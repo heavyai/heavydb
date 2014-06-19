@@ -9,7 +9,8 @@
 #define	_ERRORS_H
 
 typedef enum _mapd_err_t {
-    MAPD_ERR =               0,     // generic error number
+    MAPD_FAILURE =           0,     // generic error number
+    MAPD_SUCCESS =           1,     // success!
     MAPD_ERR_FILE_OPEN =    -1,     // unable to open file
     MAPD_ERR_FILE_CLOSE =   -2,     // error closing file
     MAPD_ERR_FILE_WRITE =   -3,     // error writing file
