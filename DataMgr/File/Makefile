@@ -4,11 +4,12 @@ LFLAGS=-Wall
 DEBUG=-g
 OBJS=File.o
 SHARED=../../Shared
+TESTNAME=fileTest
 
 all:	    $(OBJS)
 
-test:	    $(OBJS) fileTest.cpp
-		$(CC) $(LFLAGS) $(OBJS) fileTest.cpp -o test
+test:	    $(OBJS) $(TESTNAME).cpp
+		$(CC) $(LFLAGS) $(OBJS) $(TESTNAME).cpp -o $(TESTNAME)
 
 File.o:	    File.h File.cpp other
 	    $(CC) $(CFLAGS) File.cpp
