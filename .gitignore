@@ -19,3 +19,7 @@
 *.exe
 *.out
 *.app
+
+# Netbeans Project Files
+nbproject/
+    
