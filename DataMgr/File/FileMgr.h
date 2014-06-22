@@ -1,5 +1,5 @@
-#ifndef FILEMANAGER_H
-#define FILEMANAGER_H
+#ifndef _FileMgr_h
+#define _FileMgr_h
 
 #include <vector>
 #include <map>
@@ -49,7 +49,7 @@ struct FileInfo {
 
 struct
 
-class FileManager {
+class FileMgr {
 
     public:
         mapd_err_t checkPoint(); // Runs a checkpoint. This involves:
@@ -92,4 +92,4 @@ class FileManager {
 
 };
 
-#endif
+#endif // _FileMgr_h
