@@ -24,7 +24,8 @@ using std::endl;
  * 
  */
 File::File(size_t blockSize) {
-    this->blockSize_ = blockSize;
+    blockSize_ = blockSize;
+	f_ = NULL;
 }
 
 /**
@@ -37,6 +38,7 @@ File::File(size_t blockSize) {
 File::~File() {
     if (f_ != NULL)
         close();
+	f_ = NULL;
 }
 
 /**
