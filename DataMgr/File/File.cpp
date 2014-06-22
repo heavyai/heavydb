@@ -1,10 +1,8 @@
 /**
- *  File:       File.cpp
- *  Author(s):  steve@map-d.com
+ * @file        File.cpp
+ * @author      Steven Stewart <steve@map-d.com> 
  * 
- * 
- *  Notes: 
- * 
+ *  @section NOTES
  *  In order to synchronize a file's in-core state with disk, the fsync function
  *  is used, which is defined in unistd.h. This is specific to POSIX operating
  *  systems, such as Unix/Linux.
@@ -19,39 +17,33 @@ using std::cerr;
 using std::endl;
     
 /**
- * Method:      File() - constructor
- * Author(s):   steve@map-d.com
- * 
+ * This is the constructor for File. It initializes both the logical block size
+ * and the file pointer (set to NULL to clear any garbage value).
+ * @param blockSize The logical block size.
  */
 File::File(size_t blockSize) {
     blockSize_ = blockSize;
-	f_ = NULL;
+    f_ = NULL;
 }
 
 /**
- * Method:      ~File() - deconstructor
- * Author:      steve@map-d.com
- *
- * Ensures that the file handle is closed.
- *
+ * This is the destructor. It closes the file if it is open, and sets the file
+ * pointer to NULL.
  */
 File::~File() {
     if (f_ != NULL)
         close();
-	f_ = NULL;
+    f_ = NULL;
 }
 
 /**
- * Method:      open()
- * Author(s):   steve@map-d.com
- * 
  * This method will open the specified file (fname). The handle to the file
  * is saved in File object's state. The client should call close() when 
  * finished with the file.
  * 
  * Note that if "create" is true, then the file will be created and the contents
  * of the file, if it already existed, are discarded. By default, this is assumed
- * false.
+ * false (@see File.h).
  * 
  * @param fname - the name of the file to be opened (or created) 
  * @param create - a flag for whether or not to create the file if it doesn't exist
@@ -61,24 +53,26 @@ mapd_err_t File::open(const std::string &fname, bool create) {
     if (create) {
         f_ = fopen(fname.c_str(), "w+b"); // creates a new file for updates
         fileSize_ = 0;
+        if (f_ == NULL) {
+            printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to create file.");
+            return MAPD_ERR_FILE_OPEN;
+        }
     }
     else {
         f_ = fopen(fname.c_str(), "r+b"); // opens existing file for updates
+        if (f_ == NULL) {
+            fileSize_ = 0;
+            printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to open file.");
+            return MAPD_ERR_FILE_OPEN;
+        }
         fseek(f_, 0L, SEEK_END);
         fileSize_ = ftell(f_);
-        fseek(f_, 0L, SEEK_SET);
     }
-    if (f_ == NULL) {
-        cerr << "[" << __FUNCTION__ << ":" << __LINE__ << "] ERROR: unable to open file \"" << fname.c_str() << "\"" << endl;
-        return MAPD_ERR_FILE_OPEN;
-    }
+
     return MAPD_SUCCESS;
 }
 
 /**
- * Method:      close()
- * Author(s):   steve@map-d.com
- * 
  * This method closes the file pointed to by this->f_.
  * 
  * @return MAPD_SUCCES on successful close; otherwise, MAPD_ERR_FILE_CLOSE
@@ -88,9 +82,6 @@ mapd_err_t File::close() {
 }
 
 /**
- * Method:      read()
- * Author(s):   steve@map-d.com
- * 
  * This function reads n bytes into buf beginning at position pos of the file
  * pointed to by file handle this->f_.
  * 
@@ -104,7 +95,7 @@ mapd_err_t File::read(_mapd_size_t pos, _mapd_size_t n, void *buf) const {
     
     // error if attempting to read past the end of the file
     if (pos + n > fileSize_) {
-        fprintf(stderr, "[%s:%d] ERROR: unable to read bytes beyond the end of the file (offset=%u bytes=%u size=%lu).\n", __func__, __LINE__, pos, n, fileSize_);
+        printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to read bytes beyond the end of the file.");
         return MAPD_ERR_FILE_READ;
     }
     
@@ -113,7 +104,7 @@ mapd_err_t File::read(_mapd_size_t pos, _mapd_size_t n, void *buf) const {
     
     fseek(f_, pos, SEEK_SET);
     if (fread(buf, sizeof(_byte_t), n, f_) < 1) {
-        fprintf(stderr, "[%s:%d] ERROR: unable to read files.\n",  __func__, __LINE__);
+        printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to read file contents into buffer.");
         return MAPD_ERR_FILE_READ;
     }
 
@@ -121,9 +112,6 @@ mapd_err_t File::read(_mapd_size_t pos, _mapd_size_t n, void *buf) const {
 }
 
 /**
- * Method:      write()
- * Author(s):   steve@map-d.com
- * 
  * This function writes n bytes from buf to the position pos of the file
  * pointed to by file handle this->f_.
  * 
@@ -142,7 +130,7 @@ mapd_err_t File::write(_mapd_size_t pos, _mapd_size_t n, void *buf) {
     fseek(f_, pos, SEEK_SET);
     int bytesWritten = fwrite(buf, sizeof(_byte_t), n, f_);
     if (bytesWritten < 1) {
-        cerr << "[" << __FUNCTION__ << ":" << __LINE__ << "] ERROR: unable to write to file \"" << fileName_.c_str() << "\"" << endl;
+        printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to write buffer to file.\n");
         return MAPD_ERR_FILE_WRITE;
     }
     
@@ -157,9 +145,6 @@ mapd_err_t File::append(_mapd_size_t n, void *buf) {
 }
 
 /**
- * Method:      readBlock()
- * Author(s):   steve@map-d.com
- * 
  * This method reads a specific block from the file into the buffer.
  * 
  * @param blockNum - the block number from which data is being read into the buffer
@@ -171,9 +156,6 @@ mapd_err_t File::readBlock(_mapd_size_t blockNum, void *buf) const {
 }
 
 /**
- * Method:      writeBlock()
- * Author(s):   steve@map-d.com
- * 
  * This method writes the buffer to a specific block in the file.
  * 
  * @param blockNum - the block number to which data is written within the file

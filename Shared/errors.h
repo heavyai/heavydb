@@ -18,5 +18,9 @@ typedef enum _mapd_err_t {
     MAPD_ERR_FILE_APPEND =  -5      // error appending to file
 } mapd_err_t;
 
+void printError(mapd_error_t errNum, const char *function, unsigned lineNo, const char *msg) {
+    fprintf(stderr, "[%s:%u] ERROR(%d): %s\n", function, lineNo, errNum, msg);
+}
+
 #endif	/* ERRORS_H */
 

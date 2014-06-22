@@ -45,6 +45,9 @@ public:
      * otherwise, a new empty file is created. Upon success, MAPD_SUCCESS
      * is returned.
      *
+     * Note that if the file object already has an open file handle, then
+     * MAPD_ERR_FILE_OPEN is returned.
+     *
      * @param fname The file name to be opened.
      * @param create Indicates whether or not to create a new, empty file
      * @return MAPD_ERR_FILE_OPEN or MAPD_SUCCESS
