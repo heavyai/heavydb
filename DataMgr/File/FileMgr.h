@@ -1,12 +1,23 @@
-#ifndef _FileMgr_h
-#define _FileMgr_h
+/**
+ * @file    FileMgr.h
+ * @author  Todd Mostak <todd@map-d.com>
+ * @author  Steven Stewart <steve@map-d.com>
+ * @brief   This file contains the class specification and related data structures for FileMgr.
+ *
+ * This file contains the class specification, and specification for several related
+ * types and data structures, for the file manager (FileMgr). This module handles all
+ * file system requests from other modules within the DBMS.
+ *
+ */
+#ifndef FILEMGR_H
+#define FILEMGR_H
 
 #include <vector>
 #include <map>
 
 #include "File.h"
-#include "types.h"
-#include "errors.h"
+#include "../../Shared/types.h"
+#include "../../Shared/errors.h"
 
 typedef std::vector <PageInfo> ChunkPages; // holds metadata for all pages in a chunk
 typedef std::map <ChunkKey,ChunkPages> ChunkToPageMap; // ChunkKey is defined in types.h
@@ -17,7 +28,7 @@ struct PageAddress {
     mapd_size_t filePageOffset; // in logical pages from beginning of file
 }
 
-struct PageInfo { // STEVE: Should struct member variables be appended with "_" as well?
+struct PageInfo {
 
     PageAddress pageAddress;
     mapd_size_t pageSize; // in bytes
@@ -45,10 +56,13 @@ struct FileInfo {
     PageUsedVector pageUsedVector; // stores a bit (or boolean) for each page specifying if it is free
 };
 
-
-
-struct
-
+/**
+ * @class   FileMgr
+ * @author  Todd Mostak <todd@map-d.com>
+ * @author  Steven Stewart <steve@map-d.com>
+ * 
+ * @todo Provide a detailed description of this class.
+ */
 class FileMgr {
 
     public:
@@ -68,9 +82,6 @@ class FileMgr {
         mapd_err_t flushPageToDisk (const ChunkKey &chunkKey, const int pageId, const void *mem); //can you flush a new page or do you have to create it first
         mapd_err_t createPage (const ChunkKey &chunkKey, int &pageId); // returns pageId of newly created page by reference
 
-
-
-
     private:
 
         std::string basePath_; 
@@ -85,11 +96,6 @@ class FileMgr {
         mapd_err_t getFilenameFromId(const int fileId, std::string &fileName) const; // returns filename by reference
         mapd_err_t getNumDatFilesInDir(const string &basePath, mapd_size_t &numDataFiles) const; //base path may but does not have to be class member variable basePath_
 
-
-
-
-
-
 };
 
-#endif // _FileMgr_h
+#endif // FILEMGR_H
