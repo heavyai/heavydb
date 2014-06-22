@@ -19,9 +19,21 @@ bool test_writeBlock();
 bool test_readBlock();
 bool test_appendBlock();
 
-File *f = new File();
+#define BLOCKSIZE 10
+File *f = new File(BLOCKSIZE);
+
+char block0[BLOCKSIZE];
+char block1[BLOCKSIZE];
 
 int main() {
+
+    // populate block arrays used for testing
+    for (int i = 0; i < BLOCKSIZE; i++) {
+        block0[i] = i;
+        block1[i] = BLOCKSIZE - i;
+    }
+
+    // call unit tests
     test_open() ? 
         PPASS("open()") : PFAIL("open()"); 
     test_close() ? 
@@ -47,17 +59,61 @@ int main() {
 }
 
 bool test_open() {
-    return (f->open("test.db", true));
+    if (f->open("test.db", true) != MAPD_SUCCESS)
+        return false;
+    return (f->close() == MAPD_SUCCESS);
 }
 
 bool test_close() {
     f->open("test.db", true);
-    return (f->close() != MAPD_SUCCESS);
+    return (f->close() == MAPD_SUCCESS);
 }
 
 bool test_read() {
-    f->open("test.db", true);
-    return false;
+    int i, j;
+    char buf[BLOCKSIZE];
+
+    // create a file for testing
+    if (f->open("test.db", true) != MAPD_SUCCESS)
+        return false;
+
+    // write block0 to the file
+    if (f->write(0, BLOCKSIZE, &block0) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }
+    
+    // write block1 to the file
+    if (f->append(BLOCKSIZE, &block1) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }   
+
+    // read block0 from the file and verify its contents
+    if (f->read(0, BLOCKSIZE, &buf) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }
+    for (i = 0; i < BLOCKSIZE; ++i) {
+        if (block0[i] != buf[i]) {
+            f->close();
+            return false;
+        }
+    }
+
+    // read block1 from the file and verify its contents
+    if (f->read(BLOCKSIZE, BLOCKSIZE, &buf) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }
+    for (i = 0, j = BLOCKSIZE; i < BLOCKSIZE; ++i, ++j) {
+        if (block1[i] != buf[i]) {
+            f->close();
+            return false;
+        }
+    }
+
+    return (f->close() == MAPD_SUCCESS);
 }
 
 bool test_readBlock() {
@@ -65,7 +121,35 @@ bool test_readBlock() {
 }
 
 bool test_write() {
-    return false;
+     // create a file for testing
+    if (f->open("test.db", true) != MAPD_SUCCESS)
+        return false;
+    
+    if (f->fileSize() != 0) {
+        f->close();
+        return false;
+    }
+
+    // write block0 to the file
+    if (f->write(0, BLOCKSIZE, &block0) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }
+    
+    // write block1 to the file
+    if (f->append(BLOCKSIZE, &block1) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }   
+
+    // Check that the file is the correct size
+    printf("fileSize=%lu\n", f->fileSize());
+    if (f->fileSize() != 2*BLOCKSIZE) {
+        f->close();
+        return false;
+    }
+
+    return (f->close() == MAPD_SUCCESS);    
 }
 
 bool test_writeBlock() {
@@ -73,7 +157,29 @@ bool test_writeBlock() {
 }
 
 bool test_append() {
-    return false;
+    // create a file for testing
+    if (f->open("test.db", true) != MAPD_SUCCESS)
+        return false;
+
+    // write block0 to the file
+    if (f->append(BLOCKSIZE, &block0) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }
+    
+    // write block1 to the file
+    if (f->append(BLOCKSIZE, &block1) != MAPD_SUCCESS) {
+        f->close();
+        return false;
+    }   
+
+    // Check that the file is the correct size
+    if (f->fileSize() != 2*BLOCKSIZE) {
+        f->close();
+        return false;
+    }
+
+    return (f->close() == MAPD_SUCCESS);    
 }
 
 bool test_appendBlock() {

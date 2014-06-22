@@ -17,4 +17,4 @@ File.o:	    File.h File.cpp other
 other:	    $(SHARED)/errors.h $(SHARED)/types.h
 
 clean:
-	\rm *.o *~
+	\rm *.o *~ test.db
