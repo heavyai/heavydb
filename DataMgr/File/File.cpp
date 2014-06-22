@@ -32,7 +32,7 @@ File::File(size_t blockSize) {
  */
 File::~File() {
     if (f_ != NULL)
-        close();
+        fclose(f_);
     f_ = NULL;
 }
 
@@ -78,7 +78,9 @@ mapd_err_t File::open(const std::string &fname, bool create) {
  * @return MAPD_SUCCES on successful close; otherwise, MAPD_ERR_FILE_CLOSE
  */
 mapd_err_t File::close() {
-    return (fclose(f_) == 0) ? MAPD_SUCCESS : MAPD_ERR_FILE_CLOSE; 
+    int res = fclose(f_);
+    f_ = NULL;
+    return (res == 0) ? MAPD_SUCCESS : MAPD_ERR_FILE_CLOSE;
 }
 
 /**

@@ -57,14 +57,14 @@ int main() {
 }
 
 bool test_open() {
-	File f(BLOCKSIZE);
+    File f(BLOCKSIZE);
     if (f.open(FILENAME, true) != MAPD_SUCCESS)
         return false;
     return (f.close() == MAPD_SUCCESS);
 }
 
 bool test_close() {
-	File f(BLOCKSIZE);
+    File f(BLOCKSIZE);
     f.open(FILENAME, true);
     return (f.close() == MAPD_SUCCESS);
 }
@@ -72,7 +72,7 @@ bool test_close() {
 bool test_read() {
     int i, j;
     char buf[BLOCKSIZE];
-	File f(BLOCKSIZE);
+    File f(BLOCKSIZE);
 	
     // create a file for testing
     if (f.open(FILENAME, true) != MAPD_SUCCESS)
@@ -119,13 +119,13 @@ bool test_read() {
 
 bool test_readBlock() {
     File f(BLOCKSIZE);
-	return false;
+    return false;
 }
 
 bool test_write() {
     File f(BLOCKSIZE);
 		
-	 // create a file for testing
+    // create a file for testing
     if (f.open(FILENAME, true) != MAPD_SUCCESS)
         return false;
     
@@ -150,12 +150,12 @@ bool test_write() {
 }
 
 bool test_writeBlock() {
-  	File f(BLOCKSIZE);
-	return false;
+    File f(BLOCKSIZE);
+    return false;
 }
 
 bool test_append() {
-	File f(BLOCKSIZE);
+    File f(BLOCKSIZE);
 	
     // create a file for testing
     if (f.open(FILENAME, true) != MAPD_SUCCESS)
@@ -183,6 +183,7 @@ bool test_append() {
 }
 
 bool test_appendBlock() {
-	File f(BLOCKSIZE);
+    File f(BLOCKSIZE);
     return false;
 }
+
