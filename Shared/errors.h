@@ -5,8 +5,8 @@
  * Created on June 19, 2014, 4:22 PM
  */
 
-#ifndef _ERRORS_H
-#define	_ERRORS_H
+#ifndef ERRORS_H
+#define ERRORS_H
 
 typedef enum _mapd_err_t {
     MAPD_FAILURE =           0,     // generic error number
@@ -18,9 +18,7 @@ typedef enum _mapd_err_t {
     MAPD_ERR_FILE_APPEND =  -5      // error appending to file
 } mapd_err_t;
 
-void printError(mapd_error_t errNum, const char *function, unsigned lineNo, const char *msg) {
-    fprintf(stderr, "[%s:%u] ERROR(%d): %s\n", function, lineNo, errNum, msg);
-}
+#define PERROR(errNum, func, lineNo, msg) (fprintf(stderr, "[%s:%u] ERROR(%d): %s\n", func, lineNo, errNum, msg))
 
 #endif	/* ERRORS_H */
 

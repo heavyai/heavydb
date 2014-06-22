@@ -54,7 +54,7 @@ mapd_err_t File::open(const std::string &fname, bool create) {
         f_ = fopen(fname.c_str(), "w+b"); // creates a new file for updates
         fileSize_ = 0;
         if (f_ == NULL) {
-            printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to create file.");
+            PERROR(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to create file.");
             return MAPD_ERR_FILE_OPEN;
         }
     }
@@ -62,7 +62,7 @@ mapd_err_t File::open(const std::string &fname, bool create) {
         f_ = fopen(fname.c_str(), "r+b"); // opens existing file for updates
         if (f_ == NULL) {
             fileSize_ = 0;
-            printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to open file.");
+            PERROR(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to open file.");
             return MAPD_ERR_FILE_OPEN;
         }
         fseek(f_, 0L, SEEK_END);
@@ -95,7 +95,7 @@ mapd_err_t File::read(_mapd_size_t pos, _mapd_size_t n, void *buf) const {
     
     // error if attempting to read past the end of the file
     if (pos + n > fileSize_) {
-        printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to read bytes beyond the end of the file.");
+        PERROR(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to read bytes beyond the end of the file.");
         return MAPD_ERR_FILE_READ;
     }
     
@@ -104,7 +104,7 @@ mapd_err_t File::read(_mapd_size_t pos, _mapd_size_t n, void *buf) const {
     
     fseek(f_, pos, SEEK_SET);
     if (fread(buf, sizeof(_byte_t), n, f_) < 1) {
-        printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to read file contents into buffer.");
+        PERROR(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to read file contents into buffer.");
         return MAPD_ERR_FILE_READ;
     }
 
@@ -130,7 +130,7 @@ mapd_err_t File::write(_mapd_size_t pos, _mapd_size_t n, void *buf) {
     fseek(f_, pos, SEEK_SET);
     int bytesWritten = fwrite(buf, sizeof(_byte_t), n, f_);
     if (bytesWritten < 1) {
-        printError(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to write buffer to file.\n");
+        PERROR(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to write buffer to file.\n");
         return MAPD_ERR_FILE_WRITE;
     }
     
