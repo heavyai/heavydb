@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <map>
+#include <list>
 
 #include "File.h"
 #include "../../Shared/types.h"
@@ -56,7 +57,6 @@ typedef struct _ChunkFileT {
  * @class FileMgr
  * @brief The file manager manages interactions between the DBMS and the file system.
  *
- *
  * The main job of the file manager is to translate logical block addresses to physical
  * block addresses.  It manages a list of (files_), which are actually containers of
  * chunks, and indexed allocation is used for mapping chunks to block addresses.
@@ -65,7 +65,7 @@ typedef struct _ChunkFileT {
  * list of free block addresses.
  *
  * FileMgr provides a Chunk-level API, and also a block-level API for finer granularity. Care
- * must be taken when using the block-level API such as not to invalidate the indices the map
+ * must be taken when using the block-level API such as not to invalidate the indices that map
  * chunk keys to block addresses.
  *
  * @todo buffered writes, asynch vs. synch
@@ -141,7 +141,7 @@ public:
     * @param key
     * @return
     */
-    mapd_err_t deleteChunk(const int fileId, const ChuckKey &key);
+    mapd_err_t deleteChunk(const int fileId, const ChunkKey &key);
     
    /**
     *
@@ -149,7 +149,7 @@ public:
     * @param keys
     * @return
     */
-    mapd_err_t deleteChunk(const int fileId, const vector<ChuckKey> &keys);
+    mapd_err_t deleteChunk(const int fileId, const std::vector<ChunkKey> &keys);
     
     
     // ***** BLOCK INTERFACE *****
