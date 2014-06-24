@@ -1,0 +1,9 @@
+cmake_minimum_required(VERSION 2.8)
+
+PROJECT			(MapD)
+
+ADD_SUBDIRECTORY	(File)
+ADD_SUBDIRECTORY	(Buffer)
+ADD_SUBDIRECTORY	(Log)
+ADD_SUBDIRECTORY	(Metadata)
+

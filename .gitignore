@@ -20,6 +20,14 @@
 *.out
 *.app
 
-# Netbeans Project Files
-nbproject/
-    
+#CMake files
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+install_manifest.txt
+_build/
+
+#Eclipse build files
+Debug/
+.settings/
