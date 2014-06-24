@@ -31,14 +31,14 @@
 typedef std::vector<mapd_size_t> ChunkIndexT;
 
 /**
- * @type ChunkToIndexT
+ * @type ChunkKeyToIndexT
  * @brief A map from chunk keys to chunk indices (which contain block addresses).
  *
  * A chunk key (ChunkKey) uniquely identifies a chunk in a file, and a chunk
  * index provides a list of block addresses associated with that chunk. Thus,
- * ChunkToIndexT is a mapping from chunk keys to chunk indices.
+ * ChunkKeyToIndexT is a mapping from chunk keys to chunk indices.
  */
-typedef std::map<ChunkKey, ChunkIndexT> ChunkToIndexT;
+typedef std::map<ChunkKey, ChunkIndexT> ChunkKeyToIndexT;
 
 /**
  * @type _ChunkFileT, ChunkFileT, *ChunkFileTP
@@ -50,7 +50,7 @@ typedef std::map<ChunkKey, ChunkIndexT> ChunkToIndexT;
  */
 typedef struct _ChunkFileT {
     File f;
-    ChunkToIndexT index;
+    ChunkKeyToIndexT index;
     std::list<mapd_size_t> freeBlocks;
     mapd_size_t numAllocated;
     mapd_size_t numFree;
