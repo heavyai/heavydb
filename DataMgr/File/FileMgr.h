@@ -15,6 +15,7 @@
 #include <vector>
 #include <map>
 #include <list>
+#include <string>
 
 #include "File.h"
 #include "../../Shared/types.h"
@@ -51,6 +52,8 @@ typedef struct _ChunkFileT {
     File f;
     ChunkToIndexT index;
     std::list<mapd_size_t> freeBlocks;
+    mapd_size_t numAllocated;
+    mapd_size_t numFree;
 } ChunkFileT, *ChunkFileTP;
 
 /**
@@ -74,7 +77,7 @@ typedef struct _ChunkFileT {
 class FileMgr {
 
 public:
-    FileMgr();
+    FileMgr(const std::string &basePath);
     ~FileMgr();
     
     // ***** CHUNK INTERFACE *****
@@ -196,6 +199,35 @@ public:
     */
     mapd_err_t deleteBlock(const int fileId, const ChunkIndexT &index);
     
+    // ***** FILE INTERFACE *****
+
+    /**
+     * @brief Adds a file to the file manager repository.
+     *
+     *
+     * @param fileName The name given to the file in physical storage.
+     * @param blockSize The logical block size for the blocks in the file.
+     * @param numBlocks The number of logical blocks to initially allocate for the file.
+     * @param fileId Returns the unique file identifier of the newly added file.
+     * @return mapd_err_t
+     */
+    mapd_err_t addFile(const std::string &fileName, const mapd_size_t blockSize, const mapd_size_t numBlocks, int *fileId);
+
+    /**
+     * @brief Deletes a file from the file manager's repository.
+     *
+     * This method will delete the specified file (files_[fileId]), and free up
+     * its related resources.
+     *
+     * fileId The unique file identifier of the file to be deleted.
+     */
+    mapd_err_t deleteFile(const int fileId);
+
+    /**
+     * @brief Prints a representation of FileMgr's state to stdout
+     */
+    void print();
+
 private:
     std::string basePath_;              /**< The OS file system path containing the files. */
     std::vector<ChunkFileT> files_;     /**< The vector of files of chunks being managed. */

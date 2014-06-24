@@ -72,7 +72,7 @@ public:
      * @param buf A pointer to a memory buffer.
      * @return MAPD_ERR_FILE_READ or MAPD_SUCCESS
      */
-    mapd_err_t read(_mapd_size_t pos, _mapd_size_t n, void *buf) const;
+    mapd_err_t read(mapd_size_t pos, mapd_size_t n, void *buf) const;
     
     /**
      * @brief Writes to the file from a buffer.
@@ -84,7 +84,7 @@ public:
      * @param buf A pointer to a memory buffer to be written to the file.
      * @return MAPD_ERR_FILE_WRITE or MAPD_SUCCESS
      */
-    mapd_err_t write(_mapd_size_t pos, _mapd_size_t n, void *buf);
+    mapd_err_t write(mapd_size_t pos, mapd_size_t n, void *buf);
     
     /**
      * @brief Appends data to a file from a buffer.
@@ -95,7 +95,7 @@ public:
      * @param buf A pointer to a memory buffer to be appended to the file.
      * @return MAPD_ERR_FILE_WRITE or MAPD_SUCCESS
      */
-    mapd_err_t append(_mapd_size_t n, void *buf);
+    mapd_err_t append(mapd_size_t n, void *buf);
     
     /**
      * @brief Reads a specific block from the file to a buffer.
@@ -106,7 +106,7 @@ public:
      * @param buf A pointer to a memory buffer where the block will be written.
      * @return MAPD_ERR_FILE_READ or MAPD_SUCCESS
      */
-    mapd_err_t readBlock(_mapd_size_t blockNum, void *buf) const;
+    mapd_err_t readBlock(mapd_size_t blockNum, void *buf) const;
     
     /**
      * @brief Writes to the logical block in the file from a buffer.
@@ -117,7 +117,7 @@ public:
      * @param buf A pointer to a memory buffer that will be written to the file block.
      * @return MAPD_ERR_FILE_WRITE or MAPD_SUCCESS
      */
-    mapd_err_t writeBlock(_mapd_size_t blockNum, void *buf);
+    mapd_err_t writeBlock(mapd_size_t blockNum, void *buf);
     
     // Accessor(s) and Mutator(s)
     inline bool isOpen() const { return (f_ != NULL); }     /**< Returns true if the file exists. */
@@ -136,7 +136,7 @@ private:
      * The rationale is that we don't want two different hooks to the file handle
      * at the same time.
      */
-    File(const File&) {}
+    File(const File&);
 	
     /**
      * The assignment constructor is made private to prevent attempts to copy a File object.

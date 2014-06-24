@@ -24,6 +24,7 @@ using std::endl;
 File::File(size_t blockSize) {
     blockSize_ = blockSize;
     f_ = NULL;
+    fileSize_ = 0;
 }
 
 /**
@@ -92,7 +93,7 @@ mapd_err_t File::close() {
  * @param buf - the destination buffer for the read from file
  * @return MAPD_SUCCESS, MAPD_FAILURE, MAPD_ERR_FILE_READ
  */
-mapd_err_t File::read(_mapd_size_t pos, _mapd_size_t n, void *buf) const {
+mapd_err_t File::read(mapd_size_t pos, mapd_size_t n, void *buf) const {
     assert(buf);
     
     // error if attempting to read past the end of the file
@@ -122,7 +123,7 @@ mapd_err_t File::read(_mapd_size_t pos, _mapd_size_t n, void *buf) const {
  * @param buf - the source buffer that contains the data to be written to file
  * @return MAPD_SUCCESS, MAPD_FAILURE, MAPD_ERR_FILE_WRITE
  */
-mapd_err_t File::write(_mapd_size_t pos, _mapd_size_t n, void *buf) {
+mapd_err_t File::write(mapd_size_t pos, mapd_size_t n, void *buf) {
     assert(buf);
 
     // if the file is not open, then return an error
@@ -142,7 +143,7 @@ mapd_err_t File::write(_mapd_size_t pos, _mapd_size_t n, void *buf) {
     return MAPD_SUCCESS;
 }
 
-mapd_err_t File::append(_mapd_size_t n, void *buf) {
+mapd_err_t File::append(mapd_size_t n, void *buf) {
     return write(fileSize_, blockSize_, buf);
 }
 
@@ -153,7 +154,7 @@ mapd_err_t File::append(_mapd_size_t n, void *buf) {
  * @param buf - the destination buffer to which data is being written from the block
  * @return 
  */
-mapd_err_t File::readBlock(_mapd_size_t blockNum, void *buf) const {
+mapd_err_t File::readBlock(mapd_size_t blockNum, void *buf) const {
     return read(blockNum * blockSize_, blockSize_, buf);
 }
 
@@ -164,6 +165,6 @@ mapd_err_t File::readBlock(_mapd_size_t blockNum, void *buf) const {
  * @param buf - the source buffer whose contents is written to the block
  * @return 
  */
-mapd_err_t File::writeBlock(_mapd_size_t blockNum, void *buf) {
+mapd_err_t File::writeBlock(mapd_size_t blockNum, void *buf) {
     return write(blockNum * blockSize_, blockSize_, buf);
 }

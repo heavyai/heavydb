@@ -9,7 +9,9 @@
 #include "../../Shared/ansi.h"
 #include "../../Shared/testing.h"
 
-// function prototypes
+using namespace Testing;
+
+// unit test function prototypes
 bool test_open();
 bool test_close();
 bool test_write();
