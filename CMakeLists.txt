@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 2.8)
 
-PROJECT				(MapD)
+PROJECT			(MapD)
 
+ADD_SUBDIRECTORY	(Bootstrap)
 ADD_SUBDIRECTORY	(DataMgr)
+ADD_SUBDIRECTORY	(QueryEngine)
+ADD_SUBDIRECTORY	(Server)
+ADD_SUBDIRECTORY	(Shared)
+	
