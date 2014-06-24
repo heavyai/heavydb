@@ -30,3 +30,4 @@ _build/
 
 #Eclipse build files
 Debug/
+.settings/
