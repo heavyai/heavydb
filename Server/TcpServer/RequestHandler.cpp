@@ -37,10 +37,18 @@ void RequestHandler::handle_request(const request& theRequest /*, reply& theRepl
   */
 }
 
-bool RequestHandler::parse(const request& theReqest)
+bool RequestHandler::parse(const request& theReqest, InputIterator begin, InputIterator end)
 {
+    while (begin != end) {
+        /*
+        boost::tribool result = consume(req, *begin++);
+        if (result || !result) {
+            return boost::make_tuple(result, begin);
+        }
+        */
+    }
     // TODO
-    return true;
+    //return true;
 }
 
 } // namespace TcpServer

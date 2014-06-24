@@ -1,6 +1,13 @@
 #include "TcpConnection.h"
 #include <vector>
 #include <boost/bind.hpp>
+#include <boost/lexical_cast.hpp>
+
+// DEBUG ONLY FIXME
+#include <sstream>
+#include <iostream>
+#include <string>
+//
 
 namespace TcpServer {
 
@@ -32,8 +39,13 @@ void TcpConnection::handle_read(const boost::system::error_code& e,
   if (!e)
   {
     boost::logic::tribool result;
-    //boost::tie(result, boost::tuples::ignore) = request_parser_.parse(
-    //    request_, buffer_.data(), buffer_.data() + bytes_transferred);
+    boost::tie(result, boost::tuples::ignore) = requestParser_.parse(
+        request_, buffer_.data(), buffer_.data() + bytes_transferred);
+
+    std::ostringstream ss;
+    ss << boost::lexical_cast<std::string>(buffer_);
+    std::string input = ss.str().substr(0,bytes_transferred);
+    std::cout << "TcpConnection::handle_read() : " << input << std::endl;
 
     // Request is good
     if (result)

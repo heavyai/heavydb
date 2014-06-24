@@ -1,7 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
 
-PROJECT(Server)
-
 ADD_LIBRARY(requestHandler RequestHandler.cpp)
 ADD_LIBRARY(tcpConnection TcpConnection.cpp)
 ADD_LIBRARY(tcpServer TcpServer.cpp)
