@@ -3,9 +3,6 @@
 #include <string.h>
 #include "y.tab.h"
 
-#undef YY_INPUT
-//#define YY_INPUT(b,r,s) readInputForLexer(b,&r,s)
-
 #define TOK(name) { return name; }
 
 int lineno = 1;

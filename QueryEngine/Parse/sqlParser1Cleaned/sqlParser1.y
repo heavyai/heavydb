@@ -41,10 +41,12 @@ extern int readInputForLexer(char* buffer,int *numBytesRead,int maxBytesToRead);
     int iLength;
 };
 
+%error-verbose
+
 %token <sName> NAME
 %token <sValue> STRING 
 %token <iValue> INTNUM
-%token <fValue> APPROXNUM
+%token <fValue> APPROXNUM "!"
 
 %left OR
 %left AND
@@ -103,8 +105,8 @@ program:
     ;
 
 sql_list:
-        sql ';' { return ($1 != NULL); freeNode($1); }
-    |   sql_list sql ';' { return ($2 != NULL); freeNode($2); }
+        sql ';' { ex($1); freeNode($1); }
+    |   sql_list sql ';' { freeNode($2); }
     ;
 
 opt_column_commalist:
@@ -398,6 +400,7 @@ literal:
     |   INTNUM          { $$ = con($1); }
     |   APPROXNUM       { $$ = con($1); }
     ;
+;
 
 table:
         NAME                { $$ = id($1); }
@@ -590,10 +593,10 @@ int yyerror(const char *s) {
     return 1;
 }
 
-/*
+
 
 int main(void) {
     int i = yyparse();
     //printf("success? %d\n", i);
     return i;
-}*/
+}
