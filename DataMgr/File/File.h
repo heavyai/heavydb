@@ -122,15 +122,14 @@ public:
     // Accessor(s) and Mutator(s)
     inline bool isOpen() const { return (f_ != NULL); }     /**< Returns true if the file exists. */
     inline size_t blockSize() const { return blockSize_; }  /**< Returns the logical block size. */
-    inline size_t fileSize() const { return fileSize_; }    /**< Returns the file size in number of bytes. */
+    inline size_t fileSize() const { return nblocks_ * blockSize_; } /**< Returns the file size in number of bytes. */
     inline void blockSize(size_t v) { blockSize_ = v; }     /**< Sets the logical block size to a new value. */
     
 private:
     FILE *f_;               /**< a pointer to a file handle */
     std::string fileName_;  /**< the name of the file on physical disk */
     size_t blockSize_;      /**< the logical block size for the file */
-    size_t fileSize_;       /**< the size of the file in bytes */
-	mapd_size_t nblocks;
+	mapd_size_t nblocks_;   /**< the number of blocks allocated for the file. */
 
     /**
      * The copy constructor is made private to prevent attempts to copy a File object.

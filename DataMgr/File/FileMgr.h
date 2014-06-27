@@ -7,6 +7,10 @@
  * This file contains the FileMgr class specification, and the specifications of several related
  * types and data structures for use by the Map-D file management system.
  *
+ * It is recommended that any reader of this file first read through the descriptions of all the 
+ * types and data structures used by the file manager.
+ * 
+ *
  * @see File
  */
 #ifndef FILEMGR_H
@@ -29,7 +33,7 @@
  * A block address type includes a file identifier and a block address. The block
  * address (or block number) uniquely identifies a block within the respective file.
  */
-typedef struct BlockAddr {
+struct BlockAddr {
 	int fileId;
 	mapd_size_t blockAddr;
 };
@@ -41,15 +45,19 @@ typedef struct BlockAddr {
  * respective file via BlockAddrT, and it has metadata about the block's size, the address
  * of the last block written to the block, and the epoch. The epoch is temporal reference
  * marker indicating the last time that the block was updated.
+ *
+ * Note that a block may be flagged as a "shadow" to indicate that a more up-to-date version
+ * of the block exists. This flag is typically set by the buffer manager, which may have read
+ * the block into an in-memory copy called a page, and which may have been "dirtied" (updated).
  */
-typedef struct BlockInfo {
+struct BlockInfo {
 	BlockAddr blk;
 
 	// metadata about a logical block
 	mapd_size_t blockSize;			/**< the logical block size in bytes */
 	mapd_size_t endByteOffset;		/**< the last address of the last byte written to the block */
 	unsigned int epoch;				/**< indicates the last temporal reference point for which the block is current */
-	bool isShadow;					/**< */
+	bool isShadow;					/**< indicates whether or not the block is a shadow copy */
 };
 
 /**
@@ -57,7 +65,8 @@ typedef struct BlockInfo {
  * @brief A Chunk is the fundamental unit of execution in Map-D.
  *
  * A chunk is composed of a blocks. These blocks can exist across multiple files
- * managed by the file manager. The Chunk type is a vector of BlockInfoT.
+ * managed by the file manager. The Chunk type is a vector of BlockInfoT, which
+ * is struct containing block information (file, address, and metadata).
  */
 typedef std::vector<BlockInfo> Chunk;
 
@@ -84,7 +93,7 @@ typedef std::vector<BlockInfo> Chunk;
 typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
 
 /**
- * @type FileInfo, FileInfoT, *FileInfoTP
+ * @type FileInfo
  * @brief A chunk file type has a File object and a BlockAddrT.
  *
  * A file info structure wraps around a File object in order to contain additional
@@ -93,11 +102,10 @@ typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
  * The free blocks within a file must be tracked, and this is implemented using a
  * linked list.
  */
-typedef struct FileInfo {
+struct FileInfo {
     File f;
     std::list<mapd_size_t> freeBlocks;
-
-    // FileInfo(mapd_size_t nblocks);
+    mapd_size_t nblocks;
 };
 
 /**
@@ -108,14 +116,14 @@ typedef struct FileInfo {
  * block addresses.  It manages a list of (files_), which are actually containers of
  * chunks, and indexed allocation is used for mapping chunks to block addresses.
  *
- * The file manager must also manager free space. It accomplishes this using a linked
+ * The file manager must also manage free space. It accomplishes this using a linked
  * list of free block addresses associated with each file via struct FileInfo.
  *
- * FileMgr provides a chunk-level API, and also a block-level API for finer granularity. Care
- * must be taken when using the block-level API such as not to invalidate the indices that map
- * chunk keys to block addresses.
+ * FileMgr provides a chunk-level API,  a block-level API for finer granularity, and a File-level
+ * API. Care must be taken when using the block-level API such as not to invalidate the indices
+ * that map chunk keys to block addresses.
  *
- * @todo buffered writes, asynch vs. synch
+ * @todo asynch vs. synch?
  *
  */
 class FileMgr {

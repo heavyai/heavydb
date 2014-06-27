@@ -20,8 +20,7 @@ FileMgr::~FileMgr() {
     
 }
 
-void FileMgr::print() {
-	printf("FileMgr (%p)\n", this);
-	printf("\tbasePath = \"%s\"\n", basePath_.c_str());
-	printf("\tfile count = %lu\n", files_.size());
+mapd_err_t addFile(const std::string &fileName, const mapd_size_t blockSize, const mapd_size_t numBlocks, int *fileId) {
+    *fileId = files_.size();
+    
 }
