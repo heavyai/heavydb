@@ -1,8 +1,8 @@
-typedef enum { typeCon, typeId, typeText, typeOpr, typeComp, typeAssgn } nodeEnum;
+ typedef enum { typeCon, typeId, typeText, typeOpr, typeComp, typeAssgn } nodeEnum;
 
 /* constants */
 typedef struct {
-	double dValue; /*value of constant */
+	float fValue; /*value of constant */
 	int iValue;
 } conNodeType;
 
@@ -33,7 +33,6 @@ extern int textLength;
 extern int textLength2; /* this is a backup in the case of NAME . NAME (see the grammar). 
 						Both name strings correspond to a different pointer in the yytext string.
 						Keeping both textLengths lets us make sure  */
-extern int textLength3; /* For NAME.NAME.NAME */
 extern int comparisonLength;
 
 extern int dotFlag; /* to determine whether to assign length to textLength or textLength2. */

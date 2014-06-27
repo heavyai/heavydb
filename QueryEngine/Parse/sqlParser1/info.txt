@@ -1,0 +1,20 @@
+There are two executables in this folder: sqlParser1 and sqlParser1Graph.
+
+sqlParser1 takes in sql commands to standard input and exits upon syntax error or EOF, returning the return value of yyparse()- that is, whether 
+it reaches a successful parse or not.
+
+sqlParser1Graph prints to the commandline a graph representation of the advanced syntax tree.
+
+Note: makefile only compiles sqlParser1, to compile sqlParser1Graph run the following commands:
+
+rm y.tab.c (if you have run the makefile)
+flex -i sqlParser1.l (if you haven't run the makefile)
+yacc -d -y sqlParser1.y -o sqlParser1G.c
+gcc lex.yy.c y.tab.c sqlParser1G.c -o sqlParser1Graph
+
+Predicates not included that easily could be:
+ /*   |   like_predicate
+    |   test_for_null
+    |   in_predicate
+    |   all_or_any_predicate
+    |   existence_test */

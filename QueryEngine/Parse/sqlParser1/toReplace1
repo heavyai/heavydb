@@ -1,0 +1,21 @@
+%type <nPtr> sql
+%type <nPtr> manipulative_statement
+%type <nPtr> select_statement selection table_exp opt_all_distinct
+%type <nPtr> from_clause opt_where_clause opt_having_clause column_ref
+%type <nPtr> table_ref_commalist scalar_exp_commalist table_ref table
+
+%type <nPtr> search_condition predicate comparison_predicate between_predicate scalar_exp
+%type <nPtr> literal atom
+
+%type <nPtr> update_statement_positioned update_statement_searched 
+%type <nPtr> assignment assignment_commalist column cursor
+
+%type <nPtr> insert_statement column_commalist opt_column_commalist
+%type <nPtr> values_or_query_spec insert_atom_commalist insert_atom query_spec
+
+%type <nPtr> schema base_table_def base_table_element_commalist base_table_element 
+%type <nPtr> column_def table_constraint_def column_def_opt column_def_opt_list data_type
+
+%type <nPtr> function_ref ammsc opt_group_by_clause column_ref_commalist 
+%type <nPtr> opt_asc_desc opt_order_by_clause ordering_spec ordering_spec_commalist
+%type <nPtr> opt_limit_clause
