@@ -15,7 +15,8 @@ TcpConnection::TcpConnection(boost::asio::io_service& io_service,
     RequestHandler& handler)
   : strand_(io_service),
     socket_(io_service),
-    requestHandler_(handler)
+    requestHandler_(handler),
+    queryDelim_(';')
 {
 }
 
@@ -26,11 +27,19 @@ boost::asio::ip::tcp::socket& TcpConnection::socket()
 
 void TcpConnection::start()
 {
+  /*
   socket_.async_read_some(boost::asio::buffer(buffer_),
       strand_.wrap(
         boost::bind(&TcpConnection::handle_read, shared_from_this(),
           boost::asio::placeholders::error,
           boost::asio::placeholders::bytes_transferred)));
+  */
+  boost::asio::async_read_until(socket_, buffer_,
+      queryDelim_,
+      /*strand_.wrap(*/
+        boost::bind(&TcpConnection::handle_read, shared_from_this(),
+          boost::asio::placeholders::error,
+          boost::asio::placeholders::bytes_transferred)); //);
 }
 
 void TcpConnection::handle_read(const boost::system::error_code& e,
@@ -38,18 +47,22 @@ void TcpConnection::handle_read(const boost::system::error_code& e,
 {
   if (!e)
   {
-    boost::logic::tribool result;
-    boost::tie(result, boost::tuples::ignore) = requestParser_.parse(
-        request_, buffer_.data(), buffer_.data() + bytes_transferred);
 
-    std::ostringstream ss;
-    ss << boost::lexical_cast<std::string>(buffer_);
-    std::string input = ss.str().substr(0,bytes_transferred);
-    std::cout << "TcpConnection::handle_read() : " << input << std::endl;
+    bool isLegit;
+    //std::ostringstream ss;
+    const char* string = boost::asio::buffer_cast<const char*>(buffer_.data());
+    std::string theReq(string, bytes_transferred);
+    std::cout << "TcpConnection::handle_read() : " << theReq << std::endl;
+    isLegit = requestHandler_.parse(request_, theReq); //.begin(), buffer_.begin() + bytes_transferred);
 
     // Request is good
-    if (result)
-    {
+    if (isLegit) {
+      /*
+      std::ostringstream ss;
+      ss << boost::lexical_cast<std::string>(buffer_);
+      std::string input = ss.str().substr(0,bytes_transferred);
+      std::cout << "TcpConnection::handle_read() : " << input << std::endl;
+      */
       /*
       request_handler_.handle_request(request_, reply_);
       boost::asio::async_write(socket_, reply_.to_buffers(),
@@ -59,7 +72,7 @@ void TcpConnection::handle_read(const boost::system::error_code& e,
       */
     }
     // Bad request
-    else if (!result)
+    else if (0) //!result)
     {
       /*
       reply_ = reply::stock_reply(reply::bad_request);
@@ -71,11 +84,13 @@ void TcpConnection::handle_read(const boost::system::error_code& e,
     }
     else
     {
+      /*
       socket_.async_read_some(boost::asio::buffer(buffer_),
           strand_.wrap(
             boost::bind(&TcpConnection::handle_read, shared_from_this(),
               boost::asio::placeholders::error,
               boost::asio::placeholders::bytes_transferred)));
+      */
     }
   }
 
