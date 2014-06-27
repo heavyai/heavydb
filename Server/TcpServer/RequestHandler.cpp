@@ -1,21 +1,15 @@
-#include "RequestHandler.h"
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <boost/lexical_cast.hpp>
+#include "RequestHandler.h"
 //#include "Reply.h"
 //#include "Request.h"
 
 namespace TcpServer {
 
 /*
-RequestHandler::RequestHandler()
-{
-    int x = 1;
-}
-*/
-
-void RequestHandler::handle_request(const request& theRequest /*, reply& theReply*/ )
+void RequestHandler::handle_request(const request& theRequest, reply& theReply )
 {
   if (!parse(theRequest))
   {
@@ -24,7 +18,6 @@ void RequestHandler::handle_request(const request& theRequest /*, reply& theRepl
   }
 
   // Fill out the reply to be sent to the client.
-  /*
   rep.status = reply::ok;
   char buf[512];
   while (is.read(buf, sizeof(buf)).gcount() > 0)
@@ -34,21 +27,27 @@ void RequestHandler::handle_request(const request& theRequest /*, reply& theRepl
   rep.headers[0].value = boost::lexical_cast<std::string>(rep.content.size());
   rep.headers[1].name = "Content-Type";
   rep.headers[1].value = mime_types::extension_to_type(extension);
-  */
 }
+*/
 
-bool RequestHandler::parse(const request& theReqest, InputIterator begin, InputIterator end)
+#include <stdio.h>
+
+bool RequestHandler::parse(request& theRequest, const std::string rawInput)
 {
+    std::cout << "From RequestHandler::parse() : " << rawInput << std::endl; //theRequest.query << std::endl;
+    //printf("From RequestHandler() : %s\n", theRequest.query.c_str() );
+    
+    return true;
+
+    // TODO
+    /*
     while (begin != end) {
-        /*
         boost::tribool result = consume(req, *begin++);
         if (result || !result) {
             return boost::make_tuple(result, begin);
         }
-        */
     }
-    // TODO
-    //return true;
+    */
 }
 
 } // namespace TcpServer

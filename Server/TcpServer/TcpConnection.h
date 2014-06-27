@@ -15,6 +15,8 @@
 
 namespace TcpServer {
 
+const int bufferMaxSize = 8192;
+
 /// Represents a single TcpConnection from a client.
 class TcpConnection : public boost::enable_shared_from_this<TcpConnection>, private boost::noncopyable 
 {
@@ -47,7 +49,8 @@ class TcpConnection : public boost::enable_shared_from_this<TcpConnection>, priv
       RequestHandler& requestHandler_;
 
       /// Buffer for incoming data.
-      boost::array<char, 8192> buffer_;
+      boost::asio::streambuf buffer_;
+      //boost::array<char, 8192> buffer_;
 
       /// The incoming request.
       request request_;
@@ -58,6 +61,8 @@ class TcpConnection : public boost::enable_shared_from_this<TcpConnection>, priv
       /// The reply to be sent back to the client. - TODO
       //reply reply_;
 
+      /// The query delimiter
+      char queryDelim_;
 };
 
 typedef boost::shared_ptr<TcpConnection> TcpConnection_ptr;
