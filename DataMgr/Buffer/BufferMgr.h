@@ -131,16 +131,21 @@ public:
 	 */
 	~BufferMgr();
 
-    // ***** CHUNK INTERFACE *****/
-    
     /**
      * @brief Gets the request chunk by returning a pointer to its PageInfo object.
      *
-     * This method returns a pointer to a PageInfo object, which contains the bounds
-     * (address of first and last frames) of the Chunk. The page is automatically
-     * pinned, signaling that the page holding the chunk is not to be evicted.
-     * The client is then able to perform in-memory operations on the contents of
-     * the chunk within its page.
+     * This method will check if the chunk is already in the buffer pool. If it is,
+     * then the pin count for its PageInfo struct is incremented. If the chunk is not
+     * in the buffer pool, then the buffer manager needs to find a set of frames to
+     * bring the chunk into, wrapping this up into a new PageInfo struct, and updating
+     * ChunkToPageMap accordingly.
+     *
+     * If it is necessary to replace an existing PageInfo, then its dirty frames will be flushed
+     * before bringing in the new chunk.
+     *
+     * If for some reason it is not possible to bring the chunk into the buffer pool, then an error
+     * code is returned (MAPD_ERR_BUFFER). Upon success, a pointer to the new PageInfo struct is
+     * returned in page; otherwise, it is NULL.
      *
      * @param key
      * @param addr
@@ -151,25 +156,7 @@ public:
     mapd_err_t getChunkHost(const ChunkKey &key, PageInfo *page);
     
     /**
-     * @brief Pins a chunk in host memory.
-     *
-     * This method will check if the chunk is already in the buffer pool. If it is, then the pin
-     * count for its PageInfo struct is incremented. If the chunk is not in the buffer pool,
-     * then the buffer manager needs to find a set of frames to bring the chunk into, wrapping
-     * this up into a new PageInfo struct, and updating ChunkToPageMap accordingly.
-     *
-     * If it is necessary to replace an existing PageInfo, then its dirty frames will be flushed
-     * before bringing in the new chunk.
-     *
-     * If for some reason it is not possible to bring the chunk into the buffer pool, then an error
-     * code is returned (MAPD_ERR_BUFFER). Upon success, a pointer to the new PageInfo struct is
-     * returned in page; otherwise, it is NULL.
-     */
-    mapd_err_t pinChunkHost(const ChunkKey &key, PageInfo *page);
-    
-    /**
-     * @brief Returns true of the chunk is cached in the host buffer pool.
-     *
+     * @brief Returns true if the chunk is cached in the host buffer pool.
      * @param key The chunk key uniquely identifies the chunk.
      */
     bool isCachedHost(const ChunkKey &key);
