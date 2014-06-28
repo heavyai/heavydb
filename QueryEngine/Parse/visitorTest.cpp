@@ -1,18 +1,22 @@
 #include <iostream>
 
-#include "visitor/SimplePrinterVisitor.h"
-
-#include "ast/Table.h"
-#include "ast/Program.h"
+#include "visitor/XMLTranslator.h"
 
 int main() {
     
-    SimplePrinterVisitor printVisitor;
-        
-    Program prog("sql");
-    prog.accept(printVisitor);
-        
-    Table tbl("Student", "Teacher");
-    tbl.accept(printVisitor);
+    XMLTranslator XMLTransVisitor;
+    
+    Table tbl("student");
+    
+    
+    BaseTableDef btd("DROP", &tbl);
+    
+    Schema sch(&btd);
+    
+    SQL sql(&sch);
+    SQLList sqlList(&sql);
+    
+    Program prog(&sqlList);
+    prog.accept(XMLTransVisitor);
     
 }

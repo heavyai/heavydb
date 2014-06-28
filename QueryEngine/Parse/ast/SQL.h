@@ -1,17 +1,16 @@
-#ifndef AST_PROGRAM_H
-#define AST_PROGRAM_H
+#ifndef SQL_NODE_H
+#define SQL_NODE_H
 
 #include "ASTNode.h"
-#include "SQLList.h"
 #include "../visitor/Visitor.h"
 
-class Program : public ASTNode {
+class SQL : public ASTNode {
     
 public:
-    SQLList *sqlList;
+    Schema *sch;
     
     /**< Constructor */
-    explicit Program(SQLList *n) : sqlList(n) {}
+    explicit SQL(Schema *n) : sch(n) {}
     
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
@@ -20,7 +19,4 @@ public:
     
 };
 
-
-
-
-#endif // AST_PROGRAM_H
+#endif // SQL_NODE_H

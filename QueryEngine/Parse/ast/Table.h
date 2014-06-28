@@ -2,7 +2,7 @@
 #define AST_TABLE_H
 
 #include "ASTNode.h"
-#include "../visitor/SimplePrinterVisitor.h"
+#include "../visitor/Visitor.h"
 
 class Table : public ASTNode {
     
