@@ -132,7 +132,7 @@ public:
 	~BufferMgr();
 
     /**
-     * @brief Gets the request chunk by returning a pointer to its PageInfo object.
+     * @brief Gets the requested chunk by returning a pointer to its PageInfo object.
      *
      * This method will check if the chunk is already in the buffer pool. If it is,
      * then the pin count for its PageInfo struct is incremented. If the chunk is not
@@ -168,6 +168,38 @@ public:
     inline float hostHitRate() {
         return float(numHitsHost_) / float(numHitsHost_ + numMissHost_);
     }
+    
+    /**
+     * @brief Sets the hit and miss counts for the host back to 0.
+     */
+    inline void resetHitRateHost(){
+        numHitsHost_ = 0;
+        numMissHost_ = 0;
+    }
+    
+    /**
+     * @brief Prints a summary of the frames (Frame objects) in the host buffer pool to stdout.
+     *
+     * Traverses the vector frames_ in order to print a summary of the chunks currently cached in
+     * the host buffer pool.
+     */
+    void printFramesHost();
+    
+   /**
+    * @brief Prints a summary of the pages (Page objects) in the host buffer pool to stdout.
+    *
+    * Traverses the vector pages_ in order to print a summary of the pages currently cached in
+    * the host buffer pool.
+    */
+   void printPagesHost();
+    
+    /**
+     * @brief Prints a summary of the chunks in the host buffer pool to stdout.
+     *
+     * Traverses ChunkToPageMap in order to print a summary of the chunks currently cached in
+     * the host buffer pool.
+     */
+    void printChunksHost();
 
 private:
     void *hostMem_;                     /**< A pointer to the host-allocated buffer pool. */
