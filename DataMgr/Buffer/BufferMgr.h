@@ -134,7 +134,9 @@ public:
     // ***** CHUNK INTERFACE *****/
     
     /**
-     * This method returns a reference to a PageInfo, which contains the bounds
+     * @brief Gets the request chunk by returning a pointer to its PageInfo object.
+     *
+     * This method returns a pointer to a PageInfo object, which contains the bounds
      * (address of first and last frames) of the Chunk. The page is automatically
      * pinned, signaling that the page holding the chunk is not to be evicted.
      * The client is then able to perform in-memory operations on the contents of
@@ -146,10 +148,10 @@ public:
      *
      * @see BufferMgr.cpp for the buffer allocation and eviction/replacement strategies.
      */
-    mapd_err_t getChunk(const ChunkKey &key, void *addr);
+    mapd_err_t getChunkHost(const ChunkKey &key, PageInfo *page);
     
     /**
-     * @brief Pins a chunk.
+     * @brief Pins a chunk in host memory.
      *
      * This method will check if the chunk is already in the buffer pool. If it is, then the pin
      * count for its PageInfo struct is incremented. If the chunk is not in the buffer pool,
@@ -163,16 +165,29 @@ public:
      * code is returned (MAPD_ERR_BUFFER). Upon success, a pointer to the new PageInfo struct is
      * returned in page; otherwise, it is NULL.
      */
-    mapd_err_t pinChunk(const ChunkKey &key, PageInfo *page);
+    mapd_err_t pinChunkHost(const ChunkKey &key, PageInfo *page);
     
+    /**
+     * @brief Returns true of the chunk is cached in the host buffer pool.
+     *
+     * @param key The chunk key uniquely identifies the chunk.
+     */
+    bool isCachedHost(const ChunkKey &key);
     
-    
+    /**
+     * @brief Returns a float representing the host hit rate.
+     * @return float The hit rate for the host.
+     */
+    inline float hostHitRate() {
+        return float(numHitsHost_) / float(numHitsHost_ + numMissHost_);
+    }
 
 private:
     void *hostMem_;                     /**< A pointer to the host-allocated buffer pool. */
 
     // Frames
     std::vector<Frame> frames_;         /**< A vector of in-order frames, which compose the buffer pool. */
+    std::list<Frame*> free_;            /**< A linked list of pointers to free frames. */
     const mapd_size_t numFrames;        /**< The number of frames covering the buffer pool space. */
     const mapd_size_t frameSize;        /**< The size of a frame in bytes. */
 
@@ -181,6 +196,10 @@ private:
     const mapd_size_t numPages;         /**< The number of pages currently in the buffer pool. */
     
     // void *deviceMem;                 /**< @todo device (GPU) buffer pool */
+    
+    // Metadata
+    unsigned numHitsHost_;              /**< The number of host memory cache hits. */
+    unsigned numMissHost_;              /**< The number of host memory cache misses. */
     
 }; // BufferMgr
 
