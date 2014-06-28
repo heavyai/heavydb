@@ -90,12 +90,24 @@ typedef std::map<ChunkKey, PageInfo> ChunkToPageMap;
  * The main goal of the buffer manager is to maximize the chance that, when a block is accessed, no disk
  * access is required. This is accomplished by caching blocks in main and/or GPU memory.
  *
+ * The interface to BufferMgr includes the most basic functionality: the ability to bring disk pages into 
+ * the buffer pool, to pin it, and to unpin it. A chunk-level and frame-level API are provides, offering
+ * two levels of interaction with the buffer pool in terms of granularity.
+ *
+ * Frames are allocated upon allocating host memory. There's one frame per frameSize bytes, and
+ * they are ordered from 0 to (numFrames-1).
+ *
+ * Pages are variabled-sized collection of frames. They can occupy any contiguous subset of frames,
+ * and are not necessarily ordered because their allocation depends on access to free memory, as
+ * well as the replacement algorithm being used.
  */
 class BufferMgr {
 
 public:
     /**
-     * @brief A constructor that instantiates a buffer manager instance.
+     * @brief A constructor that instantiates a buffer manager instance, and allocates the buffer pool.
+     *
+     * The constructor allocates the buffer pool in host memory.
      *
      * The frame size is computed automatically based on querying the OS file system for the
      * fundamental block size of the formatted disk.
@@ -105,7 +117,7 @@ public:
     BufferMgr(mapd_size_t hostMemorySize);
 
 	/**
-	 * @brief A constructor that instantiates a buffer manager instance.
+	 * @brief A constructor that instantiates a buffer manager instance, and allocates the buffer pool.
      *
      * The frame size is passed to the constructor as a parameter, along with the host memory size.
      *
@@ -136,12 +148,37 @@ public:
      */
     mapd_err_t getChunk(const ChunkKey &key, void *addr);
     
+    /**
+     * @brief Pins a chunk.
+     *
+     * This method will check if the chunk is already in the buffer pool. If it is, then the pin
+     * count for its PageInfo struct is incremented. If the chunk is not in the buffer pool,
+     * then the buffer manager needs to find a set of frames to bring the chunk into, wrapping
+     * this up into a new PageInfo struct, and updating ChunkToPageMap accordingly.
+     *
+     * If it is necessary to replace an existing PageInfo, then its dirty frames will be flushed
+     * before bringing in the new chunk.
+     *
+     * If for some reason it is not possible to bring the chunk into the buffer pool, then an error
+     * code is returned (MAPD_ERR_BUFFER). Upon success, a pointer to the new PageInfo struct is
+     * returned in page; otherwise, it is NULL.
+     */
+    mapd_err_t pinChunk(const ChunkKey &key, PageInfo *page);
+    
+    
+    
 
 private:
     void *hostMem_;                     /**< A pointer to the host-allocated buffer pool. */
-    std::vector<Frame> frames_;         /**< A vector of frames, which compose the buffer pool. */
+
+    // Frames
+    std::vector<Frame> frames_;         /**< A vector of in-order frames, which compose the buffer pool. */
     const mapd_size_t numFrames;        /**< The number of frames covering the buffer pool space. */
     const mapd_size_t frameSize;        /**< The size of a frame in bytes. */
+
+    // Pages
+    std::vector<PageInfo> pages_;       /**< A vector of pages, which are present in the buffer pool. */
+    const mapd_size_t numPages;         /**< The number of pages currently in the buffer pool. */
     
     // void *deviceMem;                 /**< @todo device (GPU) buffer pool */
     
