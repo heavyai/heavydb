@@ -18,9 +18,20 @@
 #include <vector>
 #include <string>
 #include <cassert>
+#include <map>
+#include <list>
+#include <tuple>
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
 
+// Forward declaration(s)
+class FileMgr;
+
+/**
+ * @brief
+ *
+ *
+ */
 struct Frame {
     mapd_size_t addr;
     bool isDirty;
@@ -34,7 +45,7 @@ struct Frame {
  * page occupies frames 10, 11, and 12. This functionality enables pages
  * to span multiple frames and to have varying sizes.
  */
-typedef std::pair <std::mapd_size_t, std::mapd_size_t> PageBounds;
+typedef std::pair <mapd_size_t, mapd_size_t> PageBounds;
 
 /**
  * A PageInfo struct contains the bounds of the page (beginning and ending
@@ -45,6 +56,13 @@ struct PageInfo {
     PageBounds bounds;  /**< the span of frame IDs occupied by this page */
     int pinCount;       /**< the number of pins (resources using the page) */
     bool dirty;         /**< indicates the page has been altered and differs from disk */
+
+    PageInfo() {
+        pinCount = 0;
+        dirty = false;
+        bounds.first = 1;
+        bounds.second = 0;
+    }
 
     /**< Increments the pin count for this page. */
     inline void pin() { pinCount++; }
@@ -114,7 +132,7 @@ public:
      *
      * @param hostMemorySize The number of bytes to allocate in host memory for the buffer pool
      */
-    BufferMgr(mapd_size_t hostMemorySize);
+    BufferMgr(mapd_size_t hostMemorySize, FileMgr &fm);
 
 	/**
 	 * @brief A constructor that instantiates a buffer manager instance, and allocates the buffer pool.
@@ -124,7 +142,7 @@ public:
      * @param hostMemorySize The number of bytes to allocate in host memory for the buffer pool.
      * @param frameSize The size in bytes of each frame.
 	 */
-	BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize);
+	BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr &fm);
 
 	/**
 	 * A destructor that cleans up resources used by a buffer manager instance.
@@ -134,10 +152,10 @@ public:
     /**
      * @brief Gets the requested chunk by returning a pointer to its PageInfo object.
      *
-     * This method will check if the chunk is already in the buffer pool. If it is,
-     * then the pin count for its PageInfo struct is incremented. If the chunk is not
-     * in the buffer pool, then the buffer manager needs to find a set of frames to
-     * bring the chunk into, wrapping this up into a new PageInfo struct, and updating
+     * This method will check if the chunk is already in the buffer pool. If it is, then the
+     * pin count for its page (PageInfo object) is incremented (unless parameter pin is false).
+     * If the chunk is not in the buffer pool, then the buffer manager needs to find a set of
+     * frames to bring the chunk into, wrapping this up into a new PageInfo struct, and updating
      * ChunkToPageMap accordingly.
      *
      * If it is necessary to replace an existing PageInfo, then its dirty frames will be flushed
@@ -149,17 +167,24 @@ public:
      *
      * @param key
      * @param addr
+     * @param pin By default, set to true, indicating the pin count for the page will be incremented.
      * @return
      *
      * @see BufferMgr.cpp for the buffer allocation and eviction/replacement strategies.
      */
-    mapd_err_t getChunkHost(const ChunkKey &key, PageInfo *page);
+    mapd_err_t getChunkHost(const ChunkKey &key, PageInfo &page, bool pin = true);
     
     /**
      * @brief Returns true if the chunk is cached in the host buffer pool.
      * @param key The chunk key uniquely identifies the chunk.
      */
     bool isCachedHost(const ChunkKey &key);
+    
+   /**
+    * @brief 
+    * @param 
+    */
+    bool insertIntoIndex(std::pair<ChunkKey, PageInfo> e);
     
     /**
      * @brief Returns a float representing the host hit rate.
@@ -202,19 +227,23 @@ public:
     void printChunksHost();
 
 private:
-    void *hostMem_;                     /**< A pointer to the host-allocated buffer pool. */
+    const FileMgr &fm_;                 /**< Reference to a file manager object */
+    mapd_byte_t *hostMem_;              /**< A pointer to the host-allocated buffer pool. */
 
     // Frames
     std::vector<Frame> frames_;         /**< A vector of in-order frames, which compose the buffer pool. */
     std::list<Frame*> free_;            /**< A linked list of pointers to free frames. */
-    const mapd_size_t numFrames;        /**< The number of frames covering the buffer pool space. */
-    const mapd_size_t frameSize;        /**< The size of a frame in bytes. */
+    mapd_size_t numFrames_;             /**< The number of frames covering the buffer pool space. */
+    mapd_size_t frameSize_;             /**< The size of a frame in bytes. */
 
     // Pages
     std::vector<PageInfo> pages_;       /**< A vector of pages, which are present in the buffer pool. */
-    const mapd_size_t numPages;         /**< The number of pages currently in the buffer pool. */
+    mapd_size_t numPages_;              /**< The number of pages currently in the buffer pool. */
     
     // void *deviceMem;                 /**< @todo device (GPU) buffer pool */
+    
+    // Data structures
+    ChunkToPageMap chunkIndex;
     
     // Metadata
     unsigned numHitsHost_;              /**< The number of host memory cache hits. */

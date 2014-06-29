@@ -27,7 +27,7 @@
 #include "../../Shared/errors.h"
 
 /**
- * @type BlockAddrT
+ * @type BlockAddr
  * @brief A block address that uniquely identifies a block within a file.
  *
  * A block address type includes a file identifier and a block address. The block
@@ -42,7 +42,7 @@ struct BlockAddr {
  * @brief This struct wraps a block address with metadata associated with that block.
  *
  * This struct provides metadata about blocks. It has the address of the block within its
- * respective file via BlockAddrT, and it has metadata about the block's size, the address
+ * respective file via BlockAddr, and it has metadata about the block's size, the address
  * of the last block written to the block, and the epoch. The epoch is temporal reference
  * marker indicating the last time that the block was updated.
  *
@@ -82,10 +82,10 @@ typedef std::vector<BlockInfo> Chunk;
  * A ChunkKey is mapped to a vector of BlockInfoT, the latter of which represents
  * the in-order listing of blocks for the respective chunk. The file manager will
  * bring these blocks into contiguous order in memory upon request, and will do so
- * by looking up the ChunkKey via this mapping. BlockInfoT has a BlockAddrT and
+ * by looking up the ChunkKey via this mapping. BlockInfoT has a BlockAddr and
  * metadata about the block.
  *
- * BlockAddrT is simply a pair of values: the file identifier, and the block
+ * BlockAddr is simply a pair of values: the file identifier, and the block
  * address within that file. (Note that although files are heterogeneous, logical
  * blocks are homogeneous; namely, that data from at most one chunk can populate
  * a block.)
@@ -94,7 +94,7 @@ typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
 
 /**
  * @type FileInfo
- * @brief A chunk file type has a File object and a BlockAddrT.
+ * @brief A chunk file type has a File object and a BlockAddr.
  *
  * A file info structure wraps around a File object in order to contain additional
  * information/metadata about the file that is pertinent to the file manager.
@@ -209,7 +209,7 @@ public:
     * @param buf
     * @return
     */
-    mapd_err_t getBlock(const &BlockAddrT blk, void *buf) const;
+    mapd_err_t getBlock(const BlockAddr &blk, void *buf) const;
     
    /**
     *
@@ -242,7 +242,7 @@ public:
     * @param index
     * @return
     */
-    mapd_err_t deleteBlock(const int fileId, const BlockAddrT &index);
+    mapd_err_t deleteBlock(const int fileId, const BlockAddr &index);
     
     // ***** FILE INTERFACE *****
 
@@ -275,7 +275,7 @@ public:
 
 private:
     std::string basePath_;              /**< The OS file system path containing the files. */
-    std::vector<FileInfoT> files_;     /**< The vector of files of chunks being managed. */
+    std::vector<FileInfo> files_;     /**< The vector of files of chunks being managed. */
 };
 
 #endif // FILEMGR_H

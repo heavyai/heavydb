@@ -10,9 +10,8 @@
 
 #include <vector>
 
-// definition of a byte type (_byte_t) and a pointer to a byte type (*byte_t)
-typedef unsigned char _byte_t;
-typedef _byte_t *byte_t;
+// definition of a byte type
+typedef unsigned char mapd_byte_t;
 
 // definition of Map-D size type
 typedef unsigned mapd_size_t;

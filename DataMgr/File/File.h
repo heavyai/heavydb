@@ -130,7 +130,8 @@ private:
     std::string fileName_;  /**< the name of the file on physical disk */
     size_t blockSize_;      /**< the logical block size for the file */
 	mapd_size_t nblocks_;   /**< the number of blocks allocated for the file. */
-
+    mapd_size_t fileSize_;  /**< the size of the file in bytes */
+    
     /**
      * The copy constructor is made private to prevent attempts to copy a File object.
      * The rationale is that we don't want two different hooks to the file handle

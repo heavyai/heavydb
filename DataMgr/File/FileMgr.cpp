@@ -20,7 +20,6 @@ FileMgr::~FileMgr() {
     
 }
 
-mapd_err_t addFile(const std::string &fileName, const mapd_size_t blockSize, const mapd_size_t numBlocks, int *fileId) {
-    *fileId = files_.size();
-    
+mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) const {
+    return MAPD_FAILURE;
 }

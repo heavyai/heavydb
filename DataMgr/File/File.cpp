@@ -106,7 +106,7 @@ mapd_err_t File::read(mapd_size_t pos, mapd_size_t n, void *buf) const {
     if (!f_) return MAPD_FAILURE;
     
     fseek(f_, pos, SEEK_SET);
-    if (fread(buf, sizeof(_byte_t), n, f_) < 1) {
+    if (fread(buf, sizeof(mapd_byte_t), n, f_) < 1) {
         PERROR(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to read file contents into buffer.");
         return MAPD_ERR_FILE_READ;
     }
@@ -131,7 +131,7 @@ mapd_err_t File::write(mapd_size_t pos, mapd_size_t n, void *buf) {
     
     // write n bytes from the buffer to the file
     fseek(f_, pos, SEEK_SET);
-    int bytesWritten = fwrite(buf, sizeof(_byte_t), n, f_);
+    int bytesWritten = fwrite(buf, sizeof(mapd_byte_t), n, f_);
     if (bytesWritten < 1) {
         PERROR(MAPD_ERR_FILE_OPEN, __func__, __LINE__, "unable to write buffer to file.\n");
         return MAPD_ERR_FILE_WRITE;
