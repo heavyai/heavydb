@@ -7,7 +7,7 @@ int main() {
     // declare visitor class
     XMLTranslator XMLTransVisitor;
     
-    // build SQL statement
+    // build SQL statement: DROP TABLE student;
     Table tbl("student");
     BaseTableDef btd("DROP", &tbl);
     Schema sch(&btd);
