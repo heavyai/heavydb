@@ -12,7 +12,7 @@ public:
     SQLList *sqlList;
     
     /**< Constructor */
-    explicit SQLList(SQL *n) : sql(n) {}
+    explicit SQLList(SQL *n) : sql(n) { sqlList = NULL; }
     SQLList(SQLList *n1, SQL *n2) : sqlList(n1), sql(n2) {}
     
     /**< Accepts the given void visitor by calling v.visit(this) */
