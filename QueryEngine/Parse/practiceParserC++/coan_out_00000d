@@ -1,4 +1,9 @@
-#ifndef YY_UPNCalcParser_h_included
-#define YY_UPNCalcParser_h_included
-#define YY_USE_CLASS
-
+#include "parser.h"
+#include <iostream>
+using namespace std;
+int main(int argc, char ** argv)
+{
+       Parser parser;
+       parser.yyparse();
+       return 0;
+}

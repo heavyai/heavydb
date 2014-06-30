@@ -5,6 +5,9 @@
 #include<sstream>
 #include "parser.h"
 #include <cstdlib>
+#include <iostream>
+using namespace std;
+
 //YY_CalcParser_STYPE val;
 %}
 

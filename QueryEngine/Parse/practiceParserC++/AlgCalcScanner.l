@@ -1,12 +1,14 @@
-%name AlgCalcScanner
-%define IOSTREAM
-%define LEX_PARAM YY_AlgCalcParser_STYPE *val, YY_AlgCalcParser_LTYPE *loc
-%define MEMBERS public: int line, column;
-%define CONSTRUCTOR_INIT : line(1), column(1)
 
-%header{
+%option c++
+%option noyywrap
+
+%{
 #include <sstream>
 #include "AlgCalcParser.h"
+#define IOSTREAM
+#define LEX_PARAM YY_CalcParser_STYPE *val, YY_CalcParser_LTYPE *loc
+#define MEMBERS public: int line, column;
+#define CONSTRUCTOR_INIT : line(1), column(1)
 %}
 
 D   [0-9]
