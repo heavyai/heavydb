@@ -1,3 +1,4 @@
+%name Parser
 %define LSP_NEEDED
 %define MEMBERS                 \
     virtual ~Parser()   {} \
