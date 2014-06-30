@@ -26,6 +26,7 @@
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
 
+
 /**
  * @type BlockAddr
  * @brief A block address that uniquely identifies a block within a file.
@@ -58,6 +59,7 @@ struct BlockInfo {
 	mapd_size_t endByteOffset;		/**< the last address of the last byte written to the block */
 	unsigned int epoch;				/**< indicates the last temporal reference point for which the block is current */
 	bool isShadow;					/**< indicates whether or not the block is a shadow copy */
+    bool isNull;                    /**< indicates that the block does not contain any data (is NULL) */
 };
 
 /**
@@ -142,7 +144,7 @@ public:
      * @param index
      * @return
      */
-    mapd_err_t getChunkRef(const ChunkKey &key, Chunk &c) const;
+    Chunk* getChunkRef(const ChunkKey &key, mapd_err_t *err) const;
 
    /**
     * @param fileId
@@ -150,7 +152,7 @@ public:
     * @param buf
     * @return
     */
-    mapd_err_t getChunkCopy(const ChunkKey &key, void *buf) const;
+    Chunk* getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) const;
     
    /**
     * This method returns the number of blocks that composes the chunk identified
@@ -178,16 +180,21 @@ public:
     mapd_err_t getChunkActualSize(const ChunkKey &key, mapd_size_t *size) const;
 
    /**
-    * Given a key, this method requests the file manager to create a new chunk,
-    * requesting the requested in bytes.
+    * Given a key, this method requests the file manager to create a new chunk of the requested
+    * number of bytes (size). A pointer to the new Chunk object is returned, or NULL upon failure.
+    * If failure occurs, an error code may be stored in err.
+    *
+    * If src is NULL, then each block of the chunk will have its "isNull" flag set to true; otherwise,
+    * the data in src will be written to the new chunk.
     *
     * @param key The unique identifier of the new chunk.
-    * @param requested The amount of memory requested for the new chunk.
-    * @param actual The amount of memory allocated for the new chunk.
+    * @param size The amount of memory requested for the new chunk.
+    * @param blockSize The size of the logical disk blocks for which the chunk will be stored
     * @param src The source data to be copied into the chunk (can be NULL).
-    * @return MAPD_FAILURE or MAPD_SUCCESS @todo MAPD_ERR_DUP_KEY, DISK_FULL
+    * @param err An error code, should an error happen to occur.
+    * @return A pointer to a new Chunk, or NULL.
     */
-    mapd_err_t createChunk(ChunkKey &key, const mapd_size_t requested, mapd_size_t *actual, const void *src);
+    Chunk* createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err);
     
    /**
     * Given a chunk key, this method deletes a chunk from the file system. It returns the number of
@@ -209,7 +216,7 @@ public:
     * @param buf
     * @return
     */
-    mapd_err_t getBlock(const BlockAddr &blk, void *buf) const;
+    BlockAddr* getBlock(void *buf, mapd_err_t *err) const;
     
    /**
     *
@@ -218,7 +225,7 @@ public:
     * @param buf
     * @return
     */
-    mapd_err_t getBlock(const int fileId, mapd_size_t blockAddr, void *buf) const;
+    BlockAddr* getBlock(const int fileId, void *buf, mapd_err_t *err) const;
     
    /**
     *
@@ -226,15 +233,7 @@ public:
     * @param blockNum
     * @return
     */
-    mapd_err_t createBlock(const int fileId, mapd_size_t *blockAddr);
-    
-   /**
-    *
-    * @param fileId
-    * @param blockNum
-    * @return
-    */
-    mapd_err_t deleteBlock(const int fileId, mapd_size_t *blockAddr);
+    BlockAddr* createBlock(const int fileId, mapd_err_t *err);
     
    /**
     *
@@ -253,10 +252,10 @@ public:
      * @param fileName The name given to the file in physical storage.
      * @param blockSize The logical block size for the blocks in the file.
      * @param numBlocks The number of logical blocks to initially allocate for the file.
-     * @param fileId Returns the unique file identifier of the newly added file.
-     * @return mapd_err_t
+     * @param err
+     * @return FileInfo*
      */
-    mapd_err_t addFile(const std::string &fileName, const mapd_size_t blockSize, const mapd_size_t numBlocks, int *fileId);
+    FileInfo* addFile(const std::string &fileName, const mapd_size_t blockSize, const mapd_size_t numBlocks, mapd_err_t *err);
 
     /**
      * @brief Deletes a file from the file manager's repository.
@@ -274,8 +273,9 @@ public:
     void print();
 
 private:
-    std::string basePath_;              /**< The OS file system path containing the files. */
-    std::vector<FileInfo> files_;     /**< The vector of files of chunks being managed. */
+    std::string basePath_;          /**< The OS file system path containing the files. */
+    std::vector<FileInfo> files_;   /**< The vector of files of chunks being managed. */
+    ChunkKeyToChunkMap chunkIndex_; /**< index (map) for looking up chunks */
 };
 
 #endif // FILEMGR_H
