@@ -234,7 +234,6 @@ static void yy_flex_free YY_PROTO(( void * ));
 
 typedef unsigned char YY_CHAR;
 #define yytext_ptr yytext
-#define YY_INTERACTIVE
 
 #include <FlexLexer.h>
 
@@ -475,15 +474,14 @@ static yyconst short int yy_chk[325] =
 #define yymore() (yy_more_flag = 1)
 #define YY_MORE_ADJ yy_more_len
 #define YY_RESTORE_YY_MORE_OFFSET
-#line 1 "sqlParser1AlteredInput.l"
+#line 1 "sqlParser1.ll"
 #define INITIAL 0
-#line 2 "sqlParser1AlteredInput.l"
+#line 5 "sqlParser1.ll"
 #include "sqlParser1.h"
 #include <string.h>
 #include "y.tab.h"
-
-#undef YY_INPUT
-//#define YY_INPUT(b,r,s) readInputForLexer(b,&r,s)
+#include <iostream>
+using namespace std;
 
 #define TOK(name) { return name; }
 
@@ -501,7 +499,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 	whether to store into the array at the next available index or to return to the first. */
 
 /* sql lexer, only for select */
-#line 505 "lex.yy.cc"
+#line 503 "lex.yy.cc"
 
 /* Macros after this point can all be overridden by user definitions in
  * section 1.
@@ -628,11 +626,11 @@ YY_DECL
 	register char *yy_cp, *yy_bp;
 	register int yy_act;
 
-#line 29 "sqlParser1AlteredInput.l"
+#line 32 "sqlParser1.ll"
 
 
 		/* literal keyword tokens */
-#line 636 "lex.yy.cc"
+#line 634 "lex.yy.cc"
 
 	if ( yy_init )
 		{
@@ -695,16 +693,12 @@ yy_match:
 			yy_current_state = yy_nxt[yy_base[yy_current_state] + (unsigned int) yy_c];
 			++yy_cp;
 			}
-		while ( yy_base[yy_current_state] != 285 );
+		while ( yy_current_state != 252 );
+		yy_cp = yy_last_accepting_cpos;
+		yy_current_state = yy_last_accepting_state;
 
 yy_find_action:
 		yy_act = yy_accept[yy_current_state];
-		if ( yy_act == 0 )
-			{ /* have to back up */
-			yy_cp = yy_last_accepting_cpos;
-			yy_current_state = yy_last_accepting_state;
-			yy_act = yy_accept[yy_current_state];
-			}
 
 		YY_DO_BEFORE_ACTION;
 
@@ -723,227 +717,227 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 32 "sqlParser1AlteredInput.l"
+#line 35 "sqlParser1.ll"
 return USER;
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 33 "sqlParser1AlteredInput.l"
+#line 36 "sqlParser1.ll"
 return SELECT;
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 34 "sqlParser1AlteredInput.l"
+#line 37 "sqlParser1.ll"
 return FROM;
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 35 "sqlParser1AlteredInput.l"
+#line 38 "sqlParser1.ll"
 return WHERE;
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 36 "sqlParser1AlteredInput.l"
+#line 39 "sqlParser1.ll"
 return HAVING;
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 37 "sqlParser1AlteredInput.l"
+#line 40 "sqlParser1.ll"
 return ALL;
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 38 "sqlParser1AlteredInput.l"
+#line 41 "sqlParser1.ll"
 return DISTINCT;
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 40 "sqlParser1AlteredInput.l"
+#line 43 "sqlParser1.ll"
 return UPDATE;
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 41 "sqlParser1AlteredInput.l"
+#line 44 "sqlParser1.ll"
 return OF;
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 42 "sqlParser1AlteredInput.l"
+#line 45 "sqlParser1.ll"
 return CURRENT;
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 43 "sqlParser1AlteredInput.l"
+#line 46 "sqlParser1.ll"
 return NULLX;
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 44 "sqlParser1AlteredInput.l"
+#line 47 "sqlParser1.ll"
 return SET;
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 46 "sqlParser1AlteredInput.l"
+#line 49 "sqlParser1.ll"
 return INSERT;
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 47 "sqlParser1AlteredInput.l"
+#line 50 "sqlParser1.ll"
 return VALUES;
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 48 "sqlParser1AlteredInput.l"
+#line 51 "sqlParser1.ll"
 return INTO;
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 50 "sqlParser1AlteredInput.l"
+#line 53 "sqlParser1.ll"
 return CREATE;
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 51 "sqlParser1AlteredInput.l"
+#line 54 "sqlParser1.ll"
 return TABLE;
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 52 "sqlParser1AlteredInput.l"
+#line 55 "sqlParser1.ll"
 return NOT;
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 53 "sqlParser1AlteredInput.l"
+#line 56 "sqlParser1.ll"
 return UNIQUE;
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 54 "sqlParser1AlteredInput.l"
+#line 57 "sqlParser1.ll"
 return PRIMARY;
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 55 "sqlParser1AlteredInput.l"
+#line 58 "sqlParser1.ll"
 return KEY;
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 56 "sqlParser1AlteredInput.l"
+#line 59 "sqlParser1.ll"
 return DEFAULT;
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 57 "sqlParser1AlteredInput.l"
+#line 60 "sqlParser1.ll"
 return CHECK;
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 58 "sqlParser1AlteredInput.l"
+#line 61 "sqlParser1.ll"
 return REFERENCES;
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 59 "sqlParser1AlteredInput.l"
+#line 62 "sqlParser1.ll"
 return FOREIGN;
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 61 "sqlParser1AlteredInput.l"
+#line 64 "sqlParser1.ll"
 return VARCHAR;
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 62 "sqlParser1AlteredInput.l"
+#line 65 "sqlParser1.ll"
 return CHARACTER;
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 63 "sqlParser1AlteredInput.l"
+#line 66 "sqlParser1.ll"
 return INTEGER;
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 64 "sqlParser1AlteredInput.l"
+#line 67 "sqlParser1.ll"
 return SMALLINT;
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 65 "sqlParser1AlteredInput.l"
+#line 68 "sqlParser1.ll"
 return NUMERIC;
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 66 "sqlParser1AlteredInput.l"
+#line 69 "sqlParser1.ll"
 return DECIMAL;
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 67 "sqlParser1AlteredInput.l"
+#line 70 "sqlParser1.ll"
 return FLOAT;
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 68 "sqlParser1AlteredInput.l"
+#line 71 "sqlParser1.ll"
 return REAL;
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 69 "sqlParser1AlteredInput.l"
+#line 72 "sqlParser1.ll"
 return DOUBLE;
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 70 "sqlParser1AlteredInput.l"
+#line 73 "sqlParser1.ll"
 return PRECISION;
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 71 "sqlParser1AlteredInput.l"
+#line 74 "sqlParser1.ll"
 return DROP;
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 73 "sqlParser1AlteredInput.l"
+#line 76 "sqlParser1.ll"
 return AVG;
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 74 "sqlParser1AlteredInput.l"
+#line 77 "sqlParser1.ll"
 return MIN;
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 75 "sqlParser1AlteredInput.l"
+#line 78 "sqlParser1.ll"
 return MAX;
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 76 "sqlParser1AlteredInput.l"
+#line 79 "sqlParser1.ll"
 return SUM;
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 77 "sqlParser1AlteredInput.l"
+#line 80 "sqlParser1.ll"
 return COUNT;
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 79 "sqlParser1AlteredInput.l"
+#line 82 "sqlParser1.ll"
 return GROUP;
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 80 "sqlParser1AlteredInput.l"
+#line 83 "sqlParser1.ll"
 return ORDER;
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 81 "sqlParser1AlteredInput.l"
+#line 84 "sqlParser1.ll"
 return BY;
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 83 "sqlParser1AlteredInput.l"
+#line 86 "sqlParser1.ll"
 {
 								/* ensure that aliased name is printed fully. */
 								asFlag = 1;
@@ -952,37 +946,37 @@ YY_RULE_SETUP
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 89 "sqlParser1AlteredInput.l"
+#line 92 "sqlParser1.ll"
 return ASC;
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 90 "sqlParser1AlteredInput.l"
+#line 93 "sqlParser1.ll"
 return DESC;
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 92 "sqlParser1AlteredInput.l"
+#line 95 "sqlParser1.ll"
 return LIMIT;
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
-#line 93 "sqlParser1AlteredInput.l"
+#line 96 "sqlParser1.ll"
 return OFFSET;
 	YY_BREAK
 case 50:
-#line 96 "sqlParser1AlteredInput.l"
+#line 99 "sqlParser1.ll"
 case 51:
-#line 97 "sqlParser1AlteredInput.l"
+#line 100 "sqlParser1.ll"
 case 52:
-#line 98 "sqlParser1AlteredInput.l"
+#line 101 "sqlParser1.ll"
 case 53:
-#line 99 "sqlParser1AlteredInput.l"
+#line 102 "sqlParser1.ll"
 case 54:
-#line 100 "sqlParser1AlteredInput.l"
+#line 103 "sqlParser1.ll"
 case 55:
 YY_RULE_SETUP
-#line 100 "sqlParser1AlteredInput.l"
+#line 103 "sqlParser1.ll"
 { 
 					comparisonLength = (int) strlen(yytext);
 					yylval.sSubtok = yytext;
@@ -991,12 +985,12 @@ YY_RULE_SETUP
 	YY_BREAK
 case 56:
 YY_RULE_SETUP
-#line 107 "sqlParser1AlteredInput.l"
+#line 110 "sqlParser1.ll"
 TOK(yytext[0])
 	YY_BREAK
 case 57:
 YY_RULE_SETUP
-#line 109 "sqlParser1AlteredInput.l"
+#line 112 "sqlParser1.ll"
 {
 				dotFlag = 1;
 				TOK(yytext[0]);
@@ -1005,7 +999,7 @@ YY_RULE_SETUP
 /* names */
 case 58:
 YY_RULE_SETUP
-#line 116 "sqlParser1AlteredInput.l"
+#line 119 "sqlParser1.ll"
 {
 										//printf("dotFlag is: %d\n", dotFlag);
 										/* Was the most recent token a dot or AS? */
@@ -1033,24 +1027,24 @@ YY_RULE_SETUP
 		 */
 /* numbers */
 case 59:
-#line 145 "sqlParser1AlteredInput.l"
+#line 148 "sqlParser1.ll"
 case 60:
-#line 146 "sqlParser1AlteredInput.l"
+#line 149 "sqlParser1.ll"
 case 61:
 YY_RULE_SETUP
-#line 146 "sqlParser1AlteredInput.l"
+#line 149 "sqlParser1.ll"
 { 
 										yylval.iValue = atof(yytext);
 										return INTNUM;
 									}
 	YY_BREAK
 case 62:
-#line 153 "sqlParser1AlteredInput.l"
+#line 156 "sqlParser1.ll"
 case 63:
-#line 154 "sqlParser1AlteredInput.l"
+#line 157 "sqlParser1.ll"
 case 64:
 YY_RULE_SETUP
-#line 154 "sqlParser1AlteredInput.l"
+#line 157 "sqlParser1.ll"
 { 
 										yylval.iValue = atof(yytext);
 										return APPROXNUM;
@@ -1059,7 +1053,7 @@ YY_RULE_SETUP
 /* strings */
 case 65:
 YY_RULE_SETUP
-#line 161 "sqlParser1AlteredInput.l"
+#line 164 "sqlParser1.ll"
 {
 		textLength = (int) strlen(yytext);
 		int c = input();
@@ -1079,27 +1073,27 @@ case 66:
 yy_c_buf_p = yy_cp -= 1;
 YY_DO_BEFORE_ACTION; /* set up yytext again */
 YY_RULE_SETUP
-#line 175 "sqlParser1AlteredInput.l"
+#line 178 "sqlParser1.ll"
 {	yyerror("Unterminated string"); }
 	YY_BREAK
 case 67:
 YY_RULE_SETUP
-#line 177 "sqlParser1AlteredInput.l"
+#line 180 "sqlParser1.ll"
 { lineno++; }
 	YY_BREAK
 case 68:
 YY_RULE_SETUP
-#line 179 "sqlParser1AlteredInput.l"
+#line 182 "sqlParser1.ll"
 ;	/* white space */
 	YY_BREAK
 case 69:
 YY_RULE_SETUP
-#line 181 "sqlParser1AlteredInput.l"
+#line 184 "sqlParser1.ll"
 ;	/* comment */
 	YY_BREAK
 case 70:
 YY_RULE_SETUP
-#line 183 "sqlParser1AlteredInput.l"
+#line 186 "sqlParser1.ll"
 {
 							yyerror("Unknown character");
 							printf("%s\n", yytext);
@@ -1107,10 +1101,10 @@ YY_RULE_SETUP
 	YY_BREAK
 case 71:
 YY_RULE_SETUP
-#line 188 "sqlParser1AlteredInput.l"
+#line 191 "sqlParser1.ll"
 ECHO;
 	YY_BREAK
-#line 1114 "lex.yy.cc"
+#line 1108 "lex.yy.cc"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -1177,7 +1171,8 @@ case YY_STATE_EOF(INITIAL):
 
 			else
 				{
-				yy_cp = yy_c_buf_p;
+				yy_cp = yy_last_accepting_cpos;
+				yy_current_state = yy_last_accepting_state;
 				goto yy_find_action;
 				}
 			}
@@ -1916,7 +1911,7 @@ int main()
 	return 0;
 	}
 #endif
-#line 188 "sqlParser1AlteredInput.l"
+#line 191 "sqlParser1.ll"
 
 /*
 void yyerror(char *s) {

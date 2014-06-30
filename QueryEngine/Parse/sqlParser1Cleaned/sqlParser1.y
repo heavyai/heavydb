@@ -41,12 +41,10 @@ extern int readInputForLexer(char* buffer,int *numBytesRead,int maxBytesToRead);
     int iLength;
 };
 
-%error-verbose
-
 %token <sName> NAME
 %token <sValue> STRING 
 %token <iValue> INTNUM
-%token <fValue> APPROXNUM "!"
+%token <fValue> APPROXNUM
 
 %left OR
 %left AND
@@ -400,7 +398,6 @@ literal:
     |   INTNUM          { $$ = con($1); }
     |   APPROXNUM       { $$ = con($1); }
     ;
-;
 
 table:
         NAME                { $$ = id($1); }

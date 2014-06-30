@@ -1,0 +1,4 @@
+#ifndef YY_UPNCalcParser_h_included
+#define YY_UPNCalcParser_h_included
+#define YY_USE_CLASS
+

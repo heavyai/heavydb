@@ -1,7 +1,7 @@
 #define YY_parse_h_included
 #define YY_USE_CLASS
 
-/*  A Bison++ parser, made from sqlParser1AlteredInput.y  */
+/*  A Bison++ parser, made from sqlParser1.y  */
 
  /* with Bison++ version bison++ Version 1.21.9-1, adapted from GNU bison by coetmeur@icdc.fr
 Maintained by Magnus Ekdahl <magnus@debian.org>
@@ -99,7 +99,7 @@ Maintained by Magnus Ekdahl <magnus@debian.org>
 #define YYBISON 1  
 
  #line 88 "/usr/share/bison++/bison.cc"
-#line 1 "sqlParser1AlteredInput.y"
+#line 1 "sqlParser1.y"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -131,7 +131,7 @@ int yyerror(const char *s);
 
 extern int readInputForLexer(char* buffer,int *numBytesRead,int maxBytesToRead);
 
-#line 33 "sqlParser1AlteredInput.y"
+#line 33 "sqlParser1.y"
 typedef union {
     char *sValue;                /* string*/
     char *sName;
@@ -1568,583 +1568,583 @@ YYLABEL(yyreduce)
   switch (yyn) {
 
 case 1:
-#line 102 "sqlParser1AlteredInput.y"
+#line 102 "sqlParser1.y"
 { exit(0);;
     break;}
 case 2:
-#line 106 "sqlParser1AlteredInput.y"
-{ return (yyvsp[-1].nPtr != NULL); freeNode(yyvsp[-1].nPtr); ;
+#line 106 "sqlParser1.y"
+{ ex(yyvsp[-1].nPtr); freeNode(yyvsp[-1].nPtr); ;
     break;}
 case 3:
-#line 107 "sqlParser1AlteredInput.y"
-{ return (yyvsp[-1].nPtr != NULL); freeNode(yyvsp[-1].nPtr); ;
+#line 107 "sqlParser1.y"
+{ freeNode(yyvsp[-1].nPtr); ;
     break;}
 case 4:
-#line 111 "sqlParser1AlteredInput.y"
+#line 111 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 5:
-#line 112 "sqlParser1AlteredInput.y"
+#line 112 "sqlParser1.y"
 { yyval.nPtr = yyvsp[-1].nPtr; ;
     break;}
 case 6:
-#line 116 "sqlParser1AlteredInput.y"
+#line 116 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 7:
-#line 120 "sqlParser1AlteredInput.y"
+#line 120 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 8:
-#line 124 "sqlParser1AlteredInput.y"
+#line 124 "sqlParser1.y"
 { yyval.nPtr = opr(CREATE, 2, opr(TABLE, 1, yyvsp[-3].nPtr), yyvsp[-1].nPtr); ;
     break;}
 case 9:
-#line 125 "sqlParser1AlteredInput.y"
+#line 125 "sqlParser1.y"
 { yyval.nPtr = opr(DROP, 1, opr(TABLE, 1, yyvsp[0].nPtr)); ;
     break;}
 case 10:
-#line 129 "sqlParser1AlteredInput.y"
+#line 129 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 11:
-#line 130 "sqlParser1AlteredInput.y"
+#line 130 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 12:
-#line 134 "sqlParser1AlteredInput.y"
+#line 134 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 13:
-#line 135 "sqlParser1AlteredInput.y"
+#line 135 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 14:
-#line 139 "sqlParser1AlteredInput.y"
+#line 139 "sqlParser1.y"
 { yyval.nPtr = opr(DATATYPE, 3, yyvsp[-2].nPtr, yyvsp[-1].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 15:
-#line 143 "sqlParser1AlteredInput.y"
+#line 143 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 16:
-#line 144 "sqlParser1AlteredInput.y"
+#line 144 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-1].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 17:
-#line 148 "sqlParser1AlteredInput.y"
+#line 148 "sqlParser1.y"
 { yyval.nPtr = opr(NOT, 1, opr(NULLX, 0)); ;
     break;}
 case 18:
-#line 149 "sqlParser1AlteredInput.y"
+#line 149 "sqlParser1.y"
 { yyval.nPtr = opr(UNIQUE, 1, opr(NOT, 1, opr(NULLX, 0))); ;
     break;}
 case 19:
-#line 150 "sqlParser1AlteredInput.y"
+#line 150 "sqlParser1.y"
 { yyval.nPtr = opr(KEY, 1, opr(PRIMARY, 1, opr(NOT, 1, opr(NULLX, 0)))); ;
     break;}
 case 20:
-#line 151 "sqlParser1AlteredInput.y"
+#line 151 "sqlParser1.y"
 { yyval.nPtr = opr(DEFAULT, 1, yyvsp[0].nPtr); ;
     break;}
 case 21:
-#line 152 "sqlParser1AlteredInput.y"
+#line 152 "sqlParser1.y"
 { yyval.nPtr = opr(DEFAULT, 1, opr(NULLX, 0)); ;
     break;}
 case 22:
-#line 153 "sqlParser1AlteredInput.y"
+#line 153 "sqlParser1.y"
 { yyval.nPtr = opr(DEFAULT, 1, opr(USER, 0)); ;
     break;}
 case 23:
-#line 154 "sqlParser1AlteredInput.y"
+#line 154 "sqlParser1.y"
 { yyval.nPtr = opr(CHECK, 1, yyvsp[-1].nPtr); ;
     break;}
 case 24:
-#line 155 "sqlParser1AlteredInput.y"
+#line 155 "sqlParser1.y"
 { yyval.nPtr = opr(REFERENCES, 1, yyvsp[0].nPtr); ;
     break;}
 case 25:
-#line 156 "sqlParser1AlteredInput.y"
+#line 156 "sqlParser1.y"
 { yyval.nPtr = opr(REFERENCES, 2, yyvsp[-3].nPtr, yyvsp[-1].nPtr); ;
     break;}
 case 26:
-#line 160 "sqlParser1AlteredInput.y"
+#line 160 "sqlParser1.y"
 { yyval.nPtr = opr(UNIQUE, 1, yyvsp[-1].nPtr); ;
     break;}
 case 27:
-#line 161 "sqlParser1AlteredInput.y"
+#line 161 "sqlParser1.y"
 { yyval.nPtr = opr(KEY, 1, opr(PRIMARY, 1, yyvsp[-1].nPtr)); ;
     break;}
 case 28:
-#line 163 "sqlParser1AlteredInput.y"
+#line 163 "sqlParser1.y"
 { yyval.nPtr = opr(KEY, 2, opr(FOREIGN, 1, yyvsp[-3].nPtr), opr(REFERENCES, 1, yyvsp[0].nPtr)); ;
     break;}
 case 29:
-#line 165 "sqlParser1AlteredInput.y"
+#line 165 "sqlParser1.y"
 { yyval.nPtr = opr(KEY, 2, opr(FOREIGN, 1, yyvsp[-6].nPtr), opr(REFERENCES, 2, yyvsp[-3].nPtr, yyvsp[-1].nPtr)); ;
     break;}
 case 30:
-#line 166 "sqlParser1AlteredInput.y"
+#line 166 "sqlParser1.y"
 { yyval.nPtr = opr(CHECK, 1, yyvsp[-1].nPtr); ;
     break;}
 case 31:
-#line 170 "sqlParser1AlteredInput.y"
+#line 170 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 32:
-#line 171 "sqlParser1AlteredInput.y"
+#line 171 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 33:
-#line 175 "sqlParser1AlteredInput.y"
+#line 175 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 34:
-#line 176 "sqlParser1AlteredInput.y"
+#line 176 "sqlParser1.y"
 { yyval.nPtr = opr(ORDER, 1, opr(BY, 1, yyvsp[0].nPtr)); ;
     break;}
 case 35:
-#line 180 "sqlParser1AlteredInput.y"
+#line 180 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 36:
-#line 181 "sqlParser1AlteredInput.y"
+#line 181 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 37:
-#line 185 "sqlParser1AlteredInput.y"
+#line 185 "sqlParser1.y"
 { yyval.nPtr = opr(INTORDER, 2, con(yyvsp[-1].iValue), yyvsp[0].nPtr); ;
     break;}
 case 38:
-#line 186 "sqlParser1AlteredInput.y"
+#line 186 "sqlParser1.y"
 { yyval.nPtr = opr(COLORDER, 2, yyvsp[-1].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 39:
-#line 190 "sqlParser1AlteredInput.y"
+#line 190 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 40:
-#line 191 "sqlParser1AlteredInput.y"
+#line 191 "sqlParser1.y"
 { yyval.nPtr = opr(ASC, 0); ;
     break;}
 case 41:
-#line 192 "sqlParser1AlteredInput.y"
+#line 192 "sqlParser1.y"
 { yyval.nPtr = opr(DESC, 0); ;
     break;}
 case 42:
-#line 198 "sqlParser1AlteredInput.y"
+#line 198 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 43:
-#line 202 "sqlParser1AlteredInput.y"
+#line 202 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 44:
-#line 203 "sqlParser1AlteredInput.y"
+#line 203 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 45:
-#line 204 "sqlParser1AlteredInput.y"
+#line 204 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 46:
-#line 205 "sqlParser1AlteredInput.y"
+#line 205 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 47:
-#line 220 "sqlParser1AlteredInput.y"
+#line 220 "sqlParser1.y"
 { yyval.nPtr = opr(INSERT, 3, opr(INTO, 1, yyvsp[-2].nPtr), yyvsp[-1].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 48:
-#line 224 "sqlParser1AlteredInput.y"
+#line 224 "sqlParser1.y"
 { yyval.nPtr = opr(VALUES, 1, yyvsp[-1].nPtr); ;
     break;}
 case 49:
-#line 225 "sqlParser1AlteredInput.y"
+#line 225 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 50:
-#line 229 "sqlParser1AlteredInput.y"
+#line 229 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 51:
-#line 230 "sqlParser1AlteredInput.y"
+#line 230 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 52:
-#line 234 "sqlParser1AlteredInput.y"
+#line 234 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 53:
-#line 235 "sqlParser1AlteredInput.y"
+#line 235 "sqlParser1.y"
 { yyval.nPtr = NULL; ;
     break;}
 case 54:
-#line 241 "sqlParser1AlteredInput.y"
+#line 241 "sqlParser1.y"
 { yyval.nPtr = opr(SELECT, 3, yyvsp[-2].nPtr, yyvsp[-1].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 55:
-#line 246 "sqlParser1AlteredInput.y"
+#line 246 "sqlParser1.y"
 { yyval.nPtr = opr(ALL, 0); ;
     break;}
 case 56:
-#line 247 "sqlParser1AlteredInput.y"
+#line 247 "sqlParser1.y"
 { yyval.nPtr = opr(DISTINCT, 0); ;
     break;}
 case 57:
-#line 248 "sqlParser1AlteredInput.y"
+#line 248 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 58:
-#line 253 "sqlParser1AlteredInput.y"
+#line 253 "sqlParser1.y"
 { yyval.nPtr = opr(UPDATE, 5, yyvsp[-6].nPtr, opr(SET, 1, yyvsp[-4].nPtr), opr(WHERE, 0), opr(CURRENT, 0), opr(OF, 1, yyvsp[0].nPtr)); ;
     break;}
 case 59:
-#line 257 "sqlParser1AlteredInput.y"
+#line 257 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 60:
-#line 258 "sqlParser1AlteredInput.y"
+#line 258 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr;;
     break;}
 case 61:
-#line 259 "sqlParser1AlteredInput.y"
+#line 259 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 62:
-#line 263 "sqlParser1AlteredInput.y"
+#line 263 "sqlParser1.y"
 { yyval.nPtr = opr(ASSIGN, 3, yyvsp[-2].nPtr, compAssgn(yyvsp[-1].sSubtok), yyvsp[0].nPtr); ;
     break;}
 case 63:
-#line 264 "sqlParser1AlteredInput.y"
+#line 264 "sqlParser1.y"
 { yyval.nPtr = opr(ASSIGN, 3, yyvsp[-2].nPtr, compAssgn(yyvsp[-1].sSubtok), opr(NULLX, 0)); ;
     break;}
 case 64:
-#line 268 "sqlParser1AlteredInput.y"
+#line 268 "sqlParser1.y"
 { yyval.nPtr = opr(UPDATE, 3, yyvsp[-3].nPtr, opr(SET, 1, yyvsp[-1].nPtr), yyvsp[0].nPtr); ;
     break;}
 case 65:
-#line 272 "sqlParser1AlteredInput.y"
+#line 272 "sqlParser1.y"
 { yyval.nPtr = opr(SELECT, 3, yyvsp[-2].nPtr, yyvsp[-1].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 66:
-#line 276 "sqlParser1AlteredInput.y"
+#line 276 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 67:
-#line 277 "sqlParser1AlteredInput.y"
+#line 277 "sqlParser1.y"
 { yyval.nPtr = opr(SELALL, 0); ;
     break;}
 case 68:
-#line 286 "sqlParser1AlteredInput.y"
+#line 286 "sqlParser1.y"
 { yyval.nPtr = opr(FROM, 6, yyvsp[-5].nPtr, yyvsp[-4].nPtr, yyvsp[-3].nPtr, yyvsp[-2].nPtr, yyvsp[-1].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 69:
-#line 290 "sqlParser1AlteredInput.y"
+#line 290 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 70:
-#line 294 "sqlParser1AlteredInput.y"
+#line 294 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 71:
-#line 295 "sqlParser1AlteredInput.y"
+#line 295 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 72:
-#line 299 "sqlParser1AlteredInput.y"
+#line 299 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 73:
-#line 304 "sqlParser1AlteredInput.y"
+#line 304 "sqlParser1.y"
 { yyval.nPtr = opr(WHERE, 1, yyvsp[0].nPtr); ;
     break;}
 case 74:
-#line 305 "sqlParser1AlteredInput.y"
+#line 305 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 75:
-#line 309 "sqlParser1AlteredInput.y"
+#line 309 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 76:
-#line 310 "sqlParser1AlteredInput.y"
+#line 310 "sqlParser1.y"
 { yyval.nPtr = opr(GROUP, 1, opr(BY, 1, yyvsp[0].nPtr)); ;
     break;}
 case 77:
-#line 314 "sqlParser1AlteredInput.y"
+#line 314 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 78:
-#line 315 "sqlParser1AlteredInput.y"
+#line 315 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 79:
-#line 319 "sqlParser1AlteredInput.y"
+#line 319 "sqlParser1.y"
 { yyval.nPtr = opr(HAVING, 1, yyvsp[0].nPtr); ;
     break;}
 case 80:
-#line 320 "sqlParser1AlteredInput.y"
+#line 320 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 81:
-#line 324 "sqlParser1AlteredInput.y"
+#line 324 "sqlParser1.y"
 { yyval.nPtr = opr(EMPTY, 0); ;
     break;}
 case 82:
-#line 325 "sqlParser1AlteredInput.y"
+#line 325 "sqlParser1.y"
 { yyval.nPtr = opr(LIMIT, 1, con(yyvsp[0].iValue)); ;
     break;}
 case 83:
-#line 326 "sqlParser1AlteredInput.y"
+#line 326 "sqlParser1.y"
 { yyval.nPtr = opr(LIMIT, 2, con(yyvsp[-2].iValue), con(yyvsp[0].iValue)); ;
     break;}
 case 84:
-#line 327 "sqlParser1AlteredInput.y"
+#line 327 "sqlParser1.y"
 { yyval.nPtr = opr(LIMIT, 2, con(yyvsp[-2].iValue), con(yyvsp[0].iValue)); ;
     break;}
 case 85:
-#line 331 "sqlParser1AlteredInput.y"
+#line 331 "sqlParser1.y"
 { yyval.nPtr = opr(OR, 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 86:
-#line 332 "sqlParser1AlteredInput.y"
+#line 332 "sqlParser1.y"
 { yyval.nPtr = opr(AND, 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 87:
-#line 333 "sqlParser1AlteredInput.y"
+#line 333 "sqlParser1.y"
 { yyval.nPtr = opr(NOT, 1, yyvsp[0].nPtr); ;
     break;}
 case 88:
-#line 334 "sqlParser1AlteredInput.y"
+#line 334 "sqlParser1.y"
 { yyval.nPtr = yyvsp[-1].nPtr; ;
     break;}
 case 89:
-#line 335 "sqlParser1AlteredInput.y"
+#line 335 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 90:
-#line 339 "sqlParser1AlteredInput.y"
+#line 339 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 91:
-#line 340 "sqlParser1AlteredInput.y"
+#line 340 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 92:
-#line 349 "sqlParser1AlteredInput.y"
+#line 349 "sqlParser1.y"
 { yyval.nPtr = opr(COMPARISON, 3, yyvsp[-2].nPtr, comp(yyvsp[-1].sSubtok), yyvsp[0].nPtr); ;
     break;}
 case 93:
-#line 354 "sqlParser1AlteredInput.y"
+#line 354 "sqlParser1.y"
 { yyval.nPtr = opr(NOT, 1, opr(BETWEEN, 2, yyvsp[-5].nPtr, opr(AND, 2, yyvsp[-2].nPtr, yyvsp[0].nPtr))); ;
     break;}
 case 94:
-#line 355 "sqlParser1AlteredInput.y"
+#line 355 "sqlParser1.y"
 { yyval.nPtr = opr(BETWEEN, 2, yyvsp[-4].nPtr, opr(AND, 2, yyvsp[-2].nPtr, yyvsp[0].nPtr)); ;
     break;}
 case 95:
-#line 359 "sqlParser1AlteredInput.y"
+#line 359 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 96:
-#line 360 "sqlParser1AlteredInput.y"
+#line 360 "sqlParser1.y"
 { yyval.nPtr = opr(',', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 97:
-#line 364 "sqlParser1AlteredInput.y"
+#line 364 "sqlParser1.y"
 { yyval.nPtr = opr('+', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 98:
-#line 365 "sqlParser1AlteredInput.y"
+#line 365 "sqlParser1.y"
 { yyval.nPtr = opr('-', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 99:
-#line 366 "sqlParser1AlteredInput.y"
+#line 366 "sqlParser1.y"
 { yyval.nPtr = opr('*', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 100:
-#line 367 "sqlParser1AlteredInput.y"
+#line 367 "sqlParser1.y"
 { yyval.nPtr = opr('/', 2, yyvsp[-2].nPtr, yyvsp[0].nPtr); ;
     break;}
 case 101:
-#line 368 "sqlParser1AlteredInput.y"
+#line 368 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 102:
-#line 369 "sqlParser1AlteredInput.y"
+#line 369 "sqlParser1.y"
 { yyval.nPtr = opr(UMINUS, 1, yyvsp[0].nPtr); ;
     break;}
 case 103:
-#line 370 "sqlParser1AlteredInput.y"
+#line 370 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 104:
-#line 371 "sqlParser1AlteredInput.y"
+#line 371 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 105:
-#line 372 "sqlParser1AlteredInput.y"
+#line 372 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 106:
-#line 373 "sqlParser1AlteredInput.y"
+#line 373 "sqlParser1.y"
 { yyval.nPtr = yyvsp[-1].nPtr; ;
     break;}
 case 107:
-#line 378 "sqlParser1AlteredInput.y"
+#line 378 "sqlParser1.y"
 { yyval.nPtr = yyvsp[0].nPtr; ;
     break;}
 case 108:
-#line 379 "sqlParser1AlteredInput.y"
+#line 379 "sqlParser1.y"
 { yyval.nPtr = opr(USER, 0); ;
     break;}
 case 109:
-#line 390 "sqlParser1AlteredInput.y"
+#line 390 "sqlParser1.y"
 { yyval.nPtr = opr(AMMSC, 2, yyvsp[-3].nPtr, opr(SELALL, 0));;
     break;}
 case 110:
-#line 391 "sqlParser1AlteredInput.y"
+#line 391 "sqlParser1.y"
 { yyval.nPtr = opr(AMMSC, 3, yyvsp[-4].nPtr, opr(DISTINCT, 0), yyvsp[-1].nPtr); ;
     break;}
 case 111:
-#line 392 "sqlParser1AlteredInput.y"
+#line 392 "sqlParser1.y"
 { yyval.nPtr = opr(AMMSC, 3, yyvsp[-4].nPtr, opr(ALL, 0), yyvsp[-1].nPtr); ;
     break;}
 case 112:
-#line 393 "sqlParser1AlteredInput.y"
+#line 393 "sqlParser1.y"
 { yyval.nPtr = opr(AMMSC, 2, yyvsp[-3].nPtr, yyvsp[-1].nPtr); ;
     break;}
 case 113:
-#line 397 "sqlParser1AlteredInput.y"
+#line 397 "sqlParser1.y"
 { yyval.nPtr = text(yyvsp[0].sValue); ;
     break;}
 case 114:
-#line 398 "sqlParser1AlteredInput.y"
+#line 398 "sqlParser1.y"
 { yyval.nPtr = con(yyvsp[0].iValue); ;
     break;}
 case 115:
-#line 399 "sqlParser1AlteredInput.y"
+#line 399 "sqlParser1.y"
 { yyval.nPtr = con(yyvsp[0].fValue); ;
     break;}
 case 116:
-#line 403 "sqlParser1AlteredInput.y"
+#line 403 "sqlParser1.y"
 { yyval.nPtr = id(yyvsp[0].sName); ;
     break;}
 case 117:
-#line 404 "sqlParser1AlteredInput.y"
+#line 404 "sqlParser1.y"
 { yyval.nPtr = opr(DOT, 2, id(yyvsp[-2].sName), id2(yyvsp[0].sName));;
     break;}
 case 118:
-#line 405 "sqlParser1AlteredInput.y"
+#line 405 "sqlParser1.y"
 { yyval.nPtr = opr(ALIAS, 2, id(yyvsp[-2].sName), id2(yyvsp[0].sName));  ;
     break;}
 case 119:
-#line 410 "sqlParser1AlteredInput.y"
+#line 410 "sqlParser1.y"
 { yyval.nPtr = opr(CHARACTER, 0); ;
     break;}
 case 120:
-#line 411 "sqlParser1AlteredInput.y"
+#line 411 "sqlParser1.y"
 { yyval.nPtr = opr(CHARACTER, 1, con(yyvsp[-1].iValue)); ;
     break;}
 case 121:
-#line 412 "sqlParser1AlteredInput.y"
+#line 412 "sqlParser1.y"
 { yyval.nPtr = opr(VARCHAR, 0); ;
     break;}
 case 122:
-#line 413 "sqlParser1AlteredInput.y"
+#line 413 "sqlParser1.y"
 { yyval.nPtr = opr(VARCHAR, 1, con(yyvsp[-1].iValue)); ;
     break;}
 case 123:
-#line 414 "sqlParser1AlteredInput.y"
+#line 414 "sqlParser1.y"
 { yyval.nPtr = opr(NUMERIC, 0); ;
     break;}
 case 124:
-#line 415 "sqlParser1AlteredInput.y"
+#line 415 "sqlParser1.y"
 { yyval.nPtr = opr(NUMERIC, 1, con(yyvsp[-1].iValue)); ;
     break;}
 case 125:
-#line 416 "sqlParser1AlteredInput.y"
+#line 416 "sqlParser1.y"
 { yyval.nPtr = opr(NUMERIC, 1, opr(',', 2, yyvsp[-3].iValue, yyvsp[-1].iValue)); ;
     break;}
 case 126:
-#line 417 "sqlParser1AlteredInput.y"
+#line 417 "sqlParser1.y"
 { yyval.nPtr = opr(DECIMAL, 0); ;
     break;}
 case 127:
-#line 418 "sqlParser1AlteredInput.y"
+#line 418 "sqlParser1.y"
 { yyval.nPtr = opr(DECIMAL, 1, con(yyvsp[-1].iValue)); ;
     break;}
 case 128:
-#line 419 "sqlParser1AlteredInput.y"
+#line 419 "sqlParser1.y"
 { yyval.nPtr = opr(DECIMAL, 1, opr(',', 2, con(yyvsp[-3].iValue), con(yyvsp[-1].iValue))); ;
     break;}
 case 129:
-#line 420 "sqlParser1AlteredInput.y"
+#line 420 "sqlParser1.y"
 { yyval.nPtr = opr(INTEGER, 0); ;
     break;}
 case 130:
-#line 421 "sqlParser1AlteredInput.y"
+#line 421 "sqlParser1.y"
 { yyval.nPtr = opr(SMALLINT, 0); ;
     break;}
 case 131:
-#line 422 "sqlParser1AlteredInput.y"
+#line 422 "sqlParser1.y"
 { yyval.nPtr = opr(FLOAT, 0); ;
     break;}
 case 132:
-#line 423 "sqlParser1AlteredInput.y"
+#line 423 "sqlParser1.y"
 { yyval.nPtr = opr(FLOAT, 1, con(yyvsp[-1].iValue)); ;
     break;}
 case 133:
-#line 424 "sqlParser1AlteredInput.y"
+#line 424 "sqlParser1.y"
 { yyval.nPtr = opr(REAL, 0); ;
     break;}
 case 134:
-#line 425 "sqlParser1AlteredInput.y"
+#line 425 "sqlParser1.y"
 { yyval.nPtr = opr(DOUBLE, 1, opr(PRECISION, 0)); ;
     break;}
 case 135:
-#line 429 "sqlParser1AlteredInput.y"
+#line 429 "sqlParser1.y"
 { yyval.nPtr = id(yyvsp[0].sName); ;
     break;}
 case 136:
-#line 430 "sqlParser1AlteredInput.y"
+#line 430 "sqlParser1.y"
 { yyval.nPtr = opr(DOT, 2, id(yyvsp[-2].sName), id2(yyvsp[0].sName));;
     break;}
 case 137:
-#line 431 "sqlParser1AlteredInput.y"
+#line 431 "sqlParser1.y"
 { yyval.nPtr = opr(DOT, 2, id(yyvsp[-4].sName),  opr(DOT, 2, id(yyvsp[-4].sName), id2(yyvsp[-2].sName)));;
     break;}
 case 138:
-#line 432 "sqlParser1AlteredInput.y"
+#line 432 "sqlParser1.y"
 { yyval.nPtr = opr(ALIAS, 2, id(yyvsp[-2].sName), id2(yyvsp[0].sName)); ;
     break;}
 case 139:
-#line 436 "sqlParser1AlteredInput.y"
+#line 436 "sqlParser1.y"
 { yyval.nPtr = id(yyvsp[0].sName); ;
     break;}
 case 140:
-#line 439 "sqlParser1AlteredInput.y"
+#line 439 "sqlParser1.y"
 { yyval.nPtr = id(yyvsp[0].sName); ;
     break;}
 case 141:
-#line 443 "sqlParser1AlteredInput.y"
+#line 443 "sqlParser1.y"
 { yyval.nPtr = opr(AVG, 0); ;
     break;}
 case 142:
-#line 444 "sqlParser1AlteredInput.y"
+#line 444 "sqlParser1.y"
 { yyval.nPtr = opr(MIN, 0); ;
     break;}
 case 143:
-#line 445 "sqlParser1AlteredInput.y"
+#line 445 "sqlParser1.y"
 { yyval.nPtr = opr(MAX, 0); ;
     break;}
 case 144:
-#line 446 "sqlParser1AlteredInput.y"
+#line 446 "sqlParser1.y"
 { yyval.nPtr = opr(SUM, 0); ;
     break;}
 case 145:
-#line 447 "sqlParser1AlteredInput.y"
+#line 447 "sqlParser1.y"
 { yyval.nPtr = opr(COUNT, 0); ;
     break;}
 }
@@ -2351,7 +2351,7 @@ YYLABEL(yyerrhandle)
 /* END */
 
  #line 1038 "/usr/share/bison++/bison.cc"
-#line 449 "sqlParser1AlteredInput.y"
+#line 449 "sqlParser1.y"
 
 
 nodeType *id(char* s) {
@@ -2496,10 +2496,10 @@ int yyerror(const char *s) {
     return 1;
 }
 
-/*
+
 
 int main(void) {
     int i = yyparse();
     //printf("success? %d\n", i);
     return i;
-}*/
+}

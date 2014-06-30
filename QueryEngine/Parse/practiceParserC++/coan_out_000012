@@ -1,0 +1,4 @@
+#ifndef YY_AlgCalcParser_h_included
+#define YY_AlgCalcParser_h_included
+#define YY_USE_CLASS
+

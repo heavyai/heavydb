@@ -13,7 +13,7 @@
 
  #line 8 "/usr/share/bison++/bison.h"
 
-#line 33 "sqlParser1AlteredInput.y"
+#line 33 "sqlParser1.y"
 typedef union {
     char *sValue;                /* string*/
     char *sName;

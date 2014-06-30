@@ -2,6 +2,8 @@
 #include "sqlParser1.h"
 #include <string.h>
 #include "y.tab.h"
+#include <iostream>
+using namespace std;
 
 #define TOK(name) { return name; }
 
@@ -21,7 +23,8 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 /* sql lexer, only for select */
 %}
 
-
+%option c++
+%option batch
 
 %%
 
