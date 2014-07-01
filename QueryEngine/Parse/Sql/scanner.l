@@ -8,6 +8,8 @@
 #include "parser.h"
 using namespace std;
 
+extern yy_Parser_stype yylval;
+
 #define TOK(name) { return name; }
 
 int lineno = 1;
@@ -31,68 +33,68 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 %%
 
 		/* literal keyword tokens */
-"user"		return USER;
-"select"	return SELECT;
-"from"      return FROM;
-"where"		return WHERE;
-"having"	return HAVING;
-"all"		return ALL;
-"distinct"	return DISTINCT;
+"user"		return Parser::USER;
+"select"	return Parser::SELECT;
+"from"      return Parser::FROM;
+"where"		return Parser::WHERE;
+"having"	return Parser::HAVING;
+"all"		return Parser::ALL;
+"distinct"	return Parser::DISTINCT;
 
-"update"	return UPDATE;
-"of"		return OF;
-"current"	return CURRENT;
-"null"		return NULLX;
-"set"		return SET;
+"update"	return Parser::UPDATE;
+"of"		return Parser::OF;
+"current"	return Parser::CURRENT;
+"null"		return Parser::NULLX;
+"set"		return Parser::SET;
 
-"insert"	return INSERT;
-"values"	return VALUES;
-"into"		return INTO;
+"insert"	return Parser::INSERT;
+"values"	return Parser::VALUES;
+"into"		return Parser::INTO;
 
-"create"	return CREATE;
-"table"		return TABLE;
-"not"		return NOT;
-"unique"	return UNIQUE;
-"primary"	return PRIMARY;
-"key"		return KEY;
-"default"	return DEFAULT;
-"check"		return CHECK;
-"references"	return REFERENCES;
-"foreign"	return FOREIGN;
+"create"	return Parser::CREATE;
+"table"		return Parser::TABLE;
+"not"		return Parser::NOT;
+"unique"	return Parser::UNIQUE;
+"primary"	return Parser::PRIMARY;
+"key"		return Parser::KEY;
+"default"	return Parser::DEFAULT;
+"check"		return Parser::CHECK;
+"references"	return Parser::REFERENCES;
+"foreign"	return Parser::FOREIGN;
 
-"varchar"			return VARCHAR;
-"char"("acter")?	return CHARACTER;
-"int"("eger")?		return INTEGER;
-"smallint"			return SMALLINT;
-"numeric"	return NUMERIC;
-"decimal"	return DECIMAL;
-"float"		return FLOAT;
-"real"		return REAL;
-"double"	return DOUBLE;
-"precision"	return PRECISION;
-"drop"		return DROP;
+"varchar"			return Parser::VARCHAR;
+"char"("acter")?	return Parser::CHARACTER;
+"int"("eger")?		return Parser::INTEGER;
+"smallint"			return Parser::SMALLINT;
+"numeric"	return Parser::NUMERIC;
+"decimal"	return Parser::DECIMAL;
+"float"		return Parser::FLOAT;
+"real"		return Parser::REAL;
+"double"	return Parser::DOUBLE;
+"precision"	return Parser::PRECISION;
+"drop"		return Parser::DROP;
 
-"avg"		return AVG;
-"min"		return MIN;
-"max"		return MAX;
-"sum"		return SUM;
-"count"		return COUNT;
+"avg"		return Parser::AVG;
+"min"		return Parser::MIN;
+"max"		return Parser::MAX;
+"sum"		return Parser::SUM;
+"count"		return Parser::COUNT;
 
-"group"		return GROUP;
-"order"		return ORDER;
-"by"		return BY;
+"group"		return Parser::GROUP;
+"order"		return Parser::ORDER;
+"by"		return Parser::BY;
 
 "as"						{
 								/* ensure that aliased name is printed fully. */
 								asFlag = 1;
-								return AS;
+								return Parser::AS;
 							}
 
-"asc"		return ASC;
-"desc"		return DESC;
+"asc"		return Parser::ASC;
+"desc"		return Parser::DESC;
 
-"limit"		return LIMIT;
-"offset"	return OFFSET;
+"limit"		return Parser::LIMIT;
+"offset"	return Parser::OFFSET;
 
 "="	|
 "<>" |
@@ -102,7 +104,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 ">="			{ 
 					comparisonLength = (int) strlen(yytext);
 					yylval.sSubtok = yytext;
-					return COMPARISON;
+					return Parser::COMPARISON;
 				}
 
 
@@ -130,14 +132,14 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 										/* printf("%d %d %s \n", (int) strlen(yytext), textLength, yytext); */
 
 										yylval.sName = yytext;
-										return NAME;
+										return Parser::NAME;
 									}
 
 	/* parameters
 ":"[A-Za-z][A-Za-z0-9_]*	{
 									yylval.sParam = yytext + 1;
 									textLength = ((int) strlen(yytext)) - 1;
-									return PARAMETER;
+									return Parser::PARAMETER;
 							} 
 		 */
 
@@ -147,7 +149,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 [0-9]+"."[0-9]* |
 "."[0-9]*							{ 
 										yylval.iValue = atof(yytext);
-										return INTNUM;
+										return Parser::INTNUM;
 									}
 
 
@@ -155,20 +157,20 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 [0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
 "."[0-9]*[eE][+-]?[0-9]+			{ 
 										yylval.iValue = atof(yytext);
-										return APPROXNUM;
+										return Parser::APPROXNUM;
 									}
 
 	/* strings */
 
 '[^'\n]*'	{
 		textLength = (int) strlen(yytext);
-		int c = input();
+		int c = yyinput();
 
 		unput(c);	/* just peeking */
 		if(c != '\'') {
 			//printf("reading string: %s\n", yytext);
 			yylval.sValue = yytext;
-			return STRING;
+			return Parser::STRING;
 		} else 
 			yymore();
 		
@@ -176,7 +178,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 		
 '[^'\n]*$			{	yyerror("Unterminated string"); }
 
-\n		{ lineno++; }
+\n		{ yylineno++; }
 
 [ \t\r]+	;	/* white space */
 

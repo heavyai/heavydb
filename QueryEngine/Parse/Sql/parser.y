@@ -5,6 +5,7 @@
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
+%define USE_CONST_TOKEN 1
 
 %header{
 #include <stdio.h>
@@ -14,13 +15,13 @@
 #include "types.h"
 #include <FlexLexer.h>
 
-#define YYDEBUG 1
+//#define YYDEBUG 1
 
-#ifdef DEBUG
-#define TRACE printf("reduce at line %d\n", __LINE__);
-#else
-#define TRACE
-#endif
+//#ifdef DEBUG
+//#define TRACE printf("reduce at line %d\n", __LINE__);
+//#else
+//#define TRACE
+//#endif
 
 /* prototypes */
 nodeType *opr(int oper, int nops, ...);
