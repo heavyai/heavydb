@@ -1,0 +1,12 @@
+To generate cpp files use:
+1. bison++ -d -hparser.h -o parser.cpp parser.y
+2. flex++ -d -oscanner.cpp scanner.l
+
+To compile the files use:
+1. g++ -c parser.cpp
+2. g++ -c scanner.cpp
+3. g++ -c test.cpp
+
+To link them all
+1. g++ -o test test.o parser.o scanner.o YYDEBUG 1
+
