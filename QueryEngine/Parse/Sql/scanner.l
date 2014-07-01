@@ -12,6 +12,7 @@ yy_Parser_stype yylval;
 
 #define TOK(name) { return name; }
 
+//int lineno = 1;
 //void yyerror(const char *s);
 
 int textLength;
@@ -26,7 +27,6 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 
 /* sql lexer, only for select */
 %}
-
 
 
 %%
@@ -175,7 +175,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 		
 	}
 		
-'[^'\n]*$			{	/*yyerror("Unterminated string");*/ }
+'[^'\n]*$			{	/*error("Unterminated string");*/ }
 
 \n		{ yylineno++; }
 
@@ -184,7 +184,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 "--".*	;	/* comment */
 
 .						{
-							/*yyerror("Unknown character");*/
+							/*error("Unknown character");*/
 							printf("%s\n", yytext);
 						}
 
