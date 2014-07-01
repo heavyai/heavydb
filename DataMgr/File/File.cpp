@@ -1,19 +1,45 @@
+/**
+ * @file    File.cpp
+ * @author  Steven Stewart <steve@map-d.com>
+ * @brief   Implementation of helper methods for File I/O.
+ *
+ */
 #include <iostream>
 #include <cassert>
+#include <unistd.h>
 #include "File.h"
 
 #define MAPD_FILE_EXT ".mapd"
 
 namespace File {
 
-    FILE* open(int fileId, bool create, mapd_err_t *err) {
+    FILE* create(int fileId, mapd_size_t blockSize, mapd_size_t nblocks, mapd_err_t *err) {
+        if (nblocks < 1 || blockSize < 1) {
+            if (err) *err = MAPD_ERR_FILE_CREATE;
+            return NULL;
+        }
         FILE *f;
         std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
+        f = fopen(s.c_str(), "w+b");
+        fseek(f, (blockSize * nblocks)-1, SEEK_SET);
+        fputc(EOF, f);
+        fseek(f, 0, SEEK_SET); // rewind
+        assert(fileSize(f) == (blockSize * nblocks));
+        fprintf(stdout, "[FileMgr] created file %d (blk_sz=%u, nblocks=%u, file_sz=%lu)\n", fileId, blockSize, nblocks, fileSize(f));
+        
+        if (err) {
+            if ((fileSize(f) != blockSize * nblocks) || !f)
+                *err = MAPD_ERR_FILE_CREATE;
+            else
+                *err = MAPD_SUCCESS;
+        }
+        return f;
+    }
 
-        if (create)
-            f = fopen(s.c_str(), "w+b"); // creates new file for updates
-        else
-            f = fopen(s.c_str(), "r+b"); // opens existing file for updates
+    FILE* open(int fileId, mapd_err_t *err) {
+        FILE *f;
+        std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
+        f = fopen(s.c_str(), "r+b"); // opens existing file for updates
         
         if (f != NULL && err)
             *err = MAPD_SUCCESS;

@@ -14,19 +14,17 @@
 
 namespace File {
 
+    FILE* create(int fileId, mapd_size_t blockSize, mapd_size_t nblocks, mapd_err_t *err);
+
     /**
      * @brief Opens/creates the file with the given id; returns NULL on error.
-     *
-     * This function opens the file with the given id (fileId), or it creates the file
-     * if the create flag is true; otherwise, NULL is returned an err is set to an
-     * error code (MAPD_ERR_FILE_OPEN).
      *
      * @param fileId The id of the file to open.
      * @param create A flag indicating whether or not to create a new file
      * @param err An error code, should an error occur.
      * @return FILE* A pointer to a FILE pointer, or NULL on error.
      */
-    FILE* open(int fileId, bool create, mapd_err_t *err);
+    FILE* open(int fileId, mapd_err_t *err);
     
     /**
      * @brief Closes the file pointed to by the FILE pointer.

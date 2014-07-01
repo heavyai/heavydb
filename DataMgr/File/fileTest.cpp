@@ -12,10 +12,9 @@
 using namespace Testing;
 
 // unit test function prototypes
-bool test_open();
-bool test_close();
-bool test_read_write_append();
-bool test_read_write_append_block();
+bool test_open_close();
+bool test_create_read_write_append();
+bool test_create_read_write_append_block();
 
 #define BLOCKSIZE 10
 #define FILEID 0
@@ -32,40 +31,47 @@ int main() {
     }
 
     // call unit tests
-    test_open() ? 
-        PPASS("open()") : PFAIL("open()"); 
-    test_close() ? 
-        PPASS("close()") : PFAIL("close()"); 
-    test_read_write_append() ? 
-        PPASS("read_write_append()") : PFAIL("read_write_append()"); 
-    test_read_write_append_block() ? 
-        PPASS("read_write_append_block()") : PFAIL("read_write_append_block()"); 
+    test_open_close() ? 
+        PPASS("open_close()") : PFAIL("open_close()"); 
+    test_create_read_write_append() ? 
+          PPASS("create_read_write_append()") : PFAIL("create_read_write_append()"); 
+    test_create_read_write_append_block() ? 
+          PPASS("create_read_write_append_block()") : PFAIL("create_read_write_append_block()"); 
     
     printTestSummary();
     
     return 0;
 }
 
-bool test_open() {
-    FILE *f = File::open(FILEID, true, NULL);
+bool test_open_close() {
+    mapd_err_t err;
+    FILE *f;
+    
+    f = File::create(FILEID, BLOCKSIZE, 1, &err);
+    if (!f || err != MAPD_SUCCESS)
+        return false;
+    File::close(f);
+    
+    f = File::open(FILEID, NULL);
     if (!f) return false;
     return (File::close(f) == MAPD_SUCCESS);
 }
 
-bool test_close() {
-    FILE *f = File::open(FILEID, true, NULL);
-    if (!f) return false;
-    return (File::close(f) == MAPD_SUCCESS);
-}
-
-bool test_read_write_append() {
+bool test_create_read_write_append() {
     int i, j;
     char buf[BLOCKSIZE];
     size_t sz;
     mapd_err_t err;
-
+    FILE *f;
+    
     // create a file for testing
-    FILE *f = File::open(FILEID, true, &err);
+    f = File::create(FILEID, BLOCKSIZE, 1, &err);
+    if (!f || err != MAPD_SUCCESS)
+        return false;
+    File::close(f);
+    
+    // open the file for testing
+    f = File::open(FILEID, &err);
     if (!f || err != MAPD_SUCCESS)
         return false;
 
@@ -112,14 +118,21 @@ bool test_read_write_append() {
     return (File::close(f) == MAPD_SUCCESS);
 }
 
-bool test_read_write_append_block() {
+bool test_create_read_write_append_block() {
     int i, j;
     char buf[BLOCKSIZE];
     size_t sz;
     mapd_err_t err;
-
+    FILE *f;
+    
     // create a file for testing
-    FILE *f = File::open(FILEID, true, &err);
+    f = File::create(FILEID, BLOCKSIZE, 1, &err);
+    if (!f || err != MAPD_SUCCESS)
+        return false;
+    File::close(f);
+    
+    // open the file for testing
+    f = File::open(FILEID, &err);
     if (!f || err != MAPD_SUCCESS)
         return false;
 
