@@ -8,5 +8,5 @@ To compile the files use:
 3. g++ -c test.cpp
 
 To link them all
-1. g++ -o test test.o parser.o scanner.o YYDEBUG 1
+1. g++ -o test test.o parser.o scanner.o 
 
