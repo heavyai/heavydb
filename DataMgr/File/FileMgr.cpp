@@ -14,6 +14,50 @@
 
 unsigned int FileMgr::nextFileId = 0;
 
+FileInfo::FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks)
+     : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks)
+{
+    assert(f);
+    
+    // initialize blocks and free block list
+    for (int i = 0; i < nblocks; ++i) {
+        blocks.push_back(BlockInfo(BlockAddr(fileId, i * blockSize), blockSize, 0));
+        freeBlocks.insert(i);
+    }
+}
+
+FileInfo::~FileInfo() {
+    mapd_err_t err = File::close(f);
+    if (err != MAPD_SUCCESS)
+        fprintf(stderr, "[%s:%d] Error closing file %d.\n", __func__, __LINE__, fileId);
+}
+
+void FileInfo::print(bool blockSummary) {
+    printf("File #%d", fileId);
+    printf(" size = %u", size());
+    printf(" used = %u", used());
+    printf(" free = %u", available());
+    printf("\n");
+    if (!blockSummary)
+        return;
+    
+    for (int i = 0; i < blocks.size(); ++i) {
+
+        // obtain reference to current block
+        BlockInfo &bInfo = blocks[i];
+
+        // check if current block is in free list
+        std::set<mapd_size_t>::iterator it = find(freeBlocks.begin(), freeBlocks.end(), i);
+        bool isFree = it != freeBlocks.end();
+
+        // print block metadata
+        printf("[%d] %s%s %u/%u", i, (isFree ? "f":"-"), (bInfo.isShadow) ? "s" : "-", bInfo.endByteOffset, bInfo.blockSize);
+        assert(bInfo.blockSize == this->blockSize);
+        printf(" ep=%u", bInfo.epoch);
+        printf("\n");
+    }
+}
+
 FileMgr::FileMgr(const std::string &basePath) {
 	basePath_ = basePath;
 }
@@ -41,15 +85,12 @@ FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nbl
 }
 
 mapd_err_t FileMgr::deleteFile(const int fileId) {
+    mapd_err_t err;
     FileMap::iterator iter = files_.find(fileId);
 
     if (iter != files_.end()) { // delete FileInfo object
         // obtain FileInfo pointer
-        FileInfo *fInfo = findFile(fileId, NULL);
-        
-        // close open file handle
-        if (fInfo->f)
-            File::close(fInfo->f);
+        FileInfo *fInfo = getFile(fileId, NULL);
         
         // free memory used by FileInfo object
         delete fInfo;
@@ -62,7 +103,7 @@ mapd_err_t FileMgr::deleteFile(const int fileId) {
     return MAPD_FAILURE;
 }
 
-FileInfo* FileMgr::findFile(const int fileId, mapd_err_t *err) {
+FileInfo* FileMgr::getFile(const int fileId, mapd_err_t *err) {
     FileMap::iterator iter = files_.find(fileId);
     if (iter != files_.end()) {
         if (err) *err = MAPD_SUCCESS;
@@ -70,6 +111,42 @@ FileInfo* FileMgr::findFile(const int fileId, mapd_err_t *err) {
     }
     if (err) *err = MAPD_ERR_FILE_NOT_FOUND;
     return NULL;
+}
+
+BlockInfo* FileMgr::getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err) {
+    if (err) *err = MAPD_FAILURE;
+    FileInfo *fInfo = FileMgr::getFile(fileId, err);
+    if (fInfo && blockNum < fInfo->blocks.size()) {
+        BlockInfo *bInfo = &fInfo->blocks[blockNum];
+        if (err && bInfo) *err = MAPD_SUCCESS;
+        return bInfo;
+    }
+    return NULL;
+}
+
+BlockInfo* getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err) {
+    if (err) *err = MAPD_FAILURE;
+    if (blockNum < fInfo.blocks.size()) {
+        BlockInfo *bInfo = &fInfo.blocks[blockNum];
+        if (err && bInfo) *err = MAPD_SUCCESS;
+        return bInfo;
+    }
+    return NULL;
+}
+
+mapd_err_t FileMgr::clearBlock(const int fileId, mapd_size_t blockNum) {
+    mapd_err_t err = MAPD_SUCCESS;
+    BlockInfo *bInfo = getBlock(fileId, blockNum, &err);
+    if (bInfo && err == MAPD_SUCCESS)
+        bInfo->endByteOffset = 0;
+    return err;
+}
+
+mapd_err_t FileMgr::freeBlock(const int fileId, mapd_size_t blockNum) {
+    mapd_err_t err = MAPD_SUCCESS;
+    FileInfo *fInfo = getFile(fileId, &err);
+    fInfo->freeBlocks.insert(blockNum);
+    return err;
 }
 
 /**
