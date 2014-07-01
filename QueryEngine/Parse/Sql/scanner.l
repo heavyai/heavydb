@@ -8,12 +8,11 @@
 #include "parser.h"
 using namespace std;
 
-extern yy_Parser_stype yylval;
+yy_Parser_stype yylval;
 
 #define TOK(name) { return name; }
 
-int lineno = 1;
-void yyerror(const char *s);
+//void yyerror(const char *s);
 
 int textLength;
 int textLength2;
@@ -176,7 +175,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 		
 	}
 		
-'[^'\n]*$			{	yyerror("Unterminated string"); }
+'[^'\n]*$			{	/*yyerror("Unterminated string");*/ }
 
 \n		{ yylineno++; }
 
@@ -185,7 +184,7 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 "--".*	;	/* comment */
 
 .						{
-							yyerror("Unknown character");
+							/*yyerror("Unknown character");*/
 							printf("%s\n", yytext);
 						}
 
