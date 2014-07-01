@@ -1,7 +1,7 @@
 /**
  * @file    File.h
  * @author  Steven Stewart <steve@map-d.com>
- * @brief   This file contains the class specification for File.
+ * @brief   A selection of helper methods for File I/O.
  *
  */
 #ifndef _FILE_H
@@ -12,140 +12,106 @@
 #include "../../Shared/errors.h"
 #include "../../Shared/types.h"
 
-/**
- * @class  File
- * @author Steven Stewart <steve@map-d.com>
- * @brief  A class that implements basic file I/O.
- *
- * A file object represents data stored on physical disk. It's interface
- * facilitates reading and writing data to/from specific files. The client
- * can interact with the file at the byte or logical block level. The size
- * of a logical block is passed to the File via its constructor.
- *
- * @see Forbid copying idiom
- */
-class File {
-    
-public:
+namespace File {
+
+    FILE* create(int fileId, mapd_size_t blockSize, mapd_size_t nblocks, mapd_err_t *err);
+
     /**
-     * A constructor that instantiates a File with a logical block size.
-     * @see Explicit constructor idiom
-     */ 
-    explicit File(size_t blockSize);
-    
-    /**
-     * The destructor must release the handle for the file (FILE *f_).
+     * @brief Opens/creates the file with the given id; returns NULL on error.
+     *
+     * @param fileId The id of the file to open.
+     * @param create A flag indicating whether or not to create a new file
+     * @param err An error code, should an error occur.
+     * @return FILE* A pointer to a FILE pointer, or NULL on error.
      */
-    ~File();
+    FILE* open(int fileId, mapd_err_t *err);
     
     /**
-     * Given the file name, this method opens a file handle. If the file
-     * doesn't exist, then it is created. If the file exists and the
-     * boolean "create" is false, then MAPD_ERR_FILE_OPEN is returned;
-     * otherwise, a new empty file is created. Upon success, MAPD_SUCCESS
-     * is returned.
+     * @brief Closes the file pointed to by the FILE pointer.
      *
-     * Note that if the file object already has an open file handle, then
-     * MAPD_ERR_FILE_OPEN is returned.
-     *
-     * @param fname The file name to be opened.
-     * @param create Indicates whether or not to create a new, empty file
-     * @return MAPD_ERR_FILE_OPEN or MAPD_SUCCESS
+     * @param f Pointer to the FILE.
+     * @return mapd_err_t Returns an error code when unable to close the file properly.
      */
-    mapd_err_t open(const std::string &fname, bool create = false);
-    
+    mapd_err_t close(FILE *f);
+
     /**
-     * @brief Closes the file.
-     * The file is closed so that additional file I/O cannot be performed.
+     * @brief Reads the specified number of bytes from the offset position in file f into buf.
      *
-     * @return MAPD_ERR_FILE_CLOSE or MAPD_SUCCESS
+     * @param f Pointer to the FILE.
+     * @param offset The location within the file from which to read.
+     * @param n The number of bytes to be read.
+     * @param buf The destination buffer to where data is being read from the file.
+     * @param err If not NULL, will hold an error code should an error occur.
+     * @return size_t The number of bytes read.
      */
-    mapd_err_t close();
+    size_t read(FILE *f, mapd_size_t offset, mapd_size_t n, void *buf, mapd_err_t *err);
     
     /**
-     * @brief Reads from the file to a buffer.
-     * This method reads "n" bytes into the buffer "buf" starting at position
-     * "pos" of the file.
+     * @brief Writes the specified number of bytes to the offset position in file f from buf.
      *
-     * @param pos The starting position in the file from where to read.
-     * @param n The number of bytes to read from the file.
-     * @param buf A pointer to a memory buffer.
-     * @return MAPD_ERR_FILE_READ or MAPD_SUCCESS
-     */
-    mapd_err_t read(mapd_size_t pos, mapd_size_t n, void *buf) const;
-    
-    /**
-     * @brief Writes to the file from a buffer.
-     * This method writes "n" bytes from the buffer "buf" to position
-     * "pos" of the file.
-     *
-     * @param pos The starting position in the file for writing.
+     * @param f Pointer to the FILE.
+     * @param offset The location within the file where data is being written.
      * @param n The number of bytes to write to the file.
-     * @param buf A pointer to a memory buffer to be written to the file.
-     * @return MAPD_ERR_FILE_WRITE or MAPD_SUCCESS
+     * @param buf The source buffer containing the data to be written.
+     * @param err If not NULL, will hold an error code should an error occur.
+     * @return size_t The number of bytes written.
      */
-    mapd_err_t write(mapd_size_t pos, mapd_size_t n, void *buf);
+    size_t write(FILE *f, mapd_size_t offset, mapd_size_t n, void *buf, mapd_err_t *err);
+    
+   /**
+    * @brief Appends the specified number of bytes to the end of the file f from buf.
+    *
+    * @param f Pointer to the FILE.
+    * @param n The number of bytes to append to the file.
+    * @param buf The source buffer containing the data to be appended.
+    * @param err If not NULL, will hold an error code should an error occur.
+    * @return size_t The number of bytes written.
+    */
+    size_t append(FILE *f, mapd_size_t n, void *buf, mapd_err_t *err);
     
     /**
-     * @brief Appends data to a file from a buffer.
-     * This method appends "n" bytes from the buffer "buf" to the end
-     * of the file.
+     * @brief Reads the specified block from the file f into buf.
      *
-     * @param n The number of bytes to append to the file.
-     * @param buf A pointer to a memory buffer to be appended to the file.
-     * @return MAPD_ERR_FILE_WRITE or MAPD_SUCCESS
+     * @param f Pointer to the FILE.
+     * @param blockSize The logical block size of the file.
+     * @param blockNum The block number from where data is being read.
+     * @param buf The destination buffer to where data is being written.
+     * @param err If not NULL, will hold an error code should an error occur.
+     * @return size_t The number of bytes read (should be equal to blockSize).
      */
-    mapd_err_t append(mapd_size_t n, void *buf);
+    size_t readBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, void *buf, mapd_err_t *err);
     
     /**
-     * @brief Reads a specific block from the file to a buffer.
-     * This method reads the contents a logical block into the buffer. The
-     * block number is specified by blockNum.
+     * @brief Writes a block from buf to the file.
      *
-     * @param blockNum The logical block number in the file to be read from.
-     * @param buf A pointer to a memory buffer where the block will be written.
-     * @return MAPD_ERR_FILE_READ or MAPD_SUCCESS
+     * @param f Pointer to the FILE.
+     * @param blockSize The logical block size of the file.
+     * @param blockNum The block number to where data is being written.
+     * @param buf The source buffer from where data is being read.
+     * @param err If not NULL, will hold an error code should an error occur.
+     * @return size_t The number of bytes written (should be equal to blockSize).
      */
-    mapd_err_t readBlock(mapd_size_t blockNum, void *buf) const;
-    
+    size_t writeBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, void *buf, mapd_err_t *err);
+
     /**
-     * @brief Writes to the logical block in the file from a buffer.
-     * This method writes the buffer "buf" to a logical block in the
-     * file given by blockNum.
+     * @brief Appends a block from buf to the file.
      *
-     * @param blockNum The logical block being written to.
-     * @param buf A pointer to a memory buffer that will be written to the file block.
-     * @return MAPD_ERR_FILE_WRITE or MAPD_SUCCESS
+     * @param f Pointer to the FILE.
+     * @param blockSize The logical block size of the file.
+     * @param blockNum The block number to where data is being appended.
+     * @param buf The source buffer from where data is being read.
+     * @param err If not NULL, will hold an error code should an error occur.
+     * @return size_t The number of bytes appended (should be equal to blockSize).
      */
-    mapd_err_t writeBlock(mapd_size_t blockNum, void *buf);
-    
-    // Accessor(s) and Mutator(s)
-    inline bool isOpen() const { return (f_ != NULL); }     /**< Returns true if the file exists. */
-    inline size_t blockSize() const { return blockSize_; }  /**< Returns the logical block size. */
-    inline size_t fileSize() const { return nblocks_ * blockSize_; } /**< Returns the file size in number of bytes. */
-    inline void blockSize(size_t v) { blockSize_ = v; }     /**< Sets the logical block size to a new value. */
-    
-private:
-    FILE *f_;               /**< a pointer to a file handle */
-    std::string fileName_;  /**< the name of the file on physical disk */
-    size_t blockSize_;      /**< the logical block size for the file */
-	mapd_size_t nblocks_;   /**< the number of blocks allocated for the file. */
-    mapd_size_t fileSize_;  /**< the size of the file in bytes */
-    
+    size_t appendBlock(FILE *f, mapd_size_t blockSize, void *buf, mapd_err_t *err);
+
     /**
-     * The copy constructor is made private to prevent attempts to copy a File object.
-     * The rationale is that we don't want two different hooks to the file handle
-     * at the same time.
+     * @brief Returns the size of the specified file.
+     * @param f A pointer to the file.
+     * @return size_t The number of bytes of the file.
      */
-    File(const File&);
-	
-    /**
-     * The assignment constructor is made private to prevent attempts to copy a File object.
-     * The rationale is that we don't want two different hooks to the file handle
-     * at the same time.
-     */
-    File& operator=(const File&);
-	
-}; // class File
+    size_t fileSize(FILE *f);
+
+} // namespace File
 
 #endif // _FILE_H
