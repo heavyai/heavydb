@@ -9,9 +9,11 @@
  *
  * It is recommended that any reader of this file first read through the descriptions of all the 
  * types and data structures used by the file manager.
- * 
  *
- * @see File
+ * The file manager manages files, which are a collection of logical blocks. Each file has its own
+ * logical block size (@see FileInfo).
+ *
+ * @see File.h
  */
 #ifndef FILEMGR_H
 #define FILEMGR_H
@@ -21,11 +23,59 @@
 #include <list>
 #include <utility>
 #include <string>
+#include <cassert>
 
 #include "File.h"
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
 
+/**
+ * @type FileInfo
+ * @brief A FileInfo type has a file pointer and metadata about a file.
+ *
+ * A file info structure wraps around a file pointer in order to contain additional
+ * information/metadata about the file that is pertinent to the file manager.
+ *
+ * The free blocks within a file must be tracked, and this is implemented using a
+ * linked list. Helper functions are provided: size(), available(), and used().
+ */
+struct FileInfo {
+    int fileId;
+    FILE *f;
+    std::list<mapd_size_t> freeBlocks;
+    mapd_size_t blockSize;
+    mapd_size_t nblocks;
+    
+    inline mapd_size_t size() { return blockSize * nblocks; }
+    inline mapd_size_t available() { return freeBlocks.size() * blockSize; }
+    inline mapd_size_t used() { return size() - available(); }
+
+    /// Constructor
+    FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks)
+         : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks)
+    {
+        assert(f);
+        
+        // initialize free block list
+        for (int i = 0; i < nblocks; ++i)
+            freeBlocks.push_back(i);
+    }
+    
+    /// Destructor
+    ~FileInfo() {
+        mapd_err_t err = File::close(f);
+        if (err != MAPD_SUCCESS)
+            fprintf(stderr, "[%s:%d] Error closing file %d.\n", __func__, __LINE__, fileId);
+    }
+};
+
+/**
+ * @type FileMap
+ * @brief Maps file identifiers to file pointers.
+ *
+ * This type maps file identifiers (int fileId) to FileInfo objects.
+ */
+typedef std::map<int, FileInfo*> FileMap;
 
 /**
  * @type BlockAddr
@@ -59,16 +109,16 @@ struct BlockInfo {
 	mapd_size_t endByteOffset;		/**< the last address of the last byte written to the block */
 	unsigned int epoch;				/**< indicates the last temporal reference point for which the block is current */
 	bool isShadow;					/**< indicates whether or not the block is a shadow copy */
-    bool isNull;                    /**< indicates that the block does not contain any data (is NULL) */
+    bool isEmpty;                   /**< indicates that the block does not contain any real data (is empty) */
 };
 
 /**
  * @type Chunk
  * @brief A Chunk is the fundamental unit of execution in Map-D.
  *
- * A chunk is composed of a blocks. These blocks can exist across multiple files
- * managed by the file manager. The Chunk type is a vector of BlockInfoT, which
- * is struct containing block information (file, address, and metadata).
+ * A chunk is composed of blocks. These blocks can exist across multiple files managed by
+ * the file manager. The Chunk type is a vector of BlockInfoT, which is a struct containing
+ * block information (file, address, and metadata).
  */
 typedef std::vector<BlockInfo> Chunk;
 
@@ -95,31 +145,15 @@ typedef std::vector<BlockInfo> Chunk;
 typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
 
 /**
- * @type FileInfo
- * @brief A chunk file type has a File object and a BlockAddr.
- *
- * A file info structure wraps around a File object in order to contain additional
- * information/metadata about the file that is pertinent to the file manager.
- *
- * The free blocks within a file must be tracked, and this is implemented using a
- * linked list.
- */
-struct FileInfo {
-    File f;
-    std::list<mapd_size_t> freeBlocks;
-    mapd_size_t nblocks;
-};
-
-/**
  * @class FileMgr
  * @brief The file manager manages interactions between the DBMS and the file system.
  *
  * The main job of the file manager is to translate logical block addresses to physical
- * block addresses.  It manages a list of (files_), which are actually containers of
- * chunks, and indexed allocation is used for mapping chunks to block addresses.
+ * block addresses.  It manages a list of FileInfo objects, and files are actually containers
+ * of chunks. Indexed allocation is used for mapping chunks to block addresses.
  *
- * The file manager must also manage free space. It accomplishes this using a linked
- * list of free block addresses associated with each file via struct FileInfo.
+ * The file manager must also manage free space. It accomplishes this using a linked list of
+ * free block addresses associated with each file via struct FileInfo.
  *
  * FileMgr provides a chunk-level API,  a block-level API for finer granularity, and a File-level
  * API. Care must be taken when using the block-level API such as not to invalidate the indices
@@ -131,8 +165,50 @@ struct FileInfo {
 class FileMgr {
 
 public:
+    static unsigned nextFileId;
+    
     FileMgr(const std::string &basePath);
     ~FileMgr();
+    
+   // ***** FILE INTERFACE *****
+
+   /**
+    * @brief Adds a file to the file manager repository.
+    *
+    * This method will create a FileInfo object for the file being added, and it will create
+    * the corresponding file on physical disk with the indicated number of blocks pre-allocated.
+    *
+    * A pointer to the FileInfo object is returned, which itself has a file pointer (FILE*) and
+    * a file identifier (int fileId).
+    *
+    * @param fileName The name given to the file in physical storage.
+    * @param blockSize The logical block size for the blocks in the file.
+    * @param numBlocks The number of logical blocks to initially allocate for the file.
+    * @param err Holds an error code, should an error occur.
+    * @return FileInfo* A pointer to the FileInfo object of the added file.
+    */
+   FileInfo* createFile(const mapd_size_t blockSize, const mapd_size_t nblocks, mapd_err_t *err);
+
+   /**
+    * @brief Deletes a file from the file manager's repository.
+    *
+    * This method will delete the specified file from the FileMap (files_). Note that it does
+    * not remove references to the fileId of the deleted file. Any method that uses the 
+    * fileId will need to check for the existence of the file in the FileMap.
+    *
+    * @param fileId The unique file identifier of the file to be deleted.
+    * @return An error code, should an error occur.
+    */
+    mapd_err_t deleteFile(const int fileId);
+
+   /**
+    * @brief Finds the file in the file manager's FileMap (files_).
+    *
+    * @param fileId The unique file identifier of the file to be found.
+    * @param err An error code, should an error occur.
+    * @return A pointer to the found FileInfo object for the file.
+    */
+    FileInfo* findFile(const int fileId, mapd_err_t *err);
     
     // ***** CHUNK INTERFACE *****
     
@@ -144,7 +220,7 @@ public:
      * @param index
      * @return
      */
-    Chunk* getChunkRef(const ChunkKey &key, mapd_err_t *err) const;
+    //Chunk* getChunkRef(const ChunkKey &key, mapd_err_t *err);
 
    /**
     * @param fileId
@@ -152,7 +228,7 @@ public:
     * @param buf
     * @return
     */
-    Chunk* getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) const;
+    //Chunk* getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) ;
     
    /**
     * This method returns the number of blocks that composes the chunk identified
@@ -165,7 +241,7 @@ public:
     * @param size A return value that will hold the size in bytes occupied by the blocks of the chunk.
     * @return MAPD_FAILURE or MAPD_SUCCESS
     */
-    mapd_err_t getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t *size) const;
+    //mapd_err_t getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t *size) const;
 
    /**
     * This method returns the actual number of bytes occupied by a chunk. This calculation
@@ -177,7 +253,7 @@ public:
     * @param size A return value that will hold the actual size in bytes occupied by the blocks of the chunk.
     * @return MAPD_FAILURE or MAPD_SUCCESS
     */
-    mapd_err_t getChunkActualSize(const ChunkKey &key, mapd_size_t *size) const;
+    //mapd_err_t getChunkActualSize(const ChunkKey &key, mapd_size_t *size) const;
 
    /**
     * Given a key, this method requests the file manager to create a new chunk of the requested
@@ -194,7 +270,7 @@ public:
     * @param err An error code, should an error happen to occur.
     * @return A pointer to a new Chunk, or NULL.
     */
-    Chunk* createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err);
+    //Chunk* createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err);
     
    /**
     * Given a chunk key, this method deletes a chunk from the file system. It returns the number of
@@ -205,7 +281,7 @@ public:
     * @param size The number of bytes freed (can be NULL).
     * @return MAPD_FAILURE or MAPD_SUCCESS
     */
-    mapd_err_t deleteChunk(const ChunkKey &key, mapd_size_t *nblocks, mapd_size_t *size);
+    //mapd_err_t deleteChunk(const ChunkKey &key, mapd_size_t *nblocks, mapd_size_t *size);
     
     // ***** BLOCK INTERFACE *****
     
@@ -216,7 +292,7 @@ public:
     * @param buf
     * @return
     */
-    BlockAddr* getBlock(void *buf, mapd_err_t *err) const;
+    //BlockAddr* getBlock(void *buf, mapd_err_t *err) const;
     
    /**
     *
@@ -225,7 +301,7 @@ public:
     * @param buf
     * @return
     */
-    BlockAddr* getBlock(const int fileId, void *buf, mapd_err_t *err) const;
+    //BlockAddr* getBlock(const int fileId, void *buf, mapd_err_t *err) const;
     
    /**
     *
@@ -233,7 +309,7 @@ public:
     * @param blockNum
     * @return
     */
-    BlockAddr* createBlock(const int fileId, mapd_err_t *err);
+    //BlockAddr* createBlock(const int fileId, mapd_err_t *err);
     
    /**
     *
@@ -241,41 +317,17 @@ public:
     * @param index
     * @return
     */
-    mapd_err_t deleteBlock(const int fileId, const BlockAddr &index);
+    //mapd_err_t deleteBlock(const int fileId, const BlockAddr &index);
     
-    // ***** FILE INTERFACE *****
-
-    /**
-     * @brief Adds a file to the file manager repository.
-     *
-     *
-     * @param fileName The name given to the file in physical storage.
-     * @param blockSize The logical block size for the blocks in the file.
-     * @param numBlocks The number of logical blocks to initially allocate for the file.
-     * @param err
-     * @return FileInfo*
-     */
-    FileInfo* addFile(const std::string &fileName, const mapd_size_t blockSize, const mapd_size_t numBlocks, mapd_err_t *err);
-
-    /**
-     * @brief Deletes a file from the file manager's repository.
-     *
-     * This method will delete the specified file (files_[fileId]), and free up
-     * its related resources.
-     *
-     * fileId The unique file identifier of the file to be deleted.
-     */
-    mapd_err_t deleteFile(const int fileId);
-
     /**
      * @brief Prints a representation of FileMgr's state to stdout
      */
-    void print();
+    //void print();
 
 private:
     std::string basePath_;          /**< The OS file system path containing the files. */
-    std::vector<FileInfo> files_;   /**< The vector of files of chunks being managed. */
-    ChunkKeyToChunkMap chunkIndex_; /**< index (map) for looking up chunks */
+    FileMap files_;                 /**< Maps file identifiers (int) to FileInfo objects. */
+    ChunkKeyToChunkMap chunkIndex_; /**< Index for looking up chunks, which are vectors of BlockAddr */
 };
 
 #endif // FILEMGR_H
