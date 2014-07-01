@@ -20,7 +20,7 @@
 
 #include <vector>
 #include <map>
-#include <list>
+#include <set>
 #include <utility>
 #include <string>
 #include <cassert>
@@ -28,6 +28,51 @@
 #include "File.h"
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
+
+/**
+ * @type BlockAddr
+ * @brief A block address that uniquely identifies a block within a file.
+ *
+ * A block address type includes a file identifier and a block address. The block
+ * address (or block number) uniquely identifies a block within the respective file.
+ */
+struct BlockAddr {
+	int fileId;
+	mapd_size_t blockAddr;
+    
+    /// Constructor
+    BlockAddr(int fileIdIn, mapd_size_t blockAddrIn) : fileId(fileIdIn), blockAddr(blockAddrIn) {}
+};
+
+/**
+ * @brief This struct wraps a block address with metadata associated with that block.
+ *
+ * This struct provides metadata about blocks. It has the address of the block within its
+ * respective file via BlockAddr, and it has metadata about the block's size, the offset
+ * of the last byte written to the block, and the epoch. The epoch is temporal reference
+ * marker indicating the last time that the block was updated.
+ *
+ * Note that a block may be flagged as a "shadow" to indicate that a more up-to-date version
+ * of the block exists. This flag is typically set by the buffer manager, which may have read
+ * the block into an in-memory copy called a page, and which may have been "dirtied" (updated).
+ */
+struct BlockInfo {
+	BlockAddr blk;
+
+	// metadata about a logical block
+	mapd_size_t blockSize;			/**< the logical block size in bytes */
+	mapd_size_t endByteOffset;		/**< the last address of the last byte written to the block */
+	unsigned int epoch;				/**< indicates the last temporal reference point for which the block is current */
+    bool isShadow;					/**< indicates whether or not the block is a shadow copy */
+    
+    /// Constructor
+    BlockInfo(BlockAddr blkIn, mapd_size_t blockSizeIn, unsigned int epochIn)
+        : blk(blkIn), blockSize(blockSizeIn), epoch(epochIn)
+    {
+        isShadow = false;
+        endByteOffset = 0;
+    }
+};
 
 /**
  * @type FileInfo
@@ -42,31 +87,23 @@
 struct FileInfo {
     int fileId;
     FILE *f;
-    std::list<mapd_size_t> freeBlocks;
+    std::vector<BlockInfo> blocks;
+    std::set<mapd_size_t> freeBlocks;
     mapd_size_t blockSize;
     mapd_size_t nblocks;
+    
+    /// Constructor
+    FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks);
+    
+    /// Destructor
+    ~FileInfo();
+    
+    /// Prints a summary of the file to stdout
+    void print(bool blockSummary);
     
     inline mapd_size_t size() { return blockSize * nblocks; }
     inline mapd_size_t available() { return freeBlocks.size() * blockSize; }
     inline mapd_size_t used() { return size() - available(); }
-
-    /// Constructor
-    FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks)
-         : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks)
-    {
-        assert(f);
-        
-        // initialize free block list
-        for (int i = 0; i < nblocks; ++i)
-            freeBlocks.push_back(i);
-    }
-    
-    /// Destructor
-    ~FileInfo() {
-        mapd_err_t err = File::close(f);
-        if (err != MAPD_SUCCESS)
-            fprintf(stderr, "[%s:%d] Error closing file %d.\n", __func__, __LINE__, fileId);
-    }
 };
 
 /**
@@ -78,49 +115,13 @@ struct FileInfo {
 typedef std::map<int, FileInfo*> FileMap;
 
 /**
- * @type BlockAddr
- * @brief A block address that uniquely identifies a block within a file.
- *
- * A block address type includes a file identifier and a block address. The block
- * address (or block number) uniquely identifies a block within the respective file.
- */
-struct BlockAddr {
-	int fileId;
-	mapd_size_t blockAddr;
-};
-
-/**
- * @brief This struct wraps a block address with metadata associated with that block.
- *
- * This struct provides metadata about blocks. It has the address of the block within its
- * respective file via BlockAddr, and it has metadata about the block's size, the address
- * of the last block written to the block, and the epoch. The epoch is temporal reference
- * marker indicating the last time that the block was updated.
- *
- * Note that a block may be flagged as a "shadow" to indicate that a more up-to-date version
- * of the block exists. This flag is typically set by the buffer manager, which may have read
- * the block into an in-memory copy called a page, and which may have been "dirtied" (updated).
- */
-struct BlockInfo {
-	BlockAddr blk;
-
-	// metadata about a logical block
-	mapd_size_t blockSize;			/**< the logical block size in bytes */
-	mapd_size_t endByteOffset;		/**< the last address of the last byte written to the block */
-	unsigned int epoch;				/**< indicates the last temporal reference point for which the block is current */
-	bool isShadow;					/**< indicates whether or not the block is a shadow copy */
-    bool isEmpty;                   /**< indicates that the block does not contain any real data (is empty) */
-};
-
-/**
  * @type Chunk
  * @brief A Chunk is the fundamental unit of execution in Map-D.
  *
  * A chunk is composed of blocks. These blocks can exist across multiple files managed by
- * the file manager. The Chunk type is a vector of BlockInfoT, which is a struct containing
- * block information (file, address, and metadata).
+ * the file manager. The Chunk type is a vector of BlockInfo pointers.
  */
-typedef std::vector<BlockInfo> Chunk;
+typedef std::vector<BlockInfo*> Chunk;
 
 /**
  * @type ChunkKeyToChunkMap
@@ -170,8 +171,6 @@ public:
     FileMgr(const std::string &basePath);
     ~FileMgr();
     
-   // ***** FILE INTERFACE *****
-
    /**
     * @brief Adds a file to the file manager repository.
     *
@@ -208,7 +207,45 @@ public:
     * @param err An error code, should an error occur.
     * @return A pointer to the found FileInfo object for the file.
     */
-    FileInfo* findFile(const int fileId, mapd_err_t *err);
+    FileInfo* getFile(const int fileId, mapd_err_t *err);
+    
+   /**
+    * @brief Returns a pointer to a BlockInfo object for the specified block number in the file.
+    *
+    * @param fileId The unique file identifier of the file to be found.
+    * @param blockNum The block number of the block to be retrieved.
+    * @param err An error code, should an error occur.
+    * @return A pointer to the found FileInfo object for the file.
+    */
+    BlockInfo* getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err);
+    
+    BlockInfo* getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err);
+   
+   /**
+    * @brief Clears the contents of a block in a file.
+    *
+    * This method clears the contents of a block in a file, resulting in the
+    * endByteOffset being set to 0. The implementor may or may not modify the
+    * actual block contents (@see FileMgr.cpp).
+    *
+    * @param fileId The unique file identifier of the file to be found.
+    * @param blockNum The block number of the block to be retrieved.
+    * @return mapd_err_t An error code, should an error occur.
+    */
+    mapd_err_t clearBlock(const int fileId, mapd_size_t blockNum);
+    
+   /**
+    * @brief Adds the block to the list of free blocks.
+    *
+    * This method adds the block to the list of free blocks for a file. Note
+    * that this method does not "clear" the block -- it merely adds it to the free
+    * list, meaning that it can be overwritten at any time.
+    *
+    * @param fileId The unique file identifier of the file to be found.
+    * @param blockNum The block number of the block to be freed.
+    * @return mapd_err_t An error code, should an error occur.
+    */
+    mapd_err_t freeBlock(const int fileId, mapd_size_t blockNum);
     
     // ***** CHUNK INTERFACE *****
     
@@ -282,42 +319,7 @@ public:
     * @return MAPD_FAILURE or MAPD_SUCCESS
     */
     //mapd_err_t deleteChunk(const ChunkKey &key, mapd_size_t *nblocks, mapd_size_t *size);
-    
-    // ***** BLOCK INTERFACE *****
-    
-   /**
-    *
-    * @param fileId
-    * @param blockNum
-    * @param buf
-    * @return
-    */
-    //BlockAddr* getBlock(void *buf, mapd_err_t *err) const;
-    
-   /**
-    *
-    * @param fileId
-    * @param blockNums
-    * @param buf
-    * @return
-    */
-    //BlockAddr* getBlock(const int fileId, void *buf, mapd_err_t *err) const;
-    
-   /**
-    *
-    * @param fileId
-    * @param blockNum
-    * @return
-    */
-    //BlockAddr* createBlock(const int fileId, mapd_err_t *err);
-    
-   /**
-    *
-    * @param fileId
-    * @param index
-    * @return
-    */
-    //mapd_err_t deleteBlock(const int fileId, const BlockAddr &index);
+
     
     /**
      * @brief Prints a representation of FileMgr's state to stdout
