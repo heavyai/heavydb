@@ -90,13 +90,6 @@ public:
         cout << "</BaseTableElementCommalist>" << endl;
     }
     
-    void visit(class Name *v) {
-        printTabs(INCR);
-        cout << "<Name>" << v->name;
-        cout << "</Name>" << endl;
-        tabLevel_--;
-    }
-
     void visit(class Program *v) {
         printTabs(NONE);
         cout << "<Program>" << endl;
