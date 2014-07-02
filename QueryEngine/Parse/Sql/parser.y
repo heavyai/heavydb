@@ -63,7 +63,7 @@ using namespace std;
 %token ALIAS INTORDER COLORDER AS ORDER ASC DESC
 %token LIMIT OFFSET
 
-%type <nPtr> sql
+/*%type <nPtr> sql
 %type <nPtr> manipulative_statement
 %type <nPtr> select_statement selection table_exp opt_all_distinct
 %type <nPtr> from_clause opt_where_clause opt_having_clause column_ref
@@ -83,252 +83,251 @@ using namespace std;
 
 %type <nPtr> function_ref ammsc opt_group_by_clause column_ref_commalist 
 %type <nPtr> opt_asc_desc opt_order_by_clause ordering_spec ordering_spec_commalist
-%type <nPtr> opt_limit_clause
+%type <nPtr> opt_limit_clause*/
 
 %start program
 
 %%
 
-program: 
-    sql_list        {/* exit(0);*/}         /* it all starts here */
-    ;
+program 
+: sql_list                        
+;
 
-sql_list:
-        sql ';' {/* ex($1); freeNode($1); */}
-    |   sql_list sql ';' {/* freeNode($2); */}
-    ;
+sql_list
+: sql ';'
+| sql_list sql ';'
+;
 
-opt_column_commalist:
-        /* empty */                     {/* $$ = opr(EMPTY, 0); */}
-    |   '(' column_commalist ')'        {/* $$ = $2; */}
-    ;
+opt_column_commalist
+:        /* empty */
+|   '(' column_commalist ')'
+;
     
     /* schema definition language. Basic Sql Parser only uses a fraction of it. */
-sql:        schema      {/* $$ = $1; */}
-    ;
+sql:        
+schema
+;
     
-schema:
-       base_table_def       {/* $$ = $1; */}
-    ;
+schema
+: base_table_def
+;
 
-base_table_def:
-        CREATE TABLE table '(' base_table_element_commalist ')'    {/* $$ = opr(CREATE, 2, opr(TABLE, 1, $3), $5); */}
-    | DROP TABLE table                                             {/* $$ = opr(DROP, 1, opr(TABLE, 1, $3)); */}
-    ;
+base_table_def
+: CREATE TABLE table '(' base_table_element_commalist ')'
+| DROP TABLE table
+;
 
-base_table_element_commalist:
-        base_table_element                                      {/* $$ = $1; */}
-    |   base_table_element_commalist ',' base_table_element     {/* $$ = opr(',', 2, $1, $3); */}
-    ;
+base_table_element_commalist
+: base_table_element     
+| base_table_element_commalist ',' base_table_element
+;
 
-base_table_element:
-        column_def              {/* $$ = $1; */}
-    |   table_constraint_def    {/* $$ = $1; */}
-    ;
+base_table_element
+: column_def
+| table_constraint_def
+;
 
-column_def:
-        column data_type column_def_opt_list        {/* $$ = opr(DATATYPE, 3, $1, $2, $3); */}
-    ;
+column_def
+: column data_type column_def_opt_list
+;
 
-column_def_opt_list:
-        /* empty */                                 {/* $$ = opr(EMPTY, 0); */}
-    |   column_def_opt_list column_def_opt          {/* $$ = opr(',', 2, $1, $2); */}
-    ;
+column_def_opt_list
+:        /* empty */
+| column_def_opt_list column_def_opt
+;
 
-column_def_opt:
-        NOT NULLX                                   {/* $$ = opr(NOT, 1, opr(NULLX, 0)); */}
-    |   NOT NULLX UNIQUE                            {/* $$ = opr(UNIQUE, 1, opr(NOT, 1, opr(NULLX, 0))); */}
-    |   NOT NULLX PRIMARY KEY                       {/* $$ = opr(KEY, 1, opr(PRIMARY, 1, opr(NOT, 1, opr(NULLX, 0)))); */}
-    |   DEFAULT literal                             {/* $$ = opr(DEFAULT, 1, $2); */}
-    |   DEFAULT NULLX                               {/* $$ = opr(DEFAULT, 1, opr(NULLX, 0)); */}
-    |   DEFAULT USER                                {/* $$ = opr(DEFAULT, 1, opr(USER, 0)); */}
-    |   CHECK '(' search_condition ')'              {/* $$ = opr(CHECK, 1, $3); */}
-    |   REFERENCES table                            {/* $$ = opr(REFERENCES, 1, $2); */}
-    |   REFERENCES table '(' column_commalist ')'   {/* $$ = opr(REFERENCES, 2, $2, $4); */}
-    ;
+column_def_opt
+: NOT NULLX
+| NOT NULLX UNIQUE
+| NOT NULLX PRIMARY KEY
+| DEFAULT literal
+| DEFAULT NULLX
+| DEFAULT USER
+| CHECK '(' search_condition ')'
+| REFERENCES table
+| REFERENCES table '(' column_commalist ')'
+;
 
-table_constraint_def:
-        UNIQUE '(' column_commalist ')'             {/* $$ = opr(UNIQUE, 1, $3); */}
-    |   PRIMARY KEY '(' column_commalist ')'        {/* $$ = opr(KEY, 1, opr(PRIMARY, 1, $4)); */}
-    |   FOREIGN KEY '(' column_commalist ')'        
-            REFERENCES table                        {/* $$ = opr(KEY, 2, opr(FOREIGN, 1, $4), opr(REFERENCES, 1, $7)); */}
-    |   FOREIGN KEY '(' column_commalist ')'
-            REFERENCES table '(' column_commalist ')'   {/* $$ = opr(KEY, 2, opr(FOREIGN, 1, $4), opr(REFERENCES, 2, $7, $9)); */}
-    |   CHECK '(' search_condition ')'              {/* $$ = opr(CHECK, 1, $3); */}
-    ;
+table_constraint_def
+: UNIQUE '(' column_commalist ')'             
+| PRIMARY KEY '(' column_commalist ')'        
+| FOREIGN KEY '(' column_commalist ')' REFERENCES table                  
+| FOREIGN KEY '(' column_commalist ')' REFERENCES table '(' column_commalist ')' 
+| CHECK '(' search_condition ')'
+;
 
-column_commalist:
-        column                                      {/* $$ = $1; */}
-    |   column_commalist ',' column                 {/* $$ = opr(',', 2, $1, $3); */}
-    ;
+column_commalist
+: column
+| column_commalist ',' column
+;
 
-opt_order_by_clause:
-        /* empty */                             {/* $$ = opr(EMPTY, 0); */}
-    |   ORDER BY ordering_spec_commalist        {/* $$ = opr(ORDER, 1, opr(BY, 1, $3)); */}
-    ;
+opt_order_by_clause
+:        /* empty */
+| ORDER BY ordering_spec_commalist
+;
     
-ordering_spec_commalist:
-        ordering_spec                                   {/* $$ = $1; */}
-    |   ordering_spec_commalist ',' ordering_spec       {/* $$ = opr(',', 2, $1, $3); */}
-    ;
+ordering_spec_commalist
+: ordering_spec
+| ordering_spec_commalist ',' ordering_spec
+;
 
-ordering_spec:
-        INTNUM opt_asc_desc             {/* $$ = opr(INTORDER, 2, con($1), $2); */}
-    |   column_ref opt_asc_desc         {/* $$ = opr(COLORDER, 2, $1, $2); */}
-    ;
+ordering_spec
+: INTNUM opt_asc_desc
+| column_ref opt_asc_desc
+;
 
-opt_asc_desc:
-        /* empty */                     {/* $$ = opr(EMPTY, 0); */}
-    |   ASC                             {/* $$ = opr(ASC, 0); */}
-    |   DESC                            {/* $$ = opr(DESC, 0); */}
-    ;
+opt_asc_desc
+:        /* empty */
+| ASC
+| DESC
+;
 
 /* this starts the execution of classic manipulative statements. */
 
-sql:
-        manipulative_statement      {/* $$ = $1; */}
-    ;
+sql
+: manipulative_statement
+;
 
-manipulative_statement:
-        select_statement         {/* $$ = $1; */} 
-    |   update_statement_positioned {/* $$ = $1; */} 
-    |   update_statement_searched {/* $$ = $1; */} 
-    |   insert_statement {/* $$ = $1; */}
+manipulative_statement
+: select_statement
+| update_statement_positioned
+| update_statement_searched
+| insert_statement
     /*
-    |   commit_statement
-    |   delete_statement_positioned
-    |   delete_statement_searched
-    |   fetch_statement
-    |   insert_statement
-    |   open_statement
-    |   rollback_statement 
-    |   select_statement 
-    |   update_statement_positioned
-    |   update_statement_searched */
-    ;
+| commit_statement
+| delete_statement_positioned
+| delete_statement_searched
+| fetch_statement
+| insert_statement
+| open_statement
+| rollback_statement 
+| select_statement 
+| update_statement_positioned
+| update_statement_searched */
+;
 
-insert_statement:
-        INSERT INTO table opt_column_commalist values_or_query_spec             {/* $$ = opr(INSERT, 3, opr(INTO, 1, $3), $4, $5); */}
-    ;
+insert_statement
+: INSERT INTO table opt_column_commalist values_or_query_spec
+;
 
-values_or_query_spec:
-        VALUES '(' insert_atom_commalist ')'        {/* $$ = opr(VALUES, 1, $3); */}
-    |   query_spec                                  {/* $$ = $1; */}         
-    ;
+values_or_query_spec
+: VALUES '(' insert_atom_commalist ')'
+| query_spec
+;
 
-insert_atom_commalist:
-        insert_atom                                 {/* $$ = $1; */} 
-    |   insert_atom_commalist ',' insert_atom       {/* $$ = opr(',', 2, $1, $3); */}
-    ;
+insert_atom_commalist
+: insert_atom
+| insert_atom_commalist ',' insert_atom
+;
 
-insert_atom:
-        atom                                        {/* $$ = $1; */}
-    |   NULLX                                       {/* $$ = NULL; */}
-    ;
+insert_atom
+: atom
+| NULLX
+;
 
-select_statement:
-        SELECT opt_all_distinct selection
+select_statement
+: SELECT opt_all_distinct selection
       /*   INTO target_commalist */ 
-         table_exp                           {/* $$ = opr(SELECT, 3, $2, $3, $4); */}     
-    ;
+         table_exp
+;
 
     
-opt_all_distinct:
-    ALL                                     {/* $$ = opr(ALL, 0); */}
-    |   DISTINCT                            {/* $$ = opr(DISTINCT, 0); */}
-    | /* empty  */                          {/* $$ = opr(EMPTY, 0); */}
-    ;
+opt_all_distinct
+: ALL
+| DISTINCT
+| /* empty  */
+;
 
-update_statement_positioned:
-        UPDATE table SET assignment_commalist       
-        WHERE CURRENT OF cursor                 {/* $$ = opr(UPDATE, 5, $2, opr(SET, 1, $4), opr(WHERE, 0), opr(CURRENT, 0), opr(OF, 1, $8)); */}
-    ;
+update_statement_positioned
+: UPDATE table SET assignment_commalist       
+        WHERE CURRENT OF cursor
+;
 
-assignment_commalist:
-         /* empty */       {/* $$ = opr(EMPTY, 0); */}
-    |   assignment                              {/* $$ = $1;*/}
-    |   assignment_commalist ',' assignment     {/* $$ = opr(',', 2, $1, $3); */}
-    ;
+assignment_commalist
+:    /* empty */
+| assignment
+| assignment_commalist ',' assignment
+;
 
-assignment:
-        column COMPARISON scalar_exp               {/* $$ = opr(ASSIGN, 3, $1, compAssgn($2), $3); */}
-    |   column COMPARISON NULLX                    {/* $$ = opr(ASSIGN, 3, $1, compAssgn($2), opr(NULLX, 0)); */}
-    ;
+assignment
+: column COMPARISON scalar_exp
+| column COMPARISON NULLX
+;
 
-update_statement_searched:
-        UPDATE table SET assignment_commalist opt_where_clause {/* $$ = opr(UPDATE, 3, $2, opr(SET, 1, $4), $5); */}
-    ;
+update_statement_searched
+: UPDATE table SET assignment_commalist opt_where_clause
+;
 
-query_spec:
-        SELECT opt_all_distinct selection table_exp     {/* $$ = opr(SELECT, 3, $2, $3, $4); */}
-    ;
+query_spec
+: SELECT opt_all_distinct selection table_exp
+;
 
-selection:
-    scalar_exp_commalist         {/* $$ = $1; */} 
-    |   '*'                     {/* $$ = opr(SELALL, 0); */}
-    ;
+selection
+: scalar_exp_commalist
+| '*'
+;
 
-table_exp:
-        from_clause            
+table_exp
+: from_clause            
         opt_where_clause
         opt_group_by_clause
         opt_having_clause
         opt_order_by_clause
-        opt_limit_clause       {/* $$ = opr(FROM, 6, $1, $2, $3, $4, $5, $6); */}
-         ; 
+        opt_limit_clause
+; 
 
-from_clause:
-        FROM table_ref_commalist        {/* $$ = $2; */}
-    ;
+from_clause
+: FROM table_ref_commalist
+;
 
-table_ref_commalist:
-        table_ref                           {/* $$ = $1; */}
-    |   table_ref_commalist ',' table_ref    {/* $$ = opr(',', 2, $1, $3); */}
-    ;
+table_ref_commalist
+: table_ref
+| table_ref_commalist ',' table_ref
+;
     
-table_ref:
-    table                                    {/* $$ = $1; */}
+table_ref
+: table
     /* | table rangevariable */
-    ;
+;
 
-opt_where_clause:
-    WHERE search_condition                      {/* $$ = opr(WHERE, 1, $2); */}
-    | /* empty */                               {/* $$ = opr(EMPTY, 0); */}
-    ;
+opt_where_clause
+: WHERE search_condition
+| /* empty */
+;
 
-opt_group_by_clause:
-        /* empty */                             {/* $$ = opr(EMPTY, 0); */}
-    |   GROUP BY column_ref_commalist           {/* $$ = opr(GROUP, 1, opr(BY, 1, $3)); */}
-    ;
+opt_group_by_clause
+:   /* empty */
+| GROUP BY column_ref_commalist
+;
 
-column_ref_commalist:   
-        column_ref                              {/* $$ = $1; */}
-    |   column_ref_commalist ',' column_ref     {/* $$ = opr(',', 2, $1, $3); */}
-    ;
+column_ref_commalist  
+: column_ref
+| column_ref_commalist ',' column_ref
+;
 
-opt_having_clause:
-    HAVING search_condition                 {/* $$ = opr(HAVING, 1, $2); */}
-    | /* empty */                           {/* $$ = opr(EMPTY, 0); */}
-    ;
+opt_having_clause
+: HAVING search_condition
+| /* empty */
+;
 
 opt_limit_clause:
-    /* empty */                               {/* $$ = opr(EMPTY, 0); */}
-    | LIMIT INTNUM                            {/* $$ = opr(LIMIT, 1, con($2)); */}
-    | LIMIT INTNUM ',' INTNUM                 {/* $$ = opr(LIMIT, 2, con($2), con($4)); */}
-    | LIMIT INTNUM OFFSET INTNUM              {/* $$ = opr(LIMIT, 2, con($2), con($4)); */}
+    /* empty */                               
+    | LIMIT INTNUM                            
+    | LIMIT INTNUM ',' INTNUM                 
+    | LIMIT INTNUM OFFSET INTNUM              
     /* search conditions */
 
 search_condition:
-      search_condition OR search_condition    {/* $$ = opr(OR, 2, $1, $3); */}
-    |   search_condition AND search_condition   {/* $$ = opr(AND, 2, $1, $3); */}
-    |   NOT search_condition                    {/* $$ = opr(NOT, 1, $2); */}
-    |   '(' search_condition ')'                {/* $$ = $2; */}
-    |   predicate                               {/* $$ = $1; */}
+      search_condition OR search_condition    
+    |   search_condition AND search_condition
+    |   NOT search_condition
+    |   '(' search_condition ')'
+    |   predicate
     ;
 
 predicate:
-        comparison_predicate                    {/* $$ = $1; */}
-    |   between_predicate                       {/* $$ = $1; */}
+        comparison_predicate
+    |   between_predicate
  /*   |   like_predicate
     |   test_for_null
     |   in_predicate
@@ -337,105 +336,105 @@ predicate:
     ;
 
 comparison_predicate:
-        scalar_exp COMPARISON scalar_exp                        {/* $$ = opr(COMPARISON, 3, $1, comp($2), $3); */}
+        scalar_exp COMPARISON scalar_exp
    /* |   scalar_exp COMPARISON subquery                          { $$ = opr(COMPARISON, $1, $3); } */
     ;
 
 between_predicate:
-        scalar_exp NOT BETWEEN scalar_exp AND scalar_exp        {/* $$ = opr(NOT, 1, opr(BETWEEN, 2, $1, opr(AND, 2, $4, $6))); */}
-    |   scalar_exp BETWEEN scalar_exp AND scalar_exp            {/* $$ = opr(BETWEEN, 2, $1, opr(AND, 2, $3, $5)); */}
+        scalar_exp NOT BETWEEN scalar_exp AND scalar_exp
+    |   scalar_exp BETWEEN scalar_exp AND scalar_exp
     ;
 
 scalar_exp_commalist:       
-        scalar_exp                              {/* $$ = $1; */}
-    |   scalar_exp_commalist ',' scalar_exp     {/* $$ = opr(',', 2, $1, $3); */}
+        scalar_exp
+    |   scalar_exp_commalist ',' scalar_exp
     ;
 
 scalar_exp:
-    scalar_exp '+' scalar_exp            {/* $$ = opr('+', 2, $1, $3); */}
-    | scalar_exp '-' scalar_exp            {/* $$ = opr('-', 2, $1, $3); */}
-    | scalar_exp '*' scalar_exp            {/* $$ = opr('*', 2, $1, $3); */}
-    | scalar_exp '/' scalar_exp            {/* $$ = opr('/', 2, $1, $3); */}
-    |   '+' scalar_exp %prec UMINUS        {/* $$ = $2; */}
-    |   '-' scalar_exp %prec UMINUS        {/* $$ = opr(UMINUS, 1, $2); */}
-    |   atom                               {/* $$ = $1; */}
-    |   column_ref                          {/* $$ = $1; */}
-    |   function_ref                        {/* $$ = $1; */}
-    |   '(' scalar_exp ')'                 {/* $$ = $2; */}
+    scalar_exp '+' scalar_exp
+    | scalar_exp '-' scalar_exp
+    | scalar_exp '*' scalar_exp
+    | scalar_exp '/' scalar_exp
+    |   '+' scalar_exp %prec UMINUS
+    |   '-' scalar_exp %prec UMINUS
+    |   atom
+    |   column_ref
+    |   function_ref
+    |   '(' scalar_exp ')'
     ;
 
 atom:
     /*  parameter_ref
-    | */   literal           {/* $$ = $1; */}
-    |   USER                {/* $$ = opr(USER, 0); */}
+    | */   literal
+    |   USER
     ;
 /*
 parameter_ref:
-        parameter               { $$ = $1; }
-    |   parameter parameter                 { $$ = opr }
+        parameter
+    |   parameter parameter
     |   parameter INDICATOR parameter
     ;
 */
 
 function_ref:
-        ammsc '(' '*' ')'                   {/* $$ = opr(AMMSC, 2, $1, opr(SELALL, 0));*/}
-    |   ammsc '(' DISTINCT column_ref ')'   {/* $$ = opr(AMMSC, 3, $1, opr(DISTINCT, 0), $4); */}
-    |   ammsc '(' ALL scalar_exp ')'        {/* $$ = opr(AMMSC, 3, $1, opr(ALL, 0), $4); */}
-    |   ammsc '(' scalar_exp ')'            {/* $$ = opr(AMMSC, 2, $1, $3); */}
+        ammsc '(' '*' ')'
+    |   ammsc '(' DISTINCT column_ref ')'
+    |   ammsc '(' ALL scalar_exp ')'
+    |   ammsc '(' scalar_exp ')'
     ;
 
 literal:
-        STRING          {/* $$ = text($1); */}
-    |   INTNUM          {/* $$ = con($1); */}
-    |   APPROXNUM       {/* $$ = con($1); */}
+        STRING
+    |   INTNUM
+    |   APPROXNUM
     ;
 
 table:
-        NAME                {/* $$ = id($1); */}
-        | NAME '.' NAME     {/* $$ = opr(DOT, 2, id($1), id2($3));*/}
-        | NAME AS NAME      {/* $$ = opr(ALIAS, 2, id($1), id2($3));  */}
+        NAME
+        | NAME '.' NAME
+        | NAME AS NAME
     ;
 
 /* data types */
 data_type:
-        CHARACTER                           {/* $$ = opr(CHARACTER, 0); */}
-    |   CHARACTER '(' INTNUM ')'            {/* $$ = opr(CHARACTER, 1, con($3)); */}
-    |   VARCHAR                           {/* $$ = opr(VARCHAR, 0); */}
-    |   VARCHAR '(' INTNUM ')'            {/* $$ = opr(VARCHAR, 1, con($3)); */}
-    |   NUMERIC                             {/* $$ = opr(NUMERIC, 0); */}
-    |   NUMERIC '(' INTNUM ')'              {/* $$ = opr(NUMERIC, 1, con($3)); */}
-    |   NUMERIC '(' INTNUM ',' INTNUM ')'   {/* $$ = opr(NUMERIC, 1, opr(',', 2, $3, $5)); */}
-    |   DECIMAL                             {/* $$ = opr(DECIMAL, 0); */}
-    |   DECIMAL '(' INTNUM ')'              {/* $$ = opr(DECIMAL, 1, con($3)); */}
-    |   DECIMAL '(' INTNUM ',' INTNUM ')'   {/* $$ = opr(DECIMAL, 1, opr(',', 2, con($3), con($5))); */}
-    |   INTEGER                             {/* $$ = opr(INTEGER, 0); */}
-    |   SMALLINT                            {/* $$ = opr(SMALLINT, 0); */}
-    |   FLOAT                               {/* $$ = opr(FLOAT, 0); */}
-    |   FLOAT '(' INTNUM ')'                {/* $$ = opr(FLOAT, 1, con($3)); */}
-    |   REAL                                {/* $$ = opr(REAL, 0); */}
-    |   DOUBLE PRECISION                    {/* $$ = opr(DOUBLE, 1, opr(PRECISION, 0)); */}
+        CHARACTER
+    |   CHARACTER '(' INTNUM ')'
+    |   VARCHAR
+    |   VARCHAR '(' INTNUM ')'
+    |   NUMERIC
+    |   NUMERIC '(' INTNUM ')'
+    |   NUMERIC '(' INTNUM ',' INTNUM ')'
+    |   DECIMAL
+    |   DECIMAL '(' INTNUM ')'
+    |   DECIMAL '(' INTNUM ',' INTNUM ')'
+    |   INTEGER
+    |   SMALLINT
+    |   FLOAT
+    |   FLOAT '(' INTNUM ')'
+    |   REAL
+    |   DOUBLE PRECISION
     ;
 
 column_ref:
-        NAME                {/* $$ = id($1); */}
-    |   NAME '.' NAME       {/* $$ = opr(DOT, 2, id($1), id2($3));*/}
-    |   NAME '.' NAME '.' NAME  {/* $$ = opr(DOT, 2, id($1),  opr(DOT, 2, id($1), id2($3)));*/}
-    |   NAME AS NAME            {/* $$ = opr(ALIAS, 2, id($1), id2($3)); */} 
+        NAME
+    |   NAME '.' NAME
+    |   NAME '.' NAME '.' NAME
+    |   NAME AS NAME
     ;
         /* the various things you can name */
 
-column:     NAME            {/* $$ = id($1); */}
+column:     NAME
     ;
 
-cursor:     NAME            {/* $$ = id($1); */}
+cursor:     NAME
     ;
 
 ammsc: 
-    AVG             {/* $$ = opr(AVG, 0); */}
-    | MIN           {/* $$ = opr(MIN, 0); */}
-    | MAX           {/* $$ = opr(MAX, 0); */}
-    | SUM           {/* $$ = opr(SUM, 0); */}
-    | COUNT         {/* $$ = opr(COUNT, 0); */}
+    AVG
+    | MIN
+    | MAX
+    | SUM
+    | COUNT
 
 %%
 
