@@ -215,11 +215,19 @@ public:
     * @param fileId The unique file identifier of the file to be found.
     * @param blockNum The block number of the block to be retrieved.
     * @param err An error code, should an error occur.
-    * @return A pointer to the found FileInfo object for the file.
+    * @return A pointer to the found BlockInfo object.
     */
     BlockInfo* getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err);
     
-    BlockInfo* getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err);
+   /**
+    * @brief Returns a pointer to a BlockInfo object for the specified block number in the file.
+    *
+    * @param FileInfo& A reference to the file that contains the block.
+    * @param blockNum The block number of the block to be retrieved.
+    * @param err An error code, should an error occur.
+    * @return A pointer to the found BlockInfo object.
+    */
+    BlockInfo* getBlock(const FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err);
    
    /**
     * @brief Clears the contents of a block in a file.
@@ -228,12 +236,25 @@ public:
     * endByteOffset being set to 0. The implementor may or may not modify the
     * actual block contents (@see FileMgr.cpp).
     *
-    * @param fileId The unique file identifier of the file to be found.
-    * @param blockNum The block number of the block to be retrieved.
+    * @param fileId The unique file identifier of the file containing the block.
+    * @param blockNum The block number of the block to be cleared.
     * @return mapd_err_t An error code, should an error occur.
     */
     mapd_err_t clearBlock(const int fileId, mapd_size_t blockNum);
-    
+
+   /**
+    * @brief Clears the contents of a block in a file.
+    *
+    * This method clears the contents of a block in a file, resulting in the
+    * endByteOffset being set to 0. The implementor may or may not modify the
+    * actual block contents (@see FileMgr.cpp).
+    *
+    * @param FileInfo& A reference to the the file containing the block.
+    * @param blockNum The block number of the block to be cleared.
+    * @return mapd_err_t An error code, should an error occur.
+    */
+    mapd_err_t clearBlock(const FileInfo &fInfo, mapd_size_t blockNum);
+
    /**
     * @brief Adds the block to the list of free blocks.
     *
@@ -247,17 +268,15 @@ public:
     */
     mapd_err_t freeBlock(const int fileId, mapd_size_t blockNum);
     
-    // ***** CHUNK INTERFACE *****
-    
-    /**
-     *
-     *
-     * @param fileId
-     * @param key
-     * @param index
-     * @return
-     */
-    //Chunk* getChunkRef(const ChunkKey &key, mapd_err_t *err);
+   /**
+    *
+    *
+    * @param fileId
+    * @param key
+    * @param index
+    * @return
+    */
+    Chunk* getChunkRef(const ChunkKey &key, mapd_err_t *err);
 
    /**
     * @param fileId
@@ -265,7 +284,7 @@ public:
     * @param buf
     * @return
     */
-    //Chunk* getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) ;
+    Chunk* getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err);
     
    /**
     * This method returns the number of blocks that composes the chunk identified
@@ -278,7 +297,7 @@ public:
     * @param size A return value that will hold the size in bytes occupied by the blocks of the chunk.
     * @return MAPD_FAILURE or MAPD_SUCCESS
     */
-    //mapd_err_t getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t *size) const;
+    mapd_err_t getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t *size);
 
    /**
     * This method returns the actual number of bytes occupied by a chunk. This calculation
@@ -290,7 +309,7 @@ public:
     * @param size A return value that will hold the actual size in bytes occupied by the blocks of the chunk.
     * @return MAPD_FAILURE or MAPD_SUCCESS
     */
-    //mapd_err_t getChunkActualSize(const ChunkKey &key, mapd_size_t *size) const;
+    mapd_err_t getChunkActualSize(const ChunkKey &key, mapd_size_t *size);
 
    /**
     * Given a key, this method requests the file manager to create a new chunk of the requested
@@ -307,7 +326,7 @@ public:
     * @param err An error code, should an error happen to occur.
     * @return A pointer to a new Chunk, or NULL.
     */
-    //Chunk* createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err);
+    Chunk* createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err);
     
    /**
     * Given a chunk key, this method deletes a chunk from the file system. It returns the number of
