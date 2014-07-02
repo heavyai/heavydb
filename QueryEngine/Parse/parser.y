@@ -20,7 +20,6 @@
 #include "ast/SQL.h"
 #include "ast/Schema.h"
 #include "ast/BaseTableDef.h"
-#include "ast/Name.h"
 #include "ast/Table.h"
 
 // define stack element type to be a 
