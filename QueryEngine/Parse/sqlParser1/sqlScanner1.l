@@ -1,4 +1,4 @@
-%name CalcScanner
+%name sqlScanner1
 %define IOSTREAM
 %define LEX_PARAM YY_CalcParser_STYPE *val, YY_CalcParser_LTYPE *loc
 %define MEMBERS public: int line, column;
@@ -8,7 +8,6 @@
 #include<sstream>
 #include "defines.h"
 #include <string.h>
-#include "sqlParser1.h"
 #include <iostream>
 using namespace std;
 

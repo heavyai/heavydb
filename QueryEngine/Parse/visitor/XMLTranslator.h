@@ -5,10 +5,17 @@
 
 #include "../ast/BaseTableDef.h"
 #include "../ast/BaseTableElementCommalist.h"
+#include "../ast/BaseTableElement.h"
 #include "../ast/Program.h"
 #include "../ast/Table.h"
 #include "../ast/Schema.h"
 #include "../ast/SQL.h"
+#include "../ast/ColumnDef.h"
+#include "../ast/ColumnDefOpt.h"
+#include "../ast/ColumnDefOptList.h"
+#include "../ast/Column.h"
+#include "../ast/Literal.h"
+#include "../ast/DataType.h"
 #include "../ast/SQLList.h"
 
 #include <iostream>
@@ -69,12 +76,112 @@ public:
         printTabs(DECR);
         cout << "</BaseTableDef>" << endl;
     }
+
+    void visit(class ColumnDefOpt *v) {
+        printTabs(INCR);
+        cout << "<colDefOpt>" << endl;
+
+         /* rule_Flags: 
+        0 NOT NULL
+        1 NOT NULL PRIMARY KEY
+        2 NOT NULL UNIQUE
+        3 DEFAULT [literal]
+        4 DEFAULT NULL
+        5 DEFAULT USER
+        6 CHECK [search condition]
+        7 REFERENCES [table]
+        8 REFERENCES [table] [column_commalist]
+        */
+
+        int rf = v->rule_Flag;
+        if (rf == 0) { // Handle NOT NULL
+            printTabs(INCR);
+            cout << "<NOT NULL> </>" << endl;
+            printTabs(DECR);
+        }
+        else if (rf == 1) { // Handle NOT NULL PRIMARY KEY
+            printTabs(INCR);
+            cout << "<NOT NULL PRIMARY KEY> </>" << endl;
+            printTabs(DECR);
+        }
+        else if (rf == 2) { // Handle NOT NULL UNIQUE
+            printTabs(INCR);
+            cout << "<NOT NULL UNIQUE> </>" << endl;
+            printTabs(DECR);
+        }
+        else if (rf == 3) { // Handle DEFAULT literal
+            printTabs(INCR);
+            cout << "<DEFAULT>" << endl;
+            v->lit->accept(*this);
+            cout << "</>" << endl;
+            printTabs(DECR);
+        } 
+        else if (rf == 4) { // Handle DEFAULT NULL
+            printTabs(INCR);
+            cout << "<DEFAULT NULL> </>" << endl;
+            printTabs(DECR);
+        }
+        else if (rf == 5) { // Handle DEFAULT USER
+            printTabs(INCR);
+            cout << "<DEFAULT USER> </>" << endl;
+            printTabs(DECR);
+        } 
+       /*else if (rf == 6) { // Handle CHECK search_condition
+            printTabs(INCR);
+            cout << "<CHECK>" << endl;
+            v->srchCon->accept(*this);
+            cout << "</>" << endl;
+            printTabs(DECR);
+        } */
+        else if (rf == 7) { // Handle REFERENCES table
+            printTabs(INCR);
+            cout << "<REFERENCES>" << endl;
+            v->tbl->accept(*this);
+            cout << "</>" << endl;
+            printTabs(DECR);
+        } 
+        /*else if (rf == 8) { // Handle REFERENCES table commalist 
+            printTabs(INCR);
+            cout << "<REFERENCES>" << endl;
+            v->tbl->accept(*this);
+            v->colComList->accept(*this);
+            cout << "</>" << endl;
+            printTabs(DECR);
+        } */
+
+        printTabs(DECR);
+        cout << "</ColDefOpt>" << endl;
+    }
+
+    void visit(class ColumnDefOptList *v) {
+        printTabs(INCR);
+        cout << "<ColumnDefOptList>" << endl;
+
+        if (v->colDefOptList) v->colDefOptList->accept(*this);
+        v->colDefOpt->accept(*this);
+
+        printTabs(DECR);
+        cout << "</ColumnDefOptList>" << endl;
+    }
     
+    void visit(class ColumnDef *v) {
+        printTabs(INCR);
+        cout << "<ColumnDef>" << endl;
+        
+        v->col->accept(*this);
+        v->dType->accept(*this);
+        if (v->colDefOptList) v->colDefOptList->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</ColumnDef>" << endl;
+    }
+
     void visit(class BaseTableElement *v) {
         printTabs(INCR);
         cout << "<BaseTableElement>" << endl;
 
-        //v->sqlList->accept(*this);
+        if (v->colDef) v->colDef->accept(*this);
+        //if (v->tblConDef) v->tblConDef->accept(*this)
 
         printTabs(DECR);
         cout << "</BaseTableElement>" << endl;
@@ -84,7 +191,8 @@ public:
         printTabs(INCR);
         cout << "<BaseTableElementCommalist>" << endl;
 
-        //v->sqlList->accept(*this);
+        if (v->btec) v->btec->accept(*this);
+        v->bte->accept(*this);
 
         printTabs(DECR);
         cout << "</BaseTableElementCommalist>" << endl;
@@ -124,10 +232,42 @@ public:
         printTabs(INCR);
         cout << "<SQLList>" << endl;
         
+
+        if (v->sqlList) { v->sqlList->accept(*this);  }
         v->sql->accept(*this);
-        
+
         printTabs(DECR);
         cout << "</SQLList>" << endl;
+    }
+
+    void visit(class DataType *v) {
+        printTabs(NONE);
+
+        if (v->size1 != 0) 
+        cout << "<DataType flag=" << v->dataType_Flag << "size1" << v->size1 << "/>" << endl;
+        
+        else 
+        cout << "<DataType flag=" << v->dataType_Flag << "/>" << endl;
+       
+        //printTabs(DECR);
+    }
+
+    void visit(class Literal *v) {
+        printTabs(INCR);
+
+        cout << "<Literal string='" << v->name1 << "'/>" << endl;
+        
+        printTabs(DECR);
+        cout << "</Literal>" << endl;
+    }
+
+    void visit(class Column *v) {
+        printTabs(INCR);
+
+        cout << "<Column name='" << v->name1 << "'/>" << endl;
+        
+        printTabs(DECR);
+        cout << "</Column>" << endl;
     }
 
     void visit(class Table *v) {

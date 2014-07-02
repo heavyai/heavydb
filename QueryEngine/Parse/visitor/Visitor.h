@@ -1,4 +1,4 @@
-#ifndef AST_VISITOR_H
+#ifndef AST_VISITOR_H-
 #define AST_VISITOR_H
 
 class Visitor {
@@ -17,20 +17,20 @@ public:
     virtual void visit(class BaseTableElement *v) = 0;
     virtual void visit(class BaseTableElementCommalist *v) = 0;
     // virtual void visit(class BetweenPredicate *v) = 0;
-    // virtual void visit(class Column *v) = 0;
+    virtual void visit(class Column *v) = 0;
     // virtual void visit(class ColumnCommalist *v) = 0;
-    // virtual void visit(class ColumnDef *v) = 0;
-    // virtual void visit(class ColumnDefOpt *v) = 0;
-    // virtual void visit(class ColumnDefOptList *v) = 0;
+    virtual void visit(class ColumnDef *v) = 0;
+    virtual void visit(class ColumnDefOpt *v) = 0;
+    virtual void visit(class ColumnDefOptList *v) = 0;
     // virtual void visit(class ColumnRef *v) = 0;
     // virtual void visit(class ColumnRefCommaList *v) = 0;
     // virtual void visit(class ComparisonPredicate *v) = 0;
-    // virtual void visit(class DataType *v) = 0;
+    virtual void visit(class DataType *v) = 0;
     // virtual void visit(class FromClause *v) = 0;
     // virtual void visit(class FunctionRef *v) = 0;
     // virtual void visit(class InsertAtom *v) = 0;
     // virtual void visit(class InsertAtomCommalist *v) = 0;
-    // virtual void visit(class Literal *v) = 0;
+    virtual void visit(class Literal *v) = 0;
     // virtual void visit(class ManipulativeStatement *v) = 0;
     // virtual void visit(class OptAllDistinct *v) = 0;
     // virtual void visit(class OptColumnCommalist *v) = 0;

@@ -33,8 +33,15 @@
 #include "ast/SQL.h"
 #include "ast/Schema.h"
 #include "ast/BaseTableDef.h"
-#include "ast/Name.h"
 #include "ast/Table.h"
+#include "ast/ColumnDef.h"
+#include "ast/BaseTableElementCommalist.h"
+#include "ast/BaseTableElement.h"
+#include "ast/ColumnDefOpt.h"
+#include "ast/ColumnDefOptList.h"
+#include "ast/Literal.h"
+#include "ast/DataType.h"
+#include "ast/Column.h"
 
 // define stack element type to be a 
 // pointer to an AST node
@@ -44,6 +51,7 @@ extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
 extern std::string strData[10];
+extern int intData;
 
 using namespace std;
 
@@ -225,8 +233,67 @@ typedef
 #define	DROP	259
 #define	NAME	260
 #define	TABLE	261
-#define	INTNUM	262
-#define	UNKNOWN	263
+#define	CREATE	262
+#define	INTNUM	263
+#define	STRING	264
+#define	UNKNOWN	265
+#define	ALL	266
+#define	BETWEEN	267
+#define	BY	268
+#define	DISTINCT	269
+#define	FROM	270
+#define	GROUP	271
+#define	HAVING	272
+#define	SELECT	273
+#define	COMPARISON	274
+#define	USER	275
+#define	WHERE	276
+#define	WITH	277
+#define	EMPTY	278
+#define	SELALL	279
+#define	DOT	280
+#define	UPDATE	281
+#define	SET	282
+#define	CURRENT	283
+#define	OF	284
+#define	NULLX	285
+#define	ASSIGN	286
+#define	INSERT	287
+#define	INTO	288
+#define	VALUES	289
+#define	NOT	290
+#define	UNIQUE	291
+#define	PRIMARY	292
+#define	FOREIGN	293
+#define	KEY	294
+#define	CHECK	295
+#define	REFERENCES	296
+#define	DEFAULT	297
+#define	DATATYPE	298
+#define	DECIMAL	299
+#define	SMALLINT	300
+#define	NUMERIC	301
+#define	CHARACTER	302
+#define	INTEGER	303
+#define	REAL	304
+#define	FLOAT	305
+#define	DOUBLE	306
+#define	PRECISION	307
+#define	VARCHAR	308
+#define	AVG	309
+#define	MAX	310
+#define	MIN	311
+#define	SUM	312
+#define	COUNT	313
+#define	ALIAS	314
+#define	INTORDER	315
+#define	COLORDER	316
+#define	ORDER	317
+#define	ASC	318
+#define	DESC	319
+#define	LIMIT	320
+#define	OFFSET	321
+#define	DOTNAME	322
 
 
 #line 169 "/usr/share/bison++/bison.h"
@@ -279,8 +346,67 @@ static const int AS;
 static const int DROP;
 static const int NAME;
 static const int TABLE;
+static const int CREATE;
 static const int INTNUM;
+static const int STRING;
 static const int UNKNOWN;
+static const int ALL;
+static const int BETWEEN;
+static const int BY;
+static const int DISTINCT;
+static const int FROM;
+static const int GROUP;
+static const int HAVING;
+static const int SELECT;
+static const int COMPARISON;
+static const int USER;
+static const int WHERE;
+static const int WITH;
+static const int EMPTY;
+static const int SELALL;
+static const int DOT;
+static const int UPDATE;
+static const int SET;
+static const int CURRENT;
+static const int OF;
+static const int NULLX;
+static const int ASSIGN;
+static const int INSERT;
+static const int INTO;
+static const int VALUES;
+static const int NOT;
+static const int UNIQUE;
+static const int PRIMARY;
+static const int FOREIGN;
+static const int KEY;
+static const int CHECK;
+static const int REFERENCES;
+static const int DEFAULT;
+static const int DATATYPE;
+static const int DECIMAL;
+static const int SMALLINT;
+static const int NUMERIC;
+static const int CHARACTER;
+static const int INTEGER;
+static const int REAL;
+static const int FLOAT;
+static const int DOUBLE;
+static const int PRECISION;
+static const int VARCHAR;
+static const int AVG;
+static const int MAX;
+static const int MIN;
+static const int SUM;
+static const int COUNT;
+static const int ALIAS;
+static const int INTORDER;
+static const int COLORDER;
+static const int ORDER;
+static const int ASC;
+static const int DESC;
+static const int LIMIT;
+static const int OFFSET;
+static const int DOTNAME;
 
 
 #line 212 "/usr/share/bison++/bison.h"
@@ -293,8 +419,67 @@ static const int UNKNOWN;
 	,DROP=259
 	,NAME=260
 	,TABLE=261
-	,INTNUM=262
-	,UNKNOWN=263
+	,CREATE=262
+	,INTNUM=263
+	,STRING=264
+	,UNKNOWN=265
+	,ALL=266
+	,BETWEEN=267
+	,BY=268
+	,DISTINCT=269
+	,FROM=270
+	,GROUP=271
+	,HAVING=272
+	,SELECT=273
+	,COMPARISON=274
+	,USER=275
+	,WHERE=276
+	,WITH=277
+	,EMPTY=278
+	,SELALL=279
+	,DOT=280
+	,UPDATE=281
+	,SET=282
+	,CURRENT=283
+	,OF=284
+	,NULLX=285
+	,ASSIGN=286
+	,INSERT=287
+	,INTO=288
+	,VALUES=289
+	,NOT=290
+	,UNIQUE=291
+	,PRIMARY=292
+	,FOREIGN=293
+	,KEY=294
+	,CHECK=295
+	,REFERENCES=296
+	,DEFAULT=297
+	,DATATYPE=298
+	,DECIMAL=299
+	,SMALLINT=300
+	,NUMERIC=301
+	,CHARACTER=302
+	,INTEGER=303
+	,REAL=304
+	,FLOAT=305
+	,DOUBLE=306
+	,PRECISION=307
+	,VARCHAR=308
+	,AVG=309
+	,MAX=310
+	,MIN=311
+	,SUM=312
+	,COUNT=313
+	,ALIAS=314
+	,INTORDER=315
+	,COLORDER=316
+	,ORDER=317
+	,ASC=318
+	,DESC=319
+	,LIMIT=320
+	,OFFSET=321
+	,DOTNAME=322
 
 
 #line 215 "/usr/share/bison++/bison.h"

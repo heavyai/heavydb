@@ -120,8 +120,15 @@ Maintained by Magnus Ekdahl <magnus@debian.org>
 #include "ast/SQL.h"
 #include "ast/Schema.h"
 #include "ast/BaseTableDef.h"
-#include "ast/Name.h"
 #include "ast/Table.h"
+#include "ast/ColumnDef.h"
+#include "ast/BaseTableElementCommalist.h"
+#include "ast/BaseTableElement.h"
+#include "ast/ColumnDefOpt.h"
+#include "ast/ColumnDefOptList.h"
+#include "ast/Literal.h"
+#include "ast/DataType.h"
+#include "ast/Column.h"
 
 // define stack element type to be a 
 // pointer to an AST node
@@ -131,6 +138,7 @@ extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
 extern std::string strData[10];
+extern int intData;
 
 using namespace std;
 
@@ -339,8 +347,67 @@ typedef
 #define	DROP	259
 #define	NAME	260
 #define	TABLE	261
-#define	INTNUM	262
-#define	UNKNOWN	263
+#define	CREATE	262
+#define	INTNUM	263
+#define	STRING	264
+#define	UNKNOWN	265
+#define	ALL	266
+#define	BETWEEN	267
+#define	BY	268
+#define	DISTINCT	269
+#define	FROM	270
+#define	GROUP	271
+#define	HAVING	272
+#define	SELECT	273
+#define	COMPARISON	274
+#define	USER	275
+#define	WHERE	276
+#define	WITH	277
+#define	EMPTY	278
+#define	SELALL	279
+#define	DOT	280
+#define	UPDATE	281
+#define	SET	282
+#define	CURRENT	283
+#define	OF	284
+#define	NULLX	285
+#define	ASSIGN	286
+#define	INSERT	287
+#define	INTO	288
+#define	VALUES	289
+#define	NOT	290
+#define	UNIQUE	291
+#define	PRIMARY	292
+#define	FOREIGN	293
+#define	KEY	294
+#define	CHECK	295
+#define	REFERENCES	296
+#define	DEFAULT	297
+#define	DATATYPE	298
+#define	DECIMAL	299
+#define	SMALLINT	300
+#define	NUMERIC	301
+#define	CHARACTER	302
+#define	INTEGER	303
+#define	REAL	304
+#define	FLOAT	305
+#define	DOUBLE	306
+#define	PRECISION	307
+#define	VARCHAR	308
+#define	AVG	309
+#define	MAX	310
+#define	MIN	311
+#define	SUM	312
+#define	COUNT	313
+#define	ALIAS	314
+#define	INTORDER	315
+#define	COLORDER	316
+#define	ORDER	317
+#define	ASC	318
+#define	DESC	319
+#define	LIMIT	320
+#define	OFFSET	321
+#define	DOTNAME	322
 
 
 #line 263 "/usr/share/bison++/bison.cc"
@@ -394,8 +461,67 @@ static const int AS;
 static const int DROP;
 static const int NAME;
 static const int TABLE;
+static const int CREATE;
 static const int INTNUM;
+static const int STRING;
 static const int UNKNOWN;
+static const int ALL;
+static const int BETWEEN;
+static const int BY;
+static const int DISTINCT;
+static const int FROM;
+static const int GROUP;
+static const int HAVING;
+static const int SELECT;
+static const int COMPARISON;
+static const int USER;
+static const int WHERE;
+static const int WITH;
+static const int EMPTY;
+static const int SELALL;
+static const int DOT;
+static const int UPDATE;
+static const int SET;
+static const int CURRENT;
+static const int OF;
+static const int NULLX;
+static const int ASSIGN;
+static const int INSERT;
+static const int INTO;
+static const int VALUES;
+static const int NOT;
+static const int UNIQUE;
+static const int PRIMARY;
+static const int FOREIGN;
+static const int KEY;
+static const int CHECK;
+static const int REFERENCES;
+static const int DEFAULT;
+static const int DATATYPE;
+static const int DECIMAL;
+static const int SMALLINT;
+static const int NUMERIC;
+static const int CHARACTER;
+static const int INTEGER;
+static const int REAL;
+static const int FLOAT;
+static const int DOUBLE;
+static const int PRECISION;
+static const int VARCHAR;
+static const int AVG;
+static const int MAX;
+static const int MIN;
+static const int SUM;
+static const int COUNT;
+static const int ALIAS;
+static const int INTORDER;
+static const int COLORDER;
+static const int ORDER;
+static const int ASC;
+static const int DESC;
+static const int LIMIT;
+static const int OFFSET;
+static const int DOTNAME;
 
 
 #line 307 "/usr/share/bison++/bison.cc"
@@ -408,8 +534,67 @@ enum YY_Parser_ENUM_TOKEN { YY_Parser_NULL_TOKEN=0
 	,DROP=259
 	,NAME=260
 	,TABLE=261
-	,INTNUM=262
-	,UNKNOWN=263
+	,CREATE=262
+	,INTNUM=263
+	,STRING=264
+	,UNKNOWN=265
+	,ALL=266
+	,BETWEEN=267
+	,BY=268
+	,DISTINCT=269
+	,FROM=270
+	,GROUP=271
+	,HAVING=272
+	,SELECT=273
+	,COMPARISON=274
+	,USER=275
+	,WHERE=276
+	,WITH=277
+	,EMPTY=278
+	,SELALL=279
+	,DOT=280
+	,UPDATE=281
+	,SET=282
+	,CURRENT=283
+	,OF=284
+	,NULLX=285
+	,ASSIGN=286
+	,INSERT=287
+	,INTO=288
+	,VALUES=289
+	,NOT=290
+	,UNIQUE=291
+	,PRIMARY=292
+	,FOREIGN=293
+	,KEY=294
+	,CHECK=295
+	,REFERENCES=296
+	,DEFAULT=297
+	,DATATYPE=298
+	,DECIMAL=299
+	,SMALLINT=300
+	,NUMERIC=301
+	,CHARACTER=302
+	,INTEGER=303
+	,REAL=304
+	,FLOAT=305
+	,DOUBLE=306
+	,PRECISION=307
+	,VARCHAR=308
+	,AVG=309
+	,MAX=310
+	,MIN=311
+	,SUM=312
+	,COUNT=313
+	,ALIAS=314
+	,INTORDER=315
+	,COLORDER=316
+	,ORDER=317
+	,ASC=318
+	,DESC=319
+	,LIMIT=320
+	,OFFSET=321
+	,DOTNAME=322
 
 
 #line 310 "/usr/share/bison++/bison.cc"
@@ -450,8 +635,67 @@ const int YY_Parser_CLASS::AS=258;
 const int YY_Parser_CLASS::DROP=259;
 const int YY_Parser_CLASS::NAME=260;
 const int YY_Parser_CLASS::TABLE=261;
-const int YY_Parser_CLASS::INTNUM=262;
-const int YY_Parser_CLASS::UNKNOWN=263;
+const int YY_Parser_CLASS::CREATE=262;
+const int YY_Parser_CLASS::INTNUM=263;
+const int YY_Parser_CLASS::STRING=264;
+const int YY_Parser_CLASS::UNKNOWN=265;
+const int YY_Parser_CLASS::ALL=266;
+const int YY_Parser_CLASS::BETWEEN=267;
+const int YY_Parser_CLASS::BY=268;
+const int YY_Parser_CLASS::DISTINCT=269;
+const int YY_Parser_CLASS::FROM=270;
+const int YY_Parser_CLASS::GROUP=271;
+const int YY_Parser_CLASS::HAVING=272;
+const int YY_Parser_CLASS::SELECT=273;
+const int YY_Parser_CLASS::COMPARISON=274;
+const int YY_Parser_CLASS::USER=275;
+const int YY_Parser_CLASS::WHERE=276;
+const int YY_Parser_CLASS::WITH=277;
+const int YY_Parser_CLASS::EMPTY=278;
+const int YY_Parser_CLASS::SELALL=279;
+const int YY_Parser_CLASS::DOT=280;
+const int YY_Parser_CLASS::UPDATE=281;
+const int YY_Parser_CLASS::SET=282;
+const int YY_Parser_CLASS::CURRENT=283;
+const int YY_Parser_CLASS::OF=284;
+const int YY_Parser_CLASS::NULLX=285;
+const int YY_Parser_CLASS::ASSIGN=286;
+const int YY_Parser_CLASS::INSERT=287;
+const int YY_Parser_CLASS::INTO=288;
+const int YY_Parser_CLASS::VALUES=289;
+const int YY_Parser_CLASS::NOT=290;
+const int YY_Parser_CLASS::UNIQUE=291;
+const int YY_Parser_CLASS::PRIMARY=292;
+const int YY_Parser_CLASS::FOREIGN=293;
+const int YY_Parser_CLASS::KEY=294;
+const int YY_Parser_CLASS::CHECK=295;
+const int YY_Parser_CLASS::REFERENCES=296;
+const int YY_Parser_CLASS::DEFAULT=297;
+const int YY_Parser_CLASS::DATATYPE=298;
+const int YY_Parser_CLASS::DECIMAL=299;
+const int YY_Parser_CLASS::SMALLINT=300;
+const int YY_Parser_CLASS::NUMERIC=301;
+const int YY_Parser_CLASS::CHARACTER=302;
+const int YY_Parser_CLASS::INTEGER=303;
+const int YY_Parser_CLASS::REAL=304;
+const int YY_Parser_CLASS::FLOAT=305;
+const int YY_Parser_CLASS::DOUBLE=306;
+const int YY_Parser_CLASS::PRECISION=307;
+const int YY_Parser_CLASS::VARCHAR=308;
+const int YY_Parser_CLASS::AVG=309;
+const int YY_Parser_CLASS::MAX=310;
+const int YY_Parser_CLASS::MIN=311;
+const int YY_Parser_CLASS::SUM=312;
+const int YY_Parser_CLASS::COUNT=313;
+const int YY_Parser_CLASS::ALIAS=314;
+const int YY_Parser_CLASS::INTORDER=315;
+const int YY_Parser_CLASS::COLORDER=316;
+const int YY_Parser_CLASS::ORDER=317;
+const int YY_Parser_CLASS::ASC=318;
+const int YY_Parser_CLASS::DESC=319;
+const int YY_Parser_CLASS::LIMIT=320;
+const int YY_Parser_CLASS::OFFSET=321;
+const int YY_Parser_CLASS::DOTNAME=322;
 
 
 #line 341 "/usr/share/bison++/bison.cc"
@@ -470,19 +714,19 @@ YY_Parser_CONSTRUCTOR_CODE;
  #line 352 "/usr/share/bison++/bison.cc"
 
 
-#define	YYFINAL		14
+#define	YYFINAL		66
 #define	YYFLAG		-32768
-#define	YYNTBASE	10
+#define	YYNTBASE	72
 
-#define YYTRANSLATE(x) ((unsigned)(x) <= 263 ? yytranslate[x] : 16)
+#define YYTRANSLATE(x) ((unsigned)(x) <= 322 ? yytranslate[x] : 86)
 
 static const char yytranslate[] = {     0,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-     2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
-     2,     2,     2,     2,     2,     2,     2,     2,     9,     2,
+     2,     2,     2,     2,     2,     2,     2,     2,     2,    69,
+    70,     2,     2,    71,     2,     2,     2,     2,     2,     2,
+     2,     2,     2,     2,     2,     2,     2,     2,    68,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -503,68 +747,126 @@ static const char yytranslate[] = {     0,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     1,     2,     3,     4,     5,
-     6,     7,     8
+     6,     7,     8,     9,    10,    11,    12,    13,    14,    15,
+    16,    17,    18,    19,    20,    21,    22,    23,    24,    25,
+    26,    27,    28,    29,    30,    31,    32,    33,    34,    35,
+    36,    37,    38,    39,    40,    41,    42,    43,    44,    45,
+    46,    47,    48,    49,    50,    51,    52,    53,    54,    55,
+    56,    57,    58,    59,    60,    61,    62,    63,    64,    65,
+    66,    67
 };
 
 #if YY_Parser_DEBUG != 0
 static const short yyprhs[] = {     0,
-     0,     2,     3,     6,    10,    12,    14,    18
+     0,     2,     3,     6,    10,    12,    14,    21,    25,    27,
+    31,    33,    37,    38,    41,    44,    48,    53,    56,    59,
+    62,    65,    67,    69,    71,    76,    78,    83,    85,    90,
+    92,    97,    99,   101,   103,   108,   110,   113
 };
 
-static const short yyrhs[] = {    11,
-     0,     0,    12,     9,     0,    11,    12,     9,     0,    13,
-     0,    14,     0,     4,     6,    15,     0,     5,     0
+static const short yyrhs[] = {    73,
+     0,     0,    74,    68,     0,    73,    74,    68,     0,    75,
+     0,    76,     0,     7,     6,    83,    69,    77,    70,     0,
+     4,     6,    83,     0,    78,     0,    77,    71,    78,     0,
+    79,     0,    85,    84,    80,     0,     0,    80,    81,     0,
+    35,    30,     0,    35,    30,    36,     0,    35,    30,    37,
+    39,     0,    42,    82,     0,    42,    30,     0,    42,    20,
+     0,    41,    83,     0,     5,     0,     5,     0,    47,     0,
+    47,    69,     8,    70,     0,    53,     0,    53,    69,     8,
+    70,     0,    46,     0,    46,    69,     8,    70,     0,    44,
+     0,    44,    69,     8,    70,     0,    48,     0,    45,     0,
+    50,     0,    50,    69,     8,    70,     0,    49,     0,    51,
+    52,     0,     5,     0
 };
 
 #endif
 
 #if (YY_Parser_DEBUG != 0) || defined(YY_Parser_ERROR_VERBOSE) 
 static const short yyrline[] = { 0,
-    52,    53,    57,    58,    62,    66,    70,    74
+    80,    81,    85,    86,    90,    94,    98,    99,   103,   104,
+   108,   113,   116,   118,   121,   124,   125,   126,   127,   128,
+   130,   136,   142,   150,   151,   152,   153,   154,   155,   157,
+   158,   160,   161,   162,   163,   164,   165,   170
 };
 
 static const char * const yytname[] = {   "$","error","$illegal.","AS","DROP",
-"NAME","TABLE","INTNUM","UNKNOWN","';'","program","sql_list","sql","schema",
-"base_table_def","table",""
+"NAME","TABLE","CREATE","INTNUM","STRING","UNKNOWN","ALL","BETWEEN","BY","DISTINCT",
+"FROM","GROUP","HAVING","SELECT","COMPARISON","USER","WHERE","WITH","EMPTY",
+"SELALL","DOT","UPDATE","SET","CURRENT","OF","NULLX","ASSIGN","INSERT","INTO",
+"VALUES","NOT","UNIQUE","PRIMARY","FOREIGN","KEY","CHECK","REFERENCES","DEFAULT",
+"DATATYPE","DECIMAL","SMALLINT","NUMERIC","CHARACTER","INTEGER","REAL","FLOAT",
+"DOUBLE","PRECISION","VARCHAR","AVG","MAX","MIN","SUM","COUNT","ALIAS","INTORDER",
+"COLORDER","ORDER","ASC","DESC","LIMIT","OFFSET","DOTNAME","';'","'('","')'",
+"','","program","sql_list","sql","schema","base_table_def","base_table_element_commalist",
+"base_table_element","column_def","column_def_opt_list","column_def_opt","literal",
+"table","data_type","column",""
 };
 #endif
 
 static const short yyr1[] = {     0,
-    10,    10,    11,    11,    12,    13,    14,    15
+    72,    72,    73,    73,    74,    75,    76,    76,    77,    77,
+    78,    79,    80,    80,    81,    81,    81,    81,    81,    81,
+    81,    82,    83,    84,    84,    84,    84,    84,    84,    84,
+    84,    84,    84,    84,    84,    84,    84,    85
 };
 
 static const short yyr2[] = {     0,
-     1,     0,     2,     3,     1,     1,     3,     1
+     1,     0,     2,     3,     1,     1,     6,     3,     1,     3,
+     1,     3,     0,     2,     2,     3,     4,     2,     2,     2,
+     2,     1,     1,     1,     4,     1,     4,     1,     4,     1,
+     4,     1,     1,     1,     4,     1,     2,     1
 };
 
 static const short yydefact[] = {     2,
-     0,     1,     0,     5,     6,     0,     0,     3,     8,     7,
-     4,     0,     0,     0
+     0,     0,     1,     0,     5,     6,     0,     0,     0,     3,
+    23,     8,     0,     4,     0,    38,     0,     9,    11,     0,
+     7,     0,    30,    33,    28,    24,    32,    36,    34,     0,
+    26,    13,    10,     0,     0,     0,     0,    37,     0,    12,
+     0,     0,     0,     0,     0,     0,     0,     0,    14,    31,
+    29,    25,    35,    27,    15,    21,    22,    20,    19,    18,
+    16,     0,    17,     0,     0,     0
 };
 
-static const short yydefgoto[] = {    12,
-     2,     3,     4,     5,    10
+static const short yydefgoto[] = {    64,
+     3,     4,     5,     6,    17,    18,    19,    40,    49,    60,
+    12,    32,    20
 };
 
-static const short yypact[] = {    -4,
-    -5,    -4,    -7,-32768,-32768,    -2,    -3,-32768,-32768,-32768,
--32768,     4,     5,-32768
+static const short yypact[] = {     6,
+    11,    16,     6,   -45,-32768,-32768,    19,    19,   -43,-32768,
+-32768,-32768,   -41,-32768,    22,-32768,   -56,-32768,-32768,   -42,
+-32768,    22,   -40,-32768,   -39,   -38,-32768,-32768,   -37,   -19,
+   -35,-32768,-32768,    27,    28,    29,    30,-32768,    32,   -23,
+   -29,   -28,   -27,   -26,   -25,    17,    19,    -4,-32768,-32768,
+-32768,-32768,-32768,-32768,   -16,-32768,-32768,-32768,-32768,-32768,
+-32768,     7,-32768,    48,    49,-32768
 };
 
 static const short yypgoto[] = {-32768,
--32768,     6,-32768,-32768,-32768
+-32768,    47,-32768,-32768,-32768,    31,-32768,-32768,-32768,-32768,
+    -8,-32768,-32768
 };
 
 
-#define	YYLAST		8
+#define	YYLAST		53
 
 
-static const short yytable[] = {     1,
-     6,     8,     9,    13,    14,    11,     0,     7
+static const short yytable[] = {    13,
+    57,    23,    24,    25,    26,    27,    28,    29,    30,     1,
+    31,    46,     2,    21,    22,    58,     7,    47,    48,    61,
+    62,     8,    10,    11,    14,    59,    16,    15,    34,    35,
+    36,    37,    38,    39,    41,    42,    43,    44,    56,    45,
+    50,    51,    52,    53,    54,    63,    55,    65,    66,     9,
+     0,     0,    33
 };
 
-static const short yycheck[] = {     4,
-     6,     9,     5,     0,     0,     9,    -1,     2
+static const short yycheck[] = {     8,
+     5,    44,    45,    46,    47,    48,    49,    50,    51,     4,
+    53,    35,     7,    70,    71,    20,     6,    41,    42,    36,
+    37,     6,    68,     5,    68,    30,     5,    69,    69,    69,
+    69,    69,    52,    69,     8,     8,     8,     8,    47,     8,
+    70,    70,    70,    70,    70,    39,    30,     0,     0,     3,
+    -1,    -1,    22
 };
 
 #line 352 "/usr/share/bison++/bison.cc"
@@ -1061,36 +1363,156 @@ YYLABEL(yyreduce)
   switch (yyn) {
 
 case 1:
-#line 52 "parser.y"
+#line 80 "parser.y"
 { yyval = new Program((SQLList*)yyvsp[0]); parse_root = yyval; ;
     break;}
 case 2:
-#line 53 "parser.y"
+#line 81 "parser.y"
 { yyval = 0; parse_root = yyval; ;
     break;}
 case 3:
-#line 57 "parser.y"
+#line 85 "parser.y"
 { yyval = new SQLList((SQL*)yyvsp[-1]); ;
     break;}
 case 4:
-#line 58 "parser.y"
+#line 86 "parser.y"
 { yyval = new SQLList((SQLList*)yyvsp[-2], (SQL*)yyvsp[-1]); ;
     break;}
 case 5:
-#line 62 "parser.y"
+#line 90 "parser.y"
 { yyval = new SQL((Schema*)yyvsp[0]); ;
     break;}
 case 6:
-#line 66 "parser.y"
+#line 94 "parser.y"
 { yyval = new Schema((BaseTableDef*)yyvsp[0]); ;
     break;}
 case 7:
-#line 70 "parser.y"
-{ yyval = new BaseTableDef("DROP", (Table*)yyvsp[0]); ;
+#line 98 "parser.y"
+{ yyval = new BaseTableDef("CREATE", (Table*)yyvsp[-3], (BaseTableElementCommalist*)yyvsp[-1]); ;
     break;}
 case 8:
-#line 74 "parser.y"
+#line 99 "parser.y"
+{ yyval = new BaseTableDef("DROP", (Table*)yyvsp[0]); ;
+    break;}
+case 9:
+#line 103 "parser.y"
+{ yyval = new BaseTableElementCommalist( (BaseTableElement*)yyvsp[0]); ;
+    break;}
+case 10:
+#line 104 "parser.y"
+{ yyval = new BaseTableElementCommalist( (BaseTableElementCommalist*)yyvsp[-2], (BaseTableElement*)yyvsp[0]); ;
+    break;}
+case 11:
+#line 108 "parser.y"
+{ yyval = new BaseTableElement( (ColumnDef*)yyvsp[0]); ;
+    break;}
+case 12:
+#line 113 "parser.y"
+{ yyval = new ColumnDef( (Column*)yyvsp[-2], (DataType*)yyvsp[-1], (ColumnDefOptList*)yyvsp[0]); ;
+    break;}
+case 13:
+#line 117 "parser.y"
+{ yyval = NULL; ;
+    break;}
+case 14:
+#line 118 "parser.y"
+{ yyval = new ColumnDefOptList( (ColumnDefOptList*)yyvsp[-1], (ColumnDefOpt*)yyvsp[0]); ;
+    break;}
+case 15:
+#line 123 "parser.y"
+{ yyval = new ColumnDefOpt(0); ;
+    break;}
+case 16:
+#line 124 "parser.y"
+{ yyval = new ColumnDefOpt(1); ;
+    break;}
+case 17:
+#line 125 "parser.y"
+{ yyval = new ColumnDefOpt(2); ;
+    break;}
+case 18:
+#line 126 "parser.y"
+{ yyval = new ColumnDefOpt(3, (Literal*)yyvsp[0]); ;
+    break;}
+case 19:
+#line 127 "parser.y"
+{ yyval = new ColumnDefOpt(4); ;
+    break;}
+case 20:
+#line 128 "parser.y"
+{ yyval = new ColumnDefOpt(5); ;
+    break;}
+case 21:
+#line 130 "parser.y"
+{ yyval = new ColumnDefOpt(7, (Table*)yyvsp[0]); ;
+    break;}
+case 22:
+#line 136 "parser.y"
+{ yyval = new Literal(strData[0]); ;
+    break;}
+case 23:
+#line 142 "parser.y"
 { yyval = new Table(strData[0]); ;
+    break;}
+case 24:
+#line 150 "parser.y"
+{ yyval = new DataType(0); ;
+    break;}
+case 25:
+#line 151 "parser.y"
+{ yyval = new DataType(0, intData); ;
+    break;}
+case 26:
+#line 152 "parser.y"
+{ yyval = new DataType(1); ;
+    break;}
+case 27:
+#line 153 "parser.y"
+{ yyval = new DataType(1, intData); ;
+    break;}
+case 28:
+#line 154 "parser.y"
+{ yyval = new DataType(2); ;
+    break;}
+case 29:
+#line 155 "parser.y"
+{ yyval = new DataType(2, intData); ;
+    break;}
+case 30:
+#line 157 "parser.y"
+{ yyval = new DataType(3); ;
+    break;}
+case 31:
+#line 158 "parser.y"
+{ yyval = new DataType(3, intData); ;
+    break;}
+case 32:
+#line 160 "parser.y"
+{ yyval = new DataType(4); ;
+    break;}
+case 33:
+#line 161 "parser.y"
+{ yyval = new DataType(5); ;
+    break;}
+case 34:
+#line 162 "parser.y"
+{ yyval = new DataType(6); ;
+    break;}
+case 35:
+#line 163 "parser.y"
+{ yyval = new DataType(6, intData); ;
+    break;}
+case 36:
+#line 164 "parser.y"
+{ yyval = new DataType(7); ;
+    break;}
+case 37:
+#line 165 "parser.y"
+{ yyval = new DataType(8); ;
+    break;}
+case 38:
+#line 170 "parser.y"
+{ yyval = new Column(strData[0]); ;
     break;}
 }
 
@@ -1296,5 +1718,5 @@ YYLABEL(yyerrhandle)
 /* END */
 
  #line 1038 "/usr/share/bison++/bison.cc"
-#line 77 "parser.y"
+#line 173 "parser.y"
 

@@ -1,23 +1,27 @@
-%name sqlParser1
+%name Parser
 %define LSP_NEEDED
 %define MEMBERS                 \
     virtual ~Parser()   {} \
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
-%define ERROR_BODY {cerr << "error encountered at line: "<<lexer.lineno()<<" last word parsed:"<<lexer.YYText()<<"\n";}
+%define USE_CONST_TOKEN 1
 
 %header{
-
-#include<sstream>
-#include <iostream>
-using namespace std;
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#include "defines.h" 
+#include "types.h"
+#include <FlexLexer.h>
+
+//#define YYDEBUG 1
+
+//#ifdef DEBUG
+//#define TRACE printf("reduce at line %d\n", __LINE__);
+//#else
+//#define TRACE
+//#endif
 
 /* prototypes */
 nodeType *opr(int oper, int nops, ...);
@@ -29,9 +33,9 @@ nodeType *compAssgn(char *s);
 nodeType *con(float value);
 void freeNode(nodeType *p);
 int ex(nodeType *p);
-int yylex(void);
+//int yylex(void);
 
-int yyerror(const char *s);
+//int yyerror(const char *s);
 
 extern int readInputForLexer(char* buffer,int *numBytesRead,int maxBytesToRead);
 %}
@@ -50,7 +54,7 @@ extern int readInputForLexer(char* buffer,int *numBytesRead,int maxBytesToRead);
 %token <sName> NAME
 %token <sValue> STRING 
 %token <iValue> INTNUM
-%token <fValue> APPROXNUM
+%token <fValue> APPROXNUM 
 
 %left OR
 %left AND
@@ -454,12 +458,13 @@ ammsc:
 
 %%
 
+
 nodeType *id(char* s) {
     nodeType *p;
 
     /* allocate node */
-    if ((p = malloc(sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
+    if ((p = (nodeType*)malloc(sizeof(nodeType))) == NULL)
+        printf("out of memory");
 
     /* copy information */
     p->type = typeId;
@@ -474,8 +479,8 @@ nodeType *id2(char* s) {
     nodeType *p;
 
     /* allocate node */
-    if ((p = malloc(sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
+    if ((p = (nodeType*)malloc(sizeof(nodeType))) == NULL)
+        printf("out of memory");
 
     /* copy information */
     p->type = typeId;
@@ -490,8 +495,8 @@ nodeType *text(char* s) {
     nodeType *p;
 
     /* allocate node */
-    if ((p = malloc(sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
+    if ((p = (nodeType*)malloc(sizeof(nodeType))) == NULL)
+        printf("out of memory");
 
     /* copy information */
     p->type = typeText;
@@ -507,8 +512,8 @@ nodeType *comp(char* s) {
 
     /* comparators: =, >, etc. */
     /* allocate node */
-    if ((p = malloc(sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
+    if ((p = (nodeType*)malloc(sizeof(nodeType))) == NULL)
+        printf("out of memory");
 
     /* copy information */
     p->type = typeComp;
@@ -526,13 +531,13 @@ nodeType *compAssgn(char* s) {
 
     To do: Find a workaround that allows the assignment rule to appear properly in the grammar. */
     /* allocate node */
-    if ((p = malloc(sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
+    if ((p = (nodeType*)malloc(sizeof(nodeType))) == NULL)
+        printf("out of memory");
 
     if (!strcmp(s, "=")) {
         printf("wrong comparator\n");
         fflush(stdout);
-        yyerror("wrong comparator");
+        printf("wrong comparator");
     }
     /* copy information */
     p->type = typeAssgn;
@@ -546,8 +551,8 @@ nodeType *con(float value) {
     nodeType *p;
 
     /* allocate node */
-    if ((p = malloc(sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
+    if ((p = (nodeType*)malloc(sizeof(nodeType))) == NULL)
+        printf("out of memory");
 
     /* copy information */
     p->type = typeCon;
@@ -562,10 +567,10 @@ nodeType *opr(int oper, int nops, ...) {
     int i;
 
     /* allocate node */
-    if ((p = malloc(sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
-    if ((p->opr.op = malloc(nops * sizeof(nodeType))) == NULL)
-        yyerror("out of memory");
+    if ((p = (nodeType*)malloc(sizeof(nodeType))) == NULL)
+        printf("out of memory");
+    if ((p->opr.op = (nodeType**)malloc(nops * sizeof(nodeType))) == NULL)
+        printf("out of memory");
 
     /* copy information */
     p->type = typeOpr;
@@ -590,16 +595,11 @@ void freeNode(nodeType *p) {
     free (p);
 }
 
+/*
 int yyerror(const char *s) {
     fprintf(stdout, "%s\n", s);
-    /* should this return 1? */
+    // should this return 1? 
     return 1;
 }
+*/
 
-
-
-int main(void) {
-    int i = yyparse();
-    //printf("success? %d\n", i);
-    return i;
-}

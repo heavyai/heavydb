@@ -1,22 +1,11 @@
-// Parser Class
-#include <iostream>
-using namespace std;
+#define YY_sqlParser1_h_included
+#define YY_USE_CLASS
 
-class Parser {
-    int width, height;
-  public:
-    void set_values (int,int);
-    int area() {return width*height;}
-};
+/*  A Bison++ parser, made from sqlParser1.y  */
 
-void Parser::parse(char* inputString) {
-  width = x;
-  height = y;
-}
+ /* with Bison++ version bison++ Version 1.21.9-1, adapted from GNU bison by coetmeur@icdc.fr
+Maintained by Magnus Ekdahl <magnus@debian.org>
+  */
 
-int main () {
-  Rectangle rect;
-  rect.set_values (3,4);
-  cout << "area: " << rect.area();
-  return 0;
-}
+#define YY_USE_CLASS
+

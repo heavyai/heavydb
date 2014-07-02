@@ -1,7 +1,6 @@
 %{
-#include "sqlParser1.h"
 #include <string.h>
-#include "y.tab.h"
+#include "defines.h"
 #include <iostream>
 using namespace std;
 

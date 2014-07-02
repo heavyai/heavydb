@@ -1,14 +1,10 @@
-%name CalcScanner
-%define IOSTREAM
-%define LEX_PARAM YY_CalcParser_STYPE *val, YY_CalcParser_LTYPE *loc
-%define MEMBERS public: int line, column;
-%define CONSTRUCTOR_INIT : line(1), column(1)
- 
-%header{
+%option c++
+%option noyywrap
+
+%{
 #include<sstream>
 #include "defines.h"
 #include <string.h>
-#include "sqlParser1.h"
 #include <iostream>
 using namespace std;
 
@@ -196,8 +192,8 @@ char *lastTokenTypeRead = "start"; /* corresponds to which string token (name, s
 void yyerror(char *s) {
 	fprintf(stderr, "line %d: %s\n", lineno, s);
 }
-*/
+
 int yywrap(void) {
     return 1;
 }
-
+*/

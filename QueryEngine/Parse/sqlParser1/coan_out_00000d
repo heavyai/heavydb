@@ -1,38 +1,22 @@
- typedef enum { typeCon, typeId, typeText, typeOpr, typeComp, typeAssgn } nodeEnum;
+// Parser Class
+#include <iostream>
+using namespace std;
 
-/* constants */
-typedef struct {
-	float fValue; /*value of constant */
-	int iValue;
-} conNodeType;
+class Parser {
+    int width, height;
+  public:
+    void set_values (int,int);
+    int area() {return width*height;}
+};
 
-/* identifiers */
-typedef struct {
-		char *s;
-		int iLength;
-} idNodeType;
+void Parser::parse(char* inputString) {
+  width = x;
+  height = y;
+}
 
-/* operators */
-typedef struct {
-	int oper;					/* operator */
-	int nops;					/* no. of operands */
-	struct nodeTypeTag **op; 	/* operands */
-} oprNodeType;
-
-typedef struct nodeTypeTag {
-	nodeEnum type; 				/* type of node */
-
-	union {
-		conNodeType con; /* constants */
-		idNodeType id; /* identifiers */
-		oprNodeType opr; /* operators */
-	};
-} nodeType;
-
-extern int textLength;
-extern int textLength2; /* this is a backup in the case of NAME . NAME (see the grammar). 
-						Both name strings correspond to a different pointer in the yytext string.
-						Keeping both textLengths lets us make sure  */
-extern int comparisonLength;
-
-extern int dotFlag; /* to determine whether to assign length to textLength or textLength2. */
+int main () {
+  Rectangle rect;
+  rect.set_values (3,4);
+  cout << "area: " << rect.area();
+  return 0;
+}
