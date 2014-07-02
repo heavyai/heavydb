@@ -32,7 +32,6 @@ public:
     // virtual void visit(class InsertAtomCommalist *v) = 0;
     // virtual void visit(class Literal *v) = 0;
     // virtual void visit(class ManipulativeStatement *v) = 0;
-    virtual void visit(class Name *v) = 0;
     // virtual void visit(class OptAllDistinct *v) = 0;
     // virtual void visit(class OptColumnCommalist *v) = 0;
     // virtual void visit(class OptGroupByClause *v) = 0;
