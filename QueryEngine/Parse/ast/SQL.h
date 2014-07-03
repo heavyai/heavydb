@@ -8,10 +8,12 @@ class SQL : public ASTNode {
     
 public:
     Schema *sch;
-    
+    ManipulativeStatement *manSta;
+
     /**< Constructor */
-    explicit SQL(Schema *n) : sch(n) {}
-    
+    explicit SQL(Schema *n) : sch(n), manSta(NULL) {}
+    SQL(ManipulativeStatement *n) : manSta(n), sch(NULL) {}
+
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
         v.visit(this);
