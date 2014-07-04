@@ -84,7 +84,7 @@ FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nbl
     return fInfo;
 }
 
-mapd_err_t FileMgr::deleteFile(const int fileId) {
+mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy = false) {
     mapd_err_t err;
     FileMap::iterator iter = files_.find(fileId);
 
@@ -92,12 +92,17 @@ mapd_err_t FileMgr::deleteFile(const int fileId) {
         // obtain FileInfo pointer
         FileInfo *fInfo = getFile(fileId, NULL);
         
+        // remove FileMap entry
+        files_.erase(iter);
+
+        // remove file from disk
+        if (destory)
+            File::delete(basePath_, fInfo->f);
+
         // free memory used by FileInfo object
         delete fInfo;
         fInfo = NULL;
-        
-        // remove FileMap entry
-        files_.erase(iter);
+
         return MAPD_SUCCESS;
     }
     return MAPD_FAILURE;
@@ -161,12 +166,12 @@ Chunk* FileMgr::getChunkRef(const ChunkKey &key, mapd_err_t *err) {
     ChunkKeyToChunkMap::iterator iter = chunkIndex_.find(key);
     if (iter != chunkIndex_.end()) {
         // found
-        *err = MAPD_SUCCESS;
+        if (err) *err = MAPD_SUCCESS;
         return &iter->second;
     }
     else {
         // not found
-        *err = MAPD_ERR_CHUNK_NOT_FOUND; // chunk doesn't exist
+        if (err) *err = MAPD_ERR_CHUNK_NOT_FOUND; // chunk doesn't exist
         return NULL;
     }
 }
@@ -270,21 +275,41 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     return err;
 }
 
-// if src is NULL, then 0s are written to the new chunk
+/**
+ *
+ *
+ *
+ */
 Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err) {
     *err = MAPD_SUCCESS;
-    
+    Chunk *c = NULL;
+
+    // check if the chunk already exists
+    if (getChunkRef(key, NULL)) {
+        if (err) *err = MAPD_ERR_CHUNK_DUPL;
+        return NULL;
+    }
+
     // determine number of blocks needed
     mapd_size_t nblocks = (size + blockSize - 1) / blockSize;
     
-    // find a file that uses the specified blockSize
+    // find one or more files with the specified block size
+    FileInfo *fInfo = NULL;
+    BlockSizeFileMap::iterator it = blockSizeFile_.begin();
+    while (it != blockSizeFile_.end()) {
+        fInfo = it->second;
+        if (fInfo->blockSize == blockSize)
+            break;
+        fInfo = NULL;
+    }
+
+    if (fInfo == NULL) {
+        // create a new file with the specified block size
+
+    }
     
     
-    // determine if the file has enough free space
-    
-    
-    
-    return NULL;
+    return c;
 }
 
 /*

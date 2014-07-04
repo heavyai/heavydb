@@ -115,6 +115,16 @@ struct FileInfo {
 typedef std::map<int, FileInfo*> FileMap;
 
 /**
+ * @type BlockSizeFileMap
+ * @brief Maps logical block sizes to files.
+ * 
+ * The file manager uses this type in order to quickly find files of a certain block size.
+ * This is relevant when inserting a chunk to a file, because the chunk's block size
+ * should match the destination file's block size.
+ */
+ typedef std::map<mapd_size_t, FileInfo*> BlockSizeFileMap;
+
+/**
  * @type Chunk
  * @brief A Chunk is the fundamental unit of execution in Map-D.
  *
@@ -191,14 +201,20 @@ public:
    /**
     * @brief Deletes a file from the file manager's repository.
     *
-    * This method will delete the specified file from the FileMap (files_). Note that it does
-    * not remove references to the fileId of the deleted file. Any method that uses the 
-    * fileId will need to check for the existence of the file in the FileMap.
+    * At a minimum, this method removes the file from both the FileMap (files_) and the
+    * BlockSizeFileMap (blockSizeFile_). From the file manager's point of view, this removes
+    * the file. Unless the value of destroy is "true," the actual physical file on disk
+    * is not removed.
+    *
+    * Note that there may be residual references to the file in other data structures; thus,
+    * it is advisable to check for the existence of the file prior to trying to access it.
+    * This can be done by calling getFile().
     *
     * @param fileId The unique file identifier of the file to be deleted.
+    * @param destroy If true, then the file on disk is deleted
     * @return An error code, should an error occur.
     */
-    mapd_err_t deleteFile(const int fileId);
+    mapd_err_t deleteFile(const int fileId, const bool destroy = false);
 
    /**
     * @brief Finds the file in the file manager's FileMap (files_).
@@ -316,8 +332,11 @@ public:
     * number of bytes (size). A pointer to the new Chunk object is returned, or NULL upon failure.
     * If failure occurs, an error code may be stored in err.
     *
-    * If src is NULL, then each block of the chunk will have its "isNull" flag set to true; otherwise,
+    * If src is NULL, then each block of the chunk will have its "isEmpty" flag set to true; otherwise,
     * the data in src will be written to the new chunk.
+    *
+    * If the chunk already exists (based on looking up the key), then NULL is returned and err is set to
+    * MAPD_ERR_CHUNK_DUPL.
     *
     * @param key The unique identifier of the new chunk.
     * @param size The amount of memory requested for the new chunk.
@@ -346,9 +365,10 @@ public:
     //void print();
 
 private:
-    std::string basePath_;          /**< The OS file system path containing the files. */
-    FileMap files_;                 /**< Maps file identifiers (int) to FileInfo objects. */
-    ChunkKeyToChunkMap chunkIndex_; /**< Index for looking up chunks, which are vectors of BlockAddr */
+    std::string basePath_;              /**< The OS file system path containing the files. */
+    FileMap files_;                     /**< Maps file identifiers (int) to FileInfo objects. */
+    BlockSizeFileMap blockSizeFile_;    /**< Maps block sizes to FileInfo objects. */
+    ChunkKeyToChunkMap chunkIndex_;     /**< Index for looking up chunks, which are vectors of BlockAddr */
 };
 
 #endif // FILEMGR_H

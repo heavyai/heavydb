@@ -132,7 +132,7 @@ public:
      *
      * @param hostMemorySize The number of bytes to allocate in host memory for the buffer pool
      */
-    BufferMgr(mapd_size_t hostMemorySize, FileMgr &fm);
+    BufferMgr(mapd_size_t hostMemorySize, FileMgr *fm);
 
 	/**
 	 * @brief A constructor that instantiates a buffer manager instance, and allocates the buffer pool.
@@ -142,7 +142,7 @@ public:
      * @param hostMemorySize The number of bytes to allocate in host memory for the buffer pool.
      * @param frameSize The size in bytes of each frame.
 	 */
-	BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr &fm);
+	BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr *fm);
 
 	/**
 	 * A destructor that cleans up resources used by a buffer manager instance.
@@ -227,8 +227,8 @@ public:
     void printChunksHost();
 
 private:
-    const FileMgr &fm_;                 /**< Reference to a file manager object */
-    mapd_byte_t *hostMem_;              /**< A pointer to the host-allocated buffer pool. */
+    FileMgr *fm_;                       /**< pointer to a file manager object */
+    mapd_byte_t *hostMem_;              /**< pointer to the host-allocated buffer pool. */
 
     // Frames
     std::vector<Frame> frames_;         /**< A vector of in-order frames, which compose the buffer pool. */

@@ -35,6 +35,15 @@ namespace File {
     mapd_err_t close(FILE *f);
 
     /**
+     * @brief Deletes the file pointed to by the FILE pointer.
+     *
+     * @param basePath The base path (directory) of the file.
+     * @param f Pointer to the FILE.
+     * @return mapd_err_t Returns an error code when unable to close the file properly.
+     */
+    mapd_err_t delete(const string basePath, FILE *f);
+
+    /**
      * @brief Reads the specified number of bytes from the offset position in file f into buf.
      *
      * @param f Pointer to the FILE.

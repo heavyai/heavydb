@@ -53,6 +53,11 @@ namespace File {
         assert(f);
         return (fclose(f) == 0) ? MAPD_SUCCESS : MAPD_ERR_FILE_CLOSE;
     }
+
+    mapd_err_t delete(const string basePath, FILE *f) {
+        // @todo implement the file delete function!
+        return MAPD_SUCCESS;
+    }
     
     size_t read(FILE *f, mapd_size_t offset, mapd_size_t n, void *buf, mapd_err_t *err) {
         assert(f);

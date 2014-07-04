@@ -13,7 +13,7 @@
 using std::cout;
 using std::endl;
 
-BufferMgr::BufferMgr(mapd_size_t hostMemorySize, FileMgr &fm) : fm_(fm) {
+BufferMgr::BufferMgr(mapd_size_t hostMemorySize, FileMgr *fm) : fm_(fm) {
     // Allocate host memory
     hostMem_ = new mapd_byte_t[hostMemorySize];
     
@@ -32,7 +32,7 @@ BufferMgr::BufferMgr(mapd_size_t hostMemorySize, FileMgr &fm) : fm_(fm) {
     printf("# of frames = %u\n", numFrames_);
 }
 
-BufferMgr::BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr &fm) : fm_(fm) {
+BufferMgr::BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr *fm) : fm_(fm) {
     // Allocate host memory
     hostMem_ = new mapd_byte_t[hostMemorySize];
 
@@ -54,7 +54,8 @@ BufferMgr::~BufferMgr() {
  *
  */
 mapd_err_t BufferMgr::getChunkHost(const ChunkKey &key, PageInfo &page, bool pin) {
-
+    assert(fm_);
+    
     // Search for the page using the key
     ChunkToPageMap::iterator iter = chunkIndex.find(key);
 
@@ -67,7 +68,7 @@ mapd_err_t BufferMgr::getChunkHost(const ChunkKey &key, PageInfo &page, bool pin
     
     // not found -- request actual chunk size from file manager
     mapd_size_t actualSize;
-    fm_.getChunkActualSize(key, &actualSize);
+    fm_->getChunkActualSize(key, &actualSize);
     if (actualSize <= 0)
         return MAPD_ERR_BUFFER; // chunk doesn't exist
     
