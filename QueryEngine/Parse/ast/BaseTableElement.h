@@ -8,11 +8,11 @@ class BaseTableElement : public ASTNode {
     
 public:
     ColumnDef *colDef;
-    //TableConstraintDef *tblConDef;
+    TableConstraintDef *tblConDef;
     
     /**< Constructor */
-    explicit BaseTableElement(ColumnDef *n) : colDef(n) {}//, tblConDef(NULL);
-   // explicit BaseTableElement(TableConstraintDef *n) : colDef(NULL), tblConDef(n);
+    explicit BaseTableElement(ColumnDef *n) : colDef(n), tblConDef(NULL) {} 
+    explicit BaseTableElement(TableConstraintDef *n) : colDef(NULL), tblConDef(n) {}
         
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

@@ -35,6 +35,8 @@
 #include "ast/BaseTableDef.h"
 #include "ast/Table.h"
 #include "ast/ColumnDef.h"
+#include "ast/ColumnCommalist.h"
+#include "ast/TableConstraintDef.h"
 #include "ast/BaseTableElementCommalist.h"
 #include "ast/BaseTableElement.h"
 #include "ast/ColumnDefOpt.h"
@@ -42,6 +44,16 @@
 #include "ast/Literal.h"
 #include "ast/DataType.h"
 #include "ast/Column.h"
+
+#include "ast/ManipulativeStatement.h"
+#include "ast/SelectStatement.h"
+#include "ast/Selection.h"
+#include "ast/OptAllDistinct.h"
+#include "ast/TableExp.h"
+#include "ast/FromClause.h"
+#include "ast/TableRefCommalist.h"
+#include "ast/TableRef.h"
+
 
 // define stack element type to be a 
 // pointer to an AST node

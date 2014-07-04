@@ -22,6 +22,8 @@
 #include "ast/BaseTableDef.h"
 #include "ast/Table.h"
 #include "ast/ColumnDef.h"
+#include "ast/ColumnCommalist.h"
+#include "ast/TableConstraintDef.h"
 #include "ast/BaseTableElementCommalist.h"
 #include "ast/BaseTableElement.h"
 #include "ast/ColumnDefOpt.h"
@@ -29,6 +31,16 @@
 #include "ast/Literal.h"
 #include "ast/DataType.h"
 #include "ast/Column.h"
+
+#include "ast/ManipulativeStatement.h"
+#include "ast/SelectStatement.h"
+#include "ast/Selection.h"
+#include "ast/OptAllDistinct.h"
+#include "ast/TableExp.h"
+#include "ast/FromClause.h"
+#include "ast/TableRefCommalist.h"
+#include "ast/TableRef.h"
+
 
 // define stack element type to be a 
 // pointer to an AST node
@@ -106,7 +118,7 @@ base_table_element_commalist
 
 base_table_element
 :    column_def              { $$ = new BaseTableElement( (ColumnDef*)$1); }
-// |   table_constraint_def    { $$ = new BaseTableElement( (TableConstraintDef*)$1); }
+|   table_constraint_def    { $$ = new BaseTableElement( (TableConstraintDef*)$1); }
 ;
 
 column_def
@@ -128,18 +140,95 @@ column_def_opt:
     |   DEFAULT USER                                { $$ = new ColumnDefOpt(5); }
    // |   CHECK '(' search_condition ')'              { $$ = new ColumnDefOpt(6, (SearchCondition*)$3); }
     |   REFERENCES table                            { $$ = new ColumnDefOpt(7, (Table*)$2); }
-    //|   REFERENCES table '(' column_commalist ')'   { $$ = new ColumnDefOpt(8, (Table*)$2, (ColumnCommalist*)$4); }
+    |   REFERENCES table '(' column_commalist ')'   { $$ = new ColumnDefOpt(8, (Table*)$2, (ColumnCommalist*)$4); }
     ;
 
+table_constraint_def
+: UNIQUE '(' column_commalist ')'                                                   { $$ = new TableConstraintDef(0, (ColumnCommalist*)$3); }
+| PRIMARY KEY '(' column_commalist ')'                                              { $$ = new TableConstraintDef(1, (ColumnCommalist*)$4); }
+| FOREIGN KEY '(' column_commalist ')' REFERENCES table                             { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7); }
+| FOREIGN KEY '(' column_commalist ')' REFERENCES table '(' column_commalist ')'    { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7, (ColumnCommalist*)$9); }
+// |   CHECK '(' search_condition ')'              {$$ = new TableConstraintDef(3, (SearchCondition*)$3); }
+    ;
+
+column_commalist:
+        column                                      { $$ = new ColumnCommalist((Column*)$1); }
+    |   column_commalist ',' column                 { $$ = new ColumnCommalist((ColumnCommalist*)$1, (Column*)$3); }
+    ;
+
+/*************/
+/* this starts the execution of classic manipulative statements. */
+
+sql:
+        manipulative_statement      { $$ = new SQL((ManipulativeStatement*)$1); }
+    ;
+
+manipulative_statement:
+        select_statement                    { $$ = new ManipulativeStatement((SelectStatement*)$1); } 
+    /*|   update_statement_positioned         { $$ = opr(MANIPULATIVE_STATEMENT, 1, $1); } 
+    |   update_statement_searched           { $$ = opr(MANIPULATIVE_STATEMENT, 1, $1); } 
+    |   insert_statement                    { $$ = opr(MANIPULATIVE_STATEMENT, 1, $1); }
+    
+    |   commit_statement
+    |   delete_statement_positioned
+    |   delete_statement_searched
+    |   fetch_statement
+    |   insert_statement
+    |   open_statement
+    |   rollback_statement 
+    |   select_statement 
+    |   update_statement_positioned
+    |   update_statement_searched */
+    ;
+
+select_statement:
+        SELECT opt_all_distinct selection
+      /*   INTO target_commalist */ 
+         table_exp                                  { $$ = new SelectStatement((OptAllDistinct*)$2, (Selection*)$3, (TableExp*)$4); }   
+    ;
+
+opt_all_distinct:
+    ALL                                     { $$ = new OptAllDistinct("ALL"); }
+    |   DISTINCT                            { $$ = new OptAllDistinct("DISTINCT"); }
+    | /* empty  */                          { $$ = new OptAllDistinct(""); }
+    ;
+
+selection:
+    //scalar_exp_commalist         { $$ = opr(SELECTION, 1, $1); } |
+'*'                                { $$ = new Selection("*"); }
+;
+
+table_exp:
+    from_clause            
+/*    opt_where_clause
+    opt_group_by_clause
+    opt_having_clause
+    opt_order_by_clause
+    opt_limit_clause     */  { $$ = new TableExp((FromClause*)$1); }
+;
+
+from_clause:
+        FROM table_ref_commalist        { $$ = new FromClause((TableRefCommalist*)$2); }
+    ;
+
+table_ref_commalist:
+        table_ref                           { $$ = new TableRefCommalist((TableRef*)$1); }
+    |   table_ref_commalist ',' table_ref    { $$ = new TableRefCommalist((TableRefCommalist*)$1, (TableRef*)$3); }
+    ;
+    
+table_ref:
+    table                                    { $$ = new TableRef((Table *)$1); }
+    /* | table rangevariable */
+    ;
 
 literal
 : NAME /* should be: STRING */           { $$ = new Literal(strData[0]); }
-// | INTNUM                              { $$ = opr(LITERAL, 1, con($1)); }
+| INTNUM                                 { $$ = new Literal(intData); }
 // | APPROXNUM                           { $$ = opr(LITERAL, 1, con($1)); }
 ;
 
 table
-: NAME 							{ $$ = new Table(strData[0]); }
+: NAME 							          { $$ = new Table(strData[0]); }
 // | NAME '.' NAME     { $$ = opr(TABLE, 3, id($1), opr('.', 0), id2($3));}
 // | NAME AS NAME      { $$ = opr(TABLE, 3, id($1), opr(AS, 0), id2($3));  }
 ;

@@ -11,7 +11,7 @@ public:
     BaseTableElementCommalist *btec;
     
     /**< Constructor */
-    explicit BaseTableElementCommalist(BaseTableElement *n) : bte(n) {}
+    explicit BaseTableElementCommalist(BaseTableElement *n) : bte(n), btec(NULL) {}
     BaseTableElementCommalist(BaseTableElementCommalist *n1, BaseTableElement *n2) 
         : btec(n1), bte(n2) {}
     
