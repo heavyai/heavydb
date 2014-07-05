@@ -72,7 +72,7 @@ struct BlockAddr {
  * set of logical blocks (BlockInfo objects), and so the order variable is necessary in that context.
  */
 struct BlockInfo {
-	std::set<BlockAddr> addr;
+	std::vector<BlockAddr> addr;
 
 	// metadata about a logical block
 	mapd_size_t blockSize;		/**< the logical block size in bytes */

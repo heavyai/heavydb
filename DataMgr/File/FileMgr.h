@@ -38,14 +38,8 @@
  *
  * The free blocks (freeBlocks) within a file must be tracked, and this is implemented using a
  * basic STL set. The set ensures that no duplicate blocks are included, and that the blocks
- * are sorted, increasing the likelihood that contiguous free blocks will be made available
- * upon request.
- *
- * Note: the ordering of the blocks contained by a file is implicit by the use of an indexed vector,
- * whereas a Chunk makes use of the "order" member variable of a BlockInfo object for ordering
- * blocks contained by a chunk. The blocks of a chunk may span multiple files and may appear in
- * any order within the file. For the client, the ordering of blocks within a chunk are not to be
- * confused with the ordering of blocks within a file.
+ * are sorted, increasing the likelihood that contiguous free blocks will be assigned to a
+ * chunk, which may reduce the cost of disk accesses.
  *
  * Helper functions are provided: size(), available(), and used().
  */
@@ -110,11 +104,8 @@ typedef std::multimap<mapd_size_t, int> BlockSizeFileMMap;
  *
  * Each BlockInfo belonging to a chunk has an order variable, which states the block number within
  * the chunk.
- *
- * A basic STL set is used as a container of BlockInfo because (1) each block must be unique
- * and (2) the blocks must be ordered.
  */
-typedef std::set<BlockInfo> Chunk;
+typedef std::vector<BlockInfo> Chunk;
 
 /**
  * @type ChunkKeyToChunkMap
@@ -363,7 +354,7 @@ public:
 	 * @param Chunk A reference to the chunk to be deleted.
 	 * @return MAPD_FAILURE or MAPD_SUCCESS
 	 */
-	mapd_err_t FileMgr::deleteChunk(Chunk &c);
+	mapd_err_t deleteChunk(Chunk &c);
 
 	/**
 	 * @brief Prints a representation of FileMgr's state to stdout
