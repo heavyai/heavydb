@@ -357,15 +357,13 @@ public:
 	mapd_err_t clearChunk(Chunk &c);
 
 	/**
-	 * Given a chunk key, this method deletes a chunk from the file system. It returns the number of
-	 * blocks freed and the amount of memory freed.
+	 * Given a chunk, this method deletes a chunk from the file system by freeing all
+	 * of the blocks associated with it.
 	 *
-	 * @param key The unique identifier of the chunk.
-	 * @param nblocks The number of blocks freed (can be NULL).
-	 * @param size The number of bytes freed (can be NULL).
+	 * @param Chunk A reference to the chunk to be deleted.
 	 * @return MAPD_FAILURE or MAPD_SUCCESS
 	 */
-	//mapd_err_t deleteChunk(const ChunkKey &key, mapd_size_t *nblocks, mapd_size_t *size);
+	mapd_err_t FileMgr::deleteChunk(Chunk &c);
 
 	/**
 	 * @brief Prints a representation of FileMgr's state to stdout

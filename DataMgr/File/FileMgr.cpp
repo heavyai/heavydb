@@ -327,11 +327,14 @@ mapd_err_t clearChunk(Chunk &c) {
 	return MAPD_SUCCESS;
 }
 
-/*
-mapd_err_t FileMgr::deleteChunk(const ChunkKey &key, mapd_size_t *nblocks, mapd_size_t *size) {
-    
+
+mapd_err_t FileMgr::deleteChunk(Chunk &c) {
+	// @todo go through each block and each copy of the block,
+	// inserting them into the free lists of their respective files
+	return MAPD_SUCCESS;
 }
 
+/*
 void FileMgr::print() {
     
 }
