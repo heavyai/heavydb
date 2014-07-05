@@ -61,7 +61,7 @@ namespace File {
         return MAPD_SUCCESS;
     }
     
-    size_t read(FILE *f, mapd_size_t offset, mapd_size_t n, void *buf, mapd_err_t *err) {
+    size_t read(FILE *f, mapd_size_t offset, mapd_size_t n, mapd_byte_t *buf, mapd_err_t *err) {
         assert(f);
         assert(buf);
         
@@ -77,7 +77,7 @@ namespace File {
         return bytesRead;
     }
     
-    size_t write(FILE *f, mapd_size_t offset, mapd_size_t n, void *buf, mapd_err_t *err) {
+    size_t write(FILE *f, mapd_size_t offset, mapd_size_t n, mapd_byte_t *buf, mapd_err_t *err) {
         assert(f);
         assert(buf);
 
@@ -93,19 +93,19 @@ namespace File {
         return bytesWritten;
     }
 
-    size_t append(FILE *f, mapd_size_t n, void *buf, mapd_err_t *err) {
+    size_t append(FILE *f, mapd_size_t n, mapd_byte_t *buf, mapd_err_t *err) {
         return write(f, fileSize(f), n, buf, err);
     }
 
-    size_t readBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, void *buf, mapd_err_t *err) {
+    size_t readBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, mapd_byte_t *buf, mapd_err_t *err) {
         return read(f, blockNum * blockSize, blockSize, buf, err);
     }
     
-    size_t writeBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, void *buf, mapd_err_t *err) {
+    size_t writeBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, mapd_byte_t *buf, mapd_err_t *err) {
         return write(f, blockNum * blockSize, blockSize, buf, err);
     }
     
-    size_t appendBlock(FILE *f, mapd_size_t blockSize, void *buf, mapd_err_t *err) {
+    size_t appendBlock(FILE *f, mapd_size_t blockSize, mapd_byte_t *buf, mapd_err_t *err) {
         return write(f, fileSize(f), blockSize, buf, err);
     }
     
