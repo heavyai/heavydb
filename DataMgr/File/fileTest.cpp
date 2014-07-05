@@ -19,8 +19,8 @@ bool test_create_read_write_append_block();
 #define BLOCKSIZE 10
 #define FILEID 0
 
-char block0[BLOCKSIZE];
-char block1[BLOCKSIZE];
+mapd_byte_t block0[BLOCKSIZE];
+mapd_byte_t block1[BLOCKSIZE];
 
 int main() {
 
@@ -59,7 +59,7 @@ bool test_open_close() {
 
 bool test_create_read_write_append() {
     int i, j;
-    char buf[BLOCKSIZE];
+    mapd_byte_t buf[BLOCKSIZE];
     size_t sz;
     mapd_err_t err;
     FILE *f;
@@ -76,21 +76,21 @@ bool test_create_read_write_append() {
         return false;
 
     // write block0 to the file
-    sz = File::write(f, 0, BLOCKSIZE, &block0, &err);
+    sz = File::write(f, 0, BLOCKSIZE, block0, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
     }
     
     // append block1 to the file
-    sz = File::append(f, BLOCKSIZE, &block1, &err);
+    sz = File::append(f, BLOCKSIZE, block1, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
     }
 
     // read block0 from the file and verify its contents
-    sz = File::read(f, 0, BLOCKSIZE, &buf, &err);
+    sz = File::read(f, 0, BLOCKSIZE, buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
@@ -103,7 +103,7 @@ bool test_create_read_write_append() {
     }
 
     // read block1 from the file and verify its contents
-    sz = File::read(f, BLOCKSIZE, BLOCKSIZE, &buf, &err);
+    sz = File::read(f, BLOCKSIZE, BLOCKSIZE, buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
@@ -120,7 +120,7 @@ bool test_create_read_write_append() {
 
 bool test_create_read_write_append_block() {
     int i, j;
-    char buf[BLOCKSIZE];
+    mapd_byte_t buf[BLOCKSIZE];
     size_t sz;
     mapd_err_t err;
     FILE *f;
@@ -137,21 +137,21 @@ bool test_create_read_write_append_block() {
         return false;
 
     // write block0 to the file
-    sz = File::writeBlock(f, BLOCKSIZE, 0, &block0, &err);
+    sz = File::writeBlock(f, BLOCKSIZE, 0, block0, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
     }
     
     // append block1 to the file
-    sz = File::appendBlock(f, BLOCKSIZE, &block1, &err);
+    sz = File::appendBlock(f, BLOCKSIZE, block1, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
     }
 
     // read block0 from the file and verify its contents
-    sz = File::readBlock(f, BLOCKSIZE, 0, &buf, &err);
+    sz = File::readBlock(f, BLOCKSIZE, 0, buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
@@ -164,7 +164,7 @@ bool test_create_read_write_append_block() {
     }
 
     // read block1 from the file and verify its contents
-    sz = File::readBlock(f, BLOCKSIZE, 1, &buf, &err);
+    sz = File::readBlock(f, BLOCKSIZE, 1, buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
         File::close(f);
         return false;
