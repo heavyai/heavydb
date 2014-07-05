@@ -6,6 +6,8 @@
  */
 #include <iostream>
 #include <cassert>
+#include <cstdio>
+#include <string>
 #include <unistd.h>
 #include "File.h"
 
@@ -54,7 +56,7 @@ namespace File {
         return (fclose(f) == 0) ? MAPD_SUCCESS : MAPD_ERR_FILE_CLOSE;
     }
 
-    mapd_err_t delete(const string basePath, FILE *f) {
+    mapd_err_t erase(const std::string basePath, FILE *f) {
         // @todo implement the file delete function!
         return MAPD_SUCCESS;
     }

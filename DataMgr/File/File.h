@@ -41,7 +41,7 @@ namespace File {
      * @param f Pointer to the FILE.
      * @return mapd_err_t Returns an error code when unable to close the file properly.
      */
-    mapd_err_t delete(const string basePath, FILE *f);
+    mapd_err_t erase(const std::string basePath, FILE *f);
 
     /**
      * @brief Reads the specified number of bytes from the offset position in file f into buf.
