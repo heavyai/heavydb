@@ -52,7 +52,7 @@
 struct FileInfo {
 	int fileId;
 	FILE *f;
-	std::vector<BlockInfo> blocks;
+	std::vector<BlockAddr> blocks;
 	mapd_size_t blockSize;
 	mapd_size_t nblocks;
 	std::set<mapd_size_t> freeBlocks; /// set of block addresses of free blocks
@@ -111,11 +111,10 @@ typedef std::multimap<mapd_size_t, int> BlockSizeFileMMap;
  * Each BlockInfo belonging to a chunk has an order variable, which states the block number within
  * the chunk.
  *
- * A basic STL set is used as a container of BlockInfo* because (1) each block must be unique
- * and (2) the blocks must be ordered. The sort predicate of DerefSort (@see types.h) is used
- * because it dereferences the pointers so that the sort predicate of BlockInfo is called.
+ * A basic STL set is used as a container of BlockInfo because (1) each block must be unique
+ * and (2) the blocks must be ordered.
  */
-typedef std::set<BlockInfo*, DerefSort<BlockInfo*> > Chunk;
+typedef std::set<BlockInfo> Chunk;
 
 /**
  * @type ChunkKeyToChunkMap
@@ -208,7 +207,7 @@ public:
 	 * @param err An error code, should an error occur.
 	 * @return A pointer to the found BlockInfo object.
 	 */
-	BlockInfo* getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err);
+	BlockAddr* getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err);
 
 	/**
 	 * @brief Returns a pointer to a BlockInfo object for the specified block number in the file.
@@ -218,7 +217,7 @@ public:
 	 * @param err An error code, should an error occur.
 	 * @return A pointer to the found BlockInfo object.
 	 */
-	BlockInfo* getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err);
+	BlockAddr* getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err);
 
 	/**
 	 * @brief Clears the contents of a block in a file.
@@ -340,6 +339,22 @@ public:
 	 */
 	Chunk* createChunk(ChunkKey &key, const mapd_size_t size,
 			const mapd_size_t blockSize, const void *src, mapd_err_t *err);
+
+	/**
+	 * Calls "clearBlock()" on each block of the chunk.
+	 * @see clearBlock
+	 *
+	 * @param key The unique identifier of the chunk.
+	 */
+	mapd_err_t clearChunk(ChunkKey &key);
+
+	/**
+	 * Calls "clearBlock()" on each block of the chunk.
+	 * @see clearBlock
+	 *
+	 * @param key The unique identifier of the chunk.
+	 */
+	mapd_err_t clearChunk(Chunk &c);
 
 	/**
 	 * Given a chunk key, this method deletes a chunk from the file system. It returns the number of

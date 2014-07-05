@@ -23,8 +23,7 @@ FileInfo::FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nbloc
     
     // initialize blocks and free block list
     for (mapd_size_t i = 0; i < nblocks; ++i) {
-        blocks.push_back(BlockInfo(blockSize));
-        blocks[i].addr.insert(BlockAddr(fileId, i * blockSize));
+        blocks.push_back(BlockAddr(fileId, i * blockSize));
         freeBlocks.insert(i);
     }
 }
@@ -118,18 +117,18 @@ mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy) {
     return err;
 }
 
-BlockInfo* FileMgr::getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err) {
+BlockAddr* FileMgr::getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err) {
 	FileInfo *fInfo = FileMgr::getFile(fileId, err);
     return !fInfo ? NULL : getBlock(*fInfo, blockNum, err);
 }
 
-BlockInfo* FileMgr::getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err) {
+BlockAddr* FileMgr::getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err) {
     if (err) *err = MAPD_FAILURE;
     if (blockNum < fInfo.blocks.size()) {
-        BlockInfo *bInfo = &fInfo.blocks[blockNum];
-        if (err && bInfo)
+        BlockAddr *bAddr = &fInfo.blocks[blockNum];
+        if (err && bAddr)
         	*err = MAPD_SUCCESS;
-        return bInfo;
+        return bAddr;
     }
     return NULL;
 }
@@ -146,15 +145,9 @@ mapd_err_t FileMgr::clearBlock(const int fileId, mapd_size_t blockNum) {
 // http://stackoverflow.com/questions/2217878/c-stl-set-update-is-tedious-i-cant-change-an-element-in-place
 mapd_err_t FileMgr::clearBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     mapd_err_t err = MAPD_SUCCESS;
-    BlockInfo *bInfo = getBlock(fInfo, blockNum, &err);
-    if (bInfo && err == MAPD_SUCCESS) {
-        std::set<BlockAddr> *pSet = &bInfo->addr;
-        std::set<BlockAddr>::reverse_iterator it = pSet->rbegin();
-        BlockAddr copy = *it;
-        copy.endByteOffset = 0;
-        pSet->erase(*it);
-        pSet->insert(copy);
-    }
+    BlockAddr *bAddr = getBlock(fInfo, blockNum, &err);
+    if (bAddr && err == MAPD_SUCCESS)
+    	bAddr->endByteOffset = 0;
     return err;
 }
 
@@ -203,11 +196,10 @@ Chunk* FileMgr::getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) {
     // copy contents of chunk to buf
     Chunk::iterator chunkIt = c->begin();
     for (int i = 0; chunkIt != c->end(); ++chunkIt, ++i) {
-        BlockInfo *bInfo = *chunkIt;
-        assert(bInfo);
+        BlockInfo bInfo = *chunkIt;
         
         // get most recent copy of block
-        std::set<BlockAddr>::reverse_iterator it = bInfo->addr.rbegin();
+        std::set<BlockAddr>::reverse_iterator it = bInfo.addr.rbegin();
         BlockAddr blk = *it;
 
         // determine which file the block belongs to
@@ -225,7 +217,7 @@ Chunk* FileMgr::getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) {
             return NULL;
         
         // read block from file into buf
-        File::read(fInfo->f, i * bInfo->blockSize, bInfo->blockSize, buf, err);
+        File::read(fInfo->f, i * bInfo.blockSize, bInfo.blockSize, buf, err);
     }
     return c;
 }
@@ -256,9 +248,8 @@ mapd_err_t FileMgr::getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t 
         // Compute size based on block sizes
         Chunk::iterator chunkIt = c->begin();
         for (int i = 0; chunkIt != c->end(); ++chunkIt, ++i) {
-            BlockInfo *bInfo = *chunkIt;
-            assert(bInfo);
-            *size += bInfo->blockSize;
+            BlockInfo bInfo = *chunkIt;
+            *size += bInfo.blockSize;
         } // @todo This could be sped a little if we assume each block of a chunk is the same size, which is likely true
     }
     return err;
@@ -281,11 +272,10 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     // Compute size based on actual bytes used in block
     Chunk::iterator chunkIt = c->begin();
     for (int i = 0; chunkIt != c->end(); ++chunkIt, ++i) {
-        BlockInfo *bInfo = *chunkIt;
-        assert(bInfo);
+        BlockInfo bInfo = *chunkIt;
 
         // get most recent copy of block
-        std::set<BlockAddr>::reverse_iterator it = bInfo->addr.rbegin();
+        std::set<BlockAddr>::reverse_iterator it = bInfo.addr.rbegin();
         BlockAddr blk = *it;
 
         *size += blk.endByteOffset;
@@ -293,7 +283,7 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     
     return err;
 }
-
+/*
 Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err) {
     *err = MAPD_SUCCESS;
     Chunk *c = NULL;
@@ -315,6 +305,26 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
 
     
     return c;
+}
+*/
+mapd_err_t FileMgr::clearChunk(ChunkKey &key) {
+	// retrieve reference to the chunk
+	mapd_err_t err = MAPD_SUCCESS;
+	Chunk *c = getChunkRef(key, &err);
+	return !c ? err : clearChunk(*c);
+}
+
+mapd_err_t clearChunk(Chunk &c) {
+	std::set<BlockInfo>::iterator it;
+	for (it = c.begin(); it != c.end(); ++it) {
+		std::set<BlockAddr> *pSet = &(it->addr);
+		std::set<BlockAddr>::reverse_iterator it = pSet->rbegin();
+		BlockAddr copy = *it;
+		copy.endByteOffset = 0;
+		pSet->erase(*it);
+		pSet->insert(copy);
+	}
+	return MAPD_SUCCESS;
 }
 
 /*
