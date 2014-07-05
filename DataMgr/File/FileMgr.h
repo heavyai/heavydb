@@ -22,7 +22,6 @@
 #include <set>
 #include <utility>
 #include <string>
-#include <cassert>
 
 #include "File.h"
 #include "Block.h"
@@ -46,7 +45,7 @@
 struct FileInfo {
 	int fileId;
 	FILE *f;
-	std::vector<BlockAddr> blocks;
+	std::vector<BlockAddr*> blocks;
 	mapd_size_t blockSize;
 	mapd_size_t nblocks;
 	std::set<mapd_size_t> freeBlocks; /// set of block addresses of free blocks
@@ -105,7 +104,7 @@ typedef std::multimap<mapd_size_t, int> BlockSizeFileMMap;
  * Each BlockInfo belonging to a chunk has an order variable, which states the block number within
  * the chunk.
  */
-typedef std::vector<BlockInfo> Chunk;
+typedef std::vector<BlockInfo*> Chunk;
 
 /**
  * @type ChunkKeyToChunkMap
@@ -282,7 +281,7 @@ public:
 	 * @param buf
 	 * @return
 	 */
-	Chunk* getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err);
+	Chunk* getChunkCopy(const ChunkKey &key, mapd_byte_t *buf, mapd_err_t *err);
 
 	/**
 	 * This method returns the number of blocks that composes the chunk identified
@@ -315,8 +314,8 @@ public:
 	 * number of bytes (size). A pointer to the new Chunk object is returned, or NULL upon failure.
 	 * If failure occurs, an error code may be stored in err.
 	 *
-	 * If src is NULL, then each block of the chunk will have its "isEmpty" flag set to true; otherwise,
-	 * the data in src will be written to the new chunk.
+	 * If src is NULL, then each block of the chunk will be empty; otherwise, the src data will be copied
+	 * into it.
 	 *
 	 * If the chunk already exists (based on looking up the key), then NULL is returned and err is set to
 	 * MAPD_ERR_CHUNK_DUPL.
@@ -329,7 +328,7 @@ public:
 	 * @return A pointer to a new Chunk, or NULL.
 	 */
 	Chunk* createChunk(ChunkKey &key, const mapd_size_t size,
-			const mapd_size_t blockSize, const void *src, mapd_err_t *err);
+			const mapd_size_t blockSize, void *src, mapd_err_t *err);
 
 	/**
 	 * Calls "clearBlock()" on each block of the chunk.
@@ -362,7 +361,7 @@ public:
 	//void print();
 private:
 	std::string basePath_; 				/**< The OS file system path containing the files. */
-	std::vector<FileInfo> files_;		/**< A vector of files accessible via a file identifier. */
+	std::vector<FileInfo*> files_;		/**< A vector of files accessible via a file identifier. */
 	BlockSizeFileMMap fileIndex_; 		/**< Maps block sizes to FileInfo objects. */
 	ChunkKeyToChunkMap chunkIndex_; 	/**< Index for looking up chunks, which are vectors of BlockAddr */
 	unsigned nextFileId_;				/**< the index of the next file id */
