@@ -28,9 +28,8 @@
 class FileMgr;
 
 /**
- * @brief
- *
- *
+ * @type Frame
+ * @brief A frame has an address and a flag that indicates if it is dirty.
  */
 struct Frame {
     mapd_size_t addr;
@@ -40,10 +39,8 @@ struct Frame {
 /**
  * @brief PageBounds provides support for various page sizes.
  *
- * The PageBounds refers to the beginning and ending frame IDs over which
- * a page spans. In other words, a PageBounds of (10, 12) means that the
- * page occupies frames 10, 11, and 12. This functionality enables pages
- * to span multiple frames and to have varying sizes.
+ * The PageBounds refers to a span of consecutive frames. If the bounds are (i, j),
+ * then the frames are those where i < j.
  */
 typedef std::pair <mapd_size_t, mapd_size_t> PageBounds;
 
@@ -60,7 +57,7 @@ struct PageInfo {
     PageInfo() {
         pinCount = 0;
         dirty = false;
-        bounds.first = 1;
+        bounds.first = 0;
         bounds.second = 0;
     }
 
@@ -91,7 +88,7 @@ struct PageInfo {
  * are encapsulated by a PageInfo struct. If the chunk currently exists in the buffer pool,
  * then the ChunkToPageMap maps the chunk, via its key, to its page in the buffer pool.
  */
-typedef std::map<ChunkKey, PageInfo> ChunkToPageMap;
+typedef std::map<ChunkKey, PageInfo*> ChunkToPageMap;
 
 /**
  * @class 	BufferMgr
@@ -109,7 +106,7 @@ typedef std::map<ChunkKey, PageInfo> ChunkToPageMap;
  * access is required. This is accomplished by caching blocks in main and/or GPU memory.
  *
  * The interface to BufferMgr includes the most basic functionality: the ability to bring disk pages into 
- * the buffer pool, to pin it, and to unpin it. A chunk-level and frame-level API are provides, offering
+ * the buffer pool, to pin it, and to unpin it. A chunk-level and frame-level API are provided, offering
  * two levels of interaction with the buffer pool in terms of granularity.
  *
  * Frames are allocated upon allocating host memory. There's one frame per frameSize bytes, and
@@ -231,15 +228,13 @@ private:
     mapd_byte_t *hostMem_;              /**< pointer to the host-allocated buffer pool. */
 
     // Frames
-    std::vector<Frame> frames_;         /**< A vector of in-order frames, which compose the buffer pool. */
+    std::vector<Frame*> frames_;        /**< A vector of in-order frames, which compose the buffer pool. */
     std::list<Frame*> free_;            /**< A linked list of pointers to free frames. */
-    mapd_size_t numFrames_;             /**< The number of frames covering the buffer pool space. */
     mapd_size_t frameSize_;             /**< The size of a frame in bytes. */
 
     // Pages
-    std::vector<PageInfo> pages_;       /**< A vector of pages, which are present in the buffer pool. */
-    mapd_size_t numPages_;              /**< The number of pages currently in the buffer pool. */
-    
+    std::vector<PageInfo*> pages_;      /**< A vector of pages, which are present in the buffer pool. */
+
     // void *deviceMem;                 /**< @todo device (GPU) buffer pool */
     
     // Data structures
