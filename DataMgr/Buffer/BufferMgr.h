@@ -81,14 +81,14 @@ struct PageInfo {
 };
 
 /**
- * @brief A ChunkToPageMap maps a chunk key to a page in the buffer pool.
+ * @brief A ChunkKeyToPageMap maps a chunk key to a page in the buffer pool.
  *
  * Chunks are uniquely identifiable by a chunk key (ChunkKey). When a chunk is brought
  * into the buffer pool, it occupies a contiguous set of frames, whose bounds and metadata
  * are encapsulated by a PageInfo struct. If the chunk currently exists in the buffer pool,
- * then the ChunkToPageMap maps the chunk, via its key, to its page in the buffer pool.
+ * then the ChunkKeyToPageMap maps the chunk, via its key, to its page in the buffer pool.
  */
-typedef std::map<ChunkKey, PageInfo*> ChunkToPageMap;
+typedef std::map<ChunkKey, PageInfo*> ChunkKeyToPageMap;
 
 /**
  * @class 	BufferMgr
@@ -153,7 +153,7 @@ public:
      * pin count for its page (PageInfo object) is incremented (unless parameter pin is false).
      * If the chunk is not in the buffer pool, then the buffer manager needs to find a set of
      * frames to bring the chunk into, wrapping this up into a new PageInfo struct, and updating
-     * ChunkToPageMap accordingly.
+     * ChunkKeyToPageMap accordingly.
      *
      * If it is necessary to replace an existing PageInfo, then its dirty frames will be flushed
      * before bringing in the new chunk.
@@ -218,12 +218,15 @@ public:
     /**
      * @brief Prints a summary of the chunks in the host buffer pool to stdout.
      *
-     * Traverses ChunkToPageMap in order to print a summary of the chunks currently cached in
+     * Traverses ChunkKeyToPageMap in order to print a summary of the chunks currently cached in
      * the host buffer pool.
      */
     void printChunksHost();
 
 private:
+    BufferMgr(const BufferMgr&);
+    BufferMgr& operator=(const BufferMgr&);
+
     FileMgr *fm_;                       /**< pointer to a file manager object */
     mapd_byte_t *hostMem_;              /**< pointer to the host-allocated buffer pool. */
 
@@ -238,7 +241,7 @@ private:
     // void *deviceMem;                 /**< @todo device (GPU) buffer pool */
     
     // Data structures
-    ChunkToPageMap chunkIndex;
+    ChunkKeyToPageMap chunkIndex;
     
     // Metadata
     unsigned numHitsHost_;              /**< The number of host memory cache hits. */

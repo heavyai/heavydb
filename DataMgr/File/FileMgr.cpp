@@ -191,7 +191,7 @@ Chunk* FileMgr::getChunkRef(const ChunkKey &key, mapd_err_t *err) {
     }
 }
 
-Chunk* FileMgr::getChunkCopy(const ChunkKey &key, mapd_byte_t *buf, mapd_err_t *err) {
+Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_byte_t *buf, mapd_err_t *err) {
     assert(buf);
     *err = MAPD_SUCCESS;
     

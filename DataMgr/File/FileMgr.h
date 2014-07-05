@@ -210,6 +210,27 @@ public:
 	BlockAddr* getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err);
 
 	/**
+	 * @brief Writes the contents of buf to the block.
+	 *
+	 * @param fileId
+	 * @param blockNum
+	 * @param n
+	 * @param buf
+	 */
+	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_byte_t *buf);
+
+	/**
+	 * @brief Writes the contents of buf to the block.
+	 *
+	 * @param fInfo
+	 * @param blockNum
+	 * @param n
+	 * @param buf
+	 */
+	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_byte_t *buf);
+
+
+	/**
 	 * @brief Clears the contents of a block in a file.
 	 *
 	 * This method clears the contents of a block in a file, resulting in the
@@ -281,7 +302,7 @@ public:
 	 * @param buf
 	 * @return
 	 */
-	Chunk* getChunkCopy(const ChunkKey &key, mapd_byte_t *buf, mapd_err_t *err);
+	Chunk* getChunk(const ChunkKey &key, mapd_byte_t *buf, mapd_err_t *err);
 
 	/**
 	 * This method returns the number of blocks that composes the chunk identified
@@ -308,6 +329,17 @@ public:
 	 * @return MAPD_FAILURE or MAPD_SUCCESS
 	 */
 	mapd_err_t getChunkActualSize(const ChunkKey &key, mapd_size_t *size);
+
+	/**
+	 * Given a chunk key, this method writes to an existing chunk all of the data pointed to
+	 * by buf.
+	 */
+	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t *size, mapd_byte_t *buf);
+
+	/**
+	 * This method writes the contents of the chunk "c" to the chunk with the given chunk key.
+	 */
+	mapd_err_t putChunk(const ChunkKey &key, Chunk &c);
 
 	/**
 	 * Given a key, this method requests the file manager to create a new chunk of the requested
