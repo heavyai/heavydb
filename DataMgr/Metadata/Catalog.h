@@ -14,6 +14,10 @@
 #define CATALOG_H
 
 #include <string>
+#include <tuple>
+#include <map>
+
+#include "../../Shared/errors.h"
 
 /**
  * @type TableRow
@@ -25,6 +29,8 @@
 struct TableRow {
     std::string tableName; /**< tableId is the primary key to access rows in the table table -must bew unique */
     int tableId; /**< tableId starts at 0 for valid tables. */
+
+    TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
 };
 
 /**
@@ -39,6 +45,7 @@ struct ColumnRow {
     int columnId;
     ColumnType columnType;
     bool notNull; /**< specifies if the column can be null according to SQL standard */
+    ColumnRow(const int tableId, const std::string columnName, const int columnId, const ColumnType columnType, const bool notNull): tableId(tableId), columnName(columnName), columnId(columnId), columnType(columnType), notNull(notNull) {}
 };
 
 /**
@@ -67,24 +74,36 @@ class Catalog {
     public:
         Catalog(const std::string &basePath);
 
-
+        /**
+         * @brief Writes in-memory representation of table table and column table to file 
+         *
+         * This method only writes to file if the catalog is "dirty", as specified
+         * by the isDirty_ member variable.  It overwrites the existing catalog files.
+         * Format is string (non-binary) with each field in the TableRow and ColumnRow
+         * structs seperated by a tab, the rows themselves seperated by a newline
+         */
+        mapd_err_t writeCatalogToFile();
 
 
 
     private:
-        std::string basePath_;
+
+        /**
+         * @brief Reads files representing state of table table and column table into in-memory representation
+         *
+         * This method first checks to see if the table file and column file exist,
+         * only reading if they do.  It reads in data in the format specified by 
+         * writeCatalogToFile().  It performs no error-checking as we assume the 
+         * Catalog files are written by Catalog and represent the pre-valicated
+         * in-memory state of the database metadata.
+         */
+
+        mapd_err_t readCatalogFromFile();
+
+        std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableRowMap tableRowMap_;
         ColumnRowMap columnRowMap_;
-
-        //std::map <std::string, TableRow *> tableRowMap_;
-        //std::map < std::tuple<int, std::string>, ColumnRow *> columnRowMap_;
-
-
-        
-
-
-
-
+        bool isDirty_; /**< Specifies if the catalog has been modified in memory since the last flush to file - no need to rewrite file if this is false. */
 
 };
 

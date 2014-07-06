@@ -17,7 +17,7 @@
 using std::vector;
 
 FileInfo::FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks)
-     : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks)
+     : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks) // STEVE: careful here - assignment to same variable name fails on some compilers even though it should work according to C++ standard
 {
     // initialize blocks and free block list
     for (mapd_size_t i = 0; i < nblocks; ++i) {
@@ -51,8 +51,7 @@ void FileInfo::print(bool blockSummary) {
     }
 }
 
-FileMgr::FileMgr(const std::string &basePath) {
-	basePath_ = basePath;
+FileMgr::FileMgr(const std::string &basePath): basePath_(basePath) {
 	nextFileId_ = 0;
 }
 
