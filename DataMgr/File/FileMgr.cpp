@@ -7,28 +7,33 @@
  * @see FileMgr.h
  */
 #include <iostream>
+#include <cassert>
 #include <cstdio>
 #include <string>
 #include <cassert>
+#include <exception>
 #include "FileMgr.h"
 
-unsigned int FileMgr::nextFileId = 0;
+using std::vector;
 
 FileInfo::FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks)
      : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks)
 {
-    assert(f);
-    
     // initialize blocks and free block list
-    for (int i = 0; i < nblocks; ++i) {
-        blocks.push_back(BlockInfo(BlockAddr(fileId, i * blockSize), blockSize, 0));
+    for (mapd_size_t i = 0; i < nblocks; ++i) {
+        blocks.push_back(new BlockAddr(fileId, i * blockSize));
         freeBlocks.insert(i);
     }
+    // @todo this assumes all are free blocks; how about reading a file header with free block info?
 }
 
 FileInfo::~FileInfo() {
-    mapd_err_t err = File::close(f);
-    if (err != MAPD_SUCCESS)
+	// free memory used by BlockAddr objects
+	for (int i = 0; i < blocks.size(); ++i)
+		delete blocks[i];
+
+	// close file, if applicable
+    if (f && File::close(f) != MAPD_SUCCESS)
         fprintf(stderr, "[%s:%d] Error closing file %d.\n", __func__, __LINE__, fileId);
 }
 
@@ -42,118 +47,133 @@ void FileInfo::print(bool blockSummary) {
         return;
     
     for (int i = 0; i < blocks.size(); ++i) {
-
-        // obtain reference to current block
-        BlockInfo &bInfo = blocks[i];
-
-        // check if current block is in free list
-        std::set<mapd_size_t>::iterator it = find(freeBlocks.begin(), freeBlocks.end(), i);
-        bool isFree = it != freeBlocks.end();
-
-        // print block metadata
-        printf("[%d] %s%s %u/%u", i, (isFree ? "f":"-"), (bInfo.isShadow) ? "s" : "-", bInfo.endByteOffset, bInfo.blockSize);
-        assert(bInfo.blockSize == this->blockSize);
-        printf(" ep=%u", bInfo.epoch);
-        printf("\n");
+    	// @todo block summary
     }
 }
 
 FileMgr::FileMgr(const std::string &basePath) {
 	basePath_ = basePath;
+	nextFileId_ = 0;
 }
 
 FileMgr::~FileMgr() {
-    // NOP
-    
-    // @todo Free FileInfo* objects in FileMap
+	for (int i = 0; i < files_.size(); ++i)
+		delete files_[i];
 }
 
 FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nblocks, mapd_err_t *err) {
     FILE *f = NULL;
-    FileInfo *fInfo = NULL;
-    
+
     // create the new file
-    f = File::create(nextFileId, blockSize, nblocks, err);
-    
-    if (f) {
-        // insert a new FileInfo object into the FileMap
-        fInfo = new FileInfo(nextFileId++, f, blockSize, nblocks);
-        files_.insert(std::pair<int,FileInfo*>(fInfo->fileId, fInfo));
-    }
-    
-    return fInfo;
-}
+    f = File::create(nextFileId_, blockSize, nblocks, err);
 
-mapd_err_t FileMgr::deleteFile(const int fileId) {
-    mapd_err_t err;
-    FileMap::iterator iter = files_.find(fileId);
-
-    if (iter != files_.end()) { // delete FileInfo object
-        // obtain FileInfo pointer
-        FileInfo *fInfo = getFile(fileId, NULL);
-        
-        // free memory used by FileInfo object
-        delete fInfo;
-        fInfo = NULL;
-        
-        // remove FileMap entry
-        files_.erase(iter);
-        return MAPD_SUCCESS;
+    // check for error
+    if (!f || *err != MAPD_SUCCESS) {
+    	fprintf(stderr, "[%s:%d] Error (%d): unable to create file.\n", __func__, __LINE__, *err);
+    	return NULL;
     }
-    return MAPD_FAILURE;
+
+	// insert file into file manager data structures
+	int fileId = nextFileId_++;
+
+	// insert a new FileInfo object into vector of files
+	FileInfo *fInfo = NULL;
+	try {
+		fInfo = new FileInfo(fileId, f, blockSize, nblocks);
+		files_.push_back(fInfo);
+
+		// insert fileId into multimap fileIndex (maps block sizes to files ids)
+		fileIndex_.insert(std::pair<mapd_size_t, int>(blockSize, fileId));
+	}
+	catch (const std::bad_alloc& e) {
+		std::cout << "Bad allocation exception encountered: " << e.what() << std::endl;
+		*err = MAPD_FAILURE;
+		return NULL;
+	}
+	catch (const std::exception& e) {
+		*err = MAPD_FAILURE;
+		std::cout << "Exception encountered: " << e.what() << std::endl;
+		if (!fInfo) delete fInfo;
+		return NULL;
+	}
+	assert(files_.back() == fInfo);
+	return fInfo;
 }
 
 FileInfo* FileMgr::getFile(const int fileId, mapd_err_t *err) {
-    FileMap::iterator iter = files_.find(fileId);
-    if (iter != files_.end()) {
-        if (err) *err = MAPD_SUCCESS;
-        return iter->second;
+    if (fileId < 0 || fileId > files_.size()) {
+    	*err = MAPD_ERR_FILE_NOT_FOUND;
+    	return NULL;
     }
-    if (err) *err = MAPD_ERR_FILE_NOT_FOUND;
-    return NULL;
+    return files_[fileId];
 }
 
-BlockInfo* FileMgr::getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err) {
-    if (err) *err = MAPD_FAILURE;
-    FileInfo *fInfo = FileMgr::getFile(fileId, err);
-    if (fInfo && blockNum < fInfo->blocks.size()) {
-        BlockInfo *bInfo = &fInfo->blocks[blockNum];
-        if (err && bInfo) *err = MAPD_SUCCESS;
-        return bInfo;
+mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy) {
+	mapd_err_t err = MAPD_SUCCESS;
+
+    // confirm the file exists and obtain pointer
+    FileInfo *fInfo = getFile(fileId, &err);
+    if (err != MAPD_SUCCESS)
+    	return err;
+
+    // remove the file from the fileIndex_
+    BlockSizeFileMMap::iterator it = fileIndex_.lower_bound(fInfo->blockSize);
+    for (it = fileIndex_.begin(); it != fileIndex_.end(); ++it) {
+    	if (it->second == fileId)
+    		break;
     }
-    return NULL;
+    if (it != fileIndex_.end())
+    	fileIndex_.erase(it);
+    // @todo check else condition as error?
+
+    // remove the file from the vector of files_
+    files_.erase(files_.begin() + fileId);
+    // @todo error-checking if erase fails?
+
+    return err;
 }
 
-BlockInfo* FileMgr::getBlock(const FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err) {
+BlockAddr* FileMgr::getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err) {
+	FileInfo *fInfo = FileMgr::getFile(fileId, err);
+    return !fInfo ? NULL : getBlock(*fInfo, blockNum, err);
+}
+
+BlockAddr* FileMgr::getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err) {
     if (err) *err = MAPD_FAILURE;
     if (blockNum < fInfo.blocks.size()) {
-        const BlockInfo *bInfo = &fInfo.blocks[blockNum];
-        if (err && bInfo) *err = MAPD_SUCCESS;
-        return const_cast<BlockInfo*>(bInfo);
+        BlockAddr *bAddr = fInfo.blocks[blockNum];
+        if (err && bAddr)
+        	*err = MAPD_SUCCESS;
+        return bAddr;
     }
     return NULL;
 }
 
 mapd_err_t FileMgr::clearBlock(const int fileId, mapd_size_t blockNum) {
-    mapd_err_t err = MAPD_SUCCESS;
-    BlockInfo *bInfo = getBlock(fileId, blockNum, &err);
-    if (bInfo && err == MAPD_SUCCESS)
-        bInfo->endByteOffset = 0;
-    return err;
+	mapd_err_t err = MAPD_SUCCESS;
+	FileInfo *fInfo = FileMgr::getFile(fileId, &err);
+    return !fInfo ? err : clearBlock(*fInfo, blockNum);
 }
 
-mapd_err_t FileMgr::clearBlock(const FileInfo &fInfo, mapd_size_t blockNum) {
+mapd_err_t FileMgr::clearBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     mapd_err_t err = MAPD_SUCCESS;
-    BlockInfo *bInfo = getBlock(fInfo, blockNum, &err);
-    if (bInfo && err == MAPD_SUCCESS)
-        bInfo->endByteOffset = 0;
+    BlockAddr *bAddr = getBlock(fInfo, blockNum, &err);
+    if (bAddr && err == MAPD_SUCCESS)
+    	bAddr->endByteOffset = 0;
     return err;
 }
 
 mapd_err_t FileMgr::freeBlock(const int fileId, mapd_size_t blockNum) {
     mapd_err_t err = MAPD_SUCCESS;
     FileInfo *fInfo = getFile(fileId, &err);
-    fInfo->freeBlocks.insert(blockNum);
+    return !fInfo ? err : freeBlock(*fInfo, blockNum);
+}
+
+mapd_err_t FileMgr::freeBlock(FileInfo &fInfo, mapd_size_t blockNum) {
+    mapd_err_t err = MAPD_SUCCESS;
+    err = clearBlock(fInfo, blockNum);
+    if (err == MAPD_SUCCESS)
+    	fInfo.freeBlocks.insert(blockNum);
     return err;
 }
 
@@ -161,17 +181,17 @@ Chunk* FileMgr::getChunkRef(const ChunkKey &key, mapd_err_t *err) {
     ChunkKeyToChunkMap::iterator iter = chunkIndex_.find(key);
     if (iter != chunkIndex_.end()) {
         // found
-        *err = MAPD_SUCCESS;
+        if (err) *err = MAPD_SUCCESS;
         return &iter->second;
     }
     else {
         // not found
-        *err = MAPD_ERR_CHUNK_NOT_FOUND; // chunk doesn't exist
+        if (err) *err = MAPD_ERR_CHUNK_NOT_FOUND; // chunk doesn't exist
         return NULL;
     }
 }
 
-Chunk* FileMgr::getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) {
+Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_byte_t *buf, mapd_err_t *err) {
     assert(buf);
     *err = MAPD_SUCCESS;
     
@@ -183,16 +203,16 @@ Chunk* FileMgr::getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) {
     }
     
     // found
-    Chunk *c = &iter->second;
+    Chunk &c = iter->second;
 
     // copy contents of chunk to buf
-    Chunk::iterator chunkIt = c->begin();
-    for (int i = 0; chunkIt != c->end(); ++chunkIt, ++i) {
-        BlockInfo *bInfo = *chunkIt;
-        assert(bInfo);
+    for (int i = 0; i < c.size(); ++i) {
         
-        // determine which file the block belongs to
-        int fileId = bInfo->blk.fileId;
+        // get most recent address of current block
+        BlockAddr *blk = c[i]->addr.back();
+
+        // obtain a reference to the file of the block address
+        int fileId = blk->fileId;
         FileInfo *fInfo = getFile(fileId, err);
         assert(fInfo);
         
@@ -206,9 +226,9 @@ Chunk* FileMgr::getChunkCopy(const ChunkKey &key, void *buf, mapd_err_t *err) {
             return NULL;
         
         // read block from file into buf
-        File::read(fInfo->f, i * bInfo->blockSize, bInfo->blockSize, buf, err);
+        File::read(fInfo->f, i * c[i]->blockSize, c[i]->blockSize, buf, err);
     }
-    return c;
+    return &c;
 }
 
 mapd_err_t FileMgr::getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t *size) {
@@ -223,25 +243,20 @@ mapd_err_t FileMgr::getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t 
     }
     
     // found
-    Chunk *c = &iter->second;
+    Chunk &c = iter->second;
 
     // check if chunk has no blocks
     if (nblocks) {
-        *nblocks = c->size();
+        *nblocks = c.size();
         if (*nblocks < 1) {
             if (size) *size = 0;
             return err;
         }
     }
-    if (size) {
-        // Compute size based on block sizes
-        Chunk::iterator chunkIt = c->begin();
-        for (int i = 0; chunkIt != c->end(); ++chunkIt, ++i) {
-            BlockInfo *bInfo = *chunkIt;
-            assert(bInfo);
-            *size += bInfo->blockSize;
-        } // @todo This could be sped a little if we assume each block of a chunk is the same size, which is likely true
-    }
+    if (size) // Compute size based on block sizes
+        for (int i = 0; i < c.size(); ++i)
+            *size += c[i]->blockSize;
+
     return err;
 }
 
@@ -250,47 +265,95 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     mapd_err_t err = MAPD_SUCCESS;
     
     ChunkKeyToChunkMap::iterator iter = chunkIndex_.find(key);
-    if (iter == chunkIndex_.end()) {
-        // not found
-        err = MAPD_ERR_CHUNK_NOT_FOUND; // chunk doesn't exist
-        return err;
-    }
-    
-    // found
-    Chunk *c = &iter->second;
+    if (iter == chunkIndex_.end()) // not found
+        return MAPD_ERR_CHUNK_NOT_FOUND;
     
     // Compute size based on actual bytes used in block
-    Chunk::iterator chunkIt = c->begin();
-    for (int i = 0; chunkIt != c->end(); ++chunkIt, ++i) {
-        BlockInfo *bInfo = *chunkIt;
-        assert(bInfo);
-        *size += bInfo->endByteOffset;
-    } // @todo This could be sped a little if we assume each block of a chunk is the same size, which is likely true
+    Chunk &c = iter->second;
+    for (int i = 0; i < c.size(); ++i)
+        *size += c[i]->addr.back()->endByteOffset;
     
     return err;
 }
-
-// if src is NULL, then 0s are written to the new chunk
-Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, const void *src, mapd_err_t *err) {
+/*
+// Inserts free blocks into the chunk; creates a new file if necessary
+Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, void *src, mapd_err_t *err) {
     *err = MAPD_SUCCESS;
     
-    // determine number of blocks needed
+    // check if the chunk already exists based on key
+    if (getChunkRef(key, NULL)) {
+        if (err) *err = MAPD_ERR_CHUNK_DUPL;
+        return NULL;
+    }
+
+    // instantiate, then determine number of blocks needed
+    Chunk *c = new Chunk();
     mapd_size_t nblocks = (size + blockSize - 1) / blockSize;
     
-    // find a file that uses the specified blockSize
+    // obtain an iterator to files having the specified block size
+    BlockSizeFileMMap::iterator it = fileIndex_.lower_bound(blockSize);
+    int i = 0;
+    for (; it != fileIndex_.end() && nblocks > 0; ++it) {
+    	FileInfo *fInfo = getFile(it->second, err);
+
+    	// for each free block in this file, give it to the new Chunk
+    	vector<mapd_size_t> *free = &fInfo->freeBlocks;
+    	for (int j = 0; j < free->size() && nblocks > 0; ++i, ++j, --nblocks) {
+    		// remove block from free list
+    		mapd_size_t blockNum = free->back();
+    		free->pop_back();
+
+    		// insert new BlockInfo into chunk
+    		BlockInfo blk(blockSize, i);
+    		blk.addr.push_back(BlockAddr(fInfo->fileId, blockNum*blockSize));
+    		c->push_back(blk);
+
+    		// write data into chunk on disk
+    		if (src) {
+    			// @todo update endByteOffset for each block of this chunk!
+    			if (!fInfo->f)
+    				fInfo->f = File::open(fInfo->fileId, err);
+    			mapd_byte_t *srcAddr = (mapd_byte_t*)src + i*blockSize;
+    			File::write(fInfo->f, blockNum*blockSize, blockSize, (void*)srcAddr, err);
+    			// @todo clean this up and error-check
+    		}
+    	}
+    }
+
+    if (nblocks > 0) { // create a new file to hold remaining blocks
+    	// @todo fix this
+    	fprintf(stderr, "[%s:%d] Error: unable to insert %u blocks into new chunk.\n", __func__, __LINE__, nblocks);
+    }
     
-    
-    // determine if the file has enough free space
-    
-    
-    
-    return NULL;
+    return c;
+}
+*/
+mapd_err_t FileMgr::clearChunk(ChunkKey &key) {
+	// retrieve reference to the chunk
+	mapd_err_t err = MAPD_SUCCESS;
+	Chunk *c = getChunkRef(key, &err);
+	return !c ? err : clearChunk(*c);
+}
+
+mapd_err_t FileMgr::clearChunk(Chunk &c) {
+	for (int i = 0; i < c.size(); ++i)
+		c[i]->addr.back()->clear();
+	return MAPD_SUCCESS;
 }
 
 /*
-mapd_err_t FileMgr::deleteChunk(const ChunkKey &key, mapd_size_t *nblocks, mapd_size_t *size) {
-    
+mapd_err_t FileMgr::deleteChunk(Chunk &c) {
+	// @todo go through each block and each copy of the block,
+	// inserting them into the free lists of their respective files
+	
+    // Traverse the blocks of the chunk
+    for (int i = 0; i < c.size(); i++) {
+        //BlockInfo *bInfo = c[0];
+    }
+
+    return MAPD_SUCCESS;
 }
+
 
 void FileMgr::print() {
     

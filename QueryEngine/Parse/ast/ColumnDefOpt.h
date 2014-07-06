@@ -10,7 +10,7 @@ public:
     Literal* lit;
    // SearchCondition srchCon;
     Table* tbl;
-  //  ColumnCommalist colComList;
+    ColumnCommalist* colComList;
     int rule_Flag;
 
     /* rule_Flags: 
@@ -30,7 +30,7 @@ public:
     ColumnDefOpt(int rF, Literal *n) : rule_Flag(rF), lit(n), tbl(NULL) {}
    // ColumnDefOpt(int rule_Flag, SearchCondition *n2) : rule_Flag(rF), lit(NULL), srchCon(n2), tbl(NULL), colComList(NULL) {}
     ColumnDefOpt(int rF, Table *n3) : rule_Flag(rF), lit(NULL), tbl(n3) {}
-   // ColumnDefOpt(int rF, Table *n3, colComList *n4) : rule_Flag(rF), lit(NULL), srchCon(NULL), tbl(n3), colComList(n4) {}
+    ColumnDefOpt(int rF, Table *n3, ColumnCommalist *n4) : rule_Flag(rF), lit(NULL), tbl(n3), colComList(n4) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

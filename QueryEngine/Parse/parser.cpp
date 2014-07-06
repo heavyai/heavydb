@@ -122,6 +122,8 @@ Maintained by Magnus Ekdahl <magnus@debian.org>
 #include "ast/BaseTableDef.h"
 #include "ast/Table.h"
 #include "ast/ColumnDef.h"
+#include "ast/ColumnCommalist.h"
+#include "ast/TableConstraintDef.h"
 #include "ast/BaseTableElementCommalist.h"
 #include "ast/BaseTableElement.h"
 #include "ast/ColumnDefOpt.h"
@@ -129,6 +131,16 @@ Maintained by Magnus Ekdahl <magnus@debian.org>
 #include "ast/Literal.h"
 #include "ast/DataType.h"
 #include "ast/Column.h"
+
+#include "ast/ManipulativeStatement.h"
+#include "ast/SelectStatement.h"
+#include "ast/Selection.h"
+#include "ast/OptAllDistinct.h"
+#include "ast/TableExp.h"
+#include "ast/FromClause.h"
+#include "ast/TableRefCommalist.h"
+#include "ast/TableRef.h"
+
 
 // define stack element type to be a 
 // pointer to an AST node
@@ -714,18 +726,18 @@ YY_Parser_CONSTRUCTOR_CODE;
  #line 352 "/usr/share/bison++/bison.cc"
 
 
-#define	YYFINAL		66
+#define	YYFINAL		109
 #define	YYFLAG		-32768
-#define	YYNTBASE	72
+#define	YYNTBASE	73
 
-#define YYTRANSLATE(x) ((unsigned)(x) <= 322 ? yytranslate[x] : 86)
+#define YYTRANSLATE(x) ((unsigned)(x) <= 322 ? yytranslate[x] : 97)
 
 static const char yytranslate[] = {     0,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,    69,
-    70,     2,     2,    71,     2,     2,     2,     2,     2,     2,
+    70,    72,     2,    71,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,    68,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
      2,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -759,34 +771,45 @@ static const char yytranslate[] = {     0,
 #if YY_Parser_DEBUG != 0
 static const short yyprhs[] = {     0,
      0,     2,     3,     6,    10,    12,    14,    21,    25,    27,
-    31,    33,    37,    38,    41,    44,    48,    53,    56,    59,
-    62,    65,    67,    69,    71,    76,    78,    83,    85,    90,
-    92,    97,    99,   101,   103,   108,   110,   113
+    31,    33,    35,    39,    40,    43,    46,    50,    55,    58,
+    61,    64,    67,    73,    78,    84,    92,   103,   105,   109,
+   111,   113,   118,   120,   122,   123,   125,   127,   130,   132,
+   136,   138,   140,   142,   144,   146,   151,   153,   158,   160,
+   165,   167,   172,   174,   176,   178,   183,   185,   188
 };
 
-static const short yyrhs[] = {    73,
-     0,     0,    74,    68,     0,    73,    74,    68,     0,    75,
-     0,    76,     0,     7,     6,    83,    69,    77,    70,     0,
-     4,     6,    83,     0,    78,     0,    77,    71,    78,     0,
-    79,     0,    85,    84,    80,     0,     0,    80,    81,     0,
-    35,    30,     0,    35,    30,    36,     0,    35,    30,    37,
-    39,     0,    42,    82,     0,    42,    30,     0,    42,    20,
-     0,    41,    83,     0,     5,     0,     5,     0,    47,     0,
-    47,    69,     8,    70,     0,    53,     0,    53,    69,     8,
-    70,     0,    46,     0,    46,    69,     8,    70,     0,    44,
-     0,    44,    69,     8,    70,     0,    48,     0,    45,     0,
-    50,     0,    50,    69,     8,    70,     0,    49,     0,    51,
-    52,     0,     5,     0
+static const short yyrhs[] = {    74,
+     0,     0,    75,    68,     0,    74,    75,    68,     0,    76,
+     0,    77,     0,     7,     6,    94,    69,    78,    70,     0,
+     4,     6,    94,     0,    79,     0,    78,    71,    79,     0,
+    80,     0,    83,     0,    96,    95,    81,     0,     0,    81,
+    82,     0,    35,    30,     0,    35,    30,    36,     0,    35,
+    30,    37,    39,     0,    42,    93,     0,    42,    30,     0,
+    42,    20,     0,    41,    94,     0,    41,    94,    69,    84,
+    70,     0,    36,    69,    84,    70,     0,    37,    39,    69,
+    84,    70,     0,    38,    39,    69,    84,    70,    41,    94,
+     0,    38,    39,    69,    84,    70,    41,    94,    69,    84,
+    70,     0,    96,     0,    84,    71,    96,     0,    85,     0,
+    86,     0,    18,    87,    88,    89,     0,    11,     0,    14,
+     0,     0,    72,     0,    90,     0,    15,    91,     0,    92,
+     0,    91,    71,    92,     0,    94,     0,     5,     0,     8,
+     0,     5,     0,    47,     0,    47,    69,     8,    70,     0,
+    53,     0,    53,    69,     8,    70,     0,    46,     0,    46,
+    69,     8,    70,     0,    44,     0,    44,    69,     8,    70,
+     0,    48,     0,    45,     0,    50,     0,    50,    69,     8,
+    70,     0,    49,     0,    51,    52,     0,     5,     0
 };
 
 #endif
 
 #if (YY_Parser_DEBUG != 0) || defined(YY_Parser_ERROR_VERBOSE) 
 static const short yyrline[] = { 0,
-    80,    81,    85,    86,    90,    94,    98,    99,   103,   104,
-   108,   113,   116,   118,   121,   124,   125,   126,   127,   128,
-   130,   136,   142,   150,   151,   152,   153,   154,   155,   157,
-   158,   160,   161,   162,   163,   164,   165,   170
+    92,    93,    97,    98,   102,   106,   110,   111,   115,   116,
+   120,   121,   125,   128,   130,   133,   136,   137,   138,   139,
+   140,   142,   143,   147,   148,   149,   150,   154,   156,   162,
+   166,   184,   190,   192,   193,   196,   201,   210,   214,   216,
+   219,   225,   226,   231,   239,   240,   241,   242,   243,   244,
+   246,   247,   249,   250,   251,   252,   253,   254,   259
 };
 
 static const char * const yytname[] = {   "$","error","$illegal.","AS","DROP",
@@ -797,76 +820,98 @@ static const char * const yytname[] = {   "$","error","$illegal.","AS","DROP",
 "DATATYPE","DECIMAL","SMALLINT","NUMERIC","CHARACTER","INTEGER","REAL","FLOAT",
 "DOUBLE","PRECISION","VARCHAR","AVG","MAX","MIN","SUM","COUNT","ALIAS","INTORDER",
 "COLORDER","ORDER","ASC","DESC","LIMIT","OFFSET","DOTNAME","';'","'('","')'",
-"','","program","sql_list","sql","schema","base_table_def","base_table_element_commalist",
-"base_table_element","column_def","column_def_opt_list","column_def_opt","literal",
+"','","'*'","program","sql_list","sql","schema","base_table_def","base_table_element_commalist",
+"base_table_element","column_def","column_def_opt_list","column_def_opt","table_constraint_def",
+"column_commalist","manipulative_statement","select_statement","opt_all_distinct",
+"selection","table_exp","from_clause","table_ref_commalist","table_ref","literal",
 "table","data_type","column",""
 };
 #endif
 
 static const short yyr1[] = {     0,
-    72,    72,    73,    73,    74,    75,    76,    76,    77,    77,
-    78,    79,    80,    80,    81,    81,    81,    81,    81,    81,
-    81,    82,    83,    84,    84,    84,    84,    84,    84,    84,
-    84,    84,    84,    84,    84,    84,    84,    85
+    73,    73,    74,    74,    75,    76,    77,    77,    78,    78,
+    79,    79,    80,    81,    81,    82,    82,    82,    82,    82,
+    82,    82,    82,    83,    83,    83,    83,    84,    84,    75,
+    85,    86,    87,    87,    87,    88,    89,    90,    91,    91,
+    92,    93,    93,    94,    95,    95,    95,    95,    95,    95,
+    95,    95,    95,    95,    95,    95,    95,    95,    96
 };
 
 static const short yyr2[] = {     0,
      1,     0,     2,     3,     1,     1,     6,     3,     1,     3,
-     1,     3,     0,     2,     2,     3,     4,     2,     2,     2,
-     2,     1,     1,     1,     4,     1,     4,     1,     4,     1,
-     4,     1,     1,     1,     4,     1,     2,     1
+     1,     1,     3,     0,     2,     2,     3,     4,     2,     2,
+     2,     2,     5,     4,     5,     7,    10,     1,     3,     1,
+     1,     4,     1,     1,     0,     1,     1,     2,     1,     3,
+     1,     1,     1,     1,     1,     4,     1,     4,     1,     4,
+     1,     4,     1,     1,     1,     4,     1,     2,     1
 };
 
 static const short yydefact[] = {     2,
-     0,     0,     1,     0,     5,     6,     0,     0,     0,     3,
-    23,     8,     0,     4,     0,    38,     0,     9,    11,     0,
-     7,     0,    30,    33,    28,    24,    32,    36,    34,     0,
-    26,    13,    10,     0,     0,     0,     0,    37,     0,    12,
-     0,     0,     0,     0,     0,     0,     0,     0,    14,    31,
-    29,    25,    35,    27,    15,    21,    22,    20,    19,    18,
-    16,     0,    17,     0,     0,     0
+     0,     0,    35,     1,     0,     5,     6,    30,    31,     0,
+     0,    33,    34,     0,     0,     3,    44,     8,     0,    36,
+     0,     4,     0,     0,    32,    37,    59,     0,     0,     0,
+     0,     9,    11,    12,     0,    38,    39,    41,     0,     0,
+     0,     7,     0,    51,    54,    49,    45,    53,    57,    55,
+     0,    47,    14,     0,     0,    28,     0,     0,    10,     0,
+     0,     0,     0,    58,     0,    13,    40,    24,     0,     0,
+     0,     0,     0,     0,     0,     0,     0,     0,     0,    15,
+    29,    25,     0,    52,    50,    46,    56,    48,    16,    22,
+    42,    43,    21,    20,    19,     0,    17,     0,     0,    26,
+    18,     0,     0,    23,     0,    27,     0,     0,     0
 };
 
-static const short yydefgoto[] = {    64,
-     3,     4,     5,     6,    17,    18,    19,    40,    49,    60,
-    12,    32,    20
+static const short yydefgoto[] = {   107,
+     4,     5,     6,     7,    31,    32,    33,    66,    80,    34,
+    55,     8,     9,    14,    21,    25,    26,    36,    37,    95,
+    38,    53,    56
 };
 
-static const short yypact[] = {     6,
-    11,    16,     6,   -45,-32768,-32768,    19,    19,   -43,-32768,
--32768,-32768,   -41,-32768,    22,-32768,   -56,-32768,-32768,   -42,
--32768,    22,   -40,-32768,   -39,   -38,-32768,-32768,   -37,   -19,
-   -35,-32768,-32768,    27,    28,    29,    30,-32768,    32,   -23,
-   -29,   -28,   -27,   -26,   -25,    17,    19,    -4,-32768,-32768,
--32768,-32768,-32768,-32768,   -16,-32768,-32768,-32768,-32768,-32768,
--32768,     7,-32768,    48,    49,-32768
+static const short yypact[] = {     4,
+     6,     9,     5,     4,   -58,-32768,-32768,-32768,-32768,    15,
+    15,-32768,-32768,   -49,   -27,-32768,-32768,-32768,   -26,-32768,
+    27,-32768,     0,    15,-32768,-32768,-32768,   -24,     8,    10,
+   -53,-32768,-32768,-32768,     7,   -25,-32768,-32768,    54,    -8,
+    -7,-32768,     0,    -6,-32768,    -5,    -3,-32768,-32768,    -2,
+    13,     2,-32768,    15,   -45,-32768,    54,    54,-32768,    61,
+    62,    64,    65,-32768,    66,   -28,-32768,-32768,    54,   -43,
+   -41,    11,    12,    14,    17,    18,    45,    15,     1,-32768,
+-32768,-32768,    35,-32768,-32768,-32768,-32768,-32768,    -4,    16,
+-32768,-32768,-32768,-32768,-32768,    15,-32768,    38,    54,    20,
+-32768,   -36,    54,-32768,   -31,-32768,    78,    79,-32768
 };
 
 static const short yypgoto[] = {-32768,
--32768,    47,-32768,-32768,-32768,    31,-32768,-32768,-32768,-32768,
-    -8,-32768,-32768
+-32768,    76,-32768,-32768,-32768,    40,-32768,-32768,-32768,-32768,
+   -55,-32768,-32768,-32768,-32768,-32768,-32768,-32768,    36,-32768,
+   -10,-32768,   -19
 };
 
 
-#define	YYLAST		53
+#define	YYLAST		90
 
 
-static const short yytable[] = {    13,
-    57,    23,    24,    25,    26,    27,    28,    29,    30,     1,
-    31,    46,     2,    21,    22,    58,     7,    47,    48,    61,
-    62,     8,    10,    11,    14,    59,    16,    15,    34,    35,
-    36,    37,    38,    39,    41,    42,    43,    44,    56,    45,
-    50,    51,    52,    53,    54,    63,    55,    65,    66,     9,
-     0,     0,    33
+static const short yytable[] = {    18,
+    19,    70,    71,    35,    27,    91,    77,     1,    92,    16,
+     2,    10,    78,    79,    11,    12,    42,    43,    13,    17,
+    93,     3,    20,    35,    68,    69,    82,    69,    83,    69,
+    94,    97,    98,   104,    69,    28,    29,    30,   106,    69,
+    22,    24,    23,   102,    39,    54,    40,   105,    41,    81,
+    44,    45,    46,    47,    48,    49,    50,    51,    27,    52,
+    57,    58,    60,    61,    64,    62,    63,    90,    72,    73,
+    65,    74,    75,    76,    89,    96,   101,   108,   109,    15,
+    84,    85,    59,    86,    99,   100,    87,    88,   103,    67
 };
 
-static const short yycheck[] = {     8,
-     5,    44,    45,    46,    47,    48,    49,    50,    51,     4,
-    53,    35,     7,    70,    71,    20,     6,    41,    42,    36,
-    37,     6,    68,     5,    68,    30,     5,    69,    69,    69,
-    69,    69,    52,    69,     8,     8,     8,     8,    47,     8,
-    70,    70,    70,    70,    70,    39,    30,     0,     0,     3,
-    -1,    -1,    22
+static const short yycheck[] = {    10,
+    11,    57,    58,    23,     5,     5,    35,     4,     8,    68,
+     7,     6,    41,    42,     6,    11,    70,    71,    14,     5,
+    20,    18,    72,    43,    70,    71,    70,    71,    70,    71,
+    30,    36,    37,    70,    71,    36,    37,    38,    70,    71,
+    68,    15,    69,    99,    69,    71,    39,   103,    39,    69,
+    44,    45,    46,    47,    48,    49,    50,    51,     5,    53,
+    69,    69,    69,    69,    52,    69,    69,    78,     8,     8,
+    69,     8,     8,     8,    30,    41,    39,     0,     0,     4,
+    70,    70,    43,    70,    69,    96,    70,    70,    69,    54
 };
 
 #line 352 "/usr/share/bison++/bison.cc"
@@ -1363,155 +1408,239 @@ YYLABEL(yyreduce)
   switch (yyn) {
 
 case 1:
-#line 80 "parser.y"
+#line 92 "parser.y"
 { yyval = new Program((SQLList*)yyvsp[0]); parse_root = yyval; ;
     break;}
 case 2:
-#line 81 "parser.y"
+#line 93 "parser.y"
 { yyval = 0; parse_root = yyval; ;
     break;}
 case 3:
-#line 85 "parser.y"
+#line 97 "parser.y"
 { yyval = new SQLList((SQL*)yyvsp[-1]); ;
     break;}
 case 4:
-#line 86 "parser.y"
+#line 98 "parser.y"
 { yyval = new SQLList((SQLList*)yyvsp[-2], (SQL*)yyvsp[-1]); ;
     break;}
 case 5:
-#line 90 "parser.y"
+#line 102 "parser.y"
 { yyval = new SQL((Schema*)yyvsp[0]); ;
     break;}
 case 6:
-#line 94 "parser.y"
+#line 106 "parser.y"
 { yyval = new Schema((BaseTableDef*)yyvsp[0]); ;
     break;}
 case 7:
-#line 98 "parser.y"
+#line 110 "parser.y"
 { yyval = new BaseTableDef("CREATE", (Table*)yyvsp[-3], (BaseTableElementCommalist*)yyvsp[-1]); ;
     break;}
 case 8:
-#line 99 "parser.y"
+#line 111 "parser.y"
 { yyval = new BaseTableDef("DROP", (Table*)yyvsp[0]); ;
     break;}
 case 9:
-#line 103 "parser.y"
+#line 115 "parser.y"
 { yyval = new BaseTableElementCommalist( (BaseTableElement*)yyvsp[0]); ;
     break;}
 case 10:
-#line 104 "parser.y"
+#line 116 "parser.y"
 { yyval = new BaseTableElementCommalist( (BaseTableElementCommalist*)yyvsp[-2], (BaseTableElement*)yyvsp[0]); ;
     break;}
 case 11:
-#line 108 "parser.y"
+#line 120 "parser.y"
 { yyval = new BaseTableElement( (ColumnDef*)yyvsp[0]); ;
     break;}
 case 12:
-#line 113 "parser.y"
-{ yyval = new ColumnDef( (Column*)yyvsp[-2], (DataType*)yyvsp[-1], (ColumnDefOptList*)yyvsp[0]); ;
+#line 121 "parser.y"
+{ yyval = new BaseTableElement( (TableConstraintDef*)yyvsp[0]); ;
     break;}
 case 13:
-#line 117 "parser.y"
-{ yyval = NULL; ;
+#line 125 "parser.y"
+{ yyval = new ColumnDef( (Column*)yyvsp[-2], (DataType*)yyvsp[-1], (ColumnDefOptList*)yyvsp[0]); ;
     break;}
 case 14:
-#line 118 "parser.y"
-{ yyval = new ColumnDefOptList( (ColumnDefOptList*)yyvsp[-1], (ColumnDefOpt*)yyvsp[0]); ;
+#line 129 "parser.y"
+{ yyval = NULL; ;
     break;}
 case 15:
-#line 123 "parser.y"
-{ yyval = new ColumnDefOpt(0); ;
+#line 130 "parser.y"
+{ yyval = new ColumnDefOptList( (ColumnDefOptList*)yyvsp[-1], (ColumnDefOpt*)yyvsp[0]); ;
     break;}
 case 16:
-#line 124 "parser.y"
-{ yyval = new ColumnDefOpt(1); ;
+#line 135 "parser.y"
+{ yyval = new ColumnDefOpt(0); ;
     break;}
 case 17:
-#line 125 "parser.y"
-{ yyval = new ColumnDefOpt(2); ;
+#line 136 "parser.y"
+{ yyval = new ColumnDefOpt(1); ;
     break;}
 case 18:
-#line 126 "parser.y"
-{ yyval = new ColumnDefOpt(3, (Literal*)yyvsp[0]); ;
+#line 137 "parser.y"
+{ yyval = new ColumnDefOpt(2); ;
     break;}
 case 19:
-#line 127 "parser.y"
-{ yyval = new ColumnDefOpt(4); ;
+#line 138 "parser.y"
+{ yyval = new ColumnDefOpt(3, (Literal*)yyvsp[0]); ;
     break;}
 case 20:
-#line 128 "parser.y"
-{ yyval = new ColumnDefOpt(5); ;
+#line 139 "parser.y"
+{ yyval = new ColumnDefOpt(4); ;
     break;}
 case 21:
-#line 130 "parser.y"
-{ yyval = new ColumnDefOpt(7, (Table*)yyvsp[0]); ;
+#line 140 "parser.y"
+{ yyval = new ColumnDefOpt(5); ;
     break;}
 case 22:
-#line 136 "parser.y"
-{ yyval = new Literal(strData[0]); ;
+#line 142 "parser.y"
+{ yyval = new ColumnDefOpt(7, (Table*)yyvsp[0]); ;
     break;}
 case 23:
-#line 142 "parser.y"
-{ yyval = new Table(strData[0]); ;
+#line 143 "parser.y"
+{ yyval = new ColumnDefOpt(8, (Table*)yyvsp[-3], (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 24:
-#line 150 "parser.y"
-{ yyval = new DataType(0); ;
+#line 147 "parser.y"
+{ yyval = new TableConstraintDef(0, (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 25:
-#line 151 "parser.y"
-{ yyval = new DataType(0, intData); ;
+#line 148 "parser.y"
+{ yyval = new TableConstraintDef(1, (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 26:
-#line 152 "parser.y"
-{ yyval = new DataType(1); ;
+#line 149 "parser.y"
+{ yyval = new TableConstraintDef(2, (ColumnCommalist*)yyvsp[-3], (Table*)yyvsp[0]); ;
     break;}
 case 27:
-#line 153 "parser.y"
-{ yyval = new DataType(1, intData); ;
+#line 150 "parser.y"
+{ yyval = new TableConstraintDef(2, (ColumnCommalist*)yyvsp[-6], (Table*)yyvsp[-3], (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 28:
-#line 154 "parser.y"
-{ yyval = new DataType(2); ;
+#line 155 "parser.y"
+{ yyval = new ColumnCommalist((Column*)yyvsp[0]); ;
     break;}
 case 29:
-#line 155 "parser.y"
-{ yyval = new DataType(2, intData); ;
+#line 156 "parser.y"
+{ yyval = new ColumnCommalist((ColumnCommalist*)yyvsp[-2], (Column*)yyvsp[0]); ;
     break;}
 case 30:
-#line 157 "parser.y"
-{ yyval = new DataType(3); ;
+#line 163 "parser.y"
+{ yyval = new SQL((ManipulativeStatement*)yyvsp[0]); ;
     break;}
 case 31:
-#line 158 "parser.y"
-{ yyval = new DataType(3, intData); ;
+#line 167 "parser.y"
+{ yyval = new ManipulativeStatement((SelectStatement*)yyvsp[0]); ;
     break;}
 case 32:
-#line 160 "parser.y"
-{ yyval = new DataType(4); ;
+#line 187 "parser.y"
+{ yyval = new SelectStatement((OptAllDistinct*)yyvsp[-2], (Selection*)yyvsp[-1], (TableExp*)yyvsp[0]); ;
     break;}
 case 33:
-#line 161 "parser.y"
-{ yyval = new DataType(5); ;
+#line 191 "parser.y"
+{ yyval = new OptAllDistinct("ALL"); ;
     break;}
 case 34:
-#line 162 "parser.y"
-{ yyval = new DataType(6); ;
+#line 192 "parser.y"
+{ yyval = new OptAllDistinct("DISTINCT"); ;
     break;}
 case 35:
-#line 163 "parser.y"
-{ yyval = new DataType(6, intData); ;
+#line 193 "parser.y"
+{ yyval = new OptAllDistinct(""); ;
     break;}
 case 36:
-#line 164 "parser.y"
-{ yyval = new DataType(7); ;
+#line 198 "parser.y"
+{ yyval = new Selection("*"); ;
     break;}
 case 37:
-#line 165 "parser.y"
-{ yyval = new DataType(8); ;
+#line 207 "parser.y"
+{ yyval = new TableExp((FromClause*)yyvsp[0]); ;
     break;}
 case 38:
-#line 170 "parser.y"
+#line 211 "parser.y"
+{ yyval = new FromClause((TableRefCommalist*)yyvsp[0]); ;
+    break;}
+case 39:
+#line 215 "parser.y"
+{ yyval = new TableRefCommalist((TableRef*)yyvsp[0]); ;
+    break;}
+case 40:
+#line 216 "parser.y"
+{ yyval = new TableRefCommalist((TableRefCommalist*)yyvsp[-2], (TableRef*)yyvsp[0]); ;
+    break;}
+case 41:
+#line 220 "parser.y"
+{ yyval = new TableRef((Table *)yyvsp[0]); ;
+    break;}
+case 42:
+#line 225 "parser.y"
+{ yyval = new Literal(strData[0]); ;
+    break;}
+case 43:
+#line 226 "parser.y"
+{ yyval = new Literal(intData); ;
+    break;}
+case 44:
+#line 231 "parser.y"
+{ yyval = new Table(strData[0]); ;
+    break;}
+case 45:
+#line 239 "parser.y"
+{ yyval = new DataType(0); ;
+    break;}
+case 46:
+#line 240 "parser.y"
+{ yyval = new DataType(0, intData); ;
+    break;}
+case 47:
+#line 241 "parser.y"
+{ yyval = new DataType(1); ;
+    break;}
+case 48:
+#line 242 "parser.y"
+{ yyval = new DataType(1, intData); ;
+    break;}
+case 49:
+#line 243 "parser.y"
+{ yyval = new DataType(2); ;
+    break;}
+case 50:
+#line 244 "parser.y"
+{ yyval = new DataType(2, intData); ;
+    break;}
+case 51:
+#line 246 "parser.y"
+{ yyval = new DataType(3); ;
+    break;}
+case 52:
+#line 247 "parser.y"
+{ yyval = new DataType(3, intData); ;
+    break;}
+case 53:
+#line 249 "parser.y"
+{ yyval = new DataType(4); ;
+    break;}
+case 54:
+#line 250 "parser.y"
+{ yyval = new DataType(5); ;
+    break;}
+case 55:
+#line 251 "parser.y"
+{ yyval = new DataType(6); ;
+    break;}
+case 56:
+#line 252 "parser.y"
+{ yyval = new DataType(6, intData); ;
+    break;}
+case 57:
+#line 253 "parser.y"
+{ yyval = new DataType(7); ;
+    break;}
+case 58:
+#line 254 "parser.y"
+{ yyval = new DataType(8); ;
+    break;}
+case 59:
+#line 259 "parser.y"
 { yyval = new Column(strData[0]); ;
     break;}
 }
@@ -1718,5 +1847,5 @@ YYLABEL(yyerrhandle)
 /* END */
 
  #line 1038 "/usr/share/bison++/bison.cc"
-#line 173 "parser.y"
+#line 262 "parser.y"
 
