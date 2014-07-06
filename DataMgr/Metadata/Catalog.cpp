@@ -3,8 +3,9 @@
 using namespace std::string;
 using namespace std::map;
 using namespace std::tuple;
+using namespace std::vector;
 
-Catalog::Catalog(const string &basePath): basePath_(basePath), isDirty_(false) {
+Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), isDirty_(false) {
     readCatalogFromFile();
 }
 
@@ -32,6 +33,8 @@ mapd_err_t Catalog::readCatalogFromFile() {
         int tempTableId;
         while (tablefile >> tempTableName >> tempTableId) {
            tableRowMap_[tempTableName]  = new TableRow(tempTableName,tempTableId); // should be no need to check this for errors as we check for table entries of same name on insert
+           if (tempTableId > maxTableId_)
+               maxTableId_ = tempTableId;
         }
         tableFile.close();
         string columnFileFullPath (basePath_ + "/columns.cat");
@@ -48,6 +51,9 @@ mapd_err_t Catalog::readCatalogFromFile() {
             while (columnFile >> tempTableId >> tempColumnName >> tempColumnId >> tempColumnType >> tempNotNull) {
                 ColumnKey columnKey (tempTableId, tempColumnName); // construct the tuple that will serve as key for this entry into the column map
                 columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, tempColumnType, tempNotNull);
+               // If this column has an id higher than maxColumnId_, set maxColumnId_ to it
+               if (tempColumnId > maxColumnId_)
+                   maxColumnId_ = tempColumnId;
             }
             columnFile.close();
         }
@@ -86,6 +92,50 @@ mapd_err_t Catalog::writeCatalogToFile() {
         isDirty_ = false;
     }
     return MAPD_SUCCESS;
-
 }
+
+mapd_err_t Catalog::addTable(const string &tableName) {
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt != tableRowMap_.end())
+        return MAPD_ERR_TABLE_ALREADY_EXISTS;
+
+    // if here then table did not exist and we can insert it into tableRowMap_
+    // Create tableRow and pre-increment nextTableId_ so next TableRow gets id one higher than current max
+    TableRow *tableRow = new TableRow(tableName,++maxTableId_); 
+    tableRowMap_[tableName] = tableRow;
+
+    isDirty_ = true;
+
+    return MAPD_SUCCESS;
+}
+
+mapd_err_t Catalog::removeTable(const string &tableName) {
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt == tableRowMap_.end())
+        return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+
+    // if here then table does exist so we can remove it and its associated columns
+    tableRowMap_.erase(tableRowIt);
+
+    // can be multiple columns for the same table, so must iterate and delete each column that belongs to the table
+    ColumnRowMap::iterator columnRowIt = columnRowMap_.begin();    
+    while (columnRowIt != columnRowMap_.end()) {
+        if (std::get<0>(columnRowIt.first) == tableName)
+            columnRowMap_.erase(columnRowIt++);
+        else
+            ++columnRowIt;
+    }
+    isDirty_ = true;
+    return MAPD_SUCCESS;
+}
+
+
+
+
+            
+
+
+
+
+
 

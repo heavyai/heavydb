@@ -16,6 +16,7 @@
 #include <string>
 #include <tuple>
 #include <map>
+#include <vector>
 
 #include "../../Shared/errors.h"
 
@@ -30,7 +31,8 @@ struct TableRow {
     std::string tableName; /**< tableId is the primary key to access rows in the table table -must bew unique */
     int tableId; /**< tableId starts at 0 for valid tables. */
 
-    TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
+
+    TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId), nextColumnId(0) {}
 };
 
 /**
@@ -84,6 +86,22 @@ class Catalog {
          */
         mapd_err_t writeCatalogToFile();
 
+        /**
+         * @brief Adds an empty table to the catalog 
+         *
+         * This method tries to add a new table to the Catalog (the table table),
+         * returning an error if a table by the same name already exists.
+         * It autoincrements the nextTableId_ counter so that the next table created
+         * will have an id one higher.
+         */
+        mapd_err_t addTable(const std::string &tableName);
+
+        /**
+         * @brief Removes a table and all of its associated columns from the catalog
+         *
+         * This method tries to remove the table specified by tableName from the Catalog.  It returns an error if no table by that name exists.  
+         */
+        mapd_err_t removeTable(const std::string &tableName);
 
 
     private:
@@ -103,7 +121,10 @@ class Catalog {
         std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableRowMap tableRowMap_;
         ColumnRowMap columnRowMap_;
+        int maxTableId_; /**< Serves as monotonically increasing counter to assign to each generated table. Increments on table creation but never decrements on deletion - so may have "gaps" */
+        int maxColumnId_; /**< Serves as monotonically increasing counter to assign to each generated column. Increments on column creation but never decrements on deletion - so may have "gaps".  Right now we use a global columnId counter, making columnId a primary key for each column, but we may change this in the future so that each table has its own space for column keys. */
         bool isDirty_; /**< Specifies if the catalog has been modified in memory since the last flush to file - no need to rewrite file if this is false. */
+
 
 };
 
