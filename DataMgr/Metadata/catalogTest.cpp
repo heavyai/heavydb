@@ -30,6 +30,7 @@ void reset(); // deletes Catalog's files to reset state
 
 int main(void ) {
 
+    reset();
     test_Catalog ?
         PPASS("Catalog()") : PFAIL("Catalog()");
     reset();
@@ -43,13 +44,13 @@ int main(void ) {
 }
 
 void reset() {
-    remove ("/Users/tmostak/projects/mapd_org/mapd2/DataMgr/Metadata/tables.cat");
-    remove ("/Users/tmostak/projects/mapd_org/mapd2/DataMgr/Metadata/columns.cat");
+    remove ("tables.cat");
+    remove ("columns.cat");
 }
 
 bool test_Catalog() {
     try {
-        Catalog *catalog = new Catalog("/Users/tmostak/projects/mapd_org/mapd2/DataMgr/Metadata");
+        Catalog *catalog = new Catalog(".");
         if (!catalog)
             return false;
         delete catalog;
@@ -63,7 +64,7 @@ bool test_Catalog() {
 
 
 bool test_AddTable() {
-    Catalog catalog("/Users/tmostak/projects/mapd_org/mapd2/DataMgr/Metadata");
+    Catalog catalog(".");
     mapd_err_t status = catalog.addTable("test");
     if (status != MAPD_SUCCESS) 
         return false;
@@ -78,12 +79,12 @@ bool test_AddTable() {
     if (status != MAPD_SUCCESS) 
         return false;
 	Testing::pass++;
-    ifstream tableFile("/Users/tmostak/projects/mapd_org/mapd2/DataMgr/Metadata/tables.cat");
+    ifstream tableFile("tables.cat");
     if (tableFile) {
         string tableName;
         int tableId;
         if (tableFile >> tableName >> tableId) {
-            if (tableName != "test" || tableId == 0)
+            if (tableName != "test" || tableId != 0)
                 return false;
         } 
         else
