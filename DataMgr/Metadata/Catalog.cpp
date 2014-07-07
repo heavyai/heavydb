@@ -181,7 +181,7 @@ mapd_err_t Catalog::removeColumnFromTable(const string &tableName, const string 
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
     int tableId = tableRowIt -> second -> tableId;
-    ColumnKey columnKey (tableId, columnRow -> columnId);       
+    ColumnKey columnKey (tableId, columnRow -> columnName);       
     ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
     if (colRowIt == columnRowMap_.end()) // need to check to make sure column exists for table
         return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
@@ -189,3 +189,45 @@ mapd_err_t Catalog::removeColumnFromTable(const string &tableName, const string 
     isDirty_ = true;
     return MAPD_SUCCESS:
 }
+
+mapd_err_t Catalog::getMetadataforColumn (const string &tableName, const string &columnName,  ColumnRow &columnRow) {
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
+        return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+    int tableId = tableRowIt -> second -> tableId;
+    ColumnKey columnKey (tableId, columnRow -> columnName);       
+    ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
+    if (colRowIt == columnRowMap_.end()) // need to check to make sure column exists for table
+        return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
+    columnRow = *(colRowIt -> second); // will invoke implicit copy constructor - otherwise a pointer given to the caller might be subsequently invalidated by the Catalog in a multithreaded environment
+    return MAPD_SUCCESS;
+}
+
+mapd_err_t Catalog::getMetadataforColumns (const string &tableName, const vector<string> &columnNames,  vector <ColumnRow> &columnRows) {
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
+        return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+    int tableId = tableRowIt -> second -> tableId;
+    for (vector<string>::const_iterator colNameIt = columnNames.begin(); colNameIt != columnNames.end(); ++colNameIt) {
+        ColumnKey columnKey (tableId, *colNameIt);
+        ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
+        if (colRowIt ==  columnRowMap_.end()) 
+            return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
+        columnRows.push_back(*(colRowIt -> second));
+    }
+    return MAPD_SUCCESS;
+}
+
+
+        
+
+
+        
+
+
+
+
+}
+
+
+

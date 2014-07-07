@@ -108,7 +108,7 @@ class Catalog {
          * fields for.
          */
 
-        mapd_err_t addTableWithColumns(const string &tableName, vector <ColumnRow *> & columns);
+        mapd_err_t addTableWithColumns(const std::string &tableName, vector <ColumnRow *> & columns);
 
 
         /**
@@ -120,7 +120,7 @@ class Catalog {
          * exist but a column with the same name as the column being inserted for
          * that table already exists
          */
-        mapd_err_t addColumnToTable(const string &tableName, ColumnRow * columnRow);
+        mapd_err_t addColumnToTable(const std::string &tableName, ColumnRow * columnRow);
 
 
 
@@ -140,7 +140,33 @@ class Catalog {
          * table name exists for no column by the gien column name exists for the
          * table specified. 
          */
-        mapd_err_t removeColumnFromTable(const string &tableName, const string &columnName);
+        mapd_err_t removeColumnFromTable(const std::string &tableName, const std::string &columnName);
+
+        /**
+         * @brief Passes back via reference a ColumnRow struct for the column specified by table name and column name 
+         *
+         * This method first checks to see if the table and column specified by
+         * the tableName and columnName parameters exist, returning an error if
+         * they do not.  It then makes a copy of the ColumnRow struct representing
+         * that column which returned via the columnRow parameter.  For now we
+         * choose not to return the raw pointer as this could be invalidated by
+         * the Catalog before the calling function can access it in a multithreaded
+         * environment, although this might be a moot point if we never allow 
+         * such query overlap in the first place
+         */
+        mapd_err_t Catalog::getMetadataforColumn (const std::string &tableName, const std::string &columnName, ColumnRow &columnRow);
+
+
+        /**
+         * @brief Passes back via reference a vector of ColumnRow structs for the column specified by table name and column name 
+         *
+         * This method first checks to see if the table and columns specified by
+         * the tableName and columnName parameters exist, returning an error if
+         * they do not.  It then inserts into the vector of ColumnRow structs
+         * passed as an argument to the function copies of all structs matching
+         * the given columnName.
+         */
+        mapd_err_t getMetadataforColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
 
 
     private:
