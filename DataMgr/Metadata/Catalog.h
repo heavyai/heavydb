@@ -20,6 +20,8 @@
 
 #include "../../Shared/errors.h"
 
+enum ColumnType {DUMMY_TYPE};
+
 /**
  * @type TableRow
  * @brief specifies the content in-memory of a row in the table metadata table
@@ -32,7 +34,7 @@ struct TableRow {
     int tableId; /**< tableId starts at 0 for valid tables. */
 
 
-    TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId), nextColumnId(0) {}
+    TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
 };
 
 /**
@@ -57,14 +59,14 @@ struct ColumnRow {
  * @brief Maps table names to pointers to table row structs 
  */
 
-typedef std::map<string, TableRow *> TableRowMap;
+typedef std::map<std::string, TableRow *> TableRowMap;
 
 /**
  * @type ColumnKey
  * @brief ColumnKey is composed of the integer tableId and the string name of the column
  */
 
-typedef std::tuple<int, std::string> ColumnKey;
+typedef std::tuple <int, std::string> ColumnKey;
 
 /**
  * @type ColumnRowMap
@@ -77,6 +79,7 @@ class Catalog {
 
     public:
         Catalog(const std::string &basePath);
+        ~Catalog();
 
         /**
          * @brief Writes in-memory representation of table table and column table to file 
@@ -108,7 +111,7 @@ class Catalog {
          * fields for.
          */
 
-        mapd_err_t addTableWithColumns(const std::string &tableName, vector <ColumnRow *> & columns);
+        mapd_err_t addTableWithColumns(const std::string &tableName, std::vector <ColumnRow *> & columns);
 
 
         /**
@@ -154,7 +157,7 @@ class Catalog {
          * environment, although this might be a moot point if we never allow 
          * such query overlap in the first place
          */
-        mapd_err_t Catalog::getMetadataforColumn (const std::string &tableName, const std::string &columnName, ColumnRow &columnRow);
+        mapd_err_t getMetadataforColumn (const std::string &tableName, const std::string &columnName, ColumnRow &columnRow);
 
 
         /**

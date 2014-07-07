@@ -1,9 +1,14 @@
 #include "Catalog.h"
+#include <fstream>
+#include <set>
 
-using namespace std::string;
-using namespace std::map;
-using namespace std::tuple;
-using namespace std::vector;
+using std::string;
+using std::map;
+using std::tuple;
+using std::vector;
+using std::set;
+using std::ifstream;
+using std::ofstream;
 
 Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), isDirty_(false) {
     readCatalogFromFile();
@@ -14,10 +19,10 @@ Catalog::~Catalog() {
     writeCatalogToFile();
 
     // must clean up heap-allocated TableRow and ColumnRow structs
-    for (TableRowMap::iterator tableRowIt = tableRowMap.begin(); tableRowIt != tableRowMap.end(); ++tableRowIt)
+    for (TableRowMap::iterator tableRowIt = tableRowMap_.begin(); tableRowIt != tableRowMap_.end(); ++tableRowIt)
         delete tableRowIt -> second;
 
-    for (ColumnRowMap::iterator columnRowIt = columnRowMap.begin(); columnRowIt != columnRowMap.end(); ++columnRowIt)
+    for (ColumnRowMap::iterator columnRowIt = columnRowMap_.begin(); columnRowIt != columnRowMap_.end(); ++columnRowIt)
         delete columnRowIt -> second;
 }
 
@@ -31,7 +36,7 @@ mapd_err_t Catalog::readCatalogFromFile() {
         // expects tab-delimited file
         string tempTableName;
         int tempTableId;
-        while (tablefile >> tempTableName >> tempTableId) {
+        while (tableFile >> tempTableName >> tempTableId) {
            tableRowMap_[tempTableName]  = new TableRow(tempTableName,tempTableId); // should be no need to check this for errors as we check for table entries of same name on insert
            if (tempTableId > maxTableId_)
                maxTableId_ = tempTableId;
@@ -46,11 +51,13 @@ mapd_err_t Catalog::readCatalogFromFile() {
             int tempTableId;
             string tempColumnName;
             int tempColumnId;
-            ColumnType tempColumnType;
+            int tempColumnType;
             bool tempNotNull;
+            //while (columnFile >> tempTableId >> tempColumnName >> tempColumnId >> tempColumnType >> tempNotNull) { 
             while (columnFile >> tempTableId >> tempColumnName >> tempColumnId >> tempColumnType >> tempNotNull) {
                 ColumnKey columnKey (tempTableId, tempColumnName); // construct the tuple that will serve as key for this entry into the column map
-                columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, tempColumnType, tempNotNull);
+                columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, static_cast<ColumnType>(tempColumnType), static_cast<bool> (tempNotNull));
+                //columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, tempColumnType, tempNotNull);
                // If this column has an id higher than maxColumnId_, set maxColumnId_ to it
                if (tempColumnId > maxColumnId_)
                    maxColumnId_ = tempColumnId;
@@ -63,12 +70,12 @@ mapd_err_t Catalog::readCatalogFromFile() {
 }
 
 mapd_err_t Catalog::writeCatalogToFile() {
-    if (!isDirty_) {
+    if (isDirty_) {
         // we will just overwrite table and column files with all TableRows and ColumnRows
         string tableFileFullPath (basePath_ + "/tables.cat");
         ofstream tableFile (tableFileFullPath.c_str());
         if (tableFile.is_open()) {
-            for (TableRowMap::iterator tableRowIt = tableRowMap.begin(); tableRowIt != tableRowMap.end(); ++tableRowIt) {
+            for (TableRowMap::iterator tableRowIt = tableRowMap_.begin(); tableRowIt != tableRowMap_.end(); ++tableRowIt) {
                 TableRow *tableRow = tableRowIt -> second;
                 tableFile << tableRow -> tableName << "\t" << tableRow -> tableId << "\n";
             }
@@ -77,7 +84,7 @@ mapd_err_t Catalog::writeCatalogToFile() {
             string columnFileFullPath (basePath_ + "/columns.cat");
             ofstream columnFile (tableFileFullPath.c_str());
             if (columnFile.is_open()) {
-                for (ColumnRowMap::iterator columnRowIt = columnRowMap.begin(); columnRowIt != columnRowMap.end(); ++columnRowIt) {
+                for (ColumnRowMap::iterator columnRowIt = columnRowMap_.begin(); columnRowIt != columnRowMap_.end(); ++columnRowIt) {
                     ColumnRow *columnRow = columnRowIt -> second;
                     columnFile << columnRow -> tableId << "\t" << columnRow -> columnName << "\t" << columnRow -> columnId << "\t" << columnRow -> columnType << "\t" << columnRow -> notNull << "\n";
                 }
@@ -118,7 +125,7 @@ mapd_err_t Catalog::addTableWithColumns(const string &tableName, vector <ColumnR
         return MAPD_ERR_TABLE_ALREADY_EXISTS;
     set <string> columnNames;
     for (vector <ColumnRow *>::iterator colIt = columns.begin(); colIt != columns.end(); ++colIt) {
-    if (columnNames.insert(colIt -> second -> columnName).second == false) // ntests if we have already specified a column with the same name
+    if (columnNames.insert((*colIt) -> columnName).second == false) // ntests if we have already specified a column with the same name
         return MAPD_ERR_COLUMN_ALREADY_EXISTS; 
     }
 
@@ -128,10 +135,10 @@ mapd_err_t Catalog::addTableWithColumns(const string &tableName, vector <ColumnR
     //    return status; 
     int tableId = maxTableId_; // because tableId was pre-incremented on table insert
     for (vector <ColumnRow *>::const_iterator colIt = columns.begin(); colIt != columns.end(); ++colIt) {
-        ColumnRow *columnRow = colIt -> second;
+        ColumnRow *columnRow = *colIt;
         columnRow -> tableId = tableId;
         columnRow -> columnId = ++maxColumnId_; // get next value of maxColumnId for columnId
-         ColumnKey columnKey (tableId, colIt -> columnName);       
+         ColumnKey columnKey (tableId, columnRow -> columnName);       
          columnRowMap_[columnKey] = columnRow; // insertion of column
     isDirty_ = true;
     }
@@ -145,7 +152,7 @@ mapd_err_t Catalog::addColumnToTable(const string &tableName, ColumnRow * column
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
 
     int tableId = tableRowIt -> second -> tableId;
-    ColumnKey columnKey (tableId, columnRow -> columnId);       
+    ColumnKey columnKey (tableId, columnRow -> columnName);       
     ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
     if (colRowIt != columnRowMap_.end())
         return MAPD_ERR_COLUMN_ALREADY_EXISTS;
@@ -167,7 +174,7 @@ mapd_err_t Catalog::removeTable(const string &tableName) {
     // can be multiple columns for the same table, so must iterate and delete each column that belongs to the table
     ColumnRowMap::iterator columnRowIt = columnRowMap_.begin();    
     while (columnRowIt != columnRowMap_.end()) {
-        if (std::get<0>(columnRowIt.first) == tableName)
+        if (std::get<1>(columnRowIt -> first) == tableName)
             columnRowMap_.erase(columnRowIt++);
         else
             ++columnRowIt;
@@ -181,13 +188,13 @@ mapd_err_t Catalog::removeColumnFromTable(const string &tableName, const string 
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
     int tableId = tableRowIt -> second -> tableId;
-    ColumnKey columnKey (tableId, columnRow -> columnName);       
+    ColumnKey columnKey (tableId, columnName);       
     ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
     if (colRowIt == columnRowMap_.end()) // need to check to make sure column exists for table
         return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
     columnRowMap_.erase(colRowIt);
     isDirty_ = true;
-    return MAPD_SUCCESS:
+    return MAPD_SUCCESS;
 }
 
 mapd_err_t Catalog::getMetadataforColumn (const string &tableName, const string &columnName,  ColumnRow &columnRow) {
@@ -195,7 +202,7 @@ mapd_err_t Catalog::getMetadataforColumn (const string &tableName, const string 
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
     int tableId = tableRowIt -> second -> tableId;
-    ColumnKey columnKey (tableId, columnRow -> columnName);       
+    ColumnKey columnKey (tableId, columnName);       
     ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
     if (colRowIt == columnRowMap_.end()) // need to check to make sure column exists for table
         return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
@@ -217,17 +224,3 @@ mapd_err_t Catalog::getMetadataforColumns (const string &tableName, const vector
     }
     return MAPD_SUCCESS;
 }
-
-
-        
-
-
-        
-
-
-
-
-}
-
-
-
