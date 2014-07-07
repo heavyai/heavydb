@@ -78,6 +78,7 @@ mapd_err_t Catalog::writeCatalogToFile() {
             for (TableRowMap::iterator tableRowIt = tableRowMap_.begin(); tableRowIt != tableRowMap_.end(); ++tableRowIt) {
                 TableRow *tableRow = tableRowIt -> second;
                 tableFile << tableRow -> tableName << "\t" << tableRow -> tableId << "\n";
+                tableFile.flush();
             }
             tableFile.close();
             // we only try to write to the column file if we've succeeded at writing to the table file
