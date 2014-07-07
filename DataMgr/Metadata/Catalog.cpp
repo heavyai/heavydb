@@ -1,6 +1,7 @@
 #include "Catalog.h"
 #include <fstream>
 #include <set>
+#include <iostream>
 
 using std::string;
 using std::map;
@@ -27,7 +28,6 @@ Catalog::~Catalog() {
 }
 
 mapd_err_t Catalog::readCatalogFromFile() {
-
     string tableFileFullPath (basePath_ + "/tables.cat");
     ifstream tableFile (tableFileFullPath.c_str());
     // read in table file if it exists
@@ -79,10 +79,11 @@ mapd_err_t Catalog::writeCatalogToFile() {
                 TableRow *tableRow = tableRowIt -> second;
                 tableFile << tableRow -> tableName << "\t" << tableRow -> tableId << "\n";
             }
+            tableFile.flush();
             tableFile.close();
             // we only try to write to the column file if we've succeeded at writing to the table file
             string columnFileFullPath (basePath_ + "/columns.cat");
-            ofstream columnFile (tableFileFullPath.c_str());
+            ofstream columnFile (columnFileFullPath.c_str());
             if (columnFile.is_open()) {
                 for (ColumnRowMap::iterator columnRowIt = columnRowMap_.begin(); columnRowIt != columnRowMap_.end(); ++columnRowIt) {
                     ColumnRow *columnRow = columnRowIt -> second;
