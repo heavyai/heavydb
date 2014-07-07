@@ -105,7 +105,54 @@ mapd_err_t Catalog::addTable(const string &tableName) {
     tableRowMap_[tableName] = tableRow;
 
     isDirty_ = true;
+    return MAPD_SUCCESS;
+}
 
+
+mapd_err_t Catalog::addTableWithColumns(const string &tableName, vector <ColumnRow *> & columns) { 
+     //note that vector of ColumnRows should not be populated with tableId and columnIds - the database fills these in.
+     //
+    // first need to check if insert would result in any errors
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt != tableRowMap_.end())
+        return MAPD_ERR_TABLE_ALREADY_EXISTS;
+    set <string> columnNames;
+    for (vector <ColumnRow *>::iterator colIt = columns.begin(); colIt != columns.end(); ++colIt) {
+    if (columnNames.insert(colIt -> second -> columnName).second == false) // ntests if we have already specified a column with the same name
+        return MAPD_ERR_COLUMN_ALREADY_EXISTS; 
+    }
+
+    // if we reached this far then we know table insert will succeed
+    addTable(tableName); // would be nice to return tableId instead of error as this means we could get post-incremented columnId
+    //if (status != MAPD_SUCCESS) // table insert failed because table with same name already existed
+    //    return status; 
+    int tableId = maxTableId_; // because tableId was pre-incremented on table insert
+    for (vector <ColumnRow *>::const_iterator colIt = columns.begin(); colIt != columns.end(); ++colIt) {
+        ColumnRow *columnRow = colIt -> second;
+        columnRow -> tableId = tableId;
+        columnRow -> columnId = ++maxColumnId_; // get next value of maxColumnId for columnId
+         ColumnKey columnKey (tableId, colIt -> columnName);       
+         columnRowMap_[columnKey] = columnRow; // insertion of column
+    isDirty_ = true;
+    }
+    return MAPD_SUCCESS;
+}
+
+mapd_err_t Catalog::addColumnToTable(const string &tableName, ColumnRow * columnRow) {
+     //note that columnRow should not be populated with tableId and columnIds - the database fills these in.
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt == tableRowMap_.end())
+        return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+
+    int tableId = tableRowIt -> second -> tableId;
+    ColumnKey columnKey (tableId, columnRow -> columnId);       
+    ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
+    if (colRowIt != columnRowMap_.end())
+        return MAPD_ERR_COLUMN_ALREADY_EXISTS;
+    columnRow -> tableId = tableId;
+    columnRow -> columnId = ++maxColumnId_; // get next value of maxColumnId for columnId
+    columnRowMap_[columnKey] = columnRow; // insertion of column 
+    isDirty_ = true;
     return MAPD_SUCCESS;
 }
 
@@ -129,13 +176,16 @@ mapd_err_t Catalog::removeTable(const string &tableName) {
     return MAPD_SUCCESS;
 }
 
-
-
-
-            
-
-
-
-
-
-
+mapd_err_t Catalog::removeColumnFromTable(const string &tableName, const string &columnName) {
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
+        return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+    int tableId = tableRowIt -> second -> tableId;
+    ColumnKey columnKey (tableId, columnRow -> columnId);       
+    ColumnRowMap::iterator colRowIt = columnRowMap_.find(columnKey);
+    if (colRowIt == columnRowMap_.end()) // need to check to make sure column exists for table
+        return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
+    columnRowMap_.erase(colRowIt);
+    isDirty_ = true;
+    return MAPD_SUCCESS:
+}

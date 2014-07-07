@@ -5,7 +5,7 @@
  *
  * This file contains the Catalog class specification. The Catalog class is responsible for storing metadata
  * about stored objects in the system (currently just relations).  At this point it does not take advantage of the 
- * database storage infrastructure, this likely will change in the future as the buildout continues. Although it persists
+ * database storage infrastructure; this likely will change in the future as the buildout continues. Although it persists
  * the metainfo on disk, at database startup it reads everything into in-memory dictionaries for fast access.
  *
  */
@@ -48,6 +48,8 @@ struct ColumnRow {
     ColumnType columnType;
     bool notNull; /**< specifies if the column can be null according to SQL standard */
     ColumnRow(const int tableId, const std::string columnName, const int columnId, const ColumnType columnType, const bool notNull): tableId(tableId), columnName(columnName), columnId(columnId), columnType(columnType), notNull(notNull) {}
+
+    ColumnRow(const std::string columnName, const ColumnType columnType, const bool notNull): columnName(columnName), columnType(columnType), notNull(notNull), tableId(-1), columnId(-1) {} /**< constructor for adding columns - assumes that tableId and columnId are unknown at this point */
 };
 
 /**
@@ -97,11 +99,48 @@ class Catalog {
         mapd_err_t addTable(const std::string &tableName);
 
         /**
+         * @brief Adds a table and a set of columns to the catalog 
+         *
+         * This method first determines whether the table and columns can be added
+         * to the Catalog (i.e ensuring the table does not already exist and none 
+         * of the column names are duplicates). Along with the table name it expects
+         * a vector of ColumnRow structs, which it fills in the tableId and columnId
+         * fields for.
+         */
+
+        mapd_err_t addTableWithColumns(const string &tableName, vector <ColumnRow *> & columns);
+
+
+        /**
+         * @brief Adds a column to the catalog for an already extant table 
+         *
+         * This method tries to add a new column to a table that is already in 
+         * the catalog - equivalent to SQL's alter table add column command.
+         * It returns an error if the table does not exist, or if the table does 
+         * exist but a column with the same name as the column being inserted for
+         * that table already exists
+         */
+        mapd_err_t addColumnToTable(const string &tableName, ColumnRow * columnRow);
+
+
+
+        /**
          * @brief Removes a table and all of its associated columns from the catalog
          *
-         * This method tries to remove the table specified by tableName from the Catalog.  It returns an error if no table by that name exists.  
+         * This method tries to remove the table specified by tableName from the 
+         * Catalog.  It returns an error if no table by that name exists.  
          */
         mapd_err_t removeTable(const std::string &tableName);
+
+        /**
+         * @brief Removes a name-specified column from a given table from the catalog
+         *
+         * This method tries to remove the column specified by columnName from the
+         * table specified by tableName, returning an error if no table by the given
+         * table name exists for no column by the gien column name exists for the
+         * table specified. 
+         */
+        mapd_err_t removeColumnFromTable(const string &tableName, const string &columnName);
 
 
     private:
