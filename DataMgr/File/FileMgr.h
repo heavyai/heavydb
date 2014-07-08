@@ -8,7 +8,7 @@
  * types and data structures for use by the Map-D file management system. Each of these are documented
  * in this header file.
  *
- * The file manager manages files, which are a collection of logical blocks. The types defined here are
+ * The file manager manages files, which are collections of logical blocks. The types defined here are
  * designed to support the file managr's activities.
  *
  * @see File.h
@@ -17,6 +17,7 @@
 #define FILEMGR_H
 
 #include <iostream>
+#include <memory>
 #include <vector>
 #include <map>
 #include <set>
@@ -69,12 +70,12 @@ struct FileInfo {
 		return size() - available();
 	}
 
-	/// used by find() for ordered containers
+	/// used by find()
 	bool operator == (const FileInfo& item) const {
 		return (item.fileId == this->fileId);
 	}
 
-	/// used as a sort predicate for ordered containers
+	/// used as a sort predicate
 	bool operator < (const FileInfo& item) const {
 		return (this->fileId < item.fileId);
 	}
@@ -157,19 +158,17 @@ public:
 	 * @param fileName The name given to the file in physical storage.
 	 * @param blockSize The logical block size for the blocks in the file.
 	 * @param numBlocks The number of logical blocks to initially allocate for the file.
-	 * @param err Holds an error code, should an error occur.
 	 * @return FileInfo* A pointer to the FileInfo object of the added file.
 	 */
-	FileInfo* createFile(const mapd_size_t blockSize, const mapd_size_t nblocks, mapd_err_t *err);
+	FileInfo* createFile(const mapd_size_t blockSize, const mapd_size_t nblocks);
 
 	/**
 	 * @brief Finds the file in the file manager's FileMap (files_).
 	 *
 	 * @param fileId The unique file identifier of the file to be found.
-	 * @param err An error code, should an error occur.
 	 * @return A pointer to the found FileInfo object for the file.
 	 */
-	FileInfo* getFile(const int fileId, mapd_err_t *err);
+	FileInfo* getFile(const int fileId);
 
 	/**
 	 * @brief Deletes a file from the file manager's repository.
@@ -194,20 +193,18 @@ public:
 	 *
 	 * @param fileId The unique file identifier of the file to be found.
 	 * @param blockNum The block number of the block to be retrieved.
-	 * @param err An error code, should an error occur.
 	 * @return A pointer to the found BlockInfo object.
 	 */
-	BlockAddr* getBlock(const int fileId, mapd_size_t blockNum, mapd_err_t *err);
+	BlockAddr* getBlock(const int fileId, mapd_size_t blockNum);
 
 	/**
 	 * @brief Returns a pointer to a BlockInfo object for the specified block number in the file.
 	 *
 	 * @param FileInfo& A reference to the file that contains the block.
 	 * @param blockNum The block number of the block to be retrieved.
-	 * @param err An error code, should an error occur.
 	 * @return A pointer to the found BlockInfo object.
 	 */
-	BlockAddr* getBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_err_t *err);
+	BlockAddr* getBlock(FileInfo &fInfo, mapd_size_t blockNum);
 
 	/**
 	 * @brief Writes the contents of buf to the block.
@@ -294,7 +291,7 @@ public:
 	 * @param index
 	 * @return
 	 */
-	Chunk* getChunkRef(const ChunkKey &key, mapd_err_t *err);
+	Chunk* getChunkRef(const ChunkKey &key);
 
 	/**
 	 * @param fileId
@@ -302,7 +299,7 @@ public:
 	 * @param buf
 	 * @return
 	 */
-	Chunk* getChunk(const ChunkKey &key, mapd_byte_t *buf, mapd_err_t *err);
+	Chunk* getChunk(const ChunkKey &key, mapd_byte_t *buf);
 
 	/**
 	 * This method returns the number of blocks that composes the chunk identified
@@ -360,7 +357,7 @@ public:
 	 * @return A pointer to a new Chunk, or NULL.
 	 */
 	Chunk* createChunk(ChunkKey &key, const mapd_size_t size,
-			const mapd_size_t blockSize, void *src, mapd_err_t *err);
+			const mapd_size_t blockSize, void *src);
 
 	/**
 	 * Calls "clearBlock()" on each block of the chunk.

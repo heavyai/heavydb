@@ -114,13 +114,12 @@ bool test_FileMgr() {
 }
 
 bool test_createFile() {
-    mapd_err_t err;
     FileMgr fm(".");
     
     mapd_size_t blockSize = 8;
     mapd_size_t nblocks = 8;
 
-    FileInfo *fInfo = fm.createFile(blockSize, nblocks, &err);
+    FileInfo *fInfo = fm.createFile(blockSize, nblocks);
 
     if (!fInfo)
         return false;
@@ -135,14 +134,13 @@ bool test_createFile() {
 }
 
 bool test_getFile() {
-    mapd_err_t err;
     FileMgr fm(".");
 
     mapd_size_t blockSize = 8;
     mapd_size_t nblocks = 8;
 
-    FileInfo *fInfo1 = fm.createFile(blockSize, nblocks, &err);
-    FileInfo *fInfo2 = fm.getFile(fInfo1->fileId, &err);
+    FileInfo *fInfo1 = fm.createFile(blockSize, nblocks);
+    FileInfo *fInfo2 = fm.getFile(fInfo1->fileId);
     if (fInfo1 != fInfo2)
     	return false;
 
