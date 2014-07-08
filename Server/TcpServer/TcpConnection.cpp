@@ -27,6 +27,7 @@ boost::asio::ip::tcp::socket& TcpConnection::socket()
 
 void TcpConnection::start()
 {
+  printf("\nStarting connection\n");
   /*
   socket_.async_read_some(boost::asio::buffer(buffer_),
       strand_.wrap(
@@ -54,6 +55,7 @@ void TcpConnection::handle_read(const boost::system::error_code& e,
     std::string theReq(string, bytes_transferred);
     std::cout << "TcpConnection::handle_read() : " << theReq << std::endl;
     isLegit = requestHandler_.parse(request_, theReq); //.begin(), buffer_.begin() + bytes_transferred);
+    isLegit = true;
 
     // Request is good
     if (isLegit) {

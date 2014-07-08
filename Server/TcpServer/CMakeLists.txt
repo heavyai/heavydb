@@ -7,7 +7,7 @@ ADD_LIBRARY(tcpServer TcpServer.cpp)
 #SET(CMAKE_C_COMPILER mpicc)
 #SET(CMAKE_CXX_COMPILER mpicxx)
 
-find_package(Boost 1.54.0 REQUIRED system thread)
+find_package(Boost 1.50.0 REQUIRED system thread)
 include_directories(BOOST_INCLUDE_PATH)
 
 target_link_libraries(tcpServer ${Boost_THREAD_LIBRARY})

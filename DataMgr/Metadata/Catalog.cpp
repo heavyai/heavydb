@@ -11,7 +11,7 @@ using std::set;
 using std::ifstream;
 using std::ofstream;
 
-Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), isDirty_(false) {
+Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false) {
     readCatalogFromFile();
 }
 
@@ -212,7 +212,7 @@ mapd_err_t Catalog::getMetadataforColumn (const string &tableName, const string 
 }
 
 mapd_err_t Catalog::getMetadataforColumns (const string &tableName, const vector<string> &columnNames,  vector <ColumnRow> &columnRows) {
-    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    TableR wMap::iterator tableRowIt = tableRowMap_.find(tableName);
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
     int tableId = tableRowIt -> second -> tableId;

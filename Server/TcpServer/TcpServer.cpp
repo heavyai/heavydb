@@ -57,7 +57,7 @@ void TcpServer::start()
 
 void TcpServer::stop()
 {
-  //printf("\nCaught a kill signal, calling stop()\n");
+  printf("\nCaught a kill signal, calling stop()\n");
   acceptor_.close();
   io_service_.stop();
 }
