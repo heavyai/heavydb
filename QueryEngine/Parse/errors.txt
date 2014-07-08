@@ -1,0 +1,18 @@
+conflicts:  13 reduce/reduce
+scanner.l: In member function ‘virtual int yyFlexLexer::yylex()’:
+scanner.l:86:5: error: ‘dotCount’ was not declared in this scope
+scanner.l:95:16: error: ‘dotCount’ was not declared in this scope
+scanner.l:95:35: error: ‘asFlag’ was not declared in this scope
+scanner.l:135:11: error: ‘dData’ was not declared in this scope
+scanner.l:143:11: error: ‘dData’ was not declared in this scope
+scanner.l:144:18: error: ‘APPROXNUM’ is not a member of ‘Parser’
+scanner.l:150:3: error: ‘textLength’ was not declared in this scope
+scanner.l:150:35: error: ‘strlen’ was not declared in this scope
+scanner.l:151:17: error: ‘input’ was not declared in this scope
+scanner.l:163:32: error: ‘yyerror’ was not declared in this scope
+scanner.l:165:9: error: no post-increment operator for type
+scanner.l:172:35: error: ‘yyerror’ was not declared in this scope
+visitorTest.cpp: In function ‘int main(int, char**)’:
+visitorTest.cpp:14:18: error: cannot declare variable ‘xml’ to be of abstract type ‘XMLTranslator’
+visitor/XMLTranslator.h:62:7: note:   because the following virtual functions are pure within ‘XMLTranslator’:
+ast/../visitor/Visitor.h:12:18: note: 	virtual void Visitor::visit(Ammsc*)

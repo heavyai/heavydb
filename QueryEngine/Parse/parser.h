@@ -62,6 +62,35 @@
 #include "ast/InsertAtom.h"
 #include "ast/Atom.h"
 
+#include "ast/SearchCondition.h"
+#include "ast/ScalarExpCommalist.h"
+#include "ast/ScalarExp.h"
+#include "ast/FunctionRef.h"
+#include "ast/Ammsc.h"
+#include "ast/Predicate.h"
+#include "ast/ComparisonPredicate.h"
+#include "ast/BetweenPredicate.h"
+#include "ast/LikePredicate.h"
+#include "ast/OptEscape.h"
+#include "ast/ColumnRef.h"
+
+#include "ast/ColumnRefCommalist.h"
+#include "ast/OptWhereClause.h"
+#include "ast/OptGroupByClause.h"
+#include "ast/OptHavingClause.h"
+#include "ast/OptLimitClause.h"
+#include "ast/OptAscDesc.h"
+#include "ast/OrderingSpecCommalist.h"
+#include "ast/OrderingSpec.h"
+#include "ast/OptOrderByClause.h"
+
+#include "ast/UpdateStatementSearched.h"
+#include "ast/UpdateStatementPositioned.h"
+#include "ast/AssignmentCommalist.h"
+#include "ast/Assignment.h"
+#include "ast/Cursor.h"
+
+
 // define stack element type to be a 
 // pointer to an AST node
 #define YY_Parser_STYPE ASTNode*
@@ -70,7 +99,7 @@ extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
 extern std::string strData[10];
-extern int intData;
+extern double dData;
 
 using namespace std;
 
@@ -248,71 +277,77 @@ typedef
 
 
  #line 169 "/usr/share/bison++/bison.h"
-#define	AS	258
-#define	DROP	259
-#define	NAME	260
-#define	TABLE	261
-#define	CREATE	262
-#define	INTNUM	263
-#define	STRING	264
-#define	UNKNOWN	265
-#define	ALL	266
-#define	BETWEEN	267
-#define	BY	268
-#define	DISTINCT	269
-#define	FROM	270
-#define	GROUP	271
-#define	HAVING	272
-#define	SELECT	273
-#define	COMPARISON	274
-#define	USER	275
-#define	WHERE	276
-#define	WITH	277
-#define	EMPTY	278
-#define	SELALL	279
-#define	DOT	280
-#define	UPDATE	281
-#define	SET	282
-#define	CURRENT	283
-#define	OF	284
-#define	NULLX	285
-#define	ASSIGN	286
-#define	INSERT	287
-#define	INTO	288
-#define	VALUES	289
-#define	NOT	290
-#define	UNIQUE	291
-#define	PRIMARY	292
-#define	FOREIGN	293
-#define	KEY	294
-#define	CHECK	295
-#define	REFERENCES	296
-#define	DEFAULT	297
-#define	DATATYPE	298
-#define	DECIMAL	299
-#define	SMALLINT	300
-#define	NUMERIC	301
-#define	CHARACTER	302
-#define	INTEGER	303
-#define	REAL	304
-#define	FLOAT	305
-#define	DOUBLE	306
-#define	PRECISION	307
-#define	VARCHAR	308
-#define	AVG	309
-#define	MAX	310
-#define	MIN	311
-#define	SUM	312
-#define	COUNT	313
-#define	ALIAS	314
-#define	INTORDER	315
-#define	COLORDER	316
-#define	ORDER	317
-#define	ASC	318
-#define	DESC	319
-#define	LIMIT	320
-#define	OFFSET	321
-#define	DOTNAME	322
+#define	OR	258
+#define	AND	259
+#define	NOT	260
+#define	COMPARISON	261
+#define	UMINUS	262
+#define	AS	263
+#define	DROP	264
+#define	NAME	265
+#define	TABLE	266
+#define	CREATE	267
+#define	INTNUM	268
+#define	STRING	269
+#define	APPROXNUM	270
+#define	UNKNOWN	271
+#define	ALL	272
+#define	BETWEEN	273
+#define	BY	274
+#define	DISTINCT	275
+#define	FROM	276
+#define	GROUP	277
+#define	HAVING	278
+#define	SELECT	279
+#define	USER	280
+#define	WHERE	281
+#define	WITH	282
+#define	EMPTY	283
+#define	SELALL	284
+#define	DOT	285
+#define	UPDATE	286
+#define	SET	287
+#define	CURRENT	288
+#define	OF	289
+#define	NULLX	290
+#define	ASSIGN	291
+#define	INSERT	292
+#define	INTO	293
+#define	VALUES	294
+#define	UNIQUE	295
+#define	PRIMARY	296
+#define	FOREIGN	297
+#define	KEY	298
+#define	CHECK	299
+#define	REFERENCES	300
+#define	DEFAULT	301
+#define	DATATYPE	302
+#define	DECIMAL	303
+#define	SMALLINT	304
+#define	NUMERIC	305
+#define	CHARACTER	306
+#define	INTEGER	307
+#define	REAL	308
+#define	FLOAT	309
+#define	DOUBLE	310
+#define	PRECISION	311
+#define	VARCHAR	312
+#define	AVG	313
+#define	MAX	314
+#define	MIN	315
+#define	SUM	316
+#define	COUNT	317
+#define	ALIAS	318
+#define	INTORDER	319
+#define	COLORDER	320
+#define	ORDER	321
+#define	ASC	322
+#define	DESC	323
+#define	LIMIT	324
+#define	OFFSET	325
+#define	DOTNAME	326
+#define	ESCAPE	327
+#define	LIKE	328
 
 
 #line 169 "/usr/share/bison++/bison.h"
@@ -361,6 +396,11 @@ public:
   /* static const int token ... */
   
  #line 212 "/usr/share/bison++/bison.h"
+static const int OR;
+static const int AND;
+static const int NOT;
+static const int COMPARISON;
+static const int UMINUS;
 static const int AS;
 static const int DROP;
 static const int NAME;
@@ -368,6 +408,7 @@ static const int TABLE;
 static const int CREATE;
 static const int INTNUM;
 static const int STRING;
+static const int APPROXNUM;
 static const int UNKNOWN;
 static const int ALL;
 static const int BETWEEN;
@@ -377,7 +418,6 @@ static const int FROM;
 static const int GROUP;
 static const int HAVING;
 static const int SELECT;
-static const int COMPARISON;
 static const int USER;
 static const int WHERE;
 static const int WITH;
@@ -393,7 +433,6 @@ static const int ASSIGN;
 static const int INSERT;
 static const int INTO;
 static const int VALUES;
-static const int NOT;
 static const int UNIQUE;
 static const int PRIMARY;
 static const int FOREIGN;
@@ -426,6 +465,8 @@ static const int DESC;
 static const int LIMIT;
 static const int OFFSET;
 static const int DOTNAME;
+static const int ESCAPE;
+static const int LIKE;
 
 
 #line 212 "/usr/share/bison++/bison.h"
@@ -434,71 +475,77 @@ static const int DOTNAME;
   enum YY_Parser_ENUM_TOKEN { YY_Parser_NULL_TOKEN=0
   
  #line 215 "/usr/share/bison++/bison.h"
-	,AS=258
-	,DROP=259
-	,NAME=260
-	,TABLE=261
-	,CREATE=262
-	,INTNUM=263
-	,STRING=264
-	,UNKNOWN=265
-	,ALL=266
-	,BETWEEN=267
-	,BY=268
-	,DISTINCT=269
-	,FROM=270
-	,GROUP=271
-	,HAVING=272
-	,SELECT=273
-	,COMPARISON=274
-	,USER=275
-	,WHERE=276
-	,WITH=277
-	,EMPTY=278
-	,SELALL=279
-	,DOT=280
-	,UPDATE=281
-	,SET=282
-	,CURRENT=283
-	,OF=284
-	,NULLX=285
-	,ASSIGN=286
-	,INSERT=287
-	,INTO=288
-	,VALUES=289
-	,NOT=290
-	,UNIQUE=291
-	,PRIMARY=292
-	,FOREIGN=293
-	,KEY=294
-	,CHECK=295
-	,REFERENCES=296
-	,DEFAULT=297
-	,DATATYPE=298
-	,DECIMAL=299
-	,SMALLINT=300
-	,NUMERIC=301
-	,CHARACTER=302
-	,INTEGER=303
-	,REAL=304
-	,FLOAT=305
-	,DOUBLE=306
-	,PRECISION=307
-	,VARCHAR=308
-	,AVG=309
-	,MAX=310
-	,MIN=311
-	,SUM=312
-	,COUNT=313
-	,ALIAS=314
-	,INTORDER=315
-	,COLORDER=316
-	,ORDER=317
-	,ASC=318
-	,DESC=319
-	,LIMIT=320
-	,OFFSET=321
-	,DOTNAME=322
+	,OR=258
+	,AND=259
+	,NOT=260
+	,COMPARISON=261
+	,UMINUS=262
+	,AS=263
+	,DROP=264
+	,NAME=265
+	,TABLE=266
+	,CREATE=267
+	,INTNUM=268
+	,STRING=269
+	,APPROXNUM=270
+	,UNKNOWN=271
+	,ALL=272
+	,BETWEEN=273
+	,BY=274
+	,DISTINCT=275
+	,FROM=276
+	,GROUP=277
+	,HAVING=278
+	,SELECT=279
+	,USER=280
+	,WHERE=281
+	,WITH=282
+	,EMPTY=283
+	,SELALL=284
+	,DOT=285
+	,UPDATE=286
+	,SET=287
+	,CURRENT=288
+	,OF=289
+	,NULLX=290
+	,ASSIGN=291
+	,INSERT=292
+	,INTO=293
+	,VALUES=294
+	,UNIQUE=295
+	,PRIMARY=296
+	,FOREIGN=297
+	,KEY=298
+	,CHECK=299
+	,REFERENCES=300
+	,DEFAULT=301
+	,DATATYPE=302
+	,DECIMAL=303
+	,SMALLINT=304
+	,NUMERIC=305
+	,CHARACTER=306
+	,INTEGER=307
+	,REAL=308
+	,FLOAT=309
+	,DOUBLE=310
+	,PRECISION=311
+	,VARCHAR=312
+	,AVG=313
+	,MAX=314
+	,MIN=315
+	,SUM=316
+	,COUNT=317
+	,ALIAS=318
+	,INTORDER=319
+	,COLORDER=320
+	,ORDER=321
+	,ASC=322
+	,DESC=323
+	,LIMIT=324
+	,OFFSET=325
+	,DOTNAME=326
+	,ESCAPE=327
+	,LIKE=328
 
 
 #line 215 "/usr/share/bison++/bison.h"

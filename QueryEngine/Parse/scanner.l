@@ -9,7 +9,12 @@ extern YY_Parser_STYPE yylval;
 
 // Variables used to share data with the parser
 std::string strData[10];
-int intData;
+
+double dData;
+int dotCount = 0;
+int asFlag = 0;
+int lineno = 0;
+
 using namespace std;
 %}
 
@@ -64,7 +69,15 @@ using namespace std;
 "count"		return Parser::COUNT;
 
 "group"		return Parser::GROUP;
+"by"		return Parser::BY;
 "order"		return Parser::ORDER;
+
+"like"		return Parser::LIKE;
+"escape"		return Parser::ESCAPE;
+"limit"		return Parser::LIMIT;
+
+"asc"		return Parser::ASC;
+"desc"		return Parser::DESC;
 
 "="	|
 "<>" |
@@ -87,30 +100,9 @@ using namespace std;
 
 	/* names */
 [A-Za-z][A-Za-z0-9_]*				{
-										//printf("dotFlag is: %d\n", dotFlag);
-										/* Was the most recent token a dot or AS? */
-										if ((dotCount == 1) || (asFlag == 1)) {
-											//textLength2 = (int) strlen(yytext);
-
-											strData[1] = yytext;
-											//printf("dot: %d length1: %d length2: %d \n", dotCount, textLength, textLength2);
-											/* Reset asflag. */
-											asFlag = 0; 
-										}
-										else if (dotCount == 2) {
-											/*
-											textLength3 = (int) strlen(yytext);
-										
-											//printf("%d\n", textLength3);
-											dotCount = 0;
-											*/
-											strData[2] = yytext;
-										}
-										else {
-											//textLength = (int) strlen(yytext);
-											strData[0] == yytext;
-										}
-
+										strData[0] = yytext;
+										strData[1] = "placeholder 1";
+										strData[2] = "placeholder 2";
 										/* printf("%d %d %s \n", (int) strlen(yytext), textLength, yytext); */
 
 										return Parser::NAME;
@@ -144,8 +136,7 @@ using namespace std;
 	/* strings */
 
 '[^'\n]*'	{
-		textLength = (int) strlen(yytext);
-		int c = input();
+		int c = getchar();
 
 		unput(c);	/* just peeking */
 		if(c != '\'') {
@@ -157,17 +148,16 @@ using namespace std;
 		
 	}
 		
-'[^'\n]*$			{	yyerror("Unterminated string"); }
+'[^'\n]*$			{	cerr << "Unterminated string" << endl; }
 
-\n		{ lineno++; }
+\n		{ }
 
 [ \t\r]+	;	/* white space */
 
 "--".*	;	/* comment */
 
 .						{
-							yyerror("Unknown character");
-							printf("%s\n", yytext);
+							cerr << "Unknown character" << endl;
 						};
 
 <<EOF>>						{ yyterminate(); }

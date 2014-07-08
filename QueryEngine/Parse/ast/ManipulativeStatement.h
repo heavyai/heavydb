@@ -8,14 +8,16 @@ class ManipulativeStatement : public ASTNode {
     
 public:
     SelectStatement *selSta;
-    /* UpdateStatementSearched *USS;
-    UpdateStatementPosition *UPS; */
+    UpdateStatementSearched *USS;
+    UpdateStatementPositioned *USP;
     InsertStatement *inSta;
     
     
     /**< Constructor */
-    explicit ManipulativeStatement(SelectStatement *n) : selSta(n), inSta(NULL) {}
-    ManipulativeStatement(InsertStatement *n) : inSta(n), selSta(NULL) {}
+    explicit ManipulativeStatement(SelectStatement *n) : selSta(n), inSta(NULL), USS(NULL), USP(NULL) {}
+    ManipulativeStatement(InsertStatement *n) : inSta(n), selSta(NULL), USS(NULL), USP(NULL) {}
+    ManipulativeStatement(UpdateStatementPositioned *n) : inSta(NULL), selSta(NULL), USS(NULL), USP(n) {}
+    ManipulativeStatement(UpdateStatementSearched *n) : inSta(NULL), selSta(NULL), USS(n), USP(NULL) {}
   
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

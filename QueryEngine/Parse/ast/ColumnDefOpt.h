@@ -8,7 +8,7 @@ class ColumnDefOpt : public ASTNode {
     
 public:
     Literal* lit;
-   // SearchCondition srchCon;
+    SearchCondition* srchCon;
     Table* tbl;
     ColumnCommalist* colComList;
     int rule_Flag;
@@ -26,11 +26,11 @@ public:
     */
 
     /**< Constructor */
-    explicit ColumnDefOpt(int rF) : rule_Flag(rF), lit(NULL), tbl(NULL) {}
-    ColumnDefOpt(int rF, Literal *n) : rule_Flag(rF), lit(n), tbl(NULL) {}
-   // ColumnDefOpt(int rule_Flag, SearchCondition *n2) : rule_Flag(rF), lit(NULL), srchCon(n2), tbl(NULL), colComList(NULL) {}
-    ColumnDefOpt(int rF, Table *n3) : rule_Flag(rF), lit(NULL), tbl(n3) {}
-    ColumnDefOpt(int rF, Table *n3, ColumnCommalist *n4) : rule_Flag(rF), lit(NULL), tbl(n3), colComList(n4) {}
+    explicit ColumnDefOpt(int rF) : rule_Flag(rF), lit(NULL), srchCon(NULL), tbl(NULL) {}
+    ColumnDefOpt(int rF, Literal *n) : rule_Flag(rF), lit(n), srchCon(NULL), tbl(NULL) {}
+    ColumnDefOpt(int rF, SearchCondition *n2) : rule_Flag(rF), lit(NULL), srchCon(n2), tbl(NULL), colComList(NULL) {}
+    ColumnDefOpt(int rF, Table *n3) : rule_Flag(rF), lit(NULL), srchCon(NULL), tbl(n3) {}
+    ColumnDefOpt(int rF, Table *n3, ColumnCommalist *n4) : rule_Flag(rF), lit(NULL), srchCon(NULL), tbl(n3), colComList(n4) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

@@ -8,11 +8,11 @@ class Selection : public ASTNode {
     
 public:
     std::string selectAll; // if selection is '*'
-    //ScalarExpCommalist *sEC;
+    ScalarExpCommalist *sec;
     
     /**< Constructor */
-    explicit Selection(const std::string &n1) : selectAll(n1) {}
- //   Selection(ScalarExpCommalist *n1) : sEC(n1) {}
+    explicit Selection(const std::string &n1) : selectAll(n1), sec(NULL) {}
+    Selection(ScalarExpCommalist *n1) : sec(n1), selectAll("") {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

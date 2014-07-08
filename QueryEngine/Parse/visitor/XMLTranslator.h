@@ -37,6 +37,34 @@
 #include "../ast/InsertAtom.h"
 #include "../ast/Atom.h"
 
+#include "../ast/SearchCondition.h"
+#include "../ast/ScalarExpCommalist.h"
+#include "../ast/ScalarExp.h"
+#include "../ast/FunctionRef.h"
+#include "../ast/Ammsc.h"
+#include "../ast/Predicate.h"
+#include "../ast/ComparisonPredicate.h"
+#include "../ast/BetweenPredicate.h"
+#include "../ast/LikePredicate.h"
+#include "../ast/OptEscape.h"
+#include "../ast/ColumnRef.h"
+
+#include "../ast/ColumnRefCommalist.h"
+#include "../ast/OptWhereClause.h"
+#include "../ast/OptGroupByClause.h"
+#include "../ast/OptHavingClause.h"
+#include "../ast/OptLimitClause.h"
+#include "../ast/OptAscDesc.h"
+#include "../ast/OrderingSpecCommalist.h"
+#include "../ast/OrderingSpec.h"
+#include "../ast/OptOrderByClause.h"
+
+#include "../ast/UpdateStatementSearched.h"
+#include "../ast/UpdateStatementPositioned.h"
+#include "../ast/AssignmentCommalist.h"
+#include "../ast/Assignment.h"
+#include "../ast/Cursor.h"
+
 #include <iostream>
 using std::cout;
 using std::endl;
@@ -74,7 +102,14 @@ public:
             }
             else {
                 v->tbl->accept(*this);
+
+                printTabs(INCR);
+                cout << "</BaseTableElementCommalist>" << endl;
+          
                 v->btec->accept(*this);
+                
+                printTabs(DECR);
+                cout << "</BaseTableElementCommalist>" << endl;
             }
         }
         else if (v->ddlCmd == "DROP") {
@@ -209,13 +244,13 @@ public:
             cout << "<DEFAULT USER> </>" << endl;
             printTabs(DECR);
         } 
-       /*else if (rf == 6) { // Handle CHECK search_condition
+        else if (rf == 6) { // Handle CHECK search_condition
             printTabs(INCR);
             cout << "<CHECK>" << endl;
             v->srchCon->accept(*this);
             cout << "</>" << endl;
             printTabs(DECR);
-        } */
+        } 
         else if (rf == 7) { // Handle REFERENCES table
             printTabs(INCR);
             cout << "<REFERENCES>" << endl;
@@ -277,8 +312,111 @@ public:
         if (v->btec) v->btec->accept(*this);
         v->bte->accept(*this);
 
+    }
+
+    void visit(class Assignment *v) {
+        printTabs(INCR);
+        cout << "<Assignment>" << endl;
+
+        v->c->accept(*this);
+        printTabs(NONE);
+        cout << "\t<ASSIGNMENT>" << endl;
+        if (v->se) v->se->accept(*this);
+        else {
+            printTabs(NONE);
+            cout << "NULL" << endl;
+        }
         printTabs(DECR);
-        cout << "</BaseTableElementCommalist>" << endl;
+        cout << "<Assignment>" << endl;
+    }
+
+    void visit(class AssignmentCommalist *v) {
+  
+        if (v->ac) v->ac->accept(*this);
+        v->a->accept(*this);
+
+    }
+
+    void visit(class OrderingSpec *v) {
+        printTabs(INCR);
+        cout << "<OrderingSpec>" << endl;
+
+        if (v->cr) v->cr->accept(*this);
+        else {
+            printTabs(NONE);
+            cout << "<" << v->orderInt << ">" << endl;
+        }
+        if (v->oad) v->oad->accept(*this);
+
+        printTabs(DECR);
+        cout << "<OrderingSpec>" << endl;
+    }
+
+    void visit(class OrderingSpecCommalist *v) {
+  
+        if (v->osc) v->osc->accept(*this);
+        v->os->accept(*this);
+
+    }
+
+    void visit(class OptOrderByClause *v) {
+        printTabs(INCR);
+        cout << "<OptOrderByClause>" << endl;
+
+        printTabs(INCR);
+        cout << "<OptOrderingSpecCommalist>" << endl;
+        
+        v->osc->accept(*this);
+        
+        printTabs(DECR);
+        cout << "<OptOrderingSpecCommalist>" << endl;
+        
+        printTabs(DECR);
+        cout << "</OptLimitClause>" << endl;
+    }
+
+    void visit(class OptLimitClause *v) {
+        printTabs(INCR);
+        cout << "<OptLimitClause limit = " << v->lim1 << ">" << endl;
+
+        printTabs(DECR);
+        cout << "</OptLimitClause>" << endl;
+    }
+
+    void visit(class OptHavingClause *v) {
+        printTabs(INCR);
+        cout << "<OptHavingClause>" << endl;
+
+        v->sc->accept(*this);
+
+        printTabs(DECR);
+        cout << "</OptHavingClause>" << endl;
+    }
+    
+    void visit(class OptWhereClause *v) {
+        printTabs(INCR);
+        cout << "<OptWhereClause>" << endl;
+
+        v->sc->accept(*this);
+
+        printTabs(DECR);
+        cout << "</OptWhereClause>" << endl;
+    }
+    
+    void visit(class OptGroupByClause *v) {
+        printTabs(INCR);
+        cout << "<OptGroupByClause>" << endl;
+
+        printTabs(INCR);
+        cout << "<ColumnRefCommalist>" << endl;
+
+        v->crc->accept(*this);
+
+        printTabs(DECR);
+        cout << "</ColumnRefCommalist>" << endl;
+
+        printTabs(DECR);
+        cout << "</OptGroupByClause>" << endl;
     }
     
     void visit(class ColumnCommalist *v) {
@@ -357,6 +495,30 @@ public:
         cout << "</ValuesOrQuerySpec>" << endl;
     }
 
+    void visit(class UpdateStatementSearched *v) {
+        printTabs(INCR);
+        cout << "<UpdateStatementSearched>" << endl;
+
+        v->tbl->accept(*this);
+        v->ac->accept(*this);
+        v->owc->accept(*this);
+
+        printTabs(DECR);
+        cout << "</UpdateStatementSearched>" << endl;
+    }
+
+    void visit(class UpdateStatementPositioned *v) {
+        printTabs(INCR);
+        cout << "<UpdateStatementPositioned>" << endl;
+
+        v->tbl->accept(*this);
+        v->ac->accept(*this);
+        v->c->accept(*this);
+
+        printTabs(DECR);
+        cout << "</UpdateStatementPositioned>" << endl;
+    }
+
     void visit(class InsertStatement *v) {
         printTabs(INCR);
         cout << "<InsertStatement>" << endl;
@@ -380,21 +542,21 @@ public:
     }
     
     void visit(class TableRefCommalist *v) {
-        printTabs(INCR);
-        cout << "<TableRefCommalist>" << endl;
-
         if (v->trc) v->trc->accept(*this);
         v->tr->accept(*this);
-
-        printTabs(DECR);
-        cout << "</TableRefCommalist>" << endl;
     }
 
     void visit(class FromClause *v) {
         printTabs(INCR);
         cout << "<FromClause>" << endl;
 
+        printTabs(INCR);
+        cout << "<TableRefCommalist>" << endl;
+
         v->trc->accept(*this);
+
+        printTabs(DECR);
+        cout << "</TableRefCommalist>" << endl;
 
         printTabs(DECR);
         cout << "</FromClause>" << endl;
@@ -405,16 +567,227 @@ public:
         cout << "<TableExp>" << endl;
 
         v->fc->accept(*this);
+        if (v->owc) v->owc->accept(*this);
+        if (v->ogbc) v->ogbc->accept(*this);
+        if (v->ohc) v->ohc->accept(*this);
+        if (v->oobc) v->oobc->accept(*this);
+        if (v->olc) v->olc->accept(*this);
 
         printTabs(DECR);
         cout << "</TableExp>" << endl;
     }
+
     void visit(class Selection *v) {
         printTabs(INCR);
-        cout << "<*>" << endl;
-        // else: print the Scalar Expressions
+        cout << "<Selection>" << endl;
+
+        if(v->sec) {
+            printTabs(INCR);
+            cout << "<ScalarExpCommalist>" << endl;
+            
+            v->sec->accept(*this);
+
+            printTabs(DECR);
+             cout << "</ScalarExpCommalist>" << endl;
+        }
+        else {
+            printTabs(NONE);
+            cout << "\t<*>" << endl;
+        }
+
+        printTabs(DECR);
+        cout << "</Selection>" << endl;
     }
 
+    void visit(class OptEscape *v) {
+        printTabs(INCR);
+        cout << "<OptEscape>" << endl;
+
+        v->a->accept(*this);
+
+        printTabs(DECR);
+        cout << "</OptEscape>" << endl;
+    }
+
+    void visit(class ScalarExpCommalist *v) {
+
+        if (v->sec) v->sec->accept(*this);
+        v->se->accept(*this);
+    }
+
+    void visit(class ScalarExp *v) {
+        printTabs(INCR);
+        cout << "<ScalarExp>" << endl;
+        
+        /* rules are:
+        0 (scalar_exp)
+        1 addition
+        2 subtraction
+        3 multiplication
+        4 division
+        5 positive [scalar_exp]
+        6 negative [scalar_exp] */
+        
+        if (v->rule_Flag == 0) v->se1->accept(*this);
+        else if (v->rule_Flag == 1) {
+            v->se1->accept(*this);
+            printTabs(NONE);
+            cout << "\t<ADDITION>" << endl;
+            v->se2->accept(*this);
+        }
+        else if (v->rule_Flag == 2) {
+            v->se1->accept(*this);
+            printTabs(NONE);
+            cout << "\t<SUBTRACTION>" << endl;
+            v->se2->accept(*this);
+        }
+        else if (v->rule_Flag == 3) {
+            v->se1->accept(*this);
+            printTabs(NONE);
+            cout << "\t<MULTIPLICATION>" << endl;
+            v->se2->accept(*this);
+        }
+        else if (v->rule_Flag == 4) {
+            v->se1->accept(*this);
+            printTabs(NONE);
+            cout << "\t<DIVISION>" << endl;
+            v->se2->accept(*this);
+        }
+        else if (v->rule_Flag == 5) {
+            printTabs(NONE);
+            cout << "\t<POSITIVE>" << endl;
+            v->se1->accept(*this);
+        }
+        else if (v->rule_Flag == 6) {
+            printTabs(NONE);
+            cout << "\t<NEGATIVE>" << endl;
+            v->se1->accept(*this);
+        }
+        else {
+            if (v->a) v->a->accept(*this);
+            if (v->cr) v->cr->accept(*this);
+            if (v->fr) v->fr->accept(*this);
+        }
+
+        printTabs(DECR);
+        cout << "</ScalarExp>" << endl;
+    }
+
+    void visit(class SearchCondition *v) {
+        printTabs(INCR);
+        cout << "<SearchCondition>" << endl;
+        /* rules are:
+        -1 Predicate
+        0 OR
+        1 AND
+        2 NOT
+        3 (search_condition) */
+        
+        if (v->rule_Flag == 0) {
+            v->sc1->accept(*this);
+            cout << "<OR>" << endl;
+            v->sc2->accept(*this);
+        }
+        else if (v->rule_Flag == 1) {
+            v->sc1->accept(*this);
+            cout << "<AND>" << endl;
+            v->sc2->accept(*this);
+        }
+        else if (v->rule_Flag == 2) {
+            cout << "<NOT>" << endl;
+            v->sc1->accept(*this);
+        }
+        else if (v->rule_Flag == 3) 
+            v->sc1->accept(*this);
+        else v->p->accept(*this);
+
+        printTabs(DECR);
+        cout << "</SearchCondition>" << endl;
+    }
+    
+    void visit(class LikePredicate *v) {
+        printTabs(INCR);
+        cout << "<LikePredicate>" << endl;
+
+        v->se->accept(*this);
+        if (v->rule_Flag == 1) cout << "<NOT>" << endl;
+        cout << "<LIKE>" << endl;
+        v->a->accept(*this);
+        if (v->oe) v->oe->accept(*this);
+
+        printTabs(DECR);
+        cout << "</LikePredicate>" << endl;
+    }
+
+    void visit(class ComparisonPredicate *v) {
+        printTabs(INCR);
+        cout << "<ComparisonPredicate>" << endl;
+
+        v->se1->accept(*this);
+        printTabs(NONE);
+        cout << "\t<COMPARISON>" << endl;
+        v->se2->accept(*this);
+
+        printTabs(DECR);
+        cout << "</ComparisonPredicate>" << endl;
+    }
+
+    void visit(class BetweenPredicate *v) {
+        printTabs(INCR);
+        cout << "<BetweenPredicate>" << endl;
+
+        v->se1->accept(*this);
+        if (v->rule_Flag == 1) cout << "<NOT>" << endl;
+        cout << "<BETWEEN>" << endl;
+        v->se2->accept(*this);
+        cout << "<AND>" << endl;
+        v->se3->accept(*this);
+
+        printTabs(DECR);
+        cout << "</BetweenPredicate>" << endl;
+    }
+
+    void visit(class Predicate *v) {
+        printTabs(INCR);
+        cout << "<Predicate>" << endl;
+
+        if (v->cp) v->cp->accept(*this);
+        if (v->bp) v->bp->accept(*this);
+        if (v->lp) v->lp->accept(*this);
+
+        printTabs(DECR);
+        cout << "</Predicate>" << endl;
+    }
+
+    void visit(class FunctionRef *v) {
+        printTabs(INCR);
+        cout << "<FunctionRef>" << endl;
+
+        if (v->rule_Flag == -1) {
+            if (v->cr) {
+                v->am->accept(*this);
+                cout << "<DISTINCT>" << endl;
+                v->cr->accept(*this);
+            }
+            else {
+                v->am->accept(*this);
+                cout << "<*>" << endl;
+            }
+        }
+        else if (v->rule_Flag == 0) {
+            v->am->accept(*this);
+            cout << "<ALL>" << endl;
+            v->se->accept(*this);
+        }
+        else if (v->rule_Flag == 1) {
+            v->am->accept(*this);
+            v->se->accept(*this);
+        }
+
+        printTabs(DECR);
+        cout << "</FunctionRef>" << endl;
+    }
+    
     void visit(class OptAllDistinct *v) {
         printTabs(INCR);
         cout << "<OptAllDistinct ddlCmd='" << v->ddlCmd << "'>" << endl;
@@ -440,8 +813,8 @@ public:
         cout << "<ManipulativeStatement>" << endl;
 
         if (v->selSta) v->selSta->accept(*this);
-/*        if (v->UPS) v->UPS->accept(*this);
-        if (v->USS) v->USS->accept(*this); */
+        if (v->USP) v->USP->accept(*this);
+        if (v->USS) v->USS->accept(*this);
         if (v->inSta) v->inSta->accept(*this); 
 
         printTabs(DECR);
@@ -514,6 +887,38 @@ public:
         cout << "</Literal>" << endl;
     }
 
+    void visit(class ColumnRef *v) {
+        printTabs(INCR);
+
+        if (v->args == 1)
+            cout << "<ColumnRef name='" << v->name1 << "'/>" << endl;
+        
+        else if (v->args == 2)
+            cout << "<ColumnRef name='" << v->name1 << "." << v->name2 << "'/>" << endl;
+
+        else if (v->args == 3)
+            cout << "<ColumnRef name='" << v->name1 << "." << v->name2 << "." << v->name3 << "'/>" << endl;
+
+        printTabs(DECR);
+        cout << "</ColumnRef>" << endl;
+    }
+
+    void visit(class ColumnRefCommalist *v) {
+
+        if (v->crc) v->crc->accept(*this);
+        v->cr->accept(*this);
+
+    }
+
+    void visit(class Cursor *v) {
+        printTabs(INCR);
+
+        cout << "<Cursor name='" << v->name1 << "'/>" << endl;
+        
+        printTabs(DECR);
+        cout << "</Cursor>" << endl;
+    }
+
     void visit(class Column *v) {
         printTabs(INCR);
 
@@ -521,6 +926,24 @@ public:
         
         printTabs(DECR);
         cout << "</Column>" << endl;
+    }
+
+    void visit(class OptAscDesc *v) {
+        printTabs(INCR);
+
+        cout << "<OptAscDesc function='" << v->ascDesc << "'/>" << endl;
+        
+        printTabs(DECR);
+        cout << "</OptAscDesc>" << endl;
+    }
+
+    void visit(class Ammsc *v) {
+        printTabs(INCR);
+
+        cout << "<Ammsc function='" << v->funcName << "'/>" << endl;
+        
+        printTabs(DECR);
+        cout << "</Ammsc>" << endl;
     }
 
     void visit(class Table *v) {
