@@ -7,6 +7,8 @@
 
 extern YY_Parser_STYPE yylval;
 
+#define TOK(name) { return Parser::name; dotCount = 0; }
+
 // Variables used to share data with the parser
 std::string strData[10];
 
@@ -21,64 +23,70 @@ using namespace std;
 %%
 
 		/* literal keyword tokens */
-"user"		return Parser::USER;
-"select"	return Parser::SELECT;
-"from"      return Parser::FROM;
-"where"		return Parser::WHERE;
-"having"	return Parser::HAVING;
-"all"		return Parser::ALL;
-"distinct"	return Parser::DISTINCT;
+"user"		TOK(USER);
+"select"	TOK(SELECT);
+"from"      TOK(FROM);
+"where"		TOK(WHERE);
+"having"	TOK(HAVING);
+"all"		TOK(ALL);
+"distinct"	TOK(DISTINCT);
 
-"update"	return Parser::UPDATE;
-"of"		return Parser::OF;
-"current"	return Parser::CURRENT;
-"null"		return Parser::NULLX;
-"set"		return Parser::SET;
+"update"	TOK(UPDATE);
+"of"		TOK(OF);
+"current"	TOK(CURRENT);
+"null"		TOK(NULLX);
+"set"		TOK(SET);
 
-"insert"	return Parser::INSERT;
-"values"	return Parser::VALUES;
-"into"		return Parser::INTO;
+"insert"	TOK(INSERT);
+"values"	TOK(VALUES);
+"into"		TOK(INTO);
 
-"create"	return Parser::CREATE;
-"table"		return Parser::TABLE;
-"not"		return Parser::NOT;
-"unique"	return Parser::UNIQUE;
-"primary"	return Parser::PRIMARY;
-"key"		return Parser::KEY;
-"default"	return Parser::DEFAULT;
-"check"		return Parser::CHECK;
-"references"	return Parser::REFERENCES;
-"foreign"		return Parser::FOREIGN;
+"create"	TOK(CREATE);
+"table"		TOK(TABLE);
+"not"		TOK(NOT);
+"unique"	TOK(UNIQUE);
+"primary"	TOK(PRIMARY);
+"key"		TOK(KEY);
+"default"	TOK(DEFAULT);
+"check"		TOK(CHECK);
+"references"	TOK(REFERENCES);
+"foreign"		TOK(FOREIGN);
 
-"varchar"			return Parser::VARCHAR;
-"char"("acter")?	return Parser::CHARACTER;
-"int"("eger")?		return Parser::INTEGER;
-"smallint"			return Parser::SMALLINT;
-"numeric"	return Parser::NUMERIC;
-"decimal"	return Parser::DECIMAL;
-"float"		return Parser::FLOAT;
-"real"		return Parser::REAL;
-"double"	return Parser::DOUBLE;
-"precision"	return Parser::PRECISION;
-"drop"		return Parser::DROP;
+"varchar"			TOK(VARCHAR);
+"char"("acter")?	TOK(CHARACTER);
+"int"("eger")?		TOK(INTEGER);
+"smallint"			TOK(SMALLINT);
+"numeric"	TOK(NUMERIC);
+"decimal"	TOK(DECIMAL);
+"float"		TOK(FLOAT);
+"real"		TOK(REAL);
+"double"	TOK(DOUBLE);
+"precision"	TOK(PRECISION);
+"drop"		TOK(DROP);
 
-"avg"		return Parser::AVG;
-"min"		return Parser::MIN;
-"max"		return Parser::MAX;
-"sum"		return Parser::SUM;
-"count"		return Parser::COUNT;
+"avg"		TOK(AVG);
+"min"		TOK(MIN);
+"max"		TOK(MAX);
+"sum"		TOK(SUM);
+"count"		TOK(COUNT);
 
-"group"		return Parser::GROUP;
-"by"		return Parser::BY;
-"order"		return Parser::ORDER;
+"group"		TOK(GROUP);
+"by"		TOK(BY);
+"order"		TOK(ORDER);
 
-"like"		return Parser::LIKE;
-"escape"		return Parser::ESCAPE;
-"limit"		return Parser::LIMIT;
+"like"		TOK(LIKE);
+"escape"		TOK(ESCAPE);
+"limit"		TOK(LIMIT);
 
-"asc"		return Parser::ASC;
-"desc"		return Parser::DESC;
+"asc"		TOK(ASC);
+"desc"		TOK(DESC);
 
+"as"						{
+								/* ensure that aliased name is printed fully. */
+								asFlag = 1;
+								TOK(AS);
+							}
+							
 "="	|
 "<>" |
 "<"	|
@@ -86,7 +94,7 @@ using namespace std;
 "<="	|
 ">="			{ 
 					strData[5] = yytext;
-					return Parser::COMPARISON;
+					TOK(COMPARISON);
 				}
 
 
@@ -100,9 +108,21 @@ using namespace std;
 
 	/* names */
 [A-Za-z][A-Za-z0-9_]*				{
-										strData[0] = yytext;
-										strData[1] = "placeholder 1";
-										strData[2] = "placeholder 2";
+										if ((dotCount == 1) || (asFlag == 1)) {
+											strData[2] = yytext;
+
+											//printf("dot: %d length1: %d length2: %d \n", dotCount, textLength, textLength2);
+											/* Reset asflag. */
+											asFlag = 0; 
+										}
+
+										else if (dotCount == 2) {
+											strData[1] = yytext;
+
+											//printf("%d\n", textLength3);
+											dotCount = 0;
+										}
+										else strData[0] = yytext;
 										/* printf("%d %d %s \n", (int) strlen(yytext), textLength, yytext); */
 
 										return Parser::NAME;
@@ -122,7 +142,7 @@ using namespace std;
 [0-9]+"."[0-9]* |
 "."[0-9]*							{ 
 										dData = atof(yytext);
-										return Parser::INTNUM;
+										TOK(INTNUM);
 									}
 
 
@@ -130,7 +150,7 @@ using namespace std;
 [0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
 "."[0-9]*[eE][+-]?[0-9]+			{ 
 										dData = atof(yytext);
-										return Parser::APPROXNUM;
+										TOK(APPROXNUM);
 									}
 
 	/* strings */
@@ -142,7 +162,7 @@ using namespace std;
 		if(c != '\'') {
 			//printf("reading string: %s\n", yytext);
 			strData[0] = yytext;
-			return Parser::STRING;
+			TOK(STRING);
 		} else 
 			yymore();
 		

@@ -258,38 +258,38 @@ typedef unsigned char YY_CHAR;
 	*yy_cp = '\0'; \
 	yy_c_buf_p = yy_cp;
 
-#define YY_NUM_RULES 71
-#define YY_END_OF_BUFFER 72
+#define YY_NUM_RULES 72
+#define YY_END_OF_BUFFER 73
 static yyconst short int yy_accept[257] =
     {   0,
-        0,    0,   72,   70,   68,   67,   70,   56,   56,   57,
-       59,   52,   50,   53,   58,   58,   58,   58,   58,   58,
-       58,   58,   58,   58,   58,   58,   58,   58,   58,   58,
-       58,   58,   58,   58,   58,   58,   68,    0,   66,   65,
-       69,   61,    0,   60,   59,    0,   54,   51,   55,   58,
-       58,   58,   58,   43,   58,   58,   58,   58,   58,   58,
-       58,   58,   58,   58,   58,   58,   58,   58,   58,   58,
-       58,   58,   58,   58,   58,    9,   58,   58,   58,   58,
-       58,   58,   58,   58,   58,   58,   58,   58,   69,    0,
-       64,   60,    0,    0,   62,    6,   48,   37,   58,   58,
+        0,    0,   73,   71,   69,   68,   71,   57,   57,   58,
+       60,   53,   51,   54,   59,   59,   59,   59,   59,   59,
+       59,   59,   59,   59,   59,   59,   59,   59,   59,   59,
+       59,   59,   59,   59,   59,   59,   69,    0,   67,   66,
+       70,   62,    0,   61,   60,    0,   55,   52,   56,   59,
+       59,   50,   59,   43,   59,   59,   59,   59,   59,   59,
+       59,   59,   59,   59,   59,   59,   59,   59,   59,   59,
+       59,   59,   59,   59,   59,    9,   59,   59,   59,   59,
+       59,   59,   59,   59,   59,   59,   59,   59,   70,    0,
+       65,   61,    0,    0,   63,    6,   48,   37,   59,   59,
 
-       58,   58,   58,   58,   58,   58,   58,   58,   58,   58,
-       58,   58,   58,   58,   58,   58,   28,   21,   58,   58,
-       39,   38,   18,   58,   58,   58,   58,   58,   58,   58,
-       58,   12,   58,   40,   58,   58,   58,   58,   58,   58,
-       58,    0,   63,   27,   58,   58,   58,   58,   58,   58,
-       49,   58,   58,   36,   58,   58,   58,    3,   58,   58,
-       58,   58,   15,   45,   58,   11,   58,   58,   58,   58,
-       33,   58,   58,   58,   58,   58,   58,    1,   58,   58,
-       58,   58,   23,   41,   58,   58,   58,   58,   58,   58,
-       58,   32,   58,   42,   58,   58,   58,   47,   58,   44,
+       59,   59,   59,   59,   59,   59,   59,   59,   59,   59,
+       59,   59,   59,   59,   59,   59,   28,   21,   59,   59,
+       39,   38,   18,   59,   59,   59,   59,   59,   59,   59,
+       59,   12,   59,   40,   59,   59,   59,   59,   59,   59,
+       59,    0,   64,   27,   59,   59,   59,   59,   59,   59,
+       49,   59,   59,   36,   59,   59,   59,    3,   59,   59,
+       59,   59,   15,   45,   59,   11,   59,   59,   59,   59,
+       33,   59,   59,   59,   59,   59,   59,    1,   59,   59,
+       59,   59,   23,   41,   59,   59,   59,   59,   59,   59,
+       59,   32,   59,   42,   59,   59,   59,   47,   59,   44,
 
-       58,   58,   58,   58,   58,   17,   58,   58,   58,   58,
-        4,   58,   16,   58,   58,   58,   58,   34,   46,   58,
-        5,   13,   58,   58,   58,   58,   58,    2,   58,   19,
-        8,   14,   58,   58,   10,   31,   22,   58,   25,   28,
-       30,   58,   20,   58,   58,   26,   58,    7,   58,   58,
-       29,   27,   35,   58,   24,    0
+       59,   59,   59,   59,   59,   17,   59,   59,   59,   59,
+        4,   59,   16,   59,   59,   59,   59,   34,   46,   59,
+        5,   13,   59,   59,   59,   59,   59,    2,   59,   19,
+        8,   14,   59,   59,   10,   31,   22,   59,   25,   28,
+       30,   59,   20,   59,   59,   26,   59,    7,   59,   59,
+       29,   27,   35,   59,   24,    0
     } ;
 
 static yyconst int yy_ec[256] =
@@ -474,15 +474,16 @@ static yyconst short int yy_chk[320] =
       256,  256,  256,  256,  256,  256,  256,  256,  256
     } ;
 
-static yyconst short int yy_rule_linenum[71] =
+static yyconst short int yy_rule_linenum[72] =
     {   0,
-       24,   25,   26,   27,   28,   29,   30,   32,   33,   34,
-       35,   36,   38,   39,   40,   42,   43,   44,   45,   46,
-       47,   48,   49,   50,   51,   53,   54,   55,   56,   57,
-       58,   59,   60,   61,   62,   63,   65,   66,   67,   68,
-       69,   71,   72,   73,   75,   76,   77,   79,   80,   82,
-       83,   84,   85,   86,   87,   93,   95,  102,  121,  122,
-      123,  129,  130,  131,  138,  151,  153,  155,  157,  159
+       26,   27,   28,   29,   30,   31,   32,   34,   35,   36,
+       37,   38,   40,   41,   42,   44,   45,   46,   47,   48,
+       49,   50,   51,   52,   53,   55,   56,   57,   58,   59,
+       60,   61,   62,   63,   64,   65,   67,   68,   69,   70,
+       71,   73,   74,   75,   77,   78,   79,   81,   82,   84,
+       90,   91,   92,   93,   94,   95,  101,  103,  110,  141,
+      142,  143,  149,  150,  151,  158,  171,  173,  175,  177,
+      179
     } ;
 
 /* The intent behind this definition is that it'll catch
@@ -500,6 +501,8 @@ static yyconst short int yy_rule_linenum[71] =
 
 extern YY_Parser_STYPE yylval;
 
+#define TOK(name) { return Parser::name; dotCount = 0; }
+
 // Variables used to share data with the parser
 std::string strData[10];
 
@@ -509,7 +512,7 @@ int asFlag = 0;
 int lineno = 0;
 
 using namespace std;
-#line 513 "scanner.cpp"
+#line 516 "scanner.cpp"
 
 /* Macros after this point can all be overridden by user definitions in
  * section 1.
@@ -636,11 +639,11 @@ YY_DECL
 	register char *yy_cp, *yy_bp;
 	register int yy_act;
 
-#line 21 "scanner.l"
+#line 23 "scanner.l"
 
 
 		/* literal keyword tokens */
-#line 644 "scanner.cpp"
+#line 647 "scanner.cpp"
 
 	if ( yy_init )
 		{
@@ -723,12 +726,12 @@ do_action:	/* This label is used only to access EOF actions. */
 			{
 			if ( yy_act == 0 )
 				cerr << "--scanner backing up\n";
-			else if ( yy_act < 71 )
+			else if ( yy_act < 72 )
 				cerr << "--accepting rule at line " << yy_rule_linenum[yy_act] <<
 				         "(\"" << yytext << "\")\n";
-			else if ( yy_act == 71 )
-				cerr << "--accepting default rule (\"" << yytext << "\")\n";
 			else if ( yy_act == 72 )
+				cerr << "--accepting default rule (\"" << yytext << "\")\n";
+			else if ( yy_act == 73 )
 				cerr << "--(end of buffer or a NUL)\n";
 			else
 				cerr << "--EOF (start condition " << YY_START << ")\n";
@@ -745,288 +748,309 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 24 "scanner.l"
-return Parser::USER;
+#line 26 "scanner.l"
+TOK(USER);
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 25 "scanner.l"
-return Parser::SELECT;
+#line 27 "scanner.l"
+TOK(SELECT);
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 26 "scanner.l"
-return Parser::FROM;
+#line 28 "scanner.l"
+TOK(FROM);
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 27 "scanner.l"
-return Parser::WHERE;
+#line 29 "scanner.l"
+TOK(WHERE);
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 28 "scanner.l"
-return Parser::HAVING;
+#line 30 "scanner.l"
+TOK(HAVING);
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 29 "scanner.l"
-return Parser::ALL;
+#line 31 "scanner.l"
+TOK(ALL);
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 30 "scanner.l"
-return Parser::DISTINCT;
+#line 32 "scanner.l"
+TOK(DISTINCT);
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 32 "scanner.l"
-return Parser::UPDATE;
+#line 34 "scanner.l"
+TOK(UPDATE);
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 33 "scanner.l"
-return Parser::OF;
+#line 35 "scanner.l"
+TOK(OF);
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 34 "scanner.l"
-return Parser::CURRENT;
+#line 36 "scanner.l"
+TOK(CURRENT);
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 35 "scanner.l"
-return Parser::NULLX;
+#line 37 "scanner.l"
+TOK(NULLX);
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 36 "scanner.l"
-return Parser::SET;
+#line 38 "scanner.l"
+TOK(SET);
 	YY_BREAK
 case 13:
 YY_RULE_SETUP
-#line 38 "scanner.l"
-return Parser::INSERT;
+#line 40 "scanner.l"
+TOK(INSERT);
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 39 "scanner.l"
-return Parser::VALUES;
+#line 41 "scanner.l"
+TOK(VALUES);
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 40 "scanner.l"
-return Parser::INTO;
+#line 42 "scanner.l"
+TOK(INTO);
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 42 "scanner.l"
-return Parser::CREATE;
+#line 44 "scanner.l"
+TOK(CREATE);
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 43 "scanner.l"
-return Parser::TABLE;
+#line 45 "scanner.l"
+TOK(TABLE);
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 44 "scanner.l"
-return Parser::NOT;
+#line 46 "scanner.l"
+TOK(NOT);
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 45 "scanner.l"
-return Parser::UNIQUE;
+#line 47 "scanner.l"
+TOK(UNIQUE);
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 46 "scanner.l"
-return Parser::PRIMARY;
+#line 48 "scanner.l"
+TOK(PRIMARY);
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 47 "scanner.l"
-return Parser::KEY;
+#line 49 "scanner.l"
+TOK(KEY);
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 48 "scanner.l"
-return Parser::DEFAULT;
+#line 50 "scanner.l"
+TOK(DEFAULT);
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 49 "scanner.l"
-return Parser::CHECK;
+#line 51 "scanner.l"
+TOK(CHECK);
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 50 "scanner.l"
-return Parser::REFERENCES;
+#line 52 "scanner.l"
+TOK(REFERENCES);
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 51 "scanner.l"
-return Parser::FOREIGN;
+#line 53 "scanner.l"
+TOK(FOREIGN);
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 53 "scanner.l"
-return Parser::VARCHAR;
+#line 55 "scanner.l"
+TOK(VARCHAR);
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 54 "scanner.l"
-return Parser::CHARACTER;
+#line 56 "scanner.l"
+TOK(CHARACTER);
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 55 "scanner.l"
-return Parser::INTEGER;
+#line 57 "scanner.l"
+TOK(INTEGER);
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 56 "scanner.l"
-return Parser::SMALLINT;
+#line 58 "scanner.l"
+TOK(SMALLINT);
 	YY_BREAK
 case 30:
 YY_RULE_SETUP
-#line 57 "scanner.l"
-return Parser::NUMERIC;
+#line 59 "scanner.l"
+TOK(NUMERIC);
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 58 "scanner.l"
-return Parser::DECIMAL;
+#line 60 "scanner.l"
+TOK(DECIMAL);
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 59 "scanner.l"
-return Parser::FLOAT;
+#line 61 "scanner.l"
+TOK(FLOAT);
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 60 "scanner.l"
-return Parser::REAL;
+#line 62 "scanner.l"
+TOK(REAL);
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 61 "scanner.l"
-return Parser::DOUBLE;
+#line 63 "scanner.l"
+TOK(DOUBLE);
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 62 "scanner.l"
-return Parser::PRECISION;
+#line 64 "scanner.l"
+TOK(PRECISION);
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 63 "scanner.l"
-return Parser::DROP;
+#line 65 "scanner.l"
+TOK(DROP);
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 65 "scanner.l"
-return Parser::AVG;
+#line 67 "scanner.l"
+TOK(AVG);
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 66 "scanner.l"
-return Parser::MIN;
+#line 68 "scanner.l"
+TOK(MIN);
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 67 "scanner.l"
-return Parser::MAX;
+#line 69 "scanner.l"
+TOK(MAX);
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 68 "scanner.l"
-return Parser::SUM;
+#line 70 "scanner.l"
+TOK(SUM);
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 69 "scanner.l"
-return Parser::COUNT;
+#line 71 "scanner.l"
+TOK(COUNT);
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 71 "scanner.l"
-return Parser::GROUP;
+#line 73 "scanner.l"
+TOK(GROUP);
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 72 "scanner.l"
-return Parser::BY;
+#line 74 "scanner.l"
+TOK(BY);
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 73 "scanner.l"
-return Parser::ORDER;
+#line 75 "scanner.l"
+TOK(ORDER);
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 75 "scanner.l"
-return Parser::LIKE;
+#line 77 "scanner.l"
+TOK(LIKE);
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 76 "scanner.l"
-return Parser::ESCAPE;
+#line 78 "scanner.l"
+TOK(ESCAPE);
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 77 "scanner.l"
-return Parser::LIMIT;
+#line 79 "scanner.l"
+TOK(LIMIT);
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 79 "scanner.l"
-return Parser::ASC;
+#line 81 "scanner.l"
+TOK(ASC);
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
-#line 80 "scanner.l"
-return Parser::DESC;
+#line 82 "scanner.l"
+TOK(DESC);
 	YY_BREAK
 case 50:
-#line 83 "scanner.l"
-case 51:
-#line 84 "scanner.l"
-case 52:
-#line 85 "scanner.l"
-case 53:
-#line 86 "scanner.l"
-case 54:
-#line 87 "scanner.l"
-case 55:
 YY_RULE_SETUP
-#line 87 "scanner.l"
-{ 
-					strData[5] = yytext;
-					return Parser::COMPARISON;
-				}
+#line 84 "scanner.l"
+{
+								/* ensure that aliased name is printed fully. */
+								asFlag = 1;
+								TOK(AS);
+							}
 	YY_BREAK
+case 51:
+#line 91 "scanner.l"
+case 52:
+#line 92 "scanner.l"
+case 53:
+#line 93 "scanner.l"
+case 54:
+#line 94 "scanner.l"
+case 55:
+#line 95 "scanner.l"
 case 56:
 YY_RULE_SETUP
-#line 93 "scanner.l"
-return yytext[0];
+#line 95 "scanner.l"
+{ 
+					strData[5] = yytext;
+					TOK(COMPARISON);
+				}
 	YY_BREAK
 case 57:
 YY_RULE_SETUP
-#line 95 "scanner.l"
+#line 101 "scanner.l"
+return yytext[0];
+	YY_BREAK
+case 58:
+YY_RULE_SETUP
+#line 103 "scanner.l"
 {
 				dotCount++;
 				return yytext[0];
 			}
 	YY_BREAK
 /* names */
-case 58:
+case 59:
 YY_RULE_SETUP
-#line 102 "scanner.l"
+#line 110 "scanner.l"
 {
-										strData[0] = yytext;
-										strData[1] = "placeholder 1";
-										strData[2] = "placeholder 2";
+										if ((dotCount == 1) || (asFlag == 1)) {
+											strData[2] = yytext;
+
+											//printf("dot: %d length1: %d length2: %d \n", dotCount, textLength, textLength2);
+											/* Reset asflag. */
+											asFlag = 0; 
+										}
+
+										else if (dotCount == 2) {
+											strData[1] = yytext;
+
+											//printf("%d\n", textLength3);
+											dotCount = 0;
+										}
+										else strData[0] = yytext;
 										/* printf("%d %d %s \n", (int) strlen(yytext), textLength, yytext); */
 
 										return Parser::NAME;
@@ -1040,34 +1064,34 @@ YY_RULE_SETUP
 							} 
 		 */
 /* numbers */
-case 59:
-#line 122 "scanner.l"
 case 60:
-#line 123 "scanner.l"
+#line 142 "scanner.l"
 case 61:
+#line 143 "scanner.l"
+case 62:
 YY_RULE_SETUP
-#line 123 "scanner.l"
+#line 143 "scanner.l"
 { 
 										dData = atof(yytext);
-										return Parser::INTNUM;
+										TOK(INTNUM);
 									}
 	YY_BREAK
-case 62:
-#line 130 "scanner.l"
 case 63:
-#line 131 "scanner.l"
+#line 150 "scanner.l"
 case 64:
+#line 151 "scanner.l"
+case 65:
 YY_RULE_SETUP
-#line 131 "scanner.l"
+#line 151 "scanner.l"
 { 
 										dData = atof(yytext);
-										return Parser::APPROXNUM;
+										TOK(APPROXNUM);
 									}
 	YY_BREAK
 /* strings */
-case 65:
+case 66:
 YY_RULE_SETUP
-#line 138 "scanner.l"
+#line 158 "scanner.l"
 {
 		int c = getchar();
 
@@ -1075,52 +1099,52 @@ YY_RULE_SETUP
 		if(c != '\'') {
 			//printf("reading string: %s\n", yytext);
 			strData[0] = yytext;
-			return Parser::STRING;
+			TOK(STRING);
 		} else 
 			yymore();
 		
 	}
 	YY_BREAK
-case 66:
+case 67:
 *yy_cp = yy_hold_char; /* undo effects of setting up yytext */
 yy_c_buf_p = yy_cp -= 1;
 YY_DO_BEFORE_ACTION; /* set up yytext again */
 YY_RULE_SETUP
-#line 151 "scanner.l"
+#line 171 "scanner.l"
 {	cerr << "Unterminated string" << endl; }
-	YY_BREAK
-case 67:
-YY_RULE_SETUP
-#line 153 "scanner.l"
-{ }
 	YY_BREAK
 case 68:
 YY_RULE_SETUP
-#line 155 "scanner.l"
-;	/* white space */
+#line 173 "scanner.l"
+{ }
 	YY_BREAK
 case 69:
 YY_RULE_SETUP
-#line 157 "scanner.l"
-;	/* comment */
+#line 175 "scanner.l"
+;	/* white space */
 	YY_BREAK
 case 70:
 YY_RULE_SETUP
-#line 159 "scanner.l"
+#line 177 "scanner.l"
+;	/* comment */
+	YY_BREAK
+case 71:
+YY_RULE_SETUP
+#line 179 "scanner.l"
 {
 							cerr << "Unknown character" << endl;
 						};
 	YY_BREAK
 case YY_STATE_EOF(INITIAL):
-#line 163 "scanner.l"
+#line 183 "scanner.l"
 { yyterminate(); }
 	YY_BREAK
-case 71:
+case 72:
 YY_RULE_SETUP
-#line 164 "scanner.l"
+#line 184 "scanner.l"
 ECHO;
 	YY_BREAK
-#line 1124 "scanner.cpp"
+#line 1148 "scanner.cpp"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -1924,4 +1948,4 @@ int main()
 	return 0;
 	}
 #endif
-#line 164 "scanner.l"
+#line 184 "scanner.l"

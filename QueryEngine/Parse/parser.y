@@ -440,8 +440,8 @@ literal
 
 table
 : NAME 							          { $$ = new Table(strData[0]); }
-// | NAME '.' NAME     { $$ = opr(TABLE, 3, id($1), opr('.', 0), id2($3));}
-// | NAME AS NAME      { $$ = opr(TABLE, 3, id($1), opr(AS, 0), id2($3));  }
+| NAME '.' NAME     { $$ = new Table(0, strData[0], strData[1]);}
+| NAME AS NAME      { $$ = new Table(1, strData[0], strData[1]);  }
 ;
 
 
@@ -467,9 +467,9 @@ data_type
 
 column_ref:
         NAME                    { $$ = new ColumnRef(strData[0]); }
-    |   NAME '.' NAME           { $$ = new ColumnRef(strData[0], strData[1], strData[2]); }
+    |   NAME '.' NAME           { $$ = new ColumnRef(0, strData[0], strData[1]); }
     |   NAME '.' NAME '.' NAME  { $$ = new ColumnRef(strData[0], strData[1], strData[2]);}
-    |   NAME AS NAME            { $$ = new ColumnRef(strData[0], "AS", strData[1]); } 
+    |   NAME AS NAME            { $$ = new ColumnRef(1, strData[0], strData[1]); } 
 ;
 
 column
