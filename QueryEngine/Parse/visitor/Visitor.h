@@ -12,7 +12,7 @@ public:
     // virtual void visit(Ammsc *v) = 0;
     // virtual void visit(class Assignment *v) = 0;
     // virtual void visit(class AssignmentCommaList *v) = 0;
-    // virtual void visit(class Atom *v) = 0;
+    virtual void visit(class Atom *v) = 0;
     virtual void visit(class BaseTableDef *v) = 0;
     virtual void visit(class BaseTableElement *v) = 0;
     virtual void visit(class BaseTableElementCommalist *v) = 0;
@@ -28,19 +28,20 @@ public:
     virtual void visit(class DataType *v) = 0;
     virtual void visit(class FromClause *v) = 0;
     // virtual void visit(class FunctionRef *v) = 0;
-    // virtual void visit(class InsertAtom *v) = 0;
-    // virtual void visit(class InsertAtomCommalist *v) = 0;
+    virtual void visit(class InsertAtom *v) = 0;
+    virtual void visit(class InsertAtomCommalist *v) = 0;
+    virtual void visit(class InsertStatement *v) = 0;
     virtual void visit(class Literal *v) = 0;
     virtual void visit(class ManipulativeStatement *v) = 0;
     virtual void visit(class OptAllDistinct *v) = 0;
-    // virtual void visit(class OptColumnCommalist *v) = 0;
+    virtual void visit(class OptColumnCommalist *v) = 0;
     // virtual void visit(class OptGroupByClause *v) = 0;
     // virtual void visit(class OptHavingClause *v) = 0;
     // virtual void visit(class OptWhereClause *v) = 0;
     // virtual void visit(class ParameterRef *v) = 0;
     // virtual void visit(class Predicate *v) = 0;
     virtual void visit (class Program *v) = 0;
-    // virtual void visit(class QuerySpec *v) = 0;
+    virtual void visit(class QuerySpec *v) = 0;
     virtual void visit(class SQL *v) = 0;
     virtual void visit(class SQLList *v) = 0;
     // virtual void visit(class ScalarExp *v) = 0;
@@ -56,7 +57,7 @@ public:
     virtual void visit(class TableRefCommalist *v) = 0;
     // virtual void visit(class UpdateStatementPositioned *v) = 0;
     // virtual void visit(class UpdateStatementSearched *v) = 0;
-    // virtual void visit(class ValuesOrQuerySpec *v) = 0;
+    virtual void visit(class ValuesOrQuerySpec *v) = 0;
 };
 
 #endif // AST_VISITOR_H

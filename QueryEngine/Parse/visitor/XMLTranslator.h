@@ -29,6 +29,14 @@
 #include "../ast/TableRefCommalist.h"
 #include "../ast/TableRef.h"
 
+#include "../ast/InsertStatement.h"
+#include "../ast/OptColumnCommalist.h"
+#include "../ast/ValuesOrQuerySpec.h"
+#include "../ast/QuerySpec.h"
+#include "../ast/InsertAtomCommalist.h"
+#include "../ast/InsertAtom.h"
+#include "../ast/Atom.h"
+
 #include <iostream>
 using std::cout;
 using std::endl;
@@ -284,6 +292,83 @@ public:
         cout << "</ColumnCommalist>" << endl;
     }
 
+    void visit(class OptColumnCommalist *v) {
+        printTabs(INCR);
+        cout << "<OptColumnCommalist>" << endl;
+
+        if (v->cc) v->cc->accept(*this);
+
+        printTabs(DECR);
+        cout << "</OptColumnCommalist>" << endl;
+    }
+
+    void visit(class Atom *v) {
+        printTabs(INCR);
+        cout << "<Atom>" << endl;
+
+        if (v->lit) v->lit->accept(*this);
+        if (v->user == "user") cout << "<USER>" << endl;
+
+        printTabs(DECR);
+        cout << "</Atom>" << endl;
+    }
+
+    void visit(class InsertAtom *v) {
+        printTabs(INCR);
+        cout << "<InsertAtom>" << endl;
+
+        if (v->a) v->a->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</InsertAtom>" << endl;
+    }
+
+    void visit(class InsertAtomCommalist *v) {
+        printTabs(INCR);
+        cout << "<InsertAtomCommalist>" << endl;
+
+        if (v->iac) v->iac->accept(*this);
+        v->ia->accept(*this);
+
+        printTabs(DECR);
+        cout << "</InsertAtomCommalist>" << endl;
+    }
+
+    void visit(class QuerySpec *v) {
+        printTabs(INCR);
+        cout << "<QuerySpec>" << endl;
+
+        v->OAD->accept(*this);
+        v->sel->accept(*this);
+        v->tblExp->accept(*this);
+
+        printTabs(DECR);
+        cout << "</QuerySpec>" << endl;
+    }
+
+    void visit(class ValuesOrQuerySpec *v) {
+        printTabs(INCR);
+        cout << "<ValuesOrQuerySpec>" << endl;
+
+        if (v->iac) v->iac->accept(*this);
+        if (v->qs) v->qs->accept(*this);
+
+        printTabs(DECR);
+        cout << "</ValuesOrQuerySpec>" << endl;
+    }
+
+    void visit(class InsertStatement *v) {
+        printTabs(INCR);
+        cout << "<InsertStatement>" << endl;
+
+        v->tbl->accept(*this);
+        v->oCC->accept(*this);
+        v->voQS->accept(*this);
+
+        printTabs(DECR);
+        cout << "</InsertStatement>" << endl;
+    }
+
     void visit(class TableRef *v) {
         printTabs(INCR);
         cout << "<TableRef>" << endl;
@@ -356,8 +441,8 @@ public:
 
         if (v->selSta) v->selSta->accept(*this);
 /*        if (v->UPS) v->UPS->accept(*this);
-        if (v->USS) v->USS->accept(*this);
-        if (v->inSta) v->inSta->accept(*this); */
+        if (v->USS) v->USS->accept(*this); */
+        if (v->inSta) v->inSta->accept(*this); 
 
         printTabs(DECR);
         cout << "</ManipulativeStatement>" << endl;

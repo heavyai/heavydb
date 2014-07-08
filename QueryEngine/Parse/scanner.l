@@ -66,17 +66,109 @@ using namespace std;
 "group"		return Parser::GROUP;
 "order"		return Parser::ORDER;
 
-[0-9]+						{ intData = atoi(yytext); return Parser::INTNUM; }
+"="	|
+"<>" |
+"<"	|
+">"	|
+"<="	|
+">="			{ 
+					strData[5] = yytext;
+					return Parser::COMPARISON;
+				}
 
-[-+*/(),;]					return yytext[0];
 
-[A-Za-z][A-Za-z0-9_]*		{ strData[0] = yytext; return Parser::NAME; }
+[-+*/(),;]	return yytext[0];
 
-[ \t\r]+					; /* ignore white space */
+[.]			{
+				dotCount++;
+				return yytext[0];
+			}
 
-\n 							{ ++yylineno; }
 
-.							return Parser::UNKNOWN;
+	/* names */
+[A-Za-z][A-Za-z0-9_]*				{
+										//printf("dotFlag is: %d\n", dotFlag);
+										/* Was the most recent token a dot or AS? */
+										if ((dotCount == 1) || (asFlag == 1)) {
+											//textLength2 = (int) strlen(yytext);
+
+											strData[1] = yytext;
+											//printf("dot: %d length1: %d length2: %d \n", dotCount, textLength, textLength2);
+											/* Reset asflag. */
+											asFlag = 0; 
+										}
+										else if (dotCount == 2) {
+											/*
+											textLength3 = (int) strlen(yytext);
+										
+											//printf("%d\n", textLength3);
+											dotCount = 0;
+											*/
+											strData[2] = yytext;
+										}
+										else {
+											//textLength = (int) strlen(yytext);
+											strData[0] == yytext;
+										}
+
+										/* printf("%d %d %s \n", (int) strlen(yytext), textLength, yytext); */
+
+										return Parser::NAME;
+									}
+
+	/* parameters
+":"[A-Za-z][A-Za-z0-9_]*	{
+									yylval.sParam = yytext + 1;
+									textLength = ((int) strlen(yytext)) - 1;
+									TOK(PARAMETER);
+							} 
+		 */
+
+	/* numbers */
+
+[0-9]+	|
+[0-9]+"."[0-9]* |
+"."[0-9]*							{ 
+										dData = atof(yytext);
+										return Parser::INTNUM;
+									}
+
+
+[0-9]+[eE][+-]?[0-9]+	|
+[0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
+"."[0-9]*[eE][+-]?[0-9]+			{ 
+										dData = atof(yytext);
+										return Parser::APPROXNUM;
+									}
+
+	/* strings */
+
+'[^'\n]*'	{
+		textLength = (int) strlen(yytext);
+		int c = input();
+
+		unput(c);	/* just peeking */
+		if(c != '\'') {
+			//printf("reading string: %s\n", yytext);
+			strData[0] = yytext;
+			return Parser::STRING;
+		} else 
+			yymore();
+		
+	}
+		
+'[^'\n]*$			{	yyerror("Unterminated string"); }
+
+\n		{ lineno++; }
+
+[ \t\r]+	;	/* white space */
+
+"--".*	;	/* comment */
+
+.						{
+							yyerror("Unknown character");
+							printf("%s\n", yytext);
+						};
 
 <<EOF>>						{ yyterminate(); }
 %%

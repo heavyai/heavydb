@@ -41,6 +41,13 @@
 #include "ast/TableRefCommalist.h"
 #include "ast/TableRef.h"
 
+#include "ast/InsertStatement.h"
+#include "ast/OptColumnCommalist.h"
+#include "ast/ValuesOrQuerySpec.h"
+#include "ast/QuerySpec.h"
+#include "ast/InsertAtomCommalist.h"
+#include "ast/InsertAtom.h"
+#include "ast/Atom.h"
 
 // define stack element type to be a 
 // pointer to an AST node
@@ -102,6 +109,11 @@ sql
 : schema 						{ $$ = new SQL((Schema*)$1); }
 ;
 
+opt_column_commalist:
+        /* empty */                     { $$ = new OptColumnCommalist(NULL); }
+    |   '(' column_commalist ')'        { $$ = new OptColumnCommalist((ColumnCommalist*)$2); }
+    ;
+
 schema 							
 : base_table_def				{ $$ = new Schema((BaseTableDef*)$1); }
 ;
@@ -138,7 +150,7 @@ column_def_opt:
     |   DEFAULT literal                             { $$ = new ColumnDefOpt(3, (Literal*)$2); }
     |   DEFAULT NULLX                               { $$ = new ColumnDefOpt(4); }
     |   DEFAULT USER                                { $$ = new ColumnDefOpt(5); }
-   // |   CHECK '(' search_condition ')'              { $$ = new ColumnDefOpt(6, (SearchCondition*)$3); }
+    |   CHECK '(' search_condition ')'              { $$ = new ColumnDefOpt(6, (SearchCondition*)$3); }
     |   REFERENCES table                            { $$ = new ColumnDefOpt(7, (Table*)$2); }
     |   REFERENCES table '(' column_commalist ')'   { $$ = new ColumnDefOpt(8, (Table*)$2, (ColumnCommalist*)$4); }
     ;
@@ -164,10 +176,11 @@ sql:
     ;
 
 manipulative_statement:
-        select_statement                    { $$ = new ManipulativeStatement((SelectStatement*)$1); } 
+    select_statement                    { $$ = new ManipulativeStatement((SelectStatement*)$1); } 
+    |   insert_statement                    { $$ = new ManipulativeStatement((InsertStatement*)$1); }
     /*|   update_statement_positioned         { $$ = opr(MANIPULATIVE_STATEMENT, 1, $1); } 
     |   update_statement_searched           { $$ = opr(MANIPULATIVE_STATEMENT, 1, $1); } 
-    |   insert_statement                    { $$ = opr(MANIPULATIVE_STATEMENT, 1, $1); }
+  
     
     |   commit_statement
     |   delete_statement_positioned
@@ -179,6 +192,25 @@ manipulative_statement:
     |   select_statement 
     |   update_statement_positioned
     |   update_statement_searched */
+    ;
+
+insert_statement:
+    INSERT INTO table opt_column_commalist values_or_query_spec             { $$ = new InsertStatement((Table*)$3, (OptColumnCommalist*)$4, (ValuesOrQuerySpec*)$5); }
+    ;
+
+values_or_query_spec:
+        VALUES '(' insert_atom_commalist ')'        { $$ = new ValuesOrQuerySpec((InsertAtomCommalist*)$3); }
+    |   query_spec                                  { $$ = new ValuesOrQuerySpec((QuerySpec*)$1); }         
+    ;
+
+insert_atom_commalist:
+        insert_atom                                 { $$ = new InsertAtomCommalist((InsertAtom*)$1); } 
+    |   insert_atom_commalist ',' insert_atom       { $$ = new InsertAtomCommalist((InsertAtomCommalist*)$1, (InsertAtom*)$3); } 
+    ;
+
+insert_atom:
+        atom                                        { $$ = new InsertAtom((Atom*)$1); }
+    |   NULLX                                       { $$ = new InsertAtom(NULL); }
     ;
 
 select_statement:
@@ -193,9 +225,13 @@ opt_all_distinct:
     | /* empty  */                          { $$ = new OptAllDistinct(""); }
     ;
 
+query_spec:
+        SELECT opt_all_distinct selection table_exp     { $$ = new QuerySpec((OptAllDistinct*)$2, (Selection*)$3, (TableExp*)$4); }
+    ;
+
 selection:
-    //scalar_exp_commalist         { $$ = opr(SELECTION, 1, $1); } |
-'*'                                { $$ = new Selection("*"); }
+    scalar_exp_commalist            { $$ = new Selection((ScalarExpCommalist*)$1); } |
+| '*'                               { $$ = new Selection("*"); }
 ;
 
 table_exp:
@@ -221,6 +257,75 @@ table_ref:
     /* | table rangevariable */
     ;
 
+search_condition: 
+      search_condition OR search_condition      { $$ = new SearchCondition(1, (SearchCondition*)$1, (SearchCondition*)$2); }
+    |   search_condition AND search_condition   { $$ = new SearchCondition(2, (SearchCondition*)$1, (SearchCondition*)$2); }
+    |   NOT search_condition                    { $$ = new SearchCondition(3, (SearchCondition*)$2); }
+    |   '(' search_condition ')'                { $$ = new SearchCondition(4, (SearchCondition*)$2); }
+    |   predicate                               { $$ = new SearchCondition((Predicate*)$1); }
+    ;
+
+predicate:
+        comparison_predicate                    { $$ = new Predicate((ComparisonPredicate*)$1); }
+    |   between_predicate                       { $$ = new Predicate((BetweenPredicate*)$1); }
+    |   like_predicate                          { $$ = new Predicate((LikePredicate*)$1); }
+    /*  |   test_for_null
+    |   in_predicate
+    |   all_or_any_predicate
+    |   existence_test */
+    ;
+
+comparison_predicate:
+        scalar_exp COMPARISON scalar_exp                        { $$ = new ComparisonPredicate((ScalarExp*)$1, (ScalarExp*)$3) }
+   /* |   scalar_exp COMPARISON subquery                          { $$ = opr(COMPARISON, $1, $3); } */
+    ;
+
+between_predicate:
+        scalar_exp NOT BETWEEN scalar_exp AND scalar_exp        { $$ = new BetweenPredicate(2, (ScalarExp*)$1, (ScalarExp*)$4, (ScalarExp*)$6); }
+    |   scalar_exp BETWEEN scalar_exp AND scalar_exp            { $$ = new BetweenPredicate(1, (ScalarExp*)$1, (ScalarExp*)$4, (ScalarExp*)$6); }
+    ;
+
+like_predicate:
+        scalar_exp NOT LIKE atom opt_escape                     { $$ = new LikePredicate(2, (ScalarExp*)$1, (Atom*)$4, (OptEscape*)$6); }
+    |   scalar_exp LIKE atom opt_escape                         { $$ = new LikePredicate(1, (ScalarExp*)$1, (Atom*)$4, (OptEscape*)$6); }
+    ;
+
+opt_escape:
+        /* empty */                                             { $$ = NULL; }
+    |   ESCAPE atom                                             { $$ = new OptEscape((Atom*)$2); }
+    ;
+
+scalar_exp_commalist:       
+        scalar_exp                              { $$ = new ScalarExpCommalist((ScalarExp*)$1); }
+    |   scalar_exp_commalist ',' scalar_exp     { $$ = new ScalarExpCommalist((ScalarExpCommalist*)$1, (ScalarExp*)$3); }
+    ;
+
+scalar_exp:
+    scalar_exp '+' scalar_exp               { $$ = new ScalarExp(1, (ScalarExp*)$1, (ScalarExp*)$3); }
+    | scalar_exp '-' scalar_exp             { $$ = new ScalarExp(2, (ScalarExp*)$1, (ScalarExp*)$3); }
+    | scalar_exp '*' scalar_exp             { $$ = new ScalarExp(3, (ScalarExp*)$1, (ScalarExp*)$3); }
+    | scalar_exp '/' scalar_exp             { $$ = new ScalarExp(4, (ScalarExp*)$1, (ScalarExp*)$3); }
+    |   '+' scalar_exp %prec UMINUS         { $$ = new ScalarExp(5, (ScalarExp*)$2;  }
+    |   '-' scalar_exp %prec UMINUS         { $$ = new ScalarExp(6, (ScalarExp*)$2; }
+    |   atom                                { $$ = new ScalarExp((Atom*)$1); }
+    |   column_ref                          { $$ = new ScalarExp((ColumnRef*)$21; }
+    |   function_ref                        { $$ = new ScalarExp((FunctionRef*)$1; }
+    |   '(' scalar_exp ')'                  { $$ = new ScalarExp(7, (ScalarExp*)$2) }
+    ;
+
+atom:
+    /*  parameter_ref
+    | */   literal           { $$ = new Atom((Literal*)$1); }
+    |   USER                { $$ = new Atom("USER"); }
+    ;
+
+function_ref:
+        ammsc '(' '*' ')'                   { $$ = new FunctionRef(1, (Ammsc*)$1);}
+    |   ammsc '(' DISTINCT column_ref ')'   { $$ = new FunctionRef(2, (Ammsc*)$1, (ColumnRef*)$4); }
+    |   ammsc '(' ALL scalar_exp ')'        { $$ = new FunctionRef(3, (Ammsc*)$1, (ScalarExp*)$4); }
+    |   ammsc '(' scalar_exp ')'            { $$ = new FunctionRef(4, (Ammsc*)$1); }
+    ;
+
 literal
 : NAME /* should be: STRING */           { $$ = new Literal(strData[0]); }
 | INTNUM                                 { $$ = new Literal(intData); }
@@ -242,7 +347,7 @@ data_type
 | VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, intData); }
 | NUMERIC                             { $$ = new DataType(2); }
 | NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, intData); }
-// |   NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, strData[0], strData2[0]); }
+// |   NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, strData[0], strData[0]); }
 | DECIMAL                             { $$ = new DataType(3); }
 | DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, intData); }
 //   |   DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, strData[0], strData2[0]); }
@@ -254,9 +359,21 @@ data_type
 | DOUBLE PRECISION                    { $$ = new DataType(8); }
 ;
 
+column_ref:
+        NAME                    { $$ = new ColumnRef(strData[0]); }
+    |   NAME '.' NAME           { $$ = new ColumnRef(strData[0], strData[1], strData[2]); }
+    |   NAME '.' NAME '.' NAME  { $$ = new ColumnRef(strData[0], strData[1], strData[2]);}
 
 column
 : NAME            { $$ = new Column(strData[0]); }
+;
+
+ammsc: 
+    AVG             { $$ = new Ammsc("AVG"); }
+    | MIN           { $$ = new Ammsc("MIN"); }
+    | MAX           { $$ = new Ammsc("MAX"); }
+    | SUM           { $$ = new Ammsc("SUM"); }
+    | COUNT         { $$ = new Ammsc("COUNT"); }
 ;
 
 %%

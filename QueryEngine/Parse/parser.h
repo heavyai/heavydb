@@ -54,6 +54,13 @@
 #include "ast/TableRefCommalist.h"
 #include "ast/TableRef.h"
 
+#include "ast/InsertStatement.h"
+#include "ast/OptColumnCommalist.h"
+#include "ast/ValuesOrQuerySpec.h"
+#include "ast/QuerySpec.h"
+#include "ast/InsertAtomCommalist.h"
+#include "ast/InsertAtom.h"
+#include "ast/Atom.h"
 
 // define stack element type to be a 
 // pointer to an AST node
