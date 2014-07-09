@@ -90,7 +90,7 @@ extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
 extern std::string strData[10];
-extern double dData;
+extern double dData[10];
 
 using namespace std;
 
@@ -220,7 +220,7 @@ ordering_spec_commalist:
     ;
 
 ordering_spec:
-        INTNUM opt_asc_desc             { $$ = new OrderingSpec(dData, (OptAscDesc*)$2); }
+        INTNUM opt_asc_desc             { $$ = new OrderingSpec(dData[0], (OptAscDesc*)$2); }
     |   column_ref opt_asc_desc         { $$ = new OrderingSpec((ColumnRef*)$1, (OptAscDesc*)$2); }
     ;
 
@@ -362,9 +362,9 @@ opt_having_clause:
 
 opt_limit_clause:
     /* empty */                               { $$ = NULL; }
-    | LIMIT INTNUM                            { $$ = new OptLimitClause(dData); }
-   // | LIMIT INTNUM ',' INTNUM                 { $$ = new OptLimitClause(0, dData[0], dData[1]); }
-   // | LIMIT INTNUM OFFSET INTNUM              { $$ = new OptLimitClause(1, dData[0], dData[1]); }
+    | LIMIT INTNUM                            { $$ = new OptLimitClause(dData[0]); }
+    | LIMIT INTNUM ',' INTNUM                 { $$ = new OptLimitClause(0, dData[0], dData[1]); }
+    | LIMIT INTNUM OFFSET INTNUM              { $$ = new OptLimitClause(1, dData[0], dData[1]); }
     /* search conditions */
 
 search_condition: 
@@ -438,8 +438,8 @@ function_ref:
 
 literal
 : STRING /* should be: STRING */           { $$ = new Literal(strData[0]); }
-| INTNUM                                 { $$ = new Literal(dData); }
-// | APPROXNUM                           { $$ = opr(LITERAL, 1, con($1)); }
+| INTNUM                                   { $$ = new Literal(dData[0]); }
+| APPROXNUM                                { $$ = new Literal(dData[0]); }
 ;
 
 table
@@ -452,19 +452,19 @@ table
 /* data types */
 data_type
 : CHARACTER                           { $$ = new DataType(0); }
-| CHARACTER '(' INTNUM ')'            { $$ = new DataType(0, dData); }
+| CHARACTER '(' INTNUM ')'            { $$ = new DataType(0, dData[0]); }
 | VARCHAR                             { $$ = new DataType(1); }
-| VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, dData); }
+| VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, dData[0]); }
 | NUMERIC                             { $$ = new DataType(2); }
-| NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, dData); }
-// |   NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, strData[0], strData[0]); }
+| NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, dData[0]); }
+|   NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, dData[0], dData[1]); }
 | DECIMAL                             { $$ = new DataType(3); }
-| DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, dData); }
-//   |   DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, strData[0], strData2[0]); }
+| DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, dData[0]); }
+|   DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, dData[0], dData[1]); }
 | INTEGER                             { $$ = new DataType(4); }
 | SMALLINT                            { $$ = new DataType(5); }
 | FLOAT                               { $$ = new DataType(6); }
-| FLOAT '(' INTNUM ')'                { $$ = new DataType(6, dData); }
+| FLOAT '(' INTNUM ')'                { $$ = new DataType(6, dData[0]); }
 | REAL                                { $$ = new DataType(7); }
 | DOUBLE PRECISION                    { $$ = new DataType(8); }
 ;

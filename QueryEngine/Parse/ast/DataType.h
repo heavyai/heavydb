@@ -8,8 +8,8 @@ class DataType : public ASTNode {
     
 public:
     int dataType_Flag;
-    int size1;
-    int size2;
+    double size1;
+    double size2;
 
     /* data types:
     0 CHARACTER                           
@@ -24,8 +24,8 @@ public:
 
     /**< Constructor */
     explicit DataType(int dF) : dataType_Flag(dF), size1(0), size2(0) {}
-    DataType(int dF, int i1) : dataType_Flag(dF), size1(i1), size2(0) {}
-   // DataType(int dF, int i1, int i2) : dataType_Flag(dF), size1(i1), size1(i2) {}
+    DataType(int dF, double d1) : dataType_Flag(dF), size1(d1), size2(0) {}
+    DataType(int dF, double d1, double d2) : dataType_Flag(dF), size1(d1), size2(d2) {}
     
 
     /**< Accepts the given void visitor by calling v.visit(this) */

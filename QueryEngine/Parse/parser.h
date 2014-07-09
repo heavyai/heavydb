@@ -103,7 +103,7 @@ extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
 extern std::string strData[10];
-extern double dData;
+extern double dData[10];
 
 using namespace std;
 

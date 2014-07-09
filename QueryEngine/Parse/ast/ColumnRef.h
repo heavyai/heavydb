@@ -18,8 +18,8 @@ public:
     1 AS */
 
     /**< Constructor */
-    explicit ColumnRef(const std::string &n1) : name1(n1), args(1) {}
-    ColumnRef(int rF, const std::string &n1, const std::string &n2) : rule_Flag(rF), name1(n1), name2(n2), args(2) {}
+    explicit ColumnRef(const std::string &n1) : name1(n1), args(1), name2(""), name3("") {}
+    ColumnRef(int rF, const std::string &n1, const std::string &n2) : rule_Flag(rF), name1(n1), name2(n2), name3(""), args(2) {}
     ColumnRef(const std::string &n1, const std::string &n2, const std::string &n3) : name1(n1), name2(n2), name3(n3), args(3) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */

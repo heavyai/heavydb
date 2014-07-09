@@ -372,12 +372,17 @@ public:
         cout << "<OptOrderingSpecCommalist>" << endl;
         
         printTabs(DECR);
-        cout << "</OptLimitClause>" << endl;
+        cout << "</OptOrderByClause>" << endl;
     }
 
     void visit(class OptLimitClause *v) {
         printTabs(INCR);
-        cout << "<OptLimitClause limit = " << v->lim1 << ">" << endl;
+        if (v->rule_Flag == 0)
+            cout << "<OptLimitClause limit = " << v->lim1 << "," << v->lim2 << " >" << endl;
+        else if (v->rule_Flag == 1)
+            cout << "<OptLimitClause limit = " << v->lim1 << " OFFSET " << v->lim2 << " >" << endl;
+        else
+            cout << "<OptLimitClause limit = " << v->lim1 << ">" << endl;
 
         printTabs(DECR);
         cout << "</OptLimitClause>" << endl;
@@ -881,7 +886,7 @@ public:
         printTabs(INCR);
 
         if (v->name1 != "") cout << "<Literal string='" << v->name1 << "'/>" << endl;
-        if (v->int1 != 0) cout << "<Literal int = " << v->int1 << "'/>" << endl;
+        if (v->int1 != 0) cout << "<Literal int = " << v->int1 << "/>" << endl;
 
         printTabs(DECR);
         cout << "</Literal>" << endl;
@@ -949,6 +954,7 @@ public:
     void visit(class Table *v) {
         printTabs(INCR);
 
+        //cout << "name1 is |" << v->name1 << "| and name 2 is |" << v->name2 << "|" << endl;
         if (v->name2 != "")
             cout << "<Table name1='" << v->name1 << "' name2='" << v->name2 << "' />" << endl;
         else
