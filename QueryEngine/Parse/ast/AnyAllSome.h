@@ -1,16 +1,16 @@
-#ifndef AST_CURSOR_H
-#define AST_CURSOR_H
+#ifndef AST_ANY_ALL_SOME_H
+#define AST_ANY_ALL_SOME_H
 
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
-class Cursor : public ASTNode {
+class AnyAllSome : public ASTNode {
     
 public:
-    std::string name1;
-
+    std::string anyAllSome;
+    
     /**< Constructor */
-    explicit Cursor(const std::string &n1) : name1(n1) {}
+    explicit AnyAllSome(const std::string &n1) : anyAllSome(n1) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
@@ -19,4 +19,4 @@ public:
     
 };
 
-#endif // AST_CURSOR_H
+#endif // AST_ANY_ALL_SOME_H

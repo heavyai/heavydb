@@ -555,13 +555,16 @@ public:
         printTabs(INCR);
         cout << "<FromClause>" << endl;
 
-        printTabs(INCR);
-        cout << "<TableRefCommalist>" << endl;
+        if (v->trc) {
+            printTabs(INCR);
+            cout << "<TableRefCommalist>" << endl;
 
-        v->trc->accept(*this);
+            v->trc->accept(*this);
 
-        printTabs(DECR);
-        cout << "</TableRefCommalist>" << endl;
+            printTabs(DECR);
+            cout << "</TableRefCommalist>" << endl;
+        }
+        if (v->ss) v->ss->accept(*this);
 
         printTabs(DECR);
         cout << "</FromClause>" << endl;
@@ -874,10 +877,10 @@ public:
         printTabs(NONE);
 
         if (v->size1 != 0) 
-        cout << "<DataType flag=" << v->dataType_Flag << "size1" << v->size1 << "/>" << endl;
+            cout << "<DataType flag=" << v->dataType_Flag << "size1" << v->size1 << "/>" << endl;
         
         else 
-        cout << "<DataType flag=" << v->dataType_Flag << "/>" << endl;
+            cout << "<DataType flag=" << v->dataType_Flag << "/>" << endl;
        
         //printTabs(DECR);
     }

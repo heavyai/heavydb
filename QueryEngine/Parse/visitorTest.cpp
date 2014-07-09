@@ -18,9 +18,9 @@ int main(int argc, char ** argv) {
             break;
         ASTNode *parseRoot = 0;
         parser.parse(sql, parseRoot);
-        XMLTranslator xml;
+      /* XMLTranslator xml;
         if (parseRoot != 0)
-            parseRoot->accept(xml);
+            parseRoot->accept(xml); */
 
     }
     while (1==1);

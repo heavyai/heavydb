@@ -9,6 +9,9 @@ public:
     template <typename T>
     // virtual void visit(T &);*/
 
+    virtual void visit(class AllOrAnyPredicate *v) = 0;
+    virtual void visit(class AnyAllSome *v) = 0;
+    virtual void visit(class AtomCommalist *v) = 0;
     virtual void visit(class Ammsc *v) = 0;
     virtual void visit(class Assignment *v) = 0;
     virtual void visit(class AssignmentCommalist *v) = 0;
@@ -27,8 +30,10 @@ public:
     virtual void visit(class ColumnRefCommalist *v) = 0;
     virtual void visit(class ComparisonPredicate *v) = 0;
     virtual void visit(class DataType *v) = 0;
+    virtual void visit(class ExistenceTest *v) = 0;
     virtual void visit(class FromClause *v) = 0;
     virtual void visit(class FunctionRef *v) = 0;
+    virtual void visit(class InPredicate *v) = 0;
     virtual void visit(class InsertAtom *v) = 0;
     virtual void visit(class InsertAtomCommalist *v) = 0;
     virtual void visit(class InsertStatement *v) = 0;
@@ -48,7 +53,7 @@ public:
     virtual void visit(class OrderingSpec *v) = 0;
     // virtual void visit(class ParameterRef *v) = 0;
     virtual void visit(class Predicate *v) = 0;
-    virtual void visit (class Program *v) = 0;
+    virtual void visit(class Program *v) = 0;
     virtual void visit(class QuerySpec *v) = 0;
     virtual void visit(class SQL *v) = 0;
     virtual void visit(class SQLList *v) = 0;
@@ -58,11 +63,13 @@ public:
     virtual void visit(class SearchCondition *v) = 0;
     virtual void visit(class SelectStatement *v) = 0;
     virtual void visit(class Selection *v) = 0;
+    virtual void visit(class Subquery *v) = 0;
     virtual void visit(class Table *v) = 0;
     virtual void visit(class TableConstraintDef *v) = 0;
     virtual void visit(class TableExp *v) = 0;
     virtual void visit(class TableRef *v) = 0;
     virtual void visit(class TableRefCommalist *v) = 0;
+    virtual void visit(class TestForNull *v) = 0;
     virtual void visit(class UpdateStatementPositioned *v) = 0;
     virtual void visit(class UpdateStatementSearched *v) = 0;
     virtual void visit(class ValuesOrQuerySpec *v) = 0;

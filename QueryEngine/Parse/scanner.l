@@ -7,14 +7,14 @@
 
 extern YY_Parser_STYPE yylval;
 
-#define TOK(name) { dotCount = 0; commaCount = 0; return Parser::name; }
+#define TOK(name) { dotCount = 0; offsetFlag = 1; return Parser::name; }
 
 // Variables used to share data with the parser
 std::string strData[10];
 
 double dData[10];
 int dotCount = 0;
-int commaCount = 0;
+int offsetFlag = 0;
 int asFlag = 0;
 int lineno = 0;
 
@@ -90,10 +90,15 @@ using namespace std;
 	
 "offset"					{
 								/* ensure that aliased name is printed fully. */
-								commaCount++;
-								dotCount = 0;
+								offsetFlag = 1;
 								return Parser::OFFSET;
 							}
+
+"is"		TOK(IS);
+"in"		TOK(IN);
+"any"		TOK(ANY);
+"some"		TOK(SOME);
+"exists"	TOK(EXISTS);
 
 "="	|
 "<>" |
@@ -106,13 +111,7 @@ using namespace std;
 				}
 
 
-[-+*/();]	return yytext[0];
-
-[,]			{
-				commaCount++;
-				return yytext[0];
-
-			}
+[-+*/,();]	return yytext[0];
 
 [.]			{
 				dotCount++;
@@ -134,7 +133,7 @@ using namespace std;
 											dotCount = 0;
 										}
 										else strData[0] = yytext;
-										commaCount = 0;
+										offsetFlag = 0;
 										return Parser::NAME;
 									}
 
@@ -151,10 +150,10 @@ using namespace std;
 [0-9]+	|
 [0-9]+"."[0-9]* |
 "."[0-9]*							{ 
-										if (commaCount == 1) {
+										if (offsetFlag == 1) {
 											dData[1] = atof(yytext);
 											/* Reset asflag. */
-											commaCount = 0; 
+											offsetFlag = 0; 
 										}
 										else 
 											dData[0] = atof(yytext);
@@ -174,11 +173,9 @@ using namespace std;
 
 '[^'\n]*'	{
 		std::string temp;
-		char c = yyinput();
+		int c = yyinput();
 		temp = yytext;
-		cout << yytext << endl;
-		yyunput(1, &c);	/* just peeking */
-		cout << yytext << endl;
+		yyunput(c, yytext);	/* just peeking */
 		if(c != '\'') {
 			//printf("reading string: %s\n", yytext);
 			strData[0] = temp.substr(1, temp.length()-2);

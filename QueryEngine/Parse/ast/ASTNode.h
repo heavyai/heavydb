@@ -4,6 +4,7 @@
 class ASTNode {
     
 public:
+
     /**< Accepts the given void visitor by calling v.visit(this) */
     virtual void accept(class Visitor &v) = 0;
 };
