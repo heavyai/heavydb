@@ -16,9 +16,12 @@ int main(int argc, char ** argv) {
         getline(cin,sql);
         if (sql == "q")
             break;
-        parser.parse(sql);
+        ASTNode *parseRoot = 0;
+        parser.parse(sql, parseRoot);
         XMLTranslator xml;
-        parse_root->accept(xml);
+        if (parseRoot != 0)
+            parseRoot->accept(xml);
+
     }
     while (1==1);
     cout << "After parse" << endl;

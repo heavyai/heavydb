@@ -15,7 +15,7 @@
 #define YY_Parser_LSP_NEEDED 
 #define YY_Parser_MEMBERS                  \
     virtual ~Parser()   {} \
-    void parse(const string & inputStr) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(); /*yy_scan_string(inputStr); */ } \
+    void parse(const string & inputStr, ASTNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
     private:                   \
        yyFlexLexer lexer;
 #define YY_Parser_LEX_BODY  {return lexer.yylex();}
@@ -97,6 +97,7 @@
 // define stack element type to be a 
 // pointer to an AST node
 #define YY_Parser_STYPE ASTNode*
+#define YY_Parser_PARSE_PARAM ASTNode*& parseRoot
 
 extern ASTNode* parse_root;
 

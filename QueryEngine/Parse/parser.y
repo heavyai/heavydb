@@ -2,7 +2,7 @@
 %define LSP_NEEDED
 %define MEMBERS                 \
     virtual ~Parser()   {} \
-    void parse(const string & inputStr) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(); } \
+    void parse(const string & inputStr, ASTNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
@@ -84,6 +84,7 @@
 // define stack element type to be a 
 // pointer to an AST node
 #define YY_Parser_STYPE ASTNode*
+#define YY_Parser_PARSE_PARAM ASTNode*& parseRoot
 
 extern ASTNode* parse_root;
 
@@ -136,8 +137,8 @@ using namespace std;
 %%
 
 program
-: sql_list						{ $$ = new Program((SQLList*)$1); parse_root = $$; }
-|								{ $$ = 0; parse_root = $$; }
+: sql_list						{ $$ = new Program((SQLList*)$1); parseRoot = $$; }
+|								{ $$ = 0; parseRoot = $$; }
 ;
 
 sql_list
