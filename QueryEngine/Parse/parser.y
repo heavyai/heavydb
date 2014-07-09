@@ -201,7 +201,7 @@ table_constraint_def
 | PRIMARY KEY '(' column_commalist ')'                                              { $$ = new TableConstraintDef(1, (ColumnCommalist*)$4); }
 | FOREIGN KEY '(' column_commalist ')' REFERENCES table                             { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7); }
 | FOREIGN KEY '(' column_commalist ')' REFERENCES table '(' column_commalist ')'    { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7, (ColumnCommalist*)$9); }
-// |   CHECK '(' search_condition ')'              {$$ = new TableConstraintDef(3, (SearchCondition*)$3); }
+|   CHECK '(' search_condition ')'                                                  {$$ = new TableConstraintDef(3, (SearchCondition*)$3); }
     ;
 
 column_commalist:
@@ -211,7 +211,7 @@ column_commalist:
 
 opt_order_by_clause:
         /* empty */                             { $$ = NULL; }
-    |   ORDER BY ordering_spec_commalist        { $$ = new OptOrderByClause((OrderingSpecCommalist*)$3); }
+    |   ORDER BY ordering_spec_commalist        { $$ = new OptOrder ByClause((OrderingSpecCommalist*)$3); }
     ;
     
 ordering_spec_commalist:
@@ -457,10 +457,10 @@ data_type
 | VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, dData[0]); }
 | NUMERIC                             { $$ = new DataType(2); }
 | NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, dData[0]); }
-|   NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, dData[0], dData[1]); }
+| NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, dData[0], dData[1]); }
 | DECIMAL                             { $$ = new DataType(3); }
 | DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, dData[0]); }
-|   DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, dData[0], dData[1]); }
+| DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, dData[0], dData[1]); }
 | INTEGER                             { $$ = new DataType(4); }
 | SMALLINT                            { $$ = new DataType(5); }
 | FLOAT                               { $$ = new DataType(6); }
