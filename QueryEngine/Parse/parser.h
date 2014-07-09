@@ -15,16 +15,19 @@
 #define YY_Parser_LSP_NEEDED 
 #define YY_Parser_MEMBERS                  \
     virtual ~Parser()   {} \
+    void parse(const string & inputStr) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(); /*yy_scan_string(inputStr); */ } \
     private:                   \
        yyFlexLexer lexer;
 #define YY_Parser_LEX_BODY  {return lexer.yylex();}
 #define YY_Parser_ERROR_BODY  {cerr << "error encountered at line: "<<lexer.lineno()<<" last word parsed:"<<lexer.YYText()<<"\n";}
-#line 10 "parser.y"
+#line 11 "parser.y"
 
 #include <iostream>
 #include <fstream>
 #include <FlexLexer.h>
 #include <cstdlib>
+#include <string>
+#include <sstream>
 
 // AST nodes
 #include "ast/ASTNode.h"

@@ -2,6 +2,7 @@
 %define LSP_NEEDED
 %define MEMBERS                 \
     virtual ~Parser()   {} \
+    void parse(const string & inputStr) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(); } \
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
@@ -12,6 +13,8 @@
 #include <fstream>
 #include <FlexLexer.h>
 #include <cstdlib>
+#include <string>
+#include <sstream>
 
 // AST nodes
 #include "ast/ASTNode.h"
