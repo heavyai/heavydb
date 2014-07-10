@@ -65,6 +65,14 @@
 #include "../ast/Assignment.h"
 #include "../ast/Cursor.h"
 
+#include "../ast/TestForNull.h"
+#include "../ast/InPredicate.h"
+#include "../ast/ExistenceTest.h"
+#include "../ast/AllOrAnyPredicate.h"
+#include "../ast/AnyAllSome.h"
+#include "../ast/AtomCommalist.h"
+#include "../ast/Subquery.h"
+
 #include <iostream>
 using std::cout;
 using std::endl;
@@ -293,6 +301,77 @@ public:
         printTabs(DECR);
         cout << "</ColumnDef>" << endl;
     }
+      void visit(class InPredicate *v) {
+        printTabs(INCR);
+        cout << "<InPredicate>" << endl;
+
+        v->se->accept(*this);
+        printTabs(NONE);
+        if (v->rule_Flag == 0) cout << "<NOT IN>" << endl;
+        else cout << "<NOT>" << endl;
+
+        if (v->sq) v->sq->accept(*this);
+        if (v->ac) v->ac->accept(*this);
+
+        printTabs(DECR);
+        cout << "</InPredicate>" << endl;
+    }
+    
+      void visit(class TestForNull *v) {
+        printTabs(INCR);
+        cout << "<TestForNull>" << endl;
+
+        v->cr->accept(*this);
+        printTabs(NONE);
+        if (v->rule_Flag == 0) cout << "<NOT IN>" << endl;
+        else cout << "<NOT>" << endl;
+
+        printTabs(DECR);
+        cout << "</TestForNull>" << endl;
+    }
+    void visit(class AllOrAnyPredicate *v) {
+        printTabs(INCR);
+        cout << "<AllOrAnyPredicate>" << endl;
+
+        v->se->accept(*this);
+        v->aas->accept(*this);
+        v->sq->accept(*this);
+
+        printTabs(DECR);
+        cout << "</AllOrAnyPredicate>" << endl;
+    }
+    void visit(class Subquery *v) {
+        printTabs(INCR);
+        cout << "<Subquery>" << endl;
+
+        v->oad->accept(*this);
+        v->s->accept(*this);
+        v->te->accept(*this);
+
+        printTabs(DECR);
+        cout << "</Subquery>" << endl;
+    }
+
+    void visit(class AnyAllSome *v) {
+        printTabs(INCR);
+
+        cout << "<AnyAllSome value= " << v->anyAllSome << "/>" << endl;
+        
+        printTabs(DECR);
+        cout << "</AnyAllSome>" << endl;
+    }
+
+    void visit(class ExistenceTest *v) {
+        printTabs(INCR);
+        cout << "<ExistenceTest>" << endl;
+    
+        printTabs(NONE);
+        cout << "<EXISTS>" << endl;
+        v->sq->accept(*this);
+
+        printTabs(DECR);
+        cout << "</ExistenceTest>" << endl;
+    }
 
     void visit(class BaseTableElement *v) {
         printTabs(INCR);
@@ -425,21 +504,22 @@ public:
     }
     
     void visit(class ColumnCommalist *v) {
-        printTabs(INCR);
-        cout << "<ColumnCommalist>" << endl;
-
         if (v->colCom) v->colCom->accept(*this);
         v->col->accept(*this);
-
-        printTabs(DECR);
-        cout << "</ColumnCommalist>" << endl;
     }
 
     void visit(class OptColumnCommalist *v) {
         printTabs(INCR);
         cout << "<OptColumnCommalist>" << endl;
 
+        printTabs(INCR);
+        cout << "<ColumnCommalist>" << endl;
+
         if (v->cc) v->cc->accept(*this);
+
+
+        printTabs(DECR);
+        cout << "</ColumnCommalist>" << endl;
 
         printTabs(DECR);
         cout << "</OptColumnCommalist>" << endl;
@@ -456,6 +536,13 @@ public:
         cout << "</Atom>" << endl;
     }
 
+    void visit(class AtomCommalist *v) {
+
+        if (v->ac) v->ac->accept(*this);
+        v->a->accept(*this);
+
+    }
+
     void visit(class InsertAtom *v) {
         printTabs(INCR);
         cout << "<InsertAtom>" << endl;
@@ -467,14 +554,9 @@ public:
     }
 
     void visit(class InsertAtomCommalist *v) {
-        printTabs(INCR);
-        cout << "<InsertAtomCommalist>" << endl;
 
         if (v->iac) v->iac->accept(*this);
         v->ia->accept(*this);
-
-        printTabs(DECR);
-        cout << "</InsertAtomCommalist>" << endl;
     }
 
     void visit(class QuerySpec *v) {
@@ -505,7 +587,15 @@ public:
         cout << "<UpdateStatementSearched>" << endl;
 
         v->tbl->accept(*this);
+
+        printTabs(INCR);
+        cout << "<AtomCommalist>" << endl;
+        
         v->ac->accept(*this);
+        
+        printTabs(DECR);
+        cout << "<AtomCommalist>" << endl;
+
         v->owc->accept(*this);
 
         printTabs(DECR);
@@ -734,7 +824,8 @@ public:
         v->se1->accept(*this);
         printTabs(NONE);
         cout << "\t<COMPARISON>" << endl;
-        v->se2->accept(*this);
+        if (v->se2) v->se2->accept(*this);
+        if (v->s) v->s->accept(*this);
 
         printTabs(DECR);
         cout << "</ComparisonPredicate>" << endl;
