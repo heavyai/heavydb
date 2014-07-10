@@ -1,10 +1,10 @@
-%name RelAlgebraParser
-#define LSP_NEEDED
+%name Parser
+%define LSP_NEEDED
 %define MEMBERS                 \
     virtual ~Parser()   {} \
-    void parse(const string & inputStr, ASTNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
+    void parse(const string & inputStr, RelAlgNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
     private:                   \
-       yyFlexLexer lexer;
+       yyFlexLexer lexer; 
 %define LEX_BODY {return lexer.yylex();}
 %define ERROR_BODY {cerr << "error encountered at line: "<<lexer.lineno()<<" last word parsed:"<<lexer.YYText()<<"\n";}
 
@@ -13,14 +13,20 @@
 #include <fstream>
 #include <FlexLexer.h>
 #include <cstdlib>
+#include <string>
+#include <sstream>
 
 // AST nodes
-#include "ast/ASTNode.h"
+#include "ast/RelAlgNode.h"
 
 // define stack element type to be a 
 // pointer to an AST node
-#define YY_Parser_STYPE ASTNode*
-#define YY_Parser_PARSE_PARAM ASTNode*& parseRoot
+	
+#define YY_Parser_STYPE RelAlgNode*
+#define YY_Parser_PARSE_PARAM RelAlgNode*& parseRoot
+
+extern RelAlgNode* parse_root;
+
 
 // Variables declared in RelAlgebraLexer.l
 extern std::string strData[10];
@@ -31,8 +37,11 @@ using namespace std;
 
 %left PLUS MINUS
 %left MULTIPLY DIVIDE
+%left OR
+%left AND
+%left NOT
 
-%token NEQ EQ GT GTE LT LTE
+%left NEQ EQ GT GTE LT LTE
 %token SELECT PROJECT SORT RENAME EXTEND GROUPBY
 %token PRODUCT JOIN SEMIJOIN ANTIJOIN OUTERJOIN UNION
 %token MAX MIN COUNT SUM AVG
@@ -44,8 +53,8 @@ using namespace std;
 %%
 
 S:
-	RelExprList
-|		
+	RelExprList				{ $$ = new Program((RelExprList*)$1); }
+|							{ $$ = NULL; }
 ;
 
 RelExprList:
@@ -61,7 +70,7 @@ RelExpr:
 ;
 
 UnaryOp:
-|	SELECT 	'(' RelExpr ',' Predicate ')'
+	SELECT 	'(' RelExpr ',' Predicate ')'
 |	PROJECT '(' RelExpr ',' '{' AttrList '}' ')'
 |	SORT	'(' RelExpr ',' AttrList ')'
 |	RENAME	'(' RelExpr ',' attribute ',' NAME ')'
@@ -69,11 +78,12 @@ UnaryOp:
 |	EXTEND	'(' RelExpr ',' data ',' NAME ')'
 |	GROUPBY	'('	RelExpr ',' '{' AttrList '}' ',' AggrList ')'
 |	GROUPBY	'('	RelExpr ',' '{' '}' ',' AggrList ')'
+;
 
 BinaryOp:
 	PRODUCT '(' RelExpr ',' RelExpr ')'
 |	JOIN	'(' RelExpr ',' RelExpr ',' Predicate ')'	/* 'join' is shorthand for 'selection of product' */
-|	SEMIJOIN (' RelExpr ',' RelExpr ',' Predicate ')
+|	SEMIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'
 |	ANTIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'
 |	OUTERJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'
 |	UNION	'(' RelExpr ',' RelExpr ')'
@@ -86,10 +96,11 @@ MathExpr:
 |	MathExpr DIVIDE MathExpr
 |	'(' MathExpr ')'
 |	attribute
+;
 
 AggrList:
 	AggrExpr
-|	AggrExpr ',' AggrExpr
+|	AggrList ',' AggrExpr
 ;
 
 AggrExpr:
@@ -107,30 +118,46 @@ AggrExpr:
 
 AttrList:
   attribute
-| attribute ',' AttrList
+| AttrList ',' attribute
 ;
 
-attribute: 	NAME | fullname;
+attribute: 	NAME | NAME '.' NAME;
 
 Predicate:
   Predicate OR Predicate
 | Predicate AND Predicate
 | NOT Predicate
 | '(' Predicate ')'
-| compared CompOp compared
+| comparison
 ;
+
+comparison:	compared CompOp compared;
 
 CompOp:	NEQ | EQ | GT | GTE | LT | LTE;
 compared: 	attribute | data;
 
-fullname: 	NAME '.' NAME;
 data: 		CONSTANT | STRVAL;
 
+/*
 RelationList:
 	relation
-|	relation ',' relation
+|	RelationList ',' relation
 ;
+*/
 
 relation: 	NAME;
 
 %%
+
+RelAlgNode *parse_root = 0;
+
+int main() {
+
+    string sql;
+    cout << "Enter sql statement: ";
+    getline(cin,sql);
+
+	Parser parser;
+	parser.parse(sql, parse_root);
+	return 0;
+}

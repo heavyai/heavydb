@@ -1,7 +1,7 @@
-#ifndef REL_ALG_NODE_H
-#define REL_ALG_NODE_H
+#ifndef AST_NODE_H
+#define AST_NODE_H
 
-class RelAlgNode {
+class ASTNode {
     
 public:
 
@@ -9,4 +9,4 @@ public:
     virtual void accept(class Visitor &v) = 0;
 };
 
-#endif // REL_ALG_NODE_H
+#endif // AST_NODE_H

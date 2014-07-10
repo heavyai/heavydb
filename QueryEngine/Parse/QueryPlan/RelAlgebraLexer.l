@@ -12,7 +12,8 @@ IS			(u|U|l|L)*
 #include <iostream>
 #include "RelAlgebraParser.h"
 
-void count();
+//void /* count() */;
+int column;
 extern YY_Parser_STYPE yylval;
 
 // Variables used to share data with the parser
@@ -23,62 +24,62 @@ using namespace std;
 
 %%
 
-"!="						{ count(); return RelAlgebraParser::NEQ; }
-"="							{ count(); return RelAlgebraParser::EQ; }
-">"							{ count(); return RelAlgebraParser::GT; }
-"<"							{ count(); return RelAlgebraParser::LT; }
-">="						{ count(); return RelAlgebraParser::GTE; }
-"<="						{ count(); return RelAlgebraParser::LTE; }
+"!="						{ /* count() */; return Parser::NEQ; }
+"="							{ /* count() */; return Parser::EQ; }
+">"							{ /* count() */; return Parser::GT; }
+"<"							{ /* count() */; return Parser::LT; }
+">="						{ /* count() */; return Parser::GTE; }
+"<="						{ /* count() */; return Parser::LTE; }
 
-"select"					{ count(); return RelAlgebraParser::SELECT; }
-"project"					{ count(); return RelAlgebraParser::PROJECT; }
-"sort"						{ count(); return RelAlgebraParser::SORT; }
-"rename"					{ count(); return RelAlgebraParser::RENAME; }
-"extend"					{ count(); return RelAlgebraParser::EXTEND; }
-"groupby"					{ count(); return RelAlgebraParser::GROUPBY; }
+"select"					{ /* count() */; return Parser::SELECT; }
+"project"					{ /* count() */; return Parser::PROJECT; }
+"sort"						{ /* count() */; return Parser::SORT; }
+"rename"					{ /* count() */; return Parser::RENAME; }
+"extend"					{ /* count() */; return Parser::EXTEND; }
+"groupby"					{ /* count() */; return Parser::GROUPBY; }
 
-"product"					{ count(); return RelAlgebraParser::PRODUCT; }
-"join"						{ count(); return RelAlgebraParser::JOIN; }
-"semijoin"					{ count(); return RelAlgebraParser::SEMIJOIN; }
-"antijoin"					{ count(); return RelAlgebraParser::ANTIJOIN; }
-"outerjoin"					{ count(); return RelAlgebraParser::OUTERJOIN; }
-"union"						{ count(); return RelAlgebraParser::UNION; }
+"product"					{ /* count() */; return Parser::PRODUCT; }
+"join"						{ /* count() */; return Parser::JOIN; }
+"semijoin"					{ /* count() */; return Parser::SEMIJOIN; }
+"antijoin"					{ /* count() */; return Parser::ANTIJOIN; }
+"outerjoin"					{ /* count() */; return Parser::OUTERJOIN; }
+"union"						{ /* count() */; return Parser::UNION; }
 
-"max"						{ count(); return RelAlgebraParser::MAX; }
-"min"						{ count(); return RelAlgebraParser::MIN; }
-"count"						{ count(); return RelAlgebraParser::COUNT; }
-"sum"						{ count(); return RelAlgebraParser::SUM; }
-"avg"						{ count(); return RelAlgebraParser::AVG; }
+"max"						{ /* count() */; return Parser::MAX; }
+"min"						{ /* count() */; return Parser::MIN; }
+"count"						{ /* count() */; return Parser::COUNT; }
+"sum"						{ /* count() */; return Parser::SUM; }
+"avg"						{ /* count() */; return Parser::AVG; }
 
-"max distinct"				{ count(); return RelAlgebraParser::MAX_DISTINCT; }
-"min distinct"				{ count(); return RelAlgebraParser::MIN_DISTINCT; }
-"count distinct"			{ count(); return RelAlgebraParser::COUNT_DISTINCT; }
-"sum distinct"				{ count(); return RelAlgebraParser::SUM_DISTINCT; }
-"avg distinct"				{ count(); return RelAlgebraParser::AVG_DISTINCT; }
+"max distinct"				{ /* count() */; return Parser::MAX_DISTINCT; }
+"min distinct"				{ /* count() */; return Parser::MIN_DISTINCT; }
+"count distinct"			{ /* count() */; return Parser::COUNT_DISTINCT; }
+"sum distinct"				{ /* count() */; return Parser::SUM_DISTINCT; }
+"avg distinct"				{ /* count() */; return Parser::AVG_DISTINCT; }
 
-0[xX]{H}+{IS}?				{ count(); return(CONSTANT); }
-0{D}+{IS}?					{ count(); return(CONSTANT); }
-{D}+{IS}?					{ count(); return(CONSTANT); }
-L?'(\\.|[^\\'])+'			{ count(); return(CONSTANT); }
+0[xX]{H}+{IS}?				{ /* count() */; return(Parser::CONSTANT); }
+0{D}+{IS}?					{ /* count() */; return(Parser::CONSTANT); }
+{D}+{IS}?					{ /* count() */; return(Parser::CONSTANT); }
+L?'(\\.|[^\\'])+'			{ /* count() */; return(Parser::CONSTANT); }
 
-{D}+{E}{FS}?				{ count(); return(CONSTANT); }
-{D}*"."{D}+({E})?{FS}?		{ count(); return(CONSTANT); }
-{D}+"."{D}*({E})?{FS}?		{ count(); return(CONSTANT); }
+{D}+{E}{FS}?				{ /* count() */; return(Parser::CONSTANT); }
+{D}*"."{D}+({E})?{FS}?		{ /* count() */; return(Parser::CONSTANT); }
+{D}+"."{D}*({E})?{FS}?		{ /* count() */; return(Parser::CONSTANT); }
 
-[-+*/(),;]					{ count(); return yytext[0]; }
+[-+*/{}(),;]					{ /* count() */; return yytext[0]; }
 
-[A-Za-z][A-Za-z0-9_]*		{ count(); strData[0] = yytext; return Parser::NAME; }
+[A-Za-z][A-Za-z0-9_]*		{ /* count() */; strData[0] = yytext; return Parser::NAME; }
 
-L?\"(\\.|[^\\"])*\"			{ count(); return Parser::STRVAL; }
+L?\"(\\.|[^\\"])*\"			{ /* count() */; return Parser::STRVAL; }
 
-[ \t\v\n\f]					{ count(); }
+[ \t\v\n\f]					{ /* count() */; }
 
 .							{ /* ignore bad characters */ }
 
 <<EOF>>						{ yyterminate(); }
 %%
 
-void count()
+void count(char * yytext)
 {
 	int i;
 
@@ -90,5 +91,5 @@ void count()
 		else
 			column++;
 
-	ECHO;
+	//ECHO;
 }
