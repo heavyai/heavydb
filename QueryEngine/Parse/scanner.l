@@ -7,13 +7,14 @@
 
 extern YY_Parser_STYPE yylval;
 
-#define TOK(name) { return Parser::name; dotCount = 0; }
+#define TOK(name) { dotCount = 0; offsetFlag = 1; return Parser::name; }
 
 // Variables used to share data with the parser
 std::string strData[10];
 
-double dData;
+double dData[10];
 int dotCount = 0;
+int offsetFlag = 0;
 int asFlag = 0;
 int lineno = 0;
 
@@ -86,7 +87,19 @@ using namespace std;
 								asFlag = 1;
 								TOK(AS);
 							}
-							
+	
+"offset"					{
+								/* ensure that aliased name is printed fully. */
+								offsetFlag = 1;
+								return Parser::OFFSET;
+							}
+
+"is"		TOK(IS);
+"in"		TOK(IN);
+"any"		TOK(ANY);
+"some"		TOK(SOME);
+"exists"	TOK(EXISTS);
+
 "="	|
 "<>" |
 "<"	|
@@ -98,7 +111,7 @@ using namespace std;
 				}
 
 
-[-+*/(),;]	return yytext[0];
+[-+*/,();]	return yytext[0];
 
 [.]			{
 				dotCount++;
@@ -108,23 +121,19 @@ using namespace std;
 
 	/* names */
 [A-Za-z][A-Za-z0-9_]*				{
-										if ((dotCount == 1) || (asFlag == 1)) {
-											strData[2] = yytext;
+										//cout << dotCount << endl;
 
-											//printf("dot: %d length1: %d length2: %d \n", dotCount, textLength, textLength2);
+										if ((dotCount == 1) || (asFlag == 1)) {
+											strData[1] = yytext;
 											/* Reset asflag. */
 											asFlag = 0; 
 										}
-
 										else if (dotCount == 2) {
-											strData[1] = yytext;
-
-											//printf("%d\n", textLength3);
+											strData[2] = yytext;
 											dotCount = 0;
 										}
 										else strData[0] = yytext;
-										/* printf("%d %d %s \n", (int) strlen(yytext), textLength, yytext); */
-
+										offsetFlag = 0;
 										return Parser::NAME;
 									}
 
@@ -141,27 +150,36 @@ using namespace std;
 [0-9]+	|
 [0-9]+"."[0-9]* |
 "."[0-9]*							{ 
-										dData = atof(yytext);
-										TOK(INTNUM);
+										if (offsetFlag == 1) {
+											dData[1] = atof(yytext);
+											/* Reset asflag. */
+											offsetFlag = 0; 
+										}
+										else 
+											dData[0] = atof(yytext);
+										dotCount = 0;
+										return Parser::INTNUM;
 									}
 
 
 [0-9]+[eE][+-]?[0-9]+	|
 [0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
 "."[0-9]*[eE][+-]?[0-9]+			{ 
-										dData = atof(yytext);
+										dData[0] = atof(yytext);
 										TOK(APPROXNUM);
 									}
 
 	/* strings */
 
 '[^'\n]*'	{
-		int c = getchar();
-
-		unput(c);	/* just peeking */
+		std::string temp;
+		int c = yyinput();
+		temp = yytext;
+		yyunput(c, yytext);	/* just peeking */
 		if(c != '\'') {
 			//printf("reading string: %s\n", yytext);
-			strData[0] = yytext;
+			strData[0] = temp.substr(1, temp.length()-2);
+			// yytext;
 			TOK(STRING);
 		} else 
 			yymore();

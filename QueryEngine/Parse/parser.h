@@ -15,16 +15,19 @@
 #define YY_Parser_LSP_NEEDED 
 #define YY_Parser_MEMBERS                  \
     virtual ~Parser()   {} \
+    void parse(const string & inputStr, ASTNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
     private:                   \
        yyFlexLexer lexer;
 #define YY_Parser_LEX_BODY  {return lexer.yylex();}
 #define YY_Parser_ERROR_BODY  {cerr << "error encountered at line: "<<lexer.lineno()<<" last word parsed:"<<lexer.YYText()<<"\n";}
-#line 10 "parser.y"
+#line 11 "parser.y"
 
 #include <iostream>
 #include <fstream>
 #include <FlexLexer.h>
 #include <cstdlib>
+#include <string>
+#include <sstream>
 
 // AST nodes
 #include "ast/ASTNode.h"
@@ -90,16 +93,25 @@
 #include "ast/Assignment.h"
 #include "ast/Cursor.h"
 
+#include "ast/TestForNull.h"
+#include "ast/InPredicate.h"
+#include "ast/ExistenceTest.h"
+#include "ast/AllOrAnyPredicate.h"
+#include "ast/AnyAllSome.h"
+#include "ast/AtomCommalist.h"
+#include "ast/Subquery.h"
+
 
 // define stack element type to be a 
 // pointer to an AST node
 #define YY_Parser_STYPE ASTNode*
+#define YY_Parser_PARSE_PARAM ASTNode*& parseRoot
 
 extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
 extern std::string strData[10];
-extern double dData;
+extern double dData[10];
 
 using namespace std;
 
@@ -348,6 +360,11 @@ typedef
 #define	DOTNAME	326
 #define	ESCAPE	327
 #define	LIKE	328
+#define	IS	329
+#define	IN	330
+#define	ANY	331
+#define	SOME	332
+#define	EXISTS	333
 
 
 #line 169 "/usr/share/bison++/bison.h"
@@ -467,6 +484,11 @@ static const int OFFSET;
 static const int DOTNAME;
 static const int ESCAPE;
 static const int LIKE;
+static const int IS;
+static const int IN;
+static const int ANY;
+static const int SOME;
+static const int EXISTS;
 
 
 #line 212 "/usr/share/bison++/bison.h"
@@ -546,6 +568,11 @@ static const int LIKE;
 	,DOTNAME=326
 	,ESCAPE=327
 	,LIKE=328
+	,IS=329
+	,IN=330
+	,ANY=331
+	,SOME=332
+	,EXISTS=333
 
 
 #line 215 "/usr/share/bison++/bison.h"

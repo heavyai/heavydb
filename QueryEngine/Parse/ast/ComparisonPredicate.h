@@ -10,9 +10,11 @@ public:
 
     ScalarExp* se1;
     ScalarExp* se2;
+    Subquery* s;
 
     /* constructor */
-    explicit ComparisonPredicate(ScalarExp* n1, ScalarExp* n2) : se1(n1), se2(n2) {}
+    explicit ComparisonPredicate(ScalarExp* n1, ScalarExp* n2) : se1(n1), se2(n2), s(NULL) {}
+    ComparisonPredicate(ScalarExp* n1, Subquery* n2) : se1(n1), se2(NULL), s(n2) {}
 
 	/**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

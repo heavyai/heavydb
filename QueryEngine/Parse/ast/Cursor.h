@@ -8,7 +8,7 @@ class Cursor : public ASTNode {
     
 public:
     std::string name1;
-    
+
     /**< Constructor */
     explicit Cursor(const std::string &n1) : name1(n1) {}
 

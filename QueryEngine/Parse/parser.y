@@ -2,7 +2,7 @@
 %define LSP_NEEDED
 %define MEMBERS                 \
     virtual ~Parser()   {} \
-    void parse() {yyparse();} \
+    void parse(const string & inputStr, ASTNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
@@ -13,6 +13,8 @@
 #include <fstream>
 #include <FlexLexer.h>
 #include <cstdlib>
+#include <string>
+#include <sstream>
 
 // AST nodes
 #include "ast/ASTNode.h"
@@ -78,16 +80,25 @@
 #include "ast/Assignment.h"
 #include "ast/Cursor.h"
 
+#include "ast/TestForNull.h"
+#include "ast/InPredicate.h"
+#include "ast/ExistenceTest.h"
+#include "ast/AllOrAnyPredicate.h"
+#include "ast/AnyAllSome.h"
+#include "ast/AtomCommalist.h"
+#include "ast/Subquery.h"
+
 
 // define stack element type to be a 
 // pointer to an AST node
 #define YY_Parser_STYPE ASTNode*
+#define YY_Parser_PARSE_PARAM ASTNode*& parseRoot
 
 extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
 extern std::string strData[10];
-extern double dData;
+extern double dData[10];
 
 using namespace std;
 
@@ -128,14 +139,15 @@ using namespace std;
 %token LIMIT OFFSET
 
 %token DOTNAME ESCAPE LIKE GROUP BY
+%token IS IN ANY SOME EXISTS
 
 %start program
 
 %%
 
 program
-: sql_list						{ $$ = new Program((SQLList*)$1); parse_root = $$; }
-|								{ $$ = 0; parse_root = $$; }
+: sql_list						{ $$ = new Program((SQLList*)$1); parseRoot = $$; }
+|								{ $$ = 0; parseRoot = $$; }
 ;
 
 sql_list
@@ -198,8 +210,8 @@ table_constraint_def
 | PRIMARY KEY '(' column_commalist ')'                                              { $$ = new TableConstraintDef(1, (ColumnCommalist*)$4); }
 | FOREIGN KEY '(' column_commalist ')' REFERENCES table                             { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7); }
 | FOREIGN KEY '(' column_commalist ')' REFERENCES table '(' column_commalist ')'    { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7, (ColumnCommalist*)$9); }
-// |   CHECK '(' search_condition ')'              {$$ = new TableConstraintDef(3, (SearchCondition*)$3); }
-    ;
+| CHECK '(' search_condition ')'                                                  {$$ = new TableConstraintDef(3, (SearchCondition*)$3); }
+;
 
 column_commalist:
         column                                      { $$ = new ColumnCommalist((Column*)$1); }
@@ -217,7 +229,7 @@ ordering_spec_commalist:
     ;
 
 ordering_spec:
-        INTNUM opt_asc_desc             { $$ = new OrderingSpec(dData, (OptAscDesc*)$2); }
+        INTNUM opt_asc_desc             { $$ = new OrderingSpec(dData[0], (OptAscDesc*)$2); }
     |   column_ref opt_asc_desc         { $$ = new OrderingSpec((ColumnRef*)$1, (OptAscDesc*)$2); }
     ;
 
@@ -323,9 +335,10 @@ table_exp:
                                                     (OptOrderByClause*)$5, (OptLimitClause*)$6); }
 ;
 
-from_clause:
-        FROM table_ref_commalist                { $$ = new FromClause((TableRefCommalist*)$2); }
-    ;
+from_clause
+: FROM table_ref_commalist              { $$ = new FromClause((TableRefCommalist*)$2); }
+| FROM '(' select_statement ')'         { $$ = new FromClause((SelectStatement*)$3); }
+;
 
 table_ref_commalist:
         table_ref                               { $$ = new TableRefCommalist((TableRef*)$1); }
@@ -359,9 +372,9 @@ opt_having_clause:
 
 opt_limit_clause:
     /* empty */                               { $$ = NULL; }
-    | LIMIT INTNUM                            { $$ = new OptLimitClause(dData); }
-   // | LIMIT INTNUM ',' INTNUM                 { $$ = new OptLimitClause(0, dData[0], dData[1]); }
-   // | LIMIT INTNUM OFFSET INTNUM              { $$ = new OptLimitClause(1, dData[0], dData[1]); }
+    | LIMIT INTNUM                            { $$ = new OptLimitClause(dData[0]); }
+//    | LIMIT INTNUM ',' INTNUM                 { $$ = new OptLimitClause(0, dData[0], dData[1]); }
+    | LIMIT INTNUM OFFSET INTNUM              { $$ = new OptLimitClause(1, dData[0], dData[1]); }
     /* search conditions */
 
 search_condition: 
@@ -376,15 +389,15 @@ predicate:
         comparison_predicate                    { $$ = new Predicate((ComparisonPredicate*)$1); }
     |   between_predicate                       { $$ = new Predicate((BetweenPredicate*)$1); }
     |   like_predicate                          { $$ = new Predicate((LikePredicate*)$1); }
-    /*  |   test_for_null
-    |   in_predicate
-    |   all_or_any_predicate
-    |   existence_test */
+    |   test_for_null                           { $$ = new Predicate((TestForNull*)$1); }
+    |   in_predicate                            { $$ = new Predicate((InPredicate*)$1); }
+    |   all_or_any_predicate                    { $$ = new Predicate((AllOrAnyPredicate*)$1); }
+    |   existence_test                          { $$ = new Predicate((ExistenceTest*)$1); }
     ;
 
 comparison_predicate:
-        scalar_exp COMPARISON scalar_exp                        { $$ = new ComparisonPredicate((ScalarExp*)$1, (ScalarExp*)$3) }
-   /* |   scalar_exp COMPARISON subquery                          { $$ = opr(COMPARISON, $1, $3); } */
+        scalar_exp COMPARISON scalar_exp                        { $$ = new ComparisonPredicate((ScalarExp*)$1, (ScalarExp*)$3); }
+    |   scalar_exp COMPARISON subquery                          { $$ = new ComparisonPredicate((ScalarExp*)$1, (Subquery*)$3); }
     ;
 
 between_predicate:
@@ -401,6 +414,43 @@ opt_escape:
         /* empty */                                             { $$ = NULL; }
     |   ESCAPE atom                                             { $$ = new OptEscape((Atom*)$2); }
     ;
+
+test_for_null:
+        column_ref IS NOT NULLX                                 { $$ = new TestForNull(1, (ColumnRef*)$1); }
+    |   column_ref IS NULLX                                     { $$ = new TestForNull(0, (ColumnRef*)$1); }
+    ;
+
+in_predicate:
+        scalar_exp NOT IN '(' subquery ')'                      { $$ = new InPredicate(1, (ScalarExp*)$1, (Subquery*)$5); }
+    |   scalar_exp IN '(' subquery ')'                          { $$ = new InPredicate(0, (ScalarExp*)$1, (Subquery*)$4); }
+    |   scalar_exp NOT IN '(' atom_commalist ')'                { $$ = new InPredicate(1, (ScalarExp*)$1, (AtomCommalist*)$5); }
+    |   scalar_exp IN '(' atom_commalist ')'                    { $$ = new InPredicate(0, (ScalarExp*)$1, (AtomCommalist*)$4); }
+    ;
+
+atom_commalist:
+        atom                                                    { $$ = new AtomCommalist((Atom*)$1); }
+    |   atom_commalist ',' atom                                 { $$ = new AtomCommalist((AtomCommalist*)$1, (Atom*)$3); }
+    ;
+
+all_or_any_predicate:
+        scalar_exp COMPARISON any_all_some subquery             { $$ = new AllOrAnyPredicate((ScalarExp*)$1, (AnyAllSome*)$3, (Subquery*)$4); }
+    ;
+            
+any_all_some:
+        ANY                                                     { $$ = new AnyAllSome("ANY"); }
+    |   ALL                                                     { $$ = new AnyAllSome("ALL"); }
+    |   SOME                                                    { $$ = new AnyAllSome("SOME"); }
+    ;
+
+existence_test:
+        EXISTS subquery                                         { $$ = new ExistenceTest((Subquery*)$2); }
+    ;
+
+subquery:
+        '(' SELECT opt_all_distinct selection table_exp ')'     { $$ = new Subquery((OptAllDistinct*)$3, (Selection*)$4, (TableExp*)$5); }
+    ;
+
+/* scalar stuff */
 
 scalar_exp_commalist:       
         scalar_exp                              { $$ = new ScalarExpCommalist((ScalarExp*)$1); }
@@ -435,8 +485,8 @@ function_ref:
 
 literal
 : STRING /* should be: STRING */           { $$ = new Literal(strData[0]); }
-| INTNUM                                 { $$ = new Literal(dData); }
-// | APPROXNUM                           { $$ = opr(LITERAL, 1, con($1)); }
+| INTNUM                                   { $$ = new Literal(dData[0]); }
+| APPROXNUM                                { $$ = new Literal(dData[0]); }
 ;
 
 table
@@ -449,19 +499,19 @@ table
 /* data types */
 data_type
 : CHARACTER                           { $$ = new DataType(0); }
-| CHARACTER '(' INTNUM ')'            { $$ = new DataType(0, dData); }
+| CHARACTER '(' INTNUM ')'            { $$ = new DataType(0, dData[0]); }
 | VARCHAR                             { $$ = new DataType(1); }
-| VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, dData); }
+| VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, dData[0]); }
 | NUMERIC                             { $$ = new DataType(2); }
-| NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, dData); }
-// |   NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, strData[0], strData[0]); }
+| NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, dData[0]); }
+| NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, dData[0], dData[1]); }
 | DECIMAL                             { $$ = new DataType(3); }
-| DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, dData); }
-//   |   DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, strData[0], strData2[0]); }
+| DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, dData[0]); }
+| DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, dData[0], dData[1]); }
 | INTEGER                             { $$ = new DataType(4); }
 | SMALLINT                            { $$ = new DataType(5); }
 | FLOAT                               { $$ = new DataType(6); }
-| FLOAT '(' INTNUM ')'                { $$ = new DataType(6, dData); }
+| FLOAT '(' INTNUM ')'                { $$ = new DataType(6, dData[0]); }
 | REAL                                { $$ = new DataType(7); }
 | DOUBLE PRECISION                    { $$ = new DataType(8); }
 ;

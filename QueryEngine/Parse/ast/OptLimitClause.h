@@ -7,11 +7,17 @@
 class OptLimitClause : public ASTNode {
     
 public:
-    int lim1;
-    // int lim2;
+    double lim1;
+    double lim2;
     
+    int rule_Flag;
+    /* Rules:
+    0 ','
+    1 OFFSET */
+
     /**< Constructor */
-    explicit OptLimitClause(int Limit) : lim1(Limit) {}
+    explicit OptLimitClause(double limit) : rule_Flag(-1), lim1(limit), lim2(-1) {}
+    OptLimitClause(int rF, double limit1, double limit2) : rule_Flag(rF), lim1(limit1), lim2(limit2) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
