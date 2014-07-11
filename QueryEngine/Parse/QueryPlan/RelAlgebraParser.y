@@ -49,6 +49,8 @@
 #include "ast/Compared.h"
 #include "ast/CompOp.h"
 
+#include "visitor/Visitor.h"
+#include "visitor/XMLTranslator.h"
 // define stack element type to be a 
 // pointer to an AST node
 	
@@ -212,5 +214,9 @@ int main() {
 	parser.parse(sql, parseRoot);
 
 	if (parseRoot != 0) cout << "parsed successfully, yo\n";
+	XMLTranslator xml;
+    if (parseRoot != 0)
+        parseRoot->accept(xml); 
+
 	return 0;
 }

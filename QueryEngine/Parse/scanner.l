@@ -7,7 +7,7 @@
 
 extern YY_Parser_STYPE yylval;
 
-#define TOK(name) { dotCount = 0; offsetFlag = 1; return Parser::name; }
+#define TOK(name) { dotCount = 0; offsetFlag = 0; return Parser::name; }
 
 // Variables used to share data with the parser
 std::string strData[10];
@@ -31,6 +31,8 @@ using namespace std;
 "having"	TOK(HAVING);
 "all"		TOK(ALL);
 "distinct"	TOK(DISTINCT);
+"and"		TOK(AND);
+"or"		TOK(OR);
 
 "update"	TOK(UPDATE);
 "of"		TOK(OF);

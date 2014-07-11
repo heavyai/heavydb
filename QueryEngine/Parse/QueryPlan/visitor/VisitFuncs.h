@@ -915,7 +915,7 @@ public:
         if (v->USP) v->USP->accept(*this);
         if (v->USS) v->USS->accept(*this);
         if (v->inSta) v->inSta->accept(*this); 
-
+        
         printTabs(DECR);
         cout << "</ManipulativeStatement>" << endl;
     }

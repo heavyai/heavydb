@@ -11,7 +11,7 @@ public:
     int int1;
 
     /**< Constructor */
-    explicit Literal(const std::string &n1) : name1(n1), int1(0) {}
+    Literal(const std::string &n1) : name1(n1), int1(0) {}
     Literal(int n) : int1(n), name1("") {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */

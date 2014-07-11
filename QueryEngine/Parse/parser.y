@@ -378,8 +378,8 @@ opt_limit_clause:
     /* search conditions */
 
 search_condition: 
-      search_condition OR search_condition      { $$ = new SearchCondition(0, (SearchCondition*)$1, (SearchCondition*)$2); }
-    |   search_condition AND search_condition   { $$ = new SearchCondition(1, (SearchCondition*)$1, (SearchCondition*)$2); }
+      search_condition OR search_condition      { $$ = new SearchCondition(0, (SearchCondition*)$1, (SearchCondition*)$3); }
+    |   search_condition AND search_condition   { $$ = new SearchCondition(1, (SearchCondition*)$1, (SearchCondition*)$3); }
     |   NOT search_condition                    { $$ = new SearchCondition(2, (SearchCondition*)$2); }
     |   '(' search_condition ')'                { $$ = new SearchCondition(3, (SearchCondition*)$2); }
     |   predicate                               { $$ = new SearchCondition((Predicate*)$1); }

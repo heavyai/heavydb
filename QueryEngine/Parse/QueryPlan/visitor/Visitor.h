@@ -9,7 +9,6 @@ public:
     template <typename T>
     // virtual void visit(T &);*/
 
-    virtual void visit(class RelAlgNode *v) = 0;
     virtual void visit(class Program *v) = 0;
     virtual void visit(class RelExprList *v) = 0;
     virtual void visit(class RelExpr *v) = 0;
@@ -22,12 +21,12 @@ public:
     virtual void visit(class SortOp *v) = 0;
     virtual void visit(class GroupByOp *v) = 0;
 
-    virtual void visit(class Join *v) = 0;
-    virtual void visit(class Product *v) = 0;
-    virtual void visit(class Semijoin *v) = 0;
-    virtual void visit(class Outerjoin *v) = 0;
-    virtual void visit(class Antijoin *v) = 0;
-    virtual void visit(class Union *v) = 0;
+    virtual void visit(class JoinOp *v) = 0;
+    virtual void visit(class ProductOp *v) = 0;
+    virtual void visit(class SemijoinOp *v) = 0;
+    virtual void visit(class OuterjoinOp *v) = 0;
+    virtual void visit(class AntijoinOp *v) = 0;
+    virtual void visit(class UnionOp *v) = 0;
 
     virtual void visit(class MathExpr *v) = 0;
     virtual void visit(class Predicate *v) = 0;
