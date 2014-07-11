@@ -9,9 +9,14 @@ class CompOp : public RelAlgNode {
     
 public:
 
-	std::string *comparator;
+	const std::string comparator;
 
-	explicit CompOp(const std::string &n) : comparator(n) {}
+	CompOp(const std::string &n) : comparator(n) {}
+
+		/**< Accepts the given void visitor by calling v.visit(this) */
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
 };
 
 #endif // COMPOP_NODE_H

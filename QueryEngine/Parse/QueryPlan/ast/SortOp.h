@@ -1,17 +1,17 @@
-#ifndef PROJECT_OP_NODE_H
-#define PROJECT_OP_NODE_H
+#ifndef SORT_OP_NODE_H
+#define SORT_OP_NODE_H
 
 #include "RelAlgNode.h"
 #include "UnaryOp.h"
 #include "../visitor/Visitor.h"
 
-class ProjectOp : public UnaryOp {
+class SortOp : public UnaryOp {
     
 public:
 
 	AttrList* atLi;
 
-	explicit ProjectOp(RelExpr *n1, AttrList* n2) : atLi(n2) { relex = n1; }
+	explicit SortOp(RelExpr *n1, AttrList* n2) : atLi(n2) { relex = n1; }
 
 /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
@@ -19,4 +19,4 @@ public:
     }
 };
 
-#endif // PROJECT_OP_NODE_H
+#endif // SORT_OP_NODE_H

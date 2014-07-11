@@ -18,6 +18,7 @@ extern YY_Parser_STYPE yylval;
 
 // Variables used to share data with the parser
 std::string strData[10];
+int dData[5];
 
 using namespace std;
 %}

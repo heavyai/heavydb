@@ -8,7 +8,7 @@
 
 using std::string;
 
-class Program : public ASTNode {
+class Program : public RelAlgNode {
     
 public:
     RelExprList* rel;
@@ -22,8 +22,4 @@ public:
     }
     
 };
-
-
-
-
 #endif // AST_PROGRAM_H

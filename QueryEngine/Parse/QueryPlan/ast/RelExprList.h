@@ -14,8 +14,9 @@ public:
 	explicit RelExprList(RelExprList *n1, RelExpr *n2) : relexlist(n1), relex(n2) {}
 	RelExprList(RelExpr *n) : relex(n), relexlist(NULL) {}
 
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(class Visitor &v) = 0;
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
 };
 
 #endif // REL_EXPR_LIST_NODE_H

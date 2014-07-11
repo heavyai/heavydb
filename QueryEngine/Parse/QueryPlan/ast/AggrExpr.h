@@ -26,8 +26,9 @@ public:
 	explicit AggrExpr(int rf1, int rf2, Attribute* n) : ammsc(rf1), distinct(rf2), attr(n) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(class Visitor &v) = 0;
-
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
 };
 
 #endif // AGGR_EXPR_NODE_H

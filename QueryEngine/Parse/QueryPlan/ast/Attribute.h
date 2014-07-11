@@ -11,11 +11,13 @@ public:
 	std::string name1;
 	std::string name2;
 
-    explicit Attribute(const std::string &n1) : name1(n1)
+    Attribute(const std::string &n1) : name1(n1) {}
     Attribute(const std::string &n1, const std::string &n2) : name1(n1), name2(n2) {}
     
     /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(class Visitor &v) = 0;
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
 };
 
 #endif // ATTRIBUTE_NODE_H

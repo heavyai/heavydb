@@ -7,9 +7,13 @@
 class BinaryOp : public RelAlgNode {
     
 public:
+	RelExpr* relex1;
+	RelExpr* relex2;
 
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(class Visitor &v) = 0;
+	/**< Accepts the given void visitor by calling v.visit(this) */
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
 };
 
 #endif // BINARY_OP_NODE_H

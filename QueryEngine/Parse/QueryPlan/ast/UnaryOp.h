@@ -10,8 +10,11 @@ public:
 
 	RelExpr* relex;
 
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(class Visitor &v) = 0;
+	/**< Accepts the given void visitor by calling v.visit(this) */
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
+    
 };
 
 #endif // UNARY_OP_NODE_H

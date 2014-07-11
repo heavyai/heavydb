@@ -14,8 +14,11 @@ public:
 	explicit AggrList(AggrList *n1, AggrExpr *n2) : agLi(n1), agex(n2) {}
 	AggrList(AggrExpr *n) : agex(n), agLi(NULL) {}
 
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(class Visitor &v) = 0;
+	/**< Accepts the given void visitor by calling v.visit(this) */
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
+    
 };
 
 #endif // AGGR_LIST_NODE_H

@@ -4,7 +4,7 @@
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
-class MathExpr : public ASTNode {
+class MathExpr : public RelAlgNode {
     
 public:
 
@@ -22,8 +22,8 @@ public:
 
     /* constructor */
     explicit MathExpr(int rF, MathExpr *n1, MathExpr* n2) : rule_Flag(rF), me1(n1), me2(n2), attr(NULL) {}
-    MathExpr(int rF, MathExpr* n) : rule_Flag(rF), me1(n), me2(NULL), a(NULL){}
-    MathExpr(Attribute *n) : rule_Flag(-1), me1(NULL), me2(NULL), a(n) {}
+    MathExpr(MathExpr* n) : rule_Flag(-1), me1(n), me2(NULL), attr(NULL){}
+    MathExpr(Attribute *n) : rule_Flag(-1), me1(NULL), me2(NULL), attr(n) {}
 
 	/**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
