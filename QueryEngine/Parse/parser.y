@@ -2,6 +2,7 @@
 %define LSP_NEEDED
 %define MEMBERS                 \
     virtual ~Parser()   {} \
+    void parse() {yyparse();} \
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
