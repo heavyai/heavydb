@@ -24,11 +24,11 @@ class TablePartitioner;
  * @todo support for variable-length data types
  */
 struct InsertData {
-	int tableId;					/// identifies the table into which the data is being inserted
-	std::vector<int> colId;			/// a vector of column ids for the row(s) being inserted
-	std::vector<mapd_size_t> colSize; /// the size (in bytes) of each column
-	mapd_size_t numRows;			/// the number of rows being inserted
-	void *data;						/// points to the start of the data for the row(s) being inserted
+	int tableId;						/// identifies the table into which the data is being inserted
+	std::vector<int> colId;				/// a vector of column ids for the row(s) being inserted
+	std::vector<mapd_size_t> colSize;	/// the size (in bytes) of each column
+	mapd_size_t numRows;				/// the number of rows being inserted
+	void *data;							/// points to the start of the data for the row(s) being inserted
 };
 
 /**
@@ -61,7 +61,7 @@ public:
 
 private:
 	std::map<int, TablePartitioner*> tableToPart_; 	/// maps table ids to TablePartitioner objects
-	BufferMgr *bm_;							/// pointer to the buffer manager object
+	BufferMgr *bm_;									/// pointer to the buffer manager object
 };
 
 #endif // _TABLE_PARTITION_MGR_H
