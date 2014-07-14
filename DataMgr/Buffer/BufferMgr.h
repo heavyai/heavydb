@@ -10,14 +10,14 @@
 #include <cassert>
 #include <map>
 #include <list>
-#include <pair>
+#include <utility>
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
 
-namespace Buffer_Namespace {
-
 // Forward declaration(s)
 class FileMgr;
+
+namespace Buffer_Namespace {
 
 /**
  * @type Frame
@@ -45,15 +45,20 @@ struct PageInfo {
     PageBounds bounds;  /**< the span of frame IDs occupied by this page */
     int pinCount;       /**< the number of pins (resources using the page) */
     bool dirty;         /**< indicates the page has been altered and differs from disk */
-    bool inHostPool;    /**< indicates that the page is currently in the host pool */
+    bool isCached;      /**< indicates that the page is currently in the host pool */
+    mapd_size_t lastAddr; /**< the last address on the page containing the chunk */
 
     PageInfo() {
         pinCount = 0;
         dirty = false;
-        inHostPool = false;
+        isCached = false;
         bounds.first = 0;
         bounds.second = 0;
+        lastAddr = 0;
     }
+
+    /**< Returns whether or not the page is pinned */
+    inline bool isPinned() { return pinCount > 0; }
 
     /**< Increments the pin count for this page. */
     inline void pin() { pinCount++; }
@@ -148,7 +153,7 @@ public:
      * @brief Returns a pair of bool: (1) true if chunk is in chunkIndex_; (2) true if chunk is cached
      * @param key The unique identifier for the chunk.
      */
-    std::pair<bool> chunkStatus(const ChunkKey &key);
+    std::pair<bool, bool> chunkStatus(const ChunkKey &key);
     
    /**
     * @brief 
@@ -184,14 +189,14 @@ public:
     PageInfo* getChunk(const ChunkKey &key, mapd_size_t pad, bool pin = true);
 
     /**
-     * @brief Updates the chunk.
+     * @brief Updates the chunk. The chunk must already be in the buffer pool.
      *
      * @param key       The unique identifier of the chunk.
      * @param offset    The offset address where the update begins.
      * @param size      The number of bytes being written.
      * @param src       A pointer to the source of the data being written.
      */
-    void updateChunk(const ChunkKey &key, mapd_size_t offset, mapd_size_t size, mapd_byte_t *src);
+    bool updateChunk(const ChunkKey &key, mapd_size_t offset, mapd_size_t size, mapd_byte_t *src);
 
     /**
      * @brief Removes the chunk from the buffer pool. Returns false if the chunk is pinned.
@@ -213,7 +218,7 @@ public:
      * @param key The unique identifier of the chunk.
      * @param epoch Identifier of the most recent checkpoint.
      */
-    void flushChunk(const ChunkKey &key, unsigned int epoch);
+    bool flushChunk(const ChunkKey &key, unsigned int epoch);
 
     /**
      * @brief Flushs all dirty pages currently in the host buffer pool.
@@ -306,6 +311,9 @@ private:
     // Metadata
     unsigned numHitsHost_;              /**< The number of host memory cache hits. */
     unsigned numMissHost_;              /**< The number of host memory cache misses. */
+
+    /// Returns a pointer to a chunk in the chunkIndex
+    PageInfo* findChunkPage(const ChunkKey key);
     
 }; // BufferMgr
 
