@@ -10,6 +10,7 @@
 #include <cassert>
 #include <map>
 #include <list>
+#include <pair>
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
 
@@ -144,10 +145,10 @@ public:
 	~BufferMgr();
 
     /**
-     * @brief Returns true if the chunk is cached in the host buffer pool.
+     * @brief Returns a pair of bool: (1) true if chunk is in chunkIndex_; (2) true if chunk is cached
      * @param key The unique identifier for the chunk.
      */
-    bool isCached(const ChunkKey &key);
+    std::pair<bool> chunkStatus(const ChunkKey &key);
     
    /**
     * @brief 
