@@ -1,0 +1,93 @@
+astTest/AllOrAnyPredicate.h
+astTest/Ammsc.h
+astTest/AnyAllSome.h
+astTest/AnyOrAllPredicate.h
+astTest/AssignmentCommalist.h
+astTest/Assignment.h
+astTest/ASTNode.h
+astTest/AtomCommalist.h
+astTest/Atom.h
+astTest/BaseTableDef.h
+astTest/BaseTableElementCommalist.h
+astTest/BaseTableElement.h
+astTest/BetweenPredicate.h
+astTest/ColumnCommalist.h
+astTest/ColumnDef.h
+astTest/ColumnDefOpt.h
+astTest/ColumnDefOptList.h
+astTest/Column.h
+astTest/ColumnRefCommalist.h
+astTest/ColumnRef.h
+astTest/ComparisonPredicate.h
+astTest/Cursor.h
+astTest/DataType.h
+astTest/ExistenceTest.h
+astTest/FromClause.h
+astTest/FunctionRef.h
+astTest/InPredicate.h
+astTest/InsertAtomCommalist.h
+astTest/InsertAtom.h
+astTest/InsertStatement.h
+astTest/LikePredicate.h
+astTest/Literal.h
+astTest/ManipulativeStatement.h
+astTest/OptAllDistinct.h
+astTest/OptAscDesc.h
+astTest/OptColumnCommalist.h
+astTest/OptEscape.h
+astTest/OptGroupByClause.h
+astTest/OptHavingClause.h
+astTest/OptLimitClause.h
+astTest/OptOrderByClause.h
+astTest/OptWhereClause.h
+astTest/OrderingSpecCommalist.h
+astTest/OrderingSpec.h
+astTest/Predicate.h
+astTest/Program.h
+astTest/ProjectOp.h
+#ifndef PROJECT_OP_NODE_H
+#define PROJECT_OP_NODE_H
+
+#include "RelAlgNode.h"
+#include "UnaryOp.h"
+//#include "../visitor/Visitor.h"
+
+namespace SQL_Namespace {
+ ProjectOp : public UnaryOp {
+    
+public:
+
+	AttrList* atLi;
+	std::string selectAll;
+
+	ProjectOp(RelExpr *n1, AttrList* n2) : atLi(n2) { relex = n1; }
+	/* If the selection is "*"- this means, of course, the Attribute List spans the entirety of the table. */
+	explicit ProjectOp(const std::string &n) : atLi(NULL), selectAll(n) { relex(NULL); }
+
+/**< Accepts the given void visitor by calling v.visit(this) */
+    void accept(Visitor &v) {
+        v.visit(this);
+    }
+	};
+}
+
+#endif // PROJECT_OP_NODE_H
+astTest/QuerySpec.h
+astTest/ScalarExpCommalist.h
+astTest/ScalarExp.h
+astTest/Schema.h
+astTest/SearchCondition.h
+astTest/Selection.h
+astTest/SelectStatement.h
+astTest/SQL.h
+astTest/SQLList.h
+astTest/Subquery.h
+astTest/TableConstraintDef.h
+astTest/TableExp.h
+astTest/Table.h
+astTest/TableRefCommalist.h
+astTest/TableRef.h
+astTest/TestForNull.h
+astTest/UpdateStatementPositioned.h
+astTest/UpdateStatementSearched.h
+astTest/ValuesOrQuerySpec.h
