@@ -101,6 +101,7 @@ extern std::string strData[10];
 extern double dData[10];
 
 using namespace std;
+using namespace SQL_Namespace;
 
 %}
 %left OR
