@@ -9,12 +9,11 @@
 namespace TcpServer {
 
 TcpServer::TcpServer(const std::string& address, const std::string& port,
-    std::size_t thread_pool_size)
+    std::size_t thread_pool_size/*, Database *database*/)
   : thread_pool_size_(thread_pool_size),
     signals_(io_service_),
     acceptor_(io_service_),
-    new_connection_(new TcpConnection(io_service_, request_handler_)) //,
-    //request_handler_()
+    newConnection_()
 {
   // Register to handle the signals that indicate when the server should exit.
   // It is safe to register for the same signal multiple times in a program,
@@ -34,9 +33,8 @@ TcpServer::TcpServer(const std::string& address, const std::string& port,
   acceptor_.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
   acceptor_.bind(endpoint);
   acceptor_.listen();
-  acceptor_.async_accept(new_connection_->socket(),
-      boost::bind(&TcpServer::handle_accept, this,
-        boost::asio::placeholders::error));
+  startAccept();
+
 }
 
 void TcpServer::start()
@@ -62,16 +60,20 @@ void TcpServer::stop()
   io_service_.stop();
 }
 
-void TcpServer::handle_accept(const boost::system::error_code& e)
-{
-  if (!e)
-  {
-    new_connection_->start();
-    new_connection_.reset(new TcpConnection(io_service_, request_handler_));
-    acceptor_.async_accept(new_connection_->socket(),
-        boost::bind(&TcpServer::handle_accept, this,
-          boost::asio::placeholders::error));
-  }
+void TcpServer::startAccept() {
+      newConnection_.reset(new TcpConnection(io_service_,request_handler_));
+      acceptor_.async_accept(newConnection_ ->socket(),
+      boost::bind(&TcpServer::handleAccept, this, 
+        boost::asio::placeholders::error));
 }
+
+void TcpServer::handleAccept(const boost::system::error_code& e)
+{
+  if (!e) {
+    newConnection_->start();
+  }
+  startAccept();
+}
+
 
 } // namespace TcpServer

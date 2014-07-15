@@ -28,7 +28,8 @@ class TcpServer : private boost::noncopyable
 
     private:
       /// Handle completion of an asynchronous accept operation.
-      void handle_accept(const boost::system::error_code& e);
+      void handleAccept(const boost::system::error_code& e);
+    void startAccept();
 
       /// The number of threads that will call io_service::run().
       std::size_t thread_pool_size_;
@@ -40,13 +41,15 @@ class TcpServer : private boost::noncopyable
       boost::asio::ip::tcp::acceptor acceptor_;
 
       /// The next connection to be accepted.
-      TcpConnection_ptr new_connection_;
+      TcpConnection_ptr newConnection_;
 
       /// The handler for all incoming requests.
       RequestHandler request_handler_;
 
       /// The signal_set is used to register for process termination notifications.
       boost::asio::signal_set signals_;
+
+      int numConns_;
 };
 
 } // namespace TcpServer

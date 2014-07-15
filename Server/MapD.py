@@ -44,6 +44,7 @@ class MapD:
 
     def close(self):
         if self.sock != 0:
+            print "Socket close"
             self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
             self.sock = 0
@@ -108,8 +109,9 @@ class MapD:
                     isPackBegin = True
                     if pos == chunkSize: #if at end of chunk
                         break
+                #raw_input("press enter")
         print "Total len: %s" % totalLen
-        self.emptySocket()
+        #self.emptySocket()
         if totalLen > 0:
             self.processData()
         self.cursorRow = 0
@@ -165,6 +167,7 @@ class MapD:
         return pos, title
 
     def processData(self):
+        print self.data
         self.isOutput=True
         self.rowcount = unpack('l', self.data[:8])[0]
         print "Row count: %s" % self.rowcount
