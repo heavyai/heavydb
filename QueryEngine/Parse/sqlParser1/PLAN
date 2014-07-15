@@ -1,0 +1,51 @@
+/*	
+#define [MoveNext(child n)] "Next Node GETS child n. This Node GETS Next Node."
+	
+PLAN: 
+	This_Node GETS First Node
+	This_Node == type SQL. 
+	IF This_Node == Schema: 
+		/* care later */
+		[MoveNext]
+
+	IF This_Node == Manipulative Statement:
+		[MoveNext]
+		IF This_Node == Select Statement:
+			Child 0 = the word FROM
+			Child 1 = opt_all_distinct
+			Child 2 = the selection
+			Child 3 = the Table_exp
+
+			What we're going to do is:
+			1. Construct a plan for each table T in the from clause.
+				first goto child 3: the table exp
+				Alright, let's look at the from clause. To do this we [MoveNext(child 0)] to have This Node be FROM_CLAUSE.
+				Two children:
+				Child 0 = the word FROM 
+				Child 1 = TABLE_REF_COMMALIST
+				Copy that tree- the first Child_1 of TABLE_REF_COMMALIST.
+				
+				SELECT * FROM TABLE_1, TABLE_2, TABLE_3
+
+			2. Take the product of the plans from (1).
+				Just rename TABLE_REF_COMMALIST to PRODUCT and slice out the TABLE_REFs. 
+						PRODUCT
+			            /	  \
+					   /	   \
+					 PRODUCT   TABLE_3
+					 /     \
+					/		\
+				TABLE_1 	TABLE_2
+
+			3. Select on the predicate in the where clause.
+			Now from Table_exp: goto child1, the where clause. 
+			Take the top level search condition. This tree will need to be sliced out to be optimized completely; for now
+			we'll just have a Node saying select and then two children- the first that is the result of (2) (the table to be selected by), the second to be
+			the the search statement that can be analyzed l8r.
+
+			4. Project on the fields in the select clause.
+			Make a parent node, operator "Select"
+			Child 1: Node of (3) Child 2: selection subtree (steal node)
+
+		ELSE
+		/* care later */

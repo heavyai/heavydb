@@ -1,0 +1,131 @@
+
+
+Graph 0:
+
+                                                                                           SQL
+                                                                                            |
+                                                                                            |
+                                                                                            |
+                                                                                  MANIPULATIVE_STATEMENT
+                                                                                            |
+                                                                                            |
+                                                                                            |
+                                                                                     SELECT_STATEMENT
+                                                                                            |
+   |-----------|-------------|-------------------------------------------------------------------------------|
+   |           |             |                                                                               |
+ SELECT OPT_ALL_DISTINCT SELECTION                                                                       TABLE_EXP
+               |             |                                                                               |
+           |----          |---                |-------------------------------------|-------------------------------------------------------------------------------------------|
+           |              |                   |                                     |                                   |                  |                  |                 |
+        [empty]          [*]             FROM_CLAUSE                         OPT_WHERE_CLAUSE                  OPT_GROUP_BY_CLAUSE OPT_HAVING_CLAUSE OPT_ORDER_BY_CLAUSE OPT_LIMIT_CLAUSE
+                                              |                                     |                                   |                  |                  |                 |
+                                    |------------|            |------------------------|                          |------             |-----            |------             |----
+                                    |            |            |                        |                          |                   |                 |                   |
+                                   FROM TABLE_REF_COMMALIST WHERE               SEARCH_CONDITION               [empty]             [empty]           [empty]             [empty]
+                                                 |                                     |
+                                               |--                                     |
+                                               |                                       |
+                                           TABLE_REF                               PREDICATE
+                                               |                                       |
+                                               |                                       |
+                                               |                                       |
+                                             TABLE                            COMPARISON_PREDICATE
+                                               |                                       |
+                                               |                         |----------------------------|
+                                               |                         |              |             |
+                                        Identifier(dogs)            SCALAR_EXP    Comparison(=)   SCALAR_EXP
+                                                                         |                            |
+                                                                         |                            |
+                                                                         |                            |
+                                                                    COLUMN_REF                       ATOM
+                                                                         |                            |
+                                                                         |                            |
+                                                                         |                            |
+                                                                  Identifier(dog)                  LITERAL
+                                                                                                      |
+                                                                                                      |
+                                                                                                      |
+                                                                                                Text('twelve')
+
+
+Graph 1:
+
+                                                                                                                   SQL
+                                                                                                                    |
+                                                                                                                    |
+                                                                                                                    |
+                                                                                                          MANIPULATIVE_STATEMENT
+                                                                                                                    |
+                                                                                                                    |
+                                                                                                                    |
+                                                                                                             INSERT_STATEMENT
+                                                                                                                    |
+   |-----|----------|-------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+   |     |          |                                                             |                                                                                                     |
+ INSERT INTO      TABLE                                                  OPT_COLUMN_COMMALIST                                                                                  VALUES_OR_QUERY_SPEC
+                    |                                                             |                                                                                                     |
+                    |                                                             |                                                        |------------------------------------------------|
+                    |                                                             |                                                        |                                                |
+             Identifier(tabA)                                              COLUMN_COMMALIST                                              VALUES                                   INSERT_ATOM_COMMALIST
+                                                                                  |                                                                                                         |
+                                                                         |-------------------------------------------------------|                                                  |----------------------------------------------|
+                                                                         |                                              |        |                                                  |                                      |       |
+                                                                  COLUMN_COMMALIST                                     [,]    COLUMN                                      INSERT_ATOM_COMMALIST                           [,] INSERT_ATOM
+                                                                         |                                                       |                                                  |                                              |
+                                                                |----------------------------------------------|                 |                                        |--------------------------------------|                |-
+                                                                |                                     |        |                 |                                        |                            |         |                |
+                                                         COLUMN_COMMALIST                            [,]    COLUMN         Identifier(q)                        INSERT_ATOM_COMMALIST                 [,]   INSERT_ATOM          ATOM
+                                                                |                                              |                                                          |                                      |                |
+                                                       |-------------------------------------|                 |                                                  |----------------------------|                 |                |
+                                                       |                            |        |                 |                                                  |                    |       |                 |                |
+                                                COLUMN_COMMALIST                   [,]    COLUMN         Identifier(e)                                  INSERT_ATOM_COMMALIST         [,] INSERT_ATOM          ATOM            LITERAL
+                                                       |                                     |                                                                    |                            |                 |                |
+                                              |----------------------------|                 |                                                            |--------------------|              |-                 |                |
+                                              |                   |        |                 |                                                            |            |       |              |                  |                |
+                                       COLUMN_COMMALIST          [,]    COLUMN         Identifier(d)                                            INSERT_ATOM_COMMALIST [,] INSERT_ATOM        ATOM             LITERAL         Float(8.0)
+                                              |                            |                                                                              |                    |              |                  |
+                                     |-------------------|                 |                                                                         |-----                   |-              |                  |
+                                     |          |        |                 |                                                                         |                        |               |                  |
+                              COLUMN_COMMALIST [,]    COLUMN         Identifier(c)                                                              INSERT_ATOM                  ATOM          LITERAL        Text('sixteen')
+                                     |                   |                                                                                           |                        |               |
+                                    |-                   |                                                                                       |----                        |               |
+                                    |                    |                                                                                       |                            |               |
+                                 COLUMN            Identifier(b)                                                                                ATOM                       LITERAL        Float(4.0)
+                                    |                                                                                                            |                            |
+                                    |                                                                                                            |                            |
+                                    |                                                                                                            |                            |
+                              Identifier(a)                                                                                                     USER                      Float(3.0)
+
+
+Graph 2:
+
+                                      SQL
+                                       |
+                                       |
+                                       |
+                                    SCHEMA
+                                       |
+                                       |
+                                       |
+                                BASE_TABLE_DEF
+                                       |
+   |------|----------|--------------------------------|
+   |      |          |                                |
+ CREATE TABLE      TABLE                BASE_TABLE_ELEMENT_COMMALIST
+                     |                                |
+                     |                                |
+                     |                                |
+              Identifier(tabC)               BASE_TABLE_ELEMENT
+                                                      |
+                                                      |
+                                                      |
+                                                 COLUMN_DEF
+                                                      |
+                                       |-------------|--------------|
+                                       |             |              |
+                                    COLUMN       DATATYPE  COLUMN_DEF_OPT_LIST
+                                       |             |              |
+                                       |             |        |------
+                                       |             |        |
+                               Identifier(col_a) CHARACTER [empty]

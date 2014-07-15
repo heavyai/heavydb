@@ -1,0 +1,142 @@
+#!/usr/bin/python
+
+import MapD
+import sys, getopt
+import fileinput
+import os
+import readline
+import atexit
+
+class TablePrinter:
+    def __init__(self, mapd):
+        self.mapd = mapd
+        self.colOffsets = []
+
+
+    def printRow(self, rowNum):
+        line = ""
+        for colNum in range (self.mapd.colcount):
+            output = str(self.mapd.colData[colNum][rowNum])
+            strLen = len(output)
+            numSpaces = (self.colOffsets[colNum] - strLen) / 2 
+            line += ' ' * numSpaces 
+            line += output 
+            line += ' ' * numSpaces 
+            if self.colOffsets[colNum] - strLen - numSpaces * 2 > 0:
+                line += '|'
+        print line
+
+
+    def printTable(self):
+        if self.mapd.rowcount < 0: # was error
+            errorMsg = "ERROR: " + self.mapd.errorMsg
+            print errorMsg
+            self.mapd.rowcount = 0
+        elif len(self.mapd.colInfo) > 0:
+            offset = 0 
+            line = ""
+            dashLine = ""
+            self.colOffsets = [] 
+            for colNum in range (self.mapd.colcount):
+                colType = self.mapd.colInfo[colNum][1] 
+                offset = 0
+                if (colType == "int" or colType == "timestamp" or colType == "unsigned int" or colType == "float"):
+                    offset = 12 
+                elif (colType == "double" or colType == "unsigned long"):
+                    offset = 22
+                elif (colType == "varchar"):
+                    offset = 70 
+                elif (colType == "bool"):
+                    offset = 7
+                elif (colType == "char"):
+                    offset = 3
+                self.colOffsets.append(offset)
+                colName = self.mapd.colInfo[colNum][0]
+                strLen = len(colName)
+                numSpaces = (offset - strLen) / 2 
+                line += ' ' * numSpaces 
+                line += colName
+                line += ' ' * numSpaces 
+                if offset - strLen - numSpaces * 2 > 0:
+                    line += ' '
+                dashLine += '-' * (offset)
+                if colNum != self.mapd.colcount - 1:
+                    line += '|'
+                    dashLine += '|'
+
+            print line
+            print dashLine
+
+            for rowNum in range(self.mapd.rowcount):
+                self.printRow(rowNum)
+
+            rowLine = "(" + str(self.mapd.rowcount)
+            if self.mapd.rowcount == 1:
+                rowLine += " row)"
+            else:
+                rowLine += " rows)"
+            print rowLine
+            if self.mapd.timer == True:
+                print
+                print "Time: %.3f ms" % (self.mapd.time,)
+
+                
+            
+
+
+def getArgs(argv):
+    connArgs = {"host":"", "port":7777} 
+    try:
+        opts, args = getopt.getopt(argv, "-h:p:",["hostname=","port="])
+    except getopt.GetoptError:
+        'mapd_cli.py -h <hostname> -p <port>'
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "--hostname"):
+            connArgs["host"] = arg
+        elif opt in ("-p", "--port"):
+            connArgs["port"] = int(arg)
+    return connArgs          
+
+
+def queryLoop(mapd):
+    histFile = os.path.join(os.path.expanduser("~"), ".mapdhist")
+    try:
+        readline.read_history_file(histFile)
+    except IOError:
+        pass
+    atexit.register(readline.write_history_file, histFile)
+    del histFile
+
+    inputStr = ""
+    while True:
+        print("\n")
+        inputStr = raw_input('MapD# ')
+        if (inputStr == "\q"):
+            break
+        elif inputStr == "\\timing":
+            mapd.timer = not mapd.timer
+        else:
+            mapd.execute(inputStr)
+            if mapd.isOutput == True:
+                tablePrinter = TablePrinter(mapd)
+                tablePrinter.printTable()
+
+
+def main(argv):
+
+    connArgs = getArgs(argv)
+    mapd = MapD.MapD(connArgs["host"], connArgs["port"])
+    try:
+        mapd.connect()
+    except Exception as x:
+        print "Could not connect to db. Is it running and listening on port %d?" % connArgs["port"]
+        sys.exit(3)
+    queryLoop(mapd);
+    mapd.close()
+
+
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

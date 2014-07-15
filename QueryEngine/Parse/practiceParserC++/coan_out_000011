@@ -1,0 +1,11 @@
+#define YY_Parser_h_included
+#define YY_USE_CLASS
+
+/*  A Bison++ parser, made from parser.y  */
+
+ /* with Bison++ version bison++ Version 1.21.9-1, adapted from GNU bison by coetmeur@icdc.fr
+Maintained by Magnus Ekdahl <magnus@debian.org>
+  */
+
+#define YY_USE_CLASS
+

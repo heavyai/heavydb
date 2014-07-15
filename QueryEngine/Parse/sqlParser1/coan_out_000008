@@ -1,0 +1,11 @@
+#define YY_sqlParser1_h_included
+#define YY_USE_CLASS
+
+/*  A Bison++ parser, made from sqlParser1.y  */
+
+ /* with Bison++ version bison++ Version 1.21.9-1, adapted from GNU bison by coetmeur@icdc.fr
+Maintained by Magnus Ekdahl <magnus@debian.org>
+  */
+
+#define YY_USE_CLASS
+
