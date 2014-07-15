@@ -2,7 +2,6 @@
 #define AST_SIMPLE_PRINTER_VISITOR_H
 
 #include "Visitor.h"
-#include "../../RA/visitor/Visitor.h"
 
 #include "../ast/ColumnCommalist.h"
 #include "../ast/TableConstraintDef.h"
@@ -73,37 +72,37 @@
 #include "../ast/AtomCommalist.h"
 #include "../ast/Subquery.h"
 
-#include "../../RA/relAlg/RelAlgNode.h"
-#include "../../RA/relAlg/Program.h"
-#include "../../RA/relAlg/RelExprList.h"
-#include "../../RA/relAlg/RelExpr.h"
-#include "../../RA/relAlg/UnaryOp.h"
-#include "../../RA/relAlg/BinaryOp.h"
-#include "../../RA/relAlg/MathExpr.h"
-#include "../../RA/relAlg/SelectOp.h"
-#include "../../RA/relAlg/ProjectOp.h"
-#include "../../RA/relAlg/SortOp.h"
-#include "../../RA/relAlg/ExtendOp.h"
-#include "../../RA/relAlg/GroupByOp.h"
-#include "../../RA/relAlg/RenameOp.h"
+#include "../QueryPlan/ast/RelAlgNode.h"
+#include "../QueryPlan/ast/Program.h"
+#include "../QueryPlan/ast/RelExprList.h"
+#include "../QueryPlan/ast/RelExpr.h"
+#include "../QueryPlan/ast/UnaryOp.h"
+#include "../QueryPlan/ast/BinaryOp.h"
+#include "../QueryPlan/ast/MathExpr.h"
+#include "../QueryPlan/ast/SelectOp.h"
+#include "../QueryPlan/ast/ProjectOp.h"
+#include "../QueryPlan/ast/SortOp.h"
+#include "../QueryPlan/ast/ExtendOp.h"
+#include "../QueryPlan/ast/GroupByOp.h"
+#include "../QueryPlan/ast/RenameOp.h"
 
-#include "../../RA/relAlg/JoinOp.h"
-#include "../../RA/relAlg/SemijoinOp.h"
-#include "../../RA/relAlg/ProductOp.h"
-#include "../../RA/relAlg/OuterjoinOp.h"
-#include "../../RA/relAlg/AntijoinOp.h"
-#include "../../RA/relAlg/UnionOp.h"
-#include "../../RA/relAlg/AggrExpr.h"
-#include "../../RA/relAlg/AggrList.h"
-#include "../../RA/relAlg/AttrList.h"
-#include "../../RA/relAlg/Attribute.h"
-#include "../../RA/relAlg/Relation.h"
-#include "../../RA/relAlg/Data.h"
+#include "../QueryPlan/ast/JoinOp.h"
+#include "../QueryPlan/ast/SemijoinOp.h"
+#include "../QueryPlan/ast/ProductOp.h"
+#include "../QueryPlan/ast/OuterjoinOp.h"
+#include "../QueryPlan/ast/AntijoinOp.h"
+#include "../QueryPlan/ast/UnionOp.h"
+#include "../QueryPlan/ast/AggrExpr.h"
+#include "../QueryPlan/ast/AggrList.h"
+#include "../QueryPlan/ast/AttrList.h"
+#include "../QueryPlan/ast/Attribute.h"
+#include "../QueryPlan/ast/Relation.h"
+#include "../QueryPlan/ast/Data.h"
 
-#include "../../RA/relAlg/Predicate.h"
-#include "../../RA/relAlg/Comparison.h"
-#include "../../RA/relAlg/Compared.h"
-#include "../../RA/relAlg/CompOp.h"
+#include "../QueryPlan/ast/Predicate.h"
+#include "../QueryPlan/ast/Comparison.h"
+#include "../QueryPlan/ast/Compared.h"
+#include "../QueryPlan/ast/CompOp.h"
 
 #include <iostream>
 using std::cout;
@@ -115,7 +114,7 @@ enum tabFlag {INCR, DECR, NONE};
 /**
  * @todo brief and detailed descriptions
  */
-class QPTranslator : public SQL_Namespace::Visitor {
+class XMLTranslator : public Visitor {
 
 public:
 
@@ -136,11 +135,20 @@ public:
     }
 
     /* Begins the recursive examining of the Table-reference list. */
-    RelExpr* formProductRelation(TableRefCommalist *v) {
+    RelExpr* formProductRelation(class TableRefCommalist *v) {
         return new RelExpr(formProductOp(v->trc, v->tr));
     }
 
-    ProductOp* fromProductOp(TableRefCommalist *vTRC, TableRef *vTR) {
+    ProductOp* fromProductOp(class TableRefCommalist *vTRC, class TableRef *vTR) {
+        if (!(vTRC)) return new ProductOp(new RelExpr(new Relation(vTR->tbl)), NULL);
+        else return new ProductOp(new RelExpr(formProductOp(vTRC->trc, vTRC->vtr)), new Relation(vTR->tbl));
+    }
+
+    RelExpr* formProductRelation(class TableRefCommalist *v) {
+        return new RelExpr(formProductOp(v->trc, v->tr));
+    }
+
+    ProductOp* fromProductOp(class TableRefCommalist *vTRC, class TableRef *vTR) {
         if (!(vTRC)) return new ProductOp(new RelExpr(new Relation(vTR->tbl)), NULL);
         else return new ProductOp(new RelExpr(formProductOp(vTRC->trc, vTRC->vtr)), new Relation(vTR->tbl));
     }

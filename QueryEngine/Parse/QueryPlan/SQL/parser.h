@@ -15,12 +15,12 @@
 #define YY_Parser_LSP_NEEDED 
 #define YY_Parser_MEMBERS                  \
     virtual ~Parser()   {} \
-    void parse(const string & inputStr, RelAlgNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
+    void parse(const string & inputStr, ASTNode *& parseRoot) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); } \
     private:                   \
-       yyFlexLexer lexer; 
+       yyFlexLexer lexer;
 #define YY_Parser_LEX_BODY  {return lexer.yylex();}
 #define YY_Parser_ERROR_BODY  {cerr << "error encountered at line: "<<lexer.lineno()<<" last word parsed:"<<lexer.YYText()<<"\n";}
-#line 11 "RelAlgebraParser.y"
+#line 11 "parser.y"
 
 #include <iostream>
 #include <fstream>
@@ -28,55 +28,93 @@
 #include <cstdlib>
 #include <string>
 #include <sstream>
-	
-// RA nodes
-#include "relAlg/RelAlgNode.h"
-#include "relAlg/Program.h"
-#include "relAlg/RelExprList.h"
-#include "relAlg/RelExpr.h"
-#include "relAlg/UnaryOp.h"
-#include "relAlg/BinaryOp.h"
-#include "relAlg/MathExpr.h"
-#include "relAlg/SelectOp.h"
-#include "relAlg/ProjectOp.h"
-#include "relAlg/SortOp.h"
-#include "relAlg/ExtendOp.h"
-#include "relAlg/GroupByOp.h"
-#include "relAlg/RenameOp.h"
 
-#include "relAlg/JoinOp.h"
-#include "relAlg/SemijoinOp.h"
-#include "relAlg/ProductOp.h"
-#include "relAlg/OuterjoinOp.h"
-#include "relAlg/AntijoinOp.h"
-#include "relAlg/UnionOp.h"
-#include "relAlg/AggrExpr.h"
-#include "relAlg/AggrList.h"
-#include "relAlg/AttrList.h"
-#include "relAlg/Attribute.h"
-#include "relAlg/Relation.h"
-#include "relAlg/Data.h"
+// AST nodes
+#include "ast/ASTNode.h"
+#include "ast/Program.h"
+#include "ast/SQLList.h"
+#include "ast/SQL.h"
+#include "ast/Schema.h"
+#include "ast/BaseTableDef.h"
+#include "ast/Table.h"
+#include "ast/ColumnDef.h"
+#include "ast/ColumnCommalist.h"
+#include "ast/TableConstraintDef.h"
+#include "ast/BaseTableElementCommalist.h"
+#include "ast/BaseTableElement.h"
+#include "ast/ColumnDefOpt.h"
+#include "ast/ColumnDefOptList.h"
+#include "ast/Literal.h"
+#include "ast/DataType.h"
+#include "ast/Column.h"
 
-#include "relAlg/Predicate.h"
-#include "relAlg/Comparison.h"
-#include "relAlg/Compared.h"
-#include "relAlg/CompOp.h"
+#include "ast/ManipulativeStatement.h"
+#include "ast/SelectStatement.h"
+#include "ast/Selection.h"
+#include "ast/OptAllDistinct.h"
+#include "ast/TableExp.h"
+#include "ast/FromClause.h"
+#include "ast/TableRefCommalist.h"
+#include "ast/TableRef.h"
+
+#include "ast/InsertStatement.h"
+#include "ast/OptColumnCommalist.h"
+#include "ast/ValuesOrQuerySpec.h"
+#include "ast/QuerySpec.h"
+#include "ast/InsertAtomCommalist.h"
+#include "ast/InsertAtom.h"
+#include "ast/Atom.h"
+
+#include "ast/SearchCondition.h"
+#include "ast/ScalarExpCommalist.h"
+#include "ast/ScalarExp.h"
+#include "ast/FunctionRef.h"
+#include "ast/Ammsc.h"
+#include "ast/Predicate.h"
+#include "ast/ComparisonPredicate.h"
+#include "ast/BetweenPredicate.h"
+#include "ast/LikePredicate.h"
+#include "ast/OptEscape.h"
+#include "ast/ColumnRef.h"
+
+#include "ast/ColumnRefCommalist.h"
+#include "ast/OptWhereClause.h"
+#include "ast/OptGroupByClause.h"
+#include "ast/OptHavingClause.h"
+#include "ast/OptLimitClause.h"
+#include "ast/OptAscDesc.h"
+#include "ast/OrderingSpecCommalist.h"
+#include "ast/OrderingSpec.h"
+#include "ast/OptOrderByClause.h"
+
+#include "ast/UpdateStatementSearched.h"
+#include "ast/UpdateStatementPositioned.h"
+#include "ast/AssignmentCommalist.h"
+#include "ast/Assignment.h"
+#include "ast/Cursor.h"
+
+#include "ast/TestForNull.h"
+#include "ast/InPredicate.h"
+#include "ast/ExistenceTest.h"
+#include "ast/AllOrAnyPredicate.h"
+#include "ast/AnyAllSome.h"
+#include "ast/AtomCommalist.h"
+#include "ast/Subquery.h"
+
 
 // define stack element type to be a 
 // pointer to an AST node
-	
-#define YY_Parser_STYPE RelAlgNode*
-#define YY_Parser_PARSE_PARAM RelAlgNode*& parseRoot
+#define YY_Parser_STYPE ASTNode*
+#define YY_Parser_PARSE_PARAM ASTNode*& parseRoot
 
-extern RelAlgNode* parse_root;
+extern ASTNode* parse_root;
 
-
-// Variables declared in RelAlgebraLexer.l
+// Variables declared in scanner.l
 extern std::string strData[10];
-extern int dData[5];
+extern double dData[10];
 
 using namespace std;
-using namespace RA_Namespace;
+//using namespace SQL_Namespace;
 
 
 #line 21 "/usr/share/bison++/bison.h"
@@ -252,44 +290,82 @@ typedef
 
 
  #line 169 "/usr/share/bison++/bison.h"
-#define	PLUS	258
-#define	MINUS	259
-#define	MULTIPLY	260
-#define	DIVIDE	261
-#define	OR	262
-#define	AND	263
-#define	NOT	264
-#define	NEQ	265
-#define	EQ	266
-#define	GT	267
-#define	GTE	268
-#define	LT	269
-#define	LTE	270
-#define	SELECT	271
-#define	PROJECT	272
-#define	SORT	273
-#define	RENAME	274
-#define	EXTEND	275
-#define	GROUPBY	276
-#define	PRODUCT	277
-#define	JOIN	278
-#define	SEMIJOIN	279
-#define	ANTIJOIN	280
-#define	OUTERJOIN	281
-#define	UNION	282
-#define	MAX	283
-#define	MIN	284
-#define	COUNT	285
-#define	SUM	286
-#define	AVG	287
-#define	MAX_DISTINCT	288
-#define	MIN_DISTINCT	289
-#define	COUNT_DISTINCT	290
-#define	SUM_DISTINCT	291
-#define	AVG_DISTINCT	292
-#define	NAME	293
-#define	CONSTANT	294
-#define	STRVAL	295
+#define	OR	258
+#define	AND	259
+#define	NOT	260
+#define	COMPARISON	261
+#define	UMINUS	262
+#define	AS	263
+#define	DROP	264
+#define	NAME	265
+#define	TABLE	266
+#define	CREATE	267
+#define	INTNUM	268
+#define	STRING	269
+#define	APPROXNUM	270
+#define	UNKNOWN	271
+#define	ALL	272
+#define	BETWEEN	273
+#define	BY	274
+#define	DISTINCT	275
+#define	FROM	276
+#define	GROUP	277
+#define	HAVING	278
+#define	SELECT	279
+#define	USER	280
+#define	WHERE	281
+#define	WITH	282
+#define	EMPTY	283
+#define	SELALL	284
+#define	DOT	285
+#define	UPDATE	286
+#define	SET	287
+#define	CURRENT	288
+#define	OF	289
+#define	NULLX	290
+#define	ASSIGN	291
+#define	INSERT	292
+#define	INTO	293
+#define	VALUES	294
+#define	UNIQUE	295
+#define	PRIMARY	296
+#define	FOREIGN	297
+#define	KEY	298
+#define	CHECK	299
+#define	REFERENCES	300
+#define	DEFAULT	301
+#define	DATATYPE	302
+#define	DECIMAL	303
+#define	SMALLINT	304
+#define	NUMERIC	305
+#define	CHARACTER	306
+#define	INTEGER	307
+#define	REAL	308
+#define	FLOAT	309
+#define	DOUBLE	310
+#define	PRECISION	311
+#define	VARCHAR	312
+#define	AVG	313
+#define	MAX	314
+#define	MIN	315
+#define	SUM	316
+#define	COUNT	317
+#define	ALIAS	318
+#define	INTORDER	319
+#define	COLORDER	320
+#define	ORDER	321
+#define	ASC	322
+#define	DESC	323
+#define	LIMIT	324
+#define	OFFSET	325
+#define	DOTNAME	326
+#define	ESCAPE	327
+#define	LIKE	328
+#define	IS	329
+#define	IN	330
+#define	ANY	331
+#define	SOME	332
+#define	EXISTS	333
 
 
 #line 169 "/usr/share/bison++/bison.h"
@@ -338,44 +414,82 @@ public:
   /* static const int token ... */
   
  #line 212 "/usr/share/bison++/bison.h"
-static const int PLUS;
-static const int MINUS;
-static const int MULTIPLY;
-static const int DIVIDE;
 static const int OR;
 static const int AND;
 static const int NOT;
-static const int NEQ;
-static const int EQ;
-static const int GT;
-static const int GTE;
-static const int LT;
-static const int LTE;
+static const int COMPARISON;
+static const int UMINUS;
+static const int AS;
+static const int DROP;
+static const int NAME;
+static const int TABLE;
+static const int CREATE;
+static const int INTNUM;
+static const int STRING;
+static const int APPROXNUM;
+static const int UNKNOWN;
+static const int ALL;
+static const int BETWEEN;
+static const int BY;
+static const int DISTINCT;
+static const int FROM;
+static const int GROUP;
+static const int HAVING;
 static const int SELECT;
-static const int PROJECT;
-static const int SORT;
-static const int RENAME;
-static const int EXTEND;
-static const int GROUPBY;
-static const int PRODUCT;
-static const int JOIN;
-static const int SEMIJOIN;
-static const int ANTIJOIN;
-static const int OUTERJOIN;
-static const int UNION;
+static const int USER;
+static const int WHERE;
+static const int WITH;
+static const int EMPTY;
+static const int SELALL;
+static const int DOT;
+static const int UPDATE;
+static const int SET;
+static const int CURRENT;
+static const int OF;
+static const int NULLX;
+static const int ASSIGN;
+static const int INSERT;
+static const int INTO;
+static const int VALUES;
+static const int UNIQUE;
+static const int PRIMARY;
+static const int FOREIGN;
+static const int KEY;
+static const int CHECK;
+static const int REFERENCES;
+static const int DEFAULT;
+static const int DATATYPE;
+static const int DECIMAL;
+static const int SMALLINT;
+static const int NUMERIC;
+static const int CHARACTER;
+static const int INTEGER;
+static const int REAL;
+static const int FLOAT;
+static const int DOUBLE;
+static const int PRECISION;
+static const int VARCHAR;
+static const int AVG;
 static const int MAX;
 static const int MIN;
-static const int COUNT;
 static const int SUM;
-static const int AVG;
-static const int MAX_DISTINCT;
-static const int MIN_DISTINCT;
-static const int COUNT_DISTINCT;
-static const int SUM_DISTINCT;
-static const int AVG_DISTINCT;
-static const int NAME;
-static const int CONSTANT;
-static const int STRVAL;
+static const int COUNT;
+static const int ALIAS;
+static const int INTORDER;
+static const int COLORDER;
+static const int ORDER;
+static const int ASC;
+static const int DESC;
+static const int LIMIT;
+static const int OFFSET;
+static const int DOTNAME;
+static const int ESCAPE;
+static const int LIKE;
+static const int IS;
+static const int IN;
+static const int ANY;
+static const int SOME;
+static const int EXISTS;
 
 
 #line 212 "/usr/share/bison++/bison.h"
@@ -384,44 +498,82 @@ static const int STRVAL;
   enum YY_Parser_ENUM_TOKEN { YY_Parser_NULL_TOKEN=0
   
  #line 215 "/usr/share/bison++/bison.h"
-	,PLUS=258
-	,MINUS=259
-	,MULTIPLY=260
-	,DIVIDE=261
-	,OR=262
-	,AND=263
-	,NOT=264
-	,NEQ=265
-	,EQ=266
-	,GT=267
-	,GTE=268
-	,LT=269
-	,LTE=270
-	,SELECT=271
-	,PROJECT=272
-	,SORT=273
-	,RENAME=274
-	,EXTEND=275
-	,GROUPBY=276
-	,PRODUCT=277
-	,JOIN=278
-	,SEMIJOIN=279
-	,ANTIJOIN=280
-	,OUTERJOIN=281
-	,UNION=282
-	,MAX=283
-	,MIN=284
-	,COUNT=285
-	,SUM=286
-	,AVG=287
-	,MAX_DISTINCT=288
-	,MIN_DISTINCT=289
-	,COUNT_DISTINCT=290
-	,SUM_DISTINCT=291
-	,AVG_DISTINCT=292
-	,NAME=293
-	,CONSTANT=294
-	,STRVAL=295
+	,OR=258
+	,AND=259
+	,NOT=260
+	,COMPARISON=261
+	,UMINUS=262
+	,AS=263
+	,DROP=264
+	,NAME=265
+	,TABLE=266
+	,CREATE=267
+	,INTNUM=268
+	,STRING=269
+	,APPROXNUM=270
+	,UNKNOWN=271
+	,ALL=272
+	,BETWEEN=273
+	,BY=274
+	,DISTINCT=275
+	,FROM=276
+	,GROUP=277
+	,HAVING=278
+	,SELECT=279
+	,USER=280
+	,WHERE=281
+	,WITH=282
+	,EMPTY=283
+	,SELALL=284
+	,DOT=285
+	,UPDATE=286
+	,SET=287
+	,CURRENT=288
+	,OF=289
+	,NULLX=290
+	,ASSIGN=291
+	,INSERT=292
+	,INTO=293
+	,VALUES=294
+	,UNIQUE=295
+	,PRIMARY=296
+	,FOREIGN=297
+	,KEY=298
+	,CHECK=299
+	,REFERENCES=300
+	,DEFAULT=301
+	,DATATYPE=302
+	,DECIMAL=303
+	,SMALLINT=304
+	,NUMERIC=305
+	,CHARACTER=306
+	,INTEGER=307
+	,REAL=308
+	,FLOAT=309
+	,DOUBLE=310
+	,PRECISION=311
+	,VARCHAR=312
+	,AVG=313
+	,MAX=314
+	,MIN=315
+	,SUM=316
+	,COUNT=317
+	,ALIAS=318
+	,INTORDER=319
+	,COLORDER=320
+	,ORDER=321
+	,ASC=322
+	,DESC=323
+	,LIMIT=324
+	,OFFSET=325
+	,DOTNAME=326
+	,ESCAPE=327
+	,LIKE=328
+	,IS=329
+	,IN=330
+	,ANY=331
+	,SOME=332
+	,EXISTS=333
 
 
 #line 215 "/usr/share/bison++/bison.h"

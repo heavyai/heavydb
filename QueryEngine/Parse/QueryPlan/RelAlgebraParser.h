@@ -62,6 +62,8 @@
 #include "relAlg/Compared.h"
 #include "relAlg/CompOp.h"
 
+#include "visitor/Visitor.h"
+#include "visitor/QPTranslator.h"
 // define stack element type to be a 
 // pointer to an AST node
 	
@@ -76,7 +78,6 @@ extern std::string strData[10];
 extern int dData[5];
 
 using namespace std;
-using namespace RA_Namespace;
 
 
 #line 21 "/usr/share/bison++/bison.h"

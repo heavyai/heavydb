@@ -15,7 +15,7 @@ public:
 
 	ProjectOp(RelExpr *n1, AttrList* n2) : atLi(n2) { relex = n1; }
 	/* If the selection is "*"- this means, of course, the Attribute List spans the entirety of the table. */
-	explicit ProjectOp(const std::string &n) : atLi(NULL), selectAll(n) { relex(NULL); }
+	explicit ProjectOp(const std::string &n) : atLi(NULL), selectAll(n) { relex = NULL; }
 
 /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

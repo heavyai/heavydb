@@ -5,7 +5,7 @@
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
- BinaryOp : public RelAlgNode {
+	class BinaryOp : public RelAlgNode {
     
 public:
 	RelExpr* relex1;

@@ -2,38 +2,38 @@
 #define REL_ALG_SIMPLE_PRINTER_VISITOR_H
 
 #include "Visitor.h"
-#include "../ast/RelAlgNode.h"
-#include "../ast/Program.h"
-#include "../ast/RelExprList.h"
-#include "../ast/RelExpr.h"
-#include "../ast/UnaryOp.h"
-#include "../ast/BinaryOp.h"
-#include "../ast/MathExpr.h"
-#include "../ast/SelectOp.h"
-#include "../ast/ProjectOp.h"
-#include "../ast/SortOp.h"
-#include "../ast/ExtendOp.h"
-#include "../ast/GroupByOp.h"
-#include "../ast/RenameOp.h"
+#include "../relAlg/RelAlgNode.h"
+#include "../relAlg/Program.h"
+#include "../relAlg/RelExprList.h"
+#include "../relAlg/RelExpr.h"
+#include "../relAlg/UnaryOp.h"
+#include "../relAlg/BinaryOp.h"
+#include "../relAlg/MathExpr.h"
+#include "../relAlg/SelectOp.h"
+#include "../relAlg/ProjectOp.h"
+#include "../relAlg/SortOp.h"
+#include "../relAlg/ExtendOp.h"
+#include "../relAlg/GroupByOp.h"
+#include "../relAlg/RenameOp.h"
 
-#include "../ast/JoinOp.h"
-#include "../ast/SemijoinOp.h"
-#include "../ast/ProductOp.h"
-#include "../ast/OuterjoinOp.h"
-#include "../ast/AntijoinOp.h"
-#include "../ast/UnionOp.h"
-#include "../ast/AggrExpr.h"
-#include "../ast/AggrList.h"
-#include "../ast/AttrList.h"
-#include "../ast/Attribute.h"
-#include "../ast/Relation.h"
-#include "../ast/Data.h"
-#include "../ast/Table.h"
+#include "../relAlg/JoinOp.h"
+#include "../relAlg/SemijoinOp.h"
+#include "../relAlg/ProductOp.h"
+#include "../relAlg/OuterjoinOp.h"
+#include "../relAlg/AntijoinOp.h"
+#include "../relAlg/UnionOp.h"
+#include "../relAlg/AggrExpr.h"
+#include "../relAlg/AggrList.h"
+#include "../relAlg/AttrList.h"
+#include "../relAlg/Attribute.h"
+#include "../relAlg/Relation.h"
+#include "../relAlg/Data.h"
+#include "../relAlg/Table.h"
 
-#include "../ast/Predicate.h"
-#include "../ast/Comparison.h"
-#include "../ast/Compared.h"
-#include "../ast/CompOp.h"
+#include "../relAlg/Predicate.h"
+#include "../relAlg/Comparison.h"
+#include "../relAlg/Compared.h"
+#include "../relAlg/CompOp.h"
 
 #include <iostream>
 using std::cout;
@@ -93,6 +93,15 @@ public:
 
         printTabs(DECR);
         cout << "</RelExpr>" << endl;
+    }
+
+        void visit(class Table *v) {
+        printTabs(INCR);
+
+        cout << "name1 is |" << v->name1 << endl;
+        
+        printTabs(DECR);
+        cout << "</Table>" << endl;
     }
 
     void visit(class UnaryOp *v) {
