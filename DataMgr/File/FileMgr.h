@@ -13,8 +13,8 @@
  *
  * @see File.h
  */
-#ifndef FILEMGR_H
-#define FILEMGR_H
+#ifndef _FILEMGR_H
+#define _FILEMGR_H
 
 #include <iostream>
 #include <memory>
@@ -23,11 +23,12 @@
 #include <set>
 #include <utility>
 #include <string>
-
 #include "File.h"
 #include "Block.h"
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
+
+namespace File_Namespace {
 
 /**
  * @type FileInfo
@@ -396,4 +397,6 @@ private:
 	unsigned nextFileId_;				/**< the index of the next file id */
 };
 
-#endif // FILEMGR_H
+} // File_Namespace
+
+#endif // _FILEMGR_H

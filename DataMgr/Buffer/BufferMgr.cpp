@@ -1,208 +1,146 @@
 /**
-* @file	BufferMgr.cpp
-* @author	Steven Stewart <steve@map-d.com>
-*
-*/
-
+ * @file	BufferMgr.cpp
+ * @author	Steven Stewart <steve@map-d.com>
+ *
+ */
 #include <iostream>
-#include <map>
+#include <cassert>
 #include <cstring>
-#include <sys/statvfs.h>
-#include "../File/FileMgr.h"
 #include "BufferMgr.h"
+#include "../File/FileMgr.h"
 
 using std::cout;
 using std::endl;
-using std::pair;
-using std::map;
+using File_Namespace::Chunk;
 
 namespace Buffer_Namespace {
 
-BufferMgr::BufferMgr(mapd_size_t hostMemorySize, FileMgr *fm) {
-    // initialize variables
+BufferMgr::BufferMgr(mapd_size_t numPages, mapd_size_t pageSize, FileMgr *fm = NULL) {
+    assert(numPages > 0 && pageSize > 0);
+    pageSize_ = pageSize;
     fm_ = fm;
-    hostMem_ = NULL;
-    hostMemorySize_ = hostMemorySize;
-    numHitsHost_ = 0;
-    numMissHost_ = 0;
+    nextPage_ = 0;
 
-    // Retrieve file system information
-    struct statvfs buf;
-    if (statvfs(".", &buf) == -1) {
-        fprintf(stderr, "[%s:%d] Error: statvfs() failed.\n", __func__, __LINE__);
-        exit(EXIT_FAILURE);
-    }
-    frameSize_ = buf.f_frsize; // fundamental physical block size
+    // Allocate host buffer pool
+    hostMemSize_ = numPages * pageSize;
+    hostMem_ = new mapd_byte_t[hostMemSize_];
 
-    // Allocate frames and free list
-    mapd_size_t numFrames = hostMemorySize_ / frameSize_;
-    for (int i = 0; i < numFrames; ++i) {
-        Frame *f = new Frame(i * frameSize_);
-        frames_.push_back(f);
-        free_.push_back(f);
-    }
-
-    // Allocate host memory
-    hostMemorySize_ = frameSize_ * frames_.size();
-    hostMem_ = new mapd_byte_t[hostMemorySize_];
-
-    // Print summary
-    printf("Host memory size = %u bytes\n", hostMemorySize_);
-    printf("Frame size       = %u bytes\n", frameSize_);
-    printf("# of frames      = %lu\n", frames_.size());
-}
-
-BufferMgr::BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr *fm) : fm_(fm) {
-     // initialize variables
-    fm_ = fm;
-    hostMem_ = NULL;
-    hostMemorySize_ = hostMemorySize;
-    numHitsHost_ = 0;
-    numMissHost_ = 0;
-    frameSize_ = frameSize;
-
-    // Allocate frames and free list
-    mapd_size_t numFrames = hostMemorySize_ / frameSize_;
-    for (int i = 0; i < numFrames; ++i) {
-        Frame *f = new Frame(i * frameSize_);
-        frames_.push_back(f);
-        free_.push_back(f);
-    }
-
-    // Allocate host memory
-    hostMemorySize_ = frameSize_ * frames_.size();
-    hostMem_ = new mapd_byte_t[hostMemorySize_];
-
-    // Print summary
-    printf("Host memory size = %u bytes\n", hostMemorySize_);
-    printf("Frame size       = %u bytes\n", frameSize_);
-    printf("# of frames      = %lu\n", frames_.size());
+#ifdef DEBUG_VERBOSE
+    printMemAlloc();
+#endif
 }
 
 BufferMgr::~BufferMgr() {
+    // Delete host memory
     delete[] hostMem_;
 }
-/*
-std::pair<bool, bool> BufferMgr::chunkStatus(const ChunkKey &key) {
-    std::pair<bool, bool> status;
-    auto it = chunkIndex_.find(key);
-    
-    // is chunk in chunkIndex_?
-    status.first = (it != chunkIndex_.end());
-    
-    // is chunk cached in buffer pool?
-    status.second = status.first ? it->second->isCached : false;
-    
-    return status;
+
+Buffer* BufferMgr::createBuffer(mapd_size_t n) {
+    // compute number of pages needed
+    mapd_size_t numPages = (n + pageSize_ - 1) / pageSize_;
+
+    // allocate new buffer and insert its pages
+    Buffer *b = new Buffer();
+    b->begin = nextPage_;
+    for (mapd_size_t i = 0; i < numPages; ++i) {
+        b->pages.push_back(new Page(nextPage_));
+        nextPage_ += pageSize_; 
+    }
+    b->end = nextPage_;
+
+    // insert into BufferMgr's vector of buffers and pin it
+    buffers_.push_back(b);
+    b->pins++;
+
+    return b;
 }
 
-bool BufferMgr::insertIntoIndex(pair<ChunkKey, PageInfo*> e) {
-    pair<map<ChunkKey,PageInfo*>::iterator, bool> ret;
-    ret = chunkIndex_.insert(e);
-    return ret.second;
-}
+mapd_size_t BufferMgr::updateBuffer(Buffer &b, mapd_addr_t offset, mapd_size_t n, mapd_addr_t *src) {
+    assert(n > 0);
+    mapd_addr_t dest = b.begin + offset;
 
-PageInfo* BufferMgr::getChunk(const ChunkKey &key, bool pin) {
-    return getChunk(key, 0, pin);
-}
-
-PageInfo* BufferMgr::getChunk(const ChunkKey &key, mapd_size_t pad, bool pin) {
-    // find chunk's page
-    PageInfo *pInfo = findChunkPage(key);
-
-    // found
-    if (pInfo) {
-        if (pin) pInfo->pin();
-        return pInfo;
+    // perform update
+    if (n > 0) {
+        if (dest < b.end) {
+            memcpy(hostMem_ + dest, src, n);
+            b.end = dest + n;
+        }
+        else {
+            // @todo create buffer of new size pointed to by b
+            fprintf(stderr, "[%s:%d] Dynamic reallocation of buffers is currently unsupported.\n", __func__, __LINE__);
+            return 0;
+        }
     }
 
-    // not found -- request actual chunk size from file manager
-    mapd_size_t actualSize;
-    fm_->getChunkActualSize(key, &actualSize);
-    if (actualSize <= 0)
-        return NULL; // chunk doesn't exist
-
-    // @todo Find enough frames for the chunk in the buffer pool
-
-    // @todo if not enough frames, invoke eviction strategy
-
-    return pInfo;
+    // flag pages and buffer as dirty
+    setDirtyPages(b, dest, b.end);
+    
+    return n;
 }
 
-// @todo ability to extend page bounds 
-// @todo fix bugs: should be using bounds as frame IDs, not memory addresses!
-bool BufferMgr::updateChunk(const ChunkKey &key, mapd_size_t offset, mapd_size_t size, mapd_byte_t *src) {
-    // find chunk's page
-    PageInfo *pInfo = findChunkPage(key);
-    if (!pInfo)
+void BufferMgr::deleteBuffer(Buffer *b) {
+    // free pages
+    // @todo free pages of buffer
+
+    // free buffer and remove from BufferMgr's list of buffers
+    delete b;
+    buffers_.remove(b); // @todo thread safe needed?
+}
+
+mapd_size_t BufferMgr::copyBuffer(Buffer &bSrc, Buffer &bDest, mapd_size_t n) {
+    mapd_size_t bSrcSz = bSrc.size();
+    mapd_size_t bDestSz = bDest.size();
+
+    // copy max possible number of bytes up to size n
+    n = (bSrcSz < n) ? bSrcSz : n;
+    n = (bDestSz < n) ? bDestSz : n;
+    memcpy(hostMem_ + bSrc.begin, hostMem_ + bDest.begin, n);
+
+    // flag destination buffer and its affected pages as dirty
+    setDirtyPages(bDest, 0, n);
+
+    return n;
+}
+
+bool BufferMgr::loadChunk(const ChunkKey &key, Buffer &b, bool fast) {
+    // Returns without verifying chunk will fit in buffer
+    if (fast) { 
+        Chunk *c = fm_->getChunk(key, hostMem_ + b.begin);
+        if (c) {
+            b.pin();
+            return true;
+        }
         return false;
+    }
 
-    // if not within page's bounds, return false
-    mapd_size_t begin = pInfo->bounds.first + offset;
-    if (begin + size > pInfo->bounds.second)
-        return false;
-
-    // Copy source data into chunk
-    mapd_byte_t *dest = hostMem_ + begin;
-    memcpy(dest, src, size);
-
-    // Update last address written to for the page
-    pInfo->lastAddr = begin + size;
-
-    return true;
+    // Otherwise, checks that chunk will fit in buffer and attempts to
+    // reallocate buffer if it needs to
+    mapd_size_t *size;
+    fm_->getChunkActualSize(key, size);
+    if (*size > b.size()) {
+        // @todo create buffer of new size pointed to by b
+        fprintf(stderr, "[%s:%d] Dynamic reallocation of buffers is currently unsupported.\n", __func__, __LINE__);
+        return 0;
+    }
+    Chunk *c = fm_->getChunk(key, hostMem_ + b.begin);
+    if (c) {
+        b.pin();
+        return true;
+    }
+    return false;
 }
 
-bool BufferMgr::removeChunk(const ChunkKey &key) {
-    // find chunk's page
-    PageInfo *pInfo = findChunkPage(key);
+void flushChunk(Buffer &b, bool all = false, bool force = false) {
+    if (!force && !b.dirty)
+        return;
 
-    // not found, or if page is pinned, return false
-    if (!pInfo || pInfo->isPinned())
-        return false;
-
-    // free page and remove entry in chunkIndex_
-    delete pInfo;
-    chunkIndex_.erase(key);
-
-    return true;
-}
-
-void appendChunk(const ChunkKey &key, mapd_size_t size, mapd_byte_t *src) {
-
-}
-
-
-bool flushChunk(const ChunkKey &key, unsigned int epoch) {
-    PageInfo* pInfo = findChunkPage(key);
-
-    // not found
-    if (!pInfo)
-        return false;
-
-    // gather frame information for the page
-    Frame *fr = pInfo->bounds.first / frameSize_;
-    mapd_size_t numFrames = pInfo
-}
-
-
-void BufferMgr::printFramesHost() {
     
 }
 
-void BufferMgr::printPagesHost() {
-    
+void BufferMgr::printMemAlloc() {
+    printf("Host memory = %u bytes\n", hostMemSize_);
+    printf("# of pages  = %u\n", hostMemSize_ / pageSize_);
+    printf("Page size   = %u\n", pageSize_);
 }
 
-void BufferMgr::printChunksHost() {
-    
-}
-
-
-PageInfo* BufferMgr::findChunkPage(const ChunkKey key) {
-    auto iter = chunkIndex_.find(key);
-    if (iter == chunkIndex_.end()) // not found
-        return NULL;
-    return iter->second;
-}
-*/
 } // Buffer_Namespace

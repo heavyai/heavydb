@@ -13,7 +13,7 @@
 
 #define MAPD_FILE_EXT ".mapd"
 
-namespace File {
+namespace File_Namespace {
 
     FILE* create(int fileId, mapd_size_t blockSize, mapd_size_t nblocks, mapd_err_t *err) {
         if (nblocks < 1 || blockSize < 1) {
@@ -117,7 +117,7 @@ namespace File {
         return size;
     }
 
-}
+} // File_Namespace
 
 
 

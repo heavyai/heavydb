@@ -5,321 +5,205 @@
  * This file includes the class specification for the buffer manager (BufferMgr), and related
  * data structures and types.
  */
-#include <vector>
-#include <string>
-#include <cassert>
 #include <map>
 #include <list>
-#include <utility>
 #include "../../Shared/types.h"
-#include "../../Shared/errors.h"
 
-// Forward declaration(s)
-class FileMgr;
+namespace File_Namespace {
+    class FileMgr;
+}
+using File_Namespace::FileMgr;
 
 namespace Buffer_Namespace {
 
 /**
- * @type Frame
- * @brief A frame has an address and a flag that indicates if it is dirty.
+ * @struct Page
  */
-struct Frame {
-    mapd_size_t addr;
-    bool dirty;
+struct Page {
+    mapd_addr_t addr = 0;
+    bool dirty = false;
 
-    /// Constructor
-    Frame(mapd_size_t addrIn, bool dirtyIn = false) : 
-        addr(addrIn), dirty(dirtyIn) {}
+    Page(mapd_size_t addrIn, bool dirtyIn = false)
+        : addr(addrIn), dirty(dirtyIn) {}
 };
 
 /**
- * @brief PageBounds provides support for various page sizes.
- *
- * The PageBounds refers to a span of consecutive frames. If the bounds are (i, j),
- * then the frames are those where i < j.
+ * @struct Buffer
  */
-typedef std::pair <mapd_size_t, mapd_size_t> PageBounds;
+struct Buffer {
+    mapd_addr_t begin = 0;
+    mapd_addr_t end = 0;
+    int pins = 0;
+    bool dirty = false;
+    std::vector<Page*> pages;
 
-/**
- * A PageInfo struct contains the bounds of the page (beginning and ending
- * frame IDs) and metadata about the page. Although a page's properties are
- * publicly exposed, helper methods are provided for convenience.
- */
-struct PageInfo {
-    PageBounds bounds;  /**< the span of frame IDs occupied by this page */
-    int pinCount;       /**< the number of pins (resources using the page) */
-    bool dirty;         /**< indicates the page has been altered and differs from disk */
-    bool isCached;      /**< indicates that the page is currently in the host pool */
-    mapd_size_t lastAddr; /**< the last address on the page containing the chunk */
+    /// Returns the size in bytes of the buffer
+    inline mapd_size_t size() { return end-begin; }
 
-    PageInfo() {
-        pinCount = 0;
-        dirty = false;
-        isCached = false;
-        bounds.first = 0;
-        bounds.second = 0;
-        lastAddr = 0;
-    }
+    /// Increments the pin count
+    inline void pin() { pins++; }
 
-    /**< Returns whether or not the page is pinned */
-    inline bool isPinned() { return pinCount > 0; }
-
-    /**< Increments the pin count for this page. */
-    inline void pin() { pinCount++; }
-    
-    /**< Decrements the pin count for this page. */
-    inline void unpin() { pinCount--; }     
-    
-    /**< Returns true if the page is dirty. */
-    inline bool isDirty() { return dirty; } 
-    
-    /**< Returns the first frame ID occupied by the page. */
-    inline mapd_size_t begin() { return bounds.first; }
-    
-    /**< Returns the last frame ID occupied by the page. */
-    inline mapd_size_t end() { return bounds.second; }
-    
-    /**< Returns the number of frames occupied by the page. */
-    inline mapd_size_t numFrames() { return end() - begin(); }
+    /// Decrements the pin count
+    inline void unpin() { pins--; }
 };
 
 /**
- * @brief A ChunkKeyToPageMap maps a chunk key to a page in the buffer pool.
- *
- * If a chunk currently exists in the buffer pool, then the ChunkKeyToPageMap maps the chunk, 
- * via its key, to its page in the buffer pool.
+ * @type ChunkKeyToBufferMap
  */
-typedef std::map<ChunkKey, PageInfo*> ChunkKeyToPageMap;
+typedef std::map<ChunkKey, Buffer*> ChunkKeyToBufferMap;
 
 /**
- * @class 	BufferMgr
- * @author	Steven Stewart <steve@map-d.com>
- * @brief The buffer manager handles the caching and movement of data within the memory hierarchy (CPU/GPU).
+ * @class BufferMgr
  *
- * The buffer manager is the subsystem responsible for the allocation of the buffer space (also called the
- * memory pool or memory cache). 
- *
- * The buffer manager maintains a cache of pages in memory to hold recently accessed data. In
- * general, it acts as an intermediary between DBMS modules and the file manager. The main
- * goal of the buffer manager is the minimization of physical I/O.
- *
- * More specifically, the Map-D buffer manager keeps a cache of "chunks" in memory. If the
- * requested chunk is not in the cache, then the buffer manager requests the chunk from
- * the file manager and places it in a memory page of sufficient size. The page, which
- * itself can consist of a variable number of fixed size frames, may be padded with empty
- * space in order to leave room for appending new data.
- *
- * Map-D uses a three-level storage hierarchy: nonvolatile (disk), main memory, and GPU memory. The buffer
- * manager handles the caching and movement of data across this hierarchy. 
- *
- * The interface to BufferMgr includes the most basic functionality: the ability to bring "chunks" into 
- * the buffer pool, to pin it, and to unpin it. A chunk-level and frame-level API are provided, offering
- * two levels of interaction with the buffer pool in terms of granularity.
- *
- * Host memory is allocated upon construction of a BufferMgr object, and there's one frame per frameSize
- * bytes, and they are ordered from 0 to (numFrames-1).
- *
- * Pages are variabled-sized collection of frames. They can occupy any contiguous subset of frames,
- * and are not necessarily ordered because their allocation depends on access to free memory, as
- * well as the replacement algorithm being used.
  */
 class BufferMgr {
 
 public:
     /**
-     * @brief A constructor that instantiates a buffer manager instance, and allocates the buffer pool.
+     * Constructor
      *
-     * The constructor allocates the buffer pool in host memory.
+     * @param numPages
+     * @param pageSize
+     * @param fm
+     */
+    BufferMgr(mapd_size_t numPages, mapd_size_t pageSize, FileMgr *fm);
+
+    /// Destructor
+    ~BufferMgr();
+
+    /**
+     * Creates a buffer containing enough pages to hold n bytes. The buffer
+     * is automatically pinned in the buffer pool.
      *
-     * The frame size is computed automatically based on querying the OS file system for the
-     * fundamental block size of the formatted disk.
+     * @param n         The number of bytes to copy from src into the buffer.
+     * @return int      A pointer to the new Buffer object.
+     */
+    Buffer* createBuffer(mapd_size_t n);
+
+    /**
+     * Updates a buffer with the given id, copying n bytes from src to the 
+     * specified offset into the buffer. Returns the number of bytes copied.
+     * The buffer manager will attempt to extend the buffer or reallocate it
+     * if it needs additional memory, and will return 0 in the case that it
+     * fails.
      *
-     * @param hostMemorySize The number of bytes to allocate in host memory for the buffer pool
+     * @param n         The number of bytes to copy from src into the buffer.
+     * @param src       The source memory address from which data is copied.
+     * @return int      The id of the new buffer in the BufferMgr's index.
      */
-    BufferMgr(mapd_size_t hostMemorySize, FileMgr *fm);
+    mapd_size_t updateBuffer(Buffer &b, mapd_addr_t offset, mapd_size_t n, mapd_addr_t *src);
 
-	/**
-	 * @brief A constructor that instantiates a buffer manager instance, and allocates the buffer pool.
+    /**
+     * Removes a buffer having the specified index.
+     * @param id        The id of the buffer in the BufferMgr index.
+     */
+    void deleteBuffer(Buffer *b);
+
+    /**
+     * Copies the first n bytes of the source buffer (id = src_id) to the
+     * destination buffer (id = dest_id). Returns the number of bytes copied,
+     * or 0 on error.
      *
-     * The frame size is passed to the constructor as a parameter, along with the host memory size.
+     * @param src_id       The id of the source buffer.
+     * @param dest_id      The id of the destination buffer.
+     * @return mapd_size_t The number of bytes copied (0 on error).
+     */
+    mapd_size_t copyBuffer(Buffer &bSrc, Buffer &bDest, mapd_size_t n);
+
+    /**
+     * Concatenates the buffer with id2 to the end of the buffer with id2.
+     * If id1 does not have enough empty space, then a new buffer is created
+     * of the combined size of the two buffers. Any empty space in either
+     * buffer is pushed to the end of the new buffer, and the two original
+     * buffers are deleted; thus, the return value is a pointer to the new
+     * buffer, whose id may be different than id1.
      *
-     * @param hostMemorySize The number of bytes to allocate in host memory for the buffer pool.
-     * @param frameSize The size in bytes of each frame.
-	 */
-	BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr *fm);
-
-	/**
-	 * A destructor that cleans up resources used by a buffer manager instance.
-	 */
-	~BufferMgr();
-
-    /**
-     * @brief Returns a pair of bool: (1) true if chunk is in chunkIndex_; (2) true if chunk is cached
-     * @param key The unique identifier for the chunk.
+     * @param id1       The id of the first buffer.
+     * @param id2       The id of the second buffer.
+     * @return Buffer*  A pointer to the concatenated buffer.
      */
-    std::pair<bool, bool> chunkStatus(const ChunkKey &key);
-    
-   /**
-    * @brief 
-    * @param 
-    */
-    bool insertIntoIndex(std::pair<ChunkKey, PageInfo*> e);
+    Buffer* concatBuffer(Buffer &b1, Buffer &b2);
 
     /**
-     * @brief Returns a pointer to a PageInfo object for a chunk cached in host memory.
+     * @brief Requests that a chunk be loaded into a buffer from storage.
      *
-     * This method returns a pointer to a page (PageInfo object) in host memory containing
-     * the requested chunk. If "pin" is true, then the page is automatically pinned.
+     * This method requests that a chunk be loaded from storage into a buffer.
+     * If the chunk cannot be loaded into a buffer, then false is returned.
      *
-     * If the chunk is not in the buffer pool, then the buffer manager needs to find a set of
-     * frames to compose a new PageInfo object, and will update ChunkKeyToPageMap accordingly.
+     * If the client knows the chunk will fit in the buffer, then setting fast to
+     * true will avoid unnecessary checks and result in faster execution.
      *
-     * If it is necessary to replace an existing PageInfo, then its dirty frames will be flushed
-     * before bringing in the new chunk.
+     * If true is returned, the buffer's pin count is incremented by 1.
+     */
+    bool loadChunk(const ChunkKey &key, Buffer &b, bool fast = false);
+
+    /**
+     * @brief Returns a pointer to a Buffer object containing the requested chunk and pins the buffer.
      *
-     * Upon failure to bring a chunk onto a page, NULL is returned.
-     *
-     * @param key The unique identifier for the requested chunk.
-     * @param pin By default, set to true, which pins the page for the chunk.
-     * @return PageInfo* NULL on error; otherwise, a pointer to the chunk's page in host memory.
+     * @param ChunkKey  The unique identifier of a chunk.
+     * @return Buffer*  Returns the buffer containing the chunk, or NULL if it's not found.
      */
-    PageInfo* getChunk(const ChunkKey &key, bool pin = true);
-    
-    /**
-     * This method does the same thing as getChunkHost(key, pin), but leaves "pad" bytes of
-     * extra space at the end of the page holding the chunk. If the chunk is already cached,
-     * then its page bounds are extended to accomodate the padding.
-     */
-    PageInfo* getChunk(const ChunkKey &key, mapd_size_t pad, bool pin = true);
-
-    /**
-     * @brief Updates the chunk. The chunk must already be in the buffer pool.
-     *
-     * @param key       The unique identifier of the chunk.
-     * @param offset    The offset address where the update begins.
-     * @param size      The number of bytes being written.
-     * @param src       A pointer to the source of the data being written.
-     */
-    bool updateChunk(const ChunkKey &key, mapd_size_t offset, mapd_size_t size, mapd_byte_t *src);
-
-    /**
-     * @brief Removes the chunk from the buffer pool. Returns false if the chunk is pinned.
-     * @param key       The unique identifier of the chunk.
-     */
-    bool removeChunk(const ChunkKey &key);
-
-    /**
-     * @brief Append data to a chunk.
-     *
-     * @param key       The unique identifier of the chunk.
-     * @param size      The size of the source data in bytes.
-     * @param src       The source location of the data to be appended.
-     */
-    void appendChunk(const ChunkKey &key, mapd_size_t size, mapd_byte_t *src);
-
-    /**
-     * @brief Flushes all the dirty frames of the specified chunk from the host buffer pool.
-     * @param key The unique identifier of the chunk.
-     * @param epoch Identifier of the most recent checkpoint.
-     */
-    bool flushChunk(const ChunkKey &key, unsigned int epoch);
-
-    /**
-     * @brief Flushs all dirty pages currently in the host buffer pool.
-     * @param epoch Identifier of the most recent checkpoint.
-     */
-    void flushAll(unsigned int epoch);
-
-    /**
-     * @brief Flushs all dirty pages currently in the host buffer pool.
-     * @param epoch Identifier of the most recent checkpoint.
-     */
-    void pinChunk(const ChunkKey &key);
-
-    /**
-     * @brief Flushs all dirty pages currently in the host buffer pool.
-     * @param epoch Identifier of the most recent checkpoint.
-     */
-    void unpinChunk(const ChunkKey &key);
-
-    /**
-     * @brief Returns the number of unpinned frames available.
-     */
-    inline mapd_size_t availableFrames() { return free_.size(); }
-
-    /**
-     * @brief Returns the number of unpinned bytes available.
-     */
-    inline mapd_size_t available() { return available() * frameSize_; }
-
-    /**
-     * @brief Returns a float representing the host hit rate.
-     * @return float The hit rate for the host.
-     */
-    inline float hostHitRate() {
-        return float(numHitsHost_) / float(numHitsHost_ + numMissHost_);
+    inline Buffer* getChunkBuffer(const ChunkKey &key) {
+        Buffer *b = findChunkPage(key);
+        if (b) b->pin();
+        return b;
     }
-    
+
     /**
-     * @brief Sets the hit and miss counts for the host back to 0.
+     * @brief Returns the memory address that points to the beginning of the chunk. Pins the chunk's buffer.
+     *
+     * @param ChunkKey  The unique identifier of a chunk.
+     * @return Buffer*  Returns the buffer containing the chunk, or NULL if it's not found.
      */
-    inline void resetHitRateHost(){
-        numHitsHost_ = 0;
-        numMissHost_ = 0;
+    inline mapd_addr_t* getChunkAddr(const ChunkKey &key, mapd_size_t *size = NULL) {
+        Buffer *b = findChunkPage(key);
+        if (b) {
+            b->pin();
+            if (size) *size = b->size();
+            return hostMem_ + b->begin;
+        }
+        return NULL;
     }
-    
+
     /**
-     * @brief Prints a summary of the frames (Frame objects) in the host buffer pool to stdout.
+     * @brief Flushes the contents of the chunk's buffer to storage.
      *
-     * Traverses the vector frames_ in order to print a summary of the chunks currently cached in
-     * the host buffer pool.
+     * This method flushes the contents of the chunk's buffer to storage. If all
+     * is true, then all pages are flushed, regardless of their dirty status;
+     * otherwise, only dirty pages are flushed. If force is true, then the 
+     * the buffer is flushed even if its dirty flag is false. In general,
+     * the client should not need to use "all" or "force.""
      */
-    void printFramesHost();
-    
-   /**
-    * @brief Prints a summary of the pages (Page objects) in the host buffer pool to stdout.
-    *
-    * Traverses the vector pages_ in order to print a summary of the pages currently cached in
-    * the host buffer pool.
-    */
-   void printPagesHost();
-    
-    /**
-     * @brief Prints a summary of the chunks in the host buffer pool to stdout.
-     *
-     * Traverses ChunkKeyToPageMap in order to print a summary of the chunks currently cached in
-     * the host buffer pool.
-     */
-    void printChunksHost();
+    void flushChunk(Buffer &b, bool all = false, bool force = false);
+
+    /// Prints to stdout a summary of current host memory allocation
+    void printMemAlloc();
 
 private:
-    BufferMgr(const BufferMgr&);
-    BufferMgr& operator=(const BufferMgr&);
+    FileMgr *fm_;
+    mapd_addr_t *hostMem_;
+    mapd_size_t hostMemSize_;
+    mapd_size_t pageSize_;
+    mapd_addr_t nextPage_;
+    std::list<Buffer*> buffers_;
+    ChunkKeyToBufferMap chunkIndex_;
 
-    FileMgr *fm_;                       /**< pointer to a file manager object */
-    mapd_byte_t *hostMem_;              /**< pointer to the host-allocated buffer pool. */
-    mapd_size_t hostMemorySize_;        /**< number of bytes allocated for the host buffer pool. */
+    inline void setDirtyPages(Buffer &b, mapd_addr_t begin, mapd_addr_t end) {
+        auto it = b.pages.begin();
+        it += begin / pageSize_;
+        if (it != b.pages.end())
+            while ((*it)->addr < end)
+                (*it)->dirty = true;
+        b.dirty = true;
+    }
 
-    // Frames
-    std::vector<Frame*> frames_;        /**< A vector of in-order frames, which compose the buffer pool. */
-    std::list<Frame*> free_;            /**< A linked list of pointers to free frames. */
-    mapd_size_t frameSize_;             /**< The size of a frame in bytes. */
+    inline Buffer* findChunkPage(const ChunkKey key) {
+        auto it = chunkIndex_.find(key);
+        if (it == chunkIndex_.end()) // not found
+            return NULL;
+        return it->second;
+    }
 
-    // Pages
-    std::vector<PageInfo*> pages_;      /**< A vector of pages, which are present in the buffer pool. */
-
-    // void *deviceMem;                 /**< @todo device (GPU) buffer pool */
-    
-    // Data structures
-    ChunkKeyToPageMap chunkIndex_;
-    
-    // Metadata
-    unsigned numHitsHost_;              /**< The number of host memory cache hits. */
-    unsigned numMissHost_;              /**< The number of host memory cache misses. */
-
-    /// Returns a pointer to a chunk in the chunkIndex
-    PageInfo* findChunkPage(const ChunkKey key);
-    
 }; // BufferMgr
 
 } // Buffer_Namespace
