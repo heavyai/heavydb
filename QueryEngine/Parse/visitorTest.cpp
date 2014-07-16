@@ -17,8 +17,12 @@ int main(int argc, char ** argv) {
         if (sql == "q")
             break;
         ASTNode *parseRoot = 0;
-        parser.parse(sql, parseRoot);
-      
+        string lastParsed;
+        int numErrors = parser.parse(sql, parseRoot,lastParsed);
+        if (numErrors > 0) {
+            cout << "Error at: " << lastParsed << endl;
+        }
+        //cout << "# Errors: " << numErrors << endl;
         XMLTranslator xml;
         if (parseRoot != 0)
             parseRoot->accept(xml); 
