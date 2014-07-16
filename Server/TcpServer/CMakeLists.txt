@@ -1,17 +1,17 @@
 cmake_minimum_required(VERSION 2.8)
 
-ADD_LIBRARY(requestHandler RequestHandler.cpp)
-ADD_LIBRARY(tcpConnection TcpConnection.cpp)
-ADD_LIBRARY(tcpServer TcpServer.cpp)
-
-#SET(CMAKE_C_COMPILER mpicc)
-#SET(CMAKE_CXX_COMPILER mpicxx)
+SET (tcpserver_source_files
+    TcpServer.cpp
+    TcpServer.h
+    TcpConnection.cpp
+    TcpConnection.h
+)
 
 find_package(Boost 1.50.0 REQUIRED system thread)
 include_directories(BOOST_INCLUDE_PATH)
 
-target_link_libraries(tcpServer ${Boost_THREAD_LIBRARY})
+ADD_LIBRARY (TcpServer ${tcpserver_source_files})
 
-ADD_EXECUTABLE(serverTest ServerTest.cpp)
-target_link_libraries(serverTest pthread ${Boost_SYSTEM_LIBRARY} tcpServer tcpConnection requestHandler ) 
+target_link_libraries(TcpServer ${Boost_THREAD_LIBRARY} ${Boost_SYSTEM_LIBRARY} )
+
 

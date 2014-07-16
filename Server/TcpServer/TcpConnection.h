@@ -6,14 +6,14 @@
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/enable_shared_from_this.hpp>
-#include <boost/logic/tribool.hpp>
-#include "boost/tuple/tuple_comparison.hpp"
-#include "Reply.h"
-#include "Request.h"
-#include "RequestHandler.h"
-#include "RequestParser.h"
 
-namespace TcpServer {
+namespace Database_Namespace {
+    class Database; //forward declaration of database class
+}
+
+using Database_Namespace::Database;
+
+namespace TcpServer_Namespace {
 
 const int bufferMaxSize = 8192;
 
@@ -22,8 +22,8 @@ class TcpConnection : public boost::enable_shared_from_this<TcpConnection>, priv
 {
     public:
       /// Construct a TcpConnection with the given io_service.
-      explicit TcpConnection(boost::asio::io_service& io_service,
-          RequestHandler& handler);
+      explicit TcpConnection(boost::asio::io_service& ioService,
+          Database &database);
     ~TcpConnection();
 
       /// Get the socket associated with the TcpConnection.
@@ -47,14 +47,17 @@ class TcpConnection : public boost::enable_shared_from_this<TcpConnection>, priv
       boost::asio::ip::tcp::socket socket_;
 
       /// The handler used to process the incoming request.
-      RequestHandler& requestHandler_;
+      //RequestHandler& requestHandler_;
+      Database & database_;
+
+
 
       /// Buffer for incoming data.
       boost::asio::streambuf buffer_;
       //boost::array<char, 8192> buffer_;
 
       /// The incoming request.
-      request request_;
+      //request request_;
 
       /// The parser for the incoming request. - TODO
       //RequestParser request_parser_;
@@ -68,6 +71,6 @@ class TcpConnection : public boost::enable_shared_from_this<TcpConnection>, priv
 
 typedef boost::shared_ptr<TcpConnection> TcpConnection_ptr;
 
-} // namespace TcpServer
+} // namespace TcpServer_Namespace
 
 #endif // TCP_CONNECTION_H

@@ -1,15 +1,20 @@
 #ifndef TCP_SERVER_H
 #define TCP_SERVER_H
 
-#include <boost/asio.hpp>
 #include <string>
 #include <vector>
+#include <boost/asio.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
 #include "TcpConnection.h"
-#include "RequestHandler.h"
 
-namespace TcpServer {
+namespace Database_Namespace {
+    class Database; //forward declaration of database class
+}
+
+using Database_Namespace::Database;
+
+namespace TcpServer_Namespace {
 
 /// The top-level class of the HTTP TcpServer.
 class TcpServer : private boost::noncopyable
@@ -17,10 +22,8 @@ class TcpServer : private boost::noncopyable
     public:
       /// Construct the TcpServer to listen on the specified TCP address and port, and
       /// serve up files from the given directory.
-      explicit TcpServer(const std::string& address, const std::string& port,
-          std::size_t thread_pool_size);
-
-      /// Run the TcpServer's io_service loop.
+        explicit TcpServer(const std::string& address, const std::string& port, boost::asio::io_service &ioService, Database &database);
+      /// Start listening for connections
       void start();
 
       /// Stop the TcpServer.
@@ -28,30 +31,30 @@ class TcpServer : private boost::noncopyable
 
     private:
       /// Handle completion of an asynchronous accept operation.
-      void handleAccept(const boost::system::error_code& e);
-    void startAccept();
+        void handleAccept(const boost::system::error_code& e);
 
-      /// The number of threads that will call io_service::run().
-      std::size_t thread_pool_size_;
+        void startAccept();
 
-      /// The io_service used to perform asynchronous operations.
-      boost::asio::io_service io_service_;
+        /// The number of threads that will call io_service::run().
+        std::size_t thread_pool_size_;
 
-      /// Acceptor used to listen for incoming connections.
-      boost::asio::ip::tcp::acceptor acceptor_;
+        /// The io_service used to perform asynchronous operations.
+        boost::asio::io_service &ioService_;
 
-      /// The next connection to be accepted.
-      TcpConnection_ptr newConnection_;
+        /// Reference to the database object
+        Database &database_;
 
-      /// The handler for all incoming requests.
-      RequestHandler request_handler_;
+        /// Acceptor used to listen for incoming connections.
+        boost::asio::ip::tcp::acceptor acceptor_;
 
-      /// The signal_set is used to register for process termination notifications.
-      boost::asio::signal_set signals_;
+        /// The next connection to be accepted.
+        TcpConnection_ptr newConnection_;
 
-      int numConns_;
+        std::string address_;
+        std::string port_;
+
 };
 
-} // namespace TcpServer
+} // namespace TcpServer_Namespace
 
 #endif // TCP_SERVER_H
