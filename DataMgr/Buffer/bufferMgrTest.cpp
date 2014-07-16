@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include "BufferMgr.h"
-#include "../File/FileMgr.h"
+//#include "../File/FileMgr.h"
 #include "../../Shared/ansi.h"
 #include "../../Shared/testing.h"
 
@@ -14,8 +14,6 @@ using namespace Buffer_Namespace;
 // unit test function prototypes
 bool test_BufferMgr();
 
-
-
 int main() {
 	test_BufferMgr() ?
 	    PPASS("BufferMgr()") : PFAIL("BufferMgr()");
@@ -24,8 +22,8 @@ int main() {
 }
 
 bool test_BufferMgr() {
-	::FileMgr fm(".");
+	//::FileMgr fm(".");
 	BufferMgr bm1(1048576, NULL);
-	BufferMgr bm2(1048576, NULL);
+	BufferMgr bm2(1048576, 256, NULL);
 	return true;
 }
