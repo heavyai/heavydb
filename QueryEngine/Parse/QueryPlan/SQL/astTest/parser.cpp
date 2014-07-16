@@ -188,8 +188,6 @@ Maintained by Magnus Ekdahl <magnus@debian.org>
 #include "ast/AtomCommalist.h"
 #include "ast/Subquery.h"
 
-using namespace std;
-using namespace SQL_Namespace;
 
 // define stack element type to be a 
 // pointer to an AST node
@@ -202,7 +200,8 @@ extern ASTNode* parse_root;
 extern std::string strData[10];
 extern double dData[10];
 
-
+using namespace std;
+//using namespace SQL_Namespace;
 
 
 #line 88 "/usr/share/bison++/bison.cc"
@@ -950,24 +949,24 @@ static const short yyrhs[] = {    89,
 
 #if (YY_Parser_DEBUG != 0) || defined(YY_Parser_ERROR_VERBOSE) 
 static const short yyrline[] = { 0,
-   151,   152,   156,   157,   161,   164,   166,   170,   174,   175,
-   179,   180,   184,   185,   189,   192,   194,   197,   200,   201,
-   202,   203,   204,   205,   206,   207,   211,   212,   213,   214,
-   215,   218,   220,   223,   225,   228,   230,   233,   235,   238,
-   240,   241,   247,   251,   253,   254,   255,   270,   274,   276,
-   279,   281,   284,   286,   289,   295,   297,   298,   301,   306,
-   308,   309,   312,   314,   317,   321,   325,   326,   327,   330,
-   341,   342,   345,   347,   350,   355,   357,   360,   362,   365,
-   367,   370,   372,   375,   377,   379,   382,   384,   385,   386,
-   387,   390,   392,   393,   394,   395,   396,   397,   400,   402,
-   405,   407,   410,   412,   415,   417,   420,   422,   425,   427,
-   428,   429,   432,   434,   437,   441,   443,   444,   447,   451,
-   457,   459,   462,   464,   465,   466,   467,   468,   469,   470,
-   471,   472,   475,   478,   481,   483,   484,   485,   489,   490,
-   491,   495,   496,   497,   503,   504,   505,   506,   507,   508,
-   509,   510,   511,   512,   513,   514,   515,   516,   517,   518,
-   521,   523,   524,   525,   529,   533,   536,   538,   539,   540,
-   541
+   150,   151,   155,   156,   160,   163,   165,   169,   173,   174,
+   178,   179,   183,   184,   188,   191,   193,   196,   199,   200,
+   201,   202,   203,   204,   205,   206,   210,   211,   212,   213,
+   214,   217,   219,   222,   224,   227,   229,   232,   234,   237,
+   239,   240,   246,   250,   252,   253,   254,   269,   273,   275,
+   278,   280,   283,   285,   288,   294,   296,   297,   300,   305,
+   307,   308,   311,   313,   316,   320,   324,   325,   326,   329,
+   340,   341,   344,   346,   349,   354,   356,   359,   361,   364,
+   366,   369,   371,   374,   376,   378,   381,   383,   384,   385,
+   386,   389,   391,   392,   393,   394,   395,   396,   399,   401,
+   404,   406,   409,   411,   414,   416,   419,   421,   424,   426,
+   427,   428,   431,   433,   436,   440,   442,   443,   446,   450,
+   456,   458,   461,   463,   464,   465,   466,   467,   468,   469,
+   470,   471,   474,   477,   480,   482,   483,   484,   488,   489,
+   490,   494,   495,   496,   502,   503,   504,   505,   506,   507,
+   508,   509,   510,   511,   512,   513,   514,   515,   516,   517,
+   520,   522,   523,   524,   528,   532,   535,   537,   538,   539,
+   540
 };
 
 static const char * const yytname[] = {   "$","error","$illegal.","OR","AND",
@@ -1726,684 +1725,684 @@ YYLABEL(yyreduce)
   switch (yyn) {
 
 case 1:
-#line 151 "parser.y"
+#line 150 "parser.y"
 { yyval = new Program((SQLList*)yyvsp[0]); parseRoot = yyval; ;
     break;}
 case 2:
-#line 152 "parser.y"
+#line 151 "parser.y"
 { yyval = 0; parseRoot = yyval; ;
     break;}
 case 3:
-#line 156 "parser.y"
+#line 155 "parser.y"
 { yyval = new SQLList((SQL*)yyvsp[-1]); ;
     break;}
 case 4:
-#line 157 "parser.y"
+#line 156 "parser.y"
 { yyval = new SQLList((SQLList*)yyvsp[-2], (SQL*)yyvsp[-1]); ;
     break;}
 case 5:
-#line 161 "parser.y"
+#line 160 "parser.y"
 { yyval = new SQL((Schema*)yyvsp[0]); ;
     break;}
 case 6:
-#line 165 "parser.y"
+#line 164 "parser.y"
 { yyval = new OptColumnCommalist(NULL); ;
     break;}
 case 7:
-#line 166 "parser.y"
+#line 165 "parser.y"
 { yyval = new OptColumnCommalist((ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 8:
-#line 170 "parser.y"
+#line 169 "parser.y"
 { yyval = new Schema((BaseTableDef*)yyvsp[0]); ;
     break;}
 case 9:
-#line 174 "parser.y"
+#line 173 "parser.y"
 { yyval = new BaseTableDef("CREATE", (Table*)yyvsp[-3], (BaseTableElementCommalist*)yyvsp[-1]); ;
     break;}
 case 10:
-#line 175 "parser.y"
+#line 174 "parser.y"
 { yyval = new BaseTableDef("DROP", (Table*)yyvsp[0]); ;
     break;}
 case 11:
-#line 179 "parser.y"
+#line 178 "parser.y"
 { yyval = new BaseTableElementCommalist( (BaseTableElement*)yyvsp[0]); ;
     break;}
 case 12:
-#line 180 "parser.y"
+#line 179 "parser.y"
 { yyval = new BaseTableElementCommalist( (BaseTableElementCommalist*)yyvsp[-2], (BaseTableElement*)yyvsp[0]); ;
     break;}
 case 13:
-#line 184 "parser.y"
+#line 183 "parser.y"
 { yyval = new BaseTableElement( (ColumnDef*)yyvsp[0]); ;
     break;}
 case 14:
-#line 185 "parser.y"
+#line 184 "parser.y"
 { yyval = new BaseTableElement( (TableConstraintDef*)yyvsp[0]); ;
     break;}
 case 15:
-#line 189 "parser.y"
+#line 188 "parser.y"
 { yyval = new ColumnDef( (Column*)yyvsp[-2], (DataType*)yyvsp[-1], (ColumnDefOptList*)yyvsp[0]); ;
     break;}
 case 16:
-#line 193 "parser.y"
+#line 192 "parser.y"
 { yyval = NULL; ;
     break;}
 case 17:
-#line 194 "parser.y"
+#line 193 "parser.y"
 { yyval = new ColumnDefOptList( (ColumnDefOptList*)yyvsp[-1], (ColumnDefOpt*)yyvsp[0]); ;
     break;}
 case 18:
-#line 199 "parser.y"
+#line 198 "parser.y"
 { yyval = new ColumnDefOpt(0); ;
     break;}
 case 19:
-#line 200 "parser.y"
+#line 199 "parser.y"
 { yyval = new ColumnDefOpt(1); ;
     break;}
 case 20:
-#line 201 "parser.y"
+#line 200 "parser.y"
 { yyval = new ColumnDefOpt(2); ;
     break;}
 case 21:
-#line 202 "parser.y"
+#line 201 "parser.y"
 { yyval = new ColumnDefOpt(3, (Literal*)yyvsp[0]); ;
     break;}
 case 22:
-#line 203 "parser.y"
+#line 202 "parser.y"
 { yyval = new ColumnDefOpt(4); ;
     break;}
 case 23:
-#line 204 "parser.y"
+#line 203 "parser.y"
 { yyval = new ColumnDefOpt(5); ;
     break;}
 case 24:
-#line 205 "parser.y"
+#line 204 "parser.y"
 { yyval = new ColumnDefOpt(6, (SearchCondition*)yyvsp[-1]); ;
     break;}
 case 25:
-#line 206 "parser.y"
+#line 205 "parser.y"
 { yyval = new ColumnDefOpt(7, (Table*)yyvsp[0]); ;
     break;}
 case 26:
-#line 207 "parser.y"
+#line 206 "parser.y"
 { yyval = new ColumnDefOpt(8, (Table*)yyvsp[-3], (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 27:
-#line 211 "parser.y"
+#line 210 "parser.y"
 { yyval = new TableConstraintDef(0, (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 28:
-#line 212 "parser.y"
+#line 211 "parser.y"
 { yyval = new TableConstraintDef(1, (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 29:
-#line 213 "parser.y"
+#line 212 "parser.y"
 { yyval = new TableConstraintDef(2, (ColumnCommalist*)yyvsp[-3], (Table*)yyvsp[0]); ;
     break;}
 case 30:
-#line 214 "parser.y"
+#line 213 "parser.y"
 { yyval = new TableConstraintDef(2, (ColumnCommalist*)yyvsp[-6], (Table*)yyvsp[-3], (ColumnCommalist*)yyvsp[-1]); ;
     break;}
 case 31:
-#line 215 "parser.y"
+#line 214 "parser.y"
 {yyval = new TableConstraintDef(3, (SearchCondition*)yyvsp[-1]); ;
     break;}
 case 32:
-#line 219 "parser.y"
+#line 218 "parser.y"
 { yyval = new ColumnCommalist((Column*)yyvsp[0]); ;
     break;}
 case 33:
-#line 220 "parser.y"
+#line 219 "parser.y"
 { yyval = new ColumnCommalist((ColumnCommalist*)yyvsp[-2], (Column*)yyvsp[0]); ;
     break;}
 case 34:
-#line 224 "parser.y"
+#line 223 "parser.y"
 { yyval = NULL; ;
     break;}
 case 35:
-#line 225 "parser.y"
+#line 224 "parser.y"
 { yyval = new OptOrderByClause((OrderingSpecCommalist*)yyvsp[0]); ;
     break;}
 case 36:
-#line 229 "parser.y"
+#line 228 "parser.y"
 { yyval = new OrderingSpecCommalist((OrderingSpec*)yyvsp[0]); ;
     break;}
 case 37:
-#line 230 "parser.y"
+#line 229 "parser.y"
 { yyval = new OrderingSpecCommalist((OrderingSpecCommalist*)yyvsp[-2], (OrderingSpec*)yyvsp[0]); ;
     break;}
 case 38:
-#line 234 "parser.y"
+#line 233 "parser.y"
 { yyval = new OrderingSpec(dData[0], (OptAscDesc*)yyvsp[0]); ;
     break;}
 case 39:
-#line 235 "parser.y"
+#line 234 "parser.y"
 { yyval = new OrderingSpec((ColumnRef*)yyvsp[-1], (OptAscDesc*)yyvsp[0]); ;
     break;}
 case 40:
-#line 239 "parser.y"
+#line 238 "parser.y"
 { yyval = new OptAscDesc(""); ;
     break;}
 case 41:
-#line 240 "parser.y"
+#line 239 "parser.y"
 { yyval = new OptAscDesc("ASC"); ;
     break;}
 case 42:
-#line 241 "parser.y"
+#line 240 "parser.y"
 { yyval = new OptAscDesc("DESC"); ;
     break;}
 case 43:
-#line 248 "parser.y"
+#line 247 "parser.y"
 { yyval = new SQL((ManipulativeStatement*)yyvsp[0]); ;
     break;}
 case 44:
-#line 252 "parser.y"
+#line 251 "parser.y"
 { yyval = new ManipulativeStatement((SelectStatement*)yyvsp[0]); ;
     break;}
 case 45:
-#line 253 "parser.y"
+#line 252 "parser.y"
 { yyval = new ManipulativeStatement((InsertStatement*)yyvsp[0]); ;
     break;}
 case 46:
-#line 254 "parser.y"
+#line 253 "parser.y"
 { yyval = new ManipulativeStatement((UpdateStatementPositioned*)yyvsp[0]); ;
     break;}
 case 47:
-#line 255 "parser.y"
+#line 254 "parser.y"
 { yyval = new ManipulativeStatement((UpdateStatementSearched*)yyvsp[0]); ;
     break;}
 case 48:
-#line 271 "parser.y"
+#line 270 "parser.y"
 { yyval = new InsertStatement((Table*)yyvsp[-2], (OptColumnCommalist*)yyvsp[-1], (ValuesOrQuerySpec*)yyvsp[0]); ;
     break;}
 case 49:
-#line 275 "parser.y"
+#line 274 "parser.y"
 { yyval = new ValuesOrQuerySpec((InsertAtomCommalist*)yyvsp[-1]); ;
     break;}
 case 50:
-#line 276 "parser.y"
+#line 275 "parser.y"
 { yyval = new ValuesOrQuerySpec((QuerySpec*)yyvsp[0]); ;
     break;}
 case 51:
-#line 280 "parser.y"
+#line 279 "parser.y"
 { yyval = new InsertAtomCommalist((InsertAtom*)yyvsp[0]); ;
     break;}
 case 52:
-#line 281 "parser.y"
+#line 280 "parser.y"
 { yyval = new InsertAtomCommalist((InsertAtomCommalist*)yyvsp[-2], (InsertAtom*)yyvsp[0]); ;
     break;}
 case 53:
-#line 285 "parser.y"
+#line 284 "parser.y"
 { yyval = new InsertAtom((Atom*)yyvsp[0]); ;
     break;}
 case 54:
-#line 286 "parser.y"
+#line 285 "parser.y"
 { yyval = new InsertAtom(NULL); ;
     break;}
 case 55:
-#line 292 "parser.y"
+#line 291 "parser.y"
 { yyval = new SelectStatement((OptAllDistinct*)yyvsp[-2], (Selection*)yyvsp[-1], (TableExp*)yyvsp[0]); ;
     break;}
 case 56:
-#line 296 "parser.y"
+#line 295 "parser.y"
 { yyval = new OptAllDistinct("ALL"); ;
     break;}
 case 57:
-#line 297 "parser.y"
+#line 296 "parser.y"
 { yyval = new OptAllDistinct("DISTINCT"); ;
     break;}
 case 58:
-#line 298 "parser.y"
+#line 297 "parser.y"
 { yyval = new OptAllDistinct(""); ;
     break;}
 case 59:
-#line 303 "parser.y"
+#line 302 "parser.y"
 { yyval = new UpdateStatementPositioned((Table*)yyvsp[-6], (AssignmentCommalist*)yyvsp[-4], (Cursor*)yyvsp[0]); ;
     break;}
 case 60:
-#line 307 "parser.y"
+#line 306 "parser.y"
 { yyval = NULL; ;
     break;}
 case 61:
-#line 308 "parser.y"
+#line 307 "parser.y"
 { yyval = new AssignmentCommalist((Assignment*)yyvsp[0]); ;
     break;}
 case 62:
-#line 309 "parser.y"
+#line 308 "parser.y"
 { yyval = new AssignmentCommalist((AssignmentCommalist*)yyvsp[-2], (Assignment*)yyvsp[0]); ;
     break;}
 case 63:
-#line 313 "parser.y"
+#line 312 "parser.y"
 { yyval = new Assignment((Column*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 64:
-#line 314 "parser.y"
+#line 313 "parser.y"
 { yyval = new Assignment((Column*)yyvsp[-2], NULL); ;
     break;}
 case 65:
-#line 318 "parser.y"
+#line 317 "parser.y"
 { yyval = new UpdateStatementSearched((Table*)yyvsp[-3], (AssignmentCommalist*)yyvsp[-1], (OptWhereClause*)yyvsp[0]); ;
     break;}
 case 66:
-#line 322 "parser.y"
+#line 321 "parser.y"
 { yyval = new QuerySpec((OptAllDistinct*)yyvsp[-2], (Selection*)yyvsp[-1], (TableExp*)yyvsp[0]); ;
     break;}
 case 67:
-#line 326 "parser.y"
+#line 325 "parser.y"
 { yyval = new Selection((ScalarExpCommalist*)yyvsp[0]); ;
     break;}
 case 69:
-#line 327 "parser.y"
+#line 326 "parser.y"
 { yyval = new Selection("*"); ;
     break;}
 case 70:
-#line 336 "parser.y"
+#line 335 "parser.y"
 { yyval = new TableExp((FromClause*)yyvsp[-5], (OptWhereClause*)yyvsp[-4], (OptGroupByClause*)yyvsp[-3], (OptHavingClause*)yyvsp[-2],
                                                     (OptOrderByClause*)yyvsp[-1], (OptLimitClause*)yyvsp[0]); ;
     break;}
 case 71:
-#line 341 "parser.y"
+#line 340 "parser.y"
 { yyval = new FromClause((TableRefCommalist*)yyvsp[0]); ;
     break;}
 case 72:
-#line 342 "parser.y"
+#line 341 "parser.y"
 { yyval = new FromClause((SelectStatement*)yyvsp[-1]); ;
     break;}
 case 73:
-#line 346 "parser.y"
+#line 345 "parser.y"
 { yyval = new TableRefCommalist((TableRef*)yyvsp[0]); ;
     break;}
 case 74:
-#line 347 "parser.y"
+#line 346 "parser.y"
 { yyval = new TableRefCommalist((TableRefCommalist*)yyvsp[-2], (TableRef*)yyvsp[0]); ;
     break;}
 case 75:
-#line 351 "parser.y"
+#line 350 "parser.y"
 { yyval = new TableRef((Table *)yyvsp[0]); ;
     break;}
 case 76:
-#line 356 "parser.y"
+#line 355 "parser.y"
 { yyval = new OptWhereClause((SearchCondition*)yyvsp[0]); ;
     break;}
 case 77:
-#line 357 "parser.y"
+#line 356 "parser.y"
 { yyval = NULL; ;
     break;}
 case 78:
-#line 361 "parser.y"
+#line 360 "parser.y"
 { yyval = NULL; ;
     break;}
 case 79:
-#line 362 "parser.y"
+#line 361 "parser.y"
 { yyval = new OptGroupByClause((ColumnRefCommalist*)yyvsp[0]); ;
     break;}
 case 80:
-#line 366 "parser.y"
+#line 365 "parser.y"
 { yyval = new ColumnRefCommalist((ColumnRef*)yyvsp[0]); ;
     break;}
 case 81:
-#line 367 "parser.y"
+#line 366 "parser.y"
 { yyval = new ColumnRefCommalist((ColumnRefCommalist*)yyvsp[-2], (ColumnRef*)yyvsp[0]); ;
     break;}
 case 82:
-#line 371 "parser.y"
+#line 370 "parser.y"
 { yyval = new OptHavingClause((SearchCondition*)yyvsp[0]); ;
     break;}
 case 83:
-#line 372 "parser.y"
+#line 371 "parser.y"
 { yyval = NULL; ;
     break;}
 case 84:
-#line 376 "parser.y"
+#line 375 "parser.y"
 { yyval = NULL; ;
     break;}
 case 85:
-#line 377 "parser.y"
+#line 376 "parser.y"
 { yyval = new OptLimitClause(dData[0]); ;
     break;}
 case 86:
-#line 379 "parser.y"
+#line 378 "parser.y"
 { yyval = new OptLimitClause(1, dData[0], dData[1]); ;
     break;}
 case 87:
-#line 383 "parser.y"
+#line 382 "parser.y"
 { yyval = new SearchCondition(0, (SearchCondition*)yyvsp[-2], (SearchCondition*)yyvsp[0]); ;
     break;}
 case 88:
-#line 384 "parser.y"
+#line 383 "parser.y"
 { yyval = new SearchCondition(1, (SearchCondition*)yyvsp[-2], (SearchCondition*)yyvsp[0]); ;
     break;}
 case 89:
-#line 385 "parser.y"
+#line 384 "parser.y"
 { yyval = new SearchCondition(2, (SearchCondition*)yyvsp[0]); ;
     break;}
 case 90:
-#line 386 "parser.y"
+#line 385 "parser.y"
 { yyval = new SearchCondition(3, (SearchCondition*)yyvsp[-1]); ;
     break;}
 case 91:
-#line 387 "parser.y"
+#line 386 "parser.y"
 { yyval = new SearchCondition((Predicate*)yyvsp[0]); ;
     break;}
 case 92:
-#line 391 "parser.y"
+#line 390 "parser.y"
 { yyval = new Predicate((ComparisonPredicate*)yyvsp[0]); ;
     break;}
 case 93:
-#line 392 "parser.y"
+#line 391 "parser.y"
 { yyval = new Predicate((BetweenPredicate*)yyvsp[0]); ;
     break;}
 case 94:
-#line 393 "parser.y"
+#line 392 "parser.y"
 { yyval = new Predicate((LikePredicate*)yyvsp[0]); ;
     break;}
 case 95:
-#line 394 "parser.y"
+#line 393 "parser.y"
 { yyval = new Predicate((TestForNull*)yyvsp[0]); ;
     break;}
 case 96:
-#line 395 "parser.y"
+#line 394 "parser.y"
 { yyval = new Predicate((InPredicate*)yyvsp[0]); ;
     break;}
 case 97:
-#line 396 "parser.y"
+#line 395 "parser.y"
 { yyval = new Predicate((AllOrAnyPredicate*)yyvsp[0]); ;
     break;}
 case 98:
-#line 397 "parser.y"
+#line 396 "parser.y"
 { yyval = new Predicate((ExistenceTest*)yyvsp[0]); ;
     break;}
 case 99:
-#line 401 "parser.y"
+#line 400 "parser.y"
 { yyval = new ComparisonPredicate((ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 100:
-#line 402 "parser.y"
+#line 401 "parser.y"
 { yyval = new ComparisonPredicate((ScalarExp*)yyvsp[-2], (Subquery*)yyvsp[0]); ;
     break;}
 case 101:
-#line 406 "parser.y"
+#line 405 "parser.y"
 { yyval = new BetweenPredicate(2, (ScalarExp*)yyvsp[-5], (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 102:
-#line 407 "parser.y"
+#line 406 "parser.y"
 { yyval = new BetweenPredicate(1, (ScalarExp*)yyvsp[-4], (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 103:
-#line 411 "parser.y"
+#line 410 "parser.y"
 { yyval = new LikePredicate(2, (ScalarExp*)yyvsp[-4], (Atom*)yyvsp[-1], (OptEscape*)yyvsp[0]); ;
     break;}
 case 104:
-#line 412 "parser.y"
+#line 411 "parser.y"
 { yyval = new LikePredicate(1, (ScalarExp*)yyvsp[-3], (Atom*)yyvsp[-1], (OptEscape*)yyvsp[0]); ;
     break;}
 case 105:
-#line 416 "parser.y"
+#line 415 "parser.y"
 { yyval = NULL; ;
     break;}
 case 106:
-#line 417 "parser.y"
+#line 416 "parser.y"
 { yyval = new OptEscape((Atom*)yyvsp[0]); ;
     break;}
 case 107:
-#line 421 "parser.y"
+#line 420 "parser.y"
 { yyval = new TestForNull(1, (ColumnRef*)yyvsp[-3]); ;
     break;}
 case 108:
-#line 422 "parser.y"
+#line 421 "parser.y"
 { yyval = new TestForNull(0, (ColumnRef*)yyvsp[-2]); ;
     break;}
 case 109:
-#line 426 "parser.y"
+#line 425 "parser.y"
 { yyval = new InPredicate(1, (ScalarExp*)yyvsp[-5], (Subquery*)yyvsp[-1]); ;
     break;}
 case 110:
-#line 427 "parser.y"
+#line 426 "parser.y"
 { yyval = new InPredicate(0, (ScalarExp*)yyvsp[-4], (Subquery*)yyvsp[-1]); ;
     break;}
 case 111:
-#line 428 "parser.y"
+#line 427 "parser.y"
 { yyval = new InPredicate(1, (ScalarExp*)yyvsp[-5], (AtomCommalist*)yyvsp[-1]); ;
     break;}
 case 112:
-#line 429 "parser.y"
+#line 428 "parser.y"
 { yyval = new InPredicate(0, (ScalarExp*)yyvsp[-4], (AtomCommalist*)yyvsp[-1]); ;
     break;}
 case 113:
-#line 433 "parser.y"
+#line 432 "parser.y"
 { yyval = new AtomCommalist((Atom*)yyvsp[0]); ;
     break;}
 case 114:
-#line 434 "parser.y"
+#line 433 "parser.y"
 { yyval = new AtomCommalist((AtomCommalist*)yyvsp[-2], (Atom*)yyvsp[0]); ;
     break;}
 case 115:
-#line 438 "parser.y"
+#line 437 "parser.y"
 { yyval = new AllOrAnyPredicate((ScalarExp*)yyvsp[-3], (AnyAllSome*)yyvsp[-1], (Subquery*)yyvsp[0]); ;
     break;}
 case 116:
-#line 442 "parser.y"
+#line 441 "parser.y"
 { yyval = new AnyAllSome("ANY"); ;
     break;}
 case 117:
-#line 443 "parser.y"
+#line 442 "parser.y"
 { yyval = new AnyAllSome("ALL"); ;
     break;}
 case 118:
-#line 444 "parser.y"
+#line 443 "parser.y"
 { yyval = new AnyAllSome("SOME"); ;
     break;}
 case 119:
-#line 448 "parser.y"
+#line 447 "parser.y"
 { yyval = new ExistenceTest((Subquery*)yyvsp[0]); ;
     break;}
 case 120:
-#line 452 "parser.y"
+#line 451 "parser.y"
 { yyval = new Subquery((OptAllDistinct*)yyvsp[-3], (Selection*)yyvsp[-2], (TableExp*)yyvsp[-1]); ;
     break;}
 case 121:
-#line 458 "parser.y"
+#line 457 "parser.y"
 { yyval = new ScalarExpCommalist((ScalarExp*)yyvsp[0]); ;
     break;}
 case 122:
-#line 459 "parser.y"
+#line 458 "parser.y"
 { yyval = new ScalarExpCommalist((ScalarExpCommalist*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 123:
-#line 463 "parser.y"
+#line 462 "parser.y"
 { yyval = new ScalarExp(1, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 124:
-#line 464 "parser.y"
+#line 463 "parser.y"
 { yyval = new ScalarExp(2, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 125:
-#line 465 "parser.y"
+#line 464 "parser.y"
 { yyval = new ScalarExp(3, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 126:
-#line 466 "parser.y"
+#line 465 "parser.y"
 { yyval = new ScalarExp(4, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 127:
-#line 467 "parser.y"
+#line 466 "parser.y"
 { yyval = new ScalarExp(5, (ScalarExp*)yyvsp[0]);  ;
     break;}
 case 128:
-#line 468 "parser.y"
+#line 467 "parser.y"
 { yyval = new ScalarExp(6, (ScalarExp*)yyvsp[0]); ;
     break;}
 case 129:
-#line 469 "parser.y"
+#line 468 "parser.y"
 { yyval = new ScalarExp((Atom*)yyvsp[0]); ;
     break;}
 case 130:
-#line 470 "parser.y"
+#line 469 "parser.y"
 { yyval = new ScalarExp((ColumnRef*)yyvsp[0]); ;
     break;}
 case 131:
-#line 471 "parser.y"
+#line 470 "parser.y"
 { yyval = new ScalarExp((FunctionRef*)yyvsp[0]); ;
     break;}
 case 132:
-#line 472 "parser.y"
+#line 471 "parser.y"
 { yyval = new ScalarExp(0, (ScalarExp*)yyvsp[-1]); ;
     break;}
 case 133:
-#line 477 "parser.y"
+#line 476 "parser.y"
 { yyval = new Atom((Literal*)yyvsp[0]); ;
     break;}
 case 134:
-#line 478 "parser.y"
+#line 477 "parser.y"
 { yyval = new Atom("USER"); ;
     break;}
 case 135:
-#line 482 "parser.y"
+#line 481 "parser.y"
 { yyval = new FunctionRef((Ammsc*)yyvsp[-3]);;
     break;}
 case 136:
-#line 483 "parser.y"
+#line 482 "parser.y"
 { yyval = new FunctionRef((Ammsc*)yyvsp[-4], (ColumnRef*)yyvsp[-1]); ;
     break;}
 case 137:
-#line 484 "parser.y"
+#line 483 "parser.y"
 { yyval = new FunctionRef(0, (Ammsc*)yyvsp[-4], (ScalarExp*)yyvsp[-1]); ;
     break;}
 case 138:
-#line 485 "parser.y"
+#line 484 "parser.y"
 { yyval = new FunctionRef(1, (Ammsc*)yyvsp[-3], (ScalarExp*)yyvsp[-1]); ;
     break;}
 case 139:
-#line 489 "parser.y"
+#line 488 "parser.y"
 { yyval = new Literal(strData[0]); ;
     break;}
 case 140:
-#line 490 "parser.y"
+#line 489 "parser.y"
 { yyval = new Literal(dData[0]); ;
     break;}
 case 141:
-#line 491 "parser.y"
+#line 490 "parser.y"
 { yyval = new Literal(dData[0]); ;
     break;}
 case 142:
-#line 495 "parser.y"
+#line 494 "parser.y"
 { yyval = new Table(strData[0]); ;
     break;}
 case 143:
-#line 496 "parser.y"
+#line 495 "parser.y"
 { yyval = new Table(0, strData[0], strData[1]);;
     break;}
 case 144:
-#line 497 "parser.y"
+#line 496 "parser.y"
 { yyval = new Table(1, strData[0], strData[1]);  ;
     break;}
 case 145:
-#line 503 "parser.y"
+#line 502 "parser.y"
 { yyval = new DataType(0); ;
     break;}
 case 146:
-#line 504 "parser.y"
+#line 503 "parser.y"
 { yyval = new DataType(0, dData[0]); ;
     break;}
 case 147:
-#line 505 "parser.y"
+#line 504 "parser.y"
 { yyval = new DataType(1); ;
     break;}
 case 148:
-#line 506 "parser.y"
+#line 505 "parser.y"
 { yyval = new DataType(1, dData[0]); ;
     break;}
 case 149:
-#line 507 "parser.y"
+#line 506 "parser.y"
 { yyval = new DataType(2); ;
     break;}
 case 150:
-#line 508 "parser.y"
+#line 507 "parser.y"
 { yyval = new DataType(2, dData[0]); ;
     break;}
 case 151:
-#line 509 "parser.y"
+#line 508 "parser.y"
 { yyval = new DataType(2, dData[0], dData[1]); ;
     break;}
 case 152:
-#line 510 "parser.y"
+#line 509 "parser.y"
 { yyval = new DataType(3); ;
     break;}
 case 153:
-#line 511 "parser.y"
+#line 510 "parser.y"
 { yyval = new DataType(3, dData[0]); ;
     break;}
 case 154:
-#line 512 "parser.y"
+#line 511 "parser.y"
 { yyval = new DataType(3, dData[0], dData[1]); ;
     break;}
 case 155:
-#line 513 "parser.y"
+#line 512 "parser.y"
 { yyval = new DataType(4); ;
     break;}
 case 156:
-#line 514 "parser.y"
+#line 513 "parser.y"
 { yyval = new DataType(5); ;
     break;}
 case 157:
-#line 515 "parser.y"
+#line 514 "parser.y"
 { yyval = new DataType(6); ;
     break;}
 case 158:
-#line 516 "parser.y"
+#line 515 "parser.y"
 { yyval = new DataType(6, dData[0]); ;
     break;}
 case 159:
-#line 517 "parser.y"
+#line 516 "parser.y"
 { yyval = new DataType(7); ;
     break;}
 case 160:
-#line 518 "parser.y"
+#line 517 "parser.y"
 { yyval = new DataType(8); ;
     break;}
 case 161:
-#line 522 "parser.y"
+#line 521 "parser.y"
 { yyval = new ColumnRef(strData[0]); ;
     break;}
 case 162:
-#line 523 "parser.y"
+#line 522 "parser.y"
 { yyval = new ColumnRef(0, strData[0], strData[1]); ;
     break;}
 case 163:
-#line 524 "parser.y"
+#line 523 "parser.y"
 { yyval = new ColumnRef(strData[0], strData[1], strData[2]);;
     break;}
 case 164:
-#line 525 "parser.y"
+#line 524 "parser.y"
 { yyval = new ColumnRef(1, strData[0], strData[1]); ;
     break;}
 case 165:
-#line 529 "parser.y"
+#line 528 "parser.y"
 { yyval = new Column(strData[0]); ;
     break;}
 case 166:
-#line 533 "parser.y"
+#line 532 "parser.y"
 { yyval = new Cursor(strData[0]); ;
     break;}
 case 167:
-#line 537 "parser.y"
+#line 536 "parser.y"
 { yyval = new Ammsc("AVG"); ;
     break;}
 case 168:
-#line 538 "parser.y"
+#line 537 "parser.y"
 { yyval = new Ammsc("MIN"); ;
     break;}
 case 169:
-#line 539 "parser.y"
+#line 538 "parser.y"
 { yyval = new Ammsc("MAX"); ;
     break;}
 case 170:
-#line 540 "parser.y"
+#line 539 "parser.y"
 { yyval = new Ammsc("SUM"); ;
     break;}
 case 171:
-#line 541 "parser.y"
+#line 540 "parser.y"
 { yyval = new Ammsc("COUNT"); ;
     break;}
 }
@@ -2610,5 +2609,5 @@ YYLABEL(yyerrhandle)
 /* END */
 
  #line 1038 "/usr/share/bison++/bison.cc"
-#line 544 "parser.y"
+#line 543 "parser.y"
 

@@ -10,9 +10,9 @@ class SelectOp : public UnaryOp {
     
 public:
 
-	Predicate* pred;
+	RA_Predicate* pred;
 
-	explicit SelectOp(RelExpr *n1, Predicate* n2) : pred(n2) { relex = n1; }
+	explicit SelectOp(RelExpr *n1, RA_Predicate* n2) : pred(n2) { relex = n1; }
 
 	/**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

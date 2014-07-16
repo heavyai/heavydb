@@ -5,7 +5,8 @@
 #include "../visitor/Visitor.h"
 
 namespace SQL_Namespace {
-	class  SQLList : public ASTNode {
+
+class  SQLList : public ASTNode {
     
 public:
     SQL *sql;

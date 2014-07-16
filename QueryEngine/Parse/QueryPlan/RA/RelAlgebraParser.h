@@ -57,7 +57,7 @@
 #include "relAlg/Relation.h"
 #include "relAlg/Data.h"
 
-#include "relAlg/Predicate.h"
+#include "relAlg/RA_Predicate.h"
 #include "relAlg/Comparison.h"
 #include "relAlg/Compared.h"
 #include "relAlg/CompOp.h"

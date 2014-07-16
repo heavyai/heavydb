@@ -88,6 +88,8 @@
 #include "ast/AtomCommalist.h"
 #include "ast/Subquery.h"
 
+using namespace std;
+using namespace SQL_Namespace;
 
 // define stack element type to be a 
 // pointer to an AST node
@@ -100,8 +102,7 @@ extern ASTNode* parse_root;
 extern std::string strData[10];
 extern double dData[10];
 
-using namespace std;
-//using namespace SQL_Namespace;
+
 
 %}
 %left OR

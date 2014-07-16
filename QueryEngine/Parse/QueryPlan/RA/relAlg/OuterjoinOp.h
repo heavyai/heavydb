@@ -9,9 +9,9 @@ namespace RA_Namespace {
 class OuterjoinOp : public BinaryOp {
     
 public:
-	Predicate* pred;
+	RA_Predicate* pred;
 
-	OuterjoinOp(RelExpr *n1, RelExpr *n2, Predicate* n3) : pred(n3) { relex1 = n1; relex2 = n2; }
+	OuterjoinOp(RelExpr *n1, RelExpr *n2, RA_Predicate* n3) : pred(n3) { relex1 = n1; relex2 = n2; }
 	
 /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

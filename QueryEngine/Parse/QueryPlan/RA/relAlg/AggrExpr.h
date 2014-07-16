@@ -11,22 +11,12 @@ namespace RA_Namespace {
 
 public:
 
-	int ammsc;
-	int distinct;
-	/* ammsc:
-	0 MAX
-    1 MIN
-	2 COUNT
-	3 SUM
-	4 AVG
-
-	distinct:
-	0 (not distinct)
-	1 DISTINCT */
+	std::string ammsc;			//AVG, MAX, etc
+	std::string distinct;		//DISTINCT or not
 
 	Attribute* attr;
 
-	explicit AggrExpr(int rf1, int rf2, Attribute* n) : ammsc(rf1), distinct(rf2), attr(n) {}
+	explicit AggrExpr(const std::string &n1, const std::string &n2, Attribute* n3) : ammsc(n1), distinct(n2), attr(n3) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

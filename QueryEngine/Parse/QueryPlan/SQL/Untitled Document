@@ -1,8 +1,6 @@
-#include "SQL/parser.h"
-#include "SQL/visitor/Visitor.h"
-//#include "RA/RelAlgebraParser.h"
-//#include "RA/visitor/Visitor.h"
-#include "SQL/visitor/QPTranslator.h"
+#include "parser.h"
+#include "visitor/Visitor.h"
+#include "visitor/XMLTranslator.h"
 #include <iostream>
 #include <string>
 
@@ -21,11 +19,12 @@ int main(int argc, char ** argv) {
         ASTNode *parseRoot = 0;
         parser.parse(sql, parseRoot);
       
-        QPTranslator qp;
+        XMLTranslator xml;
         if (parseRoot != 0)
-            parseRoot->accept(qp); 
+            parseRoot->accept(xml); 
 
     }
     while (1==1);
     cout << "After parse" << endl;
 }
+

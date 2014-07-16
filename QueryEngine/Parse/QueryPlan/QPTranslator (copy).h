@@ -1,77 +1,109 @@
-#ifndef AST_SIMPLE_PRINTER_VISITOR_H
-#define AST_SIMPLE_PRINTER_VISITOR_H
+#ifndef AST_SIMPLE_TRANSLATOR_VISITOR_H
+#define AST_SIMPLE_TRANSLATOR_VISITOR_H
 
-#include "Visitor.h"
+#include "SQL/visitor/Visitor.h"
+#include "RA/visitor/Visitor.h"
 
-#include "../ast/ColumnCommalist.h"
-#include "../ast/TableConstraintDef.h"
-#include "../ast/BaseTableDef.h"
-#include "../ast/BaseTableElementCommalist.h"
-#include "../ast/BaseTableElement.h"
-#include "../ast/Program.h"
-#include "../ast/Table.h"
-#include "../ast/Schema.h"
-#include "../ast/SQL.h"
-#include "../ast/ColumnDef.h"
-#include "../ast/ColumnDefOpt.h"
-#include "../ast/ColumnDefOptList.h"
-#include "../ast/Column.h"
-#include "../ast/Literal.h"
-#include "../ast/DataType.h"
-#include "../ast/SQLList.h"
+#include "SQL/ast/ColumnCommalist.h"
+#include "SQL/ast/TableConstraintDef.h"
+#include "SQL/ast/BaseTableDef.h"
+#include "SQL/ast/BaseTableElementCommalist.h"
+#include "SQL/ast/BaseTableElement.h"
+#include "SQL/ast/Program.h"
+#include "SQL/ast/Table.h"
+#include "SQL/ast/Schema.h"
+#include "SQL/ast/SQL.h"
+#include "SQL/ast/ColumnDef.h"
+#include "SQL/ast/ColumnDefOpt.h"
+#include "SQL/ast/ColumnDefOptList.h"
+#include "SQL/ast/Column.h"
+#include "SQL/ast/Literal.h"
+#include "SQL/ast/DataType.h"
+#include "SQL/ast/SQLList.h"
 
-#include "../ast/ManipulativeStatement.h"
-#include "../ast/SelectStatement.h"
-#include "../ast/Selection.h"
-#include "../ast/OptAllDistinct.h"
-#include "../ast/TableExp.h"
-#include "../ast/FromClause.h"
-#include "../ast/TableRefCommalist.h"
-#include "../ast/TableRef.h"
+#include "SQL/ast/ManipulativeStatement.h"
+#include "SQL/ast/SelectStatement.h"
+#include "SQL/ast/Selection.h"
+#include "SQL/ast/OptAllDistinct.h"
+#include "SQL/ast/TableExp.h"
+#include "SQL/ast/FromClause.h"
+#include "SQL/ast/TableRefCommalist.h"
+#include "SQL/ast/TableRef.h"
 
-#include "../ast/InsertStatement.h"
-#include "../ast/OptColumnCommalist.h"
-#include "../ast/ValuesOrQuerySpec.h"
-#include "../ast/QuerySpec.h"
-#include "../ast/InsertAtomCommalist.h"
-#include "../ast/InsertAtom.h"
-#include "../ast/Atom.h"
+#include "SQL/ast/InsertStatement.h"
+#include "SQL/ast/OptColumnCommalist.h"
+#include "SQL/ast/ValuesOrQuerySpec.h"
+#include "SQL/ast/QuerySpec.h"
+#include "SQL/ast/InsertAtomCommalist.h"
+#include "SQL/ast/InsertAtom.h"
+#include "SQL/ast/Atom.h"
 
-#include "../ast/SearchCondition.h"
-#include "../ast/ScalarExpCommalist.h"
-#include "../ast/ScalarExp.h"
-#include "../ast/FunctionRef.h"
-#include "../ast/Ammsc.h"
-#include "../ast/Predicate.h"
-#include "../ast/ComparisonPredicate.h"
-#include "../ast/BetweenPredicate.h"
-#include "../ast/LikePredicate.h"
-#include "../ast/OptEscape.h"
-#include "../ast/ColumnRef.h"
+#include "SQL/ast/SearchCondition.h"
+#include "SQL/ast/ScalarExpCommalist.h"
+#include "SQL/ast/ScalarExp.h"
+#include "SQL/ast/FunctionRef.h"
+#include "SQL/ast/Ammsc.h"
+#include "SQL/ast/Predicate.h"
+#include "SQL/ast/ComparisonPredicate.h"
+#include "SQL/ast/BetweenPredicate.h"
+#include "SQL/ast/LikePredicate.h"
+#include "SQL/ast/OptEscape.h"
+#include "SQL/ast/ColumnRef.h"
 
-#include "../ast/ColumnRefCommalist.h"
-#include "../ast/OptWhereClause.h"
-#include "../ast/OptGroupByClause.h"
-#include "../ast/OptHavingClause.h"
-#include "../ast/OptLimitClause.h"
-#include "../ast/OptAscDesc.h"
-#include "../ast/OrderingSpecCommalist.h"
-#include "../ast/OrderingSpec.h"
-#include "../ast/OptOrderByClause.h"
+#include "SQL/ast/ColumnRefCommalist.h"
+#include "SQL/ast/OptWhereClause.h"
+#include "SQL/ast/OptHavingClause.h"
+#include "SQL/ast/OptLimitClause.h"
+#include "SQL/ast/OptAscDesc.h"
+#include "SQL/ast/OrderingSpecCommalist.h"
+#include "SQL/ast/OrderingSpec.h"
+#include "SQL/ast/OptOrderByClause.h"
 
-#include "../ast/UpdateStatementSearched.h"
-#include "../ast/UpdateStatementPositioned.h"
-#include "../ast/AssignmentCommalist.h"
-#include "../ast/Assignment.h"
-#include "../ast/Cursor.h"
+#include "SQL/ast/UpdateStatementSearched.h"
+#include "SQL/ast/UpdateStatementPositioned.h"
+#include "SQL/ast/AssignmentCommalist.h"
+#include "SQL/ast/Assignment.h"
+#include "SQL/ast/Cursor.h"
 
-#include "../ast/TestForNull.h"
-#include "../ast/InPredicate.h"
-#include "../ast/ExistenceTest.h"
-#include "../ast/AllOrAnyPredicate.h"
-#include "../ast/AnyAllSome.h"
-#include "../ast/AtomCommalist.h"
-#include "../ast/Subquery.h"
+#include "SQL/ast/TestForNull.h"
+#include "SQL/ast/InPredicate.h"
+#include "SQL/ast/ExistenceTest.h"
+#include "SQL/ast/AllOrAnyPredicate.h"
+#include "SQL/ast/AnyAllSome.h"
+#include "SQL/ast/AtomCommalist.h"
+#include "SQL/ast/Subquery.h"
+
+#include "RA/relAlg/RelAlgNode.h"
+#include "RA/relAlg/Program.h"
+#include "RA/relAlg/RelExprList.h"
+#include "RA/relAlg/RelExpr.h"
+#include "RA/relAlg/UnaryOp.h"
+#include "RA/relAlg/BinaryOp.h"
+#include "RA/relAlg/MathExpr.h"
+#include "RA/relAlg/SelectOp.h"
+#include "RA/relAlg/ProjectOp.h"
+#include "RA/relAlg/SortOp.h"
+#include "RA/relAlg/ExtendOp.h"
+#include "RA/relAlg/GroupByOp.h"
+#include "RA/relAlg/RenameOp.h"
+
+#include "RA/relAlg/JoinOp.h"
+#include "RA/relAlg/SemijoinOp.h"
+#include "RA/relAlg/ProductOp.h"
+#include "RA/relAlg/OuterjoinOp.h"
+#include "RA/relAlg/AntijoinOp.h"
+#include "RA/relAlg/UnionOp.h"
+#include "RA/relAlg/AggrExpr.h"
+#include "RA/relAlg/AggrList.h"
+#include "RA/relAlg/AttrList.h"
+#include "RA/relAlg/Attribute.h"
+#include "RA/relAlg/Relation.h"
+#include "RA/relAlg/Data.h"
+
+#include "RA/relAlg/Predicate.h"
+#include "RA/relAlg/Comparison.h"
+#include "RA/relAlg/Compared.h"
+#include "RA/relAlg/CompOp.h"
 
 #include <iostream>
 using std::cout;
@@ -83,11 +115,15 @@ enum tabFlag {INCR, DECR, NONE};
 /**
  * @todo brief and detailed descriptions
  */
-class XMLTranslator : public Visitor {
+class QPTranslator : public SQL_Namespace::Visitor {
 
 public:
 
+    RelExpr root;
+
     static void printTabs(tabFlag flag) {
+     //   tabLevel_ = 0;
+    
         if (flag == INCR)
             tabLevel_++;
         //cout << tabLevel_;
@@ -96,11 +132,218 @@ public:
                 cout << " ";
         if (flag == DECR)
             tabLevel_--;
+    
     }
+
+    ProductOp* fromProductOp(TableRefCommalist *vTRC, TableRef *vTR) {
+        if (!(vTRC)) return new ProductOp(new RelExpr(new Relation(vTR->tbl)), NULL);
+        else return new ProductOp(new RelExpr(formProductOp(vTRC->trc, vTRC->tr)), new Relation(vTR->tbl));
+    }
+
+    /* Begins the recursive examining of the Table-reference list. */
+    RelExpr* formProductRelation(TableRefCommalist *v) {
+        return new RelExpr(formProductOp(v->trc, v->tr));
+    }
+
+    void visit(class SelectStatement *v) {
+      //  printTabs(INCR);
+    //    cout << "<SelectStatement>" << endl;
+
+ //       v->OAD->accept(*this);
+        v->sel->accept(*this);
+        v->tblExp->accept(*this);
+
+        RelExpr* finishedProduct = formProductRelation(v->tblExp->fc->trc);
+    //    SelectOp* selOp = formSelOp(prodOp, v->tblExp);
+  //      ProjectOp* projOp = formProjectOp(selOp, v->sel);
+
+    //    printTabs(DECR);
+//        cout << "</SelectStatement>" << endl;
+    }
+    
+    void visit(class ManipulativeStatement *v) {
+     //   printTabs(INCR);
+    //    cout << "<ManipulativeStatement>" << endl;
+
+        if (v->selSta) v->selSta->accept(*this);
+        if (v->USP) v->USP->accept(*this);
+        if (v->USS) v->USS->accept(*this);
+        if (v->inSta) v->inSta->accept(*this); 
+
+       // printTabs(DECR);
+     //   cout << "</ManipulativeStatement>" << endl;
+    }
+
+
+    void visit(class SQL *v) {
+       // printTabs(INCR);
+      //  cout << "<SQL>" << endl;
+        
+        if (v->sch) v->sch->accept(*this);
+        if (v->manSta) v->manSta->accept(*this);
+
+     ///   printTabs(DECR);
+        //cout << "</SQL>" << endl;
+    }
+
+    void visit(class SQLList *v) {
+     //   printTabs(INCR);
+      //  cout << "<SQLList>" << endl;
+        
+
+        if (v->sqlList) { v->sqlList->accept(*this);  }
+        v->sql->accept(*this);
+
+     //   printTabs(DECR);
+       // cout << "</SQLList>" << endl;
+    }
+
+
+    void visit(class Program *v) {
+       // printTabs(NONE);
+      //  cout << "<Program>" << endl;
+
+        v->sqlList->accept(*this);
+
+     //   printTabs(DECR);
+    //    cout << "</Program>" << endl;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*******************************/
 
     void visit(class BaseTableDef *v) {
         printTabs(INCR);
-        cout << "<BaseTableDef ddlCmd='" << v->ddlCmd << "'>" << endl;
+        cout << "<BaseTableD ddlCmd='" << v->ddlCmd << "'>" << endl;
 
         if (v->ddlCmd == "CREATE") {
             if (!v->tbl || !v->btec) {
@@ -479,12 +722,12 @@ public:
     
     void visit(class OptWhereClause *v) {
         printTabs(INCR);
-        cout << "<OptWhereClause>" << endl;
+        cout << "SELECT" << endl;
 
         v->sc->accept(*this);
 
         printTabs(DECR);
-        cout << "</OptWhereClause>" << endl;
+        cout << "</SELECT>" << endl;
     }
     
     void visit(class OptGroupByClause *v) {
@@ -627,74 +870,80 @@ public:
     }
 
     void visit(class TableRef *v) {
-        printTabs(INCR);
-        cout << "<TableRef>" << endl;
+    //    printTabs(INCR);
+    //   cout << "<TableRef>" << endl;
 
         if (v->tbl) v->tbl->accept(*this);
 
-        printTabs(DECR);
-        cout << "</TableRef>" << endl;
+    //    printTabs(DECR);
+    //    cout << "</TableRef>" << endl;
     }
     
     void visit(class TableRefCommalist *v) {
-        if (v->trc) v->trc->accept(*this);
+        printTabs(INCR);
+        cout << "PRODUCT\n";
+        if (v->trc) {
+            v->trc->accept(*this);
+        }
+
         v->tr->accept(*this);
+        printTabs(DECR);
+        cout << "</PRODUCT\n";
     }
 
     void visit(class FromClause *v) {
-        printTabs(INCR);
-        cout << "<FromClause>" << endl;
+      //  printTabs(INCR);
+      //  cout << "<FromClause>" << endl;
 
         if (v->trc) {
-            printTabs(INCR);
-            cout << "<TableRefCommalist>" << endl;
-
+          //  printTabs(INCR);
             v->trc->accept(*this);
 
-            printTabs(DECR);
-            cout << "</TableRefCommalist>" << endl;
+          //  printTabs(DECR);
+            //cout << "</TableRefCommalist>" << endl;
         }
         if (v->ss) v->ss->accept(*this);
 
-        printTabs(DECR);
-        cout << "</FromClause>" << endl;
+    //    printTabs(DECR);
+    //    cout << "</FromClause>" << endl;
     }
     
     void visit(TableExp *v) {
-        printTabs(INCR);
-        cout << "<TableExp>" << endl;
+   //     printTabs(INCR);
+        //cout << "<TableExp>" << endl;
 
-        v->fc->accept(*this);
+
         if (v->owc) v->owc->accept(*this);
+        v->fc->accept(*this);
         if (v->ogbc) v->ogbc->accept(*this);
         if (v->ohc) v->ohc->accept(*this);
         if (v->oobc) v->oobc->accept(*this);
         if (v->olc) v->olc->accept(*this);
 
-        printTabs(DECR);
-        cout << "</TableExp>" << endl;
+      //  printTabs(DECR);
+        //cout << "</TableExp>" << endl;
     }
 
     void visit(class Selection *v) {
         printTabs(INCR);
-        cout << "<Selection>" << endl;
+        cout << "<PROJECT>" << endl;
 
         if(v->sec) {
-            printTabs(INCR);
-            cout << "<ScalarExpCommalist>" << endl;
+         //   printTabs(INCR);
+         //   cout << "<ScalarExpCommalist>" << endl;
             
             v->sec->accept(*this);
 
-            printTabs(DECR);
-             cout << "</ScalarExpCommalist>" << endl;
+          //  printTabs(DECR);
+          //   cout << "</ScalarExpCommalist>" << endl;
         }
         else {
             printTabs(NONE);
-            cout << "\t<*>" << endl;
+            cout << "<*>" << endl;
         }
 
         printTabs(DECR);
-        cout << "</Selection>" << endl;
+        cout << "</PROJECT>" << endl;
     }
 
     void visit(class OptEscape *v) {
@@ -714,8 +963,8 @@ public:
     }
 
     void visit(class ScalarExp *v) {
-        printTabs(INCR);
-        cout << "<ScalarExp>" << endl;
+    //    printTabs(INCR);
+   //     cout << "<ScalarExp>" << endl;
         
         /* rules are:
         0 (scalar_exp)
@@ -767,13 +1016,23 @@ public:
             if (v->fr) v->fr->accept(*this);
         }
 
-        printTabs(DECR);
-        cout << "</ScalarExp>" << endl;
+       // printTabs(DECR);
+       // cout << "</ScalarExp>" << endl;
     }
 
-    void visit(class SearchCondition *v) {
+    void visit(class Schema *v) {
         printTabs(INCR);
-        cout << "<SearchCondition>" << endl;
+        cout << "<Schema>" << endl;
+
+        v->btd->accept(*this);
+
+        printTabs(DECR);
+        cout << "</Schema>" << endl;
+    }
+    
+    void visit(class SearchCondition *v) {
+     //   printTabs(INCR);
+     //   cout << "<SearchCondition>" << endl;
         /* rules are:
         -1 Predicate
         0 OR
@@ -799,8 +1058,8 @@ public:
             v->sc1->accept(*this);
         else v->p->accept(*this);
 
-        printTabs(DECR);
-        cout << "</SearchCondition>" << endl;
+      //  printTabs(DECR);
+     //   cout << "</SearchCondition>" << endl;
     }
     
     void visit(class LikePredicate *v) {
@@ -818,17 +1077,18 @@ public:
     }
 
     void visit(class ComparisonPredicate *v) {
-        printTabs(INCR);
-        cout << "<ComparisonPredicate>" << endl;
+   //    printTabs(INCR);
+      //  cout << "<ComparisonPredicate>" << endl;
 
         v->se1->accept(*this);
-        printTabs(NONE);
-        cout << "\t<COMPARISON>" << endl;
+        printTabs(INCR);
+        cout << "<COMPARISON>" << endl;
+        tabLevel_--;
         if (v->se2) v->se2->accept(*this);
         if (v->s) v->s->accept(*this);
 
-        printTabs(DECR);
-        cout << "</ComparisonPredicate>" << endl;
+   //     printTabs(DECR);
+   //     cout << "</ComparisonPredicate>" << endl;
     }
 
     void visit(class BetweenPredicate *v) {
@@ -847,15 +1107,15 @@ public:
     }
 
     void visit(class Predicate *v) {
-        printTabs(INCR);
-        cout << "<Predicate>" << endl;
+     //   printTabs(INCR);
+     //   cout << "<Predicate>" << endl;
 
         if (v->cp) v->cp->accept(*this);
         if (v->bp) v->bp->accept(*this);
         if (v->lp) v->lp->accept(*this);
 
-        printTabs(DECR);
-        cout << "</Predicate>" << endl;
+       // printTabs(DECR);
+      //  cout << "</Predicate>" << endl;
     }
 
     void visit(class FunctionRef *v) {
@@ -895,74 +1155,7 @@ public:
         cout << "</OptAllDistinct>" << endl;
     }
     
-    void visit(class SelectStatement *v) {
-        printTabs(INCR);
-        cout << "<SelectStatement>" << endl;
 
-        v->OAD->accept(*this);
-        v->sel->accept(*this);
-        v->tblExp->accept(*this);
-
-        printTabs(DECR);
-        cout << "</SelectStatement>" << endl;
-    }
-    
-    void visit(class ManipulativeStatement *v) {
-        printTabs(INCR);
-        cout << "<ManipulativeStatement>" << endl;
-
-        if (v->selSta) v->selSta->accept(*this);
-        if (v->USP) v->USP->accept(*this);
-        if (v->USS) v->USS->accept(*this);
-        if (v->inSta) v->inSta->accept(*this); 
-
-        printTabs(DECR);
-        cout << "</ManipulativeStatement>" << endl;
-    }
-
-    void visit(class Schema *v) {
-        printTabs(INCR);
-        cout << "<Schema>" << endl;
-
-        v->btd->accept(*this);
-
-        printTabs(DECR);
-        cout << "</Schema>" << endl;
-    }
-    
-    void visit(class SQL *v) {
-        printTabs(INCR);
-        cout << "<SQL>" << endl;
-        
-        if (v->sch) v->sch->accept(*this);
-        if (v->manSta) v->manSta->accept(*this);
-
-        printTabs(DECR);
-        cout << "</SQL>" << endl;
-    }
-
-    void visit(class SQLList *v) {
-        printTabs(INCR);
-        cout << "<SQLList>" << endl;
-        
-
-        if (v->sqlList) { v->sqlList->accept(*this);  }
-        v->sql->accept(*this);
-
-        printTabs(DECR);
-        cout << "</SQLList>" << endl;
-    }
-
-
-    void visit(class Program *v) {
-        printTabs(NONE);
-        cout << "<Program>" << endl;
-
-        v->sqlList->accept(*this);
-
-        printTabs(DECR);
-        cout << "</Program>" << endl;
-    }
 
     void visit(class DataType *v) {
         printTabs(NONE);
@@ -1063,6 +1256,6 @@ private:
 };
 
 // Definition of static memble for SimplePrinterVisitor
-int XMLTranslator::tabLevel_ = 0;
+int QPTranslator::tabLevel_ = 0;
 
-#endif // AST_SIMPLE_PRINTER_VISITOR_H
+#endif // AST_SIMPLE_TRANSLATOR_VISITOR_H

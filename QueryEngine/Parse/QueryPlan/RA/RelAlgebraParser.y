@@ -44,7 +44,7 @@
 #include "relAlg/Relation.h"
 #include "relAlg/Data.h"
 
-#include "relAlg/Predicate.h"
+#include "relAlg/RA_Predicate.h"
 #include "relAlg/Comparison.h"
 #include "relAlg/Compared.h"
 #include "relAlg/CompOp.h"
@@ -102,32 +102,35 @@ RelExpr:
 ;
 
 UnaryOp:
-	SELECT 	'(' RelExpr ',' Predicate ')'						{ $$ = new SelectOp((RelExpr*)$3, (Predicate*)$5); }
+	SELECT 	'(' RelExpr ',' Predicate ')'						{ $$ = new SelectOp((RelExpr*)$3, (RA_Predicate*)$5); }
 |	PROJECT '(' RelExpr ',' '{' AttrList '}' ')'				{ $$ = new ProjectOp((RelExpr*)$3, (AttrList*)$6); }
 |	SORT	'(' RelExpr ',' AttrList ')'						{ $$ = new SortOp((RelExpr*)$3, (AttrList*)$5); }
 |	RENAME	'(' RelExpr ',' attribute ',' NAME ')'				{ $$ = new RenameOp((RelExpr*)$3, (Attribute*)$5, strData[0]); }
 |	EXTEND	'(' RelExpr ',' MathExpr ',' NAME ')'				{ $$ = new ExtendOp((RelExpr*)$3, (MathExpr*)$5, strData[0]); }
-|	EXTEND	'(' RelExpr ',' data ',' NAME ')'					{ $$ = new ExtendOp((RelExpr*)$3, (Data*)$5, strData[0]); }
+//|	EXTEND	'(' RelExpr ',' data ',' NAME ')'					{ $$ = new ExtendOp((RelExpr*)$3, (Data*)$5, strData[0]); }
 |	GROUPBY	'('	RelExpr ',' '{' AttrList '}' ',' AggrList ')'	{ $$ = new GroupByOp((RelExpr*)$3, (AttrList*)$6, (AggrList*)$9); }
 |	GROUPBY	'('	RelExpr ',' '{' '}' ',' AggrList ')'			{ $$ = new GroupByOp((RelExpr*)$3, (AggrList*)$8); }
 ;
 
 BinaryOp:
 	PRODUCT '(' RelExpr ',' RelExpr ')'						{ $$ = new ProductOp((RelExpr*)$3, (RelExpr*)$5); }
-|	JOIN	'(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new JoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }
-|	SEMIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new SemijoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }
-|	OUTERJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new OuterjoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }
-|	ANTIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new AntijoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }
+|	JOIN	'(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new JoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
+|	SEMIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new SemijoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
+|	OUTERJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new OuterjoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
+|	ANTIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new AntijoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
 |	UNION	'(' RelExpr ',' RelExpr ')'						{ $$ = new UnionOp((RelExpr*)$3, (RelExpr*)$5); }
 ;
 
 MathExpr:
-	MathExpr PLUS MathExpr									{ $$ = new MathExpr(0, (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr MINUS MathExpr									{ $$ = new MathExpr(0, (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr MULTIPLY MathExpr								{ $$ = new MathExpr(0, (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr DIVIDE MathExpr								{ $$ = new MathExpr(0, (MathExpr*)$1, (MathExpr*)$3); }
-|	'(' MathExpr ')'										{ $$ = new MathExpr((MathExpr*)$2); }
+	MathExpr PLUS MathExpr									{ $$ = new MathExpr(1, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr MINUS MathExpr									{ $$ = new MathExpr(2, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr MULTIPLY MathExpr								{ $$ = new MathExpr(3, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr DIVIDE MathExpr								{ $$ = new MathExpr(4, (MathExpr*)$1, (MathExpr*)$3); }
+|	'(' MathExpr ')'										{ $$ = new MathExpr(0, (MathExpr*)$2); }
+//|	'-' MathExpr %prec UMINUS								{ $$ = new MathExpr(5, (MathExpr*)$2); }
 |	attribute												{ $$ = new MathExpr((Attribute*)$1); }
+|	AggrExpr												{ $$ = new MathExpr((AggrExpr*)$1); }
+|	data													{ $$ = new MathExpr((Data*)$1); }
 ;
 
 AggrList:
@@ -158,11 +161,11 @@ attribute: 	NAME 							{ $$ = new Attribute(strData[0]); }
 ;
 
 Predicate:
-  Predicate OR Predicate					{ $$ = new Predicate(0, (Predicate*)$1, (Predicate*)$3); }
-| Predicate AND Predicate					{ $$ = new Predicate(1, (Predicate*)$1, (Predicate*)$3); }
-| NOT Predicate								{ $$ = new Predicate(2, (Predicate*)$2); }
-| '(' Predicate ')'							{ $$ = new Predicate(3, (Predicate*)$2); }
-| comparison								{ $$ = new Predicate((Comparison*)$1); }
+  Predicate OR Predicate					{ $$ = new RA_Predicate(0, (RA_Predicate*)$1, (RA_Predicate*)$3); }
+| Predicate AND Predicate					{ $$ = new RA_Predicate(1, (RA_Predicate*)$1, (RA_Predicate*)$3); }
+| NOT Predicate								{ $$ = new RA_Predicate(2, (RA_Predicate*)$2); }
+| '(' Predicate ')'							{ $$ = new RA_Predicate(3, (RA_Predicate*)$2); }
+| comparison								{ $$ = new RA_Predicate((Comparison*)$1); }
 ;
 
 comparison:	compared CompOp compared		{ $$ = new Comparison((Compared*)$1, (CompOp*)$2, (Compared*)$3); }
@@ -178,8 +181,8 @@ NEQ 		{ $$ = new CompOp("NEQ"); }
 ;
 
 compared: 	
-attribute 	{ $$ = new Compared((Attribute*)$1); }
-| data		{ $$ = new Compared((Data*)$1); }
+//attribute 	{ $$ = new Compared((Attribute*)$1); }
+MathExpr		{ $$ = new Compared((MathExpr*)$1); }
 ;
 
 data: 		

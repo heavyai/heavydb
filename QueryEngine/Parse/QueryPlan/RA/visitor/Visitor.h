@@ -1,5 +1,5 @@
-#ifndef AST_VISITOR_H
-#define AST_VISITOR_H
+#ifndef RA_AST_VISITOR_H
+#define RA_AST_VISITOR_H
 
 namespace RA_Namespace {
 
@@ -31,7 +31,7 @@ namespace RA_Namespace {
 	    virtual void visit(class UnionOp *v) = 0;
 
 	    virtual void visit(class MathExpr *v) = 0;
-	    virtual void visit(class Predicate *v) = 0;
+	    virtual void visit(class RA_Predicate *v) = 0;
 	    virtual void visit(class AggrList *v) = 0;
 	    virtual void visit(class AttrList *v) = 0;
 	    virtual void visit(class AggrExpr *v) = 0;
@@ -47,4 +47,4 @@ namespace RA_Namespace {
 	};
 }
 
-#endif // AST_VISITOR_H
+#endif // RA_AST_VISITOR_H

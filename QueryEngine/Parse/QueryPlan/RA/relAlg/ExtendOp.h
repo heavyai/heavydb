@@ -11,11 +11,11 @@ class ExtendOp : public UnaryOp {
 public:
 
 	MathExpr *me;
-	Data *data;
+//	Data *data;
 	std::string name;
 
-	explicit ExtendOp(RelExpr *n1, MathExpr* n2, std::string n3) : me(n2), data(NULL), name(n3) { relex = n1; }
-	ExtendOp(RelExpr *n1, Data* n2, std::string n3) : me(NULL), data(n2), name(n3) { relex = n1; }
+	explicit ExtendOp(RelExpr *n1, MathExpr* n2, std::string n3) : me(n2), name(n3) { relex = n1; }
+//	ExtendOp(RelExpr *n1, Data* n2, std::string n3) : me(NULL), data(n2), name(n3) { relex = n1; }
 
 /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {

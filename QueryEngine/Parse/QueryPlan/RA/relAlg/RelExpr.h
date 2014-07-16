@@ -4,7 +4,7 @@
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
-using namespace RA_Namespace;
+//using namespace RA_Namespace;
 
 namespace RA_Namespace {
 class RelExpr : public RelAlgNode {

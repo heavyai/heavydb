@@ -1,6 +1,6 @@
 #include "RelAlgebraParser.h"
 #include "visitor/Visitor.h"
-#include "visitor/XMLTranslator.h"
+#include "visitor/XMLTranslatorRA.h"
 #include <iostream>
 #include <string>
 

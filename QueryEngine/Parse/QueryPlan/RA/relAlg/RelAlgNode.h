@@ -2,12 +2,14 @@
 #define REL_ALG_NODE_H
 
 namespace RA_Namespace {
+
+class Visitor;
+
 class RelAlgNode {
     
 public:
-
     /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(class Visitor &v) = 0;
+    virtual void accept(Visitor &v) = 0;
 };
 }
 

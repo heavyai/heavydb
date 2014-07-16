@@ -149,8 +149,6 @@ Maintained by Magnus Ekdahl <magnus@debian.org>
 #include "relAlg/Compared.h"
 #include "relAlg/CompOp.h"
 
-#include "visitor/Visitor.h"
-#include "visitor/QPTranslator.h"
 // define stack element type to be a 
 // pointer to an AST node
 	
@@ -165,6 +163,7 @@ extern std::string strData[10];
 extern int dData[5];
 
 using namespace std;
+using namespace RA_Namespace;
 
 
 #line 88 "/usr/share/bison++/bison.cc"
@@ -715,13 +714,13 @@ static const short yyrhs[] = {    49,
 
 #if (YY_Parser_DEBUG != 0) || defined(YY_Parser_ERROR_VERBOSE) 
 static const short yyrline[] = { 0,
-    88,    90,    93,    95,    98,   100,   101,   102,   105,   107,
-   108,   109,   110,   111,   112,   113,   116,   118,   119,   120,
-   121,   122,   125,   127,   128,   129,   130,   131,   134,   136,
-   139,   141,   142,   143,   144,   145,   146,   147,   148,   149,
-   152,   154,   157,   158,   161,   163,   164,   165,   166,   169,
-   172,   174,   175,   176,   177,   178,   181,   183,   186,   188,
-   198
+    87,    89,    92,    94,    97,    99,   100,   101,   104,   106,
+   107,   108,   109,   110,   111,   112,   115,   117,   118,   119,
+   120,   121,   124,   126,   127,   128,   129,   130,   133,   135,
+   138,   140,   141,   142,   143,   144,   145,   146,   147,   148,
+   151,   153,   156,   157,   160,   162,   163,   164,   165,   168,
+   171,   173,   174,   175,   176,   177,   180,   182,   185,   187,
+   197
 };
 
 static const char * const yytname[] = {   "$","error","$illegal.","PLUS","MINUS",
@@ -1361,247 +1360,247 @@ YYLABEL(yyreduce)
   switch (yyn) {
 
 case 1:
-#line 89 "RelAlgebraParser.y"
+#line 88 "RelAlgebraParser.y"
 { yyval = new Program((RelExprList*)yyvsp[0]); parseRoot = yyval; ;
     break;}
 case 2:
-#line 90 "RelAlgebraParser.y"
+#line 89 "RelAlgebraParser.y"
 { yyval = 0; parseRoot = yyval; ;
     break;}
 case 3:
-#line 94 "RelAlgebraParser.y"
+#line 93 "RelAlgebraParser.y"
 { yyval = new RelExprList((RelExpr*)yyvsp[-1]); ;
     break;}
 case 4:
-#line 95 "RelAlgebraParser.y"
+#line 94 "RelAlgebraParser.y"
 { yyval = new RelExprList((RelExprList*)yyvsp[-2], (RelExpr*)yyvsp[0]); ;
     break;}
 case 5:
-#line 99 "RelAlgebraParser.y"
+#line 98 "RelAlgebraParser.y"
 { yyval = new RelExpr((UnaryOp*)yyvsp[0]); ;
     break;}
 case 6:
-#line 100 "RelAlgebraParser.y"
+#line 99 "RelAlgebraParser.y"
 { yyval = new RelExpr((BinaryOp*)yyvsp[0]); ;
     break;}
 case 7:
-#line 101 "RelAlgebraParser.y"
+#line 100 "RelAlgebraParser.y"
 { yyval = new RelExpr((RelExpr*)yyvsp[-1]); ;
     break;}
 case 8:
-#line 102 "RelAlgebraParser.y"
+#line 101 "RelAlgebraParser.y"
 { yyval = new RelExpr((Relation*)yyvsp[0]); ;
     break;}
 case 9:
-#line 106 "RelAlgebraParser.y"
+#line 105 "RelAlgebraParser.y"
 { yyval = new SelectOp((RelExpr*)yyvsp[-3], (Predicate*)yyvsp[-1]); ;
     break;}
 case 10:
-#line 107 "RelAlgebraParser.y"
+#line 106 "RelAlgebraParser.y"
 { yyval = new ProjectOp((RelExpr*)yyvsp[-5], (AttrList*)yyvsp[-2]); ;
     break;}
 case 11:
-#line 108 "RelAlgebraParser.y"
+#line 107 "RelAlgebraParser.y"
 { yyval = new SortOp((RelExpr*)yyvsp[-3], (AttrList*)yyvsp[-1]); ;
     break;}
 case 12:
-#line 109 "RelAlgebraParser.y"
+#line 108 "RelAlgebraParser.y"
 { yyval = new RenameOp((RelExpr*)yyvsp[-5], (Attribute*)yyvsp[-3], strData[0]); ;
     break;}
 case 13:
-#line 110 "RelAlgebraParser.y"
+#line 109 "RelAlgebraParser.y"
 { yyval = new ExtendOp((RelExpr*)yyvsp[-5], (MathExpr*)yyvsp[-3], strData[0]); ;
     break;}
 case 14:
-#line 111 "RelAlgebraParser.y"
+#line 110 "RelAlgebraParser.y"
 { yyval = new ExtendOp((RelExpr*)yyvsp[-5], (Data*)yyvsp[-3], strData[0]); ;
     break;}
 case 15:
-#line 112 "RelAlgebraParser.y"
+#line 111 "RelAlgebraParser.y"
 { yyval = new GroupByOp((RelExpr*)yyvsp[-7], (AttrList*)yyvsp[-4], (AggrList*)yyvsp[-1]); ;
     break;}
 case 16:
-#line 113 "RelAlgebraParser.y"
+#line 112 "RelAlgebraParser.y"
 { yyval = new GroupByOp((RelExpr*)yyvsp[-6], (AggrList*)yyvsp[-1]); ;
     break;}
 case 17:
-#line 117 "RelAlgebraParser.y"
+#line 116 "RelAlgebraParser.y"
 { yyval = new ProductOp((RelExpr*)yyvsp[-3], (RelExpr*)yyvsp[-1]); ;
     break;}
 case 18:
-#line 118 "RelAlgebraParser.y"
+#line 117 "RelAlgebraParser.y"
 { yyval = new JoinOp((RelExpr*)yyvsp[-5], (RelExpr*)yyvsp[-3], (Predicate*)yyvsp[-1]); ;
     break;}
 case 19:
-#line 119 "RelAlgebraParser.y"
+#line 118 "RelAlgebraParser.y"
 { yyval = new SemijoinOp((RelExpr*)yyvsp[-5], (RelExpr*)yyvsp[-3], (Predicate*)yyvsp[-1]); ;
     break;}
 case 20:
-#line 120 "RelAlgebraParser.y"
+#line 119 "RelAlgebraParser.y"
 { yyval = new OuterjoinOp((RelExpr*)yyvsp[-5], (RelExpr*)yyvsp[-3], (Predicate*)yyvsp[-1]); ;
     break;}
 case 21:
-#line 121 "RelAlgebraParser.y"
+#line 120 "RelAlgebraParser.y"
 { yyval = new AntijoinOp((RelExpr*)yyvsp[-5], (RelExpr*)yyvsp[-3], (Predicate*)yyvsp[-1]); ;
     break;}
 case 22:
-#line 122 "RelAlgebraParser.y"
+#line 121 "RelAlgebraParser.y"
 { yyval = new UnionOp((RelExpr*)yyvsp[-3], (RelExpr*)yyvsp[-1]); ;
     break;}
 case 23:
-#line 126 "RelAlgebraParser.y"
+#line 125 "RelAlgebraParser.y"
 { yyval = new MathExpr(0, (MathExpr*)yyvsp[-2], (MathExpr*)yyvsp[0]); ;
     break;}
 case 24:
-#line 127 "RelAlgebraParser.y"
+#line 126 "RelAlgebraParser.y"
 { yyval = new MathExpr(0, (MathExpr*)yyvsp[-2], (MathExpr*)yyvsp[0]); ;
     break;}
 case 25:
-#line 128 "RelAlgebraParser.y"
+#line 127 "RelAlgebraParser.y"
 { yyval = new MathExpr(0, (MathExpr*)yyvsp[-2], (MathExpr*)yyvsp[0]); ;
     break;}
 case 26:
-#line 129 "RelAlgebraParser.y"
+#line 128 "RelAlgebraParser.y"
 { yyval = new MathExpr(0, (MathExpr*)yyvsp[-2], (MathExpr*)yyvsp[0]); ;
     break;}
 case 27:
-#line 130 "RelAlgebraParser.y"
+#line 129 "RelAlgebraParser.y"
 { yyval = new MathExpr((MathExpr*)yyvsp[-1]); ;
     break;}
 case 28:
-#line 131 "RelAlgebraParser.y"
+#line 130 "RelAlgebraParser.y"
 { yyval = new MathExpr((Attribute*)yyvsp[0]); ;
     break;}
 case 29:
-#line 135 "RelAlgebraParser.y"
+#line 134 "RelAlgebraParser.y"
 { yyval = new AggrList((AggrExpr*)yyvsp[0]); ;
     break;}
 case 30:
-#line 136 "RelAlgebraParser.y"
+#line 135 "RelAlgebraParser.y"
 { yyval = new AggrList((AggrList*)yyvsp[-2], (AggrExpr*)yyvsp[0]); ;
     break;}
 case 31:
-#line 140 "RelAlgebraParser.y"
+#line 139 "RelAlgebraParser.y"
 { yyval = new AggrExpr(0, 0, (Attribute*)yyvsp[-1]); ;
     break;}
 case 32:
-#line 141 "RelAlgebraParser.y"
+#line 140 "RelAlgebraParser.y"
 { yyval = new AggrExpr(1, 0, (Attribute*)yyvsp[-1]); ;
     break;}
 case 33:
-#line 142 "RelAlgebraParser.y"
+#line 141 "RelAlgebraParser.y"
 { yyval = new AggrExpr(2, 0, (Attribute*)yyvsp[-1]); ;
     break;}
 case 34:
-#line 143 "RelAlgebraParser.y"
+#line 142 "RelAlgebraParser.y"
 { yyval = new AggrExpr(3, 0, (Attribute*)yyvsp[-1]); ;
     break;}
 case 35:
-#line 144 "RelAlgebraParser.y"
+#line 143 "RelAlgebraParser.y"
 { yyval = new AggrExpr(4, 0, (Attribute*)yyvsp[-1]); ;
     break;}
 case 36:
-#line 145 "RelAlgebraParser.y"
+#line 144 "RelAlgebraParser.y"
 { yyval = new AggrExpr(0, 1, (Attribute*)yyvsp[-1]); ;
     break;}
 case 37:
-#line 146 "RelAlgebraParser.y"
+#line 145 "RelAlgebraParser.y"
 { yyval = new AggrExpr(1, 1, (Attribute*)yyvsp[-1]); ;
     break;}
 case 38:
-#line 147 "RelAlgebraParser.y"
+#line 146 "RelAlgebraParser.y"
 { yyval = new AggrExpr(2, 1, (Attribute*)yyvsp[-1]); ;
     break;}
 case 39:
-#line 148 "RelAlgebraParser.y"
+#line 147 "RelAlgebraParser.y"
 { yyval = new AggrExpr(3, 1, (Attribute*)yyvsp[-1]); ;
     break;}
 case 40:
-#line 149 "RelAlgebraParser.y"
+#line 148 "RelAlgebraParser.y"
 { yyval = new AggrExpr(4, 1, (Attribute*)yyvsp[-1]); ;
     break;}
 case 41:
-#line 153 "RelAlgebraParser.y"
+#line 152 "RelAlgebraParser.y"
 { yyval = new AttrList((Attribute*)yyvsp[0]); ;
     break;}
 case 42:
-#line 154 "RelAlgebraParser.y"
+#line 153 "RelAlgebraParser.y"
 { yyval = new AttrList((AttrList*)yyvsp[-2], (Attribute*)yyvsp[0]); ;
     break;}
 case 43:
-#line 157 "RelAlgebraParser.y"
+#line 156 "RelAlgebraParser.y"
 { yyval = new Attribute(strData[0]); ;
     break;}
 case 44:
-#line 158 "RelAlgebraParser.y"
+#line 157 "RelAlgebraParser.y"
 { yyval = new Attribute(strData[0], strData[1]); ;
     break;}
 case 45:
-#line 162 "RelAlgebraParser.y"
+#line 161 "RelAlgebraParser.y"
 { yyval = new Predicate(0, (Predicate*)yyvsp[-2], (Predicate*)yyvsp[0]); ;
     break;}
 case 46:
-#line 163 "RelAlgebraParser.y"
+#line 162 "RelAlgebraParser.y"
 { yyval = new Predicate(1, (Predicate*)yyvsp[-2], (Predicate*)yyvsp[0]); ;
     break;}
 case 47:
-#line 164 "RelAlgebraParser.y"
+#line 163 "RelAlgebraParser.y"
 { yyval = new Predicate(2, (Predicate*)yyvsp[0]); ;
     break;}
 case 48:
-#line 165 "RelAlgebraParser.y"
+#line 164 "RelAlgebraParser.y"
 { yyval = new Predicate(3, (Predicate*)yyvsp[-1]); ;
     break;}
 case 49:
-#line 166 "RelAlgebraParser.y"
+#line 165 "RelAlgebraParser.y"
 { yyval = new Predicate((Comparison*)yyvsp[0]); ;
     break;}
 case 50:
-#line 169 "RelAlgebraParser.y"
+#line 168 "RelAlgebraParser.y"
 { yyval = new Comparison((Compared*)yyvsp[-2], (CompOp*)yyvsp[-1], (Compared*)yyvsp[0]); ;
     break;}
 case 51:
-#line 173 "RelAlgebraParser.y"
+#line 172 "RelAlgebraParser.y"
 { yyval = new CompOp("NEQ"); ;
     break;}
 case 52:
-#line 174 "RelAlgebraParser.y"
+#line 173 "RelAlgebraParser.y"
 { yyval = new CompOp("EQ"); ;
     break;}
 case 53:
-#line 175 "RelAlgebraParser.y"
+#line 174 "RelAlgebraParser.y"
 { yyval = new CompOp("GT"); ;
     break;}
 case 54:
-#line 176 "RelAlgebraParser.y"
+#line 175 "RelAlgebraParser.y"
 { yyval = new CompOp("GTE"); ;
     break;}
 case 55:
-#line 177 "RelAlgebraParser.y"
+#line 176 "RelAlgebraParser.y"
 { yyval = new CompOp("LT"); ;
     break;}
 case 56:
-#line 178 "RelAlgebraParser.y"
+#line 177 "RelAlgebraParser.y"
 { yyval = new CompOp("LTE"); ;
     break;}
 case 57:
-#line 182 "RelAlgebraParser.y"
+#line 181 "RelAlgebraParser.y"
 { yyval = new Compared((Attribute*)yyvsp[0]); ;
     break;}
 case 58:
-#line 183 "RelAlgebraParser.y"
+#line 182 "RelAlgebraParser.y"
 { yyval = new Compared((Data*)yyvsp[0]); ;
     break;}
 case 59:
-#line 187 "RelAlgebraParser.y"
+#line 186 "RelAlgebraParser.y"
 { yyval = new Data(dData[0]); ;
     break;}
 case 60:
-#line 188 "RelAlgebraParser.y"
+#line 187 "RelAlgebraParser.y"
 { yyval = new Data(strData[0]); ;
     break;}
 case 61:
-#line 199 "RelAlgebraParser.y"
+#line 198 "RelAlgebraParser.y"
 { yyval = new Relation(strData[0]); ;
     break;}
 }
@@ -1808,9 +1807,9 @@ YYLABEL(yyerrhandle)
 /* END */
 
  #line 1038 "/usr/share/bison++/bison.cc"
-#line 202 "RelAlgebraParser.y"
+#line 201 "RelAlgebraParser.y"
 
-
+/*
 RelAlgNode *parse_root = 0;
 
 int main() {
@@ -1829,4 +1828,4 @@ int main() {
         parseRoot->accept(qp); 
 
 	return 0;
-}
+}*/
