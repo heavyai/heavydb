@@ -25,7 +25,11 @@ namespace Buffer_Namespace {
  */
 struct Frame {
     mapd_size_t addr;
-    bool isDirty;
+    bool dirty;
+
+    /// Constructor
+    Frame(mapd_size_t addrIn, bool dirtyIn = false) : 
+        addr(addrIn), dirty(dirtyIn) {}
 };
 
 /**
@@ -294,6 +298,7 @@ private:
 
     FileMgr *fm_;                       /**< pointer to a file manager object */
     mapd_byte_t *hostMem_;              /**< pointer to the host-allocated buffer pool. */
+    mapd_size_t hostMemorySize_;        /**< number of bytes allocated for the host buffer pool. */
 
     // Frames
     std::vector<Frame*> frames_;        /**< A vector of in-order frames, which compose the buffer pool. */

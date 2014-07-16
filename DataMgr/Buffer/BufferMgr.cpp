@@ -18,9 +18,13 @@ using std::map;
 
 namespace Buffer_Namespace {
 
-BufferMgr::BufferMgr(mapd_size_t hostMemorySize, FileMgr *fm) : fm_(fm) {
-    // Allocate host memory
-    hostMem_ = new mapd_byte_t[hostMemorySize];
+BufferMgr::BufferMgr(mapd_size_t hostMemorySize, FileMgr *fm) {
+    // initialize variables
+    fm_ = fm;
+    hostMem_ = NULL;
+    hostMemorySize_ = hostMemorySize;
+    numHitsHost_ = 0;
+    numMissHost_ = 0;
 
     // Retrieve file system information
     struct statvfs buf;
@@ -29,36 +33,56 @@ BufferMgr::BufferMgr(mapd_size_t hostMemorySize, FileMgr *fm) : fm_(fm) {
         exit(EXIT_FAILURE);
     }
     frameSize_ = buf.f_frsize; // fundamental physical block size
-    
-    // initialize variables
-    numHitsHost_ = 0;
-    numMissHost_ = 0;
+
+    // Allocate frames and free list
+    mapd_size_t numFrames = hostMemorySize_ / frameSize_;
+    for (int i = 0; i < numFrames; ++i) {
+        Frame *f = new Frame(i * frameSize_);
+        frames_.push_back(f);
+        free_.push_back(f);
+    }
+
+    // Allocate host memory
+    hostMemorySize_ = frameSize_ * frames_.size();
+    hostMem_ = new mapd_byte_t[hostMemorySize_];
 
     // Print summary
-    printf("Host memory size = %u bytes\n", hostMemorySize);
-    printf("Frame size = %u bytes\n", frameSize_);
-    printf("# of frames = %lu\n", frames_.size());
+    printf("Host memory size = %u bytes\n", hostMemorySize_);
+    printf("Frame size       = %u bytes\n", frameSize_);
+    printf("# of frames      = %lu\n", frames_.size());
 }
 
 BufferMgr::BufferMgr(mapd_size_t hostMemorySize, mapd_size_t frameSize, FileMgr *fm) : fm_(fm) {
-    // Allocate host memory
-    hostMem_ = new mapd_byte_t[hostMemorySize];
-    frameSize_ = frameSize;
-    
-    // initialize variables
+     // initialize variables
+    fm_ = fm;
+    hostMem_ = NULL;
+    hostMemorySize_ = hostMemorySize;
     numHitsHost_ = 0;
     numMissHost_ = 0;
+    frameSize_ = frameSize;
+
+    // Allocate frames and free list
+    mapd_size_t numFrames = hostMemorySize_ / frameSize_;
+    for (int i = 0; i < numFrames; ++i) {
+        Frame *f = new Frame(i * frameSize_);
+        frames_.push_back(f);
+        free_.push_back(f);
+    }
+
+    // Allocate host memory
+    hostMemorySize_ = frameSize_ * frames_.size();
+    hostMem_ = new mapd_byte_t[hostMemorySize_];
 
     // Print summary
-    printf("Host memory size = %u bytes\n", hostMemorySize);
-    printf("Frame size = %u bytes\n", frameSize_);
-    printf("# of frames = %lu\n", frames_.size());
+    printf("Host memory size = %u bytes\n", hostMemorySize_);
+    printf("Frame size       = %u bytes\n", frameSize_);
+    printf("# of frames      = %lu\n", frames_.size());
 }
 
 BufferMgr::~BufferMgr() {
     delete[] hostMem_;
 }
-
+/*
 std::pair<bool, bool> BufferMgr::chunkStatus(const ChunkKey &key) {
     std::pair<bool, bool> status;
     auto it = chunkIndex_.find(key);
@@ -107,7 +131,7 @@ PageInfo* BufferMgr::getChunk(const ChunkKey &key, mapd_size_t pad, bool pin) {
 
 // @todo ability to extend page bounds 
 // @todo fix bugs: should be using bounds as frame IDs, not memory addresses!
-/*bool BufferMgr::updateChunk(const ChunkKey &key, mapd_size_t offset, mapd_size_t size, mapd_byte_t *src) {
+bool BufferMgr::updateChunk(const ChunkKey &key, mapd_size_t offset, mapd_size_t size, mapd_byte_t *src) {
     // find chunk's page
     PageInfo *pInfo = findChunkPage(key);
     if (!pInfo)
@@ -126,7 +150,7 @@ PageInfo* BufferMgr::getChunk(const ChunkKey &key, mapd_size_t pad, bool pin) {
     pInfo->lastAddr = begin + size;
 
     return true;
-}*/
+}
 
 bool BufferMgr::removeChunk(const ChunkKey &key) {
     // find chunk's page
@@ -143,13 +167,12 @@ bool BufferMgr::removeChunk(const ChunkKey &key) {
     return true;
 }
 
-/*
 void appendChunk(const ChunkKey &key, mapd_size_t size, mapd_byte_t *src) {
 
 }
-*/
 
-/*bool flushChunk(const ChunkKey &key, unsigned int epoch) {
+
+bool flushChunk(const ChunkKey &key, unsigned int epoch) {
     PageInfo* pInfo = findChunkPage(key);
 
     // not found
@@ -159,9 +182,9 @@ void appendChunk(const ChunkKey &key, mapd_size_t size, mapd_byte_t *src) {
     // gather frame information for the page
     Frame *fr = pInfo->bounds.first / frameSize_;
     mapd_size_t numFrames = pInfo
-}*/
+}
 
-/*
+
 void BufferMgr::printFramesHost() {
     
 }
@@ -173,7 +196,7 @@ void BufferMgr::printPagesHost() {
 void BufferMgr::printChunksHost() {
     
 }
-*/
+
 
 PageInfo* BufferMgr::findChunkPage(const ChunkKey key) {
     auto iter = chunkIndex_.find(key);
@@ -181,5 +204,5 @@ PageInfo* BufferMgr::findChunkPage(const ChunkKey key) {
         return NULL;
     return iter->second;
 }
-
+*/
 } // Buffer_Namespace
