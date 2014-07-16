@@ -2,12 +2,13 @@
 
 #include <iostream>
 #include "BufferMgr.h"
-//#include "../File/FileMgr.h"
+#include "../File/FileMgr.h"
 #include "../../Shared/ansi.h"
 #include "../../Shared/testing.h"
 
 using namespace Testing;
 using namespace Buffer_Namespace;
+using namespace File_Namespace;
 
 #define BLOCKSIZE 32
 
@@ -22,8 +23,6 @@ int main() {
 }
 
 bool test_BufferMgr() {
-	//::FileMgr fm(".");
-	BufferMgr bm1(1048576, NULL);
-	BufferMgr bm2(1048576, 256, NULL);
+	BufferMgr(50, 4096, NULL);
 	return true;
 }
