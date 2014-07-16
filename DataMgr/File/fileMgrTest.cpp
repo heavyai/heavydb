@@ -14,6 +14,7 @@
 #include "../../Shared/testing.h"
 
 using namespace Testing;
+using namespace File_Namespace;
 
 #define BLOCKSIZE 32
 
@@ -125,7 +126,7 @@ bool test_createFile() {
         return false;
     else {
         if (!fInfo->f
-            || File::fileSize(fInfo->f) != blockSize * nblocks 
+            || fileSize(fInfo->f) != blockSize * nblocks 
                 || fInfo->blockSize != blockSize 
                     || fInfo->nblocks != nblocks)
             return false;

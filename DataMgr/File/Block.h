@@ -10,6 +10,8 @@
 
 #include "../../Shared/types.h"
 
+namespace File_Namespace {
+
 /**
  * @type BlockAddr
  * @brief A logical block within a file.
@@ -53,5 +55,7 @@ struct BlockInfo {
 		addr.clear();
 	}
 };
+
+} // File_Namespace
 
 #endif /* BLOCK_H_ */

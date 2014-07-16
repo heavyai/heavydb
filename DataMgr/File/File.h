@@ -12,7 +12,7 @@
 #include "../../Shared/errors.h"
 #include "../../Shared/types.h"
 
-namespace File {
+namespace File_Namespace {
 
     FILE* create(int fileId, mapd_size_t blockSize, mapd_size_t nblocks, mapd_err_t *err);
 
@@ -121,6 +121,6 @@ namespace File {
      */
     size_t fileSize(FILE *f);
 
-} // namespace File
+} // namespace File_Namespace
 
 #endif // _FILE_H

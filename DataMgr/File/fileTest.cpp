@@ -10,6 +10,7 @@
 #include "../../Shared/testing.h"
 
 using namespace Testing;
+using namespace File_Namespace;
 
 // unit test function prototypes
 bool test_open_close();

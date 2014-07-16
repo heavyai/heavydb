@@ -16,6 +16,8 @@
 
 using std::vector;
 
+namespace File_Namespace {
+
 FileInfo::FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks)
      : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks) // STEVE: careful here - assignment to same variable name fails on some compilers even though it should work according to C++ standard
 {
@@ -33,7 +35,7 @@ FileInfo::~FileInfo() {
 		delete blocks[i];
 
 	// close file, if applicable
-    if (f && File::close(f) != MAPD_SUCCESS)
+    if (f && close(f) != MAPD_SUCCESS)
         fprintf(stderr, "[%s:%d] Error closing file %d.\n", __func__, __LINE__, fileId);
 }
 
@@ -75,7 +77,7 @@ FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nbl
 
     // create the new file
     FILE *f = NULL;
-    f = File::create(nextFileId_, blockSize, nblocks, NULL);
+    f = create(nextFileId_, blockSize, nblocks, NULL);
 
     // check for error
     if (!f) {
@@ -148,20 +150,20 @@ mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, ma
 	return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, n, buf);
 }
 
-mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_byte_t *buf) {
+mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_byte_t *buf) {
 	// The client should be writing blockSize bytes to the block
 	assert(blockNum == fInfo.blockSize);
 
     // open the file if it is not open already
 	mapd_err_t err;
 	if (!fInfo.f) {
-    	fInfo.f = File::open(fInfo.fileId, &err);
+    	fInfo.f = open(fInfo.fileId, &err);
         if (err != MAPD_SUCCESS)
         	return err;
     }
 
     // write the block to the file
-    size_t wrote = File::writeBlock(fInfo.f, fInfo.blockSize, blockNum, buf, &err);
+    size_t wrote = writeBlock(fInfo.f, fInfo.blockSize, blockNum, buf, &err);
     assert(wrote == fInfo.blockSize);
 
 	return err;
@@ -217,18 +219,18 @@ Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_byte_t *buf) {
         // obtain a reference to the file of the block address
         int fileId = blk->fileId;
         FileInfo *fInfo = getFile(fileId);
-        if (!fInfo != MAPD_SUCCESS)
+        if (!fInfo)
             return NULL;
         
         // open the file if it is not open already
         mapd_err_t err;
         if (!fInfo->f)
-            fInfo->f = File::open(fileId, &err);
+            fInfo->f = open(fileId, &err);
         if (err != MAPD_SUCCESS)
             return NULL;
         
         // read block from file into buf
-        File::read(fInfo->f, i * c[i]->blockSize, c[i]->blockSize, buf, &err);
+        read(fInfo->f, i * c[i]->blockSize, c[i]->blockSize, buf, &err);
         if (err != MAPD_SUCCESS)
         	return NULL;
     }
@@ -364,6 +366,8 @@ void FileMgr::print() {
 }
 
 */
+
+} // File_Namespace
 
 
 
