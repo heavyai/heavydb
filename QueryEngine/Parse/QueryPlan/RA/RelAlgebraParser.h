@@ -31,7 +31,7 @@
 	
 // RA nodes
 #include "relAlg/RelAlgNode.h"
-#include "relAlg/Program.h"
+#include "relAlg/RA_Program.h"
 #include "relAlg/RelExprList.h"
 #include "relAlg/RelExpr.h"
 #include "relAlg/UnaryOp.h"

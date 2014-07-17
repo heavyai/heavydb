@@ -481,7 +481,7 @@ public:
         printTabs(INCR);
         cout << "<OptWhereClause>" << endl;
 
-        v->sc->accept(*this);
+        if (v->sc) v->sc->accept(*this);
 
         printTabs(DECR);
         cout << "</OptWhereClause>" << endl;

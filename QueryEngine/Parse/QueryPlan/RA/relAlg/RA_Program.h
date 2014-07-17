@@ -1,5 +1,5 @@
-#ifndef AST_PROGRAM_H
-#define AST_PROGRAM_H
+#ifndef AST_RA_PROGRAM_H
+#define AST_RA_PROGRAM_H
 
 #include <iostream>
 #include "RelAlgNode.h"
@@ -24,4 +24,4 @@ public:
     
 	};
 }
-#endif // AST_PROGRAM_H
+#endif // AST_RA_PROGRAM_H

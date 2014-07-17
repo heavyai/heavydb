@@ -323,7 +323,7 @@ query_spec:
     ;
 
 selection:
-    scalar_exp_commalist            { $$ = new Selection((ScalarExpCommalist*)$1); } |
+    scalar_exp_commalist            { $$ = new Selection((ScalarExpCommalist*)$1); }
 | '*'                               { $$ = new Selection("*"); }
 ;
 

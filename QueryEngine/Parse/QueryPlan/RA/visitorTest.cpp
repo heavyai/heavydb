@@ -19,7 +19,7 @@ int main(int argc, char ** argv) {
         RelAlgNode *parseRoot = 0;
         parser.parse(sql, parseRoot);
       
-        XMLTranslator xml;
+        XMLTranslatorRA xml;
         if (parseRoot != 0)
             parseRoot->accept(xml); 
 

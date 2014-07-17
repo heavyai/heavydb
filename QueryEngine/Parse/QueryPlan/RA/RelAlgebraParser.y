@@ -18,7 +18,7 @@
 	
 // RA nodes
 #include "relAlg/RelAlgNode.h"
-#include "relAlg/Program.h"
+#include "relAlg/RA_Program.h"
 #include "relAlg/RelExprList.h"
 #include "relAlg/RelExpr.h"
 #include "relAlg/UnaryOp.h"
@@ -85,7 +85,7 @@ using namespace RA_Namespace;
 %%
 
 S:
-	RelExprList				{ $$ = new Program((RelExprList*)$1); parseRoot = $$; }
+	RelExprList				{ $$ = new RA_Program((RelExprList*)$1); parseRoot = $$; }
 |							{ $$ = 0; parseRoot = $$; }
 ;
 
@@ -139,16 +139,16 @@ AggrList:
 ;
 
 AggrExpr:
-	MAX '(' attribute ')'									{ $$ = new AggrExpr(0, 0, (Attribute*)$3); }
-|	MIN '(' attribute ')'									{ $$ = new AggrExpr(1, 0, (Attribute*)$3); }
-|	COUNT '(' attribute ')'									{ $$ = new AggrExpr(2, 0, (Attribute*)$3); }
-|	SUM '(' attribute ')'									{ $$ = new AggrExpr(3, 0, (Attribute*)$3); }
-|	AVG '(' attribute ')'									{ $$ = new AggrExpr(4, 0, (Attribute*)$3); }
-|	MAX_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr(0, 1, (Attribute*)$3); }
-|	MIN_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr(1, 1, (Attribute*)$3); }
-|	COUNT_DISTINCT '(' attribute ')'						{ $$ = new AggrExpr(2, 1, (Attribute*)$3); }
-|	SUM_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr(3, 1, (Attribute*)$3); }
-|	AVG_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr(4, 1, (Attribute*)$3); }
+	MAX '(' attribute ')'									{ $$ = new AggrExpr("MAX", "", (Attribute*)$3); }
+|	MIN '(' attribute ')'									{ $$ = new AggrExpr("MIN", "", (Attribute*)$3); }
+|	COUNT '(' attribute ')'									{ $$ = new AggrExpr("COUNT", "", (Attribute*)$3); }
+|	SUM '(' attribute ')'									{ $$ = new AggrExpr("SUM", "", (Attribute*)$3); }
+|	AVG '(' attribute ')'									{ $$ = new AggrExpr("AVG", "", (Attribute*)$3); }
+|	MAX_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("MAX", "DISTINCT", (Attribute*)$3); }
+|	MIN_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("MIN", "DISTINCT", (Attribute*)$3); }
+|	COUNT_DISTINCT '(' attribute ')'						{ $$ = new AggrExpr("COUNT", "DISTINCT", (Attribute*)$3); }
+|	SUM_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("SUM", "DISTINCT", (Attribute*)$3); }
+|	AVG_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("AVG", "DISTINCT", (Attribute*)$3); }
 ;
 
 AttrList:

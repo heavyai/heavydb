@@ -11,7 +11,7 @@ namespace RA_Namespace {
 	    template <typename T>
 	    // virtual void visit(T &);*/
 
-	    virtual void visit(class Program *v) = 0;
+	    virtual void visit(class RA_Program *v) = 0;
 	    virtual void visit(class RelExprList *v) = 0;
 	    virtual void visit(class RelExpr *v) = 0;
 	    virtual void visit(class BinaryOp *v) = 0;
@@ -41,7 +41,7 @@ namespace RA_Namespace {
 	    virtual void visit(class Compared *v) = 0;
 	    virtual void visit(class CompOp *v) = 0;
 	    virtual void visit(class Relation *v) = 0;
-	    virtual void visit(class Table *v) = 0;
+	    virtual void visit(class RA_Table *v) = 0;
 
 	    
 	};

@@ -1,6 +1,6 @@
 #include "SQL/parser.h"
 #include "SQL/visitor/Visitor.h"
-//#include "RA/visitor/XMLTranslatorRA.h"
+#include "RA/visitor/XMLTranslatorRA.h"
 #include "QPTranslator.h"
 #include <iostream>
 #include <string>
@@ -23,14 +23,20 @@ int main(int argc, char ** argv) {
       
         //XMLTranslator xml;
         QPTranslator xml;
+        
+        // make sure the root is NULL before we accept!
+        xml.resetRoot();
+
         if (parseRoot != 0)
             parseRoot->accept(xml); 
-        cout << "*********** TRANSFORMING TREE *********************" << endl;
-       // XMLTranslatorRA xml2;
+        cout << "*********** Visiting new tree*********************" << endl;
+        XMLTranslatorRA xml2;
+
         root = xml.getRoot();
-        if (root != 0)
-            cout << "Allegedly the root of the transformed tree is not null. This is a good thing." << endl;
-        else cout << "You failed. xml.getRoot() is " << root << endl;
+        if (root == NULL) 
+            cout << "You failed. xml.getRoot() is " << root << ". Time to brush up on your grammar." << endl;
+        else
+            root->accept(xml2); 
     }
     while (1==1);
     cout << "After parse" << endl;
