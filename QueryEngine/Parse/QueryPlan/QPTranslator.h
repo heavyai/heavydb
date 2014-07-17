@@ -145,19 +145,26 @@ public:
         return root;
     }
 
-    ProductOp* formProductOp(TableRefCommalist *vTRC, TableRef *vTR) {
-        // If the table reference commalist does not exist, create a Product Operation of the only table and NULL.
-        if (!(vTRC)) 
-            return new ProductOp(new RelExpr(new Relation(new RA_Table(vTR->tbl->name1, vTR->tbl->name2))), NULL);
-        // IF the table reference commalist exists, create a product operation between the table reference commalist and the table. 
+    ProductOp* formProductOp(TableRefCommalist *v) {
+        // If the table reference commalist's trc child has only one table child, make a product between this trc's table child and the child trc's table child.
+        if (!(v->trc->trc)) 
+            return new ProductOp(new RelExpr(new Relation(new RA_Table(v->tr->tbl->name1, v->tr->tbl->name2))), 
+                new RelExpr(new Relation(new RA_Table(v->tr->tbl->name1, v->tr->tbl->name2))));
+        // IF the table reference commalist's trc child has a trc child of its own,
+        // create a product operation between this table reference commalist's table reference child and the product of its trc child.. 
         else 
-            return new ProductOp(new RelExpr(formProductOp(vTRC->trc, vTRC->tr)), 
-                                 new RelExpr(new Relation(new RA_Table(vTR->tbl->name1, vTR->tbl->name2))));
+            return new ProductOp(new RelExpr(formProductOp(v->trc)), 
+                                 new RelExpr(new Relation(new RA_Table(v->tr->tbl->name1, v->tr->tbl->name2))));
     }
 
     // Begins the recursive examining of the Table-reference list.
     RelExpr* formProductRelation(TableRefCommalist *v) {
-        return new RelExpr(formProductOp(v->trc, v->tr));
+        // If there is only one table:
+        if (!v->trc)
+            return new RelExpr(new Relation(new RA_Table(v->tr->tbl->name1, v->tr->tbl->name2)));
+        // If there is more than one table:
+        else
+            return new RelExpr(formProductOp(v));
     }
 
     MathExpr* handleScalarExp(ScalarExp* se) {
@@ -252,7 +259,7 @@ public:
             return new RelExpr(new SelectOp(relexArg, formSelectOp(tblExp->owc->sc)));
         // otherwise the relational table to be projected is the full list of tables.
         else
-            return new RelExpr(new SelectOp(relexArg, NULL));
+            return relexArg;
 
     }
 
@@ -297,7 +304,7 @@ public:
             ColumnRefCommalist* crc = tblExp->ogbc->crc;
             return new RelExpr(new GroupByOp(relexArg, formAttrList(crc), NULL));
         }
-        else return new RelExpr(new GroupByOp(relexArg, NULL, NULL));
+        else return relexArg;
     }
 
     RelExpr* handleSelSta(SelectStatement *v) {
