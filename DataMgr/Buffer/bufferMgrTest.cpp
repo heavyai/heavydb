@@ -18,11 +18,11 @@ bool test_BufferMgr();
 int main() {
 	test_BufferMgr() ?
 	    PPASS("BufferMgr()") : PFAIL("BufferMgr()");
-
+	    
 	return EXIT_SUCCESS;
 }
 
 bool test_BufferMgr() {
-	BufferMgr(50, 4096, NULL);
+	BufferMgr(50 * 4096, NULL);
 	return true;
 }
