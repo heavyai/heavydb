@@ -309,6 +309,11 @@ public:
         printTabs(INCR);
         cout << "<Attribute>" << endl;
         
+        printTabs(NONE);
+        cout << v->name1;
+        if (v->name2 != "") cout << "." << v->name2;
+        cout << endl;
+
         printTabs(DECR);
         cout << "</Attribute>" << endl;
     }
@@ -326,6 +331,10 @@ public:
     void visit(class Data *v) {
         printTabs(INCR);
         cout << "<Data>" << endl;
+        
+        printTabs(NONE);
+        if (v->d != -1) cout << "number: " << v->d << endl;
+        if (v->s != "") cout << "string: " << v->d << endl;
         
         printTabs(DECR);
         cout << "</Data>" << endl;
@@ -370,6 +379,9 @@ public:
         printTabs(INCR);
         cout << "<CompOp>" << endl;
         
+        printTabs(NONE);
+        cout << v->comparator << endl;
+
         printTabs(DECR);
         cout << "</CompOp>" << endl;
     }

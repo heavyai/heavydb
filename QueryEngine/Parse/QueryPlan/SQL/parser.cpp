@@ -958,14 +958,14 @@ static const short yyrline[] = { 0,
    308,   309,   312,   314,   317,   321,   325,   327,   330,   341,
    342,   345,   347,   350,   355,   357,   360,   362,   365,   367,
    370,   372,   375,   377,   379,   382,   384,   385,   386,   387,
-   390,   392,   393,   394,   395,   396,   397,   400,   402,   405,
-   407,   410,   412,   415,   417,   420,   422,   425,   427,   428,
-   429,   432,   434,   437,   441,   443,   444,   447,   451,   457,
-   459,   462,   464,   465,   466,   467,   468,   469,   470,   471,
-   472,   475,   478,   481,   483,   484,   485,   489,   490,   491,
-   495,   496,   497,   503,   504,   505,   506,   507,   508,   509,
-   510,   511,   512,   513,   514,   515,   516,   517,   518,   521,
-   523,   524,   525,   529,   533,   536,   538,   539,   540,   541
+   390,   392,   393,   394,   395,   396,   397,   400,   403,   406,
+   408,   411,   413,   416,   418,   421,   423,   426,   428,   429,
+   430,   433,   435,   438,   442,   444,   445,   448,   452,   458,
+   460,   463,   465,   466,   467,   468,   469,   470,   471,   472,
+   473,   476,   479,   482,   484,   485,   486,   490,   491,   492,
+   496,   497,   498,   504,   505,   506,   507,   508,   509,   510,
+   511,   512,   513,   514,   515,   516,   517,   518,   519,   522,
+   524,   525,   526,   530,   534,   537,   539,   540,   541,   542
 };
 
 static const char * const yytname[] = {   "$","error","$illegal.","OR","AND",
@@ -2111,295 +2111,295 @@ case 97:
 { yyval = new Predicate((ExistenceTest*)yyvsp[0]); ;
     break;}
 case 98:
-#line 401 "parser.y"
-{ yyval = new ComparisonPredicate((ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
+#line 402 "parser.y"
+{ yyval = new ComparisonPredicate(strData[5], (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 99:
-#line 402 "parser.y"
-{ yyval = new ComparisonPredicate((ScalarExp*)yyvsp[-2], (Subquery*)yyvsp[0]); ;
+#line 403 "parser.y"
+{ yyval = new ComparisonPredicate(strData[5], (ScalarExp*)yyvsp[-2], (Subquery*)yyvsp[0]); ;
     break;}
 case 100:
-#line 406 "parser.y"
+#line 407 "parser.y"
 { yyval = new BetweenPredicate(2, (ScalarExp*)yyvsp[-5], (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 101:
-#line 407 "parser.y"
+#line 408 "parser.y"
 { yyval = new BetweenPredicate(1, (ScalarExp*)yyvsp[-4], (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 102:
-#line 411 "parser.y"
+#line 412 "parser.y"
 { yyval = new LikePredicate(2, (ScalarExp*)yyvsp[-4], (Atom*)yyvsp[-1], (OptEscape*)yyvsp[0]); ;
     break;}
 case 103:
-#line 412 "parser.y"
+#line 413 "parser.y"
 { yyval = new LikePredicate(1, (ScalarExp*)yyvsp[-3], (Atom*)yyvsp[-1], (OptEscape*)yyvsp[0]); ;
     break;}
 case 104:
-#line 416 "parser.y"
+#line 417 "parser.y"
 { yyval = NULL; ;
     break;}
 case 105:
-#line 417 "parser.y"
+#line 418 "parser.y"
 { yyval = new OptEscape((Atom*)yyvsp[0]); ;
     break;}
 case 106:
-#line 421 "parser.y"
+#line 422 "parser.y"
 { yyval = new TestForNull(1, (ColumnRef*)yyvsp[-3]); ;
     break;}
 case 107:
-#line 422 "parser.y"
+#line 423 "parser.y"
 { yyval = new TestForNull(0, (ColumnRef*)yyvsp[-2]); ;
     break;}
 case 108:
-#line 426 "parser.y"
+#line 427 "parser.y"
 { yyval = new InPredicate(1, (ScalarExp*)yyvsp[-5], (Subquery*)yyvsp[-1]); ;
     break;}
 case 109:
-#line 427 "parser.y"
+#line 428 "parser.y"
 { yyval = new InPredicate(0, (ScalarExp*)yyvsp[-4], (Subquery*)yyvsp[-1]); ;
     break;}
 case 110:
-#line 428 "parser.y"
+#line 429 "parser.y"
 { yyval = new InPredicate(1, (ScalarExp*)yyvsp[-5], (AtomCommalist*)yyvsp[-1]); ;
     break;}
 case 111:
-#line 429 "parser.y"
+#line 430 "parser.y"
 { yyval = new InPredicate(0, (ScalarExp*)yyvsp[-4], (AtomCommalist*)yyvsp[-1]); ;
     break;}
 case 112:
-#line 433 "parser.y"
+#line 434 "parser.y"
 { yyval = new AtomCommalist((Atom*)yyvsp[0]); ;
     break;}
 case 113:
-#line 434 "parser.y"
+#line 435 "parser.y"
 { yyval = new AtomCommalist((AtomCommalist*)yyvsp[-2], (Atom*)yyvsp[0]); ;
     break;}
 case 114:
-#line 438 "parser.y"
+#line 439 "parser.y"
 { yyval = new AllOrAnyPredicate((ScalarExp*)yyvsp[-3], (AnyAllSome*)yyvsp[-1], (Subquery*)yyvsp[0]); ;
     break;}
 case 115:
-#line 442 "parser.y"
+#line 443 "parser.y"
 { yyval = new AnyAllSome("ANY"); ;
     break;}
 case 116:
-#line 443 "parser.y"
+#line 444 "parser.y"
 { yyval = new AnyAllSome("ALL"); ;
     break;}
 case 117:
-#line 444 "parser.y"
+#line 445 "parser.y"
 { yyval = new AnyAllSome("SOME"); ;
     break;}
 case 118:
-#line 448 "parser.y"
+#line 449 "parser.y"
 { yyval = new ExistenceTest((Subquery*)yyvsp[0]); ;
     break;}
 case 119:
-#line 452 "parser.y"
+#line 453 "parser.y"
 { yyval = new Subquery((OptAllDistinct*)yyvsp[-3], (Selection*)yyvsp[-2], (TableExp*)yyvsp[-1]); ;
     break;}
 case 120:
-#line 458 "parser.y"
+#line 459 "parser.y"
 { yyval = new ScalarExpCommalist((ScalarExp*)yyvsp[0]); ;
     break;}
 case 121:
-#line 459 "parser.y"
+#line 460 "parser.y"
 { yyval = new ScalarExpCommalist((ScalarExpCommalist*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 122:
-#line 463 "parser.y"
+#line 464 "parser.y"
 { yyval = new ScalarExp(1, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 123:
-#line 464 "parser.y"
+#line 465 "parser.y"
 { yyval = new ScalarExp(2, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 124:
-#line 465 "parser.y"
+#line 466 "parser.y"
 { yyval = new ScalarExp(3, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 125:
-#line 466 "parser.y"
+#line 467 "parser.y"
 { yyval = new ScalarExp(4, (ScalarExp*)yyvsp[-2], (ScalarExp*)yyvsp[0]); ;
     break;}
 case 126:
-#line 467 "parser.y"
+#line 468 "parser.y"
 { yyval = new ScalarExp(5, (ScalarExp*)yyvsp[0]);  ;
     break;}
 case 127:
-#line 468 "parser.y"
+#line 469 "parser.y"
 { yyval = new ScalarExp(6, (ScalarExp*)yyvsp[0]); ;
     break;}
 case 128:
-#line 469 "parser.y"
+#line 470 "parser.y"
 { yyval = new ScalarExp((Atom*)yyvsp[0]); ;
     break;}
 case 129:
-#line 470 "parser.y"
+#line 471 "parser.y"
 { yyval = new ScalarExp((ColumnRef*)yyvsp[0]); ;
     break;}
 case 130:
-#line 471 "parser.y"
+#line 472 "parser.y"
 { yyval = new ScalarExp((FunctionRef*)yyvsp[0]); ;
     break;}
 case 131:
-#line 472 "parser.y"
+#line 473 "parser.y"
 { yyval = new ScalarExp(0, (ScalarExp*)yyvsp[-1]); ;
     break;}
 case 132:
-#line 477 "parser.y"
+#line 478 "parser.y"
 { yyval = new Atom((Literal*)yyvsp[0]); ;
     break;}
 case 133:
-#line 478 "parser.y"
+#line 479 "parser.y"
 { yyval = new Atom("USER"); ;
     break;}
 case 134:
-#line 482 "parser.y"
+#line 483 "parser.y"
 { yyval = new FunctionRef((Ammsc*)yyvsp[-3]);;
     break;}
 case 135:
-#line 483 "parser.y"
+#line 484 "parser.y"
 { yyval = new FunctionRef((Ammsc*)yyvsp[-4], (ColumnRef*)yyvsp[-1]); ;
     break;}
 case 136:
-#line 484 "parser.y"
+#line 485 "parser.y"
 { yyval = new FunctionRef(0, (Ammsc*)yyvsp[-4], (ScalarExp*)yyvsp[-1]); ;
     break;}
 case 137:
-#line 485 "parser.y"
+#line 486 "parser.y"
 { yyval = new FunctionRef(1, (Ammsc*)yyvsp[-3], (ScalarExp*)yyvsp[-1]); ;
     break;}
 case 138:
-#line 489 "parser.y"
+#line 490 "parser.y"
 { yyval = new Literal(strData[0]); ;
     break;}
 case 139:
-#line 490 "parser.y"
-{ yyval = new Literal(dData[0]); ;
-    break;}
-case 140:
 #line 491 "parser.y"
 { yyval = new Literal(dData[0]); ;
     break;}
+case 140:
+#line 492 "parser.y"
+{ yyval = new Literal(dData[0]); ;
+    break;}
 case 141:
-#line 495 "parser.y"
+#line 496 "parser.y"
 { yyval = new Table(strData[0]); ;
     break;}
 case 142:
-#line 496 "parser.y"
+#line 497 "parser.y"
 { yyval = new Table(0, strData[0], strData[1]);;
     break;}
 case 143:
-#line 497 "parser.y"
+#line 498 "parser.y"
 { yyval = new Table(1, strData[0], strData[1]);  ;
     break;}
 case 144:
-#line 503 "parser.y"
+#line 504 "parser.y"
 { yyval = new DataType(0); ;
     break;}
 case 145:
-#line 504 "parser.y"
+#line 505 "parser.y"
 { yyval = new DataType(0, dData[0]); ;
     break;}
 case 146:
-#line 505 "parser.y"
+#line 506 "parser.y"
 { yyval = new DataType(1); ;
     break;}
 case 147:
-#line 506 "parser.y"
+#line 507 "parser.y"
 { yyval = new DataType(1, dData[0]); ;
     break;}
 case 148:
-#line 507 "parser.y"
+#line 508 "parser.y"
 { yyval = new DataType(2); ;
     break;}
 case 149:
-#line 508 "parser.y"
+#line 509 "parser.y"
 { yyval = new DataType(2, dData[0]); ;
     break;}
 case 150:
-#line 509 "parser.y"
+#line 510 "parser.y"
 { yyval = new DataType(2, dData[0], dData[1]); ;
     break;}
 case 151:
-#line 510 "parser.y"
+#line 511 "parser.y"
 { yyval = new DataType(3); ;
     break;}
 case 152:
-#line 511 "parser.y"
+#line 512 "parser.y"
 { yyval = new DataType(3, dData[0]); ;
     break;}
 case 153:
-#line 512 "parser.y"
+#line 513 "parser.y"
 { yyval = new DataType(3, dData[0], dData[1]); ;
     break;}
 case 154:
-#line 513 "parser.y"
+#line 514 "parser.y"
 { yyval = new DataType(4); ;
     break;}
 case 155:
-#line 514 "parser.y"
+#line 515 "parser.y"
 { yyval = new DataType(5); ;
     break;}
 case 156:
-#line 515 "parser.y"
+#line 516 "parser.y"
 { yyval = new DataType(6); ;
     break;}
 case 157:
-#line 516 "parser.y"
+#line 517 "parser.y"
 { yyval = new DataType(6, dData[0]); ;
     break;}
 case 158:
-#line 517 "parser.y"
+#line 518 "parser.y"
 { yyval = new DataType(7); ;
     break;}
 case 159:
-#line 518 "parser.y"
+#line 519 "parser.y"
 { yyval = new DataType(8); ;
     break;}
 case 160:
-#line 522 "parser.y"
+#line 523 "parser.y"
 { yyval = new ColumnRef(strData[0]); ;
     break;}
 case 161:
-#line 523 "parser.y"
+#line 524 "parser.y"
 { yyval = new ColumnRef(0, strData[0], strData[1]); ;
     break;}
 case 162:
-#line 524 "parser.y"
+#line 525 "parser.y"
 { yyval = new ColumnRef(strData[0], strData[1], strData[2]);;
     break;}
 case 163:
-#line 525 "parser.y"
+#line 526 "parser.y"
 { yyval = new ColumnRef(1, strData[0], strData[1]); ;
     break;}
 case 164:
-#line 529 "parser.y"
+#line 530 "parser.y"
 { yyval = new Column(strData[0]); ;
     break;}
 case 165:
-#line 533 "parser.y"
+#line 534 "parser.y"
 { yyval = new Cursor(strData[0]); ;
     break;}
 case 166:
-#line 537 "parser.y"
+#line 538 "parser.y"
 { yyval = new Ammsc("AVG"); ;
     break;}
 case 167:
-#line 538 "parser.y"
+#line 539 "parser.y"
 { yyval = new Ammsc("MIN"); ;
     break;}
 case 168:
-#line 539 "parser.y"
+#line 540 "parser.y"
 { yyval = new Ammsc("MAX"); ;
     break;}
 case 169:
-#line 540 "parser.y"
+#line 541 "parser.y"
 { yyval = new Ammsc("SUM"); ;
     break;}
 case 170:
-#line 541 "parser.y"
+#line 542 "parser.y"
 { yyval = new Ammsc("COUNT"); ;
     break;}
 }
@@ -2606,5 +2606,5 @@ YYLABEL(yyerrhandle)
 /* END */
 
  #line 1038 "/usr/share/bison++/bison.cc"
-#line 544 "parser.y"
+#line 545 "parser.y"
 

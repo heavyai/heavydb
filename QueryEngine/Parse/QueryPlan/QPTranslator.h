@@ -228,7 +228,7 @@ public:
             if (sc->p->cp) {
                 //Also, no subqueries for the meantime: Just a > b.
                 Comparison* comp = new Comparison(new Compared(handleScalarExp(sc->p->cp->se1)),
-                    new CompOp("Comparison Not Implemented Yet"), new Compared(handleScalarExp(sc->p->cp->se2)));
+                    new CompOp(sc->p->cp->comparison), new Compared(handleScalarExp(sc->p->cp->se2)));
 
                 return new RA_Predicate(comp);
             }
@@ -293,8 +293,10 @@ public:
     }
 
     RelExpr* formGroupBy(RelExpr* relexArg, TableExp* tblExp) {
-        ColumnRefCommalist* crc = tblExp->ogbc->crc;
-        if (crc) return new RelExpr(new GroupByOp(relexArg, formAttrList(crc), NULL));
+        if (tblExp->ogbc) {
+            ColumnRefCommalist* crc = tblExp->ogbc->crc;
+            return new RelExpr(new GroupByOp(relexArg, formAttrList(crc), NULL));
+        }
         else return new RelExpr(new GroupByOp(relexArg, NULL, NULL));
     }
 

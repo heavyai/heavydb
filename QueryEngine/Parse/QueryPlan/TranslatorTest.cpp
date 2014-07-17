@@ -11,6 +11,8 @@ using namespace SQL_Namespace;
 ASTNode *parse_root = 0;
 RelAlgNode *root = 0;
 int main(int argc, char ** argv) {
+
+    /* Stage 1: parse the sql query */
 	Parser parser;
     string sql;
     do {

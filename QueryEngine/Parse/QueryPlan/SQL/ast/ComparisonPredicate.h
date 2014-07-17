@@ -12,10 +12,11 @@ public:
     ScalarExp* se1;
     ScalarExp* se2;
     Subquery* s;
+    std::string comparison;
 
     /* constructor */
-    explicit ComparisonPredicate(ScalarExp* n1, ScalarExp* n2) : se1(n1), se2(n2), s(NULL) {}
-    ComparisonPredicate(ScalarExp* n1, Subquery* n2) : se1(n1), se2(NULL), s(n2) {}
+    ComparisonPredicate(std::string &n, ScalarExp* n1, ScalarExp* n2) : comparison(n), se1(n1), se2(n2), s(NULL) {}
+    ComparisonPredicate(std::string &n, ScalarExp* n1, Subquery* n2) : comparison(n), se1(n1), se2(NULL), s(n2) {}
 
 	/**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
