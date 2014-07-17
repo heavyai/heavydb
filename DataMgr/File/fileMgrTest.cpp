@@ -82,14 +82,14 @@ bool test_FileInfo() {
 
 	for (int i = 0; i < fInfo.blocks.size(); ++i) {
 		// all blocks belong to file 0 and have an address of i*BLOCKSIZE bytes
-		if (fInfo.blocks[i]->fileId != 0 || fInfo.blocks[i]->addr != i*BLOCKSIZE)
+		if (fInfo.blocks[i]->fileId != 0 || fInfo.blocks[i]->begin != i*BLOCKSIZE)
 			return false;
 	}
 	Testing::pass++;
 
 	// all blocks are initially empty
 	for (int i = 0; i < fInfo.blocks.size(); ++i) {
-		if (fInfo.blocks[i]->endByteOffset != 0)
+		if (fInfo.blocks[i]->end - fInfo.blocks[i]->begin != 0)
 			return false;
 	}
 	Testing::pass++;

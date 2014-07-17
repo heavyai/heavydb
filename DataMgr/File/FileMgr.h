@@ -47,10 +47,10 @@ namespace File_Namespace {
 struct FileInfo {
 	int fileId;
 	FILE *f;
-	std::vector<BlockAddr*> blocks;
 	mapd_size_t blockSize;
 	mapd_size_t nblocks;
-	std::set<mapd_size_t> freeBlocks; /// set of block addresses of free blocks
+	std::vector<Block*> blocks;
+	std::set<mapd_addr_t> freeBlocks; /// set of block addresses of free blocks
 
 	/// Constructor
 	FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks);
@@ -106,7 +106,7 @@ typedef std::multimap<mapd_size_t, int> BlockSizeFileMMap;
  * Each BlockInfo belonging to a chunk has an order variable, which states the block number within
  * the chunk.
  */
-typedef std::vector<BlockInfo*> Chunk;
+typedef std::vector<MultiBlock*> Chunk;
 
 /**
  * @type ChunkKeyToChunkMap
@@ -189,23 +189,26 @@ public:
 	 */
 	mapd_err_t deleteFile(const int fileId, const bool destroy = false);
 
+
+	mapd_err_t writeFile(FileInfo &fInfo, mapd_addr_t offset, mapd_size_t n, mapd_addr_t *src);
+
 	/**
-	 * @brief Returns a pointer to a BlockInfo object for the specified block number in the file.
+	 * @brief Returns a pointer to a Block object for the specified block number in the file.
 	 *
 	 * @param fileId The unique file identifier of the file to be found.
 	 * @param blockNum The block number of the block to be retrieved.
-	 * @return A pointer to the found BlockInfo object.
+	 * @return A pointer to the found Block object.
 	 */
-	BlockAddr* getBlock(const int fileId, mapd_size_t blockNum);
+	Block* getBlock(const int fileId, mapd_size_t blockNum);
 
 	/**
-	 * @brief Returns a pointer to a BlockInfo object for the specified block number in the file.
+	 * @brief Returns a pointer to a Block object for the specified block number in the file.
 	 *
 	 * @param FileInfo& A reference to the file that contains the block.
 	 * @param blockNum The block number of the block to be retrieved.
 	 * @return A pointer to the found BlockInfo object.
 	 */
-	BlockAddr* getBlock(FileInfo &fInfo, mapd_size_t blockNum);
+	Block* getBlock(FileInfo &fInfo, mapd_size_t blockNum);
 
 	/**
 	 * @brief Writes the contents of buf to the block.
@@ -215,7 +218,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_byte_t *buf);
+	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t *buf);
 
 	/**
 	 * @brief Writes the contents of buf to the block.
@@ -225,8 +228,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_byte_t *buf);
-
+	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t *buf);
 
 	/**
 	 * @brief Clears the contents of a block in a file.
@@ -300,7 +302,7 @@ public:
 	 * @param buf
 	 * @return
 	 */
-	Chunk* getChunk(const ChunkKey &key, mapd_byte_t *buf);
+	Chunk* getChunk(const ChunkKey &key, mapd_addr_t *buf);
 
 	/**
 	 * This method returns the number of blocks that composes the chunk identified
@@ -313,8 +315,7 @@ public:
 	 * @param size A return value that will hold the size in bytes occupied by the blocks of the chunk.
 	 * @return MAPD_FAILURE or MAPD_SUCCESS
 	 */
-	mapd_err_t getChunkSize(const ChunkKey &key, int *nblocks,
-			mapd_size_t *size);
+	mapd_err_t getChunkSize(const ChunkKey &key, int *nblocks, mapd_size_t *size);
 
 	/**
 	 * This method returns the actual number of bytes occupied by a chunk. This calculation
@@ -332,7 +333,7 @@ public:
 	 * Given a chunk key, this method writes to an existing chunk all of the data pointed to
 	 * by buf.
 	 */
-	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t *size, mapd_byte_t *buf);
+	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t *buf);
 
 	/**
 	 * This method writes the contents of the chunk "c" to the chunk with the given chunk key.
@@ -357,24 +358,7 @@ public:
 	 * @param err An error code, should an error happen to occur.
 	 * @return A pointer to a new Chunk, or NULL.
 	 */
-	Chunk* createChunk(ChunkKey &key, const mapd_size_t size,
-			const mapd_size_t blockSize, void *src);
-
-	/**
-	 * Calls "clearBlock()" on each block of the chunk.
-	 * @see clearBlock
-	 *
-	 * @param key The unique identifier of the chunk.
-	 */
-	mapd_err_t clearChunk(ChunkKey &key);
-
-	/**
-	 * Calls "clearBlock()" on each block of the chunk.
-	 * @see clearBlock
-	 *
-	 * @param key The unique identifier of the chunk.
-	 */
-	mapd_err_t clearChunk(Chunk &c);
+	Chunk* createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, void *src, int epoch);
 
 	/**
 	 * Given a chunk, this method deletes a chunk from the file system by freeing all
@@ -395,6 +379,14 @@ private:
 	BlockSizeFileMMap fileIndex_; 		/**< Maps block sizes to FileInfo objects. */
 	ChunkKeyToChunkMap chunkIndex_; 	/**< Index for looking up chunks, which are vectors of BlockAddr */
 	unsigned nextFileId_;				/**< the index of the next file id */
+
+	/// Opens the FileInfo objects file handle. Returns MAPD_SUCCESS on success.
+	inline mapd_err_t openFile(FileInfo& fInfo) {
+		mapd_err_t err;
+		if (!fInfo.f)
+    		fInfo.f = open(fInfo.fileId, &err);
+        return err;
+	}
 };
 
 } // File_Namespace
