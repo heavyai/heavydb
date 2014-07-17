@@ -28,6 +28,13 @@ struct Block {
 	int fileId;
 	mapd_addr_t begin;
 	mapd_addr_t end;
+
+	/// Constructor
+	Block(int fileId, mapd_addr_t begin) {
+		this->fileId = fileId;
+		this->begin = begin;
+		this->end = begin;
+	}
 };
 
 /**
@@ -42,7 +49,11 @@ struct Block {
  * Note that it should always be the case that version.size() == epoch.size().
  */
 struct MultiBlock {
-public:
+	int fileId;
+	mapd_size_t blockSize;
+	std::queue<Block*> version;
+	std::queue<int> epoch;
+
 	/// Constructor
 	MultiBlock(int fileIdIn, mapd_size_t blockSizeIn) :
 		fileId(fileIdIn), blockSize(blockSizeIn) {}
@@ -73,12 +84,6 @@ public:
 		version.pop();
 		this->epoch.pop();
 	}
-
-private:
-	int fileId;
-	mapd_size_t blockSize;
-	std::queue<Block*> version;
-	std::queue<int> epoch;
 };
 
 } // File_Namespace

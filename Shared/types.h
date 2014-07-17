@@ -14,10 +14,10 @@
 typedef unsigned char mapd_byte_t;
 
 // definition of a memory address type
-typedef unsigned char mapd_addr_t;
+typedef size_t mapd_addr_t;
 
 // definition of Map-D size type
-typedef unsigned mapd_size_t;
+typedef size_t mapd_size_t;
 
 // The ChunkKey is a unique identifier for chunks in the database file.
 // The first element of the underlying vector for ChunkKey indicates the type of

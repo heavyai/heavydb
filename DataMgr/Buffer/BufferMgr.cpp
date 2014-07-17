@@ -6,7 +6,9 @@
 #include <iostream>
 #include <cassert>
 #include <cstring>
+#include <exception>
 #include "BufferMgr.h"
+#include "Buffer.h"
 #include "../File/FileMgr.h"
 
 using std::cout;
@@ -15,15 +17,12 @@ using File_Namespace::Chunk;
 
 namespace Buffer_Namespace {
 
-BufferMgr::BufferMgr(mapd_size_t numPages, mapd_size_t pageSize, FileMgr *fm = NULL) {
-    assert(numPages > 0 && pageSize > 0);
-    pageSize_ = pageSize;
+BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm) {
+    assert(hostMemSize > 0);
     fm_ = fm;
-    nextPage_ = 0;
-
-    // Allocate host buffer pool
-    hostMemSize_ = numPages * pageSize;
-    hostMem_ = new mapd_byte_t[hostMemSize_];
+    hostMemSize_ = hostMemSize;
+    hostMem_ = new mapd_addr_t[hostMemSize];
+    freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t*>(hostMemSize, hostMem_));
 
 #ifdef DEBUG_VERBOSE
     printMemAlloc();
@@ -31,51 +30,43 @@ BufferMgr::BufferMgr(mapd_size_t numPages, mapd_size_t pageSize, FileMgr *fm = N
 }
 
 BufferMgr::~BufferMgr() {
+    // Delete buffers
+    while (buffers_.size() > 0) {
+        delete buffers_.back();
+        buffers_.pop_back();
+    }
+
     // Delete host memory
     delete[] hostMem_;
 }
 
-Buffer* BufferMgr::createBuffer(mapd_size_t n) {
-    // compute number of pages needed
-    mapd_size_t numPages = (n + pageSize_ - 1) / pageSize_;
+Buffer* BufferMgr::createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
+    // Compute total bytes needed
+    mapd_size_t n = numPages * pageSize;
+    assert(n > 0);
 
-    // allocate new buffer and insert its pages
-    Buffer *b = new Buffer();
-    b->begin = nextPage_;
-    for (mapd_size_t i = 0; i < numPages; ++i) {
-        b->pages.push_back(new Page(nextPage_));
-        nextPage_ += pageSize_; 
+    // Find n bytes of free memory in the buffer pool
+    auto it = freeMem_.lower_bound(n);
+    if (it == freeMem_.end()) {
+        fprintf(stderr, "[%s:%d] Error: unable to find %lu bytes available in the buffer pool.\n", __func__, __LINE__, n);
+        // @todo eviction strategies
+        return NULL;
     }
-    b->end = nextPage_;
 
-    // insert into BufferMgr's vector of buffers and pin it
+    // Save free memory information
+    mapd_size_t freeMemSize = it->first;
+    mapd_addr_t *bufAddr = it->second;
+
+    // Remove entry from map, and insert new entry
+    freeMem_.erase(it);
+    if (freeMemSize - n > 0)
+        freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t*>(freeMemSize - n, bufAddr + n));
+
+    // Create Buffer object and add to the BufferMgr
+    Buffer *b = new Buffer(bufAddr, numPages, pageSize);
     buffers_.push_back(b);
-    b->pins++;
 
     return b;
-}
-
-mapd_size_t BufferMgr::updateBuffer(Buffer &b, mapd_addr_t offset, mapd_size_t n, mapd_addr_t *src) {
-    assert(n > 0);
-    mapd_addr_t dest = b.begin + offset;
-
-    // perform update
-    if (n > 0) {
-        if (dest < b.end) {
-            memcpy(hostMem_ + dest, src, n);
-            b.end = dest + n;
-        }
-        else {
-            // @todo create buffer of new size pointed to by b
-            fprintf(stderr, "[%s:%d] Dynamic reallocation of buffers is currently unsupported.\n", __func__, __LINE__);
-            return 0;
-        }
-    }
-
-    // flag pages and buffer as dirty
-    setDirtyPages(b, dest, b.end);
-    
-    return n;
 }
 
 void BufferMgr::deleteBuffer(Buffer *b) {
@@ -87,60 +78,71 @@ void BufferMgr::deleteBuffer(Buffer *b) {
     buffers_.remove(b); // @todo thread safe needed?
 }
 
-mapd_size_t BufferMgr::copyBuffer(Buffer &bSrc, Buffer &bDest, mapd_size_t n) {
-    mapd_size_t bSrcSz = bSrc.size();
-    mapd_size_t bDestSz = bDest.size();
+/// Presently, only returns the Buffer if it is not currently pinned
+Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
+    Buffer *b;
 
-    // copy max possible number of bytes up to size n
-    n = (bSrcSz < n) ? bSrcSz : n;
-    n = (bDestSz < n) ? bDestSz : n;
-    memcpy(hostMem_ + bSrc.begin, hostMem_ + bDest.begin, n);
+    // Check if buffer is already cached
+    b = findChunkBuffer(key);
+    if (b && !b->pinned())
+        return NULL;
 
-    // flag destination buffer and its affected pages as dirty
-    setDirtyPages(bDest, 0, n);
+    // Determine number of pages and page size for chunk
+    int numPages;
+    mapd_size_t size;
+    if ((fm_->getChunkSize(key, &numPages, &size)) == MAPD_FAILURE)
+        return NULL;
+    assert((size % numPages) == 0);
 
-    return n;
+    // Create buffer and load chunk
+    b = createBuffer(numPages, size / numPages);
+    if ((fm_->getChunk(key, b->host_ptr())) == NULL) {
+        deleteBuffer(b);
+        return NULL;
+    }
+    return b;
 }
 
-bool BufferMgr::loadChunk(const ChunkKey &key, Buffer &b, bool fast) {
-    // Returns without verifying chunk will fit in buffer
-    if (fast) { 
-        Chunk *c = fm_->getChunk(key, hostMem_ + b.begin);
-        if (c) {
-            b.pin();
-            return true;
-        }
-        return false;
-    }
-
-    // Otherwise, checks that chunk will fit in buffer and attempts to
-    // reallocate buffer if it needs to
-    mapd_size_t *size;
-    fm_->getChunkActualSize(key, size);
-    if (*size > b.size()) {
-        // @todo create buffer of new size pointed to by b
-        fprintf(stderr, "[%s:%d] Dynamic reallocation of buffers is currently unsupported.\n", __func__, __LINE__);
-        return 0;
-    }
-    Chunk *c = fm_->getChunk(key, hostMem_ + b.begin);
-    if (c) {
-        b.pin();
-        return true;
-    }
-    return false;
-}
-
-void flushChunk(Buffer &b, bool all = false, bool force = false) {
-    if (!force && !b.dirty)
-        return;
-
+/// Presently, only returns the pointer if it the buffer is not currently pinned
+mapd_addr_t* BufferMgr::getChunkAddr(const ChunkKey &key, mapd_size_t *length) {
+    Buffer *b = findChunkBuffer(key);
+    if (b && b->pinned())
+        return NULL;
+    else if (!b)
+        return NULL;
     
+    if (length) *length = b->length();
+    b->pin();
+    return b->host_ptr();
+}
+
+/// Presently, only flushes a chunk if it is unpinned, and flushes it right away (no queue)
+bool BufferMgr::flushChunk(const ChunkKey &key) {
+    Buffer *b = findChunkBuffer(key);
+    if (b && b->pinned())
+        return false;
+    if ((fm_->putChunk(key, b->length(), b->host_ptr())) != MAPD_SUCCESS)
+        return false;
+    return true;
 }
 
 void BufferMgr::printMemAlloc() {
-    printf("Host memory = %u bytes\n", hostMemSize_);
-    printf("# of pages  = %u\n", hostMemSize_ / pageSize_);
-    printf("Page size   = %u\n", pageSize_);
+    mapd_size_t freeMemSize = 0;
+    auto it = freeMem_.begin();
+    for (; it != freeMem_.end(); ++it)
+        freeMemSize += it->first;
+
+    printf("Total memory  = %lu bytes\n", hostMemSize_);
+    printf("Used memory   = %lu bytes\n", hostMemSize_ - freeMemSize);
+    printf("Free memory   = %lu bytes\n", freeMemSize);
+    printf("# of buffers  = %lu\n", buffers_.size());
+}
+
+Buffer* BufferMgr::findChunkBuffer(const ChunkKey key) {
+    auto it = chunkIndex_.find(key);
+    if (it == chunkIndex_.end()) // not found
+        return NULL;
+    return it->second;
 }
 
 } // Buffer_Namespace
