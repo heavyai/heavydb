@@ -14,7 +14,7 @@
 typedef unsigned char mapd_byte_t;
 
 // definition of a memory address type
-typedef size_t mapd_addr_t;
+typedef size_t* mapd_addr_t;
 
 // definition of Map-D size type
 typedef size_t mapd_size_t;

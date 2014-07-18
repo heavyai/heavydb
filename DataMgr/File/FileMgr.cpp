@@ -135,8 +135,8 @@ mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy) {
     return MAPD_SUCCESS;
 }
 
-mapd_err_t FileMgr::writeFile(FileInfo &fInfo, mapd_addr_t offset, mapd_size_t n, mapd_addr_t *src) {
-    //size_t write(FILE *f, mapd_addr_t offset, mapd_size_t n, mapd_addr_t *buf, mapd_err_t *err);
+mapd_err_t FileMgr::writeFile(FileInfo &fInfo, mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
+    //size_t write(FILE *f, mapd_addr_t offset, mapd_size_t n, mapd_addr_t buf, mapd_err_t *err);
     mapd_err_t err = MAPD_SUCCESS;
     size_t result = write(fInfo.f, offset, n, src, &err);
     return err;
@@ -153,12 +153,12 @@ Block* FileMgr::getBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     return fInfo.blocks[blockNum];
 }
 
-mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t *buf) {
+mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf) {
 	FileInfo *fInfo;
 	return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, n, buf);
 }
 
-mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t *buf) {
+mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf) {
 	// The client should be writing blockSize bytes to the block
 	assert(blockNum == fInfo.blockSize);
 
@@ -206,7 +206,7 @@ Chunk* FileMgr::getChunkRef(const ChunkKey &key) {
     return it != chunkIndex_.end() ? &it->second : NULL;
 }
 
-Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_addr_t *buf) {
+Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_addr_t buf) {
     assert(buf);
     
     // find chunk
@@ -285,7 +285,7 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     return err;
 }
 
-mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t *buf) {
+mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t buf) {
     return MAPD_FAILURE;
 }
 

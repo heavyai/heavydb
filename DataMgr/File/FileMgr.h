@@ -50,7 +50,7 @@ struct FileInfo {
 	mapd_size_t blockSize;
 	mapd_size_t nblocks;
 	std::vector<Block*> blocks;
-	std::set<mapd_addr_t> freeBlocks; /// set of block addresses of free blocks
+	std::set<mapd_size_t> freeBlocks; /// set of block addresses of free blocks
 
 	/// Constructor
 	FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks);
@@ -190,7 +190,7 @@ public:
 	mapd_err_t deleteFile(const int fileId, const bool destroy = false);
 
 
-	mapd_err_t writeFile(FileInfo &fInfo, mapd_addr_t offset, mapd_size_t n, mapd_addr_t *src);
+	mapd_err_t writeFile(FileInfo &fInfo, mapd_size_t offset, mapd_size_t n, mapd_addr_t src);
 
 	/**
 	 * @brief Returns a pointer to a Block object for the specified block number in the file.
@@ -218,7 +218,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t *buf);
+	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf);
 
 	/**
 	 * @brief Writes the contents of buf to the block.
@@ -228,7 +228,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t *buf);
+	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf);
 
 	/**
 	 * @brief Clears the contents of a block in a file.
@@ -302,7 +302,7 @@ public:
 	 * @param buf
 	 * @return
 	 */
-	Chunk* getChunk(const ChunkKey &key, mapd_addr_t *buf);
+	Chunk* getChunk(const ChunkKey &key, mapd_addr_t buf);
 
 	/**
 	 * This method returns the number of blocks that composes the chunk identified
@@ -333,7 +333,7 @@ public:
 	 * Given a chunk key, this method writes to an existing chunk all of the data pointed to
 	 * by buf.
 	 */
-	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t *buf);
+	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t buf);
 
 	/**
 	 * This method writes the contents of the chunk "c" to the chunk with the given chunk key.

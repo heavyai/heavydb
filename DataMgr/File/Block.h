@@ -26,11 +26,11 @@ namespace File_Namespace {
  */
 struct Block {
 	int fileId;
-	mapd_addr_t begin;
-	mapd_addr_t end;
+	mapd_size_t begin;
+	mapd_size_t end;
 
 	/// Constructor
-	Block(int fileId, mapd_addr_t begin) {
+	Block(int fileId, mapd_size_t begin) {
 		this->fileId = fileId;
 		this->begin = begin;
 		this->end = begin;
