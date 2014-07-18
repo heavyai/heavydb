@@ -14,10 +14,10 @@ namespace Buffer_Namespace {
  * @struct Page
  */
 struct Page {
-    mapd_addr_t *addr = 0;
+    mapd_addr_t addr = NULL;
     bool dirty = false;
 
-    Page(mapd_addr_t *addrIn, bool dirtyIn = false)
+    Page(mapd_addr_t addrIn, bool dirtyIn = false)
         : addr(addrIn), dirty(dirtyIn) {}
 };
 
@@ -27,22 +27,24 @@ struct Page {
 class Buffer {
 public:
     /// Constructor
-    Buffer(mapd_addr_t *host_ptr, mapd_size_t numPages, mapd_size_t pageSize);
+    Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize);
 
     /// Destructor
     ~Buffer();
 
     // Buffer API
-    bool write(mapd_size_t offset, mapd_size_t n, mapd_addr_t *src);
-    bool append(mapd_size_t n, mapd_addr_t *src);
-    void copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t *dest);
+    bool write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src);
+    bool append(mapd_size_t n, mapd_addr_t src);
+    void copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t dest);
+    std::vector<bool> getDirty();
+    void print();
 
     // Mutators
     inline void pin() { pins_++; }
     inline void unpin() { pins_--; }
 
     // Accessors
-    inline mapd_addr_t* host_ptr() { return host_ptr_; }
+    inline mapd_addr_t  host_ptr() { return host_ptr_; }
     inline bool pinned() { return pins_ > 0; }
     inline bool dirty() { return dirty_; }
     inline mapd_size_t numPages() { return pages_.size(); }
@@ -54,7 +56,7 @@ private:
     Buffer(const Buffer&);
     Buffer& operator =(const Buffer&);
 
-    mapd_addr_t *host_ptr_;
+    mapd_addr_t host_ptr_;
     mapd_size_t length_;
     mapd_size_t pageSize_;
     int pins_;

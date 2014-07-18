@@ -21,8 +21,8 @@ BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm) {
     assert(hostMemSize > 0);
     fm_ = fm;
     hostMemSize_ = hostMemSize;
-    hostMem_ = new mapd_addr_t[hostMemSize];
-    freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t*>(hostMemSize, hostMem_));
+    hostMem_ = (mapd_addr_t) new mapd_byte_t[hostMemSize];
+    freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(hostMemSize, hostMem_));
 
 #ifdef DEBUG_VERBOSE
     printMemAlloc();
@@ -55,12 +55,12 @@ Buffer* BufferMgr::createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
 
     // Save free memory information
     mapd_size_t freeMemSize = it->first;
-    mapd_addr_t *bufAddr = it->second;
+    mapd_addr_t bufAddr = it->second;
 
     // Remove entry from map, and insert new entry
     freeMem_.erase(it);
     if (freeMemSize - n > 0)
-        freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t*>(freeMemSize - n, bufAddr + n));
+        freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(freeMemSize - n, bufAddr + n));
 
     // Create Buffer object and add to the BufferMgr
     Buffer *b = new Buffer(bufAddr, numPages, pageSize);
@@ -103,8 +103,8 @@ Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
     return b;
 }
 
-/// Presently, only returns the pointer if it the buffer is not currently pinned
-mapd_addr_t* BufferMgr::getChunkAddr(const ChunkKey &key, mapd_size_t *length) {
+/// Presently, only returns the pointer if the buffer is not currently pinned
+mapd_addr_t BufferMgr::getChunkAddr(const ChunkKey &key, mapd_size_t *length) {
     Buffer *b = findChunkBuffer(key);
     if (b && b->pinned())
         return NULL;
@@ -116,7 +116,7 @@ mapd_addr_t* BufferMgr::getChunkAddr(const ChunkKey &key, mapd_size_t *length) {
     return b->host_ptr();
 }
 
-/// Presently, only flushes a chunk if it is unpinned, and flushes it right away (no queue)
+/// Presently, only flushes a chunk if its buffer is unpinned, and flushes it right away (no queue)
 bool BufferMgr::flushChunk(const ChunkKey &key) {
     Buffer *b = findChunkBuffer(key);
     if (b && b->pinned())
@@ -136,6 +136,11 @@ void BufferMgr::printMemAlloc() {
     printf("Used memory   = %lu bytes\n", hostMemSize_ - freeMemSize);
     printf("Free memory   = %lu bytes\n", freeMemSize);
     printf("# of buffers  = %lu\n", buffers_.size());
+}
+
+void BufferMgr::printChunkIndex() {
+    auto it = chunkIndex_.begin();
+
 }
 
 Buffer* BufferMgr::findChunkBuffer(const ChunkKey key) {

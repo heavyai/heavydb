@@ -1,11 +1,15 @@
-//
+/**
+ * @file        Buffer.cpp
+ * @author      Steven Stewart <steve@map-d.com>
+ */ 
 #include <cstring>
 #include <cassert>
 #include "Buffer.h"
+#include "../../Shared/macros.h"
 
 namespace Buffer_Namespace {
 
-Buffer::Buffer(mapd_addr_t *host_ptr, mapd_size_t numPages, mapd_size_t pageSize) {
+Buffer::Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize) {
 	assert(pageSize > 0);
 	host_ptr_ = host_ptr;
     length_ = 0;
@@ -23,15 +27,16 @@ Buffer::~Buffer() {
 	}
 }
 
-bool Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t *src) {
-	assert(n > 0 && src);
+bool Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
+	assert(n > 0);
 
 	// check for buffer overflow
 	mapd_size_t bufSize = size();
-	if (length_ + n > bufSize)
+	if ((length_ + n) > bufSize)
 		return false;
-	
+
 	// write source contents to buffer
+	assert(host_ptr_ && src);
 	memcpy(host_ptr_ + offset, src, n);
 	length_ += n;
 
@@ -39,20 +44,38 @@ bool Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t *src) {
 	dirty_ = true;
 	mapd_size_t firstPage = offset / pageSize_;
 	mapd_size_t lastPage = (offset + n) / pageSize_;
-	for (mapd_size_t i = firstPage; i <= lastPage; ++i)
+
+	for (mapd_size_t i = firstPage; i < lastPage; ++i)
 		pages_[i]->dirty = true;
 
 	return true;
 }
 
-bool Buffer::append(mapd_size_t n, mapd_addr_t *src) {
+bool Buffer::append(mapd_size_t n, mapd_addr_t src) {
 	assert(n > 0 && src);
 	return write(length_, n, src);
 }
    
-void Buffer::copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t *dest) {
+void Buffer::copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t dest) {
 	assert(n > 0 && dest);;
 	memcpy(dest, host_ptr_ + offset, n);
+}
+
+std::vector<bool> Buffer::getDirty() {
+	std::vector<bool> dirtyFlags;
+	for (int i = 0; i < pages_.size(); ++i)
+		if (pages_[i]->dirty)
+			dirtyFlags.push_back(true);
+	return dirtyFlags;
+}
+
+void Buffer::print() {
+	printf("host pointer = %p\n", host_ptr_);
+	printf("page size    = %lu\n", pageSize_);
+	printf("# of pages   = %lu\n", pages_.size());
+	printf("length       = %lu\n", length_);
+	printf("pin count    = %d\n", pins_);
+	printf("dirty        = %s\n", dirty_ ? "true" : "false");
 }
 
 

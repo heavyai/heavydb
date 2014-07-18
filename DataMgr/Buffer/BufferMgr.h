@@ -44,11 +44,11 @@ public:
     /// Deletes a buffer
     void deleteBuffer(Buffer *b);
 
-    /// Returns a buffer containing the desire chunk, or NULL on error
+    /// Returns a buffer containing the desired chunk, or NULL on error
     Buffer* getChunkBuffer(const ChunkKey &key);
 
     /// If cached, returns pointer to cached Chunk and optionally sets length
-    mapd_addr_t* getChunkAddr(const ChunkKey &key, mapd_size_t *length = NULL);
+    mapd_addr_t getChunkAddr(const ChunkKey &key, mapd_size_t *length = NULL);
 
     /// Flush unpinned chunk to disk
     bool flushChunk(const ChunkKey &key);
@@ -62,11 +62,14 @@ public:
     /// Prints to stdout a summary of current host memory allocation
     void printMemAlloc();
 
+    /// Print a representation of chunkIndex_ to stdout
+    void printChunkIndex();
+
 private:
     FileMgr *fm_;
     mapd_size_t hostMemSize_;
-    mapd_addr_t *hostMem_;
-    std::multimap<mapd_size_t, mapd_addr_t*> freeMem_;
+    mapd_addr_t hostMem_;
+    std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
 
     std::list<Buffer*> buffers_;
     ChunkKeyToBufferMap chunkIndex_;
