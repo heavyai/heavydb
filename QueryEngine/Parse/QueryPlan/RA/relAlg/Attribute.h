@@ -11,7 +11,7 @@ public:
 
 	std::string name1;
 	std::string name2;
-
+	
     Attribute(const std::string &n1) : name1(n1) {}
     Attribute(const std::string &n1, const std::string &n2) : name1(n1), name2(n2) {}
     

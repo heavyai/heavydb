@@ -323,7 +323,7 @@ query_spec:
     ;
 
 selection:
-    scalar_exp_commalist            { $$ = new Selection((ScalarExpCommalist*)$1); } |
+    scalar_exp_commalist            { $$ = new Selection((ScalarExpCommalist*)$1); }
 | '*'                               { $$ = new Selection("*"); }
 ;
 
@@ -398,8 +398,9 @@ predicate:
     ;
 
 comparison_predicate:
-        scalar_exp COMPARISON scalar_exp                        { $$ = new ComparisonPredicate((ScalarExp*)$1, (ScalarExp*)$3); }
-    |   scalar_exp COMPARISON subquery                          { $$ = new ComparisonPredicate((ScalarExp*)$1, (Subquery*)$3); }
+                                                                // strData[5] is hardcoded to contain comparison value
+        scalar_exp COMPARISON scalar_exp                        { $$ = new ComparisonPredicate(strData[5], (ScalarExp*)$1, (ScalarExp*)$3); }
+    |   scalar_exp COMPARISON subquery                          { $$ = new ComparisonPredicate(strData[5], (ScalarExp*)$1, (Subquery*)$3); }
     ;
 
 between_predicate:

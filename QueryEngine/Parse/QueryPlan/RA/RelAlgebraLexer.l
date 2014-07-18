@@ -58,7 +58,11 @@ using namespace std;
 "sum distinct"				{ /* count() */; return Parser::SUM_DISTINCT; }
 "avg distinct"				{ /* count() */; return Parser::AVG_DISTINCT; }
 
-"plus"						{ return Parser::PLUS; }
+"+"						{ return Parser::PLUS; }
+"-"						{ return Parser::MINUS; }
+"/"						{ return Parser::DIVIDE; }
+"*"						{ return Parser::MULTIPLY; }
+
 0[xX]{H}+{IS}?				{ /* count() */; return(Parser::CONSTANT); }
 0{D}+{IS}?					{ /* count() */; return(Parser::CONSTANT); }
 {D}+{IS}?					{ /* count() */; return(Parser::CONSTANT); }

@@ -1,3 +1,0 @@
-/usr/share/bison++/bison.cc: In member function ‘int Parser::yyparse(SQL_Namespace::ASTNode*&)’:
-/usr/share/bison++/bison.cc:667:43: warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]
-/usr/share/bison++/bison.cc:939:31: warning: deprecated conversion from string constant to ‘char*’ [-Wwrite-strings]

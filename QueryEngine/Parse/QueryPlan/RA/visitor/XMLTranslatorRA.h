@@ -3,7 +3,7 @@
 
 #include "Visitor.h"
 #include "../relAlg/RelAlgNode.h"
-#include "../relAlg/Program.h"
+#include "../relAlg/RA_Program.h"
 #include "../relAlg/RelExprList.h"
 #include "../relAlg/RelExpr.h"
 #include "../relAlg/UnaryOp.h"
@@ -33,22 +33,26 @@
 #include "../relAlg/Comparison.h"
 #include "../relAlg/Compared.h"
 #include "../relAlg/CompOp.h"
-#include "../relAlg/Table.h"
+#include "../relAlg/RA_Table.h"
 
 #include <iostream>
 using std::cout;
 using std::endl;
 
+using namespace RA_Namespace;
+
 #define TAB_SIZE 2 // number of spaces in a tab
 
-enum tabFlag {INCR, DECR, NONE};
+
 /**
  * @todo brief and detailed descriptions
  */
-class XMLTranslator : public Visitor {
+class XMLTranslatorRA : public RA_Namespace::Visitor {
 
 public:
-    XMLTranslator() { tabLevel_ = 0; }
+    enum tabFlag {INCR, DECR, NONE};
+    
+    XMLTranslatorRA() { tabLevel_ = 0; }
      
     void printTabs(tabFlag flag) {
         if (flag == INCR)
@@ -61,7 +65,7 @@ public:
             tabLevel_--;
     }
 
-    void visit(class Program *v) {
+    void visit(class RA_Program *v) {
         printTabs(INCR);
         cout << "<Program>" << endl;
         
@@ -305,6 +309,11 @@ public:
         printTabs(INCR);
         cout << "<Attribute>" << endl;
         
+        printTabs(NONE);
+        cout << v->name1;
+        if (v->name2 != "") cout << "." << v->name2;
+        cout << endl;
+
         printTabs(DECR);
         cout << "</Attribute>" << endl;
     }
@@ -322,6 +331,10 @@ public:
     void visit(class Data *v) {
         printTabs(INCR);
         cout << "<Data>" << endl;
+        
+        printTabs(NONE);
+        if (v->d != -1) cout << "number: " << v->d << endl;
+        if (v->s != "") cout << "string: " << v->d << endl;
         
         printTabs(DECR);
         cout << "</Data>" << endl;
@@ -366,14 +379,18 @@ public:
         printTabs(INCR);
         cout << "<CompOp>" << endl;
         
+        printTabs(NONE);
+        cout << v->comparator << endl;
+
         printTabs(DECR);
         cout << "</CompOp>" << endl;
     }
 
-    void visit(class Table *v) {
+    void visit(class RA_Table *v) {
         printTabs(INCR);
         cout << "<Table>" << endl;
         
+        printTabs(NONE);
         cout << "Name is " << v->name1 << endl;
 
         printTabs(DECR);
