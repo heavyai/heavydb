@@ -26,3 +26,4 @@ bool test_BufferMgr() {
 	BufferMgr(50 * 4096, NULL);
 	return true;
 }
+
