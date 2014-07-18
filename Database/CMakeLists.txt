@@ -9,4 +9,4 @@ find_package(Boost 1.50.0 REQUIRED system thread)
 ADD_LIBRARY (Database ${database_source_files})
 
 
-TARGET_LINK_LIBRARIES (Database TcpServer pthread ${Boost_THREAD_LIBRARY} )
+TARGET_LINK_LIBRARIES (Database pthread ${Boost_THREAD_LIBRARY} )
