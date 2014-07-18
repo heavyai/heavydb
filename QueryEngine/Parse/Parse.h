@@ -2,31 +2,23 @@
  * @file	Parse.h
  * @author	Steven Stewart <steve@map-d.com>
  */
-#include <queue>
+#include <string>
 #include "SQL/ast/ASTNode.h"
-#include "SQL/ast/Program.h"
 #include "RA/ast/RelAlgNode.h"
-#include "RA/ast/RA_Program.h"
+
+using namespace SQL_Namespace;
+using namespace RA_Namespace;
 
 namespace Parse_Namespace {
 
-/**
- * @class Parse
- * @brief A Parse object handles the parsing of input strings.
- */
-class Parse {
-
+class SQLParse {
 public:
-	Parse();
+	std::pair<bool, ASTNode*> parse(const std::string &input, std::string &errMsg);
+};
 
-	SQL_Namespace::ASTNode* parseSQL(const string &s);
-	RA_Namespace::RelAlgNode* parseRA(const string &s);
-
-	void printXML(SQL_Namespace::ASTNode *n);
-	void printXML(RA_Namespace::RelAlgNode *n);
-
-private:
-	
+class RAParse {
+public:
+	std::pair<bool, RelAlgNode*> parse(const std::string &input, std::string &errMsg);		
 };
 
 } // Parse_Namespace

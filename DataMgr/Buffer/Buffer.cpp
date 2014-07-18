@@ -4,6 +4,7 @@
  */ 
 #include <cstring>
 #include <cassert>
+#include <iostream>
 #include "Buffer.h"
 #include "../../Shared/macros.h"
 
