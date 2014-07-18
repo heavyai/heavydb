@@ -1,6 +1,6 @@
 #include "SQL/parser.h"
 #include "SQL/visitor/Visitor.h"
-#include "SQL/translator/XMLTranslator.h"
+#include "SQL/translator/XMLTranslatorSQL.h"
 #include <iostream>
 #include <string>
 #include <boost/timer/timer.hpp>
