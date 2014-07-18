@@ -6,7 +6,7 @@
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
-%define ERROR_BODY {cerr << "error encountered at line: "<<lexer.lineno()<<" last word parsed:"<<lexer.YYText()<<"\n";}
+%define ERROR_BODY {cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed:" << lexer.YYText() << endl;}
 
 %header{
 #include <iostream>

@@ -1,4 +1,0 @@
-#ifndef YY_sqlParser1_h_included
-#define YY_sqlParser1_h_included
-#define YY_USE_CLASS
-

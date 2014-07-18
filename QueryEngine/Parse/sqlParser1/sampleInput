@@ -1,3 +1,0 @@
-select * from dogs where dog = 'twelve';
-insert into tabA (a, b, c, d, e, q) values (USER, 3, 4, 'sixteen', 8);
-create table tabC (col_a CHAR);

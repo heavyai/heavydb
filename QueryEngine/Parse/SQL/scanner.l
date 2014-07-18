@@ -1,5 +1,5 @@
 %option c++
-%option noyywrap
+%option noyywrap case-insensitive
 
 %{
 #include <iostream>
