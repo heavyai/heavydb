@@ -1,4 +1,0 @@
-#ifndef YY_Parser_h_included
-#define YY_Parser_h_included
-#define YY_USE_CLASS
-
