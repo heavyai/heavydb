@@ -73,6 +73,7 @@
 #include "../ast/AnyAllSome.h"
 #include "../ast/AtomCommalist.h"
 #include "../ast/Subquery.h"
+#include "../ast/GroupByList.h"
 
 #include <iostream>
 using std::cout;
@@ -495,17 +496,30 @@ public:
         cout << "<OptGroupByClause>" << endl;
 
         printTabs(INCR);
-        cout << "<ColumnRefCommalist>" << endl;
+        cout << "<GroupByList>" << endl;
 
-        v->crc->accept(*this);
+        //if (v->crc) v->crc->accept(*this);
+        if (v->gbl) v->gbl->accept(*this);
 
         printTabs(DECR);
-        cout << "</ColumnRefCommalist>" << endl;
+        cout << "</GroupByList>" << endl;
 
         printTabs(DECR);
         cout << "</OptGroupByClause>" << endl;
     }
     
+    void visit(class GroupByList *v) {
+        printTabs(INCR);
+        cout << "<GroupByList>" << endl;
+
+        if (v->gbl) v->gbl->accept(*this);
+        v->se->accept(*this);
+        v->oad->accept(*this);
+
+        printTabs(DECR);
+        cout << "<GroupByList>" << endl;
+    }
+
     void visit(class ColumnCommalist *v) {
         if (v->colCom) v->colCom->accept(*this);
         v->col->accept(*this);
@@ -864,26 +878,32 @@ public:
     void visit(class FunctionRef *v) {
         printTabs(INCR);
         cout << "<FunctionRef>" << endl;
+        if (v->am) {
+            if (v->rule_Flag == -1) {
+                if (v->cr) {
+                    v->am->accept(*this);
+                    cout << "<DISTINCT>" << endl;
+                    v->cr->accept(*this);
+                }
+                else {
+                    v->am->accept(*this);
+                    cout << "<*>" << endl;
+                }
+            }
+            else if (v->rule_Flag == 0) {
+                v->am->accept(*this);
+                cout << "<ALL>" << endl;
+                v->se->accept(*this);
+            }
+            else if (v->rule_Flag == 1) {
+                v->am->accept(*this);
+                v->se->accept(*this);
+            }
+        }
 
-        if (v->rule_Flag == -1) {
-            if (v->cr) {
-                v->am->accept(*this);
-                cout << "<DISTINCT>" << endl;
-                v->cr->accept(*this);
-            }
-            else {
-                v->am->accept(*this);
-                cout << "<*>" << endl;
-            }
-        }
-        else if (v->rule_Flag == 0) {
-            v->am->accept(*this);
-            cout << "<ALL>" << endl;
-            v->se->accept(*this);
-        }
-        else if (v->rule_Flag == 1) {
-            v->am->accept(*this);
-            v->se->accept(*this);
+        else {
+            printTabs(NONE);
+            cout << "Substring thing" << endl;
         }
 
         printTabs(DECR);

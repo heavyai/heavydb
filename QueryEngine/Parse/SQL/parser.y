@@ -87,6 +87,7 @@
 #include "ast/AnyAllSome.h"
 #include "ast/AtomCommalist.h"
 #include "ast/Subquery.h"
+#include "ast/GroupByList.h"
 
 using namespace std;
 using namespace SQL_Namespace;
@@ -141,7 +142,7 @@ extern double dData[10];
 %token LIMIT OFFSET
 
 %token DOTNAME ESCAPE LIKE GROUP BY
-%token IS IN ANY SOME EXISTS
+%token IS IN ANY SOME EXISTS FOR FSUBSTRING
 
 %start program
 
@@ -359,14 +360,21 @@ opt_where_clause:
 
 opt_group_by_clause:
         /* empty */                             { $$ = NULL; }
-    |   GROUP BY column_ref_commalist           { $$ = new OptGroupByClause((ColumnRefCommalist*)$3); }
+    //|   GROUP BY column_ref_commalist           { $$ = new OptGroupByClause((ColumnRefCommalist*)$3); }
+    |   GROUP BY group_by_list 
+    /*opt_with_rollup */            { $$ = new OptGroupByClause((GroupByList*)$3); }
     ;
 
+group_by_list:
+    scalar_exp opt_asc_desc                         { $$ = new GroupByList((ScalarExp*)$1, (OptAscDesc*)$2); }
+    | group_by_list ',' scalar_exp opt_asc_desc     { $$ = new GroupByList((GroupByList*)$1, (ScalarExp*)$3, (OptAscDesc*)$4); }
+;
+/*
 column_ref_commalist:   
         column_ref                              { $$ = new ColumnRefCommalist((ColumnRef*)$1); }
     |   column_ref_commalist ',' column_ref     { $$ = new ColumnRefCommalist((ColumnRefCommalist*)$1, (ColumnRef*)$3); }
     ;
-
+*/
 opt_having_clause:
     HAVING search_condition                 { $$ = new OptHavingClause((SearchCondition*)$2); }
     | /* empty */                           { $$ = NULL; }
@@ -484,6 +492,9 @@ function_ref:
     |   ammsc '(' DISTINCT column_ref ')'   { $$ = new FunctionRef((Ammsc*)$1, (ColumnRef*)$4); }
     |   ammsc '(' ALL scalar_exp ')'        { $$ = new FunctionRef(0, (Ammsc*)$1, (ScalarExp*)$4); }
     |   ammsc '(' scalar_exp ')'            { $$ = new FunctionRef(1, (Ammsc*)$1, (ScalarExp*)$3); }
+    |   FSUBSTRING '(' scalar_exp_commalist ')'                         { $$ = new FunctionRef("substr", (ScalarExpCommalist*)$3); }
+    |   FSUBSTRING '(' scalar_exp FROM scalar_exp ')'                   { $$ = new FunctionRef("substr", (ScalarExp*)$3, (ScalarExp*)$5); }
+    |   FSUBSTRING '(' scalar_exp FROM scalar_exp FOR scalar_exp ')'    { $$ = new FunctionRef("substr", (ScalarExp*)$4, (ScalarExp*)$5, (ScalarExp*)$7); }
     ;
 
 literal

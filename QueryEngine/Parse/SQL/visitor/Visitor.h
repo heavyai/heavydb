@@ -30,6 +30,7 @@ namespace SQL_Namespace {
 	    virtual void visit(class ExistenceTest *v) = 0;
 	    virtual void visit(class FromClause *v) = 0;
 	    virtual void visit(class FunctionRef *v) = 0;
+	    virtual void visit(class GroupByList *v) = 0;
 	    virtual void visit(class InPredicate *v) = 0;
 	    virtual void visit(class InsertAtom *v) = 0;
 	    virtual void visit(class InsertAtomCommalist *v) = 0;
