@@ -140,7 +140,7 @@ class Catalog {
          *
          * This method tries to remove the column specified by columnName from the
          * table specified by tableName, returning an error if no table by the given
-         * table name exists for no column by the gien column name exists for the
+         * table name exists for no column by the given column name exists for the
          * table specified. 
          */
         mapd_err_t removeColumnFromTable(const std::string &tableName, const std::string &columnName);
