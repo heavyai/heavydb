@@ -22,10 +22,12 @@ int main(int argc, char ** argv) {
             cout << "Error at: " << lastParsed << endl;
             continue;
         }
-        //cout << "# Errors: " << numErrors << endl;
+        cout << "# Errors: " << numErrors << endl;
+        
         XMLTranslator xml;
         if (parseRoot != 0)
             parseRoot->accept(xml); 
+        
 
     }
     while (1==1);
