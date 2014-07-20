@@ -1,26 +1,39 @@
-#ifndef AGGR_LIST_NODE_H
-#define AGGR_LIST_NODE_H
+/**
+ * @file	AggrList.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_AGGRLIST_NODE_H
+#define RA_AGGRLIST_NODE_H
 
+#include <cassert>
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
-	class AggrList : public RelAlgNode {
+
+class AggrList : public RelAlgNode {
     
 public:
+	AggrList *n1 = NULL;
+	AggrExpr *n2 = NULL;
 
-	AggrExpr* agex;
-	AggrList* agLi;
+	explicit AggrList(AggrExpr *n2) {
+		assert(n2);
+		this->n2 = n2;
+	}
 
-	explicit AggrList(AggrList *n1, AggrExpr *n2) : agLi(n1), agex(n2) {}
-	AggrList(AggrExpr *n) : agex(n), agLi(NULL) {}
+	AggrList(AggrList *n1, AggrExpr *n2) {
+		assert(n1 && n2);
+		this->n1 = n1;
+		this->n2 = n2;
+	}
 
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
-	};
-}
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
+};
 
-#endif // AGGR_LIST_NODE_H
+} // RA_Namespace
+
+#endif // RA_AGGRLIST_NODE_H

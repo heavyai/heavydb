@@ -1,27 +1,36 @@
-#ifndef PROJECT_OP_NODE_H
-#define PROJECT_OP_NODE_H
+/**
+ * @file	ProjectOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_PROJECTOP_NODE_H
+#define RA_PROJECTOP_NODE_H
 
-#include "RelAlgNode.h"
+#include <cassert>
 #include "UnaryOp.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class ProjectOp : public UnaryOp {
     
 public:
+	RelExpr *n1 = NULL;
+	AttrList *n2 = NULL;
 
-	AttrList* atLi;
-	std::string selectAll;
+	/// Constructor
+	ProjectOp(RelExpr *n1, AttrList *n2) {
+		assert(n1 && n2);
+		this->n1 = n1;
+		this->n2 = n2;
+	}
 
-	ProjectOp(RelExpr *n1, AttrList* n2) : atLi(n2) { relex = n1; }
-	/* If the selection is "*"- this means, of course, the Attribute List spans the entirety of the table. */
-	ProjectOp(RelExpr *n1, const std::string &n) : atLi(NULL), selectAll(n) { relex = n1; }
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
 
-/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-	};
-}
+};
 
-#endif // PROJECT_OP_NODE_H
+} // RA_Namespace
+
+#endif // RA_PROJECTOP_NODE_H

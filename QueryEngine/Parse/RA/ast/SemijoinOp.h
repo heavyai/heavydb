@@ -1,23 +1,38 @@
-#ifndef SEMIJOIN_OP_NODE_H
-#define SEMIJOIN_OP_NODE_H
+/**
+ * @file	SemijoinOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_SEMIJOINOP_NODE_H
+#define RA_SEMIJOINOP_NODE_H
 
-#include "RelAlgNode.h"
+#include <cassert>
 #include "BinaryOp.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class SemijoinOp : public BinaryOp {
     
 public:
-	RA_Predicate* pred;
+	RelExpr *n1 = NULL;
+	RelExpr *n2 = NULL;
+	Predicate *n3 = NULL;
 
-	explicit SemijoinOp(RelExpr *n1, RelExpr *n2, RA_Predicate* n3) : pred(n3) { relex1 = n1; relex2 = n2; }
-	
-/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-	};
-}
+	/// Constructor
+	SemijoinOp(RelExpr *n1, RelExpr *n2, Predicate *n3) {
+		assert(n1 && n2 && n3);
+		this->n1 = n1;
+		this->n2 = n2;
+		this->n3 = n3;
+	}
 
-#endif // SEMIJOIN_OP_NODE_H
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
+
+};
+
+} // RA_Namespace
+
+#endif // RA_SEMIJOINOP_NODE_H

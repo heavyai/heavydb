@@ -1,24 +1,32 @@
-#ifndef RELATION_NODE_H
-#define RELATION_NODE_H
+/**
+ * @file	Relation.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_RELATION_NODE_H
+#define RA_RELATION_NODE_H
 
+#include <string>
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class Relation : public RelAlgNode {
     
 public:
-    std::string name1;
-    RA_Table* tbl;
+	std::string name;
 
-    /**< Constructor */
-    explicit Relation(const std::string &n1) : name1(n1), tbl(NULL) {}
-    explicit Relation(RA_Table* n) : tbl(n), name1("") {}
+	/// Constructor
+	Relation(const std::string &name) {
+		this->name = name;
+	}
 
-    void accept(Visitor &v) {
-        v.visit(this);
-    }    
-	};
-}
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
+};
 
-#endif // RELATION_NODE_H
+} // RA_Namespace
+
+#endif // RA_RELATION_NODE_H

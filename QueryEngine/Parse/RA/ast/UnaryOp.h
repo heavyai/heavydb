@@ -1,22 +1,16 @@
-#ifndef UNARY_OP_NODE_H
-#define UNARY_OP_NODE_H
+/**
+ * @file	UnaryOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ */
+#ifndef RA_UNARYOP_NODE_H
+#define RA_UNARYOP_NODE_H
 
-#include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
-class UnaryOp : public RelAlgNode {
-    
-public:
 
-	RelExpr* relex;
+class UnaryOp : public RelAlgNode {};
 
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
-	};
-}
+} // RA_Namespace
 
-#endif // UNARY_OP_NODE_H
+#endif // RA_UNARYOP_NODE_H

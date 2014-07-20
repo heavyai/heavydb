@@ -1,43 +1,82 @@
-#ifndef MATH_EXPR_NODE_H
-#define MATH_EXPR_NODE_H
+/**
+ * @file	MathExpr.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+/**
+ * @file	MathExpr.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_MATHEXPR_NODE_H
+#define RA_MATHEXPR_NODE_H
 
-#include "ASTNode.h"
+#include <cassert>
+#include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class MathExpr : public RelAlgNode {
     
 public:
+	MathExpr *n1 = NULL;
+	MathExpr *n2 = NULL;
+	Attribute *n3 = NULL;
+	AggrExpr *n4 = NULL;
+	std::string op = "";
+	int intVal;
+	float floatVal;
+	bool intFloatFlag;	// true if int; otherwise float
 
-	int rule_Flag;
-	/* rules are:
-	0 (MATH_EXPR)
-    1 addition
-	2 subtraction
-	3 multiplication
-	4 division 
-    5 positive Math_Expr
-    6 negative Math_Expr */
+	MathExpr(std::string op, MathExpr *n1, MathExpr *n2) {
+		assert(op == "PLUS" || op == "MINUS" || op == "MULTIPLY" || op == "DIVIDE");
+		assert(n1 && n2);
+		this->n1 = n1;
+		this->n2 = n2;
 
-    MathExpr* me1;
-    MathExpr* me2;
-    Attribute* attr;
-    Data* data;
-    AggrExpr* agex;
+		if (op == "PLUS")
+			this->op = "+";
+		else if (op == "MINUS")
+			this->op = "-";
+		else if (op == "MULTIPLY")
+			this->op = "-";
+		else if (op == "DIVIDE")
+			this->op = "/";
+		else
+			this->op = op;
+	}
 
-    /* constructor */
-    MathExpr(int rF, MathExpr *n1, MathExpr* n2) : rule_Flag(rF), me1(n1), me2(n2), attr(NULL), data(NULL), agex(NULL) {}
-    MathExpr(int rF, MathExpr* n) : rule_Flag(rF), me1(n), me2(NULL), attr(NULL), data(NULL), agex(NULL) {}
-    MathExpr(Attribute *n) : rule_Flag(-1), me1(NULL), me2(NULL), attr(n), data(NULL), agex(NULL) {}
-    MathExpr(Data *n) : rule_Flag(-1), me1(NULL), me2(NULL), attr(NULL), data(n), agex(NULL) {}
-    MathExpr(AggrExpr* n) : rule_Flag(-1), me1(NULL), me2(NULL), attr(NULL), data(NULL), agex(n) {}
+	explicit MathExpr(MathExpr *n1) {
+		assert(n1);
+		this->n1 = n1;
+	}
 
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
-	};
-}
+	explicit MathExpr(Attribute *n3) {
+		assert(n3);
+		this->n3 = n3;
+	}
 
-#endif // MATH_EXPR_NODE_H
+	explicit MathExpr(AggrExpr *n4) {
+		assert(n4);
+		this->n4 = n4;
+	}
+
+	explicit MathExpr(int intVal) {
+		this->intVal = intVal;
+		intFloatFlag = true;
+	}
+
+	explicit MathExpr(float floatVal) {
+		this->floatVal = floatVal;
+		intFloatFlag = false;
+	}
+
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
+};
+
+} // RA_Namespace
+
+#endif // RA_MATHEXPR_NODE_H

@@ -1,25 +1,37 @@
-#ifndef ATTRIBUTE_NODE_H
-#define ATTRIBUTE_NODE_H
+/**
+ * @file    Attribute.h
+ * @author  Steven Stewart <steve@map-d.com>
+ * @author  Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_ATTRIBUTE_NODE_H
+#define RA_ATTRIBUTE_NODE_H
 
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class Attribute : public RelAlgNode {
     
 public:
+    std::string name1 = "";
+    std::string name2 = "";
 
-	std::string name1;
-	std::string name2;
-	
-    Attribute(const std::string &n1) : name1(n1) {}
-    Attribute(const std::string &n1, const std::string &n2) : name1(n1), name2(n2) {}
-    
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
+    /// Constructor
+    explicit Attribute(const std::string &name1) {
+    	this->name1 = name1;
     }
-	};
+
+	Attribute(std::string name1, const std::string &name2) {
+		this->name1 = name1;
+		this->name2 = name2;
+    }
+
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
+};
+
 }
 
-#endif // ATTRIBUTE_NODE_H
+#endif // RA_RELEXPRLIST_NODE_H

@@ -1,32 +1,63 @@
-#ifndef REL_EXPR_NODE_H
-#define REL_EXPR_NODE_H
+/**
+ * @file    RelExpr.h
+ * @author  Steven Stewart <steve@map-d.com>
+ * @author  Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_RELEXPR_NODE_H
+#define RA_RELEXPR_NODE_H
 
+#include <cassert>
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
-//using namespace RA_Namespace;
-
 namespace RA_Namespace {
+
 class RelExpr : public RelAlgNode {
     
 public:
+    UnaryOp *n1;
+    BinaryOp *n2;
+    RelExpr *n3;
+    Relation *n4;
 
-	RelExpr* relex;
-	UnaryOp* uno;
-	BinaryOp* dos;
-	Relation* rel;
-
-	RelExpr(RelExpr *n) : relex(n), uno(NULL), dos(NULL), rel(NULL) {}
-	RelExpr(UnaryOp *n) : relex(NULL), uno(n), dos(NULL), rel(NULL) {}
-	RelExpr(BinaryOp *n) : relex(NULL), uno(NULL), dos(n), rel(NULL) {}
-	RelExpr(Relation *n) : relex(NULL), uno(NULL), dos(NULL), rel(n) {}
-	
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(Visitor &v) {
-        v.visit(this);
+    /// Constructor
+    explicit RelExpr(UnaryOp *n1) {
+    	assert(n1);
+        this->n1 = n1;
+        this->n2 = NULL;
+        this->n3 = NULL;
+        this->n4 = NULL;
     }
 
-	};
-}
+    explicit RelExpr(BinaryOp *n2) {
+        assert(n2);
+    	this->n1 = NULL;
+        this->n2 = n2;
+        this->n3 = NULL;
+        this->n4 = NULL;
+    }
 
-#endif // REL_EXPR_NODE_H
+    explicit RelExpr(RelExpr *n3) {
+        assert(n3);
+        this->n1 = NULL;
+        this->n2 = NULL;
+        this->n3 = n3;
+        this->n4 = NULL;
+    }
+
+    explicit RelExpr(Relation *n4) {
+        assert(n4);
+        this->n1 = NULL;
+        this->n2 = NULL;
+        this->n3 = NULL;
+        this->n4 = n4;
+    }
+
+	virtual void accept(Visitor &v) {
+		v.visit(this);
+	}
+};
+
+} // RA_Namespace
+
+#endif // RA_RELEXPRLIST_NODE_H

@@ -1,28 +1,35 @@
-#ifndef AGGR_EXPR_NODE_H
-#define AGGR_EXPR_NODE_H
+/**
+ * @file    AggrExpr.h
+ * @author  Steven Stewart <steve@map-d.com>
+ * @author  Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_AGGREXPRLIST_NODE_H
+#define RA_AGGREXPRLIST_NODE_H
 
+#include <cassert>
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
-using namespace RA_Namespace;
-
 namespace RA_Namespace {
-	class AggrExpr : public RelAlgNode {
 
+class AggrExpr : public RelAlgNode {
+    
 public:
+    Attribute *n1 = NULL;
+    std::string func = "";
 
-	std::string ammsc;			//AVG, MAX, etc
-	std::string distinct;		//DISTINCT or not
-
-	Attribute* attr;
-
-	explicit AggrExpr(const std::string &n1, const std::string &n2, Attribute* n3) : ammsc(n1), distinct(n2), attr(n3) {}
-
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
+    /// Constructor
+    AggrExpr(std::string func, Attribute *n1) {
+    	assert(n1);
+        this->n1 = n1;
+    	this->func = func;
     }
-	};
+
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
+};
+
 }
 
-#endif // AGGR_EXPR_NODE_H
+#endif // RA_AGGREXPRLIST_NODE_H

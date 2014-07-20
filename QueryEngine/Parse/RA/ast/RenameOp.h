@@ -1,26 +1,38 @@
-#ifndef RENAME_OP_NODE_H
-#define RENAME_OP_NODE_H
+/**
+ * @file	RenameOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_RENAMEOP_NODE_H
+#define RA_RENAMEOP_NODE_H
 
-#include "RelAlgNode.h"
+#include <cassert>
 #include "UnaryOp.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class RenameOp : public UnaryOp {
     
 public:
+	RelExpr *n1 = NULL;
+	std::string name1 = "";
+	std::string name2 = "";
 
-	Attribute* attr;
-	std::string name;
+	/// Constructor
+	RenameOp(RelExpr *n1, const std::string &name1, const std::string &name2) {
+		assert(n1 && name1 != "" && name2 != "");
+		this->n1 = n1;
+		this->name1 = name1;
+		this->name2 = name2;
+	}
 
-	RenameOp(RelExpr *n1, Attribute* n2, std::string &n3) : attr(n2), name(n3) { relex = n1; }
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
 
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
-	};
-}
+};
 
-#endif // RENAME_OP_NODE_H
+} // RA_Namespace
+
+#endif // RA_RENAMEOP_NODE_H

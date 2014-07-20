@@ -1,22 +1,36 @@
-#ifndef UNION_OP_NODE_H
-#define UNION_OP_NODE_H
+/**
+ * @file	UnionOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_UNIONOP_NODE_H
+#define RA_UNIONOP_NODE_H
 
-#include "RelAlgNode.h"
+#include <cassert>
 #include "BinaryOp.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class UnionOp : public BinaryOp {
     
 public:
+	RelExpr *n1 = NULL;
+	RelExpr *n2 = NULL;
 
-	explicit UnionOp(RelExpr *n1, RelExpr *n2) { relex1 = n1; relex2 = n2; }
+	/// Constructor
+	UnionOp(RelExpr *n1, RelExpr *n2) {
+		assert(n1 && n2);
+		this->n1 = n1;
+		this->n2 = n2;
+	}
 
-/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-	};
-}
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
 
-#endif // UNION_OP_NODE_H
+};
+
+} // RA_Namespace
+
+#endif // RA_UNIONOP_NODE_H

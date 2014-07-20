@@ -1,27 +1,31 @@
-#ifndef AST_PROGRAM_H
-#define AST_PROGRAM_H
+/**
+ * @file	Program.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_PROGRAM_NODE_H
+#define RA_PROGRAM_NODE_H
 
-#include <iostream>
 #include "RelAlgNode.h"
-#include "RelExprList.h"
 #include "../visitor/Visitor.h"
 
-using std::string;
-
 namespace RA_Namespace {
-class RA_Program : public RelAlgNode {
+
+class Program : public RelAlgNode {
     
 public:
-    RelExprList* rel;
+    RelExprList *n1;
 
-    /**< Constructor */
-    explicit RA_Program(RelExprList *n) : rel(n) {}
-    
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    virtual void accept(Visitor &v) {
-        v.visit(this);
+    /// Constructor
+    explicit Program(RelExprList *n1) {
+    	this->n1 = n1;
     }
-    
-	};
+
+	virtual void accept(Visitor &v) {
+		v.visit(this);
+	}
+};
+
 }
-#endif // AST_PROGRAM_H
+
+#endif // RA_PROGRAM_NODE_H

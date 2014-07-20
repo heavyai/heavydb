@@ -8,7 +8,7 @@ using namespace std;
 using RA_Namespace::XMLTranslator;
 
 int main(int argc, char ** argv) {
-    Parser parser;
+    RAParser parser;
     string sql;
     do {
         cout << "mapd> ";
@@ -22,6 +22,7 @@ int main(int argc, char ** argv) {
             cout << "Error at: " << lastParsed << endl;
             continue;
         }
+        
         //cout << "# Errors: " << numErrors << endl;
         XMLTranslator xml;
         if (parseRoot != 0)

@@ -1,24 +1,40 @@
-#ifndef REL_EXPR_LIST_NODE_H
-#define REL_EXPR_LIST_NODE_H
+/**
+ * @file    RelExprList.h
+ * @author  Steven Stewart <steve@map-d.com>
+ * @author  Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_RELEXPRLIST_NODE_H
+#define RA_RELEXPRLIST_NODE_H
 
-#include "RelAlgNode.h"
+#include <cassert>
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
-	class RelExprList : public RelAlgNode {
-	    
-	public:
 
-		RelExpr* relex;
-		RelExprList* relexlist;
+class RelExprList : public RelAlgNode {
+    
+public:
+    RelExprList *n1;
+    RelExpr *n2;
 
-		explicit RelExprList(RelExprList *n1, RelExpr *n2) : relexlist(n1), relex(n2) {}
-		RelExprList(RelExpr *n) : relex(n), relexlist(NULL) {}
+    /// Constructor
+    explicit RelExprList(RelExpr *n2) {
+        assert(n2);
+        this->n1 = NULL;
+    	this->n2 = n2;
+    }
 
-	    virtual void accept(Visitor &v) {
-	        v.visit(this);
-	    }
-	};
+	RelExprList(RelExprList *n1, RelExpr *n2) {
+        assert(n1 && n2);
+    	this->n1 = n1;
+    	this->n2 = n2;
+    }
+
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
+};
+
 }
 
-#endif // REL_EXPR_LIST_NODE_H
+#endif // RA_RELEXPRLIST_NODE_H

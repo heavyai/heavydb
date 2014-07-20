@@ -2,38 +2,36 @@
 #define REL_ALG_SIMPLE_PRINTER_VISITOR_H
 
 #include "../visitor/Visitor.h"
+
 #include "../ast/RelAlgNode.h"
-#include "../ast/RA_Program.h"
-#include "../ast/RelExprList.h"
-#include "../ast/RelExpr.h"
 #include "../ast/UnaryOp.h"
 #include "../ast/BinaryOp.h"
-#include "../ast/MathExpr.h"
-#include "../ast/SelectOp.h"
-#include "../ast/ProjectOp.h"
-#include "../ast/SortOp.h"
-#include "../ast/ExtendOp.h"
-#include "../ast/GroupByOp.h"
-#include "../ast/RenameOp.h"
 
-#include "../ast/JoinOp.h"
-#include "../ast/SemijoinOp.h"
-#include "../ast/ProductOp.h"
-#include "../ast/OuterjoinOp.h"
-#include "../ast/AntijoinOp.h"
-#include "../ast/UnionOp.h"
 #include "../ast/AggrExpr.h"
 #include "../ast/AggrList.h"
-#include "../ast/AttrList.h"
+#include "../ast/AntijoinOp.h"
 #include "../ast/Attribute.h"
-#include "../ast/Relation.h"
-#include "../ast/Data.h"
-
-#include "../ast/RA_Predicate.h"
+#include "../ast/AttrList.h"
 #include "../ast/Comparison.h"
-#include "../ast/Compared.h"
-#include "../ast/CompOp.h"
-#include "../ast/RA_Table.h"
+#include "../ast/DiffOp.h"
+#include "../ast/Expr.h"
+#include "../ast/ExtendOp.h"
+#include "../ast/GroupbyOp.h"
+#include "../ast/JoinOp.h"
+#include "../ast/MathExpr.h"
+#include "../ast/OuterjoinOp.h"
+#include "../ast/Predicate.h"
+#include "../ast/ProductOp.h"
+#include "../ast/Program.h"
+#include "../ast/ProjectOp.h"
+#include "../ast/Relation.h"
+#include "../ast/RelExpr.h"
+#include "../ast/RelExprList.h"
+#include "../ast/RenameOp.h"
+#include "../ast/SelectOp.h"
+#include "../ast/SemijoinOp.h"
+#include "../ast/SortOp.h"
+#include "../ast/UnionOp.h"
 
 #include <iostream>
 using std::cout;
@@ -51,12 +49,12 @@ class XMLTranslator : public RA_Namespace::Visitor {
 public:
     enum tabFlag {INCR, DECR, NONE};
     
-    XMLTranslator() { tabLevel_ = 0; }
+    XMLTranslator() { tabLevel_ = -1; }
      
     void printTabs(tabFlag flag) {
         if (flag == INCR)
             tabLevel_++;
-        //cout << tabLevel_;
+
         for (int i = 0; i < tabLevel_; ++i)
             for (int j = 0; j < TAB_SIZE; ++j)
                 cout << " ";
@@ -64,218 +62,12 @@ public:
             tabLevel_--;
     }
 
-    void visit(class RA_Program *v) {
-        printTabs(INCR);
-        cout << "<Program>" << endl;
-        
-        if (v->rel) v->rel->accept(*this);
-
-        printTabs(DECR);
-        cout << "</Program>" << endl;
-    }
-
-    void visit(class RelExprList *v) {
-        printTabs(INCR);
-        cout << "<RelExprList>" << endl;
-
-        if (v->relex) v->relex->accept(*this);
-        if (v->relexlist) v->relexlist->accept(*this);
-
-        printTabs(DECR);
-        cout << "</RelExprList>" << endl;
-    }
-
-    void visit(class RelExpr *v) {
-        printTabs(INCR);
-        cout << "<RelExpr>" << endl;
-
-        if (v->relex) v->relex->accept(*this);
-        if (v->rel) v->rel->accept(*this);
-        if (v->uno) v->uno->accept(*this);
-        if (v->dos) v->dos->accept(*this);
-
-        printTabs(DECR);
-        cout << "</RelExpr>" << endl;
-    }
-
-    void visit(class UnaryOp *v) {
-        printTabs(INCR);
-        cout << "<UnaryOp>" << endl;
-        
-        if (v->relex) v->relex->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</UnaryOp>" << endl;
-    }
-
-    void visit(class BinaryOp *v) {
-        printTabs(INCR);
-        cout << "<BinaryOp>" << endl;
-            
-        if (v->relex1) v->relex1->accept(*this);
-        if (v->relex2) v->relex2->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</BinaryOp>" << endl;
-    }
-
-    void visit(class MathExpr *v) {
-        printTabs(INCR);
-        cout << "<MathExpr>" << endl;
-        
-        if (v->attr) v->attr->accept(*this);
-        if (v->data) v->data->accept(*this);
-        if (v->agex) v->agex->accept(*this);
-        if (v->me1) v->me1->accept(*this);
-        if (v->me2) v->me2->accept(*this);
-
-        printTabs(DECR);
-        cout << "</MathExpr>" << endl;
-    }
-
-    void visit(class SelectOp *v) {
-        printTabs(INCR);
-        cout << "<SelectOp>" << endl;
-        
-        if (v->pred) v->pred->accept(*this);
-        if (v->relex) v->relex->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</SelectOp>" << endl;
-    }
-
-    void visit(class ProjectOp *v) {
-        printTabs(INCR);
-        cout << "<ProjectOp>" << endl;
-        
-        if (v->atLi) v->atLi->accept(*this);
-        if (v->relex) v->relex->accept(*this);
-
-        printTabs(DECR);
-        cout << "</ProjectOp>" << endl;
-    }
-
-    void visit(class SortOp *v) {
-        printTabs(INCR);
-        cout << "<SortOp>" << endl;
-        
-        if (v->relex) v->relex->accept(*this);
-        if (v->atLi) v->atLi->accept(*this);
-
-        printTabs(DECR);
-        cout << "</SortOp>" << endl;
-    }
-
-    void visit(class ExtendOp *v) {
-        printTabs(INCR);
-        cout << "<ExtendOp>" << endl;
-        
-        if (v->me) v->me->accept(*this);
-//        if (v->data) v->data->accept(*this);
-
-        printTabs(DECR);
-        cout << "</ExtendOp>" << endl;
-    }
-
-    void visit(class GroupByOp *v) {
-        printTabs(INCR);
-        cout << "<GroupByOp>" << endl;
-        
-        if (v->agLi) v->agLi->accept(*this);
-        if (v->atLi) v->atLi->accept(*this);
-        if (v->relex) v->relex->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</GroupByOp>" << endl;
-    }
-
-    void visit(class RenameOp *v) {
-        printTabs(INCR);
-        cout << "<RenameOp>" << endl;
-    
-        if (v->relex) v->relex->accept(*this);
-        if (v->attr) v->attr->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</RenameOp>" << endl;
-    }
-
-    void visit(class JoinOp *v) {
-        printTabs(INCR);
-        cout << "<JoinOp>" << endl;
-        
-        if (v->relex1) v->relex1->accept(*this);
-        if (v->relex2) v->relex2->accept(*this);
-        if (v->pred) v->pred->accept(*this);
-
-        printTabs(DECR);
-        cout << "</JoinOp>" << endl;
-    }
-
-    void visit(class SemijoinOp *v) {
-        printTabs(INCR);
-        cout << "<SemijoinOp>" << endl;
-        
-        if (v->relex1) v->relex1->accept(*this);
-        if (v->relex2) v->relex2->accept(*this);
-        if (v->pred) v->pred->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</SemijoinOp>" << endl;
-    }
-
-    void visit(class ProductOp *v) {
-        printTabs(INCR);
-        cout << "<ProductOp>" << endl;
-        
-        if (v->relex1) v->relex1->accept(*this);
-        if (v->relex2) v->relex2->accept(*this);
-
-        printTabs(DECR);
-        cout << "</ProductOp>" << endl;
-    }
-
-    void visit(class OuterjoinOp *v) {
-        printTabs(INCR);
-        cout << "<OuterjoinOp>" << endl;
-        
-        if (v->relex1) v->relex1->accept(*this);
-        if (v->relex2) v->relex2->accept(*this);
-        if (v->pred) v->pred->accept(*this);
-
-        printTabs(DECR);
-        cout << "</OuterjoinOp>" << endl;
-    }
-
-    void visit(class AntijoinOp *v) {
-        printTabs(INCR);
-        cout << "<AntijoinOp>" << endl;
-        
-        if (v->relex1) v->relex1->accept(*this);
-        if (v->relex2) v->relex2->accept(*this);
-        if (v->pred) v->pred->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</AntijoinOp>" << endl;
-    }
-
-    void visit(class UnionOp *v) {
-        printTabs(INCR);
-        cout << "<UnionOp>" << endl;
-        
-        if (v->relex1) v->relex1->accept(*this);
-        if (v->relex2) v->relex2->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</UnionOp>" << endl;
-    }
-
     void visit(class AggrExpr *v) {
         printTabs(INCR);
-        cout << "<AggrExpr>" << endl;
-    
-        if (v->attr) v->attr->accept(*this);
+        cout << "<AggrExpr function=\"" << v->func << "\">" << endl;
         
+        if (v->n1) v->n1->accept(*this);
+
         printTabs(DECR);
         cout << "</AggrExpr>" << endl;
     }
@@ -284,117 +76,297 @@ public:
         printTabs(INCR);
         cout << "<AggrList>" << endl;
         
-
-        if (v->agex) v->agex->accept(*this);
-        if (v->agLi) v->agLi->accept(*this);
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
         
         printTabs(DECR);
         cout << "</AggrList>" << endl;
+    }
+
+    void visit(class AntijoinOp *v) {
+        printTabs(INCR);
+        cout << "<AntijoinOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</AntijoinOp>" << endl;
+    }
+
+    void visit(class Attribute *v) {
+        printTabs(INCR);
+        cout << "<Attribute>";
+        cout << v->name1;
+        if (v->name2 != "")
+            cout << "." << v->name2;
+        cout << "</Attribute>" << endl;
+        tabLevel_--;
     }
 
     void visit(class AttrList *v) {
         printTabs(INCR);
         cout << "<AttrList>" << endl;
         
-
-        if (v->atLi) v->atLi->accept(*this);
-        if (v->at) v->at->accept(*this);
-    
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        
         printTabs(DECR);
         cout << "</AttrList>" << endl;
     }
 
-    void visit(class Attribute *v) {
-        printTabs(INCR);
-        cout << "<Attribute>" << endl;
-        
-        printTabs(NONE);
-        cout << v->name1;
-        if (v->name2 != "") cout << "." << v->name2;
-        cout << endl;
-
-        printTabs(DECR);
-        cout << "</Attribute>" << endl;
-    }
-
-    void visit(class Relation *v) {
-        printTabs(INCR);
-        cout << "<Relation>" << endl;
-
-        if (v->tbl) v->tbl->accept(*this);
-
-        printTabs(DECR);
-        cout << "</Relation>" << endl;
-    }
-
-    void visit(class Data *v) {
-        printTabs(INCR);
-        cout << "<Data>" << endl;
-        
-        printTabs(NONE);
-        if (v->d != -1) cout << "number: " << v->d << endl;
-        if (v->s != "") cout << "string: " << v->d << endl;
-        
-        printTabs(DECR);
-        cout << "</Data>" << endl;
-    }
-
-    void visit(class RA_Predicate *v) {
-        printTabs(INCR);
-        cout << "<Predicate>" << endl;
-        
-        if (v->c) v->c->accept(*this);
-        if (v->p1) v->p1->accept(*this);
-        if (v->p2) v->p2->accept(*this);
-        
-        printTabs(DECR);
-        cout << "</Predicate>" << endl;
-    }
-
     void visit(class Comparison *v) {
         printTabs(INCR);
-        cout << "<Comparison>" << endl;
-        
-        if (v->c1) v->c1->accept(*this);
-        if (v->co) v->co->accept(*this);
-        if (v->c2) v->c2->accept(*this);
+        if (v->op != "")
+            cout << "<Comparison op=\"" << v->op << "\">" << endl;
+        else
+            cout << "<Comparison op=\"NOOP\">" << endl;
+
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
         
         printTabs(DECR);
         cout << "</Comparison>" << endl;
     }
 
-    void visit(class Compared *v) {
+    void visit(class DiffOp *v) {
         printTabs(INCR);
-        cout << "<Compared>" << endl;
+        cout << "<DiffOp>" << endl;
         
-//        if (v->a) v->a->accept(*this);
-        if (v->me) v->me->accept(*this);
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
         
         printTabs(DECR);
-        cout << "</Compared>" << endl;
+        cout << "</DiffOp>" << endl;
     }
 
-    void visit(class CompOp *v) {
+    void visit(class Expr *v) {
+        if (v->str == "") {
+            printTabs(INCR);
+            cout << "<Expr>" << endl;
+            if (v->n1) v->n1->accept(*this);
+            if (v->n2) v->n2->accept(*this);
+            printTabs(DECR);
+            cout << "</Expr>" << endl;
+        }
+        else {
+            printTabs(INCR);
+            cout << "<Expr>" << v->str << "</Expr>" << endl;
+            tabLevel_--;
+        }
+    }
+
+    void visit(class ExtendOp *v) {
         printTabs(INCR);
-        cout << "<CompOp>" << endl;
+        cout << "<ExtendOp name=\"" << v->name << "\">" << endl;
         
-        printTabs(NONE);
-        cout << v->comparator << endl;
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</ExtendOp>" << endl;
+    }
+
+    void visit(class GroupbyOp *v) {
+        printTabs(INCR);
+        cout << "<GroupbyOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</GroupbyOp>" << endl;
+    }
+
+    void visit(class JoinOp *v) {
+        printTabs(INCR);
+        cout << "<JoinOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</JoinOp>" << endl;
+    }
+
+    void visit(class MathExpr *v) {
+        printTabs(INCR);
+        if (v->n1 || v->n2 || v->n3 || v->n4) { 
+            if (v->op != "")
+                cout << "<MathExpr op=\"" << v->op << "\">" << endl;
+            else
+                cout << "<MathExpr>" << endl;
+            if (v->n1) v->n1->accept(*this);
+            if (v->n2) v->n2->accept(*this);
+            if (v->n3) v->n3->accept(*this);
+            if (v->n4) v->n4->accept(*this);
+            printTabs(DECR);
+            cout << "</MathExpr>" << endl;
+        }
+        else {
+            cout << "<MathExpr>";
+            if (v->intFloatFlag)
+                cout << v->intVal << "</MathExpr>" << endl;
+            else
+                cout << v->floatVal << "</MathExpr>" << endl;
+            tabLevel_--;
+        }
+    }
+
+    void visit(class OuterjoinOp *v) {
+        printTabs(INCR);
+        cout << "<OuterjoinOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
 
         printTabs(DECR);
-        cout << "</CompOp>" << endl;
+        cout << "</OuterjoinOp>" << endl;
     }
 
-    void visit(class RA_Table *v) {
+    void visit(class Predicate *v) {
         printTabs(INCR);
-        cout << "<Table>" << endl;
-        
-        printTabs(NONE);
-        cout << "Name is " << v->name1 << endl;
+        if (v->op != "")
+            cout << "<Predicate op=\"" << v->op << "\">" << endl;
+        else
+            cout << "<Predicate>" << endl;
+
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
 
         printTabs(DECR);
-        cout << "</Table>" << endl;
+        cout << "</Predicate>" << endl;
     }
+
+    void visit(class ProductOp *v) {
+        printTabs(INCR);
+        cout << "<ProductOp>" << endl;
+
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+
+        printTabs(DECR);
+        cout << "</ProductOp>" << endl;
+    }
+
+    void visit(class Program *v) {
+        printTabs(INCR);
+        cout << "<Program>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+
+        printTabs(DECR);
+        cout << "</Program>" << endl;
+    }
+
+    void visit(class ProjectOp *v) {
+        printTabs(INCR);
+        cout << "<ProjectOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</ProjectOp>" << endl;
+    }
+
+    void visit(class Relation *v) {
+        printTabs(INCR);
+        cout << "<Relation>";
+        cout << v->name;
+        cout << "</Relation>" << endl;
+        tabLevel_--;
+    }
+
+    void visit(class RelExpr *v) {
+        printTabs(INCR);
+        cout << "<RelExpr>" << endl;
+        
+        if (v->n1)
+            v->n1->accept(*this);
+        else if (v->n2)
+            v->n2->accept(*this);
+        else if (v->n3)
+            v->n3->accept(*this);
+        else if (v->n4)
+            v->n4->accept(*this);
+
+        printTabs(DECR);
+        cout << "</RelExpr>" << endl;
+    }
+
+    void visit(class RelExprList *v) {
+        printTabs(INCR);
+        cout << "<RelExprList>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+
+        printTabs(DECR);
+        cout << "</RelExprList>" << endl;
+    }
+
+    void visit(class RenameOp *v) {
+        printTabs(INCR);
+        cout << "<RenameOp old=\"" << v->name1 << "\" new=\"" << v->name2 << "\">" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+
+        printTabs(DECR);
+        cout << "</RenameOp>" << endl;
+    }
+
+    void visit(class SelectOp *v) {
+        printTabs(INCR);
+        cout << "<SelectOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+
+        printTabs(DECR);
+        cout << "</SelectOp>" << endl;
+    }
+
+    void visit(class SemijoinOp *v) {
+        printTabs(INCR);
+        cout << "<SemijoinOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
+
+        printTabs(DECR);
+        cout << "</SemijoinOp>" << endl;
+    }
+
+    void visit(class SortOp *v) {
+        printTabs(INCR);
+        cout << "<SortOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+
+        printTabs(DECR);
+        cout << "</SortOp>" << endl;
+    }
+
+    void visit(class UnionOp *v) {
+        printTabs(INCR);
+        cout << "<UnionOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</UnionOp>" << endl;
+    }
+
 
 private:
     int tabLevel_ ;   /**< Keeps track of number of tabs to print out on a line. */

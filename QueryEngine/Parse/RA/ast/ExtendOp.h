@@ -1,27 +1,38 @@
-#ifndef EXTEND_OP_NODE_H
-#define EXTEND_OP_NODE_H
+/**
+ * @file	ExtendOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_EXTENDOP_NODE_H
+#define RA_EXTENDOP_NODE_H
 
-#include "RelAlgNode.h"
-#include "UnaryOp.h"
+#include <cassert>
+#include "../ast/UnaryOp.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class ExtendOp : public UnaryOp {
     
 public:
+	RelExpr *n1 = NULL;
+	Expr *n2 = NULL;
+	std::string name = "";
 
-	MathExpr *me;
-//	Data *data;
-	std::string name;
+	/// Constructor
+	ExtendOp(RelExpr *n1, Expr *n2, std::string name) {
+		assert(n1 && n2 && name != "");
+		this->n1 = n1;
+		this->n2 = n2;
+		this->name = name;
+	}
 
-	explicit ExtendOp(RelExpr *n1, MathExpr* n2, std::string n3) : me(n2), name(n3) { relex = n1; }
-//	ExtendOp(RelExpr *n1, Data* n2, std::string n3) : me(NULL), data(n2), name(n3) { relex = n1; }
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
 
-/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-	};
-}
+};
 
-#endif // EXTEND_OP_NODE_H
+} // RA_Namespace
+
+#endif // RA_EXTENDOP_NODE_H

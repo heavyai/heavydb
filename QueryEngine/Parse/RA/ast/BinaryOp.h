@@ -1,21 +1,18 @@
-#ifndef BINARY_OP_NODE_H
-#define BINARY_OP_NODE_H
+/**
+ * @file	BinaryOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_BINARYOP_NODE_H
+#define RA_BINARYOP_NODE_H
 
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
-	class BinaryOp : public RelAlgNode {
-    
-public:
-	RelExpr* relex1;
-	RelExpr* relex2;
 
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-	};
-}
+class BinaryOp : public RelAlgNode {};
 
-#endif // BINARY_OP_NODE_H
+} // RA_Namespace
+
+#endif // RA_BINARYOP_NODE_H

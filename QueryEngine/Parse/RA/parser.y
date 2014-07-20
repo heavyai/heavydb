@@ -1,7 +1,8 @@
 %name Parser
+%define CLASS RAParser
 %define LSP_NEEDED
 %define MEMBERS                 \
-    virtual ~Parser()   {} \
+    virtual ~RAParser()   {} \
     int parse(const string & inputStr, RelAlgNode *& parseRoot, string &lastParsed) { istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseRoot); lastParsed = lexer.YYText(); return yynerrs; } \
     private:                   \
        yyFlexLexer lexer;
@@ -14,56 +15,55 @@
 #include <FlexLexer.h>
 #include <cstdlib>
 #include <string>
+#include <vector>
 #include <sstream>
-	
-// RA nodes
+#include <cassert>
+
+// RA Parse Tree Nodes
 #include "ast/RelAlgNode.h"
-#include "ast/RA_Program.h"
-#include "ast/RelExprList.h"
-#include "ast/RelExpr.h"
 #include "ast/UnaryOp.h"
 #include "ast/BinaryOp.h"
-#include "ast/MathExpr.h"
-#include "ast/SelectOp.h"
-#include "ast/ProjectOp.h"
-#include "ast/SortOp.h"
-#include "ast/ExtendOp.h"
-#include "ast/GroupByOp.h"
-#include "ast/RenameOp.h"
 
-#include "ast/JoinOp.h"
-#include "ast/SemijoinOp.h"
-#include "ast/ProductOp.h"
-#include "ast/OuterjoinOp.h"
-#include "ast/AntijoinOp.h"
-#include "ast/UnionOp.h"
 #include "ast/AggrExpr.h"
 #include "ast/AggrList.h"
-#include "ast/AttrList.h"
+#include "ast/AntijoinOp.h"
 #include "ast/Attribute.h"
-#include "ast/Relation.h"
-#include "ast/Data.h"
-
-#include "ast/RA_Predicate.h"
+#include "ast/AttrList.h"
 #include "ast/Comparison.h"
-#include "ast/Compared.h"
-#include "ast/CompOp.h"
-
-// define stack element type to be a 
-// pointer to an AST node
-	
-#define YY_Parser_STYPE RelAlgNode*
-#define YY_Parser_PARSE_PARAM RelAlgNode*& parseRoot
-
-extern RelAlgNode* parse_root;
-
-
-// Variables declared in RelAlgebraLexer.l
-extern std::string strData[10];
-extern int dData[5];
+#include "ast/DiffOp.h"
+#include "ast/Expr.h"
+#include "ast/ExtendOp.h"
+#include "ast/GroupbyOp.h"
+#include "ast/JoinOp.h"
+#include "ast/MathExpr.h"
+#include "ast/OuterjoinOp.h"
+#include "ast/Predicate.h"
+#include "ast/ProductOp.h"
+#include "ast/Program.h"
+#include "ast/ProjectOp.h"
+#include "ast/Relation.h"
+#include "ast/RelExpr.h"
+#include "ast/RelExprList.h"
+#include "ast/RenameOp.h"
+#include "ast/SelectOp.h"
+#include "ast/SemijoinOp.h"
+#include "ast/SortOp.h"
+#include "ast/UnionOp.h"
 
 using namespace std;
 using namespace RA_Namespace;
+
+extern RelAlgNode* parse_root;
+
+// define stack element type to be a 
+// pointer to an AST node	
+#define YY_Parser_STYPE RelAlgNode*
+#define YY_Parser_PARSE_PARAM RelAlgNode*& parseRoot
+
+// Variables declared in RelAlgebraLexer.l
+extern std::vector<std::string> strData;
+extern std::vector<int> intData;
+extern std::vector<float> floatData;
 
 %}
 
@@ -75,151 +75,150 @@ using namespace RA_Namespace;
 
 %left NEQ EQ GT GTE LT LTE
 %token SELECT PROJECT SORT RENAME EXTEND GROUPBY
-%token PRODUCT JOIN SEMIJOIN ANTIJOIN OUTERJOIN UNION
+%token PRODUCT JOIN SEMIJOIN ANTIJOIN OUTERJOIN UNION DIFF INTERSECTION
 %token MAX MIN COUNT SUM AVG
 %token MAX_DISTINCT MIN_DISTINCT COUNT_DISTINCT SUM_DISTINCT AVG_DISTINCT 
-%token NAME CONSTANT STRVAL
+%token NAME INTVAL FLOATVAL STRVAL
 
-%start S
+%start Program
 
 %%
 
-S:
-	RelExprList				{ $$ = new RA_Program((RelExprList*)$1); parseRoot = $$; }
+Program:
+	RelExprList ';'			{ $$ = new Program((RelExprList*)$1); parseRoot = $$; }
 |							{ $$ = 0; parseRoot = $$; }
 ;
 
 RelExprList:
-	RelExpr ';'					{ $$ = new RelExprList((RelExpr*)$1); }
-|	RelExprList RelExpr ';'		{ $$ = new RelExprList((RelExprList*)$1, (RelExpr*)$3); }
+	RelExpr					{ $$ = new RelExprList((RelExpr*)$1); }	
+|	RelExprList RelExpr 	{ $$ = new RelExprList((RelExprList*)$1, (RelExpr*)$2); }	
 ;
 
 RelExpr:
-	UnaryOp						{ $$ = new RelExpr((UnaryOp*)$1); }
-|	BinaryOp					{ $$ = new RelExpr((BinaryOp*)$1); }
-| 	'(' RelExpr ')'				{ $$ = new RelExpr((RelExpr*)$2); }
-| 	relation					{ $$ = new RelExpr((Relation*)$1); }
+	UnaryOp					{ $$ = new RelExpr((UnaryOp*)$1); }
+|	BinaryOp				{ $$ = new RelExpr((BinaryOp*)$1); }
+| 	'(' RelExpr ')'			{ $$ = new RelExpr((RelExpr*)$1); }	
+| 	Relation				{ $$ = new RelExpr((Relation*)$1); }
 ;
 
 UnaryOp:
-	SELECT 	'(' RelExpr ',' Predicate ')'						{ $$ = new SelectOp((RelExpr*)$3, (RA_Predicate*)$5); }
-|	PROJECT '(' RelExpr ',' '{' AttrList '}' ')'				{ $$ = new ProjectOp((RelExpr*)$3, (AttrList*)$6); }
-|	SORT	'(' RelExpr ',' AttrList ')'						{ $$ = new SortOp((RelExpr*)$3, (AttrList*)$5); }
-|	RENAME	'(' RelExpr ',' attribute ',' NAME ')'				{ $$ = new RenameOp((RelExpr*)$3, (Attribute*)$5, strData[0]); }
-|	EXTEND	'(' RelExpr ',' MathExpr ',' NAME ')'				{ $$ = new ExtendOp((RelExpr*)$3, (MathExpr*)$5, strData[0]); }
-//|	EXTEND	'(' RelExpr ',' data ',' NAME ')'					{ $$ = new ExtendOp((RelExpr*)$3, (Data*)$5, strData[0]); }
-|	GROUPBY	'('	RelExpr ',' '{' AttrList '}' ',' AggrList ')'	{ $$ = new GroupByOp((RelExpr*)$3, (AttrList*)$6, (AggrList*)$9); }
-|	GROUPBY	'('	RelExpr ',' '{' '}' ',' AggrList ')'			{ $$ = new GroupByOp((RelExpr*)$3, (AggrList*)$8); }
+	SELECT 	'(' RelExpr ',' Predicate ')'		 	{ $$ = new SelectOp((RelExpr*)$3, (Predicate*)$5); }
+|	PROJECT '(' RelExpr ',' '{' AttrList '}' ')' 	{ $$ = new ProjectOp((RelExpr*)$3, (AttrList*)$6); }
+|	SORT	'(' RelExpr ',' '[' AttrList ']' ')' 	{ $$ = new SortOp((RelExpr*)$3, (AttrList*)$6); }
+|	RENAME 	'(' RelExpr ',' NAME ',' NAME ')'		{ $$ = new RenameOp((RelExpr*)$3, strData.back(), strData.back()); strData.pop_back(); strData.pop_back();}
+|	EXTEND	'(' RelExpr ',' Expr ',' NAME ')'		{ $$ = new ExtendOp((RelExpr*)$3, (Expr*)$5, strData.back()); strData.pop_back();}
+|	GROUPBY	'('	RelExpr ',' '{' AttrList '}' ',' '{' AggrList '}' ')' { $$ = new GroupbyOp((RelExpr*)$3, (AttrList*)$6, (AggrList*)$10); }
+|	GROUPBY	'('	RelExpr ',' '{' '}' ',' '{' AggrList '}' ')' { $$ = new GroupbyOp((RelExpr*)$3, (AggrList*)$9); }
+|	GROUPBY	'('	RelExpr ',' '{' AttrList '}' ',' '{' '}' ')' { $$ = new GroupbyOp((RelExpr*)$3, (AttrList*)$6); }
 ;
 
 BinaryOp:
-	PRODUCT '(' RelExpr ',' RelExpr ')'						{ $$ = new ProductOp((RelExpr*)$3, (RelExpr*)$5); }
-|	JOIN	'(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new JoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
-|	SEMIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new SemijoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
-|	OUTERJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new OuterjoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
-|	ANTIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'		{ $$ = new AntijoinOp((RelExpr*)$3, (RelExpr*)$5, (RA_Predicate*)$7); }
-|	UNION	'(' RelExpr ',' RelExpr ')'						{ $$ = new UnionOp((RelExpr*)$3, (RelExpr*)$5); }
+	UNION	'(' RelExpr ',' RelExpr ')'					{ $$ = new UnionOp((RelExpr*)$3, (RelExpr*)$5); }
+|	DIFF '(' RelExpr ',' RelExpr ')'					{ $$ = new DiffOp((RelExpr*)$3, (RelExpr*)$5); }
+|	PRODUCT '(' RelExpr ',' RelExpr ')'					{ $$ = new ProductOp((RelExpr*)$3, (RelExpr*)$5); }
+| 	INTERSECTION '(' RelExpr ',' RelExpr ')' 			{ $$ = new DiffOp((RelExpr*)$3, new DiffOp((RelExpr*)$3, (RelExpr*)$5)); }
+|	JOIN	'(' RelExpr ',' RelExpr ',' Predicate ')'	{ $$ = new JoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }	
+|	SEMIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'	{ $$ = new SemijoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }
+|	OUTERJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'	{ $$ = new OuterjoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }
+|	ANTIJOIN '(' RelExpr ',' RelExpr ',' Predicate ')'	{ $$ = new AntijoinOp((RelExpr*)$3, (RelExpr*)$5, (Predicate*)$7); }
 ;
 
-MathExpr:
-	MathExpr PLUS MathExpr									{ $$ = new MathExpr(1, (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr MINUS MathExpr									{ $$ = new MathExpr(2, (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr MULTIPLY MathExpr								{ $$ = new MathExpr(3, (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr DIVIDE MathExpr								{ $$ = new MathExpr(4, (MathExpr*)$1, (MathExpr*)$3); }
-|	'(' MathExpr ')'										{ $$ = new MathExpr(0, (MathExpr*)$2); }
-//|	'-' MathExpr %prec UMINUS								{ $$ = new MathExpr(5, (MathExpr*)$2); }
-|	attribute												{ $$ = new MathExpr((Attribute*)$1); }
-|	AggrExpr												{ $$ = new MathExpr((AggrExpr*)$1); }
-|	data													{ $$ = new MathExpr((Data*)$1); }
+Expr:
+	MathExpr		{ $$ = new Expr((MathExpr*)$1); }
+|	Predicate		{ $$ = new Expr((Predicate*)$1); }
+|	STRVAL			{ assert(strData.size() > 0); $$ = new Expr(strData.back()); strData.pop_back(); }
 ;
 
 AggrList:
-	AggrExpr												{ $$ = new AggrList((AggrExpr*)$1); }
-|	AggrList ',' AggrExpr									{ $$ = new AggrList((AggrList*)$1, (AggrExpr*)$3); }
+	AggrExpr					{ $$ = new AggrList((AggrExpr*)$1); }
+|	AggrList ',' AggrExpr		{ $$ = new AggrList((AggrList*)$1, (AggrExpr*)$3); }
 ;
 
 AggrExpr:
-	MAX '(' attribute ')'									{ $$ = new AggrExpr("MAX", "", (Attribute*)$3); }
-|	MIN '(' attribute ')'									{ $$ = new AggrExpr("MIN", "", (Attribute*)$3); }
-|	COUNT '(' attribute ')'									{ $$ = new AggrExpr("COUNT", "", (Attribute*)$3); }
-|	SUM '(' attribute ')'									{ $$ = new AggrExpr("SUM", "", (Attribute*)$3); }
-|	AVG '(' attribute ')'									{ $$ = new AggrExpr("AVG", "", (Attribute*)$3); }
-|	MAX_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("MAX", "DISTINCT", (Attribute*)$3); }
-|	MIN_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("MIN", "DISTINCT", (Attribute*)$3); }
-|	COUNT_DISTINCT '(' attribute ')'						{ $$ = new AggrExpr("COUNT", "DISTINCT", (Attribute*)$3); }
-|	SUM_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("SUM", "DISTINCT", (Attribute*)$3); }
-|	AVG_DISTINCT '(' attribute ')'							{ $$ = new AggrExpr("AVG", "DISTINCT", (Attribute*)$3); }
+	MAX '(' Attribute ')'				{ $$ = new AggrExpr("MAX", (Attribute*)$3); }
+|	MIN '(' Attribute ')'				{ $$ = new AggrExpr("MIN", (Attribute*)$3); }
+|	COUNT '(' Attribute ')'				{ $$ = new AggrExpr("COUNT", (Attribute*)$3); }
+|	SUM '(' Attribute ')'				{ $$ = new AggrExpr("SUM", (Attribute*)$3); }
+|	AVG '(' Attribute ')'				{ $$ = new AggrExpr("AVG", (Attribute*)$3); }
+|	MAX_DISTINCT '(' Attribute ')'		{ $$ = new AggrExpr("MAX_DISTINCT", (Attribute*)$3); }
+|	MIN_DISTINCT '(' Attribute ')'		{ $$ = new AggrExpr("MIN_DISTINCT", (Attribute*)$3); }
+|	COUNT_DISTINCT '(' Attribute ')'	{ $$ = new AggrExpr("COUNT_DISTINCT", (Attribute*)$3); }
+|	SUM_DISTINCT '(' Attribute ')'		{ $$ = new AggrExpr("SUM_DISTINCT", (Attribute*)$3); }
+|	AVG_DISTINCT '(' Attribute ')'		{ $$ = new AggrExpr("AVG_DISTINCT", (Attribute*)$3); }
 ;
 
 AttrList:
-  attribute													{ $$ = new AttrList((Attribute*)$1); }						
-| AttrList ',' attribute									{ $$ = new AttrList((AttrList*)$1, (Attribute*)$3); }
+  Attribute								{ $$ = new AttrList((Attribute*)$1); }
+| AttrList ',' Attribute				{ $$ = new AttrList((AttrList*)$1, (Attribute*)$3); }
 ;
 
-attribute:
-  NAME 										{ $$ = new Attribute(strData[0]); }
-| NAME '.' NAME								{ $$ = new Attribute(strData[0], strData[1]); }
+Attribute:
+  NAME 									{ $$ = new Attribute(strData.back()); strData.pop_back(); }
+| NAME '.' NAME							{ assert(strData.size() > 1); $$ = new Attribute(strData.front(), strData.back()); strData.pop_back(); strData.pop_back(); }
 ;
 
 Predicate:
-  Predicate OR Predicate					{ $$ = new RA_Predicate(0, (RA_Predicate*)$1, (RA_Predicate*)$3); }
-| Predicate AND Predicate					{ $$ = new RA_Predicate(1, (RA_Predicate*)$1, (RA_Predicate*)$3); }
-| NOT Predicate								{ $$ = new RA_Predicate(2, (RA_Predicate*)$2); }
-| '(' Predicate ')'							{ $$ = new RA_Predicate(3, (RA_Predicate*)$2); }
-| comparison								{ $$ = new RA_Predicate((Comparison*)$1); }
+  Predicate OR Predicate				{ $$ = new Predicate("OR", (Predicate*)$1, (Predicate*)$3); }
+| Predicate AND Predicate				{ $$ = new Predicate("AND", (Predicate*)$1, (Predicate*)$3); }
+| NOT Predicate							{ $$ = new Predicate("NOT", (Predicate*)$1); }
+| '(' Predicate ')'						{ $$ = new Predicate((Predicate*)$1); }	
+| Comparison							{  $$ = new Predicate((Comparison*)$1); }
 ;
 
-comparison:	compared CompOp compared		{ $$ = new Comparison((Compared*)$1, (CompOp*)$2, (Compared*)$3); }
+
+MathExpr:
+	MathExpr PLUS MathExpr				{ $$ = new MathExpr("PLUS", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr MINUS MathExpr				{ $$ = new MathExpr("MINUS", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr MULTIPLY MathExpr			{ $$ = new MathExpr("MULTIPLY", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr DIVIDE MathExpr			{ $$ = new MathExpr("DIVIDE", (MathExpr*)$1, (MathExpr*)$3); }
+|	'(' MathExpr ')'					{ $$ = new MathExpr((MathExpr*)$2); }
+|	Attribute							{ $$ = new MathExpr((Attribute*)$1); }
+|	AggrExpr							{ $$ = new MathExpr((AggrExpr*)$1); }
+|	INTVAL								{ $$ = new MathExpr((int)intData.back()); intData.pop_back(); }
+|	FLOATVAL							{ $$ = new MathExpr((float)floatData.back()); floatData.pop_back(); }
 ;
 
-CompOp:
-  NEQ 		{ $$ = new CompOp("NEQ"); }
-| EQ 		{ $$ = new CompOp("EQ"); }
-| GT		{ $$ = new CompOp("GT"); }
-| GTE 		{ $$ = new CompOp("GTE"); }
-| LT 		{ $$ = new CompOp("LT"); }
-| LTE		{ $$ = new CompOp("LTE"); }
+Comparison:
+	MathExpr NEQ MathExpr				{ $$ = new Comparison("NEQ", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr EQ MathExpr				{ $$ = new Comparison("EQ", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr GT MathExpr				{ $$ = new Comparison("GT", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr GTE MathExpr				{ $$ = new Comparison("GTE", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr LT MathExpr				{ $$ = new Comparison("LT", (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr LTE MathExpr				{ $$ = new Comparison("LTE", (MathExpr*)$1, (MathExpr*)$3); }
 ;
 
-compared: 	
-//attribute 	{ $$ = new Compared((Attribute*)$1); }
-MathExpr		{ $$ = new Compared((MathExpr*)$1); }
-;
-
-data: 		
-CONSTANT 	{ $$ = new Data(dData[0]); }
-| STRVAL	{ $$ = new Data(strData[0]); }
-;
-
-/*
-RelationList:
-	relation
-|	RelationList ',' relation
-;
-*/
-
-relation: 	
-NAME	{ $$ = new Relation(strData[0]); }
+Relation: 	
+	NAME								{ $$ = new Relation(strData.back()); strData.pop_back(); }
 ;
 
 %%
+
 /*
-RelAlgNode *parse_root = 0;
+//RelAlgNode *parse_root = 0;
 
 int main() {
 
-    string sql;
-    cout << "Enter sql statement: ";
-    getline(cin,sql);
+	do {
+    	string sql;
+    	cout << "Enter RA statement: ";
 
-    RelAlgNode *parseRoot = 0;
-	Parser parser;
-	parser.parse(sql, parseRoot);
+    	getline(cin,sql);
+    	if (sql == "q")
+    		break;
 
-	if (parseRoot != 0) cout << "parsed successfully, yo\n";
-	QPTranslator qp;
-    if (parseRoot != 0)
-        parseRoot->accept(qp); 
+    	RelAlgNode *parseRoot = 0;
+    	string lastParsed;
+
+		RAParser parser;
+		parser.parse(sql, parseRoot, lastParsed);
+
+		if (parseRoot != 0) cout << "ChunkKey Unicorns frolick!!\n";
+		//QPTranslator qp;
+    	//if (parseRoot != 0)
+    	//    parseRoot->accept(qp); 
+    } while (1);
 
 	return 0;
-}*/
+}
+*/
+

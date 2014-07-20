@@ -1,15 +1,9 @@
 %option c++
 %option noyywrap case-insensitive
 
-D			[0-9]
-L			[a-zA-Z_]
-H			[a-fA-F0-9]
-E			[Ee][+-]?{D}+
-FS			(f|F|l|L)
-IS			(u|U|l|L)*
-
 %{
 #include <iostream>
+#include <vector>
 #include "parser.h"
 
 extern YY_Parser_STYPE yylval;
@@ -18,66 +12,89 @@ extern YY_Parser_STYPE yylval;
 int column;
 
 // Variables used to share data with the parser
-std::string strData[10];
-int dData[5];
+std::vector<std::string> strData;
+std::vector<int> intData;
+std::vector<float> floatData;
 
 using namespace std;
 %}
 
 %%
 
-"!="						{ /* count() */; return Parser::NEQ; }
-"="							{ /* count() */; return Parser::EQ; }
-">"							{ /* count() */; return Parser::GT; }
-"<"							{ /* count() */; return Parser::LT; }
-">="						{ /* count() */; return Parser::GTE; }
-"<="						{ /* count() */; return Parser::LTE; }
+	/* relational ops: 1 table */
+"select"					{ /* count() */; return RAParser::SELECT; }
+"project"					{ /* count() */; return RAParser::PROJECT; }
+"sort"						{ /* count() */; return RAParser::SORT; }
+"rename"					{ /* count() */; return RAParser::RENAME; }
+"extend"					{ /* count() */; return RAParser::EXTEND; }
+"groupby"					{ /* count() */; return RAParser::GROUPBY; }
 
-"select"					{ /* count() */; return Parser::SELECT; }
-"project"					{ /* count() */; return Parser::PROJECT; }
-"sort"						{ /* count() */; return Parser::SORT; }
-"rename"					{ /* count() */; return Parser::RENAME; }
-"extend"					{ /* count() */; return Parser::EXTEND; }
-"groupby"					{ /* count() */; return Parser::GROUPBY; }
+	/* relational ops: 2 tables */
+"product"					{ /* count() */; return RAParser::PRODUCT; }
+"join"						{ /* count() */; return RAParser::JOIN; }
+"semijoin"					{ /* count() */; return RAParser::SEMIJOIN; }
+"antijoin"					{ /* count() */; return RAParser::ANTIJOIN; }
+"outerjoin"					{ /* count() */; return RAParser::OUTERJOIN; }
+"union"						{ /* count() */; return RAParser::UNION; }
+"diff"						{ /* count() */; return RAParser::DIFF; }
+"intersect"					{ /* count() */; return RAParser::INTERSECTION; }
 
-"product"					{ /* count() */; return Parser::PRODUCT; }
-"join"						{ /* count() */; return Parser::JOIN; }
-"semijoin"					{ /* count() */; return Parser::SEMIJOIN; }
-"antijoin"					{ /* count() */; return Parser::ANTIJOIN; }
-"outerjoin"					{ /* count() */; return Parser::OUTERJOIN; }
-"union"						{ /* count() */; return Parser::UNION; }
+	/* aggregation functions */
+"max"						{ /* count() */; return RAParser::MAX; }
+"min"						{ /* count() */; return RAParser::MIN; }
+"count"						{ /* count() */; return RAParser::COUNT; }
+"sum"						{ /* count() */; return RAParser::SUM; }
+"avg"						{ /* count() */; return RAParser::AVG; }
+"max distinct"				{ /* count() */; return RAParser::MAX_DISTINCT; }
+"min distinct"				{ /* count() */; return RAParser::MIN_DISTINCT; }
+"count distinct"			{ /* count() */; return RAParser::COUNT_DISTINCT; }
+"sum distinct"				{ /* count() */; return RAParser::SUM_DISTINCT; }
+"avg distinct"				{ /* count() */; return RAParser::AVG_DISTINCT; }
 
-"max"						{ /* count() */; return Parser::MAX; }
-"min"						{ /* count() */; return Parser::MIN; }
-"count"						{ /* count() */; return Parser::COUNT; }
-"sum"						{ /* count() */; return Parser::SUM; }
-"avg"						{ /* count() */; return Parser::AVG; }
+	/* arithmetic ops */
+"+"						{ return RAParser::PLUS; }
+"-"						{ return RAParser::MINUS; }
+"/"						{ return RAParser::DIVIDE; }
+"*"						{ return RAParser::MULTIPLY; }
+	
+	/* comparison ops */
+"!="						{ /* count() */; return RAParser::NEQ; }
+"="							{ /* count() */; return RAParser::EQ; }
+">"							{ /* count() */; return RAParser::GT; }
+"<"							{ /* count() */; return RAParser::LT; }
+">="						{ /* count() */; return RAParser::GTE; }
+"<="						{ /* count() */; return RAParser::LTE; }
 
-"max distinct"				{ /* count() */; return Parser::MAX_DISTINCT; }
-"min distinct"				{ /* count() */; return Parser::MIN_DISTINCT; }
-"count distinct"			{ /* count() */; return Parser::COUNT_DISTINCT; }
-"sum distinct"				{ /* count() */; return Parser::SUM_DISTINCT; }
-"avg distinct"				{ /* count() */; return Parser::AVG_DISTINCT; }
+	/* logic ops */
+"or"						{ /* count() */; return RAParser::OR; }
+"and"						{ /* count() */; return RAParser::AND; }
+"not"						{ /* count() */; return RAParser::NOT; }
 
-"+"						{ return Parser::PLUS; }
-"-"						{ return Parser::MINUS; }
-"/"						{ return Parser::DIVIDE; }
-"*"						{ return Parser::MULTIPLY; }
+	/* numbers */
+-?[0-9]+                	{ intData.push_back(atoi(yytext)); return RAParser::INTVAL; } 
 
-0[xX]{H}+{IS}?				{ /* count() */; return(Parser::CONSTANT); }
-0{D}+{IS}?					{ /* count() */; return(Parser::CONSTANT); }
-{D}+{IS}?					{ /* count() */; return(Parser::CONSTANT); }
-L?'(\\.|[^\\'])+'			{ /* count() */; return(Parser::CONSTANT); }
+-?[0-9]+"."[0-9]* |
+-?"."[0-9]+     |
+-?[0-9]+E[-+]?[0-9]+    |
+-?[0-9]+"."[0-9]*E[-+]?[0-9]+ |
+-?"."[0-9]+E[-+]?[0-9]+ { floatData.push_back(atof(yytext)); return RAParser::FLOATVAL; }
 
-{D}+{E}{FS}?				{ /* count() */; return(Parser::CONSTANT); }
-{D}*"."{D}+({E})?{FS}?		{ /* count() */; return(Parser::CONSTANT); }
-{D}+"."{D}*({E})?{FS}?		{ /* count() */; return(Parser::CONSTANT); }
+	/* booleans */
+TRUE    { intData.push_back(1); return RAParser::INTVAL; }
+UNKNOWN { intData.push_back(-1); return RAParser::INTVAL; }
+FALSE   { intData.push_back(0); return RAParser::INTVAL; }
 
-[-+*/{}(),;]					{ /* count() */; return yytext[0]; }
 
-[A-Za-z][A-Za-z0-9_]*		{ /* count() */; strData[0] = yytext; return Parser::NAME; }
 
-L?\"(\\.|[^\\"])*\"			{ /* count() */; return Parser::STRVAL; }
+[-+*/{}\[\](),.]				{/* count() */; return yytext[0]; }
+
+;							{ strData.clear(); intData.clear(); floatData.clear(); return yytext[0]; }
+
+	/* names */
+[A-Za-z][A-Za-z0-9_]*		{ /* count() */; strData.push_back(yytext); return RAParser::NAME; }
+
+	/* strings */
+L?\"(\\.|[^\\"])*\"			{ /* count() */; strData.push_back(yytext); return RAParser::STRVAL; }
 
 [ \t\v\n\f]					{ /* count() */; }
 

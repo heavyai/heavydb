@@ -1,4 +1,4 @@
-#ifndef SQL_LIST_NODE_H
+    #ifndef SQL_LIST_NODE_H
 #define SQL_LIST_NODE_H
 
 #include "ASTNode.h"
@@ -6,7 +6,7 @@
 
 namespace SQL_Namespace {
 
-class  SQLList : public ASTNode {
+class SQLList : public ASTNode {
     
 public:
     SQL *sql;
@@ -21,7 +21,8 @@ public:
         v.visit(this);
     }
     
-	};
-}
+};
+
+} // SQL_Namespace
 
 #endif // SQL_LIST_NODE_H

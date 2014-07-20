@@ -1,24 +1,36 @@
-#ifndef SORT_OP_NODE_H
-#define SORT_OP_NODE_H
+/**
+ * @file	SortOp.h
+ * @author	Steven Stewart <steve@map-d.com>
+ * @author	Gil Walzer <gil@map-d.com>
+ */
+#ifndef RA_SORTOP_NODE_H
+#define RA_SORTOP_NODE_H
 
-#include "RelAlgNode.h"
+#include <cassert>
 #include "UnaryOp.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {
+
 class SortOp : public UnaryOp {
     
 public:
+	RelExpr *n1 = NULL;
+	AttrList *n2 = NULL;
 
-	AttrList* atLi;
+	/// Constructor
+	SortOp(RelExpr *n1, AttrList *n2) {
+		assert(n1 && n2);
+		this->n1 = n1;
+		this->n2 = n2;
+	}
 
-	explicit SortOp(RelExpr *n1, AttrList* n2) : atLi(n2) { relex = n1; }
+	virtual void accept(class Visitor &v) {
+		v.visit(this);
+	}
 
-/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-	};
-}
+};
 
-#endif // SORT_OP_NODE_H
+} // RA_Namespace
+
+#endif // RA_SORTOP_NODE_H
