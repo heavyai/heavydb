@@ -133,7 +133,33 @@ public:
     }
 
     void visit(class ProductOp *v) {
+        bool x = false, y = false;
+        int q = qCount++;
+        cout << "Q" << q;
+        cout << " = " << "product(";
+        
+        // Check if left child node is leaf (Relation)
+        if (v->n1->n4) {
+            v->n1->n4->accept(*this);
+            x = true;
+        }
+        else
+            cout << "Q" << ++q;
+        cout << ", ";
 
+        // Check for right child node is leaf (Relation)
+        if (v->n1->n4) {
+            v->n1->n4->accept(*this);
+            y = true;
+        }
+        else
+            cout << "Q" << ++q;
+
+        cout << ");" << endl;
+
+        // Otherwise, visit the left and/or right child
+        if (!x) v->n1->accept(*this);
+        if (!y) v->n2->accept(*this);
     }
 
     void visit(class Program *v) {
@@ -141,8 +167,9 @@ public:
     }
 
     void visit(class ProjectOp *v) {
-        cout << "Q" << qCount;
-        cout << " = " << "project(Q" << (++qCount) << ", { ";
+        int q = qCount;
+        cout << "Q" << ++q;
+        cout << " = " << "project( Q" << ++q << ", { ";
         if (v->n2) v->n2->accept(*this);
         cout << "});" << endl;
         if (v->n1) v->n1->accept(*this);
@@ -173,7 +200,8 @@ public:
     }
 
     void visit(class SelectOp *v) {
-        cout << "Q" << qCount << " = select(Q" << (qCount+1) << ", ";
+        int q = qCount;
+        cout << "Q" << q << " = select( Q" << ++q << ", ";
         if (v->n2) v->n2->accept(*this);
         cout << ");" << endl;
         if (v->n1) v->n1->accept(*this);
