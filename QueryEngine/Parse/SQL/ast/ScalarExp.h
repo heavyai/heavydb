@@ -7,7 +7,7 @@
 
 namespace SQL_Namespace {
 
-class  ScalarExp : public ASTNode {
+class ScalarExp : public ASTNode {
     
 public:
 
@@ -34,7 +34,11 @@ public:
         this->n2 = n2;
     }
 
-    ScalarExp(int rF, ScalarExp* n) : rule_Flag(rF), se1(n), se2(NULL), a(NULL), cr(NULL), fr(NULL) {}
+    ScalarExp(int rF, ScalarExp* n1) {
+        assert(rf >= 0 && rf <= 6 && n1);
+        this->n1 = n1;
+    }
+
     ScalarExp(Atom *n) : rule_Flag(-1), se1(NULL), se2(NULL), a(n), cr(NULL), fr(NULL) {}
     ScalarExp(ColumnRef* n) : rule_Flag(-1), se1(NULL), se2(NULL), a(NULL), cr(n), fr(NULL) {}
     ScalarExp(FunctionRef* n) : rule_Flag(-1), se1(NULL), se2(NULL), a(NULL), cr(NULL), fr(n) {}

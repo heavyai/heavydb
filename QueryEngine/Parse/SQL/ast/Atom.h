@@ -1,18 +1,24 @@
 #ifndef SQL_AST_ATOM_H
 #define SQL_AST_ATOM_H
 
+#include <cassert>
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
 namespace SQL_Namespace {
-	class  Atom : public ASTNode {
+
+class Atom : public ASTNode {
     
 public:
-    std::string user;
-    Literal *lit;
+    std::string user = "";
+    Literal *lit = NULL;
 
     /**< Constructor */
-    explicit Atom(Literal *n) : lit(n), user("") {}
+    Atom(Literal *n) {
+        assert(n);
+        this->lit = n;
+    }
+
     Atom(std::string n) : user(n), lit(NULL) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
@@ -20,7 +26,8 @@ public:
         v.visit(this);
     }
     
-	};
-}
+};
+
+} // SQL_Namespace
 
 #endif // SQL_AST_ATOM_H
