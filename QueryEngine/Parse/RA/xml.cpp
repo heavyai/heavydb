@@ -1,6 +1,6 @@
 #include "parser.h"
 #include "visitor/Visitor.h"
-#include "translator/XMLTranslatorRA.h"
+#include "visitor/XMLTranslator.h"
 #include <iostream>
 #include <string>
 
@@ -8,6 +8,7 @@ using namespace std;
 using RA_Namespace::XMLTranslator;
 
 int main(int argc, char ** argv) {
+    cout << "-------------------------------------------\nMap-D, Relational Algebra to XML Translator\n-------------------------------------------" << endl;
     RAParser parser;
     string sql;
     do {
