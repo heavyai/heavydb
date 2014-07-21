@@ -1,15 +1,17 @@
-#ifndef SCALAR_EXP_NODE_H
-#define SCALAR_EXP_NODE_H
+#ifndef SQL_SCALAR_EXP_NODE_H
+#define SQL_SCALAR_EXP_NODE_H
 
+#include <cassert>
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
 namespace SQL_Namespace {
-	class  ScalarExp : public ASTNode {
+
+class  ScalarExp : public ASTNode {
     
 public:
 
-	int rule_Flag;
+	int rule_Flag = -1;
 	/* rules are:
 	0 (scalar_exp)
     1 addition
@@ -19,14 +21,19 @@ public:
     5 positive [scalar_exp]
     6 negative [scalar_exp] */
 
-    ScalarExp* se1;
-    ScalarExp* se2;
-    Atom* a;
-    ColumnRef* cr;
-    FunctionRef* fr;
+    ScalarExp* n1 = NULL;
+    ScalarExp* n2 = NULL;
+    Atom* n3 = NULL;
+    ColumnRef *n4 = NULL;
+    FunctionRef *n5 = NULL;
 
     /* constructor */
-    explicit ScalarExp(int rF, ScalarExp *n1, ScalarExp* n2) : rule_Flag(rF), se1(n1), se2(n2), a(NULL), cr(NULL), fr(NULL) {}
+    ScalarExp(int rF, ScalarExp *n1, ScalarExp* n2) {
+        assert(n1 && n2);
+        this->n1 = n1;
+        this->n2 = n2;
+    }
+
     ScalarExp(int rF, ScalarExp* n) : rule_Flag(rF), se1(n), se2(NULL), a(NULL), cr(NULL), fr(NULL) {}
     ScalarExp(Atom *n) : rule_Flag(-1), se1(NULL), se2(NULL), a(n), cr(NULL), fr(NULL) {}
     ScalarExp(ColumnRef* n) : rule_Flag(-1), se1(NULL), se2(NULL), a(NULL), cr(n), fr(NULL) {}
@@ -37,7 +44,8 @@ public:
         v.visit(this);
     }
     
-	};
-}
+};
+
+} // SQL_Namespace
 
 #endif // SCALAR_EXP_NODE_H
