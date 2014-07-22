@@ -1,5 +1,6 @@
 %option c++
 %option noyywrap case-insensitive
+%option yylineno
 
 %{
 #include <iostream>
@@ -16,7 +17,7 @@ double dData[10];
 int dotCount = 0;
 int offsetFlag = 0;
 int asFlag = 0;
-int lineno = 0;
+int mylineno = 0;
 
 using namespace std;
 %}
@@ -172,6 +173,7 @@ using namespace std;
 	int c = yyinput();
 	temp = yytext;
 	yyunput(c, yytext);	/* just peeking */
+	if (c == '\n') mylineno++;
 	if(c != '\'') {
 		//printf("reading string: %s\n", yytext);
 		strData[0] = temp.substr(1, temp.length()-2);
@@ -183,7 +185,7 @@ using namespace std;
 		
 '[^'\n]*$					{ cerr << "Unterminated string" << endl; }
 
-\n		{ }
+\n		{ mylineno++; }
 
 [ \t\r]+	;	/* white space */
 

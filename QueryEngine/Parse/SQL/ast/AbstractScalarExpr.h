@@ -6,6 +6,7 @@
 #ifndef SQL_ABSTRACT_SCALR_EXPR_H
 #define SQL_ABSTRACT_SCALR_EXPR_H
 
+#include "ASTNode.h"
 #include <cassert>
 
 namespace SQL_Namespace {
@@ -14,42 +15,46 @@ enum ScalarExprType {
 	SCALAR_INT,
 	SCALAR_FLOAT,
 	SCALAR_STRING
-}
+};
 
 class AbstractScalarExpr : public ASTNode {
 
 public:
-	virtual inline void type(ScalarExprType t) {
+	//virtual ~AbstractScalarExpr() = 0;
+
+	virtual inline void setType(ScalarExprType t) {
 		this->type = t;
 	}
 
-	virtual inline ScalarExprType type() {
+	virtual inline ScalarExprType getType() {
 		return this->type;
 	}
 
-	virtual inline void lineno(int lineno) {
-		assert(lineno > 0);
+	virtual inline void setLineno(int lineno) {
+		//assert(lineno > 0);
 		this->lineno = lineno;
 	}
 
-	virtual inline int lineno() {
+	virtual inline int getLineno() {
 		return this->lineno;
 	}
 
-	virtual inline void colno(int colno) {
-		assert(colno > 0);
+	virtual inline void setColno(int colno) {
+		//assert(colno > 0);
 		this->colno = colno;
 	}
 
-	virtual inline int colno() {
+	virtual inline int getColno() {
 		return this->colno;
 	}
 
 private:
-	virtual ~AbstractScalarExpr() = 0;
+	
 	ScalarExprType type;
 	int lineno = 0;
 	int colno = 0;
 };
 
 } // SQL_Namespace
+
+#endif SQL_ABSTRACT_SCALR_EXPR_H

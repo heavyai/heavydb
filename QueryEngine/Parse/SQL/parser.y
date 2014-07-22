@@ -18,6 +18,7 @@
 
 // AST nodes
 #include "ast/ASTNode.h"
+#include "ast/AbstractScalarExpr.h"
 #include "ast/Program.h"
 #include "ast/SQLList.h"
 #include "ast/SQL.h"
@@ -103,7 +104,7 @@ extern ASTNode* parse_root;
 extern std::string strData[10];
 extern double dData[10];
 
-
+extern int mylineno;
 
 %}
 %left OR
@@ -483,7 +484,7 @@ scalar_exp:
 
 atom:
     /*  parameter_ref
-    | */   literal           { $$ = new Atom((Literal*)$1); }
+    | */   literal           { $$ = new Atom((Literal*)$1);  }
     |   USER                { $$ = new Atom("USER"); }
     ;
 
@@ -498,9 +499,9 @@ function_ref:
     ;
 
 literal
-: STRING /* should be: STRING */           { $$ = new Literal(strData[0]); }
-| INTNUM                                   { $$ = new Literal(dData[0]); }
-| APPROXNUM                                { $$ = new Literal(dData[0]); }
+: STRING /* should be: STRING */           { $$ = new Literal(strData[0]); ((Literal*)$$)->setLineno(mylineno); }
+| INTNUM                                   { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(6); }
+| APPROXNUM                                { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(mylineno);}
 ;
 
 table

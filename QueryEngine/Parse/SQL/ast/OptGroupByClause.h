@@ -9,9 +9,11 @@ namespace SQL_Namespace {
     
 public:
     ColumnRefCommalist* crc;
-    
+    GroupByList* gbl;
+
     /**< Constructor */
-    explicit OptGroupByClause(ColumnRefCommalist* n) : crc(n) {}
+    explicit OptGroupByClause(ColumnRefCommalist* n) : crc(n), gbl(NULL) {}
+    explicit OptGroupByClause(GroupByList* n) : gbl(n), crc(NULL) {}
 
     /**< Accepts the given void visitor by calling v.visit(this) */
     void accept(Visitor &v) {
