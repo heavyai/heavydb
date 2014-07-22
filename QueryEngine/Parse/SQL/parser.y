@@ -104,6 +104,7 @@ extern ASTNode* parse_root;
 extern std::string strData[10];
 extern double dData[10];
 
+extern int mycolno;
 extern int mylineno;
 
 %}
@@ -499,9 +500,9 @@ function_ref:
     ;
 
 literal
-: STRING /* should be: STRING */           { $$ = new Literal(strData[0]); ((Literal*)$$)->setLineno(mylineno); }
-| INTNUM                                   { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(6); }
-| APPROXNUM                                { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(mylineno);}
+: STRING /* should be: STRING */           { $$ = new Literal(strData[0]); ((Literal*)$$)->setLineno(mylineno); ((Literal*)$$)->setColno(mycolno - lexer.YYLeng()); }
+| INTNUM                                   { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(mylineno); ((Literal*)$$)->setColno(mycolno - lexer.YYLeng()); }
+| APPROXNUM                                { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(mylineno); ((Literal*)$$)->setColno(mycolno - lexer.YYLeng()); }
 ;
 
 table

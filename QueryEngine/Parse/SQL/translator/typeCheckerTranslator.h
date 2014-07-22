@@ -362,8 +362,7 @@ public:
             if ((v->se1->getType() == SCALAR_STRING) ^ (v->se2->getType() == SCALAR_STRING)) {
                 printf("scalar expression mismatch between types, line %d, column %d\n", 
                     v->se1->getLineno(), v->se1->getColno());
-                exit(0);
-            }
+                }
 
             // find common type; if INT and FLOAT, cast to higher of two
             else {

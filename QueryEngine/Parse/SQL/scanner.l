@@ -5,10 +5,11 @@
 %{
 #include <iostream>
 #include "parser.h"
+#include <cstring>
 
 extern YY_Parser_STYPE yylval;
 
-#define TOK(name) { dotCount = 0; offsetFlag = 0; return Parser::name; }
+#define TOK(name) { dotCount = 0; offsetFlag = 0; mycolno += strlen(yytext); return Parser::name; }
 
 // Variables used to share data with the parser
 std::string strData[10];
@@ -17,7 +18,8 @@ double dData[10];
 int dotCount = 0;
 int offsetFlag = 0;
 int asFlag = 0;
-int mylineno = 0;
+int mylineno = 1;
+int mycolno = 0;
 
 using namespace std;
 %}
@@ -84,6 +86,8 @@ using namespace std;
 
 "asc"				TOK(ASC);
 "desc"				TOK(DESC);
+"between"			TOK(BETWEEN);
+"substr"("ing")?	TOK(FSUBSTRING)	
 
 "as" {
 	/* ensure that aliased name is printed fully. */
@@ -94,6 +98,7 @@ using namespace std;
 "offset" {
 	/* ensure that aliased name is printed fully. */
 	offsetFlag = 1;
+	mycolno += strlen(yytext);
 	return Parser::OFFSET;
 }
 
@@ -103,16 +108,17 @@ using namespace std;
 "some"				TOK(SOME);
 "exists"			TOK(EXISTS);
 
-"="|"<>"|"<"|">"|"<="|">=" { 
+"="|"<>"|"<"|">"|"!="|"<="|">=" { 
 	strData[5] = yytext;
 	TOK(COMPARISON);
 }
 
 
-[-+*/,();]			return yytext[0];
+[-+*/,();]			{ mycolno++; return yytext[0]; }
 
 [.] {
 	dotCount++;
+	mycolno += strlen(yytext);
 	return yytext[0];
 }
 
@@ -131,6 +137,8 @@ using namespace std;
 	else
 		strData[0] = yytext;
 	offsetFlag = 0;
+	//printf("lexer: %d\n", strlen(yytext));
+	mycolno += strlen(yytext);
 	return Parser::NAME;
 }
 
@@ -155,6 +163,7 @@ using namespace std;
 	else 
 		dData[0] = atof(yytext);
 	dotCount = 0;
+	mycolno += strlen(yytext);
 	return Parser::INTNUM;
 }
 
@@ -173,7 +182,6 @@ using namespace std;
 	int c = yyinput();
 	temp = yytext;
 	yyunput(c, yytext);	/* just peeking */
-	if (c == '\n') mylineno++;
 	if(c != '\'') {
 		//printf("reading string: %s\n", yytext);
 		strData[0] = temp.substr(1, temp.length()-2);
@@ -185,13 +193,13 @@ using namespace std;
 		
 '[^'\n]*$					{ cerr << "Unterminated string" << endl; }
 
-\n		{ mylineno++; }
+\n							{ mylineno++; mycolno = 0; /*printf("[%s:%d] lineno=%d\n", __func__, __LINE__, mylineno);*/  }
 
-[ \t\r]+	;	/* white space */
+[ \t\r]+		/* add one to colno per white space */ { mycolno++; }
 
 "--".*	;	/* comment */
 
-.							{ cerr << "Unknown character" << endl; };
+.							{ cerr << "Unknown character: char is " << yytext << endl; };
 
 <<EOF>>						{ yyterminate(); }
 %%
