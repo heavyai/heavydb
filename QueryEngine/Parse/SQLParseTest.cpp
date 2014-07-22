@@ -101,18 +101,11 @@ std::string schemaTesting[10] = {
 	"create table table_A (CHECK (a+3 > SOME (select * from table_A where (column_A.column_B*(a+b)/(3-4)) NOT IN ('five', 'twelve', 'thirteen'))));"
 };
 
-std::string amplab[3] = {
-	"SELECT pageURL, pageRank FROM rankings WHERE pageRank > X;"
-	"SELECT SUBSTR(sourceIP, 1, X), SUM(adRevenue) FROM uservisits GROUP BY SUBSTR(sourceIP, 1, X);"
-	"SELECT sourceIP, totalRevenue, avgPageRank FROM (SELECT sourceIP, AVG(pageRank) as avgPageRank, SUM(adRevenue) as totalRevenue FROM Rankings AS R, UserVisits AS UV WHERE R.pageURL = UV.destURL AND UV.visitDate BETWEEN 'Date(`1980-01-01)' AND 'Date(`X)' GROUP BY UV.sourceIP) ORDER BY totalRevenue DESC LIMIT 1;"
-/*CREATE TABLE url_counts_partial AS 
-  SELECT TRANSFORM (line)
-    USING "python /root/url_count.py" as (sourcePage, destPage, cnt) 
-  FROM documents;
-CREATE TABLE url_counts_total AS 
-  SELECT SUM(cnt) AS totalCount, destPage 
-  FROM url_counts_partial 
-  GROUP BY destPage; */
+std::string amplab[4] = {
+	"SELECT pageURL, pageRank FROM rankings WHERE pageRank > X;",
+	"SELECT SUBSTR(sourceIP, 1, X), SUM(adRevenue) FROM uservisits GROUP BY SUBSTR(sourceIP, 1, X);",
+	"SELECT sourceIP, totalRevenue, avgPageRank FROM (SELECT sourceIP, AVG(pageRank) as avgPageRank, SUM(adRevenue) as totalRevenue FROM Rankings AS R, UserVisits AS UV WHERE R.pageURL = UV.destURL AND UV.visitDate BETWEEN 'Date(`1980-01-01)' AND 'Date(`X)' GROUP BY UV.sourceIP) ORDER BY totalRevenue DESC LIMIT 1;",
+	"CREATE TABLE url_counts_partial AS SELECT TRANSFORM (line) USING 'python /root/url_count.py' as (sourcePage, destPage, cnt) FROM documents; CREATE TABLE url_counts_total AS SELECT SUM(cnt) AS totalCount, destPage FROM url_counts_partial GROUP BY destPage;"
 };
 
 std::string tpcH[20] = {
@@ -143,26 +136,9 @@ std::string tpcH[20] = {
 	"select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice*(1-l_discount) else 0 end) / sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= '1995-09-01' and l_shipdate < '1995-10-01';"
 };
 
-int main() {
-	PRINT_DLINE(80);
-    
-    // call unit tests
-    test_SQLParse();
+void testGrammar(SQLParse sql, std::string errMsg, std::pair<bool, ASTNode*> result) {
 
-	PRINT_DLINE(80);
-	printTestSummary();
-	PRINT_DLINE(80);
-    
-    return 0;
-}
-
-bool test_SQLParse() {
-	SQLParse sql;
-	std::string errMsg;
-	std::pair<bool, ASTNode*> result;
-
-	std::string selectFromWhere = "select * from student where GradYear > 2004;";
-	std::string selectFromWhereErr = "select * fromz student where GradYear > 2004;";
+	PCLEAR("SQLParse()");
 
 	cout << endl << "------------ Select statement testing -------------" << endl;
 
@@ -223,12 +199,16 @@ bool test_SQLParse() {
 		}
 		else PPASS("SQLParse()");
 	}
+}
 
+void testBenchmarks(SQLParse sql, std::string errMsg, std::pair<bool, ASTNode*> result) {
+
+	PCLEAR("SQLParse()");
 
 	cout << endl << "------------ AMPLab Benchmark testing -------------" << endl;
 
 	// AMPLAB testing
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 4; i++) {
 
 		// Test: AMP lab benchmarks
 		result = sql.parse(amplab[i], errMsg);
@@ -239,6 +219,8 @@ bool test_SQLParse() {
 		}
 		else PPASS("SQLParse()");
 	}
+
+	PCLEAR("SQLParse()");
 
 	cout << endl << "------------ TPC-H Benchmark testing -------------" << endl;
 	// TPC-H testing
@@ -254,12 +236,38 @@ bool test_SQLParse() {
 		else PPASS("SQLParse()");
 
 	}
+}
+
+int main() {
+	PRINT_DLINE(80);
+    
+    // call unit tests
+    test_SQLParse();
+
+	PRINT_DLINE(80);
+	printTestSummary();
+	PRINT_DLINE(80);
+    
+    return 0;
+}
+
+bool test_SQLParse() {
+	SQLParse sql;
+	std::string errMsg;
+	std::pair<bool, ASTNode*> result;
+
+	std::string selectFromWhere = "select * from student where GradYear > 2004;";
+	std::string selectFromWhereErr = "select * fromz student where GradYear > 2004;";
+
+	testGrammar(sql, errMsg, result);
+	testBenchmarks(sql, errMsg, result);
+/*
 	// Test: select with predicate, error
 	result = sql.parse(selectFromWhereErr, errMsg);
 	if (result.first) {
 		fprintf(stderr, "[%s:%d] An invalid statement was parsed without producing an error.\n", __func__, __LINE__);
 		PFAIL("SQLParse()");
 	}
-	else PPASS("SQLParse()");	
+	else PPASS("SQLParse()");	*/
 
 }
