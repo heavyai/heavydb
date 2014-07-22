@@ -51,6 +51,12 @@ void Database::stop() {
 
 bool Database::processRequest(const std::string &request) {
     std::cout << "Request: " << request << std::endl;
+    Parser parser;
+    ASTNode *parseRoot = 0;
+    string lastParsed;
+    int numErrors = parser.parse(sql, parseRoot,lastParsed);
+    if (numErrors > 0) {
+
     return true;
 }
         
