@@ -17,6 +17,7 @@ static unsigned skip = 0;
 #define PPASS(msg) (printf("%s: %s PASS(%d):\t%s%s\n", __FILE__, ANSI_COLOR_GREEN, ++pass, msg, ANSI_COLOR_RESET))
 #define PFAIL(msg) (printf("%s: %s FAIL(%d):\t%s%s\n", __FILE__, ANSI_COLOR_RED, ++fail, msg, ANSI_COLOR_RESET))
 #define PSKIP(msg) (printf("%s: %s SKIP(%d):\t%s%s\n", __FILE__, ANSI_COLOR_BLUE, ++skip, msg, ANSI_COLOR_RESET))
+#define PCLEAR pass = 0; fail = 0; skip = 0;
 
 void printTestSummary() {
     printf("pass=%u fail=%u skip=%u total=%u (%.1f%% %.1f%% %.1f%%)\n", 
