@@ -1,37 +1,38 @@
 #ifndef OUTPUT_BUFFER_H
 #define OUTPUT_BUFFER_H
 
+#include <vector>
+#include <list>
+#include <queue>
+#include <string>
+
 class OutputBuffer {
 
     private:
         std::queue<std::vector <char>, std::list <std::vector <char> > > dataQueue_;
+        bool isFinal_;
 
     public:
-        void addSubBuffer () {
+
+        OutputBuffer (): isFinal_(false) {}
+
+        inline void addSubBuffer () {
             dataQueue_.push(std::vector <char>);
         }
         
-        void finalize() {
-            dataQueue_.push(std::vector <char>);
+        inline void finalize() {
+            isFinal_ = true;
             // if this was multithreaded would notify consumer this was last
             // element
         }
 
-        void addData (const void *data, const size_t size) {
-            char * dataCharPtr = static_cast <char *> (data);
-            dataQueue_.back().insert(dataQueue_.end(), dataCharPtr, dataCharPtr + size);
-        }
+        void writeData (const void *data, const size_t size);
 
-        void addData (const char *data, const size_t size) {
-            dataQueue_.back().insert(dataQueue_.end(), dataCharPtr, dataCharPtr + size);
-        }
+        void writeData (const char *data, const size_t size);// copies c-style string (not null-terminated)
 
-        void addData (const string &data) {
-            char * dataCharPtr = data.data(); // could be null terminated
-            dataQueue_.back().insert(dataQueue_.end(), dataCharPtr, dataCharPtr + data.size()); // use data.size() to ensure we don't copy a null terminator
-        }
+        void writeData (const std::string &data);
 
-        template <typename T> void addData (T data) {
+        template <typename T> void writeData (T data) { // must leave in header file because templated
             size_t dataSize = sizeof(T);
             char * dataCharPtr = static_cast <char *> (data);
             dataQueue_.back().insert(dataQueue_.end(), dataCharPtr, dataCharPtr + size);
@@ -45,11 +46,11 @@ class OutputBuffer {
             return dataQueue_.size();
         }
 
-        const std::vector <char>& front() const {
+        inline const std::vector <char>& front() const {
             return dataQueue_.front();
         }
 
-        void pop() {
+        inline void pop() {
             dataQueue_.pop();
         }
 };
