@@ -893,11 +893,11 @@ public:
             else if (v->rule_Flag == 0) {
                 v->am->accept(*this);
                 cout << "<ALL>" << endl;
-                v->se->accept(*this);
+                v->se1->accept(*this);
             }
             else if (v->rule_Flag == 1) {
                 v->am->accept(*this);
-                v->se->accept(*this);
+                v->se1->accept(*this);
             }
         }
 
