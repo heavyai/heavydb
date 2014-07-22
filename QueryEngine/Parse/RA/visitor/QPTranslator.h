@@ -49,15 +49,44 @@ public:
     QPTranslator() { }
 
     void visit(class AggrExpr *v) {
-        cout << "<AggrExpr>";
+        cout << v->func << "(";
+        v->n1->accept(*this);
+        cout << ")";
     }
 
     void visit(class AggrList *v) {
-
+        if (v->n1) {
+            v->n1->accept(*this);
+            if (v->n1->n2)
+                cout << ", ";
+        }
+        if (v->n2) {
+            v->n2->accept(*this);
+        }
     }
 
     void visit(class AntijoinOp *v) {
- 
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+        if (!v->n2->n4)
+            v->n2->accept(*this);
+
+        cout << "Q" << qCount++ << " = antijoin(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+
+        if (v->n2->n4)
+            v->n2->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-3);
+        cout << ", ";
+
+        v->n3->accept(*this);
+
+        cout << ");" << endl;
     }
 
     void visit(class Attribute *v) {
@@ -67,37 +96,109 @@ public:
     }
 
     void visit(class AttrList *v) {
-        if (v->n1) v->n1->accept(*this);
+        if (v->n1) {
+            v->n1->accept(*this);
+            if (v->n1->n2)
+                cout << ", ";
+        }
         if (v->n2) {
             v->n2->accept(*this);
-            cout << " ";
         }
     }
 
     void visit(class Comparison *v) {
         if (v->n1) v->n1->accept(*this);
-        cout << v->op << " ";
+        cout << " " << v->op << " ";
         if (v->n2) v->n2->accept(*this);
     }
 
     void visit(class DiffOp *v) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+        if (!v->n2->n4)
+            v->n2->accept(*this);
 
+        cout << "Q" << qCount++ << " = diff(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+
+        if (v->n2->n4)
+            v->n2->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-3);
+
+        cout << ");" << endl;
     }
 
     void visit(class Expr *v) {
-
+        if (v->str != "")
+            cout << v->str;
+        else {
+            if (v->n1)
+                v->n1->accept(*this);
+            else if (v->n2)
+                v->n2->accept(*this);
+        }
     }
 
     void visit(class ExtendOp *v) {
+        if (!v->n1->n4) {
+            v->n1->accept(*this);
+        }
 
+        cout << "Q" << qCount++ << " = extend(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+
+        v->n2->accept(*this);
+        cout << ", " << v->name << ");" << endl;
     }
 
     void visit(class GroupbyOp *v) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
 
+        cout << "Q" << qCount++ << " = groupby(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << qCount-2;
+        cout << ", {";
+
+        v->n2->accept(*this);
+        cout << "}, {";
+        v->n3->accept(*this);
+        cout << "});" << endl;
     }
 
     void visit(class JoinOp *v) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+        if (!v->n2->n4)
+            v->n2->accept(*this);
 
+        cout << "Q" << qCount++ << " = join(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+
+        if (v->n2->n4)
+            v->n2->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-3);
+        cout << ", ";
+
+        v->n3->accept(*this);
+
+        cout << ");" << endl;
     }
 
     void visit(class MathExpr *v) {
@@ -108,7 +209,6 @@ public:
         }
         else if (v->n3) {
             v->n3->accept(*this);
-            cout << " ";
         }
         else if (v->n4) {
             v->n4->accept(*this);
@@ -118,48 +218,64 @@ public:
                 cout << v->intVal;
             else
                 cout << v->floatVal;       
-            cout << " ";
         }
     }
 
     void visit(class OuterjoinOp *v) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+        if (!v->n2->n4)
+            v->n2->accept(*this);
 
+        cout << "Q" << qCount++ << " = outerjoin(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+
+        if (v->n2->n4)
+            v->n2->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-3);
+        cout << ", ";
+
+        v->n3->accept(*this);
+
+        cout << ");" << endl;
     }
 
     void visit(class Predicate *v) {
-        if (v->n1) v->n1->accept(*this);
-        if (v->n2) v->n2->accept(*this);
-        if (v->n3) v->n3->accept(*this);
+        if (v->n1 && v->n2) {
+            v->n1->accept(*this);
+            cout << " " << v->op << " ";
+            v->n2->accept(*this);
+        }
+        else if (v->n1)
+            v->n1->accept(*this);
+        else if (v->n3)
+            v->n3->accept(*this);
     }
 
     void visit(class ProductOp *v) {
-        bool x = false, y = false;
-        int q = qCount++;
-        cout << "Q" << q;
-        cout << " = " << "product(";
-        
-        // Check if left child node is leaf (Relation)
-        if (v->n1->n4) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+        if (!v->n2->n4)
+            v->n2->accept(*this);
+
+        cout << "Q" << qCount++ << " = product(";
+        if (v->n1->n4)
             v->n1->n4->accept(*this);
-            x = true;
-        }
         else
-            cout << "Q" << ++q;
+            cout << "Q" << (qCount-2);
         cout << ", ";
 
-        // Check for right child node is leaf (Relation)
-        if (v->n1->n4) {
-            v->n1->n4->accept(*this);
-            y = true;
-        }
+        if (v->n2->n4)
+            v->n2->n4->accept(*this);
         else
-            cout << "Q" << ++q;
-
+            cout << "Q" << (qCount-3);
+        
         cout << ");" << endl;
-
-        // Otherwise, visit the left and/or right child
-        if (!x) v->n1->accept(*this);
-        if (!y) v->n2->accept(*this);
     }
 
     void visit(class Program *v) {
@@ -167,16 +283,22 @@ public:
     }
 
     void visit(class ProjectOp *v) {
-        int q = qCount;
-        cout << "Q" << ++q;
-        cout << " = " << "project( Q" << ++q << ", { ";
-        if (v->n2) v->n2->accept(*this);
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+
+        cout << "Q" << qCount++ << " = project(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << qCount-2;
+        cout << ", {";
+
+        v->n2->accept(*this);
         cout << "});" << endl;
-        if (v->n1) v->n1->accept(*this);
     }
 
     void visit(class Relation *v) {
-        cout << v->name << " ";
+        cout << v->name;
     }
 
     void visit(class RelExpr *v) {
@@ -196,27 +318,98 @@ public:
     }
 
     void visit(class RenameOp *v) {
+        if (!v->n1->n4) {
+            v->n1->accept(*this);
+        }
 
+        cout << "Q" << qCount++ << " = rename(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+        
+        cout << v->name1 << ", ";
+        cout << v->name2;
+        
+        cout << ");" << endl;
     }
 
     void visit(class SelectOp *v) {
-        int q = qCount;
-        cout << "Q" << q << " = select( Q" << ++q << ", ";
-        if (v->n2) v->n2->accept(*this);
+        if (!v->n1->n4) {
+            v->n1->accept(*this);
+        }
+
+        cout << "Q" << qCount++ << " = select(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+        
+        v->n2->accept(*this);
+        
         cout << ");" << endl;
-        if (v->n1) v->n1->accept(*this);
     }
 
     void visit(class SemijoinOp *v) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+        if (!v->n2->n4)
+            v->n2->accept(*this);
 
+        cout << "Q" << qCount++ << " = semijoin(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+
+        if (v->n2->n4)
+            v->n2->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-3);
+        cout << ", ";
+
+        v->n3->accept(*this);
+
+        cout << ");" << endl;
     }
 
     void visit(class SortOp *v) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
 
+        cout << "Q" << qCount++ << " = sort(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << qCount-2;
+        cout << ", [";
+
+        v->n2->accept(*this);
+        cout << "]);" << endl;
     }
 
     void visit(class UnionOp *v) {
+        if (!v->n1->n4)
+            v->n1->accept(*this);
+        if (!v->n2->n4)
+            v->n2->accept(*this);
 
+        cout << "Q" << qCount++ << " = union(";
+        if (v->n1->n4)
+            v->n1->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-2);
+        cout << ", ";
+
+        if (v->n2->n4)
+            v->n2->n4->accept(*this);
+        else
+            cout << "Q" << (qCount-3);
+
+        cout << ");" << endl;
     }
 
 private:
@@ -227,4 +420,5 @@ private:
 } // RA_Namespace
 
 #endif // REL_ALG_QP_VISITOR_H
+
 

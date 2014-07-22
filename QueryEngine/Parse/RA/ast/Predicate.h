@@ -15,10 +15,10 @@ namespace RA_Namespace {
 class Predicate : public RelAlgNode {
     
 public:
-	Predicate *n1;
-	Predicate *n2;
-	Comparison *n3;
-    std::string op;
+	Predicate *n1 = NULL;
+	Predicate *n2 = NULL;
+	Comparison *n3 = NULL;
+    std::string op = "";
 
     /// Constructor
     Predicate(const std::string &op, Predicate *n1, Predicate *n2) {

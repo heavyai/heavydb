@@ -56,7 +56,7 @@ ADD_CUSTOM_TARGET(ScannerFiles DEPENDS ${FlexppOutput})
 #ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput}  ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
 
 ADD_LIBRARY (Parser ${BisonppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
-include_directories(ast)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 #ADD_LIBRARY (Scanner ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
 #ADD_LIBRARY (Scanner ${FlexppOutput})
 
