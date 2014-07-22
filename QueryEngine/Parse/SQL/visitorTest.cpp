@@ -22,7 +22,8 @@ int main(int argc, char ** argv) {
             cout << "Error at: " << lastParsed << endl;
             continue;
         }
-        cout << "# Errors: " << numErrors << endl;
+        if (numErrors > 0)
+            cout << "# Errors: " << numErrors << endl;
         
         XMLTranslator xml;
         if (parseRoot != 0)

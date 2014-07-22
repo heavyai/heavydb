@@ -27,7 +27,6 @@ int main(int argc, char ** argv) {
         if (parseRoot != 0) {
             parseRoot->accept(tcv); 
         }
-        else cout << "parse Root is 0 wtf man\n";
 
     }
     while (1==1);
