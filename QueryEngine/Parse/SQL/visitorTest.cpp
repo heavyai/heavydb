@@ -15,6 +15,8 @@ int main(int argc, char ** argv) {
         getline(cin,sql);
         if (sql == "q")
             break;
+        else sql = sql + "\n";
+
         ASTNode *parseRoot = 0;
         string lastParsed;
         int numErrors = parser.parse(sql, parseRoot,lastParsed);

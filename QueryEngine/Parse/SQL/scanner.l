@@ -18,7 +18,7 @@ double dData[10];
 int dotCount = 0;
 int offsetFlag = 0;
 int asFlag = 0;
-int mylineno = 0;
+int mylineno = 1;
 int mycolno = 0;
 
 using namespace std;
@@ -86,6 +86,8 @@ using namespace std;
 
 "asc"				TOK(ASC);
 "desc"				TOK(DESC);
+"between"			TOK(BETWEEN);
+"substr"("ing")?	TOK(FSUBSTRING)	
 
 "as" {
 	/* ensure that aliased name is printed fully. */
@@ -106,7 +108,7 @@ using namespace std;
 "some"				TOK(SOME);
 "exists"			TOK(EXISTS);
 
-"="|"<>"|"<"|">"|"<="|">=" { 
+"="|"<>"|"<"|">"|"!="|"<="|">=" { 
 	strData[5] = yytext;
 	TOK(COMPARISON);
 }
@@ -197,7 +199,7 @@ using namespace std;
 
 "--".*	;	/* comment */
 
-.							{ cerr << "Unknown character" << endl; };
+.							{ cerr << "Unknown character: char is " << yytext << endl; };
 
 <<EOF>>						{ yyterminate(); }
 %%
