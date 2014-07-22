@@ -7,6 +7,7 @@
 #define RA_SELECTOP_NODE_H
 
 #include <cassert>
+#include "UnaryOp.h"
 #include "../visitor/Visitor.h"
 
 namespace RA_Namespace {

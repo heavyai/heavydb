@@ -1440,7 +1440,7 @@ case 11:
     break;}
 case 12:
 #line 108 "parser.y"
-{ yyval = new RenameOp((RelExpr*)yyvsp[-5], strData.back(), strData.back()); strData.pop_back(); strData.pop_back();;
+{ assert(strData.size() == 2); yyval = new RenameOp((RelExpr*)yyvsp[-5], strData.front(), strData.back()); strData.pop_back(); strData.pop_back();;
     break;}
 case 13:
 #line 109 "parser.y"
@@ -1564,7 +1564,7 @@ case 42:
     break;}
 case 43:
 #line 157 "parser.y"
-{ assert(strData.size() > 1); yyval = new Attribute(strData.front(), strData.back()); strData.pop_back(); strData.pop_back(); ;
+{ assert(strData.size() == 2); yyval = new Attribute(strData.front(), strData.back()); strData.pop_back(); strData.pop_back(); ;
     break;}
 case 44:
 #line 161 "parser.y"
@@ -1584,7 +1584,7 @@ case 47:
     break;}
 case 48:
 #line 165 "parser.y"
-{  yyval = new Predicate((Comparison*)yyvsp[0]); ;
+{ yyval = new Predicate((Comparison*)yyvsp[0]); ;
     break;}
 case 49:
 #line 170 "parser.y"

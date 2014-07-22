@@ -105,7 +105,7 @@ UnaryOp:
 	SELECT 	'(' RelExpr ',' Predicate ')'		 	{ $$ = new SelectOp((RelExpr*)$3, (Predicate*)$5); }
 |	PROJECT '(' RelExpr ',' '{' AttrList '}' ')' 	{ $$ = new ProjectOp((RelExpr*)$3, (AttrList*)$6); }
 |	SORT	'(' RelExpr ',' '[' AttrList ']' ')' 	{ $$ = new SortOp((RelExpr*)$3, (AttrList*)$6); }
-|	RENAME 	'(' RelExpr ',' NAME ',' NAME ')'		{ $$ = new RenameOp((RelExpr*)$3, strData.back(), strData.back()); strData.pop_back(); strData.pop_back();}
+|	RENAME 	'(' RelExpr ',' NAME ',' NAME ')'		{ assert(strData.size() == 2); $$ = new RenameOp((RelExpr*)$3, strData.front(), strData.back()); strData.pop_back(); strData.pop_back();}
 |	EXTEND	'(' RelExpr ',' Expr ',' NAME ')'		{ $$ = new ExtendOp((RelExpr*)$3, (Expr*)$5, strData.back()); strData.pop_back();}
 |	GROUPBY	'('	RelExpr ',' '{' AttrList '}' ',' '{' AggrList '}' ')' { $$ = new GroupbyOp((RelExpr*)$3, (AttrList*)$6, (AggrList*)$10); }
 |	GROUPBY	'('	RelExpr ',' '{' '}' ',' '{' AggrList '}' ')' { $$ = new GroupbyOp((RelExpr*)$3, (AggrList*)$9); }
@@ -154,7 +154,7 @@ AttrList:
 
 Attribute:
   NAME 									{ $$ = new Attribute(strData.back()); strData.pop_back(); }
-| NAME '.' NAME							{ assert(strData.size() > 1); $$ = new Attribute(strData.front(), strData.back()); strData.pop_back(); strData.pop_back(); }
+| NAME '.' NAME							{ assert(strData.size() == 2); $$ = new Attribute(strData.front(), strData.back()); strData.pop_back(); strData.pop_back(); }
 ;
 
 Predicate:
@@ -162,7 +162,7 @@ Predicate:
 | Predicate AND Predicate				{ $$ = new Predicate("AND", (Predicate*)$1, (Predicate*)$3); }
 | NOT Predicate							{ $$ = new Predicate("NOT", (Predicate*)$1); }
 | '(' Predicate ')'						{ $$ = new Predicate((Predicate*)$1); }	
-| Comparison							{  $$ = new Predicate((Comparison*)$1); }
+| Comparison							{ $$ = new Predicate((Comparison*)$1); }
 ;
 
 
