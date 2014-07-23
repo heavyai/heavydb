@@ -455,6 +455,7 @@ public:
                 exit(0);
             }
         }
+        
     }
 
     void visit(class Predicate *v) {
