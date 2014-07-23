@@ -75,6 +75,12 @@ typedef std::tuple <int, std::string> ColumnKey;
 
 typedef std::map < ColumnKey, ColumnRow *> ColumnRowMap;
         
+/**
+ * @type Catalog
+ * @brief Serves as the system catalog.  Currently just uses
+ * uses ASCII files to store the Table Table and Column Table.
+ */
+
 class Catalog {
 
     public:
@@ -109,6 +115,11 @@ class Catalog {
          * of the column names are duplicates). Along with the table name it expects
          * a vector of ColumnRow structs, which it fills in the tableId and columnId
          * fields for.
+         *
+         * Expects that ColumnRow structs are initialized with second
+         * constructor (without tableId and columnId) and that they are
+         * allocated on the heap - ownership of them transfers from the calling
+         * function to the Catalog
          */
 
         mapd_err_t addTableWithColumns(const std::string &tableName, std::vector <ColumnRow *> & columns);

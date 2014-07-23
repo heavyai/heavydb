@@ -7,7 +7,7 @@
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include "../Server/TcpServer/TcpServer.h"
-//#include "TcpServer.h"
+#include "../DataMgr/Metadata/Catalog.h"
 
 class OutputBuffer;
 
@@ -26,6 +26,8 @@ class Database {
     private:
         std::string tcpPort_;
         int numThreads_;
+
+        Catalog catalog_;
 
         /// The io_service used to perform asynchronous operations
         boost::asio::io_service ioService_;

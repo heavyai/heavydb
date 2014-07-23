@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 
-ADD_LIBRARY(catalog Catalog.cpp)
+SET (catalog_source_files
+    Catalog.cpp
+    Catalog.h
+)
 
-PROJECT			(MapD)
-
-ADD_EXECUTABLE(catalogTest CatalogTest.cpp)
-target_link_libraries(catalogTest catalog )
-
+ADD_LIBRARY (Catalog ${catalog_source_files})

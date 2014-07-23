@@ -1,3 +1,18 @@
+/**
+ * @file    OutputBuffer.h
+ * @author  Todd Mostak <todd@map-d.com>
+ * @brief   This file contains the class specification and related data structures for OutputBuffer.
+ *
+ * This file contains the OutputBuffer class specification, which is essentially an (eventually
+ * thread-safe) queue by which Database and the classes it calls can write output 
+ * (including errors) to and that can be sent out by TcpConnection to the client.
+ *
+ * Written to by OutputWriter
+ *
+ * @see OutputWriter.h
+ */
+
+
 #ifndef OUTPUT_BUFFER_H
 #define OUTPUT_BUFFER_H
 
@@ -5,6 +20,13 @@
 #include <list>
 #include <queue>
 #include <string>
+
+/**
+ * @type OutputBuffer
+ * @brief Wraps a queue of vectors of char called subBuffers.
+ * All writes go to back subbuffer. Client of this class can
+ * add a new subbuffer or finalize the queue at any time.
+ */
 
 class OutputBuffer {
 

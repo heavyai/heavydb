@@ -9,7 +9,7 @@ using namespace std;
 
 namespace Database_Namespace {
 
-Database::Database(const std::string &tcpPort, const int numThreads): tcpPort_(tcpPort), numThreads_(numThreads), signals_(ioService_),  tcpServer_("0.0.0.0",tcpPort,ioService_, *this)   { 
+Database::Database(const std::string &tcpPort, const int numThreads): tcpPort_(tcpPort), numThreads_(numThreads), signals_(ioService_), catalog_("data"),  tcpServer_("0.0.0.0",tcpPort,ioService_, *this)   { 
     registerSignals();
 }
 

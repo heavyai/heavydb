@@ -212,7 +212,7 @@ mapd_err_t Catalog::getMetadataforColumn (const string &tableName, const string 
 }
 
 mapd_err_t Catalog::getMetadataforColumns (const string &tableName, const vector<string> &columnNames,  vector <ColumnRow> &columnRows) {
-    TableR wMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
     int tableId = tableRowIt -> second -> tableId;
