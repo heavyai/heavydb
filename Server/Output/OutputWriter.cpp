@@ -1,6 +1,8 @@
 #include "OutputWriter.h"
 #include "OutputBuffer.h"
 
+using std::string; 
+
 OutputWriter::OutputWriter(OutputBuffer &outputBuffer): outputBuffer_(outputBuffer) {}
 
 void OutputWriter::writeError(const string &error) {
@@ -14,7 +16,7 @@ void OutputWriter::writeError(const string &error) {
 void OutputWriter::writeStatusMessage (const string &message) {
     outputBuffer_.addSubBuffer();
     int statusNum = -2;
-    outputBuffer_.writeData(errorNum);
-    outputBuffer_.writeData(error);
+    outputBuffer_.writeData(statusNum);
+    outputBuffer_.writeData(message);
     outputBuffer_.finalize();
 }

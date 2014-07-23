@@ -7,7 +7,9 @@
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include "../Server/TcpServer/TcpServer.h"
+//#include "TcpServer.h"
 
+class OutputBuffer;
 
 namespace Database_Namespace {
 
@@ -18,7 +20,7 @@ class Database {
         void start();
         void stop();
 
-        bool processRequest(const std::string &request);
+        bool processRequest(const std::string &request, OutputBuffer &outputBuffer);
 
 
     private:

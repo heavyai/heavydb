@@ -17,14 +17,20 @@ class OutputBuffer {
         OutputBuffer (): isFinal_(false) {}
 
         inline void addSubBuffer () {
-            dataQueue_.push(std::vector <char>);
+            writeLastSubBufferSize();
+            dataQueue_.push(std::vector <char> (4)); // Start with 4 so we have space later to write in size
         }
         
         inline void finalize() {
+            writeLastSubBufferSize();
             isFinal_ = true;
+            dataQueue_.push(std::vector <char> (4)); // Start with 4 so we have space later to write in size
+            writeLastSubBufferSize();
             // if this was multithreaded would notify consumer this was last
             // element
         }
+
+        void writeLastSubBufferSize();
 
         void writeData (const void *data, const size_t size);
 
@@ -34,8 +40,8 @@ class OutputBuffer {
 
         template <typename T> void writeData (T data) { // must leave in header file because templated
             size_t dataSize = sizeof(T);
-            char * dataCharPtr = static_cast <char *> (data);
-            dataQueue_.back().insert(dataQueue_.end(), dataCharPtr, dataCharPtr + size);
+            char * dataCharPtr = reinterpret_cast <char *> (&data);
+            dataQueue_.back().insert(dataQueue_.back().end(), dataCharPtr, dataCharPtr + dataSize);
         }
 
         inline bool empty () const {

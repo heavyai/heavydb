@@ -1,4 +1,4 @@
-#ifdef OUTPUT_WRITER_H
+#ifndef OUTPUT_WRITER_H
 #define OUTPUT_WRITER_H
 
 #include <string>

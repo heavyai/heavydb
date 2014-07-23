@@ -1,5 +1,9 @@
 #include <iostream>
 #include "Database.h"
+#include "OutputBuffer.h"
+#include "OutputWriter.h"
+#include "parser.h"
+
 
 using namespace std;
 
@@ -49,15 +53,22 @@ void Database::stop() {
     ioService_.stop();
 }
 
-bool Database::processRequest(const std::string &request) {
+bool Database::processRequest(const std::string &request, OutputBuffer &outputBuffer) {
     std::cout << "Request: " << request << std::endl;
+    OutputWriter outputWriter(outputBuffer);
     Parser parser;
     ASTNode *parseRoot = 0;
     string lastParsed;
-    int numErrors = parser.parse(sql, parseRoot,lastParsed);
+    int numErrors = parser.parse(request, parseRoot,lastParsed);
     if (numErrors > 0) {
-
-    return true;
+        string errorString ("Parsing error at " + lastParsed );
+        outputWriter.writeError(errorString);
+        return false;
+    }
+    else {
+        outputWriter.writeStatusMessage("OK");
+        return true;
+    }
 }
         
 } // Database_Namespace

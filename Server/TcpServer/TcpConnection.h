@@ -11,6 +11,8 @@ namespace Database_Namespace {
     class Database; //forward declaration of database class
 }
 
+class OutputBuffer; //forward declaration
+
 using Database_Namespace::Database;
 
 namespace TcpServer_Namespace {
@@ -33,12 +35,16 @@ class TcpConnection : public boost::enable_shared_from_this<TcpConnection>, priv
       void start();
 
     private:
+
+        void writeOutput(OutputBuffer &outputBuffer);
+
+
       /// Handle completion of a read operation.
-      void handle_read(const boost::system::error_code& e,
+      void handleRead(const boost::system::error_code& e,
           std::size_t bytes_transferred);
 
       /// Handle completion of a write operation.
-      void handle_write(const boost::system::error_code& e);
+      void handleWrite(const boost::system::error_code& e, OutputBuffer &outputBuffer);
 
       /// Strand to ensure the TcpConnection's handlers are not called concurrently.
       boost::asio::io_service::strand strand_;
