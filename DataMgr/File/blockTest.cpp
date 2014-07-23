@@ -35,7 +35,7 @@ int main() {
 // Test Block's constructor
 void test_Block() {
     const int fileId = 0;
-    const mapd_addr_t begin = 0;
+    const mapd_size_t begin = 0;
     Block blk(fileId, begin);
 
     // The member variables should be set correctly
@@ -59,6 +59,7 @@ void test_MultiBlock() {
 }
 
 void test_pop() {
+    bool err;
     const mapd_size_t blockSize = 32;
     const int fileId = 0;
     int epoch = 0;
@@ -66,16 +67,16 @@ void test_pop() {
     MultiBlock mb(fileId, blockSize);
 
     // create some Block objects
-    Block *blk[N];
+    Block* blk[N];
     for (int i = 0; i < N; ++i)
-        blk[i] = new Block(i, (mapd_addr_t)(i * blockSize));
+        blk[i] = new Block(i, (mapd_size_t)(i * blockSize));
 
     // push block versions into MultiBlock
     for (int i = 0; i < N; ++i)
         mb.push(blk[i], i);
 
-    // verify the blocks were inserted successfully
-    bool err = false;
+    // verify the blocks were inserted successfully (mb.version)
+    err = false;
     for (int i = 0; i < N; ++i) {
         if (mb.version[i] != blk[i]) {
             err = true;
@@ -83,12 +84,25 @@ void test_pop() {
         }
     }
     if (err)
-        PFAIL("push() - incorrect block pointer found");
+        PFAIL("push() - incorrect block pointer stored in version vector");
     else
-        PPASS("push() - version contains the inserted blocks");        
+        PPASS("push() - version vector contains the inserted blocks");        
+
+    // verify the blocks were inserted successfully (mb.epoch)
+    err = false;
+    for (int i = 0; i < N; ++i) {
+        if (mb.epoch[i] != i) {
+            err = true;
+            break;
+        }
+    }
+    if (err)
+        PFAIL("push() - incorrect epoch stored in version vector");
+    else
+        PPASS("push() - epoch vector contains the correct values");               
+
 
     // free memory
-    for (int i = 0; i < N; ++i)
-        delete blk[i];
-
+    //for (int i = 0; i < N; ++i)
+    //    delete blk[i];
 }
