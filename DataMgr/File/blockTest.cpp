@@ -221,7 +221,7 @@ void test_current() {
     else
         PPASS("current() - current version update after push");  
 
-//    printf("%lu\n", mb.version.size());
+    // printf("%lu\n", mb.version.size());
     // second, test to see if the current block is updated with each pop
     err = false;
     for (int i = 0; i < N - 1; ++i) {
@@ -240,18 +240,20 @@ void test_current() {
         PFAIL("current() - current version not updated after pop");
     }
     else
-        PPASS("pop() - current version update after pop");  
+        PPASS("current() - current version update after pop");  
 
+    // create some Block objects
+    for (int i = 0; i < N; ++i)
+        blk[i] = new Block(i, (mapd_size_t)(i * blockSize));
     /* --------------------- epoch testing ------------------------*/
-
-    // first, test to see if the current block is updated with each push
-    int* queryEpoch;
+    // first, test to see if the current epoch is updated with each push
+    int queryEpoch;
     err = false;
     for (int i = 0; i < N; ++i) {
         mb.push(blk[i], i);
 
-        mb.current(queryEpoch);
-        if (*queryEpoch != i) {
+        mb.current(&queryEpoch);
+        if (queryEpoch != i) {
             err = true;
             break; 
         }
@@ -261,14 +263,13 @@ void test_current() {
     }
     else
         PPASS("current() - current epoch update after push");  
-
+    
     // second, test to see if the current block is updated with each pop
     err = false;
     for (int i = 0; i < N - 1; ++i) {
         mb.version.pop_back();
 
-        mb.current(queryEpoch);
-        if (*queryEpoch != mb.epoch.size() - 1) {
+        if (&mb.current() != blk[mb.version.size() - 1]) {
             err = true;
             break;
         }

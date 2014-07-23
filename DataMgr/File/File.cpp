@@ -56,8 +56,13 @@ namespace File_Namespace {
         return (fclose(f) == 0) ? MAPD_SUCCESS : MAPD_ERR_FILE_CLOSE;
     }
 
-    mapd_err_t erase(const std::string basePath, FILE *f) {
-        // @todo implement the file delete function!
+    mapd_err_t erase(const std::string basePath, const std::string filename) {
+        const std::string filePath = basePath + filename;
+    //    std::cout << filePath << std::endl;
+
+        if (remove(filePath.c_str()) != 0)
+            return MAPD_FAILURE;
+
         return MAPD_SUCCESS;
     }
     
