@@ -20,7 +20,6 @@ namespace File_Namespace {
      * @brief Opens/creates the file with the given id; returns NULL on error.
      *
      * @param fileId The id of the file to open.
-     * @param create A flag indicating whether or not to create a new file
      * @param err An error code, should an error occur.
      * @return FILE* A pointer to a FILE pointer, or NULL on error.
      */
@@ -107,7 +106,6 @@ namespace File_Namespace {
      *
      * @param f Pointer to the FILE.
      * @param blockSize The logical block size of the file.
-     * @param blockNum The block number to where data is being appended.
      * @param buf The source buffer from where data is being read.
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes appended (should be equal to blockSize).

@@ -9,7 +9,7 @@
 #define _BLOCK_H_
 
 #include <cassert>
-#include <queue>	
+#include <deque>	
 #include "../../Shared/types.h"
 
 namespace File_Namespace {
@@ -33,7 +33,7 @@ struct Block {
 	Block(int fileId, mapd_size_t begin) {
 		this->fileId = fileId;
 		this->begin = begin;
-		this->end = begin;
+		this->end = begin; /// (begin >= end) => empty block
 	}
 };
 
@@ -46,13 +46,14 @@ struct Block {
  * Associated with each version of a block is an "epoch" value, which is a temporal
  * reference.
  *
+ *
  * Note that it should always be the case that version.size() == epoch.size().
  */
 struct MultiBlock {
 	int fileId;
 	mapd_size_t blockSize;
-	std::queue<Block*> version;
-	std::queue<int> epoch;
+	std::deque<Block*> version;
+	std::deque<int> epoch;
 
 	/// Constructor
 	MultiBlock(int fileIdIn, mapd_size_t blockSizeIn) :
@@ -64,25 +65,26 @@ struct MultiBlock {
 			pop();
 	}
 
-	/// Returns a reference to the most recent version of the block (optionally, the epoch)
+	/// Returns a reference to the most recent version of the block (optionally, the epoch
+	/// is returned via the parameter "epoch").
 	inline Block& current(int *epoch = NULL) {
 		assert(version.size() > 0);
-		if (epoch) *epoch = this->epoch.back();
+		if (epoch != NULL)
+			*epoch = this->epoch.back();
 		return *version.back();
 	}
 
 	/// Pushes a new block with epoch value
 	inline void push(Block *b, int epoch) {
-		assert(b->fileId == this->fileId);
-		version.push(b);
-		this->epoch.push(epoch);
+		version.push_back(b);
+		this->epoch.push_back(epoch);
 	}
 
 	/// Purges the oldest block
 	inline void pop() {
 		delete version.front(); // frees memory used by oldest Block
-		version.pop();
-		this->epoch.pop();
+		version.pop_front();
+		this->epoch.pop_front();
 	}
 };
 
