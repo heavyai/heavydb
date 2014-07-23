@@ -54,7 +54,7 @@ void Database::stop() {
 }
 
 bool Database::processRequest(const std::string &request, OutputBuffer &outputBuffer) {
-    std::cout << "Request: " << request << std::endl;
+    //std::cout << "Request: " << request << std::endl;
     OutputWriter outputWriter(outputBuffer);
     Parser parser;
     ASTNode *parseRoot = 0;

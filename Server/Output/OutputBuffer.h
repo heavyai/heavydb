@@ -32,17 +32,24 @@ class OutputBuffer {
 
         void writeLastSubBufferSize();
 
-        void writeData (const void *data, const size_t size);
+        void appendData (const void *data, const size_t size);
 
-        void writeData (const char *data, const size_t size);// copies c-style string (not null-terminated)
+        void appendData (const char *data, const size_t size);// copies c-style string (not null-terminated)
 
-        void writeData (const std::string &data);
+        void appendData (const std::string &data);
 
-        template <typename T> void writeData (T data) { // must leave in header file because templated
+        template <typename T> void appendData (T data) { // must leave in header file because templated
             size_t dataSize = sizeof(T);
             char * dataCharPtr = reinterpret_cast <char *> (&data);
             dataQueue_.back().insert(dataQueue_.back().end(), dataCharPtr, dataCharPtr + dataSize);
         }
+
+        template <typename T> void writeDataAtPos (T data, const size_t offset) { // must leave in header file because templated
+            size_t dataSize = sizeof(T);
+            char * dataCharPtr = reinterpret_cast <char *> (&data);
+            std::copy(dataCharPtr,dataCharPtr+4,dataQueue_.back().begin() + offset);
+        }
+
 
         inline bool empty () const {
             return dataQueue_.size() == 0;

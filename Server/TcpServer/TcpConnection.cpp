@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 
+using std::string;
 using std::vector;
 using std::cout;
 using std::endl;
@@ -64,58 +65,12 @@ void TcpConnection::handleRead(const boost::system::error_code& e,
         std::string request(string, bytes_transferred);
         buffer_.consume(buffer_.size());
         OutputBuffer outputBuffer;
-        cout << "Before process" << endl;
         bool isValid = database_.processRequest(request, outputBuffer);
-        cout << "Req is valid: " << isValid << endl;
         writeOutput(outputBuffer);
     }
-
-    //if (isValid) { // Request is good
-    //    char data [24];
-    //    int bytes = 16;
-    //    long long int numRows = -1;
-    //    memcpy(data, &bytes,sizeof(int));
-    //    memcpy(data + 4, &numRows,sizeof(long long int));
-    //    bytes = 4;
-    //    memcpy(data + 12, &bytes,sizeof(int));
-    //    data[16] = 'g';
-    //    data[17] = 'o';
-    //    data[18] = 'o';
-    //    data[19] = 'd';
-    //    bytes = 0;
-    //    memcpy(data + 20, &bytes,sizeof(int));
-    //    
-    //    /*
-    //  std::ostringstream ss;
-    //  ss << boost::lexical_cast<std::string>(buffer_);
-    //  std::string input = ss.str().substr(0,bytes_transferred);
-    //  std::cout << "TcpConnection::handle_read() : " << input << std::endl;
-    //  request_handler_.handle_request(request_, reply_);
-    //  */
-    //  boost::asio::async_write(socket_, boost::asio::buffer(data) /*reply_.to_buffers()*/,
-    //      strand_.wrap(
-    //        boost::bind(&TcpConnection::handle_write, shared_from_this(),
-    //          boost::asio::placeholders::error)));
     // Bad request
-    else if (0) //!result)
-    {
-      /*
-      reply_ = reply::stock_reply(reply::bad_request);
-      boost::asio::async_write(socket_, reply_.to_buffers(),
-          strand_.wrap(
-            boost::bind(&TcpConnection::handle_write, shared_from_this(),
-              boost::asio::placeholders::error)));
-      */
-    }
-    else
-    {
-      /*
-      socket_.async_read_some(boost::asio::buffer(buffer_),
-          strand_.wrap(
-            boost::bind(&TcpConnection::handle_read, shared_from_this(),
-              boost::asio::placeholders::error,
-              boost::asio::placeholders::bytes_transferred)));
-      */
+    else { 
+        std::cerr << "TcpServer - Error in handling read" << endl;
     }
 
   // If an error occurs then no new asynchronous operations are started. This
@@ -125,27 +80,19 @@ void TcpConnection::handleRead(const boost::system::error_code& e,
 }
 
 void TcpConnection::writeOutput(OutputBuffer &outputBuffer) {
-    cout << "Writing output " << endl;
     if (outputBuffer.size() > 0) {
-        const vector <char> &subBuffer = outputBuffer.front();
-        int subBufferSize = subBuffer.size();
-        cout << "SubBufferSize: " << subBufferSize << endl;
-        /*
-        char * dataCharPtr = reinterpret_cast <char *> (subBufferSize);
-        subBuffer.insert(subBuffer.begin(), dataCharPtr, dataCharPtr + 4);
-        */
+        const vector <char> subBuffer = outputBuffer.front();
+        boost::asio::const_buffer writeBuffer = boost::asio::buffer(subBuffer,subBuffer.size());
+        outputBuffer.pop();
 
-      boost::asio::buffer boostBuffer (&subBuffer[0],subBufferSize);
-
-      outputBuffer.pop();
-
-      boost::asio::async_write(socket_, boostBuffer,
+        boost::asio::async_write(socket_, /*boostBuffer, */ boost::asio::buffer(writeBuffer), 
           strand_.wrap(
             boost::bind(&TcpConnection::handleWrite, shared_from_this(),
-              boost::asio::placeholders::error, boost::ref(outputBuffer))));
+              boost::asio::placeholders::error, outputBuffer)));
 
     }
     else {
+        //cout << "New cycle" << endl;
         start();
     }
 }
@@ -157,23 +104,9 @@ void TcpConnection::handleWrite(const boost::system::error_code& e, OutputBuffer
   if (!e)
   {
       writeOutput(outputBuffer);
-    /*
-      boost::asio::async_read_until(socket_, buffer_,
-          queryDelim_,
-          strand_.wrap(
-            boost::bind(&TcpConnection::handleRead, shared_from_this(),
-              boost::asio::placeholders::error,
-              boost::asio::placeholders::bytes_transferred))); //);
-        */
-    // Initiate graceful TcpConnection closure.
-      //std::cout << "Closing connection" << std::endl;
-    //boost::system::error_code ignored_ec;
-    //socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ignored_ec);
   }
   else {
       std::cout << "socket error: " << e << std::endl;
-      //delete this;
-      
   }
 
   // No new asynchronous operations are started. This means that all shared_ptr

@@ -28,9 +28,13 @@ class TablePrinter:
 
 
     def printTable(self):
-        if self.mapd.rowcount < 0: # was error
-            errorMsg = "ERROR: " + self.mapd.errorMsg
+        if self.mapd.rowcount == -1: # was error
+
+            errorMsg = "ERROR: " + self.mapd.statusMsg
             print errorMsg
+            self.mapd.rowcount = 0
+        elif self.mapd.rowcount == -2:
+            print self.mapd.statusMsg
             self.mapd.rowcount = 0
         elif len(self.mapd.colInfo) > 0:
             offset = 0 

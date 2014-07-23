@@ -16,7 +16,7 @@ class MapD:
         self.data = ""
         self.colcount = 0
         self.rowcount = 0
-        self.errorMsg = ""
+        self.statusMsg = ""
         self.colInfo = []
         self.colData = []
         self.timer = False
@@ -44,7 +44,7 @@ class MapD:
 
     def close(self):
         if self.sock != 0:
-            print "Socket close"
+            #print "Socket close"
             self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
             self.sock = 0
@@ -85,18 +85,21 @@ class MapD:
         while not endOfStream:
             pos = 0
             chunk = self.sock.recv(8192)
+            #print chunk
             chunkSize = len(chunk)
-            print "Chunksize: %s" % chunkSize
+            #for c in range(chunkSize):
+                #print "Char at %d: %d" % (c, ord(chunk[c]))
+            #print "Chunksize: %s" % chunkSize
             while True:
-                print "Pos: %d" % (pos,)
+                #print "Pos: %d" % (pos,)
                 if isPackBegin:
                     packLen = unpack ('I',chunk[pos:pos+4])[0]
                     pos += 4
                     totalLen += packLen
-                    print "PackLen: %d" % (packLen,)
+                    #print "PackLen: %d" % (packLen,)
                     if packLen == 0:
                         endOfStream = True
-                        print "eos"
+                        #print "eos"
                         break
                 if packLen > chunkSize - pos:
                     self.data += chunk[pos:]
@@ -110,14 +113,15 @@ class MapD:
                     if pos == chunkSize: #if at end of chunk
                         break
                 #raw_input("press enter")
-        print "Total len: %s" % totalLen
+        #print "Total len: %s" % totalLen
         #self.emptySocket()
         if totalLen > 0:
+            #print "process data" 
             self.processData()
         self.cursorRow = 0
         
     def emptySocket(self):
-        print "emptying socket"
+        #print "emptying socket"
         input = [self.sock]
         while 1:
             inputready, o, e = select.select(input,[],[],0.0)
@@ -167,13 +171,13 @@ class MapD:
         return pos, title
 
     def processData(self):
-        print self.data
+        #print self.data
         self.isOutput=True
-        self.rowcount = unpack('l', self.data[:8])[0]
-        print "Row count: %s" % self.rowcount
-        pos = 8
+        self.rowcount = unpack('i', self.data[:4])[0]
+        #print "Row count: %s" % self.rowcount
+        pos = 4
         if self.rowcount < 0:
-            pos, self.errorMsg = self.readColTitle(pos)
+            pos, self.statusMsg = self.readColTitle(pos)
         else: 
             self.colcount = unpack('I', self.data[pos:12])[0]
             #meta = unpack ('iI',self.data[:8])
