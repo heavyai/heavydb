@@ -16,9 +16,11 @@ using namespace File_Namespace;
 bool test_open_close();
 bool test_create_read_write_append();
 bool test_create_read_write_append_block();
+bool test_erase();
 
 #define BLOCKSIZE 10
 #define FILEID 0
+#define MAPD_FILE_NAME "0.mapd"
 
 mapd_byte_t block0[BLOCKSIZE];
 mapd_byte_t block1[BLOCKSIZE];
@@ -38,7 +40,9 @@ int main() {
           PPASS("create_read_write_append()") : PFAIL("create_read_write_append()"); 
     test_create_read_write_append_block() ? 
           PPASS("create_read_write_append_block()") : PFAIL("create_read_write_append_block()"); 
-    
+    test_erase() ? 
+          PPASS("erase()") : PFAIL("erase()"); 
+   
     printTestSummary();
     
     return 0;
@@ -180,3 +184,42 @@ bool test_create_read_write_append_block() {
     return (close(f) == MAPD_SUCCESS);
 }
 
+bool test_erase() {
+    mapd_byte_t buf[BLOCKSIZE];
+    size_t sz;
+    mapd_err_t err;
+    FILE *f;
+    
+    const std::string basePath = "";
+
+    // create a file for testing
+    f = create(FILEID, BLOCKSIZE, 1, &err);
+    if (!f || err != MAPD_SUCCESS)
+        return false;
+    close(f);
+    const std::string filename = MAPD_FILE_NAME;
+
+    //std::cout << filename << std::endl;
+
+    if (erase(basePath, filename) != MAPD_SUCCESS)
+        return false;
+
+    f = create(FILEID, BLOCKSIZE, 1, &err);
+    close(f);
+    open(FILEID, &err);
+    close(f);
+
+    if (erase(basePath, filename) != MAPD_SUCCESS)
+        return false;
+
+    f = create(FILEID, BLOCKSIZE, 1, &err);
+    close(f);
+    f = open(FILEID, &err);
+    sz = writeBlock(f, BLOCKSIZE, 0, (mapd_addr_t)block0, &err);
+    close(f);
+    
+    if (erase(basePath, filename) != MAPD_SUCCESS)
+        return false;
+    
+    return true;
+}
