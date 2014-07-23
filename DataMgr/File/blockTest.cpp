@@ -11,6 +11,7 @@
 #include "Block.h"
 #include "../../Shared/ansi.h"
 #include "../../Shared/testing.h"
+#include "../../Shared/macros.h"
 
 using namespace Testing;
 using namespace File_Namespace;
@@ -18,14 +19,18 @@ using namespace File_Namespace;
 // unit test function prototypes
 void test_Block();
 void test_MultiBlock();
+void test_push();
 void test_pop();
+void test_current();
 
 int main() {
 
     // call unit tests
     test_Block();
     test_MultiBlock();
+    test_push();
     test_pop();
+    test_current();
 
     printTestSummary();
     
@@ -58,7 +63,7 @@ void test_MultiBlock() {
     (mb.epoch.size() == 0) ? PPASS("MultiBlock epoch is empty") : PFAIL("MultiBlock epoch is not empty");
 }
 
-void test_pop() {
+void test_push() {
     bool err;
     const mapd_size_t blockSize = 32;
     const int fileId = 0;
@@ -108,6 +113,7 @@ void test_pop() {
 }
 
 void test_pop() {
+    //printf("starting pop \n");
     bool err;
     const mapd_size_t blockSize = 32;
     const int fileId = 0;
@@ -120,69 +126,160 @@ void test_pop() {
     for (int i = 0; i < N; ++i)
         blk[i] = new Block(i, (mapd_size_t)(i * blockSize));
 
-    // push block versions into MultiBlock
+    // push block versions into MultiBlock. This relies on test_push() passing
     for (int i = 0; i < N; ++i)
         mb.push(blk[i], i);
 
-    // verify the blocks were inserted successfully (mb.version)
-    err = false;
-    for (int i = 0; i < N; ++i) {
-        if (mb.version[i] != blk[i]) {
-            err = true;
-            break;
-        }
-    }
+    // let's get poppin'
 
-    if (err)
-        PFAIL("push() - incorrect block pointer stored in version vector");
-    else
-        PPASS("push() - version vector contains the inserted blocks");        
-
-    // verify the blocks were inserted successfully (mb.epoch)
+    /* --------------------- epoch testing ------------------------*/
     err = false;
-    for (int i = 0; i < N; ++i) {
-        if (mb.epoch[i] != i) {
-            err = true;
-            break;
-        }
-    }
-    if (err)
-        PFAIL("push() - incorrect epoch stored in version vector");
-    else
-        PPASS("push() - epoch vector contains the correct values");               
-
-    // let's get poppin': pop each Block and epoch off, then check if the oldest block has changed
-    err = false;
-    for (int i = 0; i < N; ++i) {
+    for (int i = 0; i < N - 1; ++i) {
         mb.pop();
 
-        // Has the epoch of the first block changed?
-        if (mb.epoch.peek_front() != i) {
+        // Has the epoch of the first block changed? Is the size appropriate?
+        if ((mb.epoch.front() != i + 1) && (mb.epoch.size() != N - i - 1)) {
             err = true;
             break;
         }
-
-        if (err)
-            PFAIL("pop() - epoch vector not updated after pop");
-        else
-            PPASS("pop() - epoch vector updated after pop");      
-    
-        err = false;
-
-        // Has the first version changed?
-        if (mb.version.peek_front() != blk[0]) {
-            err = true;
-            break;
-        }
-
-        if (err)
-            PFAIL("pop() - epoch vector not updated after pop");
-        else
-            PPASS("pop() - epoch vector updated after pop");               
     }
+
+    // multiBlock now has a single block; check to see if it's empty after popping
+    mb.pop();
+    if (mb.epoch.size() != 0) err = true;
+
+    if (err) {
+        PFAIL("pop() - epoch vector not updated after pop");
+
+    }
+    else
+        PPASS("pop() - epoch vector updated after pop");   
+
+    //refill the blocks: create some Block objects
+    for (int i = 0; i < N; ++i)
+        blk[i] = new Block(i, (mapd_size_t)(i * blockSize));
+
+    // push block versions into MultiBlock. This relies on test_push() passing
+    for (int i = 0; i < N; ++i)
+        mb.push(blk[i], i);
+
+    /* --------------------- version testing ------------------------*/
+    err = false;
+    for (int i = 1; i < N; ++i) {
+        mb.pop();
+
+        // Has the epoch of the first block changed? Is the size appropriate?
+        if ((mb.version.front() != blk[0]) && (mb.epoch.size() != N - i)) {
+            err = true;
+            break;
+        }
+    }
+
+    // multiBlock now has a single block; check to see if it's empty after popping
+    mb.pop();
+    if (mb.version.size() != 0) err = true;
+
+    if (err) {
+        PFAIL("pop() - version vector not updated after pop");
+
+    }
+    else
+        PPASS("pop() - version vector updated after pop");      
 
     // free memory
     //for (int i = 0; i < N; ++i)
     //    delete blk[i];
 }
 
+void test_current() {
+    bool err;
+    const mapd_size_t blockSize = 32;
+    const int fileId = 0;
+    int epoch = 0;
+    const int N = 10;
+    MultiBlock mb(fileId, blockSize);
+
+    // create some Block objects
+    Block* blk[N];
+    for (int i = 0; i < N; ++i)
+        blk[i] = new Block(i, (mapd_size_t)(i * blockSize));
+
+    /* --------------------- version testing ------------------------*/
+
+    // first, test to see if the current block is updated with each push
+    err = false;
+    for (int i = 0; i < N; ++i) {
+        mb.push(blk[i], i);
+        if (&mb.current() != blk[i]) {
+            err = true;
+            break; 
+        }
+    }
+    if (err) {
+        PFAIL("current() - current version not updated after push");
+    }
+    else
+        PPASS("current() - current version update after push");  
+
+//    printf("%lu\n", mb.version.size());
+    // second, test to see if the current block is updated with each pop
+    err = false;
+    for (int i = 0; i < N - 1; ++i) {
+        mb.version.pop_back();
+
+        if (&mb.current() != blk[mb.version.size() - 1]) {
+            err = true;
+            break;
+        }
+    }
+
+    // clear the multiBlock
+    mb.pop();
+
+    if (err) {
+        PFAIL("current() - current version not updated after pop");
+    }
+    else
+        PPASS("pop() - current version update after pop");  
+
+    /* --------------------- epoch testing ------------------------*/
+
+    // first, test to see if the current block is updated with each push
+    int* queryEpoch;
+    err = false;
+    for (int i = 0; i < N; ++i) {
+        mb.push(blk[i], i);
+
+        mb.current(queryEpoch);
+        if (*queryEpoch != i) {
+            err = true;
+            break; 
+        }
+    }
+    if (err) {
+        PFAIL("current() - current epoch not updated after push");
+    }
+    else
+        PPASS("current() - current epoch update after push");  
+
+    // second, test to see if the current block is updated with each pop
+    err = false;
+    for (int i = 0; i < N - 1; ++i) {
+        mb.version.pop_back();
+
+        mb.current(queryEpoch);
+        if (*queryEpoch != mb.epoch.size() - 1) {
+            err = true;
+            break;
+        }
+    }
+
+    // clear the multiBlock
+    mb.pop();
+
+    if (err) {
+        PFAIL("current() - current version not updated after pop");
+    }
+    else
+        PPASS("current() - current version update after pop");  
+}
