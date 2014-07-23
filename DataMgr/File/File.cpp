@@ -58,11 +58,8 @@ namespace File_Namespace {
 
     mapd_err_t erase(const std::string basePath, const std::string filename) {
         const std::string filePath = basePath + filename;
-    //    std::cout << filePath << std::endl;
-
         if (remove(filePath.c_str()) != 0)
             return MAPD_FAILURE;
-
         return MAPD_SUCCESS;
     }
     
