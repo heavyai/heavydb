@@ -67,7 +67,7 @@ namespace File_Namespace {
         
         // read n bytes from the offset location in the file into the buffer
         fseek(f, offset, SEEK_SET);
-        size_t bytesRead = fread(buf, sizeof(mapd_addr_t), n, f);
+        size_t bytesRead = fread(buf, sizeof(mapd_byte_t), n, f);
         if (bytesRead < 1) {
             fprintf(stderr, "[%s:%d] Error reading file contents into buffer.\n", __func__, __LINE__);
             if (err) *err = MAPD_ERR_FILE_READ;
@@ -83,7 +83,7 @@ namespace File_Namespace {
 
         // write n bytes from the buffer to the offset location in the file
         fseek(f, offset, SEEK_SET);
-        size_t bytesWritten = fwrite(buf, sizeof(mapd_addr_t), n, f);
+        size_t bytesWritten = fwrite(buf, sizeof(mapd_byte_t), n, f);
         if (bytesWritten < 1) {
             fprintf(stderr, "[%s:%d] Error writing buffer contents to file.\n", __func__, __LINE__);
             if (err) *err = MAPD_ERR_FILE_WRITE;

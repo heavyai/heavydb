@@ -48,14 +48,14 @@ bool test_open_close() {
     mapd_err_t err;
     FILE *f;
     
-    f = File::create(FILEID, BLOCKSIZE, 1, &err);
+    f = create(FILEID, BLOCKSIZE, 1, &err);
     if (!f || err != MAPD_SUCCESS)
         return false;
-    File::close(f);
+    close(f);
     
-    f = File::open(FILEID, NULL);
+    f = open(FILEID, NULL);
     if (!f) return false;
-    return (File::close(f) == MAPD_SUCCESS);
+    return (close(f) == MAPD_SUCCESS);
 }
 
 bool test_create_read_write_append() {
@@ -66,57 +66,57 @@ bool test_create_read_write_append() {
     FILE *f;
     
     // create a file for testing
-    f = File::create(FILEID, BLOCKSIZE, 1, &err);
+    f = create(FILEID, BLOCKSIZE, 1, &err);
     if (!f || err != MAPD_SUCCESS)
         return false;
-    File::close(f);
+    close(f);
     
     // open the file for testing
-    f = File::open(FILEID, &err);
+    f = open(FILEID, &err);
     if (!f || err != MAPD_SUCCESS)
         return false;
 
     // write block0 to the file
-    sz = File::write(f, 0, BLOCKSIZE, block0, &err);
+    sz = write(f, 0, BLOCKSIZE, (mapd_addr_t)block0, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
     
     // append block1 to the file
-    sz = File::append(f, BLOCKSIZE, block1, &err);
+    sz = append(f, BLOCKSIZE, (mapd_addr_t)block1, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
 
     // read block0 from the file and verify its contents
-    sz = File::read(f, 0, BLOCKSIZE, buf, &err);
+    sz = read(f, 0, BLOCKSIZE, (mapd_addr_t)buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
     for (i = 0; i < BLOCKSIZE; ++i) {
         if (block0[i] != buf[i]) {
-            File::close(f);
+            close(f);
             return false;
         }
     }
 
     // read block1 from the file and verify its contents
-    sz = File::read(f, BLOCKSIZE, BLOCKSIZE, buf, &err);
+    sz = read(f, BLOCKSIZE, BLOCKSIZE, (mapd_addr_t)buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
     for (i = 0, j = BLOCKSIZE; i < BLOCKSIZE; ++i, ++j) {
         if (block1[i] != buf[i]) {
-            File::close(f);
+            close(f);
             return false;
         }
     }
 
-    return (File::close(f) == MAPD_SUCCESS);
+    return (close(f) == MAPD_SUCCESS);
 }
 
 bool test_create_read_write_append_block() {
@@ -127,56 +127,56 @@ bool test_create_read_write_append_block() {
     FILE *f;
     
     // create a file for testing
-    f = File::create(FILEID, BLOCKSIZE, 1, &err);
+    f = create(FILEID, BLOCKSIZE, 1, &err);
     if (!f || err != MAPD_SUCCESS)
         return false;
-    File::close(f);
+    close(f);
     
     // open the file for testing
-    f = File::open(FILEID, &err);
+    f = open(FILEID, &err);
     if (!f || err != MAPD_SUCCESS)
         return false;
 
     // write block0 to the file
-    sz = File::writeBlock(f, BLOCKSIZE, 0, block0, &err);
+    sz = writeBlock(f, BLOCKSIZE, 0, (mapd_addr_t)block0, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
     
     // append block1 to the file
-    sz = File::appendBlock(f, BLOCKSIZE, block1, &err);
+    sz = appendBlock(f, BLOCKSIZE, (mapd_addr_t)block1, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
 
     // read block0 from the file and verify its contents
-    sz = File::readBlock(f, BLOCKSIZE, 0, buf, &err);
+    sz = readBlock(f, BLOCKSIZE, 0, (mapd_addr_t)buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
     for (i = 0; i < BLOCKSIZE; ++i) {
         if (block0[i] != buf[i]) {
-            File::close(f);
+            close(f);
             return false;
         }
     }
 
     // read block1 from the file and verify its contents
-    sz = File::readBlock(f, BLOCKSIZE, 1, buf, &err);
+    sz = readBlock(f, BLOCKSIZE, 1, (mapd_addr_t)buf, &err);
     if (err != MAPD_SUCCESS || sz != BLOCKSIZE) {
-        File::close(f);
+        close(f);
         return false;
     }
     for (i = 0, j = BLOCKSIZE; i < BLOCKSIZE; ++i, ++j) {
         if (block1[i] != buf[i]) {
-            File::close(f);
+            close(f);
             return false;
         }
     }
 
-    return (File::close(f) == MAPD_SUCCESS);
+    return (close(f) == MAPD_SUCCESS);
 }
 
