@@ -5,6 +5,7 @@
 #include "../File/FileMgr.h"
 #include "../../Shared/ansi.h"
 #include "../../Shared/testing.h"
+#include "../../Shared/macros.h"
 
 using namespace Testing;
 using namespace Buffer_Namespace;
@@ -18,7 +19,10 @@ bool test_BufferMgr();
 int main() {
 	test_BufferMgr() ?
 	    PPASS("BufferMgr()") : PFAIL("BufferMgr()");
-	    
+	
+	PRINT_DLINE(80);
+	printTestSummary();
+	PRINT_DLINE(80);
 	return EXIT_SUCCESS;
 }
 
