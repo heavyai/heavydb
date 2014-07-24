@@ -32,8 +32,7 @@ bool Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
 	assert(n > 0);
 
 	// check for buffer overflow
-	mapd_size_t bufSize = size();
-	if ((length_ + n) > bufSize)
+	if ((length_ + n) > size())
 		return false;
 
 	// write source contents to buffer
@@ -54,11 +53,19 @@ bool Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
 
 bool Buffer::append(mapd_size_t n, mapd_addr_t src) {
 	assert(n > 0 && src);
-	return write(length_, n, src);
+	if ((length_ + n) >= size())
+		return false;
+	if (write(length_, n, src)) {
+		length_ += n;
+		return true;
+	}
+	return false;
 }
    
-void Buffer::copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t dest) {
-	assert(n > 0 && dest);;
+bool Buffer::copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t dest) {
+	assert(n > 0 && dest);
+	if ((n + offset) >= length_)
+		return false;
 	memcpy(dest, host_ptr_ + offset, n);
 }
 
