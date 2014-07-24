@@ -1,11 +1,14 @@
 /**
  * @file    OutputBuffer.h
  * @author  Todd Mostak <todd@map-d.com>
- * @brief   This file contains the class specification and related data structures for OutputBuffer.
+ * @brief   This file contains the class specification 
+ * for OutputBuffer.
  *
- * This file contains the OutputBuffer class specification, which is essentially an (eventually
- * thread-safe) queue by which Database and the classes it calls can write output 
- * (including errors) to and that can be sent out by TcpConnection to the client.
+ * This file contains the OutputBuffer class specification,
+ * which is essentially an (eventually thread-safe) queue by
+ * which Database and the classes it calls can write output 
+ * (including errors) to and that can be sent out by
+ * TcpConnection to the client.
  *
  * Written to by OutputWriter
  *
@@ -23,9 +26,16 @@
 
 /**
  * @type OutputBuffer
- * @brief Wraps a queue of vectors of char called subBuffers.
+ * @brief A queue of buffers that can be written to by Database
+ * and friends.
+ *
+ * Wraps a queue of vectors of char called subBuffers.
  * All writes go to back subbuffer. Client of this class can
  * add a new subbuffer or finalize the queue at any time.
+ * Currently instantciated by TcpConnection and passed by
+ * reference to Database
+ *
+ * @see OutputWriter
  */
 
 class OutputBuffer {
@@ -35,6 +45,10 @@ class OutputBuffer {
         bool isFinal_;
 
     public:
+        /**
+         * @brief Constructor is default except initializes
+         * isFinal_ private variable to false
+         */
 
         OutputBuffer (): isFinal_(false) {}
         /**
@@ -43,6 +57,8 @@ class OutputBuffer {
          * First writes out the size of the last SubBuffer
          * and then pushes onto the queue a new SubBuffer of
          * size 4 - to reserve space for size written later.
+         *
+         * @see writeLastSubBufferSize()
          */
         inline void addSubBuffer () {
             writeLastSubBufferSize();
@@ -56,7 +72,10 @@ class OutputBuffer {
          * SubBuffer and pushes a new one, but also sets 
          * isFinal_ flag.  Might in future need to notify
          * consumer thread that it just pushed last element.
+         *
+         * @see writeLastSubBufferSize()
          */
+
         inline void finalize() {
             writeLastSubBufferSize();
             isFinal_ = true;
@@ -77,12 +96,16 @@ class OutputBuffer {
 
         /**
          * @brief Appends a void buffer to end of SubBuffer at the back of the queue.
+         * @param data data to append
+         * @size size in bytes of data to append
          */
 
         void appendData (const void *data, const size_t size);
 
         /**
          * @brief Appends a char buffer of size size to end of SubBuffer at the back of the queue.
+         * @param data non-null terminated char data to append
+         * @param size size of char data to append
          *
          * Expects string not to be null terminated.
          */
@@ -92,6 +115,8 @@ class OutputBuffer {
         /**
          * @brief Appends a std::string to end of SubBuffer at
          * the back of the internal queue
+         * 
+         * @param data std::string to append
          */
 
         void appendData (const std::string &data);
@@ -99,6 +124,8 @@ class OutputBuffer {
         /**
          * @brief Appends a templated POD type to end of SubBuffer
          * at the back of the internal queue.
+         *
+         * @param templated POD data to append
          */
         
         template <typename T> void appendData (T data) { // must leave in header file because templated
@@ -111,6 +138,8 @@ class OutputBuffer {
          * @brief Writes a tempated POD type to position specified
          * by offset to the SubBuffer at the back of the internal
          * queue. 
+         * @param data templated data to write
+         * @param offset position in SubBuffer to write to
          *
          * No error checking is conducted to ensure that position
          * is less than the length of the buffer. Used by 

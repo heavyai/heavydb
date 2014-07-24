@@ -61,7 +61,11 @@ struct ColumnRow {
     /**
      * @brief Constructor that does not specify tableId 
      * and columnId - these will be filled in by Catalog.
+     * @param columnName name of column
+     * @param columnType data type of column
+     * @param notNull boolean expressing that no values in column can be null
      */
+
     ColumnRow(const std::string columnName, const ColumnType columnType, const bool notNull): columnName(columnName), columnType(columnType), notNull(notNull), tableId(-1), columnId(-1) {} /**< constructor for adding columns - assumes that tableId and columnId are unknown at this point */
 };
 
@@ -95,11 +99,25 @@ typedef std::map < ColumnKey, ColumnRow *> ColumnRowMap;
 class Catalog {
 
     public:
+        /**
+         * @brief Constructor - takes basePath to already extant
+         * data directory for writing
+         * @param basePath directory path for writing catalog 
+         * metadata - expects for this directory to already exist
+         */
+
         Catalog(const std::string &basePath);
+
+        /**
+         * @brief Destructor - deletes all
+         * ColumnRow and TableRow structures 
+         * which were allocated on the heap
+         */
         ~Catalog();
 
         /**
          * @brief Writes in-memory representation of table table and column table to file 
+         * @return error code or MAPD_SUCCESS
          *
          * This method only writes to file if the catalog is "dirty", as specified
          * by the isDirty_ member variable.  It overwrites the existing catalog files.
@@ -110,6 +128,8 @@ class Catalog {
 
         /**
          * @brief Adds an empty table to the catalog 
+         * @param tableName name of table to be added
+         * @return error code or MAPD_SUCCESS
          *
          * This method tries to add a new table to the Catalog (the table table),
          * returning an error if a table by the same name already exists.
@@ -120,6 +140,18 @@ class Catalog {
 
         /**
          * @brief Adds a table and a set of columns to the catalog 
+         * @param tableName name of table to be added
+         * @param columns vector of ColumnRow
+         * pointers that should have been 
+         * allocated on the heap (with new) and
+         * instanciated with second (partial)
+         * constrructor. tableId and columnId will
+         * be populated by Catalog for each.
+         * Catalog takes responsibilitty for deleting
+         * these when Catalog goes out-of-scope.
+         * @return error code or MAPD_SUCCESS
+         *
+         *
          *
          * This method first determines whether the table and columns can be added
          * to the Catalog (i.e ensuring the table does not already exist and none 
@@ -131,6 +163,10 @@ class Catalog {
          * constructor (without tableId and columnId) and that they are
          * allocated on the heap - ownership of them transfers from the calling
          * function to the Catalog
+         *
+         * Called by SQL DDL CREATE TABLE
+         *
+         * @see ColumnRow
          */
 
         mapd_err_t addTableWithColumns(const std::string &tableName, std::vector <ColumnRow *> & columns);
@@ -139,11 +175,22 @@ class Catalog {
         /**
          * @brief Adds a column to the catalog for an already extant table 
          *
+         * @param ColumnRow pointer to heap-allocated ColumnRow
+         * structure instanciated with second (partial) 
+         * constructor.  tableID and columnId will be populated
+         * by Catalog.  Catalog takes responsibility for
+         * deleting this object when Catalog goes out-of-scope.
+         * @return error code or MAPD_SUCCESS
+         *
          * This method tries to add a new column to a table that is already in 
          * the catalog - equivalent to SQL's alter table add column command.
          * It returns an error if the table does not exist, or if the table does 
          * exist but a column with the same name as the column being inserted for
          * that table already exists
+         *
+         * Called by SQL DDL ALTER TABLE ADD COLUMN
+         *
+         * @see ColumnRow
          */
         mapd_err_t addColumnToTable(const std::string &tableName, ColumnRow * columnRow);
 
@@ -151,24 +198,40 @@ class Catalog {
 
         /**
          * @brief Removes a table and all of its associated columns from the catalog
+         * @param tableName name of table to be removed from catalog
+         * @return error code or MAPD_SUCCESS
          *
          * This method tries to remove the table specified by tableName from the 
          * Catalog.  It returns an error if no table by that name exists.  
+         *
+         * Called by SQL DDL DROP TABLE
          */
+
         mapd_err_t removeTable(const std::string &tableName);
 
         /**
          * @brief Removes a name-specified column from a given table from the catalog
+         * @param tableName table specified column belongs to
+         * @param columnName name of column to be removed
+         * @return error code or MAPD_SUCCESS
          *
          * This method tries to remove the column specified by columnName from the
          * table specified by tableName, returning an error if no table by the given
          * table name exists for no column by the given column name exists for the
          * table specified. 
+         *
+         * Called by SQL DDL ALTER TABLE DROP COLUMN
          */
+
         mapd_err_t removeColumnFromTable(const std::string &tableName, const std::string &columnName);
 
         /**
          * @brief Passes back via reference a ColumnRow struct for the column specified by table name and column name 
+         * @param tableName table specified column belongs to
+         * @param columnName name of column we want metadata for
+         * @param columnRow ColumnRow struct of metadata that
+         * is returned by reference. 
+         * @return error code or MAPD_SUCCESS
          *
          * This method first checks to see if the table and column specified by
          * the tableName and columnName parameters exist, returning an error if
@@ -179,11 +242,18 @@ class Catalog {
          * environment, although this might be a moot point if we never allow 
          * such query overlap in the first place
          */
+
         mapd_err_t getMetadataforColumn (const std::string &tableName, const std::string &columnName, ColumnRow &columnRow);
 
 
         /**
          * @brief Passes back via reference a vector of ColumnRow structs for the column specified by table name and column name 
+         * @param tableName table specified columns belong to
+         * @param columnNames vector of names of columns we want
+         * metadata for
+         * @param columnRows vector of ColumnRow structs of 
+         * metadata that is returned by reference. 
+         * @return error code or MAPD_SUCCESS
          *
          * This method first checks to see if the table and columns specified by
          * the tableName and columnName parameters exist, returning an error if
@@ -191,6 +261,7 @@ class Catalog {
          * passed as an argument to the function copies of all structs matching
          * the given columnName.
          */
+
         mapd_err_t getMetadataforColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
 
 
