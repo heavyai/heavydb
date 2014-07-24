@@ -85,13 +85,13 @@ extern std::vector<float> floatData;
 %%
 
 Program:
-	RelExprList ';'			{ $$ = new Program((RelExprList*)$1); parseRoot = $$; }
+	RelExprList				{ $$ = new Program((RelExprList*)$1); parseRoot = $$; }
 |							{ $$ = 0; parseRoot = $$; }
 ;
 
 RelExprList:
-	RelExpr					{ $$ = new RelExprList((RelExpr*)$1); }	
-|	RelExprList RelExpr 	{ $$ = new RelExprList((RelExprList*)$1, (RelExpr*)$2); }	
+	RelExpr	';'				{ $$ = new RelExprList((RelExpr*)$1); }	
+|	RelExprList RelExpr ';' { $$ = new RelExprList((RelExprList*)$1, (RelExpr*)$2); }	
 ;
 
 RelExpr:
