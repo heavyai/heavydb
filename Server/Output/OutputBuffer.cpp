@@ -3,9 +3,6 @@
 
 using std::string;
 using std::vector;
-using std::cout;
-using std::endl;
-
 
 void OutputBuffer::appendData (const void *data, const size_t size) {
     const char * dataCharPtr = reinterpret_cast <const char *> (data);
