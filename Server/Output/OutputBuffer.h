@@ -37,12 +37,26 @@ class OutputBuffer {
     public:
 
         OutputBuffer (): isFinal_(false) {}
-
+        /**
+         * @brief Pushes a new SubBuffer onto internal queue.
+         *
+         * First writes out the size of the last SubBuffer
+         * and then pushes onto the queue a new SubBuffer of
+         * size 4 - to reserve space for size written later.
+         */
         inline void addSubBuffer () {
             writeLastSubBufferSize();
             dataQueue_.push(std::vector <char> (4)); // Start with 4 so we have space later to write in size
         }
-        
+       
+        /**
+         * @brief Finalizes OutputBuffer
+         *
+         * Like addSubBuffer(), first writes out size of last
+         * SubBuffer and pushes a new one, but also sets 
+         * isFinal_ flag.  Might in future need to notify
+         * consumer thread that it just pushed last element.
+         */
         inline void finalize() {
             writeLastSubBufferSize();
             isFinal_ = true;
@@ -51,20 +65,58 @@ class OutputBuffer {
             // if this was multithreaded would notify consumer this was last
             // element
         }
+        
+        /**
+         * @brief Writes size of SubBuffer at back of queue to its first four bytes
+         *
+         * Only writes out size if internalQueue size is
+         * greater than 0.
+         */
 
         void writeLastSubBufferSize();
 
+        /**
+         * @brief Appends a void buffer to end of SubBuffer at the back of the queue.
+         */
+
         void appendData (const void *data, const size_t size);
 
-        void appendData (const char *data, const size_t size);// copies c-style string (not null-terminated)
+        /**
+         * @brief Appends a char buffer of size size to end of SubBuffer at the back of the queue.
+         *
+         * Expects string not to be null terminated.
+         */
+
+        void appendData (const char *data, const size_t size);
+
+        /**
+         * @brief Appends a std::string to end of SubBuffer at
+         * the back of the internal queue
+         */
 
         void appendData (const std::string &data);
 
+        /**
+         * @brief Appends a templated POD type to end of SubBuffer
+         * at the back of the internal queue.
+         */
+        
         template <typename T> void appendData (T data) { // must leave in header file because templated
             size_t dataSize = sizeof(T);
             char * dataCharPtr = reinterpret_cast <char *> (&data);
             dataQueue_.back().insert(dataQueue_.back().end(), dataCharPtr, dataCharPtr + dataSize);
         }
+
+        /**
+         * @brief Writes a tempated POD type to position specified
+         * by offset to the SubBuffer at the back of the internal
+         * queue. 
+         *
+         * No error checking is conducted to ensure that position
+         * is less than the length of the buffer. Used by 
+         * writeLastSubBufferSize() to write SubBuffer size
+         * at the front of the SubBuffer.
+         */
 
         template <typename T> void writeDataAtPos (T data, const size_t offset) { // must leave in header file because templated
             size_t dataSize = sizeof(T);
@@ -80,6 +132,11 @@ class OutputBuffer {
         inline size_t size() const {
             return dataQueue_.size();
         }
+
+        /**
+         * @brief Returns a reference to the front SubBuffer
+         * in the internal queue.
+         */
 
         inline const std::vector <char>& front() const {
             return dataQueue_.front();
