@@ -40,7 +40,7 @@ namespace File_Namespace {
      * @param f Pointer to the FILE.
      * @return mapd_err_t Returns an error code when unable to close the file properly.
      */
-    mapd_err_t erase(const std::string basePath, const std::string filename);
+    mapd_err_t removeFile(const std::string basePath, const std::string filename);
 
     /**
      * @brief Reads the specified number of bytes from the offset position in file f into buf.

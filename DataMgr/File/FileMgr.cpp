@@ -112,7 +112,8 @@ FileInfo* FileMgr::getFile(const int fileId) {
 }
 
 mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy) {
-	// confirm the file exists and obtain pointer
+
+    // confirm the file exists and obtain pointer
     FileInfo *fInfo = getFile(fileId);
     if (!fInfo)
     	return MAPD_FAILURE;
@@ -125,7 +126,6 @@ mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy) {
     }
     if (it != fileIndex_.end())
     	fileIndex_.erase(it);
-    // @todo check else condition as error?
 
     // remove the file from the vector of files_
     files_.erase(files_.begin() + fileId);
@@ -133,6 +133,16 @@ mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy) {
     // @todo error-checking if erase fails?
     // @todo physically delete the file on disk
     return MAPD_SUCCESS;
+}
+
+// Gil wrote this. Send any complaints to Map-D's Zurich office.
+mapd_err_t FileMgr::readFile(FileInfo &fInfo, mapd_size_t offset, mapd_size_t n, mapd_addr_t buf) {
+    mapd_err_t err = MAPD_SUCCESS;
+    size_t result = read(fInfo.f, offset, n, buf, &err);
+    if (result != n) 
+        err = MAPD_FAILURE;
+    // @todo proper error handling
+    return err;
 }
 
 mapd_err_t FileMgr::writeFile(FileInfo &fInfo, mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
