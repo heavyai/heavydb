@@ -11,11 +11,10 @@ class Buffer;
 class BufferManager;
 
 struct ColumnInfo {
-    int columnId_; // in case we iterate over all structs of ColumnInfo instead of using a map
+    int columnId_; // for when we iterate over all structs of ColumnInfo instead of using a map
     DataType columnType_; 
     int bitSize_;
     Buffer * insertBuffer_; // a pointer so can be null
-    mapd_size_t insertBufferNumTuples;
     ColumnInfo(int columnId, int bitSize): columnId_(columnId), bitSize_(bitSize) {}
 };
 
@@ -39,8 +38,7 @@ struct FragmentInfo {
 class LinearTablePartitioner : public AbstractPartitioner { // implements
 
 public:
-	LinearTablePartitioner(int tableId, mapd_size_t maxFragmentSize, vector <ColumnInfo> &columnInfoVec, BufferManager &bufferManager) :
-		tableId_(tableId), insertBufferSize_(insertBufferSize), columnInfoVec_(columnInfoVec), bufferManager_(bufferManager) {}
+LinearTablePartitioner(const int tableId,  vector <ColumnInfo> &columnInfoVec, BufferManager &bufferManager, const mapd_size_t maxFragmentRows, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
 	//virtual ~LinearTablePartitioner();
 
@@ -50,10 +48,12 @@ public:
 
 private:
 	int tableId_;
-	mapd_size_t maxFragmentSize_;
+	mapd_size_t maxFragmentRows_;
+    mapd_size_t pageSize_;
     map <int, ColumnInfo> columnMap_; 
     std::vector<FragmentInfo> fragmentInfoVec_;
     mapd_size_t currentInsertBufferSize_;
+    int currentInsertBufferFragmentId_;
     Buffer_Namespace::BufferManager &bufferManager_;
 	
 	LinearTablePartitioner(const LinearTablePartitioner&);
