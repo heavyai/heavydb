@@ -37,5 +37,10 @@ struct DerefSort {
 	}
 };
 
+enum DataType {
+    INT_TYPE,
+    FLOAT_TYPE
+};
+
 #endif	/* _TYPES_H */
 

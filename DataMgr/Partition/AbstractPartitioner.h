@@ -7,6 +7,11 @@
 
 #include <vector>
 
+struct ColumnInfo {
+    int columnId;
+    int bitSize;
+};
+
 class AbstractPartitioner {
 
 public:
@@ -20,6 +25,7 @@ public:
  	 * @param ids	A vector of int of column identifirs
 	 */
 	virtual bool getPartitionIds(const void *predicate, std::vector<int> &result);
+    virtual void insertData (const vector <int> &columnIds, const vector <void *> &data);
 };
 
  #endif // _ABSTRACT_PARTITIONER_H

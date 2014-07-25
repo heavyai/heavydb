@@ -137,7 +137,7 @@ bool test_AddTableWithColumns() {
     Catalog catalog(".");
     vector <string> columnNames {"a","b","c"};
     vector <ColumnRow> columnRows;
-    mapd_err_t status = catalog.getMetadataforColumns("test1", columnNames, columnRows); 
+    mapd_err_t status = catalog.getMetadataForColumns("test1", columnNames, columnRows); 
     if (status != MAPD_SUCCESS)
         return false;
     if (columnRows.size() != 3)

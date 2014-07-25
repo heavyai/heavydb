@@ -243,7 +243,7 @@ class Catalog {
          * such query overlap in the first place
          */
 
-        mapd_err_t getMetadataforColumn (const std::string &tableName, const std::string &columnName, ColumnRow &columnRow);
+        mapd_err_t getMetadataForColumn (const std::string &tableName, const std::string &columnName, ColumnRow &columnRow);
 
 
         /**
@@ -262,7 +262,7 @@ class Catalog {
          * the given columnName.
          */
 
-        mapd_err_t getMetadataforColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
+        mapd_err_t getMetadataForColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
 
 
     private:

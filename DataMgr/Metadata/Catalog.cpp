@@ -198,7 +198,7 @@ mapd_err_t Catalog::removeColumnFromTable(const string &tableName, const string 
     return MAPD_SUCCESS;
 }
 
-mapd_err_t Catalog::getMetadataforColumn (const string &tableName, const string &columnName,  ColumnRow &columnRow) {
+mapd_err_t Catalog::getMetadataForColumn (const string &tableName, const string &columnName,  ColumnRow &columnRow) {
     TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
@@ -211,7 +211,7 @@ mapd_err_t Catalog::getMetadataforColumn (const string &tableName, const string 
     return MAPD_SUCCESS;
 }
 
-mapd_err_t Catalog::getMetadataforColumns (const string &tableName, const vector<string> &columnNames,  vector <ColumnRow> &columnRows) {
+mapd_err_t Catalog::getMetadataForColumns (const string &tableName, const vector<string> &columnNames,  vector <ColumnRow> &columnRows) {
     TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;

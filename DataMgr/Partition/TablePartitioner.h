@@ -26,6 +26,8 @@ public:
 
 	virtual bool getPartitionIds(const void *predicate, std::vector<int> &result);
 
+    virtual void insertData (const vector <int> &columnIds, const vector <void *> &data);
+
 private:
 	int tableId_;
 	mapd_size_t insertBufferSize_;
