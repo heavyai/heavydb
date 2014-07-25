@@ -57,4 +57,4 @@ private:
 
 } // SQL_Namespace
 
-#endif SQL_ABSTRACT_SCALR_EXPR_H
+#endif // SQL_ABSTRACT_SCALR_EXPR_H

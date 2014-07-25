@@ -5,12 +5,13 @@
 #include "../visitor/Visitor.h"
 
 namespace SQL_Namespace {
-	class  Table : public ASTNode {
+
+class Table : public ASTNode {
     
 public:
-    std::string name1;
-    std::string name2;
-    std::string name3;
+    std::string name1 = "";
+    std::string name2 = "";
+    std::string name3 = "";
 
     // if true, then "."; else "as"
     bool dotOrAs; 	// NAME '.' NAME
@@ -23,8 +24,9 @@ public:
     1 AS */
 
     /**< Constructor */
-    explicit Table(const std::string &n1) : name1(n1) {
-    	name2 = "";
+    explicit Table(const std::string &n1) {
+    	assert(n1 != std::string(""));
+        this->name1 = n1;
     }
 
     Table(int rF, const std::string &n1, const std::string &n2) : rule_Flag(rF), name1(n1), name2(n2) {
@@ -39,7 +41,8 @@ public:
         v.visit(this);
     }
     
-	};
-}
+};
+
+} // SQL_Namespace
 
 #endif // AST_TABLE_H
