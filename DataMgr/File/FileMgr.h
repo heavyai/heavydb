@@ -190,7 +190,20 @@ public:
 	mapd_err_t deleteFile(const int fileId, const bool destroy = false);
 
 
+   /**
+     * @brief Writes the specified number of bytes to the offset position into the file pointed at
+     * by fInfo from src.
+     *
+     * @param fInfo address of the FileInfo object.
+     * @param offset The location within the file where data is being written.
+     * @param n The number of bytes to write to the file.
+     * @param src The source buffer containing the data to be written.
+     * @return err If not NULL, will hold an error code should an error occur.
+     */
 	mapd_err_t writeFile(FileInfo &fInfo, mapd_size_t offset, mapd_size_t n, mapd_addr_t src);
+
+    /// Read n bytes of the file beginning at offset into buf
+	mapd_err_t readFile(FileInfo &fInfo, mapd_size_t offset, mapd_size_t n, mapd_addr_t buf);
 
 	/**
 	 * @brief Returns a pointer to a Block object for the specified block number in the file.

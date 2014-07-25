@@ -78,6 +78,22 @@ void BufferMgr::deleteBuffer(Buffer *b) {
     buffers_.remove(b); // @todo thread safe needed?
 }
 
+Buffer* BufferMgr::createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_size_t pageSize) {
+    Buffer *b = NULL;
+
+    // First, check if chunk already exists
+    if ((b = getChunkBuffer(key)) != NULL)
+        return b;
+
+    // Create a new buffer for the new chunk
+    b = createBuffer(numPages, pageSize);
+    if (b == NULL)
+        return NULL; // unable to create the new buffer
+
+    // Insert an entry in chunkIndex_ for the new chunk. Just do it.
+    chunkIndex_[key] = b;
+}
+
 /// Presently, only returns the Buffer if it is not currently pinned
 Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
     Buffer *b;
@@ -114,6 +130,11 @@ mapd_addr_t BufferMgr::getChunkAddr(const ChunkKey &key, mapd_size_t *length) {
     if (length) *length = b->length();
     b->pin();
     return b->host_ptr();
+}
+
+bool BufferMgr::chunkIsCached(const ChunkKey &key) {
+    auto it = chunkIndex_.find(key);
+    return (it != chunkIndex_.end());
 }
 
 /// Presently, only flushes a chunk if its buffer is unpinned, and flushes it right away (no queue)

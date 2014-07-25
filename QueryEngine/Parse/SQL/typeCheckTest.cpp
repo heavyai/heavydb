@@ -1,11 +1,11 @@
 #include "parser.h"
 #include "visitor/Visitor.h"
-#include "translator/typeCheckerTranslator.h"
+#include "visitor/TypeChecker.h"
 #include <iostream>
 #include <string>
 
 using namespace std;
-using SQL_Namespace::TypeCheckerVisitor;
+using SQL_Namespace::TypeChecker;
 
 int main(int argc, char ** argv) {
     Parser parser;
@@ -25,9 +25,9 @@ int main(int argc, char ** argv) {
             continue;
         }
 
-        TypeCheckerVisitor tcv;
+        TypeChecker tc;
         if (parseRoot != 0) {
-            parseRoot->accept(tcv); 
+            parseRoot->accept(tc); 
         }
 
     }

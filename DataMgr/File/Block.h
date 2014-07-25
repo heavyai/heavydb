@@ -25,9 +25,9 @@ namespace File_Namespace {
  * a block size "blockSize" such that: (end - begin) <= blockSize.
  */
 struct Block {
-	int fileId;
-	mapd_size_t begin;
-	mapd_size_t end;
+	int fileId;			/// unique identifier of the owning file
+	mapd_size_t begin;	/// offset of first byte from beginning of file
+	mapd_size_t end;	/// last used byte is offset at end-1
 
 	/// Constructor
 	Block(int fileId, mapd_size_t begin) {

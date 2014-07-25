@@ -44,11 +44,17 @@ public:
     /// Deletes a buffer
     void deleteBuffer(Buffer *b);
 
-    /// Returns a buffer containing the desired chunk, or NULL on error
+    /// Creates a new chunk (if it doesn't exist) and returns a Buffer object for it
+    Buffer* createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_size_t pageSize);
+
+    /// @brief Returns a buffer containing the desired chunk, or NULL on error
     Buffer* getChunkBuffer(const ChunkKey &key);
 
     /// If cached, returns pointer to cached Chunk and optionally sets length
     mapd_addr_t getChunkAddr(const ChunkKey &key, mapd_size_t *length = NULL);
+
+    /// Returns whether or not the chunk is cached (in the buffer pool)
+    bool chunkIsCached(const ChunkKey &key);
 
     /// Flush unpinned chunk to disk
     bool flushChunk(const ChunkKey &key);
