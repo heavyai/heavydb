@@ -37,7 +37,7 @@ struct DerefSort {
 	}
 };
 
-enum DataType {
+enum mapd_data_t {
     INT_TYPE,
     FLOAT_TYPE
 };

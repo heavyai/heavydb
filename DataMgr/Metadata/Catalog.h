@@ -46,7 +46,7 @@ struct ColumnRow {
     int tableId; /**< tableId and columnName constitute the primary key to access rows in the column table - the pair must be unique> */
     std::string columnName;  /**< tableId and columnName constitute the primary key to access rows in the column table - the pair must be unique */
     int columnId;
-    DataType columnType;
+    mapd_data_t columnType;
     bool notNull; /**< specifies if the column can be null according to SQL standard */
 
 
@@ -55,7 +55,7 @@ struct ColumnRow {
      * should be used by Catalog internally.  
      */
 
-    ColumnRow(const int tableId, const std::string columnName, const int columnId, const DataType columnType, const bool notNull): tableId(tableId), columnName(columnName), columnId(columnId), columnType(columnType), notNull(notNull) {}
+    ColumnRow(const int tableId, const std::string columnName, const int columnId, const mapd_data_t columnType, const bool notNull): tableId(tableId), columnName(columnName), columnId(columnId), columnType(columnType), notNull(notNull) {}
 
     /**
      * @brief Constructor that does not specify tableId 
@@ -65,7 +65,7 @@ struct ColumnRow {
      * @param notNull boolean expressing that no values in column can be null
      */
 
-    ColumnRow(const std::string columnName, const DataType columnType, const bool notNull): columnName(columnName), columnType(columnType), notNull(notNull), tableId(-1), columnId(-1) {} /**< constructor for adding columns - assumes that tableId and columnId are unknown at this point */
+    ColumnRow(const std::string columnName, const mapd_data_t columnType, const bool notNull): columnName(columnName), columnType(columnType), notNull(notNull), tableId(-1), columnId(-1) {} /**< constructor for adding columns - assumes that tableId and columnId are unknown at this point */
 };
 
 /**
