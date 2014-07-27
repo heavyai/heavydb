@@ -94,20 +94,23 @@ Buffer* BufferMgr::createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_s
     chunkIndex_[key] = b;
 }
 
+
 /// Presently, only returns the Buffer if it is not currently pinned
 Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
     Buffer *b;
 
     // Check if buffer is already cached
     b = findChunkBuffer(key);
+
     if (b && !b->pinned())
         return NULL;
 
     // Determine number of pages and page size for chunk
     int numPages;
     mapd_size_t size;
-    if ((fm_->getChunkSize(key, &numPages, &size)) == MAPD_FAILURE)
+    if ((fm_->getChunkSize(key, &numPages, &size)) != MAPD_SUCCESS)
         return NULL;
+
     assert((size % numPages) == 0);
 
     // Create buffer and load chunk
@@ -164,7 +167,7 @@ void BufferMgr::printChunkIndex() {
 
 }
 
-Buffer* BufferMgr::findChunkBuffer(const ChunkKey key) {
+Buffer* BufferMgr::findChunkBuffer(const ChunkKey &key) {
     auto it = chunkIndex_.find(key);
     if (it == chunkIndex_.end()) // not found
         return NULL;

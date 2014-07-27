@@ -81,7 +81,7 @@ private:
     ChunkKeyToBufferMap chunkIndex_;
     
     /// Looks up a Chunk's buffer in the chunkIndex
-    Buffer* findChunkBuffer(const ChunkKey key);
+    Buffer* findChunkBuffer(const ChunkKey &key);
 
 }; // BufferMgr
 

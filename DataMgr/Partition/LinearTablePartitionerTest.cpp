@@ -19,6 +19,26 @@ int main() {
     columnInfoVec.push_back(colInfo);
     LinearTablePartitioner linearTablePartitioner(0, columnInfoVec, bufferMgr, 1048576 );
 
+    vector <int> columnIds; 
+    vector <void *> data;
+    columnIds.push_back(0);
+    int intData = 3;
+    data.push_back(static_cast <void *> (&intData));
+
+    for (int i = 0; i < 40; ++i) {
+        for (int r = 0; r < 100000; ++r) { 
+            linearTablePartitioner.insertData(columnIds,data,1);
+        }
+        vector <PartitionInfo> partitions;
+        linearTablePartitioner.getPartitionsForQuery(partitions);
+        cout << endl << "Query " << i << endl;
+        for (int p = 0; p < partitions.size(); ++p)
+            cout << partitions[p].partitionId_ << " " << partitions[p].numTuples_ << endl;
+    }
+
+
+
+
     //linearTablePartitioner.insertData
 
 
