@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT			(MapD_exe)
 set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
+ADD_SUBDIRECTORY    (DataMgr/PgConnector)
 ADD_SUBDIRECTORY    (QueryEngine/Parse/SQL)
 ADD_SUBDIRECTORY    (DataMgr/Metadata/)
 ADD_SUBDIRECTORY	(Server)

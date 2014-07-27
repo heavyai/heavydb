@@ -24,7 +24,8 @@ enum mapd_err_t {
     MAPD_ERR_TABLE_ALREADY_EXISTS   = -11,  // error, catalog
     MAPD_ERR_TABLE_DOES_NOT_EXIST   = -12,  // error, catalog 
     MAPD_ERR_COLUMN_ALREADY_EXISTS  = -13,  // error, catalog 
-    MAPD_ERR_COLUMN_DOES_NOT_EXIST  = -14  // error, catalog 
+    MAPD_ERR_COLUMN_DOES_NOT_EXIST  = -14,  // error, catalog 
+    MAPD_ERR_PG_FAIL  = -15  // error, catalog 
 
 };
 
