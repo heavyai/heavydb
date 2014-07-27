@@ -3,17 +3,22 @@
 
 #include "RelAlgNode.h"
 #include "UnaryOp.h"
-//#include "../visitor/Visitor.h"
+#include "../visitor/Visitor.h"
 
 namespace SQL_Namespace {
- ProjectOp : public UnaryOp {
+
+class ProjectOp : public UnaryOp {
     
 public:
 
-	AttrList* atLi;
-	std::string selectAll;
+	AttrList* atLi = NULL;
+	std::string selectAll = NULL;
 
-	ProjectOp(RelExpr *n1, AttrList* n2) : atLi(n2) { relex = n1; }
+	ProjectOp(RelExpr *n1, AttrList* n2) : atLi(n2) { 
+		assert(n2);
+		this->atLi = n2;
+	}
+	
 	/* If the selection is "*"- this means, of course, the Attribute List spans the entirety of the table. */
 	explicit ProjectOp(const std::string &n) : atLi(NULL), selectAll(n) { relex(NULL); }
 
@@ -21,7 +26,8 @@ public:
     void accept(Visitor &v) {
         v.visit(this);
     }
-	};
-}
+};
+
+} // SQL_Namespace
 
 #endif // PROJECT_OP_NODE_H

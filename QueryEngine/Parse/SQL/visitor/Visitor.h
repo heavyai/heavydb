@@ -49,7 +49,6 @@ namespace SQL_Namespace {
 	    virtual void visit(class OptWhereClause *v) = 0;
 	    virtual void visit(class OrderingSpecCommalist *v) = 0;
 	    virtual void visit(class OrderingSpec *v) = 0;
-	    // virtual void visit(class ParameterRef *v) = 0;
 	    virtual void visit(class Predicate *v) = 0;
 	    virtual void visit(class Program *v) = 0;
 	    virtual void visit(class QuerySpec *v) = 0;

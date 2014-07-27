@@ -248,8 +248,8 @@ opt_asc_desc:
 /* this starts the execution of classic manipulative statements. */
 
 sql:
-        manipulative_statement      { $$ = new SQL((ManipulativeStatement*)$1); }
-    ;
+    manipulative_statement      { $$ = new SQL((ManipulativeStatement*)$1); }
+;
 
 manipulative_statement:
     select_statement                    { $$ = new ManipulativeStatement((SelectStatement*)$1); } 
@@ -505,8 +505,8 @@ literal
 | APPROXNUM                                { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(mylineno); ((Literal*)$$)->setColno(mycolno - lexer.YYLeng()); }
 ;
 
-table
-: NAME 							          { $$ = new Table(strData[0]); }
+table:
+  NAME 							          { $$ = new Table(strData[0]); }
 | NAME '.' NAME     { $$ = new Table(0, strData[0], strData[1]);}
 | NAME AS NAME      { $$ = new Table(1, strData[0], strData[1]);  }
 ;

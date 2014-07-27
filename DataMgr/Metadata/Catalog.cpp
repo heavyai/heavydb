@@ -51,13 +51,13 @@ mapd_err_t Catalog::readCatalogFromFile() {
             int tempTableId;
             string tempColumnName;
             int tempColumnId;
-            int tempColumnType;
+            int tempmapd_data_t;
             bool tempNotNull;
-            //while (columnFile >> tempTableId >> tempColumnName >> tempColumnId >> tempColumnType >> tempNotNull) { 
-            while (columnFile >> tempTableId >> tempColumnName >> tempColumnId >> tempColumnType >> tempNotNull) {
+            //while (columnFile >> tempTableId >> tempColumnName >> tempColumnId >> tempmapd_data_t >> tempNotNull) { 
+            while (columnFile >> tempTableId >> tempColumnName >> tempColumnId >> tempmapd_data_t >> tempNotNull) {
                 ColumnKey columnKey (tempTableId, tempColumnName); // construct the tuple that will serve as key for this entry into the column map
-                columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, static_cast<ColumnType>(tempColumnType), static_cast<bool> (tempNotNull));
-                //columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, tempColumnType, tempNotNull);
+                columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, static_cast<mapd_data_t>(tempmapd_data_t), static_cast<bool> (tempNotNull));
+                //columnRowMap_[columnKey] = new ColumnRow(tempTableId, tempColumnName, tempColumnId, tempmapd_data_t, tempNotNull);
                // If this column has an id higher than maxColumnId_, set maxColumnId_ to it
                if (tempColumnId > maxColumnId_)
                    maxColumnId_ = tempColumnId;
