@@ -4,23 +4,31 @@
  */
 #ifndef _LINEAR_TABLE_PARTITIONER_H
 #define _LINEAR_TABLE_PARTITIONER_H
-#include "AbstractPartitioner.h"
+//#include "AbstractPartitioner.h"
 #include "../../Shared/types.h"
+#include "../PgConnector/PgConnector.h"
 
-class Buffer;
-class BufferManager;
+#include <vector>
+#include <map>
+
+namespace Buffer_Namespace {
+    class Buffer;
+    class BufferMgr;
+};
 
 struct ColumnInfo {
     int columnId_; // for when we iterate over all structs of ColumnInfo instead of using a map
-    DataType columnType_; 
+    mapd_data_t columnType_; 
     int bitSize_;
-    Buffer * insertBuffer_; // a pointer so can be null
-    ColumnInfo(int columnId, int bitSize): columnId_(columnId), bitSize_(bitSize) {}
+    Buffer_Namespace::Buffer * insertBuffer_; // a pointer so can be null
+
+    //ColumnInfo(const int columnId, const mapd_data_t columnType, const int bitSize): columnId_(columnId), columnType_(columnType), bitSize_(bitSize) {}
+	//ColumnInfo& operator=(const ColumnInfo&);
 };
 
 struct FragmentInfo {
     int fragmentId_;
-    mapd_size_t numTuples;
+    mapd_size_t numTuples_;
 };
 
     
@@ -35,26 +43,31 @@ struct FragmentInfo {
  * @todo 	The LinearTablePartitioner should have a reference to a PartitionScheme;
  *			this will be added in an upcoming release.
  */
-class LinearTablePartitioner : public AbstractPartitioner { // implements
+class LinearTablePartitioner { //: public AbstractPartitioner { // implements
 
 public:
-LinearTablePartitioner(const int tableId,  vector <ColumnInfo> &columnInfoVec, BufferManager &bufferManager, const mapd_size_t maxFragmentRows, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
+    LinearTablePartitioner(const int tableId,  std::vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxFragmentRows, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
 	//virtual ~LinearTablePartitioner();
 
-	virtual bool getPartitionIds(const void *predicate, std::vector<int> &result);
+	/*virtual*/ bool getPartitionIds(const void *predicate, std::vector<int> &result);
 
-    virtual void insertData (const vector <int> &columnIds, const vector <void *> &data, const int numRows);
+    /*virtual*/ void insertData (const std::vector <int> &columnIds, const std::vector <void *> &data, const int numRows);
 
 private:
 	int tableId_;
 	mapd_size_t maxFragmentRows_;
+    int maxFragmentId_;
     mapd_size_t pageSize_;
-    map <int, ColumnInfo> columnMap_; 
+    std::map <int, ColumnInfo> columnMap_; 
     std::vector<FragmentInfo> fragmentInfoVec_;
     mapd_size_t currentInsertBufferSize_;
     int currentInsertBufferFragmentId_;
-    Buffer_Namespace::BufferManager &bufferManager_;
+    Buffer_Namespace::BufferMgr &bufferManager_;
+
+    PgConnector pgConnector_;
+    
+    void createNewFragment();
 	
 	LinearTablePartitioner(const LinearTablePartitioner&);
 	LinearTablePartitioner& operator=(const LinearTablePartitioner&);
