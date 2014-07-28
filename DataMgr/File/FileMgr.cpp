@@ -163,14 +163,13 @@ Block* FileMgr::getBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     return fInfo.blocks[blockNum];
 }
 
-mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf) {
+mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_addr_t buf) {
 	FileInfo *fInfo;
-	return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, n, buf);
+	return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, buf);
 }
 
-mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf) {
-	// The client should be writing blockSize bytes to the block
-	assert(blockNum == fInfo.blockSize);
+mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_addr_t buf) {
+    // assert buf
 
     // open the file if it is not open already
     if (openFile(fInfo) != MAPD_SUCCESS)

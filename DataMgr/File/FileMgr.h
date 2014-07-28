@@ -231,7 +231,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf);
+	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_addr_t buf);
 
 	/**
 	 * @brief Writes the contents of buf to the block.
@@ -241,7 +241,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf);
+	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_addr_t buf);
 
 	/**
 	 * @brief Clears the contents of a block in a file.
