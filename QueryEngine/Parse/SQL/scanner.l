@@ -6,15 +6,18 @@
 #include <iostream>
 #include "parser.h"
 #include <cstring>
+#include <vector>
+#include <string>
 
 extern YY_Parser_STYPE yylval;
 
 #define TOK(name) { dotCount = 0; offsetFlag = 0; mycolno += strlen(yytext); return Parser::name; }
 
 // Variables used to share data with the parser
-std::string strData[10];
+std::vector<std::string> strData;
+std::vector<long int> intData;
+std::vector<double> realData;
 
-double dData[10];
 int dotCount = 0;
 int offsetFlag = 0;
 int asFlag = 0;
@@ -109,7 +112,7 @@ using namespace std;
 "exists"			TOK(EXISTS);
 
 "="|"<>"|"<"|">"|"!="|"<="|">=" { 
-	strData[5] = yytext;
+	strData.push_back(yytext);
 	TOK(COMPARISON);
 }
 
@@ -125,73 +128,39 @@ using namespace std;
 
 	/* names */
 [A-Za-z][A-Za-z0-9_]* {
-	if ((dotCount == 1) || (asFlag == 1)) {
-		strData[1] = yytext;
-		/* Reset asflag. */
-		asFlag = 0; 
-	}
-	else if (dotCount == 2) {
-		strData[2] = yytext;
-		dotCount = 0;
-	}
-	else
-		strData[0] = yytext;
-	offsetFlag = 0;
-	//printf("lexer: %d\n", strlen(yytext));
+	strData.push_back(yytext);
 	mycolno += strlen(yytext);
-	return Parser::NAME;
+	TOK(NAME);
 }
 
-	/* parameters
-":"[A-Za-z][A-Za-z0-9_]* {
-	yylval.sParam = yytext + 1;
-	textLength = ((int) strlen(yytext)) - 1;
-	TOK(PARAMETER);
-} 
-	*/
+\"[^\"\n]*$ { cerr << "Unterminated string" << endl; }
 
 	/* numbers */
-
-[0-9]+	|
-[0-9]+"."[0-9]* |
-"."[0-9]* { 
-	if (offsetFlag == 1) {
-		dData[1] = atof(yytext);
-		/* Reset asflag. */
-		offsetFlag = 0; 
-	}
-	else 
-		dData[0] = atof(yytext);
-	dotCount = 0;
-	mycolno += strlen(yytext);
-	return Parser::INTNUM;
+[0-9]+ {
+	intData.push_back((int)strtol(yytext, NULL, 10));
+	TOK(INTNUM);
 }
-
+[0-9]+"."[0-9]* |
+"."[0-9]* {
+	realData.push_back((int)strtol(yytext, NULL, 10));
+	TOK(APPROXNUM);
+}
 
 [0-9]+[eE][+-]?[0-9]+	|
 [0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
 "."[0-9]*[eE][+-]?[0-9]+ { 
-	dData[0] = atof(yytext);
+	realData.push_back(strtof(yytext, NULL));
 	TOK(APPROXNUM);
 }
 
 	/* strings */
-
 '[^'\n]*' {
-	std::string temp;
-	int c = yyinput();
-	temp = yytext;
-	yyunput(c, yytext);	/* just peeking */
-	if(c != '\'') {
-		//printf("reading string: %s\n", yytext);
-		strData[0] = temp.substr(1, temp.length()-2);
-		// yytext;
-		TOK(STRING);
-	} else 
-		yymore();
+	
+	TOK(STRING);
 }
-		
-'[^'\n]*$					{ cerr << "Unterminated string" << endl; }
+
+'[^'\n]*$ { cerr << "Unterminated string" << endl; }
+
 
 \n							{ mylineno++; mycolno = 0; /*printf("[%s:%d] lineno=%d\n", __func__, __LINE__, mylineno);*/  }
 
@@ -203,3 +172,4 @@ using namespace std;
 
 <<EOF>>						{ yyterminate(); }
 %%
+

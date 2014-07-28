@@ -62,8 +62,8 @@ extern RelAlgNode* parse_root;
 
 // Variables declared in RelAlgebraLexer.l
 extern std::vector<std::string> strData;
-extern std::vector<int> intData;
-extern std::vector<float> floatData;
+extern std::vector<long int> intData;
+extern std::vector<double> realData;
 
 %}
 
@@ -175,7 +175,7 @@ MathExpr:
 |	Attribute							{ $$ = new MathExpr((Attribute*)$1); }
 |	AggrExpr							{ $$ = new MathExpr((AggrExpr*)$1); }
 |	INTVAL								{ $$ = new MathExpr((int)intData.back()); intData.pop_back(); }
-|	FLOATVAL							{ $$ = new MathExpr((float)floatData.back()); floatData.pop_back(); }
+|	FLOATVAL							{ $$ = new MathExpr((float)realData.back()); realData.pop_back(); }
 ;
 
 Comparison:

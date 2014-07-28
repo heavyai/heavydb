@@ -1,14 +1,16 @@
 #ifndef INSERT_ATOM_NODE_H
 #define INSERT_ATOM_NODE_H
 
+#include <cassert>
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
 namespace SQL_Namespace {
-	class  InsertAtom : public ASTNode {
+
+class InsertAtom : public ASTNode {
     
 public:
-    Atom *a;
+    Atom *a = NULL;
     
     /**< Constructor */
     explicit InsertAtom(Atom *n) : a(n) {}
@@ -18,7 +20,8 @@ public:
         v.visit(this);
     }
     
-	};
-}
+};
+
+} // SQL_Namespace
 
 #endif // INSERT_ATOM_NODE_H

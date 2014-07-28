@@ -15,7 +15,6 @@ public:
     
     /**< Constructor */
     explicit OptColumnCommalist(ColumnCommalist *n) {
-    	assert(n);
     	this->cc = n;
     }
         

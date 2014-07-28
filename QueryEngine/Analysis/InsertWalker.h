@@ -23,7 +23,11 @@ namespace Analysis_Namespace {
 class InsertWalker : public SQL_Namespace::Visitor {
 
 public:
-	InsertWalker(Catalog &c) : c_(c) {}
+	/// Constructor
+	InsertWalker(Catalog &c) : c_(c), errFlag_(false) {}
+
+	/// Returns an error message if an error was encountered
+	inline std::pair<bool, std::string> errMsg() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
 
 	virtual void visit(Program *v);
 	virtual void visit(SQLList *v);
@@ -33,6 +37,11 @@ public:
 	virtual void visit(OptColumnCommalist *v);
 	virtual void visit(ColumnCommalist *v);
 	virtual void visit(Column *v);
+	virtual void visit(ValuesOrQuerySpec *v);
+	virtual void visit(InsertAtom *v);
+	virtual void visit(InsertAtomCommalist *v);
+	virtual void visit(Atom *v);
+	virtual void visit(Literal *v);
 
 	virtual void visit(AllOrAnyPredicate *v) {}
 	virtual void visit(Ammsc *v) {}
@@ -40,7 +49,6 @@ public:
 	virtual void visit(AssignmentCommalist *v) {}
 	virtual void visit(Assignment *v) {}
 	virtual void visit(AtomCommalist *v) {}
-	virtual void visit(Atom *v) {}
 	virtual void visit(BaseTableDef *v) {}
 	virtual void visit(BaseTableElementCommalist *v) {}
 	virtual void visit(BaseTableElement *v) {}
@@ -58,10 +66,7 @@ public:
 	virtual void visit(FunctionRef *v) {}
 	virtual void visit(GroupByList *v) {}
 	virtual void visit(InPredicate *v) {}
-	virtual void visit(InsertAtomCommalist *v) {}
-	virtual void visit(InsertAtom *v) {}
 	virtual void visit(LikePredicate *v) {}
-	virtual void visit(Literal *v) {}
 	virtual void visit(OptAllDistinct *v) {}
 	virtual void visit(OptAscDesc *v) {}
 	virtual void visit(OptEscape *v) {}
@@ -89,12 +94,13 @@ public:
 	virtual void visit(TestForNull *v) {}
 	virtual void visit(UpdateStatementPositioned *v) {}
 	virtual void visit(UpdateStatementSearched *v) {}
-	virtual void visit(ValuesOrQuerySpec *v) {}
 
 private:
 	Catalog &c_;
 	std::vector<std::string> colNames_;
-	std::string errMsg_ = "";
+	std::vector<mapd_data_t> colTypes_;
+	std::string errMsg_;
+	bool errFlag_;
 };
 
 } // Analysis_Namespace

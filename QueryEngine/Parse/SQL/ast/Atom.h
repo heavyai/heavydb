@@ -21,7 +21,6 @@ public:
 
     /**< Constructor */
     Atom(Literal *n) {
-        assert(n);
         this->lit = n;
     }
 

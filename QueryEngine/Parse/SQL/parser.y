@@ -101,8 +101,9 @@ using namespace SQL_Namespace;
 extern ASTNode* parse_root;
 
 // Variables declared in scanner.l
-extern std::string strData[10];
-extern double dData[10];
+extern std::vector<std::string> strData;
+extern std::vector<double> realData;
+extern std::vector<long int> intData;
 
 extern int mycolno;
 extern int mylineno;
@@ -150,46 +151,46 @@ extern int mylineno;
 
 %%
 
-program
-: sql_list						{ $$ = new Program((SQLList*)$1); parseRoot = $$; }
-|								{ $$ = 0; parseRoot = $$; }
+program:
+    sql_list						{ $$ = new Program((SQLList*)$1); parseRoot = $$; }
+|	      							{ $$ = 0; parseRoot = $$; }
 ;
 
-sql_list
-: sql ';'						{ $$ = new SQLList((SQL*)$1); }
-| sql_list sql ';'				{ $$ = new SQLList((SQLList*)$1, (SQL*)$2); }
+sql_list:
+    sql ';'						    { $$ = new SQLList((SQL*)$1); }
+|   sql_list sql ';'				{ $$ = new SQLList((SQLList*)$1, (SQL*)$2); }
 ;
 
-sql
-: schema 						{ $$ = new SQL((Schema*)$1); }
+sql:
+    schema 						   { $$ = new SQL((Schema*)$1); }
 ;
 
 opt_column_commalist:
-        /* empty */                     { $$ = new OptColumnCommalist(NULL); }
-    |   '(' column_commalist ')'        { $$ = new OptColumnCommalist((ColumnCommalist*)$2); }
+        /* empty */                { $$ = new OptColumnCommalist(NULL); }
+    |   '(' column_commalist ')'   { $$ = new OptColumnCommalist((ColumnCommalist*)$2); }
     ;
 
-schema 							
-: base_table_def				{ $$ = new Schema((BaseTableDef*)$1); }
+schema:
+    base_table_def			   	   { $$ = new Schema((BaseTableDef*)$1); }
 ;
 
-base_table_def
-: CREATE TABLE table '(' base_table_element_commalist ')'		{ $$ = new BaseTableDef("CREATE", (Table*)$3, (BaseTableElementCommalist*)$5); }
+base_table_def:
+    CREATE TABLE table '(' base_table_element_commalist ')'		{ $$ = new BaseTableDef("CREATE", (Table*)$3, (BaseTableElementCommalist*)$5); }
 | DROP TABLE table 												{ $$ = new BaseTableDef("DROP", (Table*)$3); }
 ;
 
-base_table_element_commalist
-: base_table_element                                      { $$ = new BaseTableElementCommalist( (BaseTableElement*)$1); }
+base_table_element_commalist:
+    base_table_element                                      { $$ = new BaseTableElementCommalist( (BaseTableElement*)$1); }
 | base_table_element_commalist ',' base_table_element     { $$ = new BaseTableElementCommalist( (BaseTableElementCommalist*)$1, (BaseTableElement*)$3); }
 ;
 
-base_table_element
-:    column_def              { $$ = new BaseTableElement( (ColumnDef*)$1); }
+base_table_element:
+    column_def              { $$ = new BaseTableElement( (ColumnDef*)$1); }
 |   table_constraint_def    { $$ = new BaseTableElement( (TableConstraintDef*)$1); }
 ;
 
-column_def
-: column data_type column_def_opt_list        { $$ = new ColumnDef( (Column*)$1, (DataType*)$2, (ColumnDefOptList*)$3); }
+column_def:
+    column data_type column_def_opt_list        { $$ = new ColumnDef( (Column*)$1, (DataType*)$2, (ColumnDefOptList*)$3); }
 ;
 
 column_def_opt_list:
@@ -210,12 +211,12 @@ column_def_opt:
     |   REFERENCES table '(' column_commalist ')'   { $$ = new ColumnDefOpt(8, (Table*)$2, (ColumnCommalist*)$4); }
     ;
 
-table_constraint_def
-: UNIQUE '(' column_commalist ')'                                                   { $$ = new TableConstraintDef(0, (ColumnCommalist*)$3); }
-| PRIMARY KEY '(' column_commalist ')'                                              { $$ = new TableConstraintDef(1, (ColumnCommalist*)$4); }
-| FOREIGN KEY '(' column_commalist ')' REFERENCES table                             { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7); }
-| FOREIGN KEY '(' column_commalist ')' REFERENCES table '(' column_commalist ')'    { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7, (ColumnCommalist*)$9); }
-| CHECK '(' search_condition ')'                                                  {$$ = new TableConstraintDef(3, (SearchCondition*)$3); }
+table_constraint_def:
+    UNIQUE '(' column_commalist ')'                                                   { $$ = new TableConstraintDef(0, (ColumnCommalist*)$3); }
+|   PRIMARY KEY '(' column_commalist ')'                                              { $$ = new TableConstraintDef(1, (ColumnCommalist*)$4); }
+|   FOREIGN KEY '(' column_commalist ')' REFERENCES table                             { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7); }
+|   FOREIGN KEY '(' column_commalist ')' REFERENCES table '(' column_commalist ')'    { $$ = new TableConstraintDef(2, (ColumnCommalist*)$4, (Table*)$7, (ColumnCommalist*)$9); }
+|   CHECK '(' search_condition ')'                                                  {$$ = new TableConstraintDef(3, (SearchCondition*)$3); }
 ;
 
 column_commalist:
@@ -234,7 +235,7 @@ ordering_spec_commalist:
     ;
 
 ordering_spec:
-        INTNUM opt_asc_desc             { $$ = new OrderingSpec(dData[0], (OptAscDesc*)$2); }
+        INTNUM opt_asc_desc             { $$ = new OrderingSpec(realData[0], (OptAscDesc*)$2); }
     |   column_ref opt_asc_desc         { $$ = new OrderingSpec((ColumnRef*)$1, (OptAscDesc*)$2); }
     ;
 
@@ -271,8 +272,10 @@ manipulative_statement:
     ;
 
 insert_statement:
-    INSERT INTO table opt_column_commalist values_or_query_spec             { $$ = new InsertStatement((Table*)$3, (OptColumnCommalist*)$4, (ValuesOrQuerySpec*)$5); }
-    ;
+    INSERT INTO table opt_column_commalist values_or_query_spec {
+        $$ = new InsertStatement((Table*)$3, (OptColumnCommalist*)$4, (ValuesOrQuerySpec*)$5);
+    }
+;
 
 values_or_query_spec:
         VALUES '(' insert_atom_commalist ')'        { $$ = new ValuesOrQuerySpec((InsertAtomCommalist*)$3); }
@@ -384,9 +387,9 @@ opt_having_clause:
 
 opt_limit_clause:
     /* empty */                               { $$ = NULL; }
-    | LIMIT INTNUM                            { $$ = new OptLimitClause(dData[0]); }
-//    | LIMIT INTNUM ',' INTNUM                 { $$ = new OptLimitClause(0, dData[0], dData[1]); }
-    | LIMIT INTNUM OFFSET INTNUM              { $$ = new OptLimitClause(1, dData[0], dData[1]); }
+    | LIMIT INTNUM                            { $$ = new OptLimitClause(realData[0]); }
+//    | LIMIT INTNUM ',' INTNUM                 { $$ = new OptLimitClause(0, realData[0], realData[1]); }
+    | LIMIT INTNUM OFFSET INTNUM              { $$ = new OptLimitClause(1, realData[0], realData[1]); }
     /* search conditions */
 
 search_condition: 
@@ -484,10 +487,8 @@ scalar_exp:
     ;
 
 atom:
-    /*  parameter_ref
-    | */   literal           { $$ = new Atom((Literal*)$1);  }
-    |   USER                { $$ = new Atom("USER"); }
-    ;
+    literal { $$ = new Atom((Literal*)$1);  }
+;
 
 function_ref:
         ammsc '(' '*' ')'                   { $$ = new FunctionRef((Ammsc*)$1);}
@@ -500,47 +501,70 @@ function_ref:
     ;
 
 literal
-: STRING /* should be: STRING */           { $$ = new Literal(strData[0]); ((Literal*)$$)->setLineno(mylineno); ((Literal*)$$)->setColno(mycolno - lexer.YYLeng()); }
-| INTNUM                                   { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(mylineno); ((Literal*)$$)->setColno(mycolno - lexer.YYLeng()); }
-| APPROXNUM                                { $$ = new Literal(dData[0]); ((Literal*)$$)->setLineno(mylineno); ((Literal*)$$)->setColno(mycolno - lexer.YYLeng()); }
+: STRING /* should be: STRING */ {
+        assert(realData.size() != 0);
+        $$ = new Literal(strData.back());
+        strData.pop_back();
+        ((Literal*)$$)->setLineno(mylineno);
+        ((Literal*)$$)->setColno(mycolno - lexer.YYLeng());
+    }
+| INTNUM {
+        assert(intData.size() != 0);
+        $$ = new Literal(intData.back());
+        intData.pop_back();
+    }
+| APPROXNUM {
+        assert(realData.size() != 0);
+        $$ = new Literal(realData.back());
+        realData.pop_back();
+    }
 ;
 
 table:
-  NAME 							          { $$ = new Table(strData[0]); }
-| NAME '.' NAME     { $$ = new Table(0, strData[0], strData[1]);}
-| NAME AS NAME      { $$ = new Table(1, strData[0], strData[1]);  }
+  NAME {
+    // printf("table: [%d] strData.size()=%d \"%s\"\n", __LINE__, strData.size(), strData[0].c_str()); 
+    assert(strData.size() != 0); 
+    $$ = new Table(strData.back());
+    strData.pop_back();
+}
+| NAME '.' NAME     { $$ = new Table(0, strData[0], strData[1]); }
+| NAME AS NAME      { $$ = new Table(1, strData[0], strData[1]); }
 ;
 
 
 /* data types */
 data_type
 : CHARACTER                           { $$ = new DataType(0); }
-| CHARACTER '(' INTNUM ')'            { $$ = new DataType(0, dData[0]); }
+| CHARACTER '(' INTNUM ')'            { $$ = new DataType(0, realData[0]); }
 | VARCHAR                             { $$ = new DataType(1); }
-| VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, dData[0]); }
+| VARCHAR '(' INTNUM ')'              { $$ = new DataType(1, realData[0]); }
 | NUMERIC                             { $$ = new DataType(2); }
-| NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, dData[0]); }
-| NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, dData[0], dData[1]); }
+| NUMERIC '(' INTNUM ')'              { $$ = new DataType(2, realData[0]); }
+| NUMERIC '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(2, realData[0], realData[1]); }
 | DECIMAL                             { $$ = new DataType(3); }
-| DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, dData[0]); }
-| DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, dData[0], dData[1]); }
+| DECIMAL '(' INTNUM ')'              { $$ = new DataType(3, realData[0]); }
+| DECIMAL '(' INTNUM ',' INTNUM ')'   { $$ = new DataType(3, realData[0], realData[1]); }
 | INTEGER                             { $$ = new DataType(4); }
 | SMALLINT                            { $$ = new DataType(5); }
 | FLOAT                               { $$ = new DataType(6); }
-| FLOAT '(' INTNUM ')'                { $$ = new DataType(6, dData[0]); }
+| FLOAT '(' INTNUM ')'                { $$ = new DataType(6, realData[0]); }
 | REAL                                { $$ = new DataType(7); }
 | DOUBLE PRECISION                    { $$ = new DataType(8); }
 ;
 
 column_ref:
-        NAME                    { $$ = new ColumnRef(strData[0]); }
+        NAME                    { printf("[%d]\n", __LINE__); $$ = new ColumnRef(strData[0]); }
     |   NAME '.' NAME           { $$ = new ColumnRef(0, strData[0], strData[1]); }
     |   NAME '.' NAME '.' NAME  { $$ = new ColumnRef(strData[0], strData[1], strData[2]);}
     |   NAME AS NAME            { $$ = new ColumnRef(1, strData[0], strData[1]); } 
 ;
 
-column
-: NAME            { $$ = new Column(strData[0]); }
+column:
+    NAME {
+        assert(strData.size() > 0); 
+        $$ = new Column(strData.back()); 
+        strData.pop_back();
+    }
 ;
 
 cursor

@@ -13,8 +13,8 @@ int column;
 
 // Variables used to share data with the parser
 std::vector<std::string> strData;
-std::vector<int> intData;
-std::vector<float> floatData;
+std::vector<long int> intData;
+std::vector<double> realData;
 
 using namespace std;
 %}
@@ -77,7 +77,7 @@ using namespace std;
 -?"."[0-9]+     |
 -?[0-9]+E[-+]?[0-9]+    |
 -?[0-9]+"."[0-9]*E[-+]?[0-9]+ |
--?"."[0-9]+E[-+]?[0-9]+ { floatData.push_back(atof(yytext)); return RAParser::FLOATVAL; }
+-?"."[0-9]+E[-+]?[0-9]+ { realData.push_back(atof(yytext)); return RAParser::FLOATVAL; }
 
 	/* booleans */
 TRUE    { intData.push_back(1); return RAParser::INTVAL; }
@@ -88,7 +88,7 @@ FALSE   { intData.push_back(0); return RAParser::INTVAL; }
 
 [-+*/{}\[\](),.]				{/* count() */; return yytext[0]; }
 
-;							{ strData.clear(); intData.clear(); floatData.clear(); return yytext[0]; }
+;							{ strData.clear(); intData.clear(); realData.clear(); return yytext[0]; }
 
 	/* names */
 [A-Za-z][A-Za-z0-9_]*		{ /* count() */; strData.push_back(yytext); return RAParser::NAME; }
