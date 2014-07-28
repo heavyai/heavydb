@@ -172,9 +172,10 @@ mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_addr_t 
     // assert buf
 
     // open the file if it is not open already
-    if (openFile(fInfo) != MAPD_SUCCESS)
+    if (openFile(fInfo) != MAPD_SUCCESS) {
+        printf("openfile error");
         return MAPD_FAILURE;
-
+    }
     // write the block to the file
     mapd_err_t err;
     size_t wrote = writeBlock(fInfo.f, fInfo.blockSize, blockNum, buf, &err);
@@ -294,7 +295,7 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     return err;
 }
 
-mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t buf) {
+mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t src, int epoch) {
     return MAPD_FAILURE;
 }
 
@@ -353,7 +354,7 @@ mapd_err_t FileMgr::deleteChunk(Chunk &c) {
         //BlockInfo *bInfo = c[0];
     }
 
-    return MAPD_SUCCESS;
+    return MAPD_FAILURE;
 }
 
 } // File_Namespace

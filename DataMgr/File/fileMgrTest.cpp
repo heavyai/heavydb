@@ -29,7 +29,7 @@ void test_deleteFile(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_writeReadFile(mapd_size_t blockSize, mapd_size_t nblocks);
 void test_putGetBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_clearFreeBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
-void test_createChunk();
+void test_createChunk(mapd_size_t nblocks);
 
 int main(void) {
 
@@ -87,7 +87,7 @@ int main(void) {
     //test_clearFreeBlock(30000, 30000);
     //test_clearFreeBlock(100000, 100000);
 
-    test_createChunk();
+    test_createChunk(32);
 
     /*    PPASS("deleteFile()") : PFAIL("deleteFile()");*/
     /*test_getBlock() ?
@@ -251,7 +251,7 @@ void test_writeReadFile(mapd_size_t blockSize, mapd_size_t nblocks) {
     if (err != MAPD_SUCCESS)
         PFAIL("test_writeReadFile() - error returned from writeFile writing uninitialized block");
     
-    //initialze block1 with values
+    //initialize block1 with values
     for (int i = 0; i < blockSize; i++) {
         block1[i] = (mapd_byte_t) i;
     }
@@ -436,25 +436,79 @@ void test_clearFreeBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg) {
     }
 }
 
-void test_createChunk() {
+void test_createChunk(mapd_size_t nblocks) {
+    mapd_err_t err;
 
     mapd_size_t blockSize1 = 8;
-    mapd_size_t blockSize2 = 16;
-    mapd_size_t blockSize3 = 12;
+    mapd_size_t blockSize2 = 9;
+    mapd_size_t blockSize3 = 10;
+
+    mapd_byte_t srcBuf[blockSize1];
+    mapd_byte_t destBuf[blockSize1];
     FileMgr fm(".");
 
-    fileInfo = fm.createFile(fileId);
+    int keyInt = 4;
+    int epoch = 0;
+
+    FileInfo *fileInfo1 = fm.createFile(blockSize1, nblocks);
     
     ChunkKey key;
-    key.push_back(4);
+    key.push_back(keyInt);
     printf("%d\n", key.back());
 
-    // creating a Chunk with the blockSize
-    Chunk* c = fm.createChunk(key, blockSize1, blockSize1, NULL, 0);
+    int freeCount1 = fileInfo1->freeBlocks.size();\
 
+    // creating a Chunk with the blockSize
+    mapd_size_t sizeArg = blockSize1;
+    Chunk* c = fm.createChunk(key, sizeArg, blockSize1, NULL, 0);
+
+    //check formula
+    printf("nblocks = %d, from blockSize %d and size %d\n", (sizeArg + blockSize1 - 1) / blockSize1, blockSize1, sizeArg);
+    
     // verify that it actually returned
     if (c == NULL)
         PFAIL("createChunk returned a Null chunk");
+    else PPASS("createChunk's returned Chunk exists");
+
+    int freeCount2 = fileInfo1->freeBlocks.size();
+
+    // verify that there is one less freeBlock
+    if (freeCount1 != freeCount2 + 1)
+        PFAIL("freeBlock size hasn't decreased by one");
+    else PPASS("freeBlock size decreased by one");
+
+    // initialize the buffer
+    for (int i = 0; i < blockSize1; i++) {
+        srcBuf[i] = rand() % 256;;
+    }
+
+    Chunk* gottenRefChunk = fm.getChunkRef(key);
+    if (gottenRefChunk == NULL)
+        PFAIL("getChunkRef returned NULL");
+    else PPASS("getChunkRef did not return NULL");
+/*
+    Chunk* gottenChunk = fm.getChunk(key, srcBuf);
+    if (gottenChunk == NULL)
+        PFAIL("getChunk returned NULL");
+    else PPASS("getChunk did not return NULL");
+*/
+    // put the chunk's content in the buffer
+    err = fm.putChunk(key, 0, destBuf, epoch);
+    if (err != MAPD_SUCCESS)
+        PFAIL("putChunk returned error");
+    else PPASS("putChunk did not return error");
+
+
+    err = fm.deleteChunk(*c);
+    if (err != MAPD_SUCCESS)
+        PFAIL("deleteChunk returned error");
+    else PPASS("deleteChunk did not return error");
+
+    err = fm.deleteChunk(*gottenRefChunk);
+    if (err != MAPD_SUCCESS)
+        PFAIL("deleteChunk returned error");
+    else PPASS("deleteChunk did not return error");
+
 
     // we're going to create chunks of one multiblock 
     //Chunk* c = createChunk()
