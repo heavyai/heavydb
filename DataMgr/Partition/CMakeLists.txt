@@ -7,6 +7,7 @@ set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
 SET (partitioner_source_files
     LinearTablePartitioner.cpp
     LinearTablePartitioner.h
+    AbstractTablePartitioner.h
 )
 
 set (partitioner_include_dirs
