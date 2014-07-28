@@ -48,7 +48,7 @@ class LinearTablePartitioner { //: public AbstractPartitioner { // implements
 public:
     LinearTablePartitioner(const int tableId,  std::vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
-	//virtual ~LinearTablePartitioner();
+    ~LinearTablePartitioner();
 
     void getPartitionsForQuery(std::vector <PartitionInfo> &partitions, const void *predicate = 0);
 
@@ -68,6 +68,10 @@ private:
     PgConnector pgConnector_;
     
     void createNewPartition();
+    void createStateTableIfDne();
+    void readState();
+    void writeState();
+    void getInsertBufferChunks();
 	
 	LinearTablePartitioner(const LinearTablePartitioner&);
 	LinearTablePartitioner& operator=(const LinearTablePartitioner&);

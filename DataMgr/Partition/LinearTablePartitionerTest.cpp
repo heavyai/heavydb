@@ -17,13 +17,21 @@ int main() {
     colInfo.bitSize_ = 32;
     colInfo.insertBuffer_ = 0;
     columnInfoVec.push_back(colInfo);
+    colInfo.columnId_ = 1;
+    colInfo.columnType_ = FLOAT_TYPE; 
+    colInfo.bitSize_ = 32;
+    colInfo.insertBuffer_ = 0;
+    columnInfoVec.push_back(colInfo);
     LinearTablePartitioner linearTablePartitioner(0, columnInfoVec, bufferMgr, 1048576 );
 
     vector <int> columnIds; 
     vector <void *> data;
     columnIds.push_back(0);
+    columnIds.push_back(1);
     int intData = 3;
     data.push_back(static_cast <void *> (&intData));
+    float floatData = 7.2;
+    data.push_back(static_cast <void *> (&floatData));
 
     for (int i = 0; i < 40; ++i) {
         for (int r = 0; r < 100000; ++r) { 

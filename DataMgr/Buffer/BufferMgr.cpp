@@ -92,6 +92,7 @@ Buffer* BufferMgr::createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_s
 
     // Insert an entry in chunkIndex_ for the new chunk. Just do it.
     chunkIndex_[key] = b;
+    return b;
 }
 
 
