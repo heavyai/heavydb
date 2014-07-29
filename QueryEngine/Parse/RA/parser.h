@@ -75,8 +75,8 @@ extern RelAlgNode* parse_root;
 
 // Variables declared in RelAlgebraLexer.l
 extern std::vector<std::string> strData;
-extern std::vector<int> intData;
-extern std::vector<float> floatData;
+extern std::vector<long int> intData;
+extern std::vector<double> realData;
 
 
 #line 21 "/usr/share/bison++/bison.h"

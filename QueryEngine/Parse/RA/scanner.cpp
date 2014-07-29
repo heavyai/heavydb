@@ -480,8 +480,8 @@ int column;
 
 // Variables used to share data with the parser
 std::vector<std::string> strData;
-std::vector<int> intData;
-std::vector<float> floatData;
+std::vector<long int> intData;
+std::vector<double> realData;
 
 using namespace std;
 #line 488 "scanner.cpp"
@@ -919,7 +919,7 @@ case 42:
 case 43:
 YY_RULE_SETUP
 #line 80 "scanner.l"
-{ floatData.push_back(atof(yytext)); return RAParser::FLOATVAL; }
+{ realData.push_back(atof(yytext)); return RAParser::FLOATVAL; }
 	YY_BREAK
 /* booleans */
 case 44:
@@ -945,7 +945,7 @@ YY_RULE_SETUP
 case 48:
 YY_RULE_SETUP
 #line 91 "scanner.l"
-{ strData.clear(); intData.clear(); floatData.clear(); return yytext[0]; }
+{ strData.clear(); intData.clear(); realData.clear(); return yytext[0]; }
 	YY_BREAK
 /* names */
 case 49:

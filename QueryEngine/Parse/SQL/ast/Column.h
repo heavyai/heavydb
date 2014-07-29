@@ -1,24 +1,35 @@
-#ifndef SQL_AST_COLUMN_H
-#define SQL_AST_COLUMN_H
+#ifndef SQL_COLUMN_H
+#define SQL_COLUMN_H
 
+#include <cassert>
 #include "ASTNode.h"
-#include "../visitor/Visitor.h"
 
-namespace SQL_Namespace {
-	class  Column : public ASTNode {
-    
+class Column : public ASTNode {
+
 public:
-    std::string name1;
-    
-    /**< Constructor */
-    explicit Column(const std::string &n1) : name1(n1) {}
 
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
-	};
-}
+	std::string s1;
+	std::string s2;
 
-#endif // SQL_AST_COLUMN_H
+	explicit Column(const std::string &s1) {
+		assert(s1 != "");
+		this->s1 = s1;
+	}
+
+	Column(const std::string &s1, const std::string &s2) {
+		assert(s1 != "");
+		assert(s2 != "");
+		this->s1 = s1;
+		this->s2 = s2;
+	}
+
+	~Column() {
+
+	}
+	
+	virtual void accept(Visitor &v) const {
+		v.visit(this);
+	}
+};
+
+#endif // SQL_COLUMN_H

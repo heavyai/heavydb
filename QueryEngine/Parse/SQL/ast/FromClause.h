@@ -1,26 +1,24 @@
-#ifndef FROM_CLAUSE_NODE_H
-#define FROM_CLAUSE_NODE_H
+#ifndef SQL_FROMCLAUSE_H
+#define SQL_FROMCLAUSE_H
 
+#include <cassert>
 #include "ASTNode.h"
-#include "../visitor/Visitor.h"
 
-namespace SQL_Namespace {
-	class  FromClause : public ASTNode {
-    
+class FromClause : public ASTNode {
+
 public:
-    TableRefCommalist* trc; 
-    SelectStatement* ss;
 
-    /**< Constructor */
-    explicit FromClause(TableRefCommalist *n) : trc(n), ss(NULL) {}
-    FromClause(SelectStatement *n) : trc(NULL), ss(n) {}
+	explicit FromClause() {
 
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
-	};
-}
+	}
 
-#endif // FROM_CLAUSE_NODE_H
+	~FromClause() {
+
+	}
+	
+	virtual void accept(Visitor &v) const {
+		v.visit(this);
+	}
+};
+
+#endif // SQL_FROMCLAUSE_H

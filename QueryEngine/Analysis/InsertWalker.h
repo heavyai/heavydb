@@ -1,9 +1,6 @@
 /**
  * @file	InsertWalker.h
  * @author	Steven Stewart <steve@map-d.com>
- *
- * Semantic Analysis
- *
  */
 #ifndef SQL_INSERT_WALKER_H
 #define SQL_INSERT_WALKER_H
@@ -20,6 +17,22 @@ using namespace SQL_Namespace;
 
 namespace Analysis_Namespace {
 
+/**
+ * @class InsertWalker
+ * @brief Parses and type-checks INSERT statements.
+ *
+ * The InsertWalker will traverse the SQL AST in order to parse statements of
+ * the following form:
+ *
+ * INSERT INTO table (column1 [, column2, column3 ... ]) VALUES (value1 [, value2, value3 ... ])
+ *
+ * It verifies the existence of the table and column names, and it verifies that
+ * the specified values are of the correct type for the corresponding column. If
+ * not, then a local member called "errFlag_" is set to true, and "errMsg_" will
+ * contain an appropriate error message. These members are accessible via the
+ * isError() method.
+ *
+ */
 class InsertWalker : public SQL_Namespace::Visitor {
 
 public:
@@ -27,7 +40,7 @@ public:
 	InsertWalker(Catalog &c) : c_(c), errFlag_(false) {}
 
 	/// Returns an error message if an error was encountered
-	inline std::pair<bool, std::string> errMsg() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
+	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
 
 	virtual void visit(Program *v);
 	virtual void visit(SQLList *v);

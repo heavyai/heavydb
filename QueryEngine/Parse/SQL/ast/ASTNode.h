@@ -1,17 +1,16 @@
-#ifndef SQL_AST_NODE_H
-#define SQL_AST_NODE_H
+/**
+ * @file	ASTNode.h
+ * @author	Steven Stewart <steve@map-d.com>
+ */
+#ifndef SQL_ASTNODE_H
+#define SQL_ASTNODE_H
 
 #include "../visitor/Visitor.h"
 
-namespace SQL_Namespace {
-
 class ASTNode {
-    
+
 public:
-	/**< Accepts the given void visitor by calling v.visit(this) */
-	virtual void accept(class Visitor &v) = 0;
+	virtual void accept(Visitor &v) const = 0;
 };
 
-} // SQL_Namespace
-
-#endif // SQL_AST_NODE_H
+#endif // SQL_ASTNODE_H
