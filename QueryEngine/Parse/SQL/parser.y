@@ -175,8 +175,8 @@ opt_all_distinct:
 ;
 
 from_clause:
-	FROM table_list				{ $$ = new FromClause(); }
-|	FROM '(' select_stmt ')'	{ $$ = new FromClause(); }
+	FROM table_list				{ $$ = new FromClause((TableList*)$2); }
+|	FROM '(' select_stmt ')'	{ $$ = new FromClause((SelectStmt*)$3); }
 ;
 
 opt_where:
@@ -205,8 +205,8 @@ opt_limit:
 ;
 
 table_list:
-	table_list ',' table 	{ $$ = new TableList(); }
-|	table 					{ $$ = new TableList(); }
+	table_list ',' table 	{ $$ = new TableList((TableList*)$1, (Table*)$3); }
+|	table 					{ $$ = new TableList((Table*)$1); }
 ;
 
 table:
