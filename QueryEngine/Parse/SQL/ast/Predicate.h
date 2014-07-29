@@ -1,37 +1,60 @@
-#ifndef PREDICATE_NODE_H
-#define PREDICATE_NODE_H
+/**
+ * @file    Predicate.h
+ * @author  Steven Stewart <steve@map-d.com>
+ */
+#ifndef SQL_PREDICATE_NODE_H
+#define SQL_PREDICATE_NODE_H
 
+#include <cassert>
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
-namespace SQL_Namespace {
-	class  Predicate : public ASTNode {
+class Predicate : public ASTNode {
     
 public:
+	Predicate *n1 = NULL;
+	Predicate *n2 = NULL;
+	Comparison *n3 = NULL;
+    std::string op = "";
 
-    ComparisonPredicate* cp;
-    BetweenPredicate* bp;
-    LikePredicate* lp;
-    ExistenceTest* et;
-    TestForNull *tfn;
-    AllOrAnyPredicate *aoap;
-    InPredicate *ip;
-
-    /* constructor */
-    explicit Predicate(ComparisonPredicate* n) : cp(n), bp(NULL), lp(NULL), et(NULL), tfn(NULL), aoap(NULL), ip(NULL) {}
-    Predicate(BetweenPredicate* n) : cp(NULL), bp(n), lp(NULL), et(NULL), tfn(NULL), aoap(NULL), ip(NULL) {}
-    Predicate(LikePredicate *n) : cp(NULL), bp(NULL), lp(n), et(NULL), tfn(NULL), aoap(NULL), ip(NULL) {}
-    Predicate(ExistenceTest* n) : cp(NULL), bp(NULL), lp(NULL), et(n), tfn(NULL), aoap(NULL), ip(NULL) {}
-    Predicate(TestForNull *n) : cp(NULL), bp(NULL), lp(NULL), et(NULL), tfn(n), aoap(NULL), ip(NULL) {}
-    Predicate(AllOrAnyPredicate* n) : cp(NULL), bp(NULL), lp(NULL), et(NULL), tfn(NULL), aoap(n), ip(NULL) {}
-    Predicate(InPredicate *n) : cp(NULL), bp(NULL), lp(NULL), et(NULL), tfn(NULL), aoap(NULL), ip(n) {}
-
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
+    /// Constructor
+    Predicate(const std::string &op, Predicate *n1, Predicate *n2) {
+    	assert(op == "AND" || op == "OR");
+        assert(n1 && n2);
+    	this->op = op;
+    	this->n1 = n1;
+    	this->n2 = n2;
+        this->n3 = NULL;
     }
-    
-	};
-}
 
-#endif // PREDICATE_NODE_H
+    Predicate(const std::string &op, Predicate *n1) {
+    	assert(op == "NOT");
+        assert(n1);
+    	this->op = op;
+    	this->n1 = n1;
+        this->n2 = NULL;
+        this->n3 = NULL;
+    }
+
+    explicit Predicate(Predicate *n1) {
+        assert(n1);
+        this->op = "";
+    	this->n1 = n1;
+        this->n2 = NULL;
+        this->n3 = NULL;
+    }
+
+    explicit Predicate(Comparison *n3) {
+        assert(n3);
+        this->op = "";
+        this->n1 = NULL;
+        this->n2 = NULL;
+    	this->n3 = n3;
+    }
+
+	virtual void accept(class Visitor &v) const {
+		v.visit(this);
+	}
+};
+
+#endif // SQL_PREDICATE_NODE_H

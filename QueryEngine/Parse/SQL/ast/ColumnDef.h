@@ -1,27 +1,38 @@
-#ifndef COLUMN_DEF_NODE_H
-#define COLUMN_DEF_NODE_H
+#ifndef SQL_COLUMNDEF_H
+#define SQL_COLUMNDEF_H
 
+#include <cassert>
 #include "ASTNode.h"
-#include "../visitor/Visitor.h"
 
-namespace SQL_Namespace {
-	class  ColumnDef : public ASTNode {
-    
+class ColumnDef : public ASTNode {
+
 public:
 
-    Column *col;
-    DataType *dType;
-    ColumnDefOptList *colDefOptList;
+	Column *n1 = NULL;
+	MapdDataT *n2 = NULL;
+	std::string s;
 
-    /* constructor */
-    explicit ColumnDef(Column *col1, DataType *dType1, ColumnDefOptList *colDefOptList1) : col(col1), dType(dType1), colDefOptList(colDefOptList1) {}
+	ColumnDef(Column *n1, MapdDataT *n2) {
+		assert(n1 && n2);
+		this->n1 = n1;
+		this->n2 = n2;
+	}
 
-	/**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
-	};
-}
+	ColumnDef(Column *n1, MapdDataT *n2, const std::string &s) {
+		assert(n1 && n2);
+		assert(s == "PRIMARY KEY" || s == "NULL" || s == "NOT NULL");
+		this->n1 = n1;
+		this->n2 = n2;
+		this->s = s;
+	}
 
-#endif // COLUMN_DEF_NODE_H
+	~ColumnDef() {
+
+	}
+	
+	virtual void accept(Visitor &v) const {
+		v.visit(this);
+	}
+};
+
+#endif // SQL_COLUMN_H

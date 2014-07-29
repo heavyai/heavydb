@@ -1,36 +1,36 @@
-#ifndef AST_LITERAL_H
-#define AST_LITERAL_H
+#ifndef SQL_LITERAL_H
+#define SQL_LITERAL_H
 
-#include "ASTNode.h"
 #include <cassert>
-#include "AbstractScalarExpr.h"
-#include "../visitor/Visitor.h"
+#include "ASTNode.h"
 
-namespace SQL_Namespace {
-	class  Literal : public AbstractScalarExpr {
-    
+class Literal : public ASTNode {
+
 public:
-    std::string name1 = "";
-    int int1 = 0;
 
-    /**< Constructor */
-    Literal(const std::string &n1) {
-        assert(n1 != "");
-        name1 = n1; 
-        this->setType(SCALAR_STRING);
-    }
-    Literal(int n) {
-        int1 = n;
-        this->setType(SCALAR_INT); 
-    }
+	long int n1;
+	double n2;
+	std::string n3;
 
-    /**< Accepts the given void visitor by calling v.visit(this) */
-    void accept(Visitor &v) {
-        v.visit(this);
-    }
-    
+	explicit Literal(long int n1) {
+		this->n1 = n1;
+	}
+
+	explicit Literal(double n2) {
+		this->n2 = n2;
+	}
+
+	explicit Literal(const std::string &n3) {
+		this->n3 = n3;
+	}
+
+	~Literal() {
+
+	}
+	
+	virtual void accept(Visitor &v) const {
+		v.visit(this);
+	}
 };
 
-} // SQL_Namespace
-
-#endif // AST_LITERAL_H
+#endif // SQL_LITERAL_H
