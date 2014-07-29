@@ -5,13 +5,13 @@
  * Used for testing the insert walker. In order to test the walker,
  * enter INSERT statements at the parser's prompt.
  */
-#include "../../DataMgr/Metadata/Catalog.h"
-#include "../Parse/SQL/parser.h"
-#include "InsertWalker.h"
- #include "../../Shared/types.h"
 #include <iostream>
 #include <string>
 #include <vector>
+#include "../../Shared/types.h"
+#include "../Parse/SQL/parser.h"
+ #include "InsertWalker.h"
+#include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace std;
 using Analysis_Namespace::InsertWalker;
@@ -27,7 +27,7 @@ int main(int argc, char ** argv) {
     c.addTableWithColumns("T1", cols);
 
     // Create a parser for SQL and... do stuff
-    Parser parser;
+    SQLParser parser;
     string sql;
     do {
         cout << "mapd> ";
@@ -45,7 +45,7 @@ int main(int argc, char ** argv) {
         }
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
-        
+        if (parseRoot == NULL) printf("parseRoot is NULL\n");
         InsertWalker iw(c);
         if (parseRoot != 0)
             parseRoot->accept(iw); 
