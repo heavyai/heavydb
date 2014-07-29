@@ -1,6 +1,6 @@
 #include "parser.h"
 #include "visitor/Visitor.h"
-#include "translator/XMLTranslatorSQL.h"
+//#include "translator/XMLTranslatorSQL.h"
 #include <iostream>
 #include <string>
 #include <boost/timer/timer.hpp>
@@ -24,7 +24,7 @@ int main(int argc, char ** argv) {
         if (sql == "q")
             break;
         string lastParsed;
-        Parser parser;
+        SQLParser parser;
         const boost::timer::nanosecond_type oneSecond(1000000000LL);
         boost::timer::cpu_timer cpuTimer;
         for (int i = 0; i != 100000; ++i) {
