@@ -42,11 +42,14 @@
 #include "ast/OptLimit.h"
 #include "ast/OptOrderby.h"
 #include "ast/OptWhere.h"
+#include "ast/OrderbyColumn.h"
+#include "ast/OrderbyColumnList.h"
 #include "ast/Predicate.h"
 #include "ast/RenameStmt.h"
 #include "ast/ScalarExpr.h"
 #include "ast/ScalarExprList.h"
 #include "ast/SearchCondition.h"
+#include "ast/Selection.h"
 #include "ast/SelectStmt.h"
 #include "ast/SqlStmt.h"
 #include "ast/Table.h"
@@ -82,6 +85,7 @@ extern std::vector<double> realData;
 %token AVG COUNT MAX MIN SUM
 %token AS NULLX
 %token NAME
+%token ASC DESC
 %token CREATE ALTER DROP RENAME TABLE
 %token INTVAL FLOATVAL STRING
 %token ADD TO
@@ -137,19 +141,19 @@ select_stmt:
 		opt_having
 		opt_orderby
 		opt_limit {
-			$$ = new SelectStmt((OptAllDistinct*)$2, (FromClause*)$3, (OptWhere*)$4, (OptGroupby*)$5, 
-				(OptHaving*)$6, (OptOrderby*)$7, (OptLimit*)$8);
+			$$ = new SelectStmt((OptAllDistinct*)$2, (Selection*)$3, (FromClause*)$4, (OptWhere*)$5, (OptGroupby*)$6, 
+				(OptHaving*)$7, (OptOrderby*)$8, (OptLimit*)$9);
 		}
 ;
 
 selection:
-	scalar_expr_list
-|	MULTIPLY
+	scalar_expr_list	{ $$ = new Selection((ScalarExprList*)$1); }
+|	MULTIPLY 			{ $$ = new Selection(true); }
 ;
 
 scalar_expr_list:
-	scalar_expr
-|	scalar_expr_list ',' scalar_expr
+	scalar_expr 						{ $$ = new ScalarExprList((ScalarExpr*)$1); }
+|	scalar_expr_list ',' scalar_expr 	{ $$ = new ScalarExprList((ScalarExprList*)$1, (ScalarExpr*)$3); }
 ;
 
 scalar_expr:
@@ -176,12 +180,12 @@ from_clause:
 ;
 
 opt_where:
-	WHERE search_condition	{ $$ = new OptWhere(); }
+	WHERE search_condition	{ $$ = new OptWhere((SearchCondition*)$2); }
 |
 ;
 
 opt_groupby:
-	GROUPBY column_list		{ $$ = new OptGroupby(); }
+	GROUPBY column_list		{ $$ = new OptGroupby((ColumnList*)$2); }
 |
 ;
 
@@ -191,7 +195,7 @@ opt_having:
 ;
 
 opt_orderby:
-	ORDERBY 				{ $$ = new OptOrderby(); }
+	ORDERBY orderby_column_list	{ $$ = new OptOrderby((OrderbyColumnList*)$2); }
 |
 ;
 
@@ -246,6 +250,17 @@ column:
 	}
 ;
 
+orderby_column_list:
+	orderby_column								{ $$ = new OrderbyColumnList((OrderbyColumn*)$1); }
+|	orderby_column_list ',' orderby_column		{ $$ = new OrderbyColumnList((OrderbyColumnList*)$1, (OrderbyColumn*)$3); }
+;
+
+orderby_column:
+	column			{ $$ = new OrderbyColumn((Column*)$1); }
+|	column ASC		{ $$ = new OrderbyColumn((Column*)$1, true);  /* true => ASC */}
+|	column DESC		{ $$ = new OrderbyColumn((Column*)$1, false); /* false => DESC */ }
+;
+
 search_condition:
 	predicate 							{ $$ = new SearchCondition((Predicate*)$1); }
 ;
@@ -253,8 +268,8 @@ search_condition:
 predicate:
  	predicate OR predicate				{ $$ = new Predicate("OR", (Predicate*)$1, (Predicate*)$3); }
 |	predicate AND predicate				{ $$ = new Predicate("AND", (Predicate*)$1, (Predicate*)$3); }
-|	NOT predicate							{ $$ = new Predicate("NOT", (Predicate*)$1); }
-|	'(' predicate ')'						{ $$ = new Predicate((Predicate*)$1); }	
+|	NOT predicate						{ $$ = new Predicate("NOT", (Predicate*)$1); }
+|	'(' predicate ')'					{ $$ = new Predicate((Predicate*)$1); }	
 |	comparison							{ $$ = new Predicate((Comparison*)$1); }
 ;
 

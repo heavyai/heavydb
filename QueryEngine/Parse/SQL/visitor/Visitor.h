@@ -25,12 +25,15 @@ class OptHaving;
 class OptLimit;
 class OptOrderby;
 class OptWhere;
+class OrderbyColumn;
+class OrderbyColumnList;
 class Predicate;
 class RenameStmt;
 class ScalarExpr;
 class ScalarExprList;
 class SearchCondition;
 class SelectStmt;
+class Selection;
 class SqlStmt;
 class Table;
 class TableList;
@@ -69,11 +72,14 @@ public:
 	virtual void visit(const OptLimit*) {}
 	virtual void visit(const OptOrderby*) {}
 	virtual void visit(const OptWhere*) {}
+	virtual void visit(const OrderbyColumn*) {}
+	virtual void visit(const OrderbyColumnList*) {}
 	virtual void visit(const Predicate*) {}
 	virtual void visit(const RenameStmt*) {}
 	virtual void visit(const ScalarExpr*) {}
 	virtual void visit(const ScalarExprList*) {}
 	virtual void visit(const SearchCondition*) {}
+	virtual void visit(const Selection*) {}
 	virtual void visit(const SelectStmt*) {}
 	virtual void visit(const SqlStmt*) {}
 	virtual void visit(const Table*) {}

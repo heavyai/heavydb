@@ -7,9 +7,11 @@
 class OptOrderby : public ASTNode {
 
 public:
+	OrderbyColumnList *n1 = NULL;
 
-	explicit OptOrderby() {
-
+	explicit OptOrderby(OrderbyColumnList* n1) {
+		assert(n1);
+		this->n1 = n1;
 	}
 	
 	virtual void accept(Visitor &v) const {

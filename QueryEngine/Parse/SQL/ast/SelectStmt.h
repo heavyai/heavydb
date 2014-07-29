@@ -9,17 +9,18 @@ class SelectStmt : public Statement {
 public:
 
 	OptAllDistinct* n1 = NULL;
-	FromClause *n2 = NULL;
-	OptWhere *n3 = NULL;
-	OptGroupby *n4 = NULL;
-	OptHaving *n5 = NULL;
-	OptOrderby *n6 = NULL;
-	OptLimit *n7 = NULL;
+	Selection *n2 = NULL;
+	FromClause *n3 = NULL;
+	OptWhere *n4 = NULL;
+	OptGroupby *n5 = NULL;
+	OptHaving *n6 = NULL;
+	OptOrderby *n7 = NULL;
+	OptLimit *n8 = NULL;
 
-	explicit SelectStmt(OptAllDistinct *n1, FromClause *n2, OptWhere *n3,
-		OptGroupby *n4, OptHaving *n5, OptOrderby *n6, OptLimit *n7)
+	explicit SelectStmt(OptAllDistinct *n1, Selection *n2, FromClause *n3, OptWhere *n4,
+		OptGroupby *n5, OptHaving *n6, OptOrderby *n7, OptLimit *n8)
 	{
-		assert(n2);
+		assert(n2 && n3);
 		this->n1 = n1;
 		this->n2 = n2;
 		this->n3 = n3;
@@ -27,6 +28,7 @@ public:
 		this->n5 = n5;
 		this->n6 = n6;
 		this->n7 = n7;
+		this->n8 = n8;
 	}
 	
 	virtual void accept(Visitor &v) const {

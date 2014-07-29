@@ -24,8 +24,10 @@ std::vector<double> realData;
 "all"			{ return SQLParser::ALL; }
 "alter"			{ return SQLParser::ALTER; }
 "as"			{ return SQLParser::AS; }
+"asc"			{ return SQLParser::ASC; }
 "column"		{ return SQLParser::COLUMN; }
 "create"		{ return SQLParser::CREATE; }
+"desc"			{ return SQLParser::DESC; }
 "distinct"		{ return SQLParser::DISTINCT; }
 "drop"			{ return SQLParser::DROP; }
 "from"			{ return SQLParser::FROM; }

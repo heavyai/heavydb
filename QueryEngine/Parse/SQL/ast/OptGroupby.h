@@ -7,9 +7,11 @@
 class OptGroupby : public ASTNode {
 
 public:
+	ColumnList* n1 = NULL;
 
-	explicit OptGroupby() {
-
+	explicit OptGroupby(ColumnList* n1) {
+		assert(n1);
+		this->n1 = n1;
 	}
 	
 	virtual void accept(Visitor &v) const {

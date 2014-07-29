@@ -3,19 +3,25 @@
 
 #include <cassert>
 #include "ASTNode.h"
+#include "../../../../Shared/types.h"
 
 class Column : public ASTNode {
 
 public:
-
 	std::string s1;
 	std::string s2;
 
+	// id and type is obtained from the Catalog during semantic analysis
+	int column_id = -1;
+	mapd_data_t column_type;
+
+	/// Constructor
 	explicit Column(const std::string &s1) {
 		assert(s1 != "");
 		this->s1 = s1;
 	}
 
+	/// Constructor
 	Column(const std::string &s1, const std::string &s2) {
 		assert(s1 != "");
 		assert(s2 != "");

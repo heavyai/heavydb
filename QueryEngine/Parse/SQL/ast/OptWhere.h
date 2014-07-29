@@ -7,9 +7,11 @@
 class OptWhere : public ASTNode {
 
 public:
+	SearchCondition *n1 = NULL;
 
-	explicit OptWhere() {
-
+	explicit OptWhere(SearchCondition *n1) {
+		assert(n1);
+		this->n1 = n1;
 	}
 	
 	virtual void accept(Visitor &v) const {
