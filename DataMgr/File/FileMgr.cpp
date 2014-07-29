@@ -163,19 +163,19 @@ Block* FileMgr::getBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     return fInfo.blocks[blockNum];
 }
 
-mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf) {
+mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_addr_t buf) {
 	FileInfo *fInfo;
-	return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, n, buf);
+	return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, buf);
 }
 
-mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf) {
-	// The client should be writing blockSize bytes to the block
-	assert(blockNum == fInfo.blockSize);
+mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_addr_t buf) {
+    // assert buf
 
     // open the file if it is not open already
-    if (openFile(fInfo) != MAPD_SUCCESS)
+    if (openFile(fInfo) != MAPD_SUCCESS) {
+        printf("openfile error");
         return MAPD_FAILURE;
-
+    }
     // write the block to the file
     mapd_err_t err;
     size_t wrote = writeBlock(fInfo.f, fInfo.blockSize, blockNum, buf, &err);
@@ -295,7 +295,7 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     return err;
 }
 
-mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t buf) {
+mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t src, int epoch) {
     return MAPD_FAILURE;
 }
 
@@ -354,7 +354,7 @@ mapd_err_t FileMgr::deleteChunk(Chunk &c) {
         //BlockInfo *bInfo = c[0];
     }
 
-    return MAPD_SUCCESS;
+    return MAPD_FAILURE;
 }
 
 } // File_Namespace

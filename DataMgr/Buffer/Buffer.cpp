@@ -38,7 +38,7 @@ bool Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
 	// write source contents to buffer
 	assert(host_ptr_ && src);
 	memcpy(host_ptr_ + offset, src, n);
-	length_ += n;
+	//length_ += n; // TODD: if not appending you aren't adding to length?
 
 	// update dirty flags
 	dirty_ = true;

@@ -9,6 +9,7 @@
 #define	_TYPES_H
 
 #include <vector>
+#include <cstddef>
 
 // definition of a byte type
 typedef unsigned char mapd_byte_t;
@@ -17,7 +18,7 @@ typedef unsigned char mapd_byte_t;
 typedef mapd_byte_t* mapd_addr_t;
 
 // definition of Map-D size type
-typedef size_t mapd_size_t;
+typedef std::size_t mapd_size_t;
 
 // The ChunkKey is a unique identifier for chunks in the database file.
 // The first element of the underlying vector for ChunkKey indicates the type of

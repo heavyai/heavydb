@@ -231,7 +231,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf);
+	mapd_err_t putBlock(int fileId, mapd_size_t blockNum, mapd_addr_t buf);
 
 	/**
 	 * @brief Writes the contents of buf to the block.
@@ -241,7 +241,7 @@ public:
 	 * @param n
 	 * @param buf
 	 */
-	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_size_t n, mapd_addr_t buf);
+	mapd_err_t putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_addr_t buf);
 
 	/**
 	 * @brief Clears the contents of a block in a file.
@@ -346,7 +346,7 @@ public:
 	 * Given a chunk key, this method writes to an existing chunk all of the data pointed to
 	 * by buf.
 	 */
-	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t buf);
+	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t buf, int epoch);
 
 	/**
 	 * This method writes the contents of the chunk "c" to the chunk with the given chunk key.
@@ -395,7 +395,7 @@ private:
 
 	/// Opens the FileInfo objects file handle. Returns MAPD_SUCCESS on success.
 	inline mapd_err_t openFile(FileInfo& fInfo) {
-		mapd_err_t err;
+		mapd_err_t err = MAPD_SUCCESS;
 		if (!fInfo.f)
     		fInfo.f = open(fInfo.fileId, &err);
         return err;
