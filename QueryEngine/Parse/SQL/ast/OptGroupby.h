@@ -11,10 +11,6 @@ public:
 	explicit OptGroupby() {
 
 	}
-
-	~OptGroupby() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

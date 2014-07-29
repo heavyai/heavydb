@@ -40,7 +40,8 @@ struct DerefSort {
 
 enum mapd_data_t {
     INT_TYPE,
-    FLOAT_TYPE
+    FLOAT_TYPE,
+    BOOLEAN_TYPE
 };
 
 #endif	/* _TYPES_H */

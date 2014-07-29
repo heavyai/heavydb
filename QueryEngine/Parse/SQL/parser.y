@@ -96,8 +96,9 @@ extern std::vector<double> realData;
 %%
 
 sql_stmt:
-	dml_stmt ';'		{ $$ = new SqlStmt((DmlStmt*)$1); }
-|	ddl_stmt ';'		{ $$ = new SqlStmt((DdlStmt*)$1); }
+	dml_stmt ';'		{ $$ = new SqlStmt((DmlStmt*)$1); parseRoot = $$; }
+|	ddl_stmt ';'		{ $$ = new SqlStmt((DdlStmt*)$1); parseRoot = $$; }
+|						{ $$ = 0; parseRoot = $$; }
 ;
 
 	/***** Data manipulation language *****/
@@ -116,7 +117,7 @@ insert_stmt:
 
 literal_list:
 	literal 					{ $$ = new LiteralList((Literal*)$1); }
-|	literal_list ',' literal 	{ $$ = new LiteralList((LiteralList*)$1, (Literal*)$2); }
+|	literal_list ',' literal 	{ $$ = new LiteralList((LiteralList*)$1, (Literal*)$3); }
  /*| NULLX*/
 ;
 
@@ -205,14 +206,26 @@ table_list:
 ;
 
 table:
-	NAME 					{ $$ = new Table(); }
-|	NAME '.' NAME 			{ $$ = new Table(); }
-|	NAME AS NAME 			{ $$ = new Table(); }
+	NAME 					{ $$ = new Table(strData.back()); strData.pop_back(); }
+|	NAME '.' NAME { 
+		std::string s1 = strData.back();
+		strData.pop_back();
+		std::string s2 = strData.back();
+		strData.pop_back();
+		$$ = new Table(s1, s2);
+	}
+|	NAME AS NAME {
+		std::string s1 = strData.back();
+		strData.pop_back();
+		std::string s2 = strData.back();
+		strData.pop_back();
+		$$ = new Table(s1, s2);
+	}
 ;
 
 column_list:
-	column 					{ $$ = new ColumnList(); }
-|	column_list ',' column 	{ $$ = new ColumnList(); }
+	column 					{ $$ = new ColumnList((Column*)$1); }
+|	column_list ',' column 	{ $$ = new ColumnList((ColumnList*)$1, (Column*)$3); }
 ;
 
 column:
@@ -321,7 +334,7 @@ mapd_data_t:
 ;
 
 %%
-
+/*
 int main(int argc, char ** argv) {
 	SQLParser parser;
     string sql;
@@ -346,3 +359,5 @@ int main(int argc, char ** argv) {
     while (true);
     cout << "Good-bye." << endl;
 }
+*/
+

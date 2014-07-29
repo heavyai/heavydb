@@ -11,10 +11,6 @@ public:
 	explicit OptHaving() {
 
 	}
-
-	~OptHaving() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

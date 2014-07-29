@@ -26,9 +26,6 @@ public:
 		this->s = s;
 	}
 
-	~ColumnDef() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

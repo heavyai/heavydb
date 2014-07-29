@@ -11,10 +11,6 @@ public:
 	explicit OptWhere() {
 
 	}
-
-	~OptWhere() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

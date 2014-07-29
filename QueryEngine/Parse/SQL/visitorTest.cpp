@@ -1,14 +1,14 @@
 #include "parser.h"
 #include "visitor/Visitor.h"
-#include "translator/XMLTranslatorSQL.h"
+//#include "translator/XMLTranslatorSQL.h"
 #include <iostream>
 #include <string>
 
 using namespace std;
-using SQL_Namespace::XMLTranslator;
+//using SQL_Namespace::XMLTranslator;
 
 int main(int argc, char ** argv) {
-    Parser parser;
+    SQLParser parser;
     string sql;
     do {
         cout << "mapd> ";
@@ -27,12 +27,10 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         
-        XMLTranslator xml;
+        /*XMLTranslator xml;
         if (parseRoot != 0)
-            parseRoot->accept(xml); 
-        
-
+            parseRoot->accept(xml);*/      
     }
-    while (1==1);
+    while (true);
     cout << "Good-bye." << endl;
 }

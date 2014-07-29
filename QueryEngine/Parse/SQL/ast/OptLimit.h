@@ -11,10 +11,6 @@ public:
 	explicit OptLimit() {
 
 	}
-
-	~OptLimit() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

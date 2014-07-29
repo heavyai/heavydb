@@ -14,10 +14,6 @@ public:
 		assert(n1);
 		this->n1 = n1;
 	}
-
-	~DropStmt() {
-		if (n1) delete n1;
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

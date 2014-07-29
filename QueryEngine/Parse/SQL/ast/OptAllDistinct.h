@@ -11,10 +11,6 @@ public:
 	explicit OptAllDistinct() {
 
 	}
-
-	~OptAllDistinct() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

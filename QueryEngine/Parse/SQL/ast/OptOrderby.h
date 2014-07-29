@@ -11,10 +11,6 @@ public:
 	explicit OptOrderby() {
 
 	}
-
-	~OptOrderby() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

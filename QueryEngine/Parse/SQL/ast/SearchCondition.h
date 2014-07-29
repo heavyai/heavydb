@@ -14,10 +14,6 @@ public:
 		assert(n1);
 		this->n1 = n1;
 	}
-
-	~SearchCondition() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

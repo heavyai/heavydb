@@ -4,11 +4,7 @@
 #include <cassert>
 #include "ASTNode.h"
 
-enum mapd_data_t {
-    INT_TYPE,
-    FLOAT_TYPE,
-    BOOLEAN_TYPE    
-};
+#include "../../../../Shared/types.h"
 
 class MapdDataT : public ASTNode {
 
@@ -23,10 +19,6 @@ public:
 			this->type = FLOAT_TYPE;
 		else if (type == 2)
 			this->type == BOOLEAN_TYPE;
-	}
-
-	~MapdDataT() {
-
 	}
 	
 	virtual void accept(Visitor &v) const {

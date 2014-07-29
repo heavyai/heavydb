@@ -16,10 +16,6 @@ public:
 		this->n1 = n1;
 		this->name = name;
 	}
-
-	~RenameStmt() {
-		if (n1) delete n1;
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

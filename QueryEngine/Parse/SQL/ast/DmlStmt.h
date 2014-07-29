@@ -20,11 +20,6 @@ public:
 		assert(n2);
 		this->n2 = n2;
 	}
-
-	~DmlStmt() {
-		if (n1) delete n1;
-		if (n2) delete n2;
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

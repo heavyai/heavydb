@@ -28,10 +28,6 @@ public:
 		this->n6 = n6;
 		this->n7 = n7;
 	}
-
-	~SelectStmt() {
-		
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

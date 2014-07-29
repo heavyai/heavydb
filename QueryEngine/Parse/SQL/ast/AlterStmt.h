@@ -24,12 +24,6 @@ public:
 		this->n1 = n1;
 		this->n2 = n2;
 	}
-
-	~AlterStmt() {
-		if (n1) delete n1;
-		if (n2) delete n2;
-		if (n3) delete n3;
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

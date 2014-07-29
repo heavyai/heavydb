@@ -8,13 +8,20 @@ class ColumnList : public ASTNode {
 
 public:
 
-	explicit ColumnList() {
+	ColumnList *n1 = NULL;
+	Column *n2 = NULL;
 
+	ColumnList(ColumnList *n1, Column *n2) {
+		assert(n1 && n2);
+		this->n1 = n1;
+		this->n2 = n2;
 	}
 
-	~ColumnList() {
-
+	explicit ColumnList(Column *n2) {
+		assert(n2);
+		this->n2 = n2;
 	}
+
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

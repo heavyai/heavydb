@@ -32,13 +32,6 @@ public:
 		assert(n4);
 		this->n4 = n4;
 	}
-
-	~DdlStmt() {
-		if (n1) delete n1;
-		if (n2) delete n2;
-		if (n3) delete n3;
-		if (n4) delete n4;
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);

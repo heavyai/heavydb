@@ -11,10 +11,6 @@ public:
 	explicit FromClause() {
 
 	}
-
-	~FromClause() {
-
-	}
 	
 	virtual void accept(Visitor &v) const {
 		v.visit(this);
