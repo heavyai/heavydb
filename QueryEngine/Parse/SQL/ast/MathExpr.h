@@ -64,7 +64,7 @@ public:
 		intFloatFlag = false;
 	}
 
-	virtual void accept(class Visitor &v) const {
+	virtual void accept(class Visitor &v) {
 		v.visit(this);
 	}
 };

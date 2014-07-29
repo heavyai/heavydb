@@ -52,7 +52,7 @@ public:
     	this->n3 = n3;
     }
 
-	virtual void accept(class Visitor &v) const {
+	virtual void accept(class Visitor &v) {
 		v.visit(this);
 	}
 };

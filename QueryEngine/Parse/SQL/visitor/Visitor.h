@@ -49,41 +49,41 @@ public:
 	//Visitor();
 	//virtual ~Visitor();
 
-	virtual void visit(const AggrExpr*) {}
-	virtual void visit(const AlterStmt*) {}
-	virtual void visit(const Column*) {}
-	virtual void visit(const ColumnDef*) {}
-	virtual void visit(const ColumnDefList*) {}
-	virtual void visit(const ColumnList*) {}
-	virtual void visit(const Comparison*) {}
-	virtual void visit(const CreateStmt*) {}
-	virtual void visit(const DdlStmt*) {}
-	virtual void visit(const DmlStmt*) {}
-	virtual void visit(const DropStmt*) {}
-	virtual void visit(const FromClause*) {}
-	virtual void visit(const InsertStmt*) {}
-	virtual void visit(const Literal*) {}
-	virtual void visit(const LiteralList*) {}
-	virtual void visit(const MapdDataT*) {}
-	virtual void visit(const MathExpr*) {}
-	virtual void visit(const OptAllDistinct*) {}
-	virtual void visit(const OptGroupby*) {}
-	virtual void visit(const OptHaving*) {}
-	virtual void visit(const OptLimit*) {}
-	virtual void visit(const OptOrderby*) {}
-	virtual void visit(const OptWhere*) {}
-	virtual void visit(const OrderbyColumn*) {}
-	virtual void visit(const OrderbyColumnList*) {}
-	virtual void visit(const Predicate*) {}
-	virtual void visit(const RenameStmt*) {}
-	virtual void visit(const ScalarExpr*) {}
-	virtual void visit(const ScalarExprList*) {}
-	virtual void visit(const SearchCondition*) {}
-	virtual void visit(const Selection*) {}
-	virtual void visit(const SelectStmt*) {}
-	virtual void visit(const SqlStmt*) {}
-	virtual void visit(const Table*) {}
-	virtual void visit(const TableList*) {}
+	virtual void visit(AggrExpr*) {}
+	virtual void visit(AlterStmt*) {}
+	virtual void visit(Column*) {}
+	virtual void visit(ColumnDef*) {}
+	virtual void visit(ColumnDefList*) {}
+	virtual void visit(ColumnList*) {}
+	virtual void visit(Comparison*) {}
+	virtual void visit(CreateStmt*) {}
+	virtual void visit(DdlStmt*) {}
+	virtual void visit(DmlStmt*) {}
+	virtual void visit(DropStmt*) {}
+	virtual void visit(FromClause*) {}
+	virtual void visit(InsertStmt*) {}
+	virtual void visit(Literal*) {}
+	virtual void visit(LiteralList*) {}
+	virtual void visit(MapdDataT*) {}
+	virtual void visit(MathExpr*) {}
+	virtual void visit(OptAllDistinct*) {}
+	virtual void visit(OptGroupby*) {}
+	virtual void visit(OptHaving*) {}
+	virtual void visit(OptLimit*) {}
+	virtual void visit(OptOrderby*) {}
+	virtual void visit(OptWhere*) {}
+	virtual void visit(OrderbyColumn*) {}
+	virtual void visit(OrderbyColumnList*) {}
+	virtual void visit(Predicate*) {}
+	virtual void visit(RenameStmt*) {}
+	virtual void visit(ScalarExpr*) {}
+	virtual void visit(ScalarExprList*) {}
+	virtual void visit(SearchCondition*) {}
+	virtual void visit(Selection*) {}
+	virtual void visit(SelectStmt*) {}
+	virtual void visit(SqlStmt*) {}
+	virtual void visit(Table*) {}
+	virtual void visit(TableList*) {}
 	
 };
 
