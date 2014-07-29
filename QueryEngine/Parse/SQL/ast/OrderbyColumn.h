@@ -23,7 +23,7 @@ public:
 		this->asc_or_desc = asc_or_desc;
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
 };

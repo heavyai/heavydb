@@ -22,7 +22,7 @@ public:
     	this->func = func;
     }
 
-	virtual void accept(class Visitor &v) const {
+	virtual void accept(class Visitor &v) {
 		v.visit(this);
 	}
 

@@ -31,7 +31,7 @@ public:
 		this->n8 = n8;
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
 };

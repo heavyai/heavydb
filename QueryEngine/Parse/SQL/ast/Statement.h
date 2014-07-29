@@ -6,7 +6,7 @@
 class Statement : public ASTNode {
 
 public:
-	virtual void accept(Visitor &v) const = 0;
+	virtual void accept(Visitor &v) = 0;
 };
 
 #endif // SQL_STATEMENT_H

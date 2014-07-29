@@ -6,10 +6,10 @@
 #define SQL_SCALAREXPR_NODE_H
 
 #include <cassert>
-#include "ASTNode.h"
+#include "Expression.h"
 #include "../visitor/Visitor.h"
 
-class ScalarExpr : public ASTNode {
+class ScalarExpr : public Expression {
 
 public:
 	ScalarExpr *n1 = NULL;
@@ -51,7 +51,7 @@ public:
 		this->n4 = n4;
 	}
 
-	virtual void accept(class Visitor &v) const {
+	virtual void accept(class Visitor &v) {
 		v.visit(this);
 	}
 };

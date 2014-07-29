@@ -8,8 +8,8 @@
 class Column : public ASTNode {
 
 public:
-	std::string s1;
-	std::string s2;
+	std::string s1 = "";
+	std::string s2 = "";
 
 	// id and type is obtained from the Catalog during semantic analysis
 	int column_id = -1;
@@ -29,7 +29,7 @@ public:
 		this->s2 = s2;
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
 };

@@ -38,7 +38,7 @@ public:
             this->op = op;
     }
 
-	virtual void accept(class Visitor &v) const {
+	virtual void accept(class Visitor &v) {
 		v.visit(this);
 	}
 };
