@@ -29,7 +29,8 @@ void test_deleteFile(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_writeReadFile(mapd_size_t blockSize, mapd_size_t nblocks);
 void test_putGetBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_clearFreeBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
-void test_createChunk(mapd_size_t nblocks);
+void test_createChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
+void test_putGetChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
 
 int main(void) {
 /*
@@ -87,8 +88,8 @@ int main(void) {
     //test_clearFreeBlock(30000, 30000);
     //test_clearFreeBlock(100000, 100000);
 */
-    test_createChunk(32);
-
+    test_createChunk(32, 8);
+    test_putGetChunk(32, 8);
     /*    PPASS("deleteFile()") : PFAIL("deleteFile()");*/
     /*test_getBlock() ?
         PPASS("getBlock()") : PFAIL("getBlock()"); 
@@ -436,12 +437,11 @@ void test_clearFreeBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg) {
     }
 }
 
-void test_createChunk(mapd_size_t nblocks) {
+void test_createChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg) {
     mapd_err_t err;
+    bool loopError = false;
 
-    mapd_size_t blockSize1 = 8;
-    mapd_size_t blockSize2 = 9;
-    mapd_size_t blockSize3 = 10;
+    mapd_size_t blockSize1 = blockSizeArg;
 
     mapd_byte_t srcBuf[blockSize1];
     mapd_byte_t destBuf[blockSize1];
@@ -454,22 +454,62 @@ void test_createChunk(mapd_size_t nblocks) {
     
     ChunkKey key;
     key.push_back(keyInt);
-    printf("%d\n", key.back());
+  //  printf("%d\n", key.back());
 
     int freeCount1 = fileInfo1->freeBlocks.size();\
 
     // creating a Chunk with the blockSize
     mapd_size_t sizeArg = blockSize1;
-    Chunk* c = fm.createChunk(key, sizeArg, blockSize1, NULL, 0);
-
-    //check formula
-    printf("nblocks = %d, from blockSize %d and size %d\n", (sizeArg + blockSize1 - 1) / blockSize1, blockSize1, sizeArg);
-    
+    Chunk* c = fm.createChunk(key, 0, blockSize1, NULL, 0);
+ 
     // verify that it actually returned
     if (c == NULL)
         PFAIL("createChunk returned a Null chunk");
     else PPASS("createChunk's returned Chunk exists");
 
+    //@todo add support for creating chunk from source file.
+}
+
+void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
+    mapd_err_t err;
+    bool loopError = false;
+
+    mapd_size_t blockSize1 = blockSizeArg;
+
+    mapd_byte_t srcBufSmall[blockSize1];
+    mapd_byte_t destBufSmall[blockSize1];
+    FileMgr fm(".");
+
+    int keyInt = 4;
+    int epoch = 0;
+
+    FileInfo *fileInfo1 = fm.createFile(blockSize1, nblocks);
+    
+    ChunkKey key;
+    key.push_back(keyInt);
+  //  printf("%d\n", key.back());
+
+    int freeCount1 = fileInfo1->freeBlocks.size();\
+
+    // creating a Chunk with the blockSize
+    mapd_size_t sizeArg = blockSize1;
+    Chunk* c = fm.createChunk(key, 0, blockSize1, NULL, 0);
+
+    // initialize the buffer
+    for (int i = 0; i < blockSize1; i++) {
+        srcBufSmall[i] = rand() % 256;
+    }
+
+    Chunk* gottenRefChunk = fm.getChunkRef(key);
+    if (gottenRefChunk == NULL)
+        PFAIL("getChunkRef returned NULL");
+    else PPASS("getChunkRef did not return NULL");
+
+    err = fm.putChunk(key, blockSize1, srcBufSmall, epoch, blockSize1);
+    if (err != MAPD_SUCCESS)
+        PFAIL("putChunk returned error");
+    else PPASS("putChunk did not return error");
+  
     int freeCount2 = fileInfo1->freeBlocks.size();
 
     // verify that there is one less freeBlock
@@ -477,28 +517,58 @@ void test_createChunk(mapd_size_t nblocks) {
         PFAIL("freeBlock size hasn't decreased by one");
     else PPASS("freeBlock size decreased by one");
 
-    // initialize the buffer
-    for (int i = 0; i < blockSize1; i++) {
-        srcBuf[i] = rand() % 256;;
-    }
-
-    Chunk* gottenRefChunk = fm.getChunkRef(key);
-    if (gottenRefChunk == NULL)
-        PFAIL("getChunkRef returned NULL");
-    else PPASS("getChunkRef did not return NULL");
-/*
-    Chunk* gottenChunk = fm.getChunk(key, srcBuf);
+    // put the chunk's content in the buffer
+    Chunk* gottenChunk = fm.getChunk(key, destBufSmall);
     if (gottenChunk == NULL)
         PFAIL("getChunk returned NULL");
     else PPASS("getChunk did not return NULL");
-*/
-    // put the chunk's content in the buffer
-    err = fm.putChunk(key, 0, destBuf, epoch);
+
+    for (int i = 0; i < blockSize1; i++) {
+        loopError = !(srcBufSmall[i] == destBufSmall[i]);
+    }
+
+    if (loopError)
+        PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
+    else PPASS("srcBuf and destBuf match");
+
+    /* ----------------------------------------------------------------*/ 
+    // serious testing: fill large buffers to capacity
+    mapd_byte_t srcBuf[blockSize1*nblocks];
+    mapd_byte_t destBuf[blockSize1*nblocks];
+
+    // make another file just in case no space
+    fm.createFile(blockSize1, nblocks);
+
+    for (int i = 0; i < blockSize1*nblocks; i++) {
+        srcBuf[i] = rand() % 256;
+    }
+ 
+    gottenRefChunk = fm.getChunkRef(key);
+    if (gottenRefChunk == NULL)
+        PFAIL("getChunkRef returned NULL");
+    else PPASS("getChunkRef did not return NULL");
+
+    err = fm.putChunk(key, blockSize1*nblocks, srcBuf, epoch);
     if (err != MAPD_SUCCESS)
         PFAIL("putChunk returned error");
     else PPASS("putChunk did not return error");
 
+    // put the chunk's content in the buffer (no one puts ChunkKey in a corner)
+    gottenChunk = fm.getChunk(key, destBuf);
+    if (gottenChunk == NULL)
+        PFAIL("getChunk returned NULL");
+    else PPASS("getChunk did not return NULL");
 
+    for (int i = 0; i < blockSize1*nblocks; i++) {
+        loopError = !(srcBufSmall[i] == destBufSmall[i]);
+    }
+
+    if (loopError)
+        PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
+    else PPASS("srcBuf and destBuf match");
+
+
+/*
     err = fm.deleteChunk(*c);
     if (err != MAPD_SUCCESS)
         PFAIL("deleteChunk returned error");
@@ -509,7 +579,7 @@ void test_createChunk(mapd_size_t nblocks) {
         PFAIL("deleteChunk returned error");
     else PPASS("deleteChunk did not return error");
 
-
+*/
     // we're going to create chunks of one multiblock 
     //Chunk* c = createChunk()
 }
