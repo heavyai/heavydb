@@ -4,6 +4,8 @@
 #include <cassert>
 #include "ASTNode.h"
 
+namespace SQL_Namespace {
+
 class ColumnDef : public ASTNode {
 
 public:
@@ -31,5 +33,7 @@ public:
 		v.visit(this);
 	}
 };
+
+}
 
 #endif // SQL_COLUMN_H

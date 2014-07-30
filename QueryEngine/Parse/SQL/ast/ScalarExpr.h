@@ -9,6 +9,8 @@
 #include "Expression.h"
 #include "../visitor/Visitor.h"
 
+namespace SQL_Namespace {
+
 class ScalarExpr : public Expression {
 
 public:
@@ -55,5 +57,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_SCALAREXPR_NODE_H

@@ -4,6 +4,8 @@
 #include <cassert>
 #include "ASTNode.h"
 
+namespace SQL_Namespace {
+
 class OptAllDistinct : public ASTNode {
 
 public:
@@ -16,5 +18,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_OPTALLDISTINCT_H

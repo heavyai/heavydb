@@ -5,7 +5,7 @@
 #include <string>
 
 using namespace std;
-//using SQL_Namespace::XMLTranslator;
+using namespace SQL_Namespace;
 
 int main(int argc, char ** argv) {
     SQLParser parser;

@@ -4,6 +4,8 @@
 #include <cassert>
 #include "Statement.h"
 
+namespace SQL_Namespace {
+
 class SqlStmt : public Statement {
 
 public:
@@ -26,5 +28,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_SQLSTMT_H

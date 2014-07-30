@@ -4,6 +4,8 @@
 #include <cassert>
 #include "ASTNode.h"
 
+namespace SQL_Namespace {
+
 class OptOrderby : public ASTNode {
 
 public:
@@ -18,5 +20,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_OPTORDERBY_H

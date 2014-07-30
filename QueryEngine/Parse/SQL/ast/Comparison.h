@@ -9,6 +9,8 @@
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
+namespace SQL_Namespace {
+
 class Comparison : public ASTNode {
     
 public:
@@ -42,5 +44,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_COMPARISON_NODE_H

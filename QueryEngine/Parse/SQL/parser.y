@@ -56,7 +56,7 @@
 #include "ast/TableList.h"
 
 using namespace std;
-// using namespace SQL_Namespace;
+using namespace SQL_Namespace;
 
 // define stack element type to be a 
 // pointer to an AST node

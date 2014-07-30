@@ -4,6 +4,8 @@
 #include <cassert>
 #include "ASTNode.h"
 
+namespace SQL_Namespace {
+
 class OrderbyColumnList : public ASTNode {
 
 public:
@@ -25,5 +27,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_ORDERBYCOLUMNLIST_H

@@ -4,6 +4,8 @@
 #include <cassert>
 #include "ASTNode.h"
 
+namespace SQL_Namespace {
+
 class SearchCondition : public ASTNode {
 
 public:
@@ -19,5 +21,7 @@ public:
 		v.visit(this);
 	}
 };
+
+}
 
 #endif // SQL_SEARCHCONDITION_H

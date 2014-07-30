@@ -9,6 +9,8 @@
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
+namespace SQL_Namespace {
+
 class AggrExpr : public ASTNode {
     
 public:
@@ -27,5 +29,7 @@ public:
 	}
 
 };
+
+} // SQL_Namespace
 
 #endif // SQL_AGGREXPRLIST_NODE_H

@@ -2,6 +2,8 @@
 #define SQL_VISITOR_H
 
 // forward declarations
+namespace SQL_Namespace {
+
 class AggrExpr;
 class AlterStmt;
 class Column;
@@ -86,5 +88,7 @@ public:
 	virtual void visit(TableList*) {}
 	
 };
+
+} // SQL_Namespace
 
 #endif // SQL_VISITOR_H

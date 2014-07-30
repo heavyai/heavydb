@@ -9,6 +9,8 @@
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
+namespace SQL_Namespace {
+
 class Predicate : public ASTNode {
     
 public:
@@ -56,5 +58,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_PREDICATE_NODE_H

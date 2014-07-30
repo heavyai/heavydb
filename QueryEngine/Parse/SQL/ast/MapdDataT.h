@@ -6,6 +6,8 @@
 
 #include "../../../../Shared/types.h"
 
+namespace SQL_Namespace {
+
 class MapdDataT : public ASTNode {
 
 public:
@@ -25,5 +27,7 @@ public:
 		v.visit(this);
 	}
 };
+
+} // SQL_Namespace
 
 #endif // SQL_MAPDDATAT_H

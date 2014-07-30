@@ -9,6 +9,8 @@
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
+namespace SQL_Namespace {
+
 class Expression : public ASTNode {
 
 public:
@@ -17,5 +19,7 @@ public:
 
 	virtual void accept(Visitor &v) = 0;
 };
+
+} // SQL_Namespace
 
 #endif // SQL_EXPRESSION_NODE_H
