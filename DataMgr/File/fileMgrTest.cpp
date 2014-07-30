@@ -32,7 +32,7 @@ void test_clearFreeBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_createChunk(mapd_size_t nblocks);
 
 int main(void) {
-
+/*
     test_FileInfo(10);
     test_FileInfo(100);
     test_FileInfo(1000);
@@ -86,7 +86,7 @@ int main(void) {
     // don't uncomment this if you know what's good for you
     //test_clearFreeBlock(30000, 30000);
     //test_clearFreeBlock(100000, 100000);
-
+*/
     test_createChunk(32);
 
     /*    PPASS("deleteFile()") : PFAIL("deleteFile()");*/
