@@ -13,21 +13,21 @@
 #include "../Parse/SQL/ast/InsertStmt.h"
 #include "../Parse/SQL/ast/Table.h"
 #include "../Parse/SQL/ast/ColumnList.h"
- #include "../Parse/SQL/ast/Column.h"
+#include "../Parse/SQL/ast/Column.h"
 #include "../Parse/SQL/ast/LiteralList.h"
 #include "../Parse/SQL/ast/Literal.h"  
  
 namespace Analysis_Namespace {
 
-void InsertWalker::visit(const SqlStmt *v) {
+void InsertWalker::visit(SqlStmt *v) {
 	if (v->n1) v->n1->accept(*this); // DmlStmt
 }
 
-void InsertWalker::visit(const DmlStmt *v) {
+void InsertWalker::visit(DmlStmt *v) {
 	if (v->n1) v->n1->accept(*this); // InsertStmt
 }
 
-void InsertWalker::visit(const InsertStmt *v) {
+void InsertWalker::visit(InsertStmt *v) {
 	assert(v->n1 && v->n2 && v->n3);
 	if (v->n1->name1 != "") {
 		//printf("table = %s\n", v->n1->name1.c_str());
@@ -83,21 +83,21 @@ void InsertWalker::visit(const InsertStmt *v) {
 	}
 }
 
-void InsertWalker::visit(const ColumnList *v) {
+void InsertWalker::visit(ColumnList *v) {
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
 }
 
-void InsertWalker::visit(const Column *v) {
-	colNames_.push_back(v->s1);
+void InsertWalker::visit(Column *v) {
+	colNames_.push_back(v->colName);
 }
 
-void InsertWalker::visit(const LiteralList *v) {
+void InsertWalker::visit(LiteralList *v) {
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
 }
 
-void InsertWalker::visit(const Literal *v) {
+void InsertWalker::visit(Literal *v) {
 	this->colTypes_.push_back(v->type);
 }
 

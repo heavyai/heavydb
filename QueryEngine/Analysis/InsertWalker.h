@@ -38,13 +38,13 @@ public:
 	/// Returns an error message if an error was encountered
 	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
 
-	virtual void visit(const SqlStmt *v);
-	virtual void visit(const DmlStmt *v);
-	virtual void visit(const InsertStmt *v);
-	virtual void visit(const ColumnList *v);
-	virtual void visit(const Column *v);
-	virtual void visit(const LiteralList *v);
-	virtual void visit(const Literal *v);
+	virtual void visit(SqlStmt *v);
+	virtual void visit(DmlStmt *v);
+	virtual void visit(InsertStmt *v);
+	virtual void visit(ColumnList *v);
+	virtual void visit(Column *v);
+	virtual void visit(LiteralList *v);
+	virtual void visit(Literal *v);
 
 private:
 	Catalog &c_;
