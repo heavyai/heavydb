@@ -346,7 +346,7 @@ public:
 	 * Given a chunk key, this method writes to an existing chunk all of the data pointed to
 	 * by buf.
 	 */
-	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t buf, int epoch);
+	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t buf, int epoch, mapd_size_t optBlockSize = -1);
 
 	/**
 	 * This method writes the contents of the chunk "c" to the chunk with the given chunk key.
@@ -371,6 +371,7 @@ public:
 	 * @param err An error code, should an error happen to occur.
 	 * @return A pointer to a new Chunk, or NULL.
 	 */
+
 	Chunk* createChunk(ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, void *src, int epoch);
 
 	/**
