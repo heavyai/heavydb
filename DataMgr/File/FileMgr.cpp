@@ -14,6 +14,9 @@
 #include <exception>
 #include "FileMgr.h"
 
+
+#define MAPD_DEFAULT_BLOCK_SIZE 32
+
 using std::vector;
 
 namespace File_Namespace {
@@ -308,7 +311,7 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
     // ensure chunk exists
     Chunk* c;
     if ((c = getChunkRef(key)) == NULL) { // not found 
-        //fprintf(stderr, "getChunkRef failed\n");
+        fprintf(stderr, "getChunkRef failed\n");
         return MAPD_ERR_CHUNK_NOT_FOUND;
     }
     
@@ -316,9 +319,11 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
     // obtain blockSize from Chunk. if no blocks in the Chunk, use default param.
 
     if (c->size() == 0) {
-        if (optBlockSize == -1) 
+        if (optBlockSize == -1)  {
             // jesus user work with me here
-            return MAPD_FAILURE;
+            fprintf(stderr, "God damn it user how am I supposed to know the blockSize? smh\n");
+            blockSize = MAPD_DEFAULT_BLOCK_SIZE;
+        }
         else
             blockSize = optBlockSize;
     }
@@ -332,7 +337,7 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
 
     // number of blocks to be added from src
     mapd_size_t nblocks = (size + blockSize - 1) / blockSize;
-    printf("%u\n", nblocks);
+    //printf("%u\n", nblocks);
     mapd_size_t blockCount = 0;
 
     // iterator that keeps track of all files in fileIndex_
@@ -355,8 +360,8 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
         it--;
         // @todo handle no available files 
         if (fInfo == NULL) {
-        //    fprintf(stderr, "unable to find file with available space1\n");
-            return MAPD_FAILURE;
+          // create a new file with the exact number of needed blocks
+          fInfo = createFile(MAPD_DEFAULT_BLOCK_SIZE, nblocks);
         }
 
         // if room, iterate through free blocks and create a new block at the given size, removing address from free blocks
@@ -398,8 +403,8 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
         --it;
         // @todo handle no available files 
         if (fInfo == NULL) {
-           // fprintf(stderr, "unable to find file with available space2\n");
-            return MAPD_FAILURE;
+            // create a new file with the exact number of needed blocks
+            fInfo = createFile(blockSize, nblocks);
         }
 
         // if room, iterate through free blocks and create a new block at the given size, removing address from free blocks
@@ -444,7 +449,8 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
 
     // determine number of blocks needed
     mapd_size_t nblocks = (size + blockSize - 1) / blockSize;
-    
+    mapd_size_t blockCount = 0;
+
     // Iterate over the files from which to obtain free blocks
     for (auto it = fileIndex_.lower_bound(blockSize); it != fileIndex_.end() && nblocks > 0; ++it) {
         FileInfo *fInfo = getFile(it->second);
@@ -457,19 +463,67 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
 
             // obtain a free block and remove it from the set
             auto freeIt = fInfo->freeBlocks.begin();
+
+            // write a block's worth of data to the file at position begin
             mb->push(new Block(fInfo->fileId, *freeIt), epoch);
             fInfo->freeBlocks.erase(freeIt);
 
+            mapd_err_t err;
+            mapd_size_t bytesWritten = write(fInfo->f, (*freeIt)*fInfo->blockSize, size, (mapd_addr_t)src+blockCount*blockSize, &err);
+
+            if (err != MAPD_SUCCESS) {
+                fprintf(stderr, "%s\n", "write din' work");
+            }
+
+            // check if it wrote all n bytes
+            if (bytesWritten != size) {
+                fprintf(stderr, "Wrote %d bytes instead of %d\n", bytesWritten, size);
+            }
+
             // insert the MultiBlock into the new Chunk
             c.push_back(mb);
-            // @todo copy src into new Chunk
+            blockCount++;
             nblocks--;
         }
     }
 
     if (nblocks > 0) { // create a new file to hold remaining blocks
         // @todo fix this
-        fprintf(stderr, "[%s:%d] Error: unable to insert %lu blocks into new chunk.\n", __func__, __LINE__, nblocks);
+        //fprintf(stderr, "[%s:%d] Error: unable to insert %lu blocks into new chunk.\n", __func__, __LINE__, nblocks);
+        
+        // create a new file with the exact number of needed blocks
+        FileInfo *fInfo = createFile(blockSize, nblocks);
+
+        // obtain free blocks from current file
+        while (fInfo->freeBlocks.size() > 0 && nblocks > 0) {
+            
+            // create a new MultiBlock
+            MultiBlock *mb = new MultiBlock(fInfo->fileId, fInfo->blockSize);
+
+            // obtain a free block and remove it from the set
+            auto freeIt = fInfo->freeBlocks.begin();
+
+            // write a block's worth of data to the file at position begin
+            mb->push(new Block(fInfo->fileId, *freeIt), epoch);
+            fInfo->freeBlocks.erase(freeIt);
+
+            mapd_err_t err;
+            mapd_size_t bytesWritten = write(fInfo->f, (*freeIt)*fInfo->blockSize, size, (mapd_addr_t)src+blockCount*blockSize, &err);
+
+            if (err != MAPD_SUCCESS) {
+                fprintf(stderr, "%s\n", "write din' work");
+            }
+
+            // check if it wrote all n bytes
+            if (bytesWritten != size) {
+                fprintf(stderr, "Wrote %d bytes instead of %d\n", bytesWritten, size);
+            }
+
+            // insert the MultiBlock into the new Chunk
+            c.push_back(mb);
+            blockCount++;
+            nblocks--;
+        }
     }
     
     // Add an entry to the file manager's chunk index

@@ -443,16 +443,16 @@ void test_createChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg) {
     mapd_err_t err;
     bool loopError = false;
 
-    mapd_size_t blockSize1 = blockSizeArg;
+    mapd_size_t blockSize = blockSizeArg;
 
-    mapd_byte_t srcBuf[blockSize1];
-    mapd_byte_t destBuf[blockSize1];
+    mapd_byte_t srcBuf[blockSize];
+    mapd_byte_t destBuf[blockSize];
     FileMgr fm(".");
 
     int keyInt = 4;
     int epoch = 0;
 
-    FileInfo *fileInfo1 = fm.createFile(blockSize1, nblocks);
+    FileInfo *fileInfo1 = fm.createFile(blockSize, nblocks);
     
     ChunkKey key;
     key.push_back(keyInt);
@@ -461,15 +461,27 @@ void test_createChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg) {
     int freeCount1 = fileInfo1->freeBlocks.size();\
 
     // creating a Chunk with the blockSize
-    mapd_size_t sizeArg = blockSize1;
-    Chunk* c = fm.createChunk(key, 0, blockSize1, NULL, 0);
+    mapd_size_t sizeArg = blockSize;
+    Chunk* c = fm.createChunk(key, 0, blockSize, NULL, 0);
  
     // verify that it actually returned
     if (c == NULL)
         PFAIL("createChunk returned a Null chunk");
     else PPASS("createChunk's returned Chunk exists");
 
-    //@todo add support for creating chunk from source file.
+    //create chunk from source file.
+    for (int i = 0; i < blockSize; i++) {
+        srcBuf[i] = rand() % 256;
+    }
+
+    ChunkKey key1;
+    key1.push_back(keyInt+1);
+    c = fm.createChunk(key1, blockSize, blockSize, srcBuf, 0);
+ 
+    // verify that it actually returned
+    if (c == NULL)
+        PFAIL("createChunk returned NULL when creating from buffer");
+    else PPASS("createChunk's returned Chunk exists when creating from buffer");
 }
 
 void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
@@ -477,6 +489,8 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     bool loopError = false;
 
     mapd_size_t blockSize1 = blockSizeArg;
+    mapd_size_t blockSize2 = blockSizeArg + 1;
+    mapd_size_t blockSize3 = blockSizeArg + 2;
 
     mapd_byte_t srcBufSmall[blockSize1];
     mapd_byte_t destBufSmall[blockSize1];
@@ -568,29 +582,81 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     if (loopError)
         PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
     else PPASS("srcBuf and destBuf match");
+
+    // Test if putChunk will allow placing more bytes than Chunk has room
+    fm.createChunk(key, 0, blockSize2, NULL, 0);
+    FileInfo *fileInfo2 = fm.createFile(blockSize2, nblocks-1);
+    err = fm.putChunk(key, blockSize2*nblocks, srcBuf, epoch);
+    if (err != MAPD_SUCCESS)
+        PFAIL("putChunk is unable to write more blocks than available");
+    else PPASS("putChunk writes more blocks than available (Creates new file)");
+
+    fm.createChunk(key, 0, blockSize1, srcBufSmall, 0);
+
+    /******* Check if createChunk() works with source buffer ********/
+ 
+    // create a new Chunk with a different ChunkKey, write what's in srcBufSmall to it
+    ChunkKey key1;
+    key1.push_back(keyInt+1);
+    fm.createChunk(key1, blockSize1, blockSize1, srcBufSmall, 0);
+
+    // clear contents of destBufSmall
+   for (int i = 0; i < blockSize1*nblocks; i++) {
+        destBuf[i] = -1;
+    }
+
+    fm.getChunk(key1, destBufSmall);
+
+    loopError = false;
+    for (int i = 0; i < blockSize1*nblocks; i++) {
+        loopError = !(srcBufSmall[i] == destBufSmall[i]);
+    }
+
+    // Check whether buffer returned by getChunk = created Chunk
+    if (loopError)
+        PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
+    else PPASS("srcBuf and destBuf match");
+
 }
 
 void test_deleteChunk() {
     mapd_err_t err;
     FileMgr fm(".");
 
-    mapd_size_t blockSize1 = 8;
+    mapd_size_t blockSize = 8;
     mapd_size_t nblocks = 8;
+    mapd_byte_t srcBuf[blockSize*nblocks];
 
     int keyInt = 4;
-    FileInfo *fileInfo1 = fm.createFile(blockSize1, nblocks);
+    int epoch = 0;
+    FileInfo *fileInfo1 = fm.createFile(blockSize, nblocks);
 
     ChunkKey key;
     key.push_back(keyInt);
-
+    /************** Test deleteChunk on empty Chunk **********/
     int freeCount1 = fileInfo1->freeBlocks.size();\
 
     // creating a Chunk with the blockSize
-    mapd_size_t sizeArg = blockSize1;
-    Chunk* c = fm.createChunk(key, 0, blockSize1, NULL, 0);
+    mapd_size_t sizeArg = blockSize;
+    Chunk* c = fm.createChunk(key, 0, blockSize, NULL, 0);
 
     if (fm.deleteChunk(key) != MAPD_SUCCESS)
-       PFAIL("deleteChunk failed");
-    else PPASS("deleteChunk did not fail");
+       PFAIL("deleteChunk failed on empty Chunk");
+    else PPASS("deleteChunk passes on empty Chunk");
+
+    /******** test deleteChunk on nonemptyChunk ********/ 
+    c = fm.createChunk(key, 0, blockSize, NULL, 0);
+    for (int i = 0; i < blockSize*nblocks; i++) {
+        srcBuf[i] = rand() % 256;
+    }
+
+    fm.createFile(blockSize, nblocks);
+
+    // Chunk has no blocks yet: must use optional argument!
+    err = fm.putChunk(key, blockSize*nblocks, srcBuf, epoch, blockSize);
+
+    if (fm.deleteChunk(key) != MAPD_SUCCESS)
+       PFAIL("deleteChunk failed to delete full Chunk");
+    else PPASS("deleteChunk did not fail to delete full Chunk");
 }
 
