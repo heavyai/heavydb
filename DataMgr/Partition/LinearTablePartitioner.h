@@ -27,9 +27,10 @@ public:
 
     ~LinearTablePartitioner();
 
-    virtual void getPartitionsForQuery(std::vector <PartitionInfo> &partitions, const void *predicate = 0);
+    virtual void getPartitionsForQuery(std::vector <PartitionInfo> &partitionIds, const void *predicate = 0);
 
-    virtual void insertData (const std::vector <int> &columnIds, const std::vector <void *> &data, const int numRows);
+    //virtual void insertData (const std::vector <int> &columnIds, const std::vector <void *> &data, const int numRows);
+    virtual void insertData (const InsertData &insertDataStruct);
     //mapd_size_t currentInsertBufferSize_;
 
 private:
@@ -41,7 +42,6 @@ private:
     std::vector<PartitionInfo> partitionInfoVec_; // do we assume this kept in order
     //int currentInsertBufferPartitionId_;
     Buffer_Namespace::BufferMgr &bufferManager_;
-
     PgConnector pgConnector_;
     
     void createNewPartition();
