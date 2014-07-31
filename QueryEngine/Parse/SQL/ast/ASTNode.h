@@ -6,11 +6,17 @@
 #define SQL_ASTNODE_H
 
 #include "../visitor/Visitor.h"
+#include "../translator/SQL_RA_Translator.h"
+
+namespace SQL_Namespace {
 
 class ASTNode {
 
 public:
-	virtual void accept(Visitor &v) const = 0;
+	virtual void accept(Visitor &v) = 0;
+	virtual void accept(SQL_RA_Translator &v) = 0;
 };
+
+} // SQL_Namespace
 
 #endif // SQL_ASTNODE_H

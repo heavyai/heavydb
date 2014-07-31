@@ -4,6 +4,8 @@
 #include <cassert>
 #include "ASTNode.h"
 
+namespace SQL_Namespace {
+
 class ColumnDefList : public ASTNode {
 
 public:
@@ -26,9 +28,16 @@ public:
 
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
+
+    virtual void accept(class SQL_RA_Translator &v) {
+        v.visit(this);
+    }
+
 };
+
+} // SQL_Namespace
 
 #endif // SQL_COLUMNDEFLIST_H

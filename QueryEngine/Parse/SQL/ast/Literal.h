@@ -5,6 +5,8 @@
 #include "ASTNode.h"
 #include "../../../../Shared/types.h"
 
+namespace SQL_Namespace {
+
 class Literal : public ASTNode {
 
 public:
@@ -28,9 +30,16 @@ public:
 		this->n3 = n3;
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
+
+    virtual void accept(class SQL_RA_Translator &v) {
+        v.visit(this);
+    }
+
 };
+
+} // SQL_Namespace
 
 #endif // SQL_LITERAL_H

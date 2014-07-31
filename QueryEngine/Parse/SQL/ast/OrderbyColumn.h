@@ -4,6 +4,8 @@
 #include <cassert>
 #include "ASTNode.h"
 
+namespace SQL_Namespace {
+
 class OrderbyColumn : public ASTNode {
 
 public:
@@ -23,9 +25,16 @@ public:
 		this->asc_or_desc = asc_or_desc;
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
+
+    virtual void accept(class SQL_RA_Translator &v) {
+        v.visit(this);
+    }
+
 };
+
+} // SQL_Namespace
 
 #endif // SQL_ORDERBYCOLUMN_H

@@ -4,6 +4,8 @@
 #include <cassert>
 #include "Statement.h"
 
+namespace SQL_Namespace {
+
 class RenameStmt : public Statement {
 
 public:
@@ -17,9 +19,16 @@ public:
 		this->name = name;
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
+
+    virtual void accept(class SQL_RA_Translator &v) {
+        v.visit(this);
+    }
+
 };
+
+} // SQL_Namespace
 
 #endif // SQL_RENAMESTMT_H

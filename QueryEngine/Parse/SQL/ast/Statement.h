@@ -3,10 +3,15 @@
 
 #include "ASTNode.h"
 
+namespace SQL_Namespace { 
+
 class Statement : public ASTNode {
 
 public:
-	virtual void accept(Visitor &v) const = 0;
+	virtual void accept(Visitor &v) = 0;
+	virtual void accept(SQL_RA_Translator &v) = 0;
 };
+
+} // SQL_Namespace
 
 #endif // SQL_STATEMENT_H

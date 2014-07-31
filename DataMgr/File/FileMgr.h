@@ -346,7 +346,7 @@ public:
 	 * Given a chunk key, this method writes to an existing chunk all of the data pointed to
 	 * by buf.
 	 */
-	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t buf, int epoch);
+	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t buf, int epoch, mapd_size_t optBlockSize = -1);
 
 	/**
 	 * This method writes the contents of the chunk "c" to the chunk with the given chunk key.
@@ -371,6 +371,7 @@ public:
 	 * @param err An error code, should an error happen to occur.
 	 * @return A pointer to a new Chunk, or NULL.
 	 */
+
 	Chunk* createChunk(ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, void *src, int epoch);
 
 	/**
@@ -380,7 +381,7 @@ public:
 	 * @param Chunk A reference to the chunk to be deleted.
 	 * @return MAPD_FAILURE or MAPD_SUCCESS
 	 */
-	mapd_err_t deleteChunk(Chunk &c);
+	mapd_err_t deleteChunk(ChunkKey &key);
 
 	/**
 	 * @brief Prints a representation of FileMgr's state to stdout
@@ -400,6 +401,11 @@ private:
     		fInfo.f = open(fInfo.fileId, &err);
         return err;
 	}
+
+	/**
+	 * @brief Inserts every block within the multiblock back into the free list, and then deletes the block
+	 */
+	void freeMultiBlock(MultiBlock* mb);
 };
 
 } // File_Namespace

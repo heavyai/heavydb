@@ -4,6 +4,8 @@
 #include <cassert>
 #include "Statement.h"
 
+namespace SQL_Namespace {
+
 class SelectStmt : public Statement {
 
 public:
@@ -31,10 +33,17 @@ public:
 		this->n8 = n8;
 	}
 	
-	virtual void accept(Visitor &v) const {
+	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
+
+    virtual void accept(class SQL_RA_Translator &v) {
+        v.visit(this);
+    }
+
 };
+
+} // SQL_Namespace
 
 #endif // SQL_SELECTSTMT_H
 

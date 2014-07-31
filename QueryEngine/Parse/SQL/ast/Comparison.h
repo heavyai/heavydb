@@ -9,6 +9,8 @@
 #include "ASTNode.h"
 #include "../visitor/Visitor.h"
 
+namespace SQL_Namespace {
+
 class Comparison : public ASTNode {
     
 public:
@@ -38,9 +40,16 @@ public:
             this->op = op;
     }
 
-	virtual void accept(class Visitor &v) const {
+	virtual void accept(class Visitor &v) {
 		v.visit(this);
 	}
+
+    virtual void accept(class SQL_RA_Translator &v) {
+        v.visit(this);
+    }
+
 };
+
+} // SQL_Namespace
 
 #endif // SQL_COMPARISON_NODE_H
