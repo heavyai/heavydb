@@ -9,6 +9,7 @@ class Statement : public ASTNode {
 
 public:
 	virtual void accept(Visitor &v) = 0;
+	virtual void accept(SQL_RA_Translator &v) = 0;
 };
 
 } // SQL_Namespace
