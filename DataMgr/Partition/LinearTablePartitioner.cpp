@@ -38,14 +38,15 @@ LinearTablePartitioner::~LinearTablePartitioner() {
     writeState();
 }
 
-void LinearTablePartitioner::insertData (const vector <int> &columnIds, const vector <void *> &data, const int numRows) {
-    if (maxPartitionId_ < 0 || partitionInfoVec_.back().numTuples_ + numRows > maxPartitionRows_) { // create new partition - note that this as currently coded will leave empty tuplesspace at end of current buffer chunks in the case of an insert of multiple rows at a time 
+//void LinearTablePartitioner::insertData (const vector <int> &columnIds, const vector <void *> &data, const int numRows) {
+void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
+    if (maxPartitionId_ < 0 || partitionInfoVec_.back().numTuples_ + insertDataStruct.numRows > maxPartitionRows_) { // create new partition - note that this as currently coded will leave empty tuplesspace at end of current buffer chunks in the case of an insert of multiple rows at a time 
         // should we also do this if magPartitionId_ < 0 and allocate lazily?
         createNewPartition();
     }
 
     for (int c = 0; c != columnIds.size(); ++c) {
-        int columnId = columnIds[c];
+        int columnId =insertDataStruct.columnIds[c];
         map <int, ColumnInfo>::iterator colMapIt = columnMap_.find(columnId);
         // This SHOULD be found and this iterator should not be end()
         // as SemanticChecker should have already checked each column reference
@@ -53,10 +54,10 @@ void LinearTablePartitioner::insertData (const vector <int> &columnIds, const ve
         assert(colMapIt != columnMap_.end());
         //cout << "Insert buffer before insert: " << colMapIt -> second.insertBuffer_ << endl;
         //cout << "Insert buffer before insert length: " << colMapIt -> second.insertBuffer_ -> length() << endl;
-        colMapIt -> second.insertBuffer_ -> append(colMapIt -> second.bitSize_ * numRows / 8, static_cast <mapd_addr_t> (data[c]));
+        colMapIt -> second.insertBuffer_ -> append(colMapIt -> second.bitSize_ * insertDataStruct_.numRows / 8, static_cast <mapd_addr_t> (insertDataStruct.data[c]));
     }
     //currentInsertBufferSize_ += numRows;
-    partitionInfoVec_.back().numTuples_ += numRows;
+    partitionInfoVec_.back().numTuples_ += insertDataStruct.numRows_;
 }
 
 
@@ -87,9 +88,9 @@ void LinearTablePartitioner::createNewPartition() {
     partitionInfoVec_.push_back(newPartitionInfo);
 }
 
-void LinearTablePartitioner::getPartitionsForQuery(vector <PartitionInfo> &partitions, const void *predicate) {
-    // right now we don't test predicate, so just return all partitions 
-    partitions = partitionInfoVec_;
+void LinearTablePartitioner::getPartitionsForQuery(vector <PartitionInfo> &partitionIds, const void *predicate) {
+    // right now we don't test predicate, so just return (copy of) all partitions 
+    partitionIds = partitionInfoVec_;
 
 }
 

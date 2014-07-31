@@ -1,6 +1,7 @@
 /**
  * @file	TablePartitionMgr.h
  * @author	Steven Stewart <steve@map-d.com>
+ * @author	Todd Mostak <todd@map-d.com>
  */
 #ifndef _TABLE_PARTITION_MGR_H
 #define _TABLE_PARTITION_MGR_H
@@ -8,6 +9,7 @@
 #include <map>
 #include <vector>
 #include "../../Shared/types.h"
+#include "AbstractTablePartitioner.h"
 
 // forward declaration(s)
 class BufferMgr;
@@ -23,12 +25,12 @@ class TablePartitioner;
  *
  * @todo support for variable-length data types
  */
+
 struct InsertData {
 	int tableId;						/// identifies the table into which the data is being inserted
-	std::vector<int> colId;				/// a vector of column ids for the row(s) being inserted
-	std::vector<mapd_size_t> colSize;	/// the size (in bytes) of each column
+	std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
 	mapd_size_t numRows;				/// the number of rows being inserted
-	void *data;							/// points to the start of the data for the row(s) being inserted
+	vector <void *> data;							/// points to the start of the data for the row(s) being inserted
 };
 
 /**
@@ -42,13 +44,14 @@ class TablePartitionMgr {
 
 public:
 	/// Constructor
-	TablePartitionMgr(BufferMgr *bm) : bm_(bm) {}
+	TablePartitionMgr(BufferMgr &bm) : bm_(bm) {}
 
 	/// Destructor
-	virtual ~TablePartitionMgr();
+	~TablePartitionMgr();
 
+    void createPartitionerForTable (const int tableId, const PartitionType partititonType, std::vector <ColumnInfo> &columnInfoVec, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize = 1048576);
 	/// Insert the data (insertData) into the table
-	virtual void insert(const InsertData *insertData);
+	void insertData(const InsertData &insertDataStruct);
 
 	/**
 	 * Obtain partition ids via a partition manager.
@@ -57,11 +60,11 @@ public:
 	 *
 	 * @todo The type of predicate should be changed to point to the subtree of the predicate in the AST
 	 */
-	virtual bool getPartitionIds(const int tableId, const void *predicate, std::vector<int> &result);
+	void getPartitionIds(const int tableId,  std::vector<int> &partitionIds, const void *predicate = 0);
 
 private:
-	std::map<int, TablePartitioner*> tableToPart_; 	/// maps table ids to TablePartitioner objects
-	BufferMgr *bm_;									/// pointer to the buffer manager object
+	std::map<int, vector <AbstractTablePartitioner &> > tableToPartitionerMap_; 	/// maps table ids to TablePartitioner objects
+	BufferMgr & bm_;									/// pointer to the buffer manager object
 };
 
 #endif // _TABLE_PARTITION_MGR_H
