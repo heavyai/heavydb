@@ -90,7 +90,7 @@ int main(void) {
     //test_clearFreeBlock(100000, 100000);
 */
     test_createChunk(32, 8);
-    test_putGetChunk(32, 8);
+    test_putGetChunk(32, 40);
     test_deleteChunk();
     /*    PPASS("deleteFile()") : PFAIL("deleteFile()");*/
     /*test_getBlock() ?
@@ -584,17 +584,27 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     else PPASS("srcBuf and destBuf match");
 
     // Test if putChunk will allow placing more bytes than Chunk has room
-    fm.createChunk(key, 0, blockSize2, NULL, 0);
-    FileInfo *fileInfo2 = fm.createFile(blockSize2, nblocks-1);
-    err = fm.putChunk(key, blockSize2*nblocks, srcBuf, epoch);
+    mapd_byte_t srcBuf2[blockSize2*nblocks];
+    mapd_byte_t destBuf2[blockSize2*nblocks];
+    
+    for (int i = 0; i < blockSize2*nblocks; i++) {
+        srcBuf[i] = rand() % 256;
+    }    
+
+    ChunkKey key2;
+    key2.push_back(keyInt+1);
+    fm.createChunk(key2, 0, blockSize2, NULL, 0);
+
+    err = fm.putChunk(key2, blockSize2*nblocks, srcBuf2, epoch, blockSize2);
+    err = fm.putChunk(key2, blockSize2*nblocks, srcBuf2, epoch, blockSize2);
     if (err != MAPD_SUCCESS)
         PFAIL("putChunk is unable to write more blocks than available");
-    else PPASS("putChunk writes more blocks than available (Creates new file)");
+    else PPASS("putChunk writes more blocks than available (Creates new files)");
 
-    fm.createChunk(key, 0, blockSize1, srcBufSmall, 0);
 
     /******* Check if createChunk() works with source buffer ********/
- 
+     fm.createChunk(key, 0, blockSize1, srcBufSmall, 0);
+
     // create a new Chunk with a different ChunkKey, write what's in srcBufSmall to it
     ChunkKey key1;
     key1.push_back(keyInt+1);
@@ -638,19 +648,19 @@ void test_deleteChunk() {
 
     // creating a Chunk with the blockSize
     mapd_size_t sizeArg = blockSize;
-    Chunk* c = fm.createChunk(key, 0, blockSize, NULL, 0);
+    Chunk* c = fm.createChunk(key, 0, blockSize, NULL, epoch);
 
     if (fm.deleteChunk(key) != MAPD_SUCCESS)
        PFAIL("deleteChunk failed on empty Chunk");
     else PPASS("deleteChunk passes on empty Chunk");
 
     /******** test deleteChunk on nonemptyChunk ********/ 
-    c = fm.createChunk(key, 0, blockSize, NULL, 0);
+    c = fm.createChunk(key, 0, blockSize, NULL, epoch);
     for (int i = 0; i < blockSize*nblocks; i++) {
         srcBuf[i] = rand() % 256;
     }
 
-    fm.createFile(blockSize, nblocks);
+    FileInfo *fInfo = fm.createFile(blockSize, nblocks);
 
     // Chunk has no blocks yet: must use optional argument!
     err = fm.putChunk(key, blockSize*nblocks, srcBuf, epoch, blockSize);
@@ -658,5 +668,44 @@ void test_deleteChunk() {
     if (fm.deleteChunk(key) != MAPD_SUCCESS)
        PFAIL("deleteChunk failed to delete full Chunk");
     else PPASS("deleteChunk did not fail to delete full Chunk");
+
+    /********* Check that deleting a Chunk between two other chunks won't screw things up freeBlocks-wise */
+    ChunkKey key1;
+    key1.push_back(keyInt+1);
+    
+    ChunkKey key2;
+    key2.push_back(keyInt+2);
+    
+    ChunkKey key3;
+    key3.push_back(keyInt+3);
+
+    // new blockSize so other file's free blocks are not used
+    mapd_size_t blockSize2 = blockSize+1;
+
+    // make a relatively big file
+    fInfo = fm.createFile(blockSize2, nblocks*8);
+
+    // fill a block's worth of data in each Chunk
+    Chunk* c1 = fm.createChunk(key1, blockSize2, blockSize2, srcBuf, epoch);
+    Chunk* c2 = fm.createChunk(key2, blockSize2, blockSize2, srcBuf, epoch);
+    Chunk* c3 = fm.createChunk(key3, blockSize2, blockSize2, srcBuf, epoch);
+
+    // get address of c2's block before deletion
+    mapd_size_t beginAddr = c2->front()->version.front()->begin;
+//    printf("%u\n", beginAddr);
+
+    fm.deleteChunk(key2);    
+
+    ChunkKey key4;
+    key4.push_back(keyInt+4);
+
+    Chunk* c4 = fm.createChunk(key4, blockSize2*2, blockSize2, srcBuf, epoch);
+
+    mapd_size_t beginAddr2 = c4->front()->version.front()->begin;
+    mapd_size_t endAddr = c4->front()->version.front()->end;
+    
+    if (beginAddr != beginAddr2)
+        PFAIL("Chunk is not created in deleted chunk's memory address");
+    else PPASS("new Chunk is created in deleted chunk's memory address");
 }
 

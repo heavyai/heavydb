@@ -60,7 +60,7 @@ void test_MultiBlock() {
     (mb.fileId == fileId) ? PPASS("MultiBlock fileId set correctly") : PFAIL("MultiBlock fileId not set correctly");
     (mb.blockSize == blockSize) ? PPASS("MultiBlock blockSize set correctly") : PFAIL("MultiBlock blockSize not set correctly");
     (mb.version.size() == 0) ? PPASS("MultiBlock version is empty") : PFAIL("MultiBlock version is not empty");
-    (mb.epoch.size() == 0) ? PPASS("MultiBlock epoch is empty") : PFAIL("MultiBlock epoch is not empty");
+    (mb.epoch.size() == 0) ? PPASS("MultiBlock epoch is empty") : PFAIL("EPOCH FAIL: MultiBlock epoch is not empty");
 }
 
 void test_push() {
