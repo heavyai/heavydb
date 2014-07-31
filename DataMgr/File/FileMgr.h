@@ -374,7 +374,6 @@ public:
 
 	Chunk* createChunk(ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, void *src, int epoch);
 
-
 	/**
 	 * Given a chunk, this method deletes a chunk from the file system by freeing all
 	 * of the blocks associated with it.
@@ -402,8 +401,10 @@ private:
     		fInfo.f = open(fInfo.fileId, &err);
         return err;
 	}
-	
-	// Helper method for deleteChunk(): deletes a MultiBlock, freeing (and returning to freeBlocks) all resident blocks
+
+	/**
+	 * @brief Inserts every block within the multiblock back into the free list, and then deletes the block
+	 */
 	void freeMultiBlock(MultiBlock* mb);
 };
 

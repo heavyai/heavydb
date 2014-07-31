@@ -1,6 +1,6 @@
 /**
- * @file	FileMgr.cpp
- * @author	Steven Stewart <steve@map-d.com>
+ * @file    FileMgr.cpp
+ * @author  Steven Stewart <steve@map-d.com>
  *
  * Implementation file for the file manager.
  *
@@ -29,11 +29,11 @@ FileInfo::FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nbloc
 }
 
 FileInfo::~FileInfo() {
-	// free memory used by Block objects
-	for (int i = 0; i < blocks.size(); ++i)
-		delete blocks[i];
+    // free memory used by Block objects
+    for (int i = 0; i < blocks.size(); ++i)
+        delete blocks[i];
 
-	// close file, if applicable
+    // close file, if applicable
     if (f && close(f) != MAPD_SUCCESS)
         fprintf(stderr, "[%s:%d] Error closing file %d.\n", __func__, __LINE__, fileId);
 }
@@ -48,31 +48,31 @@ void FileInfo::print(bool blockSummary) {
         return;
     
     for (int i = 0; i < blocks.size(); ++i) {
-    	// @todo block summary
+        // @todo block summary
     }
 }
 
 FileMgr::FileMgr(const std::string &basePath): basePath_(basePath) {
-	nextFileId_ = 0;
+    nextFileId_ = 0;
 }
 
 FileMgr::~FileMgr() {
-	for (int i = 0; i < files_.size(); ++i)
-		delete files_[i];
+    for (int i = 0; i < files_.size(); ++i)
+        delete files_[i];
 
-	// free memory allocated for Chunk objects
-	for(auto it = chunkIndex_.begin(); it != chunkIndex_.end(); ++it) {
-		Chunk &v = (*it).second;
+    // free memory allocated for Chunk objects
+    for(auto it = chunkIndex_.begin(); it != chunkIndex_.end(); ++it) {
+        Chunk &v = (*it).second;
 
-		// free memory allocated for MultiBlock objects
-		for (auto it2 = v.begin(); it2 != v.end(); ++it2)
-			delete *it2;
-	}
+        // free memory allocated for MultiBlock objects
+        for (auto it2 = v.begin(); it2 != v.end(); ++it2)
+            delete *it2;
+    }
 }
 
 FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nblocks) {
-	if (blockSize < 1 || nblocks < 1)
-		return NULL;
+    if (blockSize < 1 || nblocks < 1)
+        return NULL;
 
     // create the new file
     FILE *f = NULL;
@@ -80,34 +80,34 @@ FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nbl
 
     // check for error
     if (!f) {
-    	fprintf(stderr, "[%s:%d] Error: unable to create file.\n", __func__, __LINE__);
-    	return NULL;
+        fprintf(stderr, "[%s:%d] Error: unable to create file.\n", __func__, __LINE__);
+        return NULL;
     }
 
-	// update file manager data structures
+    // update file manager data structures
     int fileId = nextFileId_++;
-	FileInfo *fInfo = NULL;
-	try {
-		fInfo = new FileInfo(fileId, f, blockSize, nblocks);
-		files_.push_back(fInfo);
-		fileIndex_.insert(std::pair<mapd_size_t, int>(blockSize, fileId));
-	}
-	catch (const std::bad_alloc& e) {
-		std::cout << "Bad allocation exception encountered: " << e.what() << std::endl;
-		return NULL;
-	}
-	catch (const std::exception& e) {
-		std::cout << "Exception encountered: " << e.what() << std::endl;
-		if (!fInfo) delete fInfo;
-		return NULL;
-	}
-	assert(files_.back() == fInfo);
-	return fInfo;
+    FileInfo *fInfo = NULL;
+    try {
+        fInfo = new FileInfo(fileId, f, blockSize, nblocks);
+        files_.push_back(fInfo);
+        fileIndex_.insert(std::pair<mapd_size_t, int>(blockSize, fileId));
+    }
+    catch (const std::bad_alloc& e) {
+        std::cout << "Bad allocation exception encountered: " << e.what() << std::endl;
+        return NULL;
+    }
+    catch (const std::exception& e) {
+        std::cout << "Exception encountered: " << e.what() << std::endl;
+        if (!fInfo) delete fInfo;
+        return NULL;
+    }
+    assert(files_.back() == fInfo);
+    return fInfo;
 }
 
 FileInfo* FileMgr::getFile(const int fileId) {
     if (fileId < 0 || fileId > files_.size())
-    	return NULL;
+        return NULL;
     return files_[fileId];
 }
 
@@ -116,16 +116,16 @@ mapd_err_t FileMgr::deleteFile(const int fileId, const bool destroy) {
     // confirm the file exists and obtain pointer
     FileInfo *fInfo = getFile(fileId);
     if (!fInfo)
-    	return MAPD_FAILURE;
+        return MAPD_FAILURE;
 
     // remove the file from the fileIndex_
     BlockSizeFileMMap::iterator it = fileIndex_.lower_bound(fInfo->blockSize);
     for (it = fileIndex_.begin(); it != fileIndex_.end(); ++it) {
-    	if (it->second == fileId)
-    		break;
+        if (it->second == fileId)
+            break;
     }
     if (it != fileIndex_.end())
-    	fileIndex_.erase(it);
+        fileIndex_.erase(it);
 
     // remove the file from the vector of files_
     files_.erase(files_.begin() + fileId);
@@ -154,7 +154,7 @@ mapd_err_t FileMgr::writeFile(FileInfo &fInfo, mapd_size_t offset, mapd_size_t n
 
 
 Block* FileMgr::getBlock(const int fileId, mapd_size_t blockNum) {
-	FileInfo *fInfo = FileMgr::getFile(fileId);
+    FileInfo *fInfo = FileMgr::getFile(fileId);
     return !fInfo ? NULL : getBlock(*fInfo, blockNum);
 }
 
@@ -164,8 +164,8 @@ Block* FileMgr::getBlock(FileInfo &fInfo, mapd_size_t blockNum) {
 }
 
 mapd_err_t FileMgr::putBlock(int fileId, mapd_size_t blockNum, mapd_addr_t buf) {
-	FileInfo *fInfo;
-	return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, buf);
+    FileInfo *fInfo;
+    return ((fInfo = getFile(fileId)) == NULL) ? MAPD_FAILURE : putBlock(*fInfo, blockNum, buf);
 }
 
 mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_addr_t buf) {
@@ -181,19 +181,19 @@ mapd_err_t FileMgr::putBlock(FileInfo &fInfo, mapd_size_t blockNum, mapd_addr_t 
     size_t wrote = writeBlock(fInfo.f, fInfo.blockSize, blockNum, buf, &err);
     assert(wrote == fInfo.blockSize);
 
-	return err;
+    return err;
 }
 
 mapd_err_t FileMgr::clearBlock(const int fileId, mapd_size_t blockNum) {
-	FileInfo *fInfo = FileMgr::getFile(fileId);
+    FileInfo *fInfo = FileMgr::getFile(fileId);
     return !fInfo ? MAPD_FAILURE : clearBlock(*fInfo, blockNum);
 }
 
 mapd_err_t FileMgr::clearBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     Block *b = getBlock(fInfo, blockNum);
     if (b) {
-    	b->end = b->begin;
-    	return MAPD_SUCCESS;
+        b->end = b->begin;
+        return MAPD_SUCCESS;
     }
     return MAPD_FAILURE;
 }
@@ -207,7 +207,7 @@ mapd_err_t FileMgr::freeBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     mapd_err_t err = MAPD_SUCCESS;
     err = clearBlock(fInfo, blockNum);
     if (err == MAPD_SUCCESS)
-    	fInfo.freeBlocks.insert(blockNum); // @todo error-checking on insert() ?
+        fInfo.freeBlocks.insert(blockNum); // @todo error-checking on insert() ?
     return err;
 }
 
@@ -245,7 +245,7 @@ Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_addr_t buf) {
         mapd_err_t err;
         read(fInfo->f, i * c[i]->blockSize, c[i]->blockSize, buf, &err);
         if (err != MAPD_SUCCESS)
-        	return NULL;
+            return NULL;
     }
     return &c;
 }
@@ -432,20 +432,22 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
 
 // Inserts free blocks into the chunk; creates a new file if necessary
 Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, void *src, int epoch) {
-    Chunk *c;
-
+    
     // check if the chunk already exists based on key
-    if ((c = getChunkRef(key)) != NULL) {
-        return c;
+    Chunk *ctmp = NULL;
+    if ((ctmp = getChunkRef(key)) != NULL) {
+        return ctmp;
     }
 
-    // instantiate, then determine number of blocks needed
-    c = new Chunk();
+    // declare the new chunk
+    Chunk c;
+
+    // determine number of blocks needed
     mapd_size_t nblocks = (size + blockSize - 1) / blockSize;
     
     // Iterate over the files from which to obtain free blocks
     for (auto it = fileIndex_.lower_bound(blockSize); it != fileIndex_.end() && nblocks > 0; ++it) {
-    	FileInfo *fInfo = getFile(it->second);
+        FileInfo *fInfo = getFile(it->second);
 
         // obtain free blocks from current file
         while (fInfo->freeBlocks.size() > 0 && nblocks > 0) {
@@ -459,24 +461,23 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
             fInfo->freeBlocks.erase(freeIt);
 
             // insert the MultiBlock into the new Chunk
-            c->push_back(mb);
+            c.push_back(mb);
             // @todo copy src into new Chunk
             nblocks--;
         }
     }
 
     if (nblocks > 0) { // create a new file to hold remaining blocks
-    	// @todo fix this
-    	fprintf(stderr, "[%s:%d] Error: unable to insert %lu blocks into new chunk.\n", __func__, __LINE__, nblocks);
+        // @todo fix this
+        fprintf(stderr, "[%s:%d] Error: unable to insert %lu blocks into new chunk.\n", __func__, __LINE__, nblocks);
     }
     
     // Add an entry to the file manager's chunk index
-    chunkIndex_.insert(std::pair<ChunkKey, Chunk>(key, *c));
+    chunkIndex_.insert(std::pair<ChunkKey, Chunk>(key, c));
 
-    return c;
+    return getChunkRef(key);
 }
 
-// insert every block within the multiblock back into the free list, and then delete the block
 void FileMgr::freeMultiBlock(MultiBlock* mb) {
     while (mb->version.size() > 0) {
         //get fileInfo of each block
@@ -501,7 +502,7 @@ mapd_err_t FileMgr::deleteChunk(ChunkKey &key) {
     if ((c = getChunkRef(key)) == NULL)
         return MAPD_FAILURE;
 
-    // While there are still multiblocks in the chunk, pop the front and free it
+    // While there are still multiblocks in the chunk, pop the back and free it
     while (c->size() > 0) {
         freeMultiBlock(c->back());
         c->pop_back();
