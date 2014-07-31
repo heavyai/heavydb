@@ -374,6 +374,7 @@ public:
 
 	Chunk* createChunk(ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, void *src, int epoch);
 
+
 	/**
 	 * Given a chunk, this method deletes a chunk from the file system by freeing all
 	 * of the blocks associated with it.
@@ -381,7 +382,7 @@ public:
 	 * @param Chunk A reference to the chunk to be deleted.
 	 * @return MAPD_FAILURE or MAPD_SUCCESS
 	 */
-	mapd_err_t deleteChunk(Chunk &c);
+	mapd_err_t deleteChunk(ChunkKey &key);
 
 	/**
 	 * @brief Prints a representation of FileMgr's state to stdout
@@ -401,6 +402,9 @@ private:
     		fInfo.f = open(fInfo.fileId, &err);
         return err;
 	}
+	
+	// Helper method for deleteChunk(): deletes a MultiBlock, freeing (and returning to freeBlocks) all resident blocks
+	void freeMultiBlock(MultiBlock* mb);
 };
 
 } // File_Namespace

@@ -31,6 +31,7 @@ void test_putGetBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_clearFreeBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_createChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
 void test_putGetChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
+void test_deleteChunk();
 
 int main(void) {
 /*
@@ -90,6 +91,7 @@ int main(void) {
 */
     test_createChunk(32, 8);
     test_putGetChunk(32, 8);
+    test_deleteChunk();
     /*    PPASS("deleteFile()") : PFAIL("deleteFile()");*/
     /*test_getBlock() ?
         PPASS("getBlock()") : PFAIL("getBlock()"); 
@@ -566,21 +568,29 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     if (loopError)
         PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
     else PPASS("srcBuf and destBuf match");
+}
 
+void test_deleteChunk() {
+    mapd_err_t err;
+    FileMgr fm(".");
 
-/*
-    err = fm.deleteChunk(*c);
-    if (err != MAPD_SUCCESS)
-        PFAIL("deleteChunk returned error");
-    else PPASS("deleteChunk did not return error");
+    mapd_size_t blockSize1 = 8;
+    mapd_size_t nblocks = 8;
 
-    err = fm.deleteChunk(*gottenRefChunk);
-    if (err != MAPD_SUCCESS)
-        PFAIL("deleteChunk returned error");
-    else PPASS("deleteChunk did not return error");
+    int keyInt = 4;
+    FileInfo *fileInfo1 = fm.createFile(blockSize1, nblocks);
 
-*/
-    // we're going to create chunks of one multiblock 
-    //Chunk* c = createChunk()
+    ChunkKey key;
+    key.push_back(keyInt);
+
+    int freeCount1 = fileInfo1->freeBlocks.size();\
+
+    // creating a Chunk with the blockSize
+    mapd_size_t sizeArg = blockSize1;
+    Chunk* c = fm.createChunk(key, 0, blockSize1, NULL, 0);
+
+    if (fm.deleteChunk(key) != MAPD_SUCCESS)
+       PFAIL("deleteChunk failed");
+    else PPASS("deleteChunk did not fail");
 }
 

@@ -476,32 +476,42 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
     return c;
 }
 
-void freeMultiBlock(MultiBlock* mb) {
-    
+// insert every block within the multiblock back into the free list, and then delete the block
+void FileMgr::freeMultiBlock(MultiBlock* mb) {
+    while (mb->version.size() > 0) {
+        //get fileInfo of each block
+        Block &blk = *mb->version.front();
+        FileInfo *fInfo = getFile(blk.fileId);
+
+        // expression refers to file offset of most recent block in MultiBlock
+        fInfo->freeBlocks.insert(blk.begin);
+        // delete the front block
+        mb->pop();
+    }
+    //now, delete the whole multiblock
+    delete mb;
 }
 
-mapd_err_t FileMgr::deleteChunk(Chunk &c) {
-	// @todo go through each block and each copy of the block,
-	// inserting them into the free lists of their respective files
-	
-    // Traverse the blocks of the chunk
-    for (int i = 0; i < c.size(); i++) {
+mapd_err_t FileMgr::deleteChunk(ChunkKey &key) {
+    mapd_err_t err = MAPD_SUCCESS;
+    
+    Chunk* c = NULL;
 
-        //BlockInfo *bInfo = c[0];
+    // ensure the Chunk exists
+    if ((c = getChunkRef(key)) == NULL)
+        return MAPD_FAILURE;
+
+    // While there are still multiblocks in the chunk, pop the front and free it
+    while (c->size() > 0) {
+        freeMultiBlock(c->back());
+        c->pop_back();
     }
 
-    return MAPD_FAILURE;
+    // Remove Chunk from ChunkIndex. Return failure if it does not remove exactly one chunk.
+    if (chunkIndex_.erase(key) != 1)
+        return MAPD_FAILURE;
 
-    // add every block to free list, delete each block
-    // delete each multiblock
-    // remove Chunk from ChunkIndex
-    // remove Chunk from chunkKey/chunk mapping
-    // delete Chunk
+    return MAPD_SUCCESS;
 }
 
 } // File_Namespace
-
-
-
-
-
