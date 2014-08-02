@@ -52,8 +52,6 @@ void InsertWalker::visit(InsertStmt *v) {
 			else if (err != MAPD_SUCCESS)
 				errMsg_ = "Catalog returned an error.";
 			
-			fprintf(stderr, "Error [%d]: %s\n", err, errMsg_.c_str());
-
 			colNames_.clear();
 			colMetadata.clear();
 			return;
@@ -65,13 +63,12 @@ void InsertWalker::visit(InsertStmt *v) {
 		// Check that the values in the insert statement are the right type
 		if (colTypes_.size() == colNames_.size()) {
 			for (int i = 0; i < colTypes_.size(); ++i) {
-				// printf("colMetadata[i].columnName=\"%s\" colNames_[i]=\"%s\"\n", colMetadata[i].columnName.c_str(), colNames_[i].c_str());
+				//printf("colMetadata[i].columnName=\"%s\" colNames_[i]=\"%s\" colMetadata[i].columnType=%d\n", colMetadata[i].columnName.c_str(), colNames_[i].c_str(), colMetadata[i].columnType);
 				if (colMetadata[i].columnType != colTypes_[i]) {
 					std::stringstream ss;
 					ss << "Type mismatch at column \"" << colMetadata[i].columnName << "\"";
 					errFlag_ = true;
 					errMsg_ = ss.str();
-					fprintf(stderr, "%s\n", errMsg_.c_str());
 					break;
 				}
 			}
@@ -89,7 +86,12 @@ void InsertWalker::visit(ColumnList *v) {
 }
 
 void InsertWalker::visit(Column *v) {
-	colNames_.push_back(v->colName);
+	std::string colName;
+	if (v->s2 != "")
+		colName = v->s2 + "." + v->s1;
+	else
+		colName = v->s1;
+	colNames_.push_back(colName);	
 }
 
 void InsertWalker::visit(LiteralList *v) {
