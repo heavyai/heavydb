@@ -20,16 +20,12 @@ public:
 		else if (type == 1)
 			this->type = FLOAT_TYPE;
 		else if (type == 2)
-			this->type == BOOLEAN_TYPE;
+			this->type = BOOLEAN_TYPE;
 	}
 	
 	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
-
-    virtual void accept(class SQL_RA_Translator &v) {
-        v.visit(this);
-    }
 
 };
 

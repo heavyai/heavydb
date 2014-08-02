@@ -32,10 +32,6 @@ public:
 		v.visit(this);
 	}
 
-    virtual void accept(class SQL_RA_Translator &v) {
-        v.visit(this);
-    }
-
 };
 
 } // SQL_Namespace

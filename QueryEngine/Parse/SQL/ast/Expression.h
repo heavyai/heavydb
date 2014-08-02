@@ -18,7 +18,6 @@ public:
 	mapd_data_t type;
 
 	virtual void accept(Visitor &v) = 0;
-	virtual void accept(SQL_RA_Translator &v) = 0;
 };
 
 } // SQL_Namespace

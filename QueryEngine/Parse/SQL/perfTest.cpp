@@ -33,6 +33,7 @@ int main(int argc, char ** argv) {
         }
         double hostElapsedTime = double(cpuTimer.elapsed().user) / oneSecond * 1000000.0 /* microseconds */ / 100000.0 /*numQueries*/;
         cout << "Query took: " << hostElapsedTime << " microseconds." <<  endl;
+
         /*
         ASTNode *parseRoot = 0;
         parser.parse(sql, parseRoot);
