@@ -46,10 +46,10 @@ private:
 	std::vector<int> tableIds_;
 	std::vector<int> columnIds_;
 
-	RA_Namespace::RelExpr *nodeFromClause_;
-	RA_Namespace::AttrList *nodeSelection_;
-	RA_Namespace::ProjectOp *nodeSelectStmt_;
-	RA_Namespace::RelExpr *nodeSqlStmt_;
+	RA_Namespace::RelExpr *nodeFromClause_ = NULL;
+	RA_Namespace::AttrList *nodeSelection_ = NULL;
+	RA_Namespace::ProjectOp *nodeSelectStmt_ = NULL;
+	RA_Namespace::RelExpr *nodeSqlStmt_ = NULL;
 };
 
 } // Translate_Namespace

@@ -14,13 +14,13 @@ namespace RA_Namespace {
 class RelExprList : public RelAlgNode {
     
 public:
-    RelExprList *n1;
-    RelExpr *n2;
+    RelExprList *n1 = NULL;
+    RelExpr *n2 = NULL;
 
     /// Constructor
     explicit RelExprList(RelExpr *n2) {
         assert(n2);
-        this->n1 = NULL;
+        printf("RelExprList(RelExpr*) n2=%p\n", n2);
     	this->n2 = n2;
     }
 

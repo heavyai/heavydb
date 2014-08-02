@@ -51,9 +51,6 @@ void SQL_RA_Translator::visit(DmlStmt *v) {
 	printf("<DmlStmt>\n");
 	if (v->n1) v->n1->accept(*this); // InsertStmt
 	if (v->n2) v->n2->accept(*this); // SelectStmt
-
-    assert(nodeSqlStmt_);
-	root = new Program(new RelExprList(nodeSqlStmt_));
 }
 
 void SQL_RA_Translator::visit(FromClause *v) {
@@ -135,6 +132,7 @@ void SQL_RA_Translator::visit(Selection *v) {
 	// case: > 1 column
 	else if (numCols > 1) {
 		n = new AttrList(new Attribute(to_string(columnIds_[0])));
+        columnIds_.pop_back();
 		while (columnIds_.size() > 0) {
 			n = new AttrList(n, new Attribute(to_string(columnIds_.back())));
 			columnIds_.pop_back();
@@ -149,7 +147,8 @@ void SQL_RA_Translator::visit(SelectStmt *v) {
 	if (v->n3) v->n3->accept(*this); // FromClause
 
     assert(nodeSelection_ && nodeFromClause_);
-	nodeSelectStmt_ =  new ProjectOp((RelExpr*)nodeSelection_, (AttrList*)nodeFromClause_);
+	nodeSelectStmt_ =  new ProjectOp((RelExpr*)nodeFromClause_, (AttrList*)nodeSelection_);
+    assert(nodeSelectStmt_);
 }
 
 void SQL_RA_Translator::visit(SqlStmt *v) {
@@ -157,8 +156,10 @@ void SQL_RA_Translator::visit(SqlStmt *v) {
 	if (v->n1) v->n1->accept(*this); // DmlStmt
 	if (v->n2) v->n2->accept(*this); // DdlStmt
 
-    assert(nodeSelectStmt_);
-	nodeSqlStmt_ = new RelExpr(nodeSelectStmt_);
+    if (nodeSelectStmt_) {
+        root = new Program(new RelExprList((RelExpr*)nodeSelectStmt_));
+        assert(root);
+    }
 }
 
 void SQL_RA_Translator::visit(TableList *v) {
