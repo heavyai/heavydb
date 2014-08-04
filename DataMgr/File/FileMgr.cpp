@@ -293,9 +293,9 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     
     // Compute size based on actual bytes used in block
     Chunk &c = iter->second;
-    for (int i = 0; i < c.size(); ++i)
-        *size += c[i]->current().end;
-    
+    for (int i = 0; i < c.size(); ++i) {
+        *size += (c[i]->current().end - c[i]->current().begin)*c[i]->blockSize;
+    }
     return err;
 }
 

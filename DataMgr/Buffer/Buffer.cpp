@@ -32,9 +32,9 @@ bool Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
 	assert(n > 0);
 
 	// check for buffer overflow
-	if ((length_ + n) > size())
+	if ((length_ + n) > size()) {
 		return false;
-
+	}
 	// write source contents to buffer
 	assert(host_ptr_ && src);
 	memcpy(host_ptr_ + offset, src, n);
@@ -57,7 +57,6 @@ bool Buffer::append(mapd_size_t n, mapd_addr_t src) {
 	if ((length_ + n) >= size())
 		return false;
 	if (write(length_, n, src)) {
-		length_ += n;
 		return true;
 	}
 	return false;
@@ -65,9 +64,11 @@ bool Buffer::append(mapd_size_t n, mapd_addr_t src) {
    
 bool Buffer::copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t dest) {
 	assert(n > 0 && dest);
-	if ((n + offset) >= length_)
+	if ((n + offset) > length_)
+		//@todo I (Gil) changed this from >= to >. If this condition fails, though, shouldn't it copy the first length_ bytes?
 		return false;
 	memcpy(dest, host_ptr_ + offset, n);
+	return true;
 }
 
 std::vector<bool> Buffer::getDirty() {

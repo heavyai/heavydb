@@ -23,9 +23,9 @@ BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm) {
     hostMemSize_ = hostMemSize;
     hostMem_ = (mapd_addr_t) new mapd_byte_t[hostMemSize];
     freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(hostMemSize, hostMem_));
-
+    printf("[%s:%d] freeMem_.size()=%d\n", __FILE__, __LINE__, freeMem_.size());
 #ifdef DEBUG_VERBOSE
-    printMemAlloc();
+   // printMemAlloc();
 #endif
 }
 
@@ -48,7 +48,8 @@ Buffer* BufferMgr::createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
     // Find n bytes of free memory in the buffer pool
     auto it = freeMem_.lower_bound(n);
     if (it == freeMem_.end()) {
-        fprintf(stderr, "[%s:%d] Error: unable to find %lu bytes available in the buffer pool.\n", __func__, __LINE__, n);
+        //fprintf(stderr, "[%s:%d] Error: unable to find %lu bytes available in the buffer pool. freeMem_.size()=%d\n", __func__, __LINE__, n, freeMem_.size());
+       // printMemAlloc();
         // @todo eviction strategies
         return NULL;
     }
@@ -61,6 +62,8 @@ Buffer* BufferMgr::createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
     freeMem_.erase(it);
     if (freeMemSize - n > 0)
         freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(freeMemSize - n, bufAddr + n));
+
+    // what to do if you end up with, say, tons of blocks with freeMemSize of 1?
 
     // Create Buffer object and add to the BufferMgr
     Buffer *b = new Buffer(bufAddr, numPages, pageSize);
@@ -112,6 +115,11 @@ Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
     if ((fm_->getChunkSize(key, &numPages, &size)) != MAPD_SUCCESS)
         return NULL;
 
+    if (size == 0)
+        //@todo: proper error handling needed
+        return NULL;
+
+    printf("size: %d, numPages %d\n", size, numPages);
     assert((size % numPages) == 0);
 
     // Create buffer and load chunk
@@ -119,6 +127,14 @@ Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
     if ((fm_->getChunk(key, b->host_ptr())) == NULL) {
         deleteBuffer(b);
         return NULL;
+    }
+    else {
+        mapd_size_t actualSize = 0;
+        
+        if ((fm_->getChunkActualSize(key, &actualSize)) != MAPD_SUCCESS)
+            return NULL;
+        b->length(actualSize);
+        
     }
     return b;
 }
@@ -146,7 +162,10 @@ bool BufferMgr::flushChunk(const ChunkKey &key) {
     Buffer *b = findChunkBuffer(key);
     if (b && b->pinned())
         return false;
-    if ((fm_->putChunk(key, b->length(), b->host_ptr())) != MAPD_SUCCESS)
+
+    // @todo temporarly using 0 for epoch: update this
+    int epoch = 0;
+    if ((fm_->putChunk(key, b->length(), b->host_ptr(), epoch)) != MAPD_SUCCESS)
         return false;
     return true;
 }

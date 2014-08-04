@@ -6,6 +6,7 @@
 #define _BUFFER_H_
 
 #include <vector>
+#include <assert.h>
 #include "../../Shared/types.h"
 
 namespace Buffer_Namespace {
