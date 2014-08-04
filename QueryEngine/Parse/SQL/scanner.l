@@ -2,6 +2,7 @@
 %option noyywrap case-insensitive
 
 %{
+#undef yyFlexLexer
 #include <iostream>
 #include <vector>
 #include "parser.h"
@@ -15,7 +16,9 @@ std::vector<std::string> strData;
 std::vector<long int> intData;
 std::vector<double> realData;
 
+
 %}
+
 
 %%
 
@@ -98,4 +101,5 @@ std::vector<double> realData;
 
 <<EOF>>						{ yyterminate(); }
 %%
+
 

@@ -3,6 +3,9 @@
 #include "OutputBuffer.h"
 #include "OutputWriter.h"
 #include "parser.h"
+#include <boost/thread.hpp>
+#include <boost/bind.hpp>
+#include <boost/shared_ptr.hpp>
 
 
 using namespace std;
@@ -56,7 +59,7 @@ void Database::stop() {
 bool Database::processRequest(const std::string &request, OutputBuffer &outputBuffer) {
     //std::cout << "Request: " << request << std::endl;
     OutputWriter outputWriter(outputBuffer);
-    Parser parser;
+    SQLParser parser;
     ASTNode *parseRoot = 0;
     string lastParsed;
     int numErrors = parser.parse(request, parseRoot,lastParsed);
