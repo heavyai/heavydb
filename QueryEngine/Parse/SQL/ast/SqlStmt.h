@@ -13,7 +13,6 @@ public:
 	DmlStmt *n1 = NULL;
 	DdlStmt *n2 = NULL;
 	
-	
 	explicit SqlStmt(DmlStmt *n1) {
 		assert(n1);
 		this->n1 = n1;
@@ -27,10 +26,6 @@ public:
 	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
-
-    virtual void accept(class SQL_RA_Translator &v) {
-        v.visit(this);
-    }
 
 };
 

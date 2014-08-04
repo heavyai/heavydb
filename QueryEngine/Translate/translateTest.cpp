@@ -10,25 +10,14 @@
 #include <vector>
 #include "../../Shared/types.h"
 #include "../Parse/SQL/parser.h"
- #include "InsertWalker.h"
-#include "../../DataMgr/Metadata/Catalog.h"
+#include "SQL_RA_Translator.h"
+#include "../Parse/RA/visitor/XMLTranslator.h"
+#include "../Parse/RA/visitor/QPTranslator.h"
 
 using namespace std;
-using Analysis_Namespace::InsertWalker;
+using Translate_Namespace::SQL_RA_Translator;
 
 int main(int argc, char ** argv) {
-    // Add a table to the catalog
-    Catalog c(".");
-    
-    std::vector<ColumnRow*> cols;
-    cols.push_back(new ColumnRow("a", INT_TYPE, true));
-    cols.push_back(new ColumnRow("b", FLOAT_TYPE, true));
-    
-    mapd_err_t err = c.addTableWithColumns("T1", cols);
-    if (err != MAPD_SUCCESS) {
-        printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
-        //exit(EXIT_FAILURE);
-    }
 
     // Create a parser for SQL and... do stuff
     SQLParser parser;
@@ -50,14 +39,25 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
-        InsertWalker iw(c);
-        if (parseRoot != 0) {
-            parseRoot->accept(iw); 
-            std::pair<bool, std::string> insertErr = iw.isError();
-            if (insertErr.first == true) {
-                cout << "Error: " << insertErr.second << std::endl;
-            }
-        }
+        
+        SQL_RA_Translator sql2ra;
+        if (parseRoot != 0)
+            parseRoot->accept(sql2ra);
+
+        RA_Namespace::XMLTranslator ra_xml;
+        printf("\nXML Output of translated Relational Algebra AST\n");
+        printf("-----------------------------------------------\n");
+        if (sql2ra.root != 0)
+            sql2ra.root->accept(ra_xml);
+        printf("\n\n");
+
+        RA_Namespace::QPTranslator ra_qp;
+        printf("\nQuery Plan output of translated Relational Algebra AST\n");
+        printf("------------------------------------------------------\n");
+        if (sql2ra.root != 0)
+            sql2ra.root->accept(ra_qp);
+        printf("\n\n");
+
     }
     while(true);
     cout << "Good-bye." << endl;

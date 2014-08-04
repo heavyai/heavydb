@@ -268,8 +268,8 @@ search_condition:
 predicate:
  	predicate OR predicate				{ $$ = new Predicate("OR", (Predicate*)$1, (Predicate*)$3); }
 |	predicate AND predicate				{ $$ = new Predicate("AND", (Predicate*)$1, (Predicate*)$3); }
-|	NOT predicate						{ $$ = new Predicate("NOT", (Predicate*)$1); }
-|	'(' predicate ')'					{ $$ = new Predicate((Predicate*)$1); }	
+|	NOT predicate						{ $$ = new Predicate("NOT", (Predicate*)$2); }
+|	'(' predicate ')'					{ $$ = new Predicate((Predicate*)$2); }	
 |	comparison							{ $$ = new Predicate((Comparison*)$1); }
 ;
 

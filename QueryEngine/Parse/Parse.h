@@ -6,7 +6,7 @@
 #include "SQL/ast/ASTNode.h"
 #include "RA/ast/RelAlgNode.h"
 
-using namespace SQL_Namespace;
+//using namespace SQL_Namespace;
 using namespace RA_Namespace;
 
 namespace Parse_Namespace {

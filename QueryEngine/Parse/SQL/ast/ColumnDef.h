@@ -32,11 +32,6 @@ public:
 	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}
-
-    virtual void accept(class SQL_RA_Translator &v) {
-        v.visit(this);
-    }
-
 };
 
 }

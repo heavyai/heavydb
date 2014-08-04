@@ -25,7 +25,7 @@ public:
     	this->func = func;
     }
 
-	virtual void accept(class Visitor &v) {
+	virtual void accept(class RA_Namespace::Visitor &v) {
 		v.visit(this);
 	}
 };

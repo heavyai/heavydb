@@ -1,3 +1,9 @@
+/**
+ * @file	Visitor.h
+ * @author	Steven Stewart <steve@map-d.com>
+ *
+ * This header file specifies the void Visitor API for the SQL parser.
+ */
 #ifndef SQL_VISITOR_H
 #define SQL_VISITOR_H
 
@@ -48,8 +54,6 @@ class sqlStmt;
 class Visitor {
 
 public:
-	//Visitor();
-	//virtual ~Visitor();
 
 	virtual void visit(AggrExpr*) {}
 	virtual void visit(AlterStmt*) {}
