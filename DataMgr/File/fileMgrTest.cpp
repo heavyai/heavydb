@@ -34,7 +34,7 @@ void test_putGetChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
 void test_deleteChunk();
 
 int main(void) {
-/*
+
     test_FileInfo(10);
     test_FileInfo(100);
     test_FileInfo(1000);
@@ -88,7 +88,7 @@ int main(void) {
     // don't uncomment this if you know what's good for you
     //test_clearFreeBlock(30000, 30000);
     //test_clearFreeBlock(100000, 100000);
-*/
+
     test_createChunk(32, 8);
     test_putGetChunk(32, 40);
     test_deleteChunk();
@@ -496,13 +496,15 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     mapd_byte_t destBufSmall[blockSize1];
     FileMgr fm(".");
 
-    int keyInt = 4;
+    int keyInt[] = {1, 2, 3, 4, 5};
     int epoch = 0;
 
     FileInfo *fileInfo1 = fm.createFile(blockSize1, nblocks);
     
     ChunkKey key;
-    key.push_back(keyInt);
+
+    // alter the key for the first test
+    key.push_back(keyInt[0]);
   //  printf("%d\n", key.back());
 
     int freeCount1 = fileInfo1->freeBlocks.size();\
@@ -525,7 +527,6 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     if (err != MAPD_SUCCESS)
         PFAIL("putChunk returned error");
     else PPASS("putChunk did not return error");
-  
     int freeCount2 = fileInfo1->freeBlocks.size();
 
     // verify that there is one less freeBlock
@@ -539,8 +540,10 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
         PFAIL("getChunk returned NULL");
     else PPASS("getChunk did not return NULL");
 
+    loopError = false;
     for (int i = 0; i < blockSize1; i++) {
         loopError = !(srcBufSmall[i] == destBufSmall[i]);
+  
     }
 
     if (loopError)
@@ -553,10 +556,13 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     mapd_byte_t destBuf[blockSize1*nblocks];
 
     // make another file just in case no space
-    fm.createFile(blockSize1, nblocks);
+ //   fm.createFile(blockSize1, nblocks);
 
     for (int i = 0; i < blockSize1*nblocks; i++) {
-        srcBuf[i] = rand() % 256;
+        srcBuf[i] = i;
+    }
+    for (int i = 0; i < blockSize1*nblocks; i++) {
+        destBuf[i] = 43;//rand() % 256;
     }
  
     gottenRefChunk = fm.getChunkRef(key);
@@ -564,7 +570,11 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
         PFAIL("getChunkRef returned NULL");
     else PPASS("getChunkRef did not return NULL");
 
-    err = fm.putChunk(key, blockSize1*nblocks, srcBuf, epoch);
+    // alter the key for the new set of tests
+    key.push_back(keyInt[1]);
+    c = fm.createChunk(key, 0, blockSize1, NULL, 0);
+
+    err = fm.putChunk(key, blockSize1*nblocks, srcBuf, epoch, blockSize1);
     if (err != MAPD_SUCCESS)
         PFAIL("putChunk returned error");
     else PPASS("putChunk did not return error");
@@ -576,7 +586,7 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     else PPASS("getChunk did not return NULL");
 
     for (int i = 0; i < blockSize1*nblocks; i++) {
-        loopError = !(srcBufSmall[i] == destBufSmall[i]);
+        loopError = !(srcBuf[i] == destBuf[i]);
     }
 
     if (loopError)
@@ -588,34 +598,35 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     mapd_byte_t destBuf2[blockSize2*nblocks];
     
     for (int i = 0; i < blockSize2*nblocks; i++) {
-        srcBuf[i] = rand() % 256;
+        srcBuf2[i] = rand() % 256;
     }    
 
-    ChunkKey key2;
-    key2.push_back(keyInt+1);
-    fm.createChunk(key2, 0, blockSize2, NULL, 0);
+    // alter the key for the new set of tests
+    key.push_back(keyInt[2]);
+    fm.createChunk(key, 0, blockSize2, NULL, 0);
 
-    err = fm.putChunk(key2, blockSize2*nblocks, srcBuf2, epoch, blockSize2);
-    err = fm.putChunk(key2, blockSize2*nblocks, srcBuf2, epoch, blockSize2);
+    err = fm.putChunk(key, blockSize2*nblocks, srcBuf2, epoch, blockSize2);
+    err = fm.putChunk(key, blockSize2*nblocks, srcBuf2, epoch, blockSize2);
     if (err != MAPD_SUCCESS)
         PFAIL("putChunk is unable to write more blocks than available");
     else PPASS("putChunk writes more blocks than available (Creates new files)");
 
 
     /******* Check if createChunk() works with source buffer ********/
-     fm.createChunk(key, 0, blockSize1, srcBufSmall, 0);
+    
+    // alter the key for the new set of tests
+    key.push_back(keyInt[3]);
+    fm.createChunk(key, 0, blockSize1, srcBufSmall, 0);
 
     // create a new Chunk with a different ChunkKey, write what's in srcBufSmall to it
-    ChunkKey key1;
-    key1.push_back(keyInt+1);
-    fm.createChunk(key1, blockSize1, blockSize1, srcBufSmall, 0);
+    fm.createChunk(key, blockSize1, blockSize1, srcBufSmall, 0);
 
     // clear contents of destBufSmall
    for (int i = 0; i < blockSize1*nblocks; i++) {
-        destBuf[i] = -1;
+        destBufSmall[i] = 0;
     }
 
-    fm.getChunk(key1, destBufSmall);
+    fm.getChunk(key, destBufSmall);
 
     loopError = false;
     for (int i = 0; i < blockSize1*nblocks; i++) {
@@ -623,6 +634,36 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     }
 
     // Check whether buffer returned by getChunk = created Chunk
+    if (loopError)
+        PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
+    else PPASS("srcBuf and destBuf match");
+
+    /******* Check if createChunk() works with source buffer ********/
+    
+    // alter the key for the new set of tests
+    fm.createChunk(key, 0, blockSize1*nblocks, srcBuf, 0);
+
+    for (int i = 0; i < blockSize1*nblocks; i++) {
+        srcBuf[i] = i;
+    }
+    for (int i = 0; i < blockSize1*nblocks; i++) {
+        destBuf[i] = 43;//rand() % 256;
+    }
+ 
+    // alter the key for the new set of tests
+    key.push_back(keyInt[4]);
+    c = fm.createChunk(key, blockSize1*nblocks, blockSize1, srcBuf, epoch);
+
+    // put the chunk's content in the buffer (no one puts ChunkKey in a corner)
+    gottenChunk = fm.getChunk(key, destBuf);
+    if (gottenChunk == NULL)
+        PFAIL("getChunk returned NULL");
+    else PPASS("getChunk did not return NULL");
+
+    for (int i = 0; i < blockSize1*nblocks; i++) {
+        loopError = !(srcBuf[i] == destBuf[i]);
+    }
+
     if (loopError)
         PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
     else PPASS("srcBuf and destBuf match");
