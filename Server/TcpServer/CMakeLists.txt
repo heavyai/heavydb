@@ -8,7 +8,10 @@ SET (tcpserver_source_files
 )
 
 find_package(Boost 1.50.0 REQUIRED system thread)
-include_directories(BOOST_INCLUDE_PATH)
+include_directories(${CMAKE_INCLUDE_PATH})
+message ("Boost include path: " ${BOOST_INCLUDE_DIR})
+message("CMAKE_INCLUDE_PATH 2 = " ${CMAKE_INCLUDE_PATH})
+
 
 ADD_LIBRARY (TcpServer ${tcpserver_source_files})
 

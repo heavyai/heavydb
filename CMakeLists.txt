@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 2.8)
 
 PROJECT			(MapD_exe)
+
+SET(CMAKE_INCLUDE_PATH ${CMAKE_INCLUDE_PATH} "/usr/local/Cellar/boost/1.55/include" "/usr/local/Cellar/libpqxx/4.0.1/include")
+message("CMAKE_INCLUDE_PATH = " ${CMAKE_INCLUDE_PATH})
+
 set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
 ADD_SUBDIRECTORY    (DataMgr/PgConnector)
 ADD_SUBDIRECTORY    (QueryEngine/Parse/SQL)

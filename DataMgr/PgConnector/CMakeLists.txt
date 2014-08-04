@@ -8,6 +8,7 @@ SET (output_source_files
 )
 #find_package (PQXX REQUIRED)
 #find_package (PostgreSQL REQUIRED)
+include_directories(${CMAKE_INCLUDE_PATH})
 ADD_LIBRARY (PgConnector ${output_source_files})
 
 target_link_libraries (PgConnector pqxx)
