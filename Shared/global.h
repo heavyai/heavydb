@@ -1,0 +1,7 @@
+#ifndef DEFAULTS_H
+#define DEFAULTS_H
+
+#define MAPD_DEFAULT_BLOCK_SIZE 32
+#define MAPD_DEFAULT_N_BLOCKS 32
+
+#endif
