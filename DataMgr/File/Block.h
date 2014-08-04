@@ -21,12 +21,11 @@ namespace File_Namespace {
  * A Block struct stores the file id for the file it belongs to, and it
  * stores its beginning and ending locations within that file. Note that
  * the ending location signifies one position beyond the last used byte
- * in the block. To use a block properly, the owning file should specify
- * a block size "blockSize" such that: (end - begin) <= blockSize.
+ * in the block. To use a block properly, (end - begin) >= 1 should hold true.
  */
 struct Block {
 	int fileId;			/// unique identifier of the owning file
-	mapd_size_t begin;	/// offset of first byte from beginning of file
+	mapd_size_t begin;	/// block number within byte
 	mapd_size_t end;	/// last used byte is offset at end-1
 
 	/// Constructor

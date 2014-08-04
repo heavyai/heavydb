@@ -20,7 +20,6 @@ public:
     /// Constructor
     explicit RelExprList(RelExpr *n2) {
         assert(n2);
-        printf("RelExprList(RelExpr*) n2=%p\n", n2);
     	this->n2 = n2;
     }
 

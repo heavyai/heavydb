@@ -2,8 +2,8 @@
  * @file	AbstractPartitionMgr.h
  * @author	Steven Stewart <steve@map-d.com>
  */
-#ifndef _ABSTRACT_PARTITION_MGR_H
-#define _ABSTRACT_PARTITION_MGR_H
+#ifndef DATAMGR_PARTITION_ABSTRACTPARTITIONER_H
+#define DATAMGR_PARTITION_ABSTRACTPARTITIONER_H
 
 /**
  * @class AbstractPartitionMgr
@@ -34,4 +34,4 @@ public:
 	virtual void getPartitionIds(const int entityId, const void *predicate, std::vector<int> &result) = 0;
 };
 
-#endif // _ABSTRACT_PARTITION_MGR_H
+#endif // DATAMGR_PARTITION_ABSTRACTPARTITIONER_H

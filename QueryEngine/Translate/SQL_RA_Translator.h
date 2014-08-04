@@ -23,12 +23,17 @@ public:
 	SQL_RA_Translator();
 
 	virtual void visit(Column *v);
+	virtual void visit(Comparison *v);
 	virtual void visit(DdlStmt *v);
 	virtual void visit(DmlStmt *v);
 	virtual void visit(FromClause *v);
 	virtual void visit(InsertStmt *v);
+	virtual void visit(MathExpr *v);
+	virtual void visit(OptWhere *v);
+	virtual void visit(Predicate *v);
 	virtual void visit(ScalarExpr *v);
 	virtual void visit(ScalarExprList *v);
+	virtual void visit(SearchCondition *v);
 	virtual void visit(SelectStmt *v);
 	virtual void visit(Selection *v);
 	virtual void visit(SqlStmt *v);
@@ -50,6 +55,10 @@ private:
 	RA_Namespace::AttrList *nodeSelection_ = NULL;
 	RA_Namespace::ProjectOp *nodeSelectStmt_ = NULL;
 	RA_Namespace::RelExpr *nodeSqlStmt_ = NULL;
+    
+    std::vector<RA_Namespace::Predicate*> nodePredicateVec_;
+    std::vector<RA_Namespace::Comparison*> nodeComparisonVec_;
+    std::vector<RA_Namespace::MathExpr*> nodeMathExprVec_;
 };
 
 } // Translate_Namespace

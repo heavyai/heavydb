@@ -86,6 +86,7 @@ public:
     inline mapd_size_t numPages() { return pages_.size(); }
     inline mapd_size_t pageSize() { return pageSize_; }
     inline mapd_size_t length() { return length_; }
+    inline void length(mapd_size_t length) { assert(length <= size()); this->length_ = length; }
     inline mapd_size_t size() { return pageSize_ * pages_.size(); }
 
 private:

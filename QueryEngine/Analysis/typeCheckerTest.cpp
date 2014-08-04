@@ -10,11 +10,11 @@
 #include <vector>
 #include "../../Shared/types.h"
 #include "../Parse/SQL/parser.h"
- #include "ExprWalker.h"
+#include "TypeChecker.h"
 #include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace std;
-using Analysis_Namespace::ExprWalker;
+using Analysis_Namespace::TypeChecker;
 
 int main(int argc, char ** argv) {
     // Add a table to the catalog
@@ -22,9 +22,13 @@ int main(int argc, char ** argv) {
     
     std::vector<ColumnRow*> cols;
     cols.push_back(new ColumnRow("a", INT_TYPE, true));
-    cols.push_back(new ColumnRow("b", INT_TYPE, true));
-
-    c.addTableWithColumns("T1", cols);
+    cols.push_back(new ColumnRow("b", FLOAT_TYPE, true));
+    
+    mapd_err_t err = c.addTableWithColumns("T1", cols);
+    if (err != MAPD_SUCCESS) {
+        printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
+        //exit(EXIT_FAILURE);
+    }
 
     // Create a parser for SQL and... do stuff
     SQLParser parser;
@@ -46,9 +50,14 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
-        ExprWalker ew(c);
-        if (parseRoot != 0)
-            parseRoot->accept(ew); 
+        TypeChecker tc(c);
+        if (parseRoot != 0) {
+            parseRoot->accept(tc); 
+            std::pair<bool, std::string> insertErr = tc.isError();
+            if (insertErr.first == true) {
+                cout << "Error: " << insertErr.second << std::endl;
+            }
+        }
     }
     while(true);
     cout << "Good-bye." << endl;

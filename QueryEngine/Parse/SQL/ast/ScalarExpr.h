@@ -2,8 +2,8 @@
  * @file	ScalarExpr.h
  * @author	Steven Stewart <steve@map-d.com>
  */
-#ifndef SQL_SCALAREXPR_NODE_H
-#define SQL_SCALAREXPR_NODE_H
+#ifndef QUERYENGINE_PARSER_SQL_AST_SCALAREXPR_H
+#define QUERYENGINE_PARSER_SQL_AST_SCALAREXPR_H
 
 #include <cassert>
 #include "Expression.h"
@@ -61,4 +61,4 @@ public:
 
 } // SQL_Namespace
 
-#endif // SQL_SCALAREXPR_NODE_H
+#endif // QUERYENGINE_PARSER_SQL_AST_SCALAREXPR_H
