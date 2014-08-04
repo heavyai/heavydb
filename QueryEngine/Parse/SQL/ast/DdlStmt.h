@@ -25,7 +25,7 @@ public:
 		this->n2 = n2;
 	}
 
-	explicit DdlStmt(AlterStmt *n1) {
+	explicit DdlStmt(AlterStmt *n3) {
 		assert(n3);
 		this->n3 = n3;
 	}
