@@ -54,7 +54,7 @@ void test_createBuffer() {
 	BufferMgr *bm = new BufferMgr(32 * 64, fm);
 
 	Buffer *b = bm->createBuffer(32, 64);
-	mapd_size_t freeMemSize = bm->freeMemSize();
+	mapd_size_t freeMemSize = bm->unused();
 
 	if (freeMemSize != 0) 
 		PFAIL("create Buffer did not use up all memory");

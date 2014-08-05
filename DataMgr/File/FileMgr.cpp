@@ -471,7 +471,7 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
         mapd_err_t err;
         mapd_size_t bytesToWrite = std::min(sizeCount, blockSize);
         mapd_size_t bytesWritten = write(fInfo->f, begin*fInfo->blockSize, bytesToWrite, (mapd_addr_t)src+blockCount*blockSize, &err);
-        sizeCount =- bytesToWrite;
+        sizeCount -= bytesToWrite;
         nblocks--;
         blockCount++;
     }  

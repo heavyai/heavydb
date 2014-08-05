@@ -1,7 +1,6 @@
 /**
  * @file	BufferMgr.cpp
  * @author	Steven Stewart <steve@map-d.com>
- *
  */
 #include <iostream>
 #include <cassert>
@@ -19,14 +18,12 @@ namespace Buffer_Namespace {
 
 BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm) {
     assert(hostMemSize > 0);
+    if (fm == NULL)
+        fprintf(stderr, "[%s:%d] Warning: null reference to file manager.\n", __func__, __LINE__);
     fm_ = fm;
     hostMemSize_ = hostMemSize;
     hostMem_ = (mapd_addr_t) new mapd_byte_t[hostMemSize];
     freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(hostMemSize, hostMem_));
-    printf("[%s:%d] freeMem_.size()=%d\n", __FILE__, __LINE__, freeMem_.size());
-#ifdef DEBUG_VERBOSE
-   // printMemAlloc();
-#endif
 }
 
 BufferMgr::~BufferMgr() {
@@ -35,11 +32,12 @@ BufferMgr::~BufferMgr() {
         delete buffers_.back();
         buffers_.pop_back();
     }
-
+    
     // Delete host memory
     delete[] hostMem_;
 }
 
+/// Finds contiguous free memory in order to create a new Buffer with the requested pages
 Buffer* BufferMgr::createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
     // Compute total bytes needed
     mapd_size_t n = numPages * pageSize;
@@ -48,8 +46,7 @@ Buffer* BufferMgr::createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
     // Find n bytes of free memory in the buffer pool
     auto it = freeMem_.lower_bound(n);
     if (it == freeMem_.end()) {
-        //fprintf(stderr, "[%s:%d] Error: unable to find %lu bytes available in the buffer pool. freeMem_.size()=%d\n", __func__, __LINE__, n, freeMem_.size());
-       // printMemAlloc();
+        fprintf(stderr, "[%s:%d] Error: unable to find %lu bytes available in the buffer pool.\n", __func__, __LINE__, n);
         // @todo eviction strategies
         return NULL;
     }
@@ -62,31 +59,37 @@ Buffer* BufferMgr::createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
     freeMem_.erase(it);
     if (freeMemSize - n > 0)
         freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(freeMemSize - n, bufAddr + n));
-
-    // what to do if you end up with, say, tons of blocks with freeMemSize of 1?
+    // @todo Defragmentation
 
     // Create Buffer object and add to the BufferMgr
     Buffer *b = new Buffer(bufAddr, numPages, pageSize);
     buffers_.push_back(b);
-
     return b;
 }
 
 void BufferMgr::deleteBuffer(Buffer *b) {
-    // free pages
-    // @todo free pages of buffer
+    // save buffer information
+    mapd_size_t bufferSize = b->size();
+    mapd_addr_t bufferAddr = b->host_ptr();
 
     // free buffer and remove from BufferMgr's list of buffers
     delete b;
     buffers_.remove(b); // @todo thread safe needed?
+
+    // Add free memory back to buffer pool
+    freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(bufferSize, bufferAddr));
+    // @todo merge with other contiguous free memory entries
 }
 
 Buffer* BufferMgr::createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_size_t pageSize) {
     Buffer *b = NULL;
 
     // First, check if chunk already exists
-    if ((b = getChunkBuffer(key)) != NULL)
+    if ((b = getChunkBuffer(key)) != NULL) {
+        if (b->numPages() != numPages || b->pageSize() != pageSize)
+            fprintf(stderr, "[%s:%d] Warning: Chunk already exists; ignoring requested number of pages and page size.\n", __func__, __LINE__);
         return b;
+    }
 
     // Create a new buffer for the new chunk
     b = createBuffer(numPages, pageSize);
@@ -119,7 +122,6 @@ Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
         //@todo: proper error handling needed
         return NULL;
 
-    printf("size: %d, numPages %d\n", size, numPages);
     assert((size % numPages) == 0);
 
     // Create buffer and load chunk
@@ -130,11 +132,9 @@ Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
     }
     else {
         mapd_size_t actualSize = 0;
-        
         if ((fm_->getChunkActualSize(key, &actualSize)) != MAPD_SUCCESS)
             return NULL;
         b->length(actualSize);
-        
     }
     return b;
 }
