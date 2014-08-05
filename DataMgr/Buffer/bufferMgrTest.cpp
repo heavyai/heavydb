@@ -12,48 +12,81 @@ using namespace Buffer_Namespace;
 using namespace File_Namespace;
 
 // unit test function prototypes
-void test_BufferMgr();
-void test_createBuffer();
+void test_BufferMgr(mapd_size_t hostMemSize);
+void test_createBuffer(mapd_size_t numPages, mapd_size_t pageSize);
 void test_createChunk(mapd_size_t numPages, mapd_size_t pageSize);
 void test_getChunkBuffer(mapd_size_t numPages, mapd_size_t pageSize);
-void test_flush();
+void test_flush(mapd_size_t numPages, mapd_size_t pageSize);
 
 int main() {
-	test_BufferMgr();
-	test_createBuffer();
-	test_createChunk(32, 64);
+	test_BufferMgr(1);
+	test_BufferMgr(10);
+	test_BufferMgr(32*4096);
+	
+	PRINT_SLINE(70);
+
+	test_createBuffer(1, 1);
+	test_createBuffer(32, 32);
+	test_createBuffer(1024, 1024);
+	test_createBuffer(1, 65536);
+	test_createBuffer(65536, 1);
+
+	PRINT_SLINE(70);
+
 	test_createChunk(1, 1);
-	test_createChunk(300, 64);
-	test_createChunk(3, 64);
+	test_createChunk(32, 64);
+	test_createChunk(1024, 1024);	
+	test_createChunk(1, 65536);
+	test_createChunk(256, 1);
+
+	PRINT_SLINE(70);
+
+	test_getChunkBuffer(1, 1);
 	test_getChunkBuffer(32, 64);
-	test_flush();
+	test_getChunkBuffer(1024, 1024);	
+	test_getChunkBuffer(1, 65536);
+	test_getChunkBuffer(16384, 1);
+
+	PRINT_SLINE(70);
+
+	test_flush(1, 1);
+	test_flush(32, 64);
+	test_flush(1024, 1024);	
+	test_flush(1, 65536);
+	test_flush(9000, 1);
+	
+	PRINT_DLINE(70);
+	
+	printTestSummary();
+
+	PRINT_DLINE(70);
 
 	return EXIT_SUCCESS;
 }
 
-void test_BufferMgr() {
+void test_BufferMgr(mapd_size_t hostMemSize) {
 	mapd_err_t err;
 
 	// create a Buffer Mgr without a fileMgr object
-	BufferMgr *bm = new BufferMgr(32 * 4096, NULL);
+	BufferMgr *bm = new BufferMgr(hostMemSize, NULL);
 	if (bm == NULL)	
 		PFAIL("BufferMgr didn't construct");
 	else
 		PPASS("BufferMgr constructed woo");
 
 	FileMgr *fm = new FileMgr(".");
-	bm = new BufferMgr(32 * 4096, fm);
+	bm = new BufferMgr(hostMemSize, fm);
 	if (bm == NULL)	
 		PFAIL("BufferMgr didn't construct w/fileMgr param");
 	else
 		PPASS("BufferMgr constructed with fileMgr param");
 }
 
-void test_createBuffer() {
+void test_createBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
 	FileMgr *fm = new FileMgr(".");
-	BufferMgr *bm = new BufferMgr(32 * 64, fm);
+	BufferMgr *bm = new BufferMgr(numPages * pageSize, fm);
 
-	Buffer *b = bm->createBuffer(32, 64);
+	Buffer *b = bm->createBuffer(numPages, pageSize);
 	mapd_size_t freeMemSize = bm->unused();
 
 	if (freeMemSize != 0) 
@@ -65,6 +98,7 @@ void test_createBuffer() {
 }
 
 void test_createChunk(mapd_size_t numPages, mapd_size_t pageSize) {
+
     FileMgr fm(".");
 	BufferMgr *bm = new BufferMgr(numPages * pageSize, &fm);
 
@@ -72,9 +106,10 @@ void test_createChunk(mapd_size_t numPages, mapd_size_t pageSize) {
 	ChunkKey key;
     key.push_back(keyInt);
 
-	mapd_size_t srcBuf[pageSize*numPages];
+	mapd_byte_t *srcBuf = new mapd_byte_t[pageSize*numPages];
 
 	for (int i = 0; i < pageSize*numPages; i++) {
+		//printf("[%d] no pun int", i);
         srcBuf[i] = 42;
     }
 
@@ -105,6 +140,8 @@ void test_createChunk(mapd_size_t numPages, mapd_size_t pageSize) {
 
 	//bm->printMemAlloc();
 	bm->printChunkIndex();
+
+	delete [] srcBuf;
 }
 
 void test_getChunkBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
@@ -115,8 +152,8 @@ void test_getChunkBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
 	ChunkKey key;
     key.push_back(keyInt);
 	
-    mapd_byte_t srcBuf[numPages*pageSize];
-	mapd_byte_t destBuf[numPages*pageSize];
+    mapd_byte_t *srcBuf = new mapd_byte_t[numPages*pageSize];
+	mapd_byte_t *destBuf = new mapd_byte_t[numPages*pageSize];
 
 	for (int i = 0; i < numPages*pageSize; i++) {
         srcBuf[i] = 42;
@@ -162,21 +199,21 @@ void test_getChunkBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
 	else
 		PPASS("Successfully exited upon improper input");
 
+	delete [] srcBuf;
+	delete [] destBuf;
 }
 
 // grab your plunger cause it's time to flush
-void test_flush() {
-	mapd_size_t numPages = 64;
-	mapd_size_t pageSize = 32;
-
-    FileMgr fm(".");
-	BufferMgr *bm = new BufferMgr(numPages * pageSize, &fm);
-
-	int keyInt = 4;
-	ChunkKey key;
-    key.push_back(keyInt);
+void test_flush(mapd_size_t numPages, mapd_size_t pageSize) {
 	
-    mapd_byte_t srcBuf[numPages*pageSize];
+    FileMgr fm(".");
+	BufferMgr *bm = new BufferMgr(numPages * pageSize * 3, &fm);
+
+    int keyInt[] = {1, 2, 3, 4, 5};
+	ChunkKey key;
+    key.push_back(keyInt[0]);
+	
+    mapd_byte_t *srcBuf = new mapd_byte_t[numPages*pageSize];
 	
 	for (int i = 0; i < numPages*pageSize; i++) {
         srcBuf[i] = 42;
@@ -213,4 +250,43 @@ void test_flush() {
 		PFAIL("Tried to flush pinned buffer's contents to Chunk.");
 	else
 		PPASS("Unable to flush pinned buffer's contents to Chunk");
+
+	// make two more chunks and flush them
+	ChunkKey key2;
+	key2.push_back(keyInt[1]);
+	printf("try1\n");
+	// create and unpin buffer for flushing
+	Chunk *c1 = fm.createChunk(key2, numPages*pageSize, pageSize, srcBuf, 1);
+	b = bm->getChunkBuffer(key2);
+	b->unpin();
+	printf("try2\n");
+	ChunkKey key3;
+	key3.push_back(keyInt[2]);
+	printf("try3\n");
+	Chunk *c2 = fm.createChunk(key3, numPages*pageSize, pageSize, srcBuf, 1);
+	b = bm->getChunkBuffer(key3);
+	b->unpin();
+	printf("try4\n");
+	bm->flushAllChunks();
+
+	// check the epochs to see if the flush worked
+	loopError = false;
+	(*c1)[0]->current(&epoch);
+	for (int i = 0; i < c->size(); i++) {
+		if (epoch != 0)
+			loopError = true;
+	}
+	
+	(*c2)[0]->current(&epoch);
+	for (int i = 0; i < c->size(); i++) {
+		if (epoch != 0)
+			loopError = true;
+	}
+
+	if (loopError) 
+		PFAIL("Epoch not set by flushAllChunk() correctly.");
+	else
+		PPASS("Epoch set by flushAllChunk() correctly");
+
+	delete [] srcBuf;
 }

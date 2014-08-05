@@ -23,11 +23,12 @@ namespace File_Namespace {
         FILE *f;
         std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
         f = fopen(s.c_str(), "w+b");
+        assert(f); //@todo error checking on f
         fseek(f, (blockSize * nblocks)-1, SEEK_SET);
         fputc(EOF, f);
         fseek(f, 0, SEEK_SET); // rewind
         assert(fileSize(f) == (blockSize * nblocks));
-        fprintf(stdout, "[FileMgr] created file %d (blk_sz=%lu, nblocks=%lu, file_sz=%lu)\n", fileId, blockSize, nblocks, fileSize(f));
+      //  fprintf(stdout, "[FileMgr] created file %d (blk_sz=%lu, nblocks=%lu, file_sz=%lu)\n", fileId, blockSize, nblocks, fileSize(f));
         
         if (err) {
             if ((fileSize(f) != blockSize * nblocks) || !f)
