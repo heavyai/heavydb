@@ -131,6 +131,8 @@ Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
         return NULL;
     }
     else {
+        // Insert an entry in chunkIndex_ for the new chunk. Just do it.
+        chunkIndex_[key] = b;
         mapd_size_t actualSize = 0;
         if ((fm_->getChunkActualSize(key, &actualSize)) != MAPD_SUCCESS)
             return NULL;
