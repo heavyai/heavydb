@@ -111,7 +111,7 @@ public:
     Buffer* getChunkBuffer(const ChunkKey &key);
 
     /**
-     * @brief If cached, returns pointer to cached Chunk and optionally sets length.
+     * @brief If cached, returns pointer to cached Chunk and optionally returns the length.
      *
      * This method will return the starting memory address of the buffer holding the
      * Chunk's contents in the host buffer pool, and it will optionally return the
