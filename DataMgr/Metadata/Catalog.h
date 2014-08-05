@@ -10,6 +10,9 @@
  *
  */
 
+//@todo Be able to look up tables by schema and possibily database name (i.e.
+//db_name.schema_name.table_name
+//
 #ifndef CATALOG_H
 #define CATALOG_H
 
@@ -17,6 +20,7 @@
 #include <tuple>
 #include <map>
 #include <vector>
+#include <utility>
 
 #include "../../Shared/errors.h"
 #include "../../Shared/types.h"
@@ -262,7 +266,9 @@ class Catalog {
          */
 
         mapd_err_t getMetadataForColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
+        mapd_err_t getMetadataForColumns(const std::vector <std::string>  &tableNames, const std::vector <std::pair <std::string, std::string> > &columnNames, std::vector <ColumnRow> &columnRows);
 
+        mapd_err_t getAllColumnMetadataForTable(const std::string &tableName, std::vector <ColumnRow> &columnRows);
 
     private:
 

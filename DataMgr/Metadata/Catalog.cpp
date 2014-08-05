@@ -10,6 +10,7 @@ using std::vector;
 using std::set;
 using std::ifstream;
 using std::ofstream;
+using std::pair;
 
 Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false) {
     readCatalogFromFile();
@@ -118,7 +119,7 @@ mapd_err_t Catalog::addTable(const string &tableName) {
 
 
 mapd_err_t Catalog::addTableWithColumns(const string &tableName, vector <ColumnRow *> & columns) { 
-     //note that vector of ColumnRows should not be populated with tableId and columnIds - the database fills these in.
+     //note that vector of ColumnRows should not be populated with tableId and columnIds - the catalog fills these in.
      //
     // first need to check if insert would result in any errors
     TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
@@ -225,3 +226,67 @@ mapd_err_t Catalog::getMetadataForColumns (const string &tableName, const vector
     }
     return MAPD_SUCCESS;
 }
+
+mapd_err_t Catalog::getAllColumnMetadataForTable(const string &tableName, vector <ColumnRow> &columnRows) {
+    auto tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
+        return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+    int tableId = tableRowIt -> second -> tableId;
+    for (auto colRowIt = columnRowMap_.begin(); colRowIt != columnRowMap_.end(); ++colRowIt) {
+        if (colRowIt -> second -> tableId == tableId) {
+            columnRows.push_back(*(colRowIt -> second));
+        }
+    }
+    return MAPD_SUCCESS;
+}
+
+mapd_err_t Catalog::getMetadataForColumns(const vector <string>  &tableNames, const vector <pair <string, string> > &columnNames, vector <ColumnRow> &columnRows) {
+    //map <string, int> tableIdMap;
+    vector <int> tableIds;
+    for (auto tableNameIt = tableNames.begin(); tableNameIt != tableNames.end(); ++tableNameIt) {
+        auto tableRowIt = tableRowMap_.find(*tableNameIt);
+        if (tableRowIt == tableRowMap_.end())
+            return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+        tableIds.push_back(tableRowIt -> second -> tableId);
+    }
+    int numTables = tableIds.size();
+    // If here then all tables exist
+    for (auto colNameIt = columnNames.begin(); colNameIt != columnNames.end(); ++colNameIt) {
+        string tableName (colNameIt -> first);
+        ColumnRowMap::iterator colRowIt = columnRowMap_.end(); // set this to end at first to signify column not found yet
+        if (tableName.size() == 0) { // no explicit table reference
+            for (auto tableIdIt = tableIds.begin(); tableIdIt != tableIds.end(); ++tableIdIt) {
+                ColumnKey columnKey (*tableIdIt, colNameIt -> second);
+                auto tempColRowIt = columnRowMap_.find(columnKey);
+                if (tempColRowIt !=  columnRowMap_.end()) { 
+                    if (colRowIt != columnRowMap_.end()) // if we've already found the column
+                        return MAPD_ERR_COLUMN_IS_AMBIGUOUS;
+                    colRowIt = tempColRowIt;
+                }
+            }
+        }
+        else { // we have table_name.column_name
+            int tableNameFound = false;
+            int tableIndex;
+            for (tableIndex = 0; tableIndex != tableNames.size(); ++tableIndex) {
+                if (tableName == tableNames[tableIndex]) {
+                    tableNameFound = true;
+                    break;
+                }
+            }
+            if (!tableNameFound) 
+                return MAPD_ERR_COL_TABLE_REF_NOT_IN_TABLE_LIST;
+            // Note that tableIndex should be the index of the table that was
+            // found
+            int tableId = tableIds[tableIndex];
+            ColumnKey columnKey(tableId, colNameIt -> second);
+            colRowIt = columnRowMap_.find(columnKey); 
+        }
+        if (colRowIt == columnRowMap_.end())
+            return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
+        columnRows.push_back(*(colRowIt -> second));
+    }
+    return MAPD_SUCCESS;
+}
+
+
