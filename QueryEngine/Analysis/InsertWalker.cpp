@@ -64,7 +64,7 @@ void InsertWalker::visit(InsertStmt *v) {
 		if (colTypes_.size() == colNames_.size()) {
 			for (int i = 0; i < colTypes_.size(); ++i) {
 				//printf("colMetadata[i].columnName=\"%s\" colNames_[i]=\"%s\" colMetadata[i].columnType=%d\n", colMetadata[i].columnName.c_str(), colNames_[i].c_str(), colMetadata[i].columnType);
-				if (colMetadata[i].columnType != colTypes_[i]) {
+				if (colMetadata[i].columnType == INT_TYPE && colTypes_[i] == FLOAT_TYPE) {
 					std::stringstream ss;
 					ss << "Type mismatch at column \"" << colMetadata[i].columnName << "\"";
 					errFlag_ = true;
@@ -75,7 +75,7 @@ void InsertWalker::visit(InsertStmt *v) {
 		}
 		else {
 			errFlag_ = true;
-			errMsg_ = "No values specified for indicated columns.";				
+			errMsg_ = "Column count does not match value count.";				
 		}
 	}
 }
