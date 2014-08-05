@@ -10,6 +10,7 @@ using std::vector;
 using std::set;
 using std::ifstream;
 using std::ofstream;
+using std::pair;
 
 Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false) {
     readCatalogFromFile();
@@ -239,11 +240,11 @@ mapd_err_t Catalog::getAllColumnMetadataForTable(const string &tableName, vector
     return MAPD_SUCCESS;
 }
 
-mapd_err_t Catalog::getMetadataForColumns(const vector <pair <string> > &tableNames, const vector <pair <string> > &columnNames, vector <ColumnRow> &columnRows) {
+mapd_err_t Catalog::getMetadataForColumns(const vector <string>  &tableNames, const vector <pair <string, string> > &columnNames, vector <ColumnRow> &columnRows) {
     //map <string, int> tableIdMap;
-    vector <int> tableIdMap;
-    for (auto tableIt = tableNames.begin(); tableIt != tableNames.end(); ++tableIt) {
-        auto tableRowIt = tableRowMap_.find(tableName);
+    vector <int> tableIds;
+    for (auto tableNameIt = tableNames.begin(); tableNameIt != tableNames.end(); ++tableNameIt) {
+        auto tableRowIt = tableRowMap_.find(*tableNameIt);
         if (tableRowIt == tableRowMap_.end())
             return MAPD_ERR_TABLE_DOES_NOT_EXIST;
         tableIds.push_back(tableRowIt -> second -> tableId);
@@ -267,8 +268,8 @@ mapd_err_t Catalog::getMetadataForColumns(const vector <pair <string> > &tableNa
         else { // we have table_name.column_name
             int tableNameFound = false;
             int tableIndex;
-            for (tableIndex = 0; t != tableNames.size(); ++t) {
-                if (tableName == tableNames[t]) {
+            for (tableIndex = 0; tableIndex != tableNames.size(); ++tableIndex) {
+                if (tableName == tableNames[tableIndex]) {
                     tableNameFound = true;
                     break;
                 }
@@ -285,6 +286,7 @@ mapd_err_t Catalog::getMetadataForColumns(const vector <pair <string> > &tableNa
             return MAPD_ERR_COLUMN_DOES_NOT_EXIST;
         columnRows.push_back(*(colRowIt -> second));
     }
+    return MAPD_SUCCESS;
 }
 
 

@@ -266,11 +266,9 @@ class Catalog {
          */
 
         mapd_err_t getMetadataForColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
-        //@todo implement this below
-        mapd_err_t getMetadataForColumns (const std::vector<std::string &tableNames>, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
-        mapd_err_t Catalog::getAllColumnMetadataForTable(const std::string &tableName, std::vector <ColumnRow> &columnRows);
+        mapd_err_t getMetadataForColumns(const std::vector <std::string>  &tableNames, const std::vector <std::pair <std::string, std::string> > &columnNames, std::vector <ColumnRow> &columnRows);
 
-        mapd_err_t Catalog::getMetadataForColumns(const std::vector <std::pair <std::string> > &tableNames, const std::vector <std::pair <std::string> > &columnNames, std::vector <ColumnRow> &columnRows);
+        mapd_err_t getAllColumnMetadataForTable(const std::string &tableName, std::vector <ColumnRow> &columnRows);
 
     private:
 
