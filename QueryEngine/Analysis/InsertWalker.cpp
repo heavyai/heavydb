@@ -29,8 +29,8 @@ void InsertWalker::visit(DmlStmt *v) {
 
 void InsertWalker::visit(InsertStmt *v) {
 	assert(v->n1 && v->n2 && v->n3);
-	if (v->n1->name1 != "") {
-		//printf("table = %s\n", v->n1->name1.c_str());
+	if (v->n1->name.second != "") {
+		//printf("table = %s\n", v->n1->name.second.c_str());
 		
 		// visiting v->n2 will populate the colNames_ vector
 		v->n2->accept(*this);
@@ -40,13 +40,13 @@ void InsertWalker::visit(InsertStmt *v) {
 		
 		// Request metadata for the columns
 		std::vector<ColumnRow> colMetadata;
-		mapd_err_t err = c_.getMetadataForColumns(v->n1->name1, colNames_, colMetadata);
+		mapd_err_t err = c_.getMetadataForColumns(v->n1->name.second, colNames_, colMetadata);
 
 		// Check for error (table or column does not exists)
 		if (err != MAPD_SUCCESS) {
 			errFlag_ = true;
 			if (err == MAPD_ERR_TABLE_DOES_NOT_EXIST)
-				errMsg_ = "Table \"" + v->n1->name1 + "\" does not exist";
+				errMsg_ = "Table \"" + v->n1->name.second + "\" does not exist";
 			else if (err == MAPD_ERR_COLUMN_DOES_NOT_EXIST)
 				errMsg_ = "Column \"" + colNames_[colMetadata.size()] + "\" does not exist";
 			else if (err != MAPD_SUCCESS)

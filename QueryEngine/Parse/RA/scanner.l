@@ -2,6 +2,7 @@
 %option noyywrap case-insensitive
 
 %{
+#undef yyFlexLexer
 #include <iostream>
 #include <vector>
 #include "parser.h"

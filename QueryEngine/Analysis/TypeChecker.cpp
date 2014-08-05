@@ -142,7 +142,7 @@ void TypeChecker::visit(TableList *v) {
 
 void TypeChecker::visit(Table *v) {
 	printf("<Table>\n");
-	tblNames_.push_back(v->name1);
+	tblNames_.push_back(v->name.second);
 }
 
 } // Analysis_Namespace

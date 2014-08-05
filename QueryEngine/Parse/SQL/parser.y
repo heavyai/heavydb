@@ -241,13 +241,13 @@ column:
 		strData.pop_back();
 		$$ = new Column(s1, s2);
 	}
-|   NAME AS NAME {
+	/* 	|   NAME AS NAME {
 		std::string s1 = strData.back();
 		strData.pop_back();
 		std::string s2 = strData.back();
 		strData.pop_back();
 		$$ = new Column(s1, s2);
-	}
+	} */
 ;
 
 orderby_column_list:

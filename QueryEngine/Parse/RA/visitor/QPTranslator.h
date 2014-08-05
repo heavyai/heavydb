@@ -66,26 +66,35 @@ public:
     }
 
     void visit(class AntijoinOp *v) {
-        if (!v->n1->n4)
+        int childCount = 0;
+        if (!v->n1->n4) {
             v->n1->accept(*this);
-        if (!v->n2->n4)
+            childCount++;
+        }
+        if (!v->n2->n4) {
             v->n2->accept(*this);
+            childCount++;
+        }
 
         cout << "Q" << qCount++ << " = antijoin(";
         if (v->n1->n4)
             v->n1->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-2);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         if (v->n2->n4)
             v->n2->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-3);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         v->n3->accept(*this);
-
+        
         cout << ");" << endl;
     }
 
@@ -113,23 +122,32 @@ public:
     }
 
     void visit(class DiffOp *v) {
-        if (!v->n1->n4)
+        int childCount = 0;
+        if (!v->n1->n4) {
             v->n1->accept(*this);
-        if (!v->n2->n4)
+            childCount++;
+        }
+        if (!v->n2->n4) {
             v->n2->accept(*this);
+            childCount++;
+        }
 
         cout << "Q" << qCount++ << " = diff(";
         if (v->n1->n4)
             v->n1->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-2);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         if (v->n2->n4)
             v->n2->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-3);
-
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
+        
         cout << ");" << endl;
     }
 
@@ -178,26 +196,35 @@ public:
     }
 
     void visit(class JoinOp *v) {
-        if (!v->n1->n4)
+        int childCount = 0;
+        if (!v->n1->n4) {
             v->n1->accept(*this);
-        if (!v->n2->n4)
+            childCount++;
+        }
+        if (!v->n2->n4) {
             v->n2->accept(*this);
+            childCount++;
+        }
 
         cout << "Q" << qCount++ << " = join(";
         if (v->n1->n4)
             v->n1->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-2);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         if (v->n2->n4)
             v->n2->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-3);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         v->n3->accept(*this);
-
+        
         cout << ");" << endl;
     }
 
@@ -222,26 +249,35 @@ public:
     }
 
     void visit(class OuterjoinOp *v) {
-        if (!v->n1->n4)
+        int childCount = 0;
+        if (!v->n1->n4) {
             v->n1->accept(*this);
-        if (!v->n2->n4)
+            childCount++;
+        }
+        if (!v->n2->n4) {
             v->n2->accept(*this);
+            childCount++;
+        }
 
         cout << "Q" << qCount++ << " = outerjoin(";
         if (v->n1->n4)
             v->n1->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-2);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         if (v->n2->n4)
             v->n2->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-3);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         v->n3->accept(*this);
-
+        
         cout << ");" << endl;
     }
 
@@ -258,22 +294,31 @@ public:
     }
 
     void visit(class ProductOp *v) {
-        if (!v->n1->n4)
+        int childCount = 0;
+        if (!v->n1->n4) {
             v->n1->accept(*this);
-        if (!v->n2->n4)
+            childCount++;
+        }
+        if (!v->n2->n4) {
             v->n2->accept(*this);
+            childCount++;
+        }
 
         cout << "Q" << qCount++ << " = product(";
         if (v->n1->n4)
             v->n1->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-2);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         if (v->n2->n4)
             v->n2->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-3);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         
         cout << ");" << endl;
     }
@@ -353,26 +398,35 @@ public:
     }
 
     void visit(class SemijoinOp *v) {
-        if (!v->n1->n4)
+        int childCount = 0;
+        if (!v->n1->n4) {
             v->n1->accept(*this);
-        if (!v->n2->n4)
+            childCount++;
+        }
+        if (!v->n2->n4) {
             v->n2->accept(*this);
+            childCount++;
+        }
 
         cout << "Q" << qCount++ << " = semijoin(";
         if (v->n1->n4)
             v->n1->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-2);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         if (v->n2->n4)
             v->n2->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-3);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         v->n3->accept(*this);
-
+        
         cout << ");" << endl;
     }
 
@@ -392,22 +446,31 @@ public:
     }
 
     void visit(class UnionOp *v) {
-        if (!v->n1->n4)
+        int childCount = 0;
+        if (!v->n1->n4) {
             v->n1->accept(*this);
-        if (!v->n2->n4)
+            childCount++;
+        }
+        if (!v->n2->n4) {
             v->n2->accept(*this);
+            childCount++;
+        }
 
         cout << "Q" << qCount++ << " = union(";
         if (v->n1->n4)
             v->n1->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-2);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
         cout << ", ";
 
         if (v->n2->n4)
             v->n2->n4->accept(*this);
-        else
-            cout << "Q" << (qCount-3);
+        else {
+            cout << "Q" << (qCount-childCount-1);
+            childCount--;
+        }
 
         cout << ");" << endl;
     }
