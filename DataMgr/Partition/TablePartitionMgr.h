@@ -6,10 +6,12 @@
 #ifndef _TABLE_PARTITION_MGR_H
 #define _TABLE_PARTITION_MGR_H
 
+#include "AbstractTablePartitioner.h"
+#include "../../Shared/types.h"
+#include "../PgConnector/PgConnector.h"
+
 #include <map>
 #include <vector>
-#include "../../Shared/types.h"
-#include "AbstractTablePartitioner.h"
 
 // forward declaration(s)
 class BufferMgr;
@@ -33,6 +35,7 @@ struct InsertData {
 	vector <void *> data;							/// points to the start of the data for the row(s) being inserted
 };
 
+
 /**
  * @class TablePartitionMgr
  * @brief A partition manager for tables in the relational data model.
@@ -44,7 +47,7 @@ class TablePartitionMgr {
 
 public:
 	/// Constructor
-	TablePartitionMgr(BufferMgr &bm) : bm_(bm) {}
+	TablePartitionMgr(Catalog &catalog, BufferMgr &bm);
 
 	/// Destructor
 	~TablePartitionMgr();
@@ -63,8 +66,11 @@ public:
 	void getPartitionIds(const int tableId,  std::vector<int> &partitionIds, const void *predicate = 0);
 
 private:
+    int maxPartitionerId_;
 	std::map<int, vector <AbstractTablePartitioner &> > tableToPartitionerMap_; 	/// maps table ids to TablePartitioner objects
-	BufferMgr & bm_;									/// pointer to the buffer manager object
+    Catalog &catalog_;
+	BufferMgr & bufferMgr_;									/// pointer to the buffer manager object
+    PgConnector pgConnector_;
 };
 
 #endif // _TABLE_PARTITION_MGR_H
