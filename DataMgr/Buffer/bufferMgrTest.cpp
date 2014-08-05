@@ -87,7 +87,7 @@ void test_createChunk(mapd_size_t numPages, mapd_size_t pageSize) {
 	else
 		PPASS("Buffer returned is not NULL");
 
-	if (bm->chunkIsCached(key))
+	if (!bm->chunkIsCached(key))
 		PFAIL("chunk ain't cached");
 	else
 		PPASS("cache rules everything around me");
@@ -135,7 +135,7 @@ void test_getChunkBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
 	else
 		PPASS("Buffer returned is not NULL");
 
-	if (bm->chunkIsCached(key))
+	if (!bm->chunkIsCached(key))
 		PFAIL("chunk ain't cached");
 	else
 		PPASS("cache rules everything around me");
@@ -176,30 +176,27 @@ void test_flush() {
 	ChunkKey key;
     key.push_back(keyInt);
 	
-	printf("here yet?\n");
     mapd_byte_t srcBuf[numPages*pageSize];
 	
 	for (int i = 0; i < numPages*pageSize; i++) {
         srcBuf[i] = 42;
     }
-	printf("here yet?\n");
     // create a Chunk and get it into a Buffer object
 	Chunk* c = fm.createChunk(key, numPages*pageSize, pageSize, srcBuf, 1);
 	Buffer *b = bm->getChunkBuffer(key);
 
-	printf("here yet?\n");
+	// unpin buffer
+	b->unpin();
 	if (bm->flushChunk(key))
 		PPASS("Successfully flushed buffer's contents to Chunk.");
 	else
 		PFAIL("Unsuccessfully flushed buffer's contents to Chunk");
 
-	printf("here yet?\n");
 	// upon flushing, the epoch should be set to 0 @todo fix epoch handling
 	bool loopError = false;
-	int epoch;
-	printf("here yet?\n");
+	int epoch = -1 ;
 	(*c)[0]->current(&epoch);
-	printf("current: %d\n", epoch);
+	//printf("current: %d\n", epoch);
 	for (int i = 0; i < c->size(); i++) {
 		if (epoch != 0)
 			loopError = true;
@@ -209,4 +206,11 @@ void test_flush() {
 		PFAIL("Epoch not set by flushChunk() correctly.");
 	else
 		PPASS("Epoch set by flushChunk() correctly");
+
+	// try flushing a pinned buffer
+	b->pin();
+	if (bm->flushChunk(key))
+		PFAIL("Tried to flush pinned buffer's contents to Chunk.");
+	else
+		PPASS("Unable to flush pinned buffer's contents to Chunk");
 }

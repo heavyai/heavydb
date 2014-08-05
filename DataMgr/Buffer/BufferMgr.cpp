@@ -162,10 +162,12 @@ bool BufferMgr::chunkIsCached(const ChunkKey &key) {
 /// Presently, only flushes a chunk if its buffer is unpinned, and flushes it right away (no queue)
 bool BufferMgr::flushChunk(const ChunkKey &key) {
     Buffer *b = findChunkBuffer(key);
-    if (b == NULL)
+    if (b == NULL) {
         return false;
-    else if (b && b->pinned())
+    }
+    else if (b && b->pinned()) {
         return false;
+    }   
 
     // @todo temporarly using 0 for epoch: update this
     int epoch = 0;

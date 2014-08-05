@@ -33,18 +33,22 @@ size_t Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
 	assert(n > 0); // cannot write 0 bytes
 
 	// check for buffer overflow
-	if ((length_ + n) > size())
+	if ((length_ + n) > size()) {
+		//printf("overflow\n");
 		return 0;
+	}
 
 	// write source contents to buffer
 	assert(host_ptr_ && src);
 	memcpy(host_ptr_ + offset, src, n);
 	length_ = std::max(length_, offset + n);
+	//printf("new length: %d\n", length_);
 
 	// update dirty flags for buffer and each affected page
 	dirty_ = true;
 	mapd_size_t firstPage = offset / pageSize_;
 	mapd_size_t lastPage = (offset + n) / pageSize_;
+	//printf("first page: %u, last page: %u\n", firstPage, lastPage);
 	for (mapd_size_t i = firstPage; i < lastPage; ++i)
 		pages_[i]->dirty = true;
 
@@ -56,8 +60,10 @@ size_t Buffer::append(mapd_size_t n, mapd_addr_t src) {
 	assert(n > 0 && src);
 	
 	// Cannot append beyond the total allocated buffer size
-	if ((length_ + n) >= size())
+	if ((length_ + n) > size()) {
+		//printf("overflow\n");
 		return 0;
+	}
 
 	// writes n bytes to src using the current buffer length
 	// as the beginning offset
