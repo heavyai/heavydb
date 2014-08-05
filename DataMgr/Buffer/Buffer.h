@@ -2,28 +2,31 @@
  * @file		Buffer.h
  * @author		Steven Stewart <steve@map-d.com>
  */
-#ifndef _BUFFER_H_
-#define _BUFFER_H_
+#ifndef DATAMGR_BUFFER_BUFFER_H
+#define DATAMGR_BUFFER_BUFFER_H
 
 #include <vector>
-#include <assert.h>
+#include <cassert>
 #include "../../Shared/types.h"
 
 namespace Buffer_Namespace {
 
 /**
- * @struct Page
+ * @struct  Page
+ * @brief   A page holds a memory location and a "dirty" flag to indicate whether its been modified.
  */
 struct Page {
     mapd_addr_t addr = NULL;    /// memory address for beginning of page
     bool dirty = false;         /// indicates the page has been modified
 
+    /// Constructor
     Page(mapd_addr_t addrIn, bool dirtyIn = false)
         : addr(addrIn), dirty(dirtyIn) {}
 };
 
 /**
  * @class Buffer
+ * @brief A buffer is an area of memory in the buffer pool consisting of pages.
  */
 class Buffer {
 public:
@@ -42,7 +45,7 @@ public:
      *
      * @return bool Returns false if the write fails.
      */
-    bool write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src);
+    size_t write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src);
     
     /**
      * @brief Appends the data at src to the end of the buffer.
@@ -52,7 +55,7 @@ public:
      *
      * @return bool Returns false if appending beyond buffer's total size.
      */
-    bool append(mapd_size_t n, mapd_addr_t src);
+    size_t append(mapd_size_t n, mapd_addr_t src);
     
     /**
      * @brief Copies content from the buffer to the destination memory address.
@@ -63,7 +66,7 @@ public:
      *
      * @return bool Returns false if the copy fails.
      */
-    bool copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t dest);
+    size_t copy(mapd_size_t offset, mapd_size_t n, mapd_addr_t dest);
     
     /**
      * @brief Returns the "dirty" status of the pages in the buffer.
@@ -104,4 +107,4 @@ private:
 
 } // Buffer_Namespace
 
-#endif // _BUFFER_H_
+#endif // DATAMGR_BUFFER_BUFFER_H
