@@ -93,9 +93,9 @@ Buffer* BufferMgr::createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_s
 
     // Create a new buffer for the new chunk
     b = createBuffer(numPages, pageSize);
-    if (b == NULL)
+    if (b == NULL) {
         return NULL; // unable to create the new buffer
-
+    }
     // Insert an entry in chunkIndex_ for the new chunk. Just do it.
     chunkIndex_[key] = b;
     return b;
@@ -118,10 +118,12 @@ Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
     if ((fm_->getChunkSize(key, &numPages, &size)) != MAPD_SUCCESS)
         return NULL;
 
-    if (size == 0)
+//    printf("size: %d numPages: %d\n", size, numPages);
+    if (size == 0) {
+  //      printf("cmon\n");
         //@todo: proper error handling needed
         return NULL;
-
+    }
     assert((size % numPages) == 0);
 
     // Create buffer and load chunk
@@ -162,10 +164,12 @@ bool BufferMgr::chunkIsCached(const ChunkKey &key) {
 /// Presently, only flushes a chunk if its buffer is unpinned, and flushes it right away (no queue)
 bool BufferMgr::flushChunk(const ChunkKey &key) {
     Buffer *b = findChunkBuffer(key);
-    if (b == NULL)
+    if (b == NULL) {
         return false;
-    else if (b && b->pinned())
+    }
+    else if (b && b->pinned()) {
         return false;
+    }   
 
     // @todo temporarly using 0 for epoch: update this
     int epoch = 0;

@@ -93,7 +93,7 @@ void test_Buffer_write() {
 	bool err = false;
 
 	// Create buffer
-	mapd_size_t memPadFactor = 2;
+	mapd_size_t memPadFactor = 1;
 	mapd_size_t numInt = 1024;
 	mapd_size_t memSize = numInt * sizeof(int);
 	mapd_size_t pageSize = 32;
@@ -119,7 +119,7 @@ void test_Buffer_write() {
 		PPASS("pointers match");
 
 	// Perform the write
-	if (!b.write(0, memSize, (mapd_addr_t)data))
+	if (b.write(0, memSize, (mapd_addr_t)data) == 0)
 		PFAIL("write() method reported a failure");
 	else
 		PPASS("write() method succeeded");
@@ -152,10 +152,14 @@ void test_Buffer_write() {
 			break;
 		}
 	}
-	if (err)
+	if (err) {
 		PFAIL("page incorrectly flagged as not dirty");
-	else
+		//printf("%d out of %d\n", cleanCount, dirtyFlags.size());
+	}
+	else {
 		PPASS("all pages correctly flagged as not dirty.");
+		//printf("%d out of %d\n", cleanCount, dirtyFlags.size());
+	}
 }
 
 void test_Buffer_append() {
@@ -171,7 +175,7 @@ void test_Buffer_append() {
 	// Setup
 	int a[numInt*2]; // double size of array to hold appended blocks
 	// double number of pages to hold appended blocks
-	Buffer b((mapd_addr_t)a, 2*memPadFactor*numPages, pageSize);
+	Buffer b((mapd_addr_t)a, memPadFactor*numPages, pageSize);
 	int *buf = (int*)b.host_ptr();
 	int data[numInt];
 	for (int i = 0; i < numInt; ++i)
@@ -189,13 +193,13 @@ void test_Buffer_append() {
 		PPASS("pointers match");
 
 	// Perform the write
-	if (!b.write(0, memSize, (mapd_addr_t)data))
+	if (b.write(0, memSize, (mapd_addr_t)data) == 0)
 		PFAIL("write() method reported a failure");
 	else
 		PPASS("write() method succeeded");
 	b.print();
 
-	if (!b.append(memSize, (mapd_addr_t)data))
+	if (b.append(memSize, (mapd_addr_t)data) == 0)
 		PFAIL("append() method reported a failure");
 	else
 		PPASS("append() method succeeded");
