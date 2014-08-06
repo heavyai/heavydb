@@ -14,43 +14,53 @@ using namespace RA_Namespace;
 namespace RA_Namespace {
 
 /**
- * @todo brief and detailed descriptions
+ * @class   QPTranslator
+ * @brief   This class walks/executes a query plan, which is an AST of relational algebra statements.
  */
-class QPTranslator : public RA_Namespace::Visitor {
+class QPTranslator : public Visitor {
 
 public:
-    
+    /// Constructor
     QPTranslator() {}
+    
+    /// @brief Visit a AggrExpr node
+    virtual void visit(AggrExpr *v);
 
-    virtual void visit(class AggrExpr *v);
-    virtual void visit(class AggrList *v);
-    virtual void visit(class AntijoinOp *v);
-    virtual void visit(class Attribute *v);
-    virtual void visit(class AttrList *v);
-    virtual void visit(class Comparison *v);
-    virtual void visit(class DiffOp *v);
-    virtual void visit(class Expr *v);
-    virtual void visit(class ExtendOp *v);
-    virtual void visit(class GroupbyOp *v);
-    virtual void visit(class JoinOp *v);
-    virtual void visit(class MathExpr *v);
-    virtual void visit(class OuterjoinOp *v);
-    virtual void visit(class Predicate *v);
-    virtual void visit(class ProductOp *v);
-    virtual void visit(class Program *v);
-    virtual void visit(class ProjectOp *v);
-    virtual void visit(class Relation *v);
-    virtual void visit(class RelExpr *v);
-    virtual void visit(class RelExprList *v);
-    virtual void visit(class RenameOp *v);
-    virtual void visit(class SelectOp *v);
-    virtual void visit(class SemijoinOp *v);
-    virtual void visit(class SortOp *v);
-    virtual void visit(class UnionOp *v);
+    /// @brief Visit a Attribute node
+    virtual void visit(Attribute *v);
+
+    /// @brief Visit a AttrList node
+    virtual void visit(AttrList *v);
+
+    /// @brief Visit a Comparison node
+    virtual void visit(Comparison *v);
+
+    /// @brief Visit a MathExpr node
+    virtual void visit(MathExpr *v);
+
+    /// @brief Visit a Predicate node
+    virtual void visit(Predicate *v);
+
+    /// @brief Visit a Program node
+    virtual void visit(Program *v);
+
+    /// @brief Visit a ProjectOp node
+    virtual void visit(ProjectOp *v);
+
+    /// @brief Visit a Relation node
+    virtual void visit(Relation *v);
+
+    /// @brief Visit a RelExpr node
+    virtual void visit(RelExpr *v);
+    
+    /// @brief Visit a RelExprList node
+    virtual void visit(RelExprList *v);
+
+    /// @brief Visit a SelectOp node
+    virtual void visit(SelectOp *v);
 
 private:
-    std::deque<int> qTracker;
-
+    std::deque<int> qTracker_;
 };
 
 } // RA_Namespace

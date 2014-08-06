@@ -7,6 +7,7 @@
 #define RA_AGGREXPRLIST_NODE_H
 
 #include <cassert>
+#include <string>
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
 
