@@ -3,14 +3,13 @@
 
 namespace RA_Namespace {
 
-class UnaryOp;
-class BinaryOp;
-
+// forward declarations
 class AggrExpr;
 class AggrList;
 class AntijoinOp;
 class Attribute;
 class AttrList;
+class BinaryOp;
 class Comparison;
 class DiffOp;
 class Expr;
@@ -30,36 +29,37 @@ class RenameOp;
 class SelectOp;
 class SemijoinOp;
 class SortOp;
+class UnaryOp;
 class UnionOp;
 
 class Visitor {
 
 	public:
- 	    virtual void visit(AggrExpr *v) = 0;
- 	    virtual void visit(AggrList *v) = 0;
- 	    virtual void visit(AntijoinOp *v) = 0;
- 	    virtual void visit(Attribute *v) = 0;
- 	    virtual void visit(AttrList *v) = 0;
- 	    virtual void visit(Comparison *v) = 0;
- 	    virtual void visit(DiffOp *v) = 0;
- 	    virtual void visit(Expr *v) = 0;
- 	    virtual void visit(ExtendOp *v) = 0;
- 	    virtual void visit(GroupbyOp *v) = 0;
- 	    virtual void visit(JoinOp *v) = 0;
- 	    virtual void visit(MathExpr *v) = 0;
- 	    virtual void visit(OuterjoinOp *v) = 0;
- 	    virtual void visit(Predicate *v) = 0;
- 	    virtual void visit(ProductOp *v) = 0;
- 	    virtual void visit(Program *v) = 0;
- 	    virtual void visit(ProjectOp *v) = 0;
- 	    virtual void visit(Relation *v) = 0;
- 	    virtual void visit(RelExpr *v) = 0;
- 	    virtual void visit(RelExprList *v) = 0;
- 	    virtual void visit(RenameOp *v) = 0;
- 	    virtual void visit(SelectOp *v) = 0;
- 	    virtual void visit(SemijoinOp *v) = 0;
- 	    virtual void visit(SortOp *v) = 0;
- 	    virtual void visit(UnionOp *v) = 0;
+ 	    virtual void visit(AggrExpr *v) {}
+ 	    virtual void visit(AggrList *v) {}
+ 	    virtual void visit(AntijoinOp *v) {}
+ 	    virtual void visit(Attribute *v) {}
+ 	    virtual void visit(AttrList *v) {}
+ 	    virtual void visit(Comparison *v) {}
+ 	    virtual void visit(DiffOp *v) {}
+ 	    virtual void visit(Expr *v) {}
+ 	    virtual void visit(ExtendOp *v) {}
+ 	    virtual void visit(GroupbyOp *v) {}
+ 	    virtual void visit(JoinOp *v) {}
+ 	    virtual void visit(MathExpr *v) {}
+ 	    virtual void visit(OuterjoinOp *v) {}
+ 	    virtual void visit(Predicate *v) {}
+ 	    virtual void visit(ProductOp *v) {}
+ 	    virtual void visit(Program *v) {}
+ 	    virtual void visit(ProjectOp *v) {}
+ 	    virtual void visit(Relation *v) {}
+ 	    virtual void visit(RelExpr *v) {}
+ 	    virtual void visit(RelExprList *v) {}
+ 	    virtual void visit(RenameOp *v) {}
+ 	    virtual void visit(SelectOp *v) {}
+ 	    virtual void visit(SemijoinOp *v) {}
+ 	    virtual void visit(SortOp *v) {}
+ 	    virtual void visit(UnionOp *v) {}
 };
 
 } // RA_Namespace
