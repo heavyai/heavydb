@@ -33,9 +33,11 @@ std::vector<double> realData;
 "desc"			{ return SQLParser::DESC; }
 "distinct"		{ return SQLParser::DISTINCT; }
 "drop"			{ return SQLParser::DROP; }
+"exists"		{ return SQLParser::EXISTS; }
 "from"			{ return SQLParser::FROM; }
 "group by"		{ return SQLParser::GROUPBY; }
 "having"		{ return SQLParser::HAVING; }
+"if"			{ return SQLParser::IF; }
 "insert"		{ return SQLParser::INSERT; }
 "into"			{ return SQLParser::INTO; }
 "key"			{ return SQLParser::KEY; }

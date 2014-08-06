@@ -85,7 +85,7 @@ extern std::vector<double> realData;
 %token FROM WHERE GROUPBY HAVING ORDERBY LIMIT
 %token AVG COUNT MAX MIN SUM
 %token AS NULLX
-%token NAME
+%token NAME IF EXISTS
 %token ASC DESC
 %token CREATE ALTER DROP RENAME TABLE
 %token INTVAL FLOATVAL STRING
@@ -319,8 +319,8 @@ ddl_stmt:
 ;
 
 create_stmt:
-	CREATE TABLE table 
-		'(' column_def_list ')'			{ $$ = new CreateStmt((Table*)$3, (ColumnDefList*)$5); }
+	CREATE TABLE table '(' column_def_list ')'	{ $$ = new CreateStmt((Table*)$3, (ColumnDefList*)$5); }
+|	CREATE TABLE IF NOT EXISTS table '(' column_def_list ')' { $$ = new CreateStmt((Table*)$6, (ColumnDefList*)$8); }
 ;
 
 column_def_list:
@@ -336,7 +336,8 @@ column_def:
 ;
 
 drop_stmt:
-	DROP table 	{ $$ = new DropStmt((Table*)$2); }
+	DROP TABLE table 				{ $$ = new DropStmt((Table*)$3); }
+|	DROP TABLE IF EXISTS table 		{ $$ = new DropStmt((Table*)$5); }
 ;
 
 alter_stmt:
