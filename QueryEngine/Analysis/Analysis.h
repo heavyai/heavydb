@@ -34,7 +34,7 @@ namespace Analysis_Namespace {
  * This function makes use of an InsertWalker to check the insert statements
  * that are present in the "sql" string.
  *
- * @param sql 									A string holding an SQL statement.
+ * @param tree
  * @param InsertData&							This will contain the insert data if the string passes
  * @return std::pair<bool, std::string>			Returns true if the string passes.
  */
@@ -49,11 +49,20 @@ std::pair<bool, std::string> checkInsert(ASTNode* tree, Catalog& c, InsertData& 
  *
  * @see checkInsert
  *
- * @param sql 								A string holding an SQL statement.
+ * @param tree
  * @return std::pair<bool, std::string>		Returns true if the string passes.
  */
 std::pair<bool, std::string> checkSql(ASTNode *tree, Catalog &c);
 
+/**
+ * @brief 
+ *
+ * @see checkDdl
+ *
+ * @param tree
+ * @return std::pair<bool, std::string>		Returns true if the string passes.
+ */
+std::pair<bool, std::string> checkDdl(ASTNode *tree, Catalog &c);
 
 } // Analysis_Namespace
 

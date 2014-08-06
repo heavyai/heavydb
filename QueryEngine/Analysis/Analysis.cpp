@@ -21,4 +21,10 @@ std::pair<bool, std::string> checkSql(ASTNode *tree, Catalog &c) {
 	return (w.isError());
 }
 
+std::pair<bool, std::string> checkDdl(ASTNode *tree, Catalog &c) {
+	DdlWalker w(c);
+	tree->accept(w);
+	return (w.isError());	
+}
+
 } // Analysis_Namespace

@@ -3,22 +3,21 @@
  * @author	Steven Stewart <steve@map-d.com>
  */
 #include <string>
-#include "SQL/ast/ASTNode.h"
-#include "RA/ast/RelAlgNode.h"
-
-//using namespace SQL_Namespace;
-using namespace RA_Namespace;
+ 
+// forward declarations
+namespace SQL_Namespace { class ASTNode; }
+namespace RA_Namespace { class RelAlgNode; }
 
 namespace Parse_Namespace {
 
-class SQLParse {
-public:
-	std::pair<bool, ASTNode*> parse(const std::string &input, std::string &errMsg);
-};
+/**
+ * @brief Returns the root of the SQL abstract syntax tree parsed from the input string.
+ */
+SQL_Namespace::ASTNode* parse_sql(const std::string &input, std::string &errMsg);
 
-class RAParse {
-public:
-	std::pair<bool, RelAlgNode*> parse(const std::string &input, std::string &errMsg);		
-};
+/**
+ * @brief Returns the root of the RA abstract syntax tree parsed from the input string.
+ */
+RA_Namespace::RelAlgNode* parse_ra(const std::string &input, std::string &errMsg);
 
 } // Parse_Namespace

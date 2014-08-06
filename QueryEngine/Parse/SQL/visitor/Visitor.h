@@ -7,9 +7,10 @@
 #ifndef SQL_VISITOR_H
 #define SQL_VISITOR_H
 
-// forward declarations
+
 namespace SQL_Namespace {
 
+// forward declarations
 class AggrExpr;
 class AlterStmt;
 class Column;

@@ -1,22 +1,23 @@
 /**
- * @file	analysisTest.h
+ * @file	DdlWalkerTest.h
  * @author	Steven Stewart <steve@map-d.com>
  *
- * Used for interactively testing the semantic analysis modules.
+ * Used for testing the insert walker. In order to test the walker,
+ * enter INSERT statements at the parser's prompt.
  */
 #include <iostream>
 #include <string>
 #include <vector>
-#include "Analysis.h"
 #include "../../Shared/types.h"
 #include "../Parse/SQL/parser.h"
+ #include "DdlWalker.h"
 #include "../../DataMgr/Metadata/Catalog.h"
-//#include "../../DataMgr/Partition/TablePartitionMgr.h"
 
 using namespace std;
-using Analysis_Namespace::TypeChecker;
+using Analysis_Namespace::DdlWalker;
 
 int main(int argc, char ** argv) {
+    // Add a table to the catalog
     Catalog c(".");
     
     std::vector<ColumnRow*> cols;
@@ -49,23 +50,14 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
-        
-        // Check INSERT statements
-        //InsertData idata;
-        /*std::pair<bool, std::string> insertErr = Analysis_Namespace::checkInsert(parseRoot, c, &i);
-        if (insertErr.first == true)
-            cout << "Error: " << insertErr.second << std::endl;
-        */
-
-        // Check DDL statements
-        std::pair<bool, std::string> sqlErr = Analysis_Namespace::checkDdl(parseRoot, c);
-        if (sqlErr.first == true)
-            cout << "Error: " << sqlErr.second << std::endl;
-
-        // Check SQL statements
-        std::pair<bool, std::string> sqlErr = Analysis_Namespace::checkSql(parseRoot, c);
-        if (sqlErr.first == true)
-            cout << "Error: " << sqlErr.second << std::endl;
+        DdlWalker dw(c);
+        if (parseRoot != 0) {
+            parseRoot->accept(dw); 
+            std::pair<bool, std::string> insertErr = dw.isError();
+            if (insertErr.first == true) {
+                cout << "Error: " << insertErr.second << std::endl;
+            }
+        }
     }
     while(true);
     cout << "Good-bye." << endl;
