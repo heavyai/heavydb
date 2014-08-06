@@ -20,10 +20,14 @@ namespace File_Namespace {
             if (err) *err = MAPD_ERR_FILE_CREATE;
             return NULL;
         }
+
         FILE *f;
         std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
-        f = fopen(s.c_str(), "w+b");
-        assert(f); //@todo error checking on f
+        if ((f = fopen(s.c_str(), "w+b")) == NULL) {
+            fprintf(stderr, "[%s:%d] Warning: unable to create file: fopen returned a NULL pointer.\n", __func__, __LINE__);
+            return NULL;
+        }
+
         fseek(f, (blockSize * nblocks)-1, SEEK_SET);
         fputc(EOF, f);
         fseek(f, 0, SEEK_SET); // rewind

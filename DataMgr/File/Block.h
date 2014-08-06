@@ -5,8 +5,8 @@
  * This file contains the declaration and definition of a Block type and a BlockInfo type.
  */
 
-#ifndef _BLOCK_H_
-#define _BLOCK_H_
+#ifndef DATAMGR_FILE_BLOCK_H
+#define DATAMGR_FILE_BLOCK_H
 
 #include <cassert>
 #include <deque>	
@@ -89,4 +89,4 @@ struct MultiBlock {
 
 } // File_Namespace
 
-#endif /* _BLOCK_H_ */
+#endif // DATAMGR_FILE_BLOCK_H

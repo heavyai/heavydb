@@ -496,7 +496,7 @@ void FileMgr::freeMultiBlock(MultiBlock* mb) {
     delete mb;
 }
 
-mapd_err_t FileMgr::deleteChunk(ChunkKey &key) {
+mapd_err_t FileMgr::deleteChunk(const ChunkKey &key) {
     mapd_err_t err = MAPD_SUCCESS;
     
     Chunk* c = NULL;

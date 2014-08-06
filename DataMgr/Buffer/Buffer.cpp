@@ -60,14 +60,8 @@ size_t Buffer::append(mapd_size_t n, mapd_addr_t src) {
 	assert(n > 0 && src);
 	
 	// Cannot append beyond the total allocated buffer size
-<<<<<<< Updated upstream
-	if ((length_ + n) > size()) {
-		//printf("overflow\n");
-=======
 	if ((length_ + n) > size())
->>>>>>> Stashed changes
 		return 0;
-	}
 
 	// writes n bytes to src using the current buffer length
 	// as the beginning offset

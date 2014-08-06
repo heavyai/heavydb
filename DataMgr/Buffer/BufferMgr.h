@@ -8,6 +8,7 @@
 #ifndef DATAMGR_BUFFER_BUFFERMGR_H
 #define DATAMGR_BUFFER_BUFFERMGR_H
 
+#include <utility>
 #include <map>
 #include <list>
 #include "Buffer.h"
@@ -96,6 +97,29 @@ public:
      * @return          A pointer to the Buffer object intended to hold the Chunk, or NULL
      */
     Buffer* createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_size_t pageSize);
+
+    /**
+     * @brief Deletes a chunk: removes it from both the buffer pool (if needed) and file manager.
+     *
+     * This method will remove a chunk from the buffer pool by freeing the pages belonging to
+     * the Buffer object holding the chunk, and then calling the file manager to delete the chunk
+     * from the file system by calling file manager's corresponding deleteChunk() method.
+     *
+     * Note that this method will delete the chunk, assuming the chunk exists, from the file system
+     * regardless of whether or not the chunk is currently in the buffer pool.
+     *
+     * This method should be used cautiously and should NOT be confused with simply evicting
+     * the buffer from the buffer pool without removing the chunk from the file system.
+     *
+     * This method returns two bool values in a pair. The first indicates whether or not the 
+     * chunk was removed from the buffer pool, which will be always be true in the case that the
+     * chunk wasn't in the buffer pool to begin with. The second bool indicates whether or not
+     * the file manager successfully removed the chunk from the file system.
+     *
+     * @param key                       The unique identifier for a Chunk.
+     * @return std::pair<bool,bool>     Existence of chunk in buffer pool and file system.
+     */
+    std::pair<bool, bool> deleteChunk(const ChunkKey &key);
 
     /**
      * @brief Returns a Buffer containing the desired chunk, or NULL on error

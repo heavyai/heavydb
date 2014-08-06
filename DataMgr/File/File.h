@@ -4,8 +4,8 @@
  * @brief   A selection of helper methods for File I/O.
  *
  */
-#ifndef _FILE_H
-#define _FILE_H
+#ifndef DATAMGR_FILE_FILE_H
+#define DATAMGR_FILE_FILE_H
 
 #include <iostream>
 #include <string>
@@ -121,4 +121,4 @@ namespace File_Namespace {
 
 } // namespace File_Namespace
 
-#endif // _FILE_H
+#endif // DATAMGR_FILE_FILE_H

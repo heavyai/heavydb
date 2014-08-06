@@ -11,10 +11,17 @@
  * The file manager manages files, which are collections of logical blocks. The types defined here are
  * designed to support the file managr's activities.
  *
+ * Each file managed by file manager has a block size associated with it. Each block within the file
+ * has the respective block size. A FileInfo object describes the metadata for a specific file.
+ *
+ * At present, metadata for the file manager is loaded from and stored into a Postgres database.
+ * In the future, such metadata will be stored using the RDBMS's own infrastructure.
+ *
  * @see File.h
+ * @see Block.h
  */
-#ifndef _FILEMGR_H
-#define _FILEMGR_H
+#ifndef DATAMGR_FILE_FILEMGR_H
+#define DATAMGR_FILE_FILEMGR_H
 
 #include <iostream>
 #include <memory>
@@ -40,17 +47,17 @@ namespace File_Namespace {
  * The free blocks (freeBlocks) within a file must be tracked, and this is implemented using a
  * basic STL set. The set ensures that no duplicate blocks are included, and that the blocks
  * are sorted, increasing the likelihood that contiguous free blocks will be assigned to a
- * chunk, which may reduce the cost of disk accesses.
+ * chunk, which may reduce the cost of DBMS disk accesses.
  *
  * Helper functions are provided: size(), available(), and used().
  */
 struct FileInfo {
-	int fileId;
-	FILE *f;
-	mapd_size_t blockSize;
-	mapd_size_t nblocks;
-	std::vector<Block*> blocks;
-	std::set<mapd_size_t> freeBlocks; /// set of block addresses of free blocks
+	int fileId;							/// unique file identifier (i.e., used for a file name)
+	FILE *f;							/// file stream object for the represented file
+	mapd_size_t blockSize;				/// the fixed size of each block in the file
+	mapd_size_t nblocks;				/// the number of blocks in the file
+	std::vector<Block*> blocks;			/// vector of Block object pointers for each file block
+	std::set<mapd_size_t> freeBlocks; 	/// set of block addresses of free blocks
 
 	/// Constructor
 	FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks);
@@ -61,12 +68,17 @@ struct FileInfo {
 	/// Prints a summary of the file to stdout
 	void print(bool blockSummary);
 
+	/// Returns the product of block size with number of blocks
 	inline mapd_size_t size() {
 		return blockSize * nblocks;
 	}
+
+	/// Returns the product of block size with the number of free blocks
 	inline mapd_size_t available() {
 		return freeBlocks.size() * blockSize;
 	}
+
+	/// Returns the amount of used bytes; size() - available()
 	inline mapd_size_t used() {
 		return size() - available();
 	}
@@ -381,7 +393,7 @@ public:
 	 * @param Chunk A reference to the chunk to be deleted.
 	 * @return MAPD_FAILURE or MAPD_SUCCESS
 	 */
-	mapd_err_t deleteChunk(ChunkKey &key);
+	mapd_err_t deleteChunk(const ChunkKey &key);
 
 	/**
 	 * @brief Prints a representation of FileMgr's state to stdout
@@ -410,4 +422,4 @@ private:
 
 } // File_Namespace
 
-#endif // _FILEMGR_H
+#endif // DATAMGR_FILE_FILEMGR_H

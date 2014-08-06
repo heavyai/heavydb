@@ -101,6 +101,27 @@ Buffer* BufferMgr::createChunk(const ChunkKey &key, mapd_size_t numPages, mapd_s
     return b;
 }
 
+std::pair<bool, bool> BufferMgr::deleteChunk(const ChunkKey &key) {
+    // Return values
+    bool bool1 = false;
+    bool bool2 = false;
+
+    // Delete the Chunk's buffer if it is currently cached
+    Buffer *b = findChunkBuffer(key);
+    if (b != NULL) {
+        deleteBuffer(b);
+        b = NULL; // to prevent accessing newly unallocated memory
+    }
+    bool1 = true;
+
+    // Ask file manager to delete the chunk from the file system
+    if (fm_->deleteChunk(key) == MAPD_FAILURE)
+        bool2 = false;
+    else
+        bool2 = true;
+
+    return std::pair<bool, bool>(bool1, bool2);
+}
 
 /// Presently, only returns the Buffer if it is not currently pinned
 Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
