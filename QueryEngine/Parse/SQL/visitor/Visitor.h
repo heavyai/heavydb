@@ -22,6 +22,7 @@ class DdlStmt;
 class DmlStmt;
 class DropStmt;
 class FromClause;
+class InsertColumnList;
 class InsertStmt;
 class Literal;
 class LiteralList;
@@ -67,6 +68,7 @@ public:
 	virtual void visit(DmlStmt*) {}
 	virtual void visit(DropStmt*) {}
 	virtual void visit(FromClause*) {}
+	virtual void visit(InsertColumnList*) {}
 	virtual void visit(InsertStmt*) {}
 	virtual void visit(Literal*) {}
 	virtual void visit(LiteralList*) {}

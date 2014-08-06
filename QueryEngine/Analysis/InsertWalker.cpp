@@ -12,8 +12,7 @@
 #include "../Parse/SQL/ast/DmlStmt.h"
 #include "../Parse/SQL/ast/InsertStmt.h"
 #include "../Parse/SQL/ast/Table.h"
-#include "../Parse/SQL/ast/ColumnList.h"
-#include "../Parse/SQL/ast/Column.h"
+#include "../Parse/SQL/ast/InsertColumnList.h"
 #include "../Parse/SQL/ast/LiteralList.h"
 #include "../Parse/SQL/ast/Literal.h"  
  
@@ -80,18 +79,9 @@ void InsertWalker::visit(InsertStmt *v) {
 	}
 }
 
-void InsertWalker::visit(ColumnList *v) {
+void InsertWalker::visit(InsertColumnList *v) {
 	if (v->n1) v->n1->accept(*this);
-	if (v->n2) v->n2->accept(*this);
-}
-
-void InsertWalker::visit(Column *v) {
-	std::string colName;
-	if (v->s2 != "")
-		colName = v->s2 + "." + v->s1;
-	else
-		colName = v->s1;
-	colNames_.push_back(colName);	
+	colNames_.push_back(v->name);
 }
 
 void InsertWalker::visit(LiteralList *v) {

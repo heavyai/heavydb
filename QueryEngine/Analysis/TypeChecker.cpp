@@ -25,12 +25,7 @@ namespace Analysis_Namespace {
 
 void TypeChecker::visit(Column *v) {
 	printf("<Column>\n");
-	std::string colName;
-	if (v->s2 != "")
-		colName = v->s2 + "." + v->s1;
-	else
-		colName = v->s1;
-	colNames_.push_back(colName);	
+	colNames_.push_back(v->name);	
 }
 
 void TypeChecker::visit(DmlStmt *v) {
@@ -88,7 +83,7 @@ void TypeChecker::visit(SelectStmt *v) {
 
 	if (v->n2) v->n2->accept(*this); // Selection
 	for (int i = 0; i < colNames_.size(); ++i)
-		printf("%s%s%s", i == 0 ? "columns: ":"", colNames_[i].c_str(), (i+1) == colNames_.size() ? "\n" : ", ");
+		printf("%s%s%s", i == 0 ? "columns: ":"", colNames_[i].second.c_str(), (i+1) == colNames_.size() ? "\n" : ", ");
 
 	if (v->n3) v->n3->accept(*this); // FromClause
 	for (int i = 0; i < tblNames_.size(); ++i)

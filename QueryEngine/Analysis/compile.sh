@@ -11,7 +11,7 @@ g++ insertWalkerTest.cpp InsertWalker.cpp ../Parse/SQL/parser.cpp ../Parse/SQL/s
 g++ -o typeCheckerTest typeCheckerTest.cpp TypeChecker.cpp ../Parse/SQL/parser.cpp ../Parse/SQL/scanner.cpp ../../DataMgr/Metadata/Catalog.cpp -std=c++11 -w
 
 # DdlWalker
-g++ -o ddlWalkerTest ddlWalkerTest.cpp ../Parse/SQL/parser.cpp ../Parse/SQL/scanner.cpp ../../DataMgr/Metadata/Catalog.cpp -std=c++11 -w
+g++ -o ddlWalkerTest ddlWalkerTest.cpp DdlWalker.cpp ../Parse/SQL/parser.cpp ../Parse/SQL/scanner.cpp ../../DataMgr/Metadata/Catalog.cpp -std=c++11 -w
 
 # analysisTest
 g++ -o analysisTest analysisTest.cpp Analysis.cpp InsertWalker.cpp TypeChecker.cpp ../Parse/SQL/parser.cpp ../Parse/SQL/scanner.cpp ../../DataMgr/Metadata/Catalog.cpp -std=c++11 -w

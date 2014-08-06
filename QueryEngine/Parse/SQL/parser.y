@@ -31,6 +31,7 @@
 #include "ast/DmlStmt.h"
 #include "ast/DropStmt.h"
 #include "ast/FromClause.h"
+#include "ast/InsertColumnList.h"
 #include "ast/InsertStmt.h"
 #include "ast/Literal.h"
 #include "ast/LiteralList.h"
@@ -113,10 +114,15 @@ dml_stmt:
 ;
 
 insert_stmt:
-	INSERT INTO table '(' column_list ')'
+	INSERT INTO table '(' insert_column_list ')'
 		VALUES '(' literal_list ')' {
-			$$ = new InsertStmt((Table*)$3, (ColumnList*)$5, (LiteralList*)$9);
+			$$ = new InsertStmt((Table*)$3, (InsertColumnList*)$5, (LiteralList*)$9);
 		}
+;
+
+insert_column_list:
+	NAME 						{ $$ = new InsertColumnList(strData.back()); strData.pop_back(); }
+|	insert_column_list ',' NAME { $$ = new InsertColumnList((InsertColumnList*)$1, strData.back()); strData.pop_back(); }
 ;
 
 literal_list:

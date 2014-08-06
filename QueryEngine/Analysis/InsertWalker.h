@@ -64,10 +64,7 @@ public:
 	virtual void visit(InsertStmt *v);
 
 	/// @brief Visit an ColumnList node
-	virtual void visit(ColumnList *v);
-
-	/// @brief Visit an Column node
-	virtual void visit(Column *v);
+	virtual void visit(InsertColumnList *v);
 
 	/// @brief Visit an LiteralList node
 	virtual void visit(LiteralList *v);

@@ -40,7 +40,7 @@ public:
 		else if (op == "MINUS")
 			this->op = "-";
 		else if (op == "MULTIPLY")
-			this->op = "-";
+			this->op = "*";
 		else if (op == "DIVIDE")
 			this->op = "/";
 		else

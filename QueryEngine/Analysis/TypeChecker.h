@@ -65,7 +65,7 @@ private:
 	std::string errMsg_;					/// holds an error message, if applicable; otherwise, it is ""
 	bool errFlag_ = false;					/// indicates the existence of an error when true
 
-	std::vector<std::string> colNames_;		/// saves parsed column names from "Selection" node
+	std::vector<std::pair<std::string, std::string>> colNames_;	/// saves parsed column names from "Selection" node
 	std::vector<std::string> tblNames_;		/// saves parsed table names from "FromClause" node
 
 };

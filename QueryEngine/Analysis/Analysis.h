@@ -13,6 +13,7 @@
 // includes
 #include <string>
 #include <utility>
+#include "DdlWalker.h"
 #include "InsertWalker.h"
 #include "TypeChecker.h"
 
