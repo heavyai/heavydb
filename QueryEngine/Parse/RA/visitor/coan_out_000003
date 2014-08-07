@@ -331,15 +331,23 @@ void QPTranslator::visit(ProductOp *v) {
 
     cout << "Q" << queryNum_ << " = product(";
 
-    int first;
-    int second;
-    if (!v->n1->n4) {
-        second = qTracker_.back();
-        qTracker_.pop_back();
-    }
+    int first = 10;
+    int second = 10;
     if (!v->n2->n4) {
-        first = qTracker_.back();
-        qTracker_.pop_back();
+        if (qTracker_.size() != 0) {
+            second = qTracker_.back();
+            qTracker_.pop_back();
+        }
+        else
+            second = 0;
+    }
+    if (!v->n1->n4) {
+        if (qTracker_.size() != 0) {
+            first = qTracker_.back();
+            qTracker_.pop_back();
+        }
+        else
+            first = 0;
     }
 
     if (v->n1->n4)

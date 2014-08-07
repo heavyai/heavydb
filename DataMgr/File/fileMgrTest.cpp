@@ -31,7 +31,7 @@ void test_putGetBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_clearFreeBlock(mapd_size_t blockSizeArg, mapd_size_t nblocksArg);
 void test_createChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
 void test_putGetChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
-void test_deleteChunk();
+void test_deleteChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
 
 int main(void) {
 
@@ -89,9 +89,23 @@ int main(void) {
     //test_clearFreeBlock(30000, 30000);
     //test_clearFreeBlock(100000, 100000);
 
-    test_createChunk(32, 8);
-    test_putGetChunk(32, 40);
-    test_deleteChunk();
+    test_createChunk(8, 8);
+    test_createChunk(128, 64);
+    test_createChunk(1, 1);
+    test_createChunk(1000, 1000);
+    test_createChunk(10000, 10000);
+
+    test_putGetChunk(8, 8);
+    test_putGetChunk(128, 64);
+    test_putGetChunk(1, 1);
+    test_putGetChunk(1000, 1000);
+    test_putGetChunk(10000, 10000);
+
+    test_deleteChunk(8, 8);
+    test_deleteChunk(128, 64);
+    test_deleteChunk(1, 1);
+    test_deleteChunk(1000, 1000);
+    test_deleteChunk(10000, 10000);
     /*    PPASS("deleteFile()") : PFAIL("deleteFile()");*/
     /*test_getBlock() ?
         PPASS("getBlock()") : PFAIL("getBlock()"); 
@@ -545,9 +559,10 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
         loopError = !(srcBufSmall[i] == destBufSmall[i]);
   
     }
-
-    if (loopError)
+    if (loopError) {
         PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
+        printf("blockSize = %d, nblocks = %d\n", blockSizeArg, nblocks);
+    }
     else PPASS("srcBuf and destBuf match");
 
     /* ----------------------------------------------------------------*/ 
@@ -589,8 +604,10 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
         loopError = !(srcBuf[i] == destBuf[i]);
     }
 
-    if (loopError)
+    if (loopError) {
         PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
+        printf("blockSize = %d, nblocks = %d\n", blockSizeArg, nblocks);
+    }
     else PPASS("srcBuf and destBuf match");
 
     // Test if putChunk will allow placing more bytes than Chunk has room
@@ -616,7 +633,6 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     
     // alter the key for the new set of tests
     key.push_back(keyInt[3]);
-    fm.createChunk(key, 0, blockSize1, srcBufSmall, 0);
 
     // create a new Chunk with a different ChunkKey, write what's in srcBufSmall to it
     fm.createChunk(key, blockSize1, blockSize1, srcBufSmall, 0);
@@ -634,15 +650,13 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     }
 
     // Check whether buffer returned by getChunk = created Chunk
-    if (loopError)
+    if (loopError) {
         PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
+        printf("blockSize = %d, nblocks = %d\n", blockSizeArg, nblocks);
+    }
     else PPASS("srcBuf and destBuf match");
 
     /******* Check if createChunk() works with source buffer ********/
-    
-    // alter the key for the new set of tests
-    fm.createChunk(key, 0, blockSize1*nblocks, srcBuf, 0);
-
     for (int i = 0; i < blockSize1*nblocks; i++) {
         srcBuf[i] = i;
     }
@@ -659,23 +673,24 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     if (gottenChunk == NULL)
         PFAIL("getChunk returned NULL");
     else PPASS("getChunk did not return NULL");
-
+        printf("\n");
     for (int i = 0; i < blockSize1*nblocks; i++) {
         loopError = !(srcBuf[i] == destBuf[i]);
+        printf("%d %d\n", srcBuf[i], destBuf[i]);
     }
-
-    if (loopError)
-        PFAIL("buffer filled during getChunk does not equal buffer inserted with putChunk");
-    else PPASS("srcBuf and destBuf match");
+        printf("\n");
+    if (loopError) {        
+        PFAIL("buffer filled during getChunk does not equal buffer inserted with createChunk");
+        printf("blockSize = %d, nblocks = %d\n", blockSizeArg, nblocks);
+    }
+    else PPASS("srcBuf and destBuf match from createChunk insert");
 
 }
 
-void test_deleteChunk() {
+void test_deleteChunk(mapd_size_t blockSize, mapd_size_t nblocks) {
     mapd_err_t err;
     FileMgr fm(".");
 
-    mapd_size_t blockSize = 8;
-    mapd_size_t nblocks = 8;
     mapd_byte_t srcBuf[blockSize*nblocks];
 
     int keyInt = 4;
@@ -706,9 +721,30 @@ void test_deleteChunk() {
     // Chunk has no blocks yet: must use optional argument!
     err = fm.putChunk(key, blockSize*nblocks, srcBuf, epoch, blockSize);
 
+    // Get a vector of addresses of each block (to check if they are located in the freelist after)
+    std::vector<int> blockAddrs;
+    // iterate through each multiblock in the Chunk
+    for (int i = 0; i < c->size(); i++) {
+        // iterate through each block in the multiblock
+        for (int j = 0; j < (*c)[i]->version.size(); j++) {
+            blockAddrs.push_back((*c)[i]->version[j]->begin);
+        }
+    }
+
     if (fm.deleteChunk(key) != MAPD_SUCCESS)
        PFAIL("deleteChunk failed to delete full Chunk");
     else PPASS("deleteChunk did not fail to delete full Chunk");
+
+    bool loopError = false;
+    for (int i = 0; i < blockAddrs.size(); i++) {
+        auto it = fInfo->freeBlocks.find(blockAddrs[i]);
+        if (it == fInfo->freeBlocks.end()) 
+            loopError = true;
+    }
+    if (loopError) 
+        PFAIL("some block addresses in deleted chunk not found in free list");
+    else
+        PPASS("all block addresses in deleted chunk found in freelist");
 
     /********* Check that deleting a Chunk between two other chunks won't screw things up freeBlocks-wise */
     ChunkKey key1;
