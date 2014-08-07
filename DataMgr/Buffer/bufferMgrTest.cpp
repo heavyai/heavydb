@@ -15,6 +15,7 @@ using namespace File_Namespace;
 void test_BufferMgr(mapd_size_t hostMemSize);
 void test_createBuffer(mapd_size_t numPages, mapd_size_t pageSize);
 void test_createChunk(mapd_size_t numPages, mapd_size_t pageSize);
+void test_deleteChunk(mapd_size_t numPages, mapd_size_t pageSize, mapd_size_t bytesToWrite);
 void test_getChunkBuffer(mapd_size_t numPages, mapd_size_t pageSize);
 void test_flush(mapd_size_t numPages, mapd_size_t pageSize);
 void test_getChunkAddr(mapd_size_t numPages, mapd_size_t pageSize);
@@ -39,6 +40,17 @@ int main() {
 	test_createChunk(1024, 1024);	
 	test_createChunk(1, 65536);
 	test_createChunk(256, 1);
+
+	PRINT_SLINE(70);
+
+	test_deleteChunk(1, 1, 1);
+	test_deleteChunk(32, 64, 32*64);
+	test_deleteChunk(32, 64, 32*64/2);
+	test_deleteChunk(1024, 1024, 1024*1024);
+	test_deleteChunk(1, 65536, 65536);
+	test_deleteChunk(1, 65536, 65536/2);
+	test_deleteChunk(256, 1, 256);
+	test_deleteChunk(256, 1, 128);
 
 	PRINT_SLINE(70);
 
@@ -156,6 +168,55 @@ void test_createChunk(mapd_size_t numPages, mapd_size_t pageSize) {
 	
 	//bm->deleteBuffer(b);
 	delete [] srcBuf;
+}
+
+void test_deleteChunk(mapd_size_t numPages, mapd_size_t pageSize, mapd_size_t bytesToWrite) {
+    FileMgr fm(".");
+	BufferMgr *bm = new BufferMgr(numPages * pageSize, &fm);
+
+	int keyInt = 4;
+	ChunkKey key;
+    key.push_back(keyInt);
+	
+    mapd_byte_t *srcBuf = new mapd_byte_t[numPages*pageSize];
+	mapd_byte_t *destBuf = new mapd_byte_t[numPages*pageSize];
+
+	for (int i = 0; i < bytesToWrite; i++) {
+        srcBuf[i] = 42;
+    }
+	for (int i = 0; i < bytesToWrite; i++) {
+        destBuf[i] = 43;
+    }
+
+    // create a Chunk and get it into a Buffer object
+	Chunk* c = fm.createChunk(key, bytesToWrite, pageSize, srcBuf, 0);
+
+	int availableBegin = bm->unused();
+//	printf("used by Chunk's buffer: %d, unused: %d, total: %d\n", 0, bm->unused(), numPages*pageSize);
+	
+	Buffer *b = bm->getChunkBuffer(key);
+	int availablePreFree = bm->unused();
+	int usedByChunk = availableBegin - availablePreFree;
+	bm->deleteChunk(key);
+
+	int availablePostFree = bm->unused();
+	//printf("used by Chunk's buffer: %d, unused: %d, total: %d\n", usedByChunk, bm->unused(), numPages*pageSize);
+	
+	if (availableBegin != availablePostFree)	
+		PFAIL("free mem size after deleteChunk() does not equal free mem size before createChunk()");
+	else
+		PPASS("free mem size after deleteChunk() equals free mem size before createChunk()");
+
+	if (usedByChunk != availablePostFree - availablePreFree)	
+		PFAIL("# of bytes created in buffer does not equal number of bytes freed after deleteChunk()");
+	else
+		PPASS("# of bytes written to chunk equals created # of bytes in buffer");
+
+	if (fm.getChunkRef(key) != NULL)
+		PFAIL("getChunkRef() returning non-null reference to Chunk");
+	else
+		PPASS("getChunkRef returns NULL reference to Chunk");
+
 }
 
 void test_getChunkBuffer(mapd_size_t numPages, mapd_size_t pageSize) {
