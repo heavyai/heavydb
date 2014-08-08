@@ -6,6 +6,17 @@
  *
  * @see FileMgr.h
  */
+
+/*
+    POSTGRES SQL statements used by FileMgr
+
+    CREATE TABLE IF NOT EXISTS FileInfo(file_id integer PRIMARY KEY, block_size integer not null, nblocks integer not null);
+    CREATE TABLE IF NOT EXISTS FileInfo_Blocks(file_id integer not null, begin integer not null, _end integer not null, free boolean not null, PRIMARY KEY(file_id, begin));
+    CREATE TABLE IF NOT EXISTS MultiBlock(MultiBlock_id integer not null, version integer not null, epoch integer not null, file_id integer not null, begin INT not null, PRIMARY KEY(MultiBlock_id, version));
+    CREATE TABLE IF NOT EXISTS Chunk_MultiBlock(ChunkKey integer[], MultiBlock_id integer, PRIMARY KEY(ChunkKey, MultiBlock_id));
+
+*/
+
 #include <iostream>
 #include <cassert>
 #include <cstdio>
@@ -19,19 +30,19 @@ using std::vector;
 
 namespace File_Namespace {
 
-FileInfo::FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks)
-     : fileId(fileId), f(f), blockSize(blockSize), nblocks(nblocks) // STEVE: careful here - assignment to same variable name fails on some compilers even though it should work according to C++ standard
+FileInfo::FileInfo(int fileIdIn, FILE *fIn, mapd_size_t blockSizeIn, mapd_size_t nblocksIn)
+     : fileId(fileIdIn), f(fIn), blockSize(blockSizeIn), nblocks(nblocksIn)
 {
     // initialize blocks and free block list
     for (mapd_size_t i = 0; i < nblocks; ++i) {
-        blocks.push_back(new Block(fileId, i * blockSize));
+        blocks.push_back(new Block(fileId, i));
         freeBlocks.insert(i);
     }
 }
 
 FileInfo::~FileInfo() {
     // free memory used by Block objects
-    for (int i = 0; i < blocks.size(); ++i)
+    for (mapd_size_t i = 0; i < blocks.size(); ++i)
         delete blocks[i];
 
     // close file, if applicable
@@ -48,45 +59,55 @@ void FileInfo::print(bool blockSummary) {
     if (!blockSummary)
         return;
     
-    for (int i = 0; i < blocks.size(); ++i) {
+    for (mapd_size_t i = 0; i < blocks.size(); ++i) {
         // @todo block summary
     }
 }
 
-FileMgr::FileMgr(const std::string &basePath): basePath_(basePath) {
+FileMgr::FileMgr(const std::string &basePath) : basePath_(basePath), pgConnector_("mapd", "mapd") {
     nextFileId_ = 0;
+
+    // Create FileInfo table for storing metadata
+    mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS FileInfo(file_id integer PRIMARY KEY, block_size integer, nblocks integer)");
+    printf("status = %d\n", status);
+    assert(status == MAPD_SUCCESS);
+
+    // read in metadata and update internal data structures
+    readState();
 }
 
 FileMgr::~FileMgr() {
     for (int i = 0; i < files_.size(); ++i)
         delete files_[i];
 
-    // free memory allocated for Chunk objects
+    // free memory allocated for MultiBlock objects for each Chunk
     for(auto it = chunkIndex_.begin(); it != chunkIndex_.end(); ++it) {
         Chunk &v = (*it).second;
-
-        // free memory allocated for MultiBlock objects
         for (auto it2 = v.begin(); it2 != v.end(); ++it2)
             delete *it2;
     }
 }
 
 FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nblocks) {
-    if (blockSize < 1 || nblocks < 1)
+    if (blockSize == 0 || nblocks == 0) {
+        // @todo proper exception handling would be desirable, eh
         return NULL;
+    }
 
     // create the new file
     FILE *f = NULL;
     f = create(nextFileId_, blockSize, nblocks, NULL);
 
     // check for error
-    if (!f) {
+    if (f == NULL) {
         fprintf(stderr, "[%s:%d] Error: unable to create file.\n", __func__, __LINE__);
         return NULL;
     }
 
     // update file manager data structures
-    int fileId = nextFileId_++;
+    int fileId = nextFileId_;
+    nextFileId_++;
+
     FileInfo *fInfo = NULL;
     try {
         fInfo = new FileInfo(fileId, f, blockSize, nblocks);
@@ -193,7 +214,7 @@ mapd_err_t FileMgr::clearBlock(const int fileId, mapd_size_t blockNum) {
 mapd_err_t FileMgr::clearBlock(FileInfo &fInfo, mapd_size_t blockNum) {
     Block *b = getBlock(fInfo, blockNum);
     if (b) {
-        b->end = b->begin;
+        b->used = 0;
         return MAPD_SUCCESS;
     }
     return MAPD_FAILURE;
@@ -219,7 +240,7 @@ Chunk* FileMgr::getChunkRef(const ChunkKey &key) {
 
 Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_addr_t buf) {
     assert(buf);
-    
+
     // find chunk
     auto it = chunkIndex_.find(key);
     if (it == chunkIndex_.end()) // chunk doesn't exist
@@ -244,8 +265,10 @@ Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_addr_t buf) {
         
         // read block from file into buf
         mapd_err_t err;
-        read(fInfo->f, blk.begin * c[i]->blockSize, c[i]->blockSize, buf, &err);
-        buf += c[i]->blockSize;
+        mapd_size_t used = c[i]->version.current().used;
+        read(fInfo->f, blk.blockNum * c[i]->blockSize, used, buf, &err);
+        buf += used;
+        // @todo should ensure no gaps in blocks of Chunk
 
         if (err != MAPD_SUCCESS)
             return NULL;
@@ -293,16 +316,12 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     
     // Compute size based on actual bytes used in block
     Chunk &c = iter->second;
-    for (int i = 0; i < c.size(); ++i) {
-        *size += (c[i]->current().end - c[i]->current().begin)*c[i]->blockSize;
-    }
+    for (int i = 0; i < c.size(); ++i)
+        *size += (c[i]->current().used;
+    
     return err;
 }
 
-/* Assume there are enough multiblocks in Chunk corresponded to Chunkkey to store data pointed to
-in buf.
-    @todo extend Chunk with new blocks.
-*/
 mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t src, int epoch, mapd_size_t optBlockSize) {
     assert(src);
     mapd_err_t err = MAPD_SUCCESS;
@@ -315,59 +334,59 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
     }
     
     mapd_size_t blockSize;
+    
     // obtain blockSize from Chunk. if no blocks in the Chunk, use default param.
-
     if (c->size() == 0) {
         if (optBlockSize == -1)  {
-            // jesus user work with me here
-            fprintf(stderr, "God damn it user how am I supposed to know the blockSize? smh\n");
+            fprintf(stderr, "[%s:%d] Notice: using Map-D default block size.\n", __FILE__, __LINE__);
             blockSize = MAPD_DEFAULT_BLOCK_SIZE;
         }
         else
             blockSize = optBlockSize;
     }
     else {
-        // obtain a reference to the file of the block address
+        // Otherwise, obtain FileInfo object of first block in order
+        // to get the block size
         Block &blk = (*c)[0]->current();
-        int fileId = blk.fileId;
-        FileInfo* fInfo = getFile(fileId);
-        blockSize = fInfo->blockSize;
+        blockSize = getFile(blk.fileId)->blockSize;
     }
 
     // number of blocks to be added from src
     mapd_size_t nblocks = (size + blockSize - 1) / blockSize;
-    //blockCount: number of blocks written so far
+    
+    // blockCount: number of blocks written so far
     mapd_size_t blockCount = 0;
 
-    // iterator that keeps track of all files in fileIndex_
+    // Obtain an iterator over files having the desired block size to be written
     auto it = fileIndex_.lower_bound(blockSize);
 
-    // write blockSize bytes from src, in Block form, to each MultiBlock. 
+    // Write blockSize bytes to a new version of each existing logical block
+    // of the Chunk
     for (int i = 0; i < c->size(); ++i) {
 
-        // check list of free blocks for room to create a new block
-        mapd_size_t begin;
-
-        // find a suitable fInfo
+        // find a suitable file (i.e., having the desired block size)
         FileInfo* fInfo = NULL;
-        for (/* preserve iterator position */; it != fileIndex_.end(); ++it) {
+        for (; it != fileIndex_.end(); ++it) {
             if (getFile(it->second)->available() > 0) {
                 fInfo = getFile(it->second);
             }
         }
-        it--;
+        it--; // preserve iterator position
+
         if (fInfo == NULL) {
           // create a new file with the default number of blocks
           fInfo = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
         }
+        assert(fInfo->freeBlocks.size() > 0);
 
-        // iterate through free blocks and create a new block at the given size, removing address from free blocks
+        // obtain first available free block
+        mapd_size_t freeBlockNum;
         auto itFree = fInfo->freeBlocks.begin();
-        begin = *itFree;
+        freeBlockNum = *itFree;
         fInfo->freeBlocks.erase(itFree);
-        Block* newblk = new Block(fInfo->fileId, begin);
 
-        (*c)[i]->push(newblk, epoch);
+        // I have to go on the plane now. I'll finish this later.
+        (*c)[i]->push(fInfo->getBlock(freeBlockNum), epoch);
     
         mapd_size_t bytesWritten = write(fInfo->f, begin*fInfo->blockSize, blockSize, src+blockCount*blockSize, &err);
 
@@ -420,6 +439,7 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
     // check if the chunk already exists based on key
     Chunk *ctmp = NULL;
     if ((ctmp = getChunkRef(key)) != NULL) {
+        fprintf(stderr, "Warning: Chunk already exists.\n");
         return ctmp;
     }
 
@@ -516,6 +536,35 @@ mapd_err_t FileMgr::deleteChunk(const ChunkKey &key) {
         return MAPD_FAILURE;
 
     return MAPD_SUCCESS;
+}
+
+void FileMgr::readState() {
+    std::vector<int> file_id;
+    std::vector<long unsigned> block_size;
+    std::vector<long unsigned> nblocks;
+
+    // submit query to retrieve metadata for FileInfo objects
+    std::string partitionQuery = "select file_id, block_size, nblocks from FileInfo order by file_id";
+    mapd_err_t status = pgConnector_.query(partitionQuery);
+    assert(status == MAPD_SUCCESS);    
+
+    size_t numRows = pgConnector_.getNumRows();
+    printf("FileMgr numRows = %lu\n", numRows);
+
+    // traverse rows in result set
+    for (int r = 0; r < numRows; ++r) {
+        file_id.push_back(pgConnector_.getData<int>(r,0));
+        block_size.push_back(pgConnector_.getData<int>(r,1));
+        nblocks.push_back(pgConnector_.getData<int>(r,2));
+        printf("file_id=%d block_size=%ld nblocks=%ld\n", file_id.back(), block_size.back(), nblocks.back());
+    }
+
+    // submit query to retrieve metadata for the free blocks of each file
+    partitionQuery = "select file_id, block_size, nblocks from FileInfo order by file_id";
+}
+
+void FileMgr::writeState() {
+
 }
 
 } // File_Namespace

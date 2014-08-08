@@ -9,7 +9,7 @@
  * in this header file.
  *
  * The file manager manages files, which are collections of logical blocks. The types defined here are
- * designed to support the file managr's activities.
+ * designed to support the file manager's activities.
  *
  * Each file managed by file manager has a block size associated with it. Each block within the file
  * has the respective block size. A FileInfo object describes the metadata for a specific file.
@@ -34,6 +34,7 @@
 #include "Block.h"
 #include "../../Shared/types.h"
 #include "../../Shared/errors.h"
+#include "../PgConnector/PgConnector.h"
 
 namespace File_Namespace {
 
@@ -46,8 +47,8 @@ namespace File_Namespace {
  *
  * The free blocks (freeBlocks) within a file must be tracked, and this is implemented using a
  * basic STL set. The set ensures that no duplicate blocks are included, and that the blocks
- * are sorted, increasing the likelihood that contiguous free blocks will be assigned to a
- * chunk, which may reduce the cost of DBMS disk accesses.
+ * are sorted, faciliating the obtaining of consecutive free blocks by a constant time
+ * pop operation, which may reduce the cost of DBMS disk accesses.
  *
  * Helper functions are provided: size(), available(), and used().
  */
@@ -57,7 +58,7 @@ struct FileInfo {
 	mapd_size_t blockSize;				/// the fixed size of each block in the file
 	mapd_size_t nblocks;				/// the number of blocks in the file
 	std::vector<Block*> blocks;			/// vector of Block object pointers for each file block
-	std::set<mapd_size_t> freeBlocks; 	/// set of block addresses of free blocks
+	std::set<mapd_size_t> freeBlocks; 	/// set of block numbers of free blocks
 
 	/// Constructor
 	FileInfo(int fileId, FILE *f, mapd_size_t blockSize, mapd_size_t nblocks);
@@ -68,12 +69,12 @@ struct FileInfo {
 	/// Prints a summary of the file to stdout
 	void print(bool blockSummary);
 
-	/// Returns the product of block size with number of blocks
+	/// Returns the number of bytes used by the file
 	inline mapd_size_t size() {
 		return blockSize * nblocks;
 	}
 
-	/// Returns the product of block size with the number of free blocks
+	/// Returns the number of free bytes available
 	inline mapd_size_t available() {
 		return freeBlocks.size() * blockSize;
 	}
@@ -81,16 +82,6 @@ struct FileInfo {
 	/// Returns the amount of used bytes; size() - available()
 	inline mapd_size_t used() {
 		return size() - available();
-	}
-
-	/// used by find()
-	bool operator == (const FileInfo& item) const {
-		return (item.fileId == this->fileId);
-	}
-
-	/// used as a sort predicate
-	bool operator < (const FileInfo& item) const {
-		return (this->fileId < item.fileId);
 	}
 };
 
@@ -106,31 +97,26 @@ typedef std::multimap<mapd_size_t, int> BlockSizeFileMMap;
 
 /**
  * @type Chunk
- * @brief A Chunk is the fundamental unit of execution in Map-D.
+ * @brief A Chunk is the fundamental unit of execution in Map-D. It is a vector of MultiBlock pointers.
  *
  * A chunk is composed of logical blocks. These blocks can exist across multiple files managed by
  * the file manager.
  *
- * The collection of blocks is implemented as a set of BlockInfo* pointers. Since files contain
- * actual BlockInfo objects, it is better for a chunk to contain pointers to those objects in order
+ * The collection of blocks is implemented as a set of MultiBlock* pointers. Since files contain
+ * actual MultiBlock objects, it is better for a chunk to contain pointers to those objects in order
  * to avoid copy semantics and potential discrepancies between file blocks and chunk blocks.
- *
- * Each BlockInfo belonging to a chunk has an order variable, which states the block number within
- * the chunk.
  */
 typedef std::vector<MultiBlock*> Chunk;
 
 /**
  * @type ChunkKeyToChunkMap
- * @brief A map from chunk keys to files to block addresses.
+ * @brief Maps ChunkKeys (unique ids for Chunks) to Chunk objects.
  *
  * The file system can store multiple chunks across multiple files. With that
  * in mind, the challenge is to be able to reconstruct the blocks that compose
  * a chunk upon request. A chunk key (ChunkKey) uniquely identifies a chunk,
  * and so ChunkKeyToChunkMap maps chunk keys to Chunk types, which are
- * sets of ordered BlockInfo* pointers (logical blocks). The ordering of the
- * blocks is enforced by the set according to a sort predicate implemented
- * as part of BlockInfo.
+ * vectors of MultiBlock* pointers (logical blocks).
  */
 typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
 
@@ -139,13 +125,10 @@ typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
  * @brief The file manager manages interactions between the DBMS and the file system.
  *
  * The main job of the file manager is to translate logical block addresses to physical
- * block addresses. It maintains a list of files
+ * block addresses.
  *
  * FileMgr provides a chunk-level API, a block-level API for finer granularity, and a file-level
  * API. Care must be taken when using the different APIs such as not to "step on each others' toes"
- *
- * The file manager supports having a shadow copy of a block. In other words, any block that has
- * been updated will have an old (shadow) and new (current) copy.
  *
  * @todo asynch vs. synch?
  *
@@ -153,7 +136,7 @@ typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
 class FileMgr {
 
 public:
-	/// Constructor
+	/// Constructor with Postgress connector
 	FileMgr(const std::string &basePath);
 
 	/// Destructor
@@ -358,12 +341,8 @@ public:
 	 * Given a chunk key, this method writes to an existing chunk all of the data pointed to
 	 * by buf.
 	 */
-	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t buf, int epoch, mapd_size_t optBlockSize = -1);
-
-	/**
-	 * This method writes the contents of the chunk "c" to the chunk with the given chunk key.
-	 */
-	mapd_err_t putChunk(const ChunkKey &key, Chunk &c);
+	// @todo Comments to explain this in more depth are clearly "needed"
+	mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t src, int epoch, mapd_size_t optBlockSize = -1);
 
 	/**
 	 * Given a key, this method requests the file manager to create a new chunk of the requested
@@ -406,6 +385,9 @@ private:
 	ChunkKeyToChunkMap chunkIndex_; 	/**< Index for looking up chunks, which are vectors of BlockAddr */
 	unsigned nextFileId_;				/**< the index of the next file id */
 
+	/// Postgres connector object -- currently used for reading/writing file manager metadata
+	PgConnector pgConnector_;
+
 	/// Opens the FileInfo objects file handle. Returns MAPD_SUCCESS on success.
 	inline mapd_err_t openFile(FileInfo& fInfo) {
 		mapd_err_t err = MAPD_SUCCESS;
@@ -418,6 +400,16 @@ private:
 	 * @brief Inserts every block within the multiblock back into the free list, and then deletes the block
 	 */
 	void freeMultiBlock(MultiBlock* mb);
+
+	/**
+	 * @brief Reads metadata for file manager from Postgres database
+	 */
+	void readState();
+
+	/**
+	 * @brief Writes metadata for file manager from Postgres database
+	 */
+	void writeState(); 
 };
 
 } // File_Namespace

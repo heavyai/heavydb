@@ -32,7 +32,7 @@ namespace File_Namespace {
         fputc(EOF, f);
         fseek(f, 0, SEEK_SET); // rewind
         assert(fileSize(f) == (blockSize * nblocks));
-      //  fprintf(stdout, "[FileMgr] created file %d (blk_sz=%lu, nblocks=%lu, file_sz=%lu)\n", fileId, blockSize, nblocks, fileSize(f));
+        // fprintf(stdout, "[FileMgr] created file %d (blk_sz=%lu, nblocks=%lu, file_sz=%lu)\n", fileId, blockSize, nblocks, fileSize(f));
         
         if (err) {
             if ((fileSize(f) != blockSize * nblocks) || !f)

@@ -34,7 +34,7 @@ void test_putGetChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
 void test_deleteChunk(mapd_size_t nblocks, mapd_size_t blockSizeArg);
 
 int main(void) {
-
+/*
     test_FileInfo(10);
     test_FileInfo(100);
     test_FileInfo(1000);
@@ -88,7 +88,7 @@ int main(void) {
     // don't uncomment this if you know what's good for you
     //test_clearFreeBlock(30000, 30000);
     //test_clearFreeBlock(100000, 100000);
-
+*/
     test_createChunk(8, 8);
     test_createChunk(128, 64);
     test_createChunk(1, 1);
@@ -663,19 +663,29 @@ void test_putGetChunk(mapd_size_t blockSizeArg, mapd_size_t nblocks) {
     for (int i = 0; i < blockSize1*nblocks; i++) {
         destBuf[i] = 43;//rand() % 256;
     }
- 
+
     // alter the key for the new set of tests
     key.push_back(keyInt[4]);
+
     c = fm.createChunk(key, blockSize1*nblocks, blockSize1, srcBuf, epoch);
 
     // put the chunk's content in the buffer (no one puts ChunkKey in a corner)
     gottenChunk = fm.getChunk(key, destBuf);
+    printf("&c=%p &gottenChunk=%p\n", c, gottenChunk);
+    
+    if (c != gottenChunk)
+        PFAIL("getChunk pointer does not match that from createChunk, yo");
     if (gottenChunk == NULL)
         PFAIL("getChunk returned NULL");
     else PPASS("getChunk did not return NULL");
         printf("\n");
+
+    loopError = false;
     for (int i = 0; i < blockSize1*nblocks; i++) {
-        loopError = !(srcBuf[i] == destBuf[i]);
+        if (!(srcBuf[i] == destBuf[i])) {
+            loopError = true;
+            break;
+        }
         printf("%d %d\n", srcBuf[i], destBuf[i]);
     }
         printf("\n");
