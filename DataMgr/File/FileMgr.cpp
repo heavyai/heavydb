@@ -393,8 +393,7 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
         blockCount++;
     }
 
-    // Create new MultiBlock objects for the Chunk in order to write
-    // any remaining bytes
+    // Create new MultiBlock objects for the Chunk for remaining unwritten data
     while (nblocks > 0) {
 
         // find a suitable file (i.e., having the desired block size)
@@ -424,76 +423,35 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
 
         nblocks--;
         blockCount++;
-    }
+
+    } // while (nblocks > 0)
 
     return err;
 }
 
 // Inserts free blocks into the chunk; creates a new file if necessary
-Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, void *src, int epoch) {
-    
+Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, mapd_addr_t src, int epoch) {
     // check if the chunk already exists based on key
     Chunk *ctmp = NULL;
     if ((ctmp = getChunkRef(key)) != NULL) {
-        fprintf(stderr, "Warning: Chunk already exists.\n");
+        fprintf(stderr, "Warning: Chunk for specified key already exists. Using existing Chunk.\n");
         return ctmp;
     }
 
-    // declare the new chunk
-    Chunk c;
+    // Otherwise, add an entry to the file manager's chunk index
+    chunkIndex_.insert(std::pair<ChunkKey, Chunk>(key, Chunk()));
 
-    mapd_size_t sizeCount = size; 
-    // determine number of blocks needed
-    mapd_size_t nblocks = (size + blockSize - 1) / blockSize;
-    mapd_size_t blockCount = 0;
+    // Call putChunk to copy src into the new Chunk
+    mapd_err_t err = putChunk(key, size, src, epoch, blockSize);
 
-    // iterator that keeps track of all files in fileIndex_
-    if (fileIndex_.size() == 0) {
-        createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
+    // if putChunk() fails, then remove key from chunkIndex and return NULL
+    if (err != MAPD_SUCCESS) {
+        fprintf(stderr, "[%s:%s:%d] Error: unable to create chunk.\n", __FILE__, __func__, __LINE__);
+        chunkIndex_.erase(key);
+        return NULL;
     }
-    auto it = fileIndex_.lower_bound(blockSize);
-    // Create new Multiblocks for remaining bytes.
-    while (nblocks > 0) {
-        // check list of free blocks for room to create a new block
-        mapd_size_t begin;
-        // find a suitable fInfo
-        FileInfo* fInfo = NULL;
-        for (/* preserve iterator position */; it != fileIndex_.end(); ++it) {
-        
-            if (getFile(it->second)->available() > 0) {
-                fInfo = getFile(it->second);
-            }
-        }
-        --it;
-        // @todo handle no available files 
-        if (fInfo == NULL) {
-            // create a new file with the the default number of blocks
-            fInfo = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
-        }
-        auto itFree = fInfo->freeBlocks.begin();
-        begin = *itFree;
 
-        fInfo->freeBlocks.erase(itFree);
-        Block* newblk = new Block(fInfo->fileId, begin);
-
-        MultiBlock* mb = new MultiBlock(fInfo->blockSize);
-        mb->push(newblk, epoch);
-        c.push_back(mb);
-
-        // bytes will be written to newblk
-        newblk->end = begin+1;
-        
-
-        mapd_err_t err;
-        mapd_size_t bytesToWrite = std::min(sizeCount, blockSize);
-        mapd_size_t bytesWritten = write(fInfo->f, begin*fInfo->blockSize, bytesToWrite, (mapd_addr_t)src+blockCount*blockSize, &err);
-        sizeCount -= bytesToWrite;
-        nblocks--;
-        blockCount++;
-    }  
-    // Add an entry to the file manager's chunk index
-    chunkIndex_.insert(std::pair<ChunkKey, Chunk>(key, c));
-
+    // success!
     return getChunkRef(key);
 }
 
@@ -504,7 +462,7 @@ void FileMgr::freeMultiBlock(MultiBlock* mb) {
         FileInfo *fInfo = getFile(blk.fileId);
 
         // expression refers to file offset of most recent block in MultiBlock
-        fInfo->freeBlocks.insert(blk.begin);
+        fInfo->freeBlocks.insert(blk.blockNum);
         // delete the front block
         mb->pop();
     }

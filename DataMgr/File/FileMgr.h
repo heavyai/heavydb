@@ -363,7 +363,7 @@ public:
 	 * @return A pointer to a new Chunk, or NULL.
 	 */
 
-	Chunk* createChunk(ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, void *src, int epoch);
+	Chunk* createChunk(ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, mapd_addr_t src, int epoch);
 
 	/**
 	 * Given a chunk, this method deletes a chunk from the file system by freeing all
