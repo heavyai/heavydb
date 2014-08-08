@@ -1,6 +1,7 @@
 clear
 g++ -g -o blockTest blockTest.cpp -std=c++11
-g++ -g -o fileMgrTest FileMgr.cpp File.cpp fileMgrTest.cpp -std=c++11
+#g++ -g -o fileMgrTest FileMgr.cpp File.cpp fileMgrTest.cpp -std=c++11
+g++ -g -o fileMgrTest ../PgConnector/PgConnector.cpp FileMgr.cpp File.cpp fileMgrTest.cpp -std=c++11 -I/usr/local/include -L/usr/local/lib -lpqxx
 if [ "$?" != "0" ]; then
 echo "l0l h4xed"
 exit 0 

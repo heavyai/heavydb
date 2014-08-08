@@ -265,7 +265,7 @@ Chunk* FileMgr::getChunk(const ChunkKey &key, mapd_addr_t buf) {
         
         // read block from file into buf
         mapd_err_t err;
-        mapd_size_t used = c[i]->version.current().used;
+        mapd_size_t used = c[i]->current().used;
         read(fInfo->f, blk.blockNum * c[i]->blockSize, used, buf, &err);
         buf += used;
         // @todo should ensure no gaps in blocks of Chunk
@@ -317,7 +317,7 @@ mapd_err_t FileMgr::getChunkActualSize(const ChunkKey &key, mapd_size_t *size) {
     // Compute size based on actual bytes used in block
     Chunk &c = iter->second;
     for (int i = 0; i < c.size(); ++i)
-        *size += (c[i]->current().used;
+        *size += c[i]->current().used;
     
     return err;
 }
@@ -360,17 +360,14 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
     // Obtain an iterator over files having the desired block size to be written
     auto it = fileIndex_.lower_bound(blockSize);
 
-    // Write blockSize bytes to a new version of each existing logical block
-    // of the Chunk
+    // Write blockSize bytes to a new version of each existing logical block of the Chunk
     for (int i = 0; i < c->size(); ++i) {
 
         // find a suitable file (i.e., having the desired block size)
         FileInfo* fInfo = NULL;
-        for (; it != fileIndex_.end(); ++it) {
-            if (getFile(it->second)->available() > 0) {
+        for (; it != fileIndex_.end(); ++it)
+            if (getFile(it->second)->available() > 0)
                 fInfo = getFile(it->second);
-            }
-        }
         it--; // preserve iterator position
 
         if (fInfo == NULL) {
@@ -379,56 +376,55 @@ mapd_err_t FileMgr::putChunk(const ChunkKey &key, mapd_size_t size, mapd_addr_t 
         }
         assert(fInfo->freeBlocks.size() > 0);
 
-        // obtain first available free block
+        // obtain first available free block number, and remove it from free block list
         mapd_size_t freeBlockNum;
         auto itFree = fInfo->freeBlocks.begin();
         freeBlockNum = *itFree;
         fInfo->freeBlocks.erase(itFree);
 
-        // I have to go on the plane now. I'll finish this later.
-        (*c)[i]->push(fInfo->getBlock(freeBlockNum), epoch);
+        // Push the previously free block to be used as the new version
+        // of the current MultiBlock with the specified epoch
+        (*c)[i]->push(getBlock(*fInfo, freeBlockNum), epoch);
     
-        mapd_size_t bytesWritten = write(fInfo->f, begin*fInfo->blockSize, blockSize, src+blockCount*blockSize, &err);
+        // Write the correct block of src to the identified free block in fInfo
+        mapd_size_t bytesWritten = write(fInfo->f, freeBlockNum*fInfo->blockSize, blockSize, src+blockCount*blockSize, &err);
 
         nblocks--;
         blockCount++;
     }
 
-    // Create new Multiblocks for remaining bytes.
+    // Create new MultiBlock objects for the Chunk in order to write
+    // any remaining bytes
     while (nblocks > 0) {
 
-        // check list of free blocks for room to create a new block
-        mapd_size_t begin;
-
-        // find a suitable fInfo
+        // find a suitable file (i.e., having the desired block size)
         FileInfo* fInfo = NULL;
-        for (/* preserve iterator position */; it != fileIndex_.end(); ++it) {
-            if (getFile(it->second)->available() > 0) {
+        for (; it != fileIndex_.end(); ++it)
+            if (getFile(it->second)->available() > 0)
                 fInfo = getFile(it->second);
-                //fprintf(stderr, "hey found a good file! shouldn't be no error now2\n");
-            }
-        }
-        --it;
+        it--; // preserve iterator position
+
         if (fInfo == NULL) {
-            // create a new file with the the default number of blocks
-            fInfo = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
+          // create a new file with the default number of blocks
+          fInfo = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
         }
+        assert(fInfo->freeBlocks.size() > 0);
 
-        // if room, iterate through free blocks and create a new block at the given size, removing address from free blocks    
+        // obtain first available free block number, and remove it from free block list
+        mapd_size_t freeBlockNum;
         auto itFree = fInfo->freeBlocks.begin();
-        begin = *itFree;
+        freeBlockNum = *itFree;
         fInfo->freeBlocks.erase(itFree);
-        Block* newblk = new Block(fInfo->fileId, begin);
 
-        MultiBlock* mb = new MultiBlock(fInfo->fileId, fInfo->blockSize);
-        mb->push(newblk, epoch);
-        c->push_back(mb);    
+        MultiBlock* mb = new MultiBlock(fInfo->blockSize);
+        mb->push(getBlock(*fInfo, freeBlockNum), epoch);
+        c->push_back(mb);
 
-        mapd_size_t bytesWritten = write(fInfo->f, begin*fInfo->blockSize, blockSize, src+blockCount*blockSize, &err);
+        mapd_size_t bytesWritten = write(fInfo->f, freeBlockNum*fInfo->blockSize, blockSize, src+blockCount*blockSize, &err);
 
         nblocks--;
         blockCount++;
-    }    
+    }
 
     return err;
 }
@@ -480,7 +476,7 @@ Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_si
         fInfo->freeBlocks.erase(itFree);
         Block* newblk = new Block(fInfo->fileId, begin);
 
-        MultiBlock* mb = new MultiBlock(fInfo->fileId, fInfo->blockSize);
+        MultiBlock* mb = new MultiBlock(fInfo->blockSize);
         mb->push(newblk, epoch);
         c.push_back(mb);
 
