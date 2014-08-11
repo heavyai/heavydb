@@ -5,13 +5,18 @@
  */
 #include "TablePartitionMgr.h"
 #include "Catalog.h"
+#include "BufferMgr.h"
+#include "LinearTablePartitioner.h"
+
 #include <limits>
+#include <boost/lexical_cast.hpp>
 
-
+using std::vector;
+using std::string;
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr(Catalog &catalog, BufferMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), pgConnector_("mapd","tmostak"), isDirty_(false) {
+TablePartitionMgr::TablePartitionMgr(Metadata_Namespace::Catalog &catalog, Buffer_Namespace::BufferMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), pgConnector_("mapd","tmostak"), isDirty_(false) {
     createStateTableIfDne();
     readState();
 }
@@ -35,13 +40,14 @@ void TablePartitionMgr::getQueryPartitionInfo(const int tableId, QueryInfo &quer
     // to allow finding the partitioner that makes us scan the 
     // least number of tuples
     
-    queryinfo.numTuples = std::numeric_limits<mapd_size_t>::max();
+    queryInfo.numTuples = std::numeric_limits<mapd_size_t>::max();
 
 
     // Iterate over each partitioner that exists for the table
     for (auto vecIt = mapIt -> second.begin(); vecIt != mapIt -> second.end(); ++vecIt) {
         QueryInfo tempQueryInfo;
-        vecIt -> getPartitionsForQuery(tempQueryInfo, predicate);
+        AbstractTablePartitioner * abstractTablePartitioner = *vecIt;
+        abstractTablePartitioner -> getPartitionsForQuery(tempQueryInfo, predicate);
         if (tempQueryInfo.numTuples < queryInfo.numTuples) 
             queryInfo = tempQueryInfo;
     }
@@ -51,7 +57,7 @@ void TablePartitionMgr::getQueryPartitionInfo(const int tableId, QueryInfo &quer
 
 
 
-void TablePartitionMgr::createPartitionerForTable(const int tableId, const PartitionType partititonType, std::vector <ColumnInfo> &columnInfoVec, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize = 1048576) {
+void TablePartitionMgr::createPartitionerForTable(const int tableId, const PartitionerType partitionerType, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize) {
     // need to query catalog for needed metadata
     vector <Metadata_Namespace::ColumnRow> columnRows;
     mapd_err_t status = catalog_.getAllColumnMetadataForTable(tableId, columnRows);
@@ -63,7 +69,7 @@ void TablePartitionMgr::createPartitionerForTable(const int tableId, const Parti
     AbstractTablePartitioner * partitioner;
     assert (partitionerType == LINEAR);
     if (partitionerType == LINEAR) {
-        partitioner = new LinearTablePartitioner(maxPartitionerId, columnInfoVec, bufferMgr_);
+        partitioner = new LinearTablePartitioner(maxPartitionerId_, columnInfoVec, bufferMgr_);
     }
     auto partMapIt = tableToPartitionerMap_.find(tableId);
     if (partMapIt != tableToPartitionerMap_.end()) {
@@ -82,7 +88,9 @@ void TablePartitionMgr::insertData(const InsertData &insertDataStruct) {
     assert (mapIt != tableToPartitionerMap_.end());
     // Now iterate over all partitioners for given table
     for (auto vecIt = mapIt -> second.begin(); vecIt != mapIt -> second.end(); ++vecIt) {
-        vecIt -> insertData(insertDataStruct);
+        AbstractTablePartitioner * abstractTablePartitioner = *vecIt;
+
+        abstractTablePartitioner -> insertData(insertDataStruct);
     }
 }
 
@@ -97,18 +105,18 @@ void TablePartitionMgr::readState() {
     assert(status == MAPD_SUCCESS);
     size_t numRows = pgConnector_.getNumRows();
     int prevTableId = -1;
-    vector <AbstractTablePartitioner &> partitionerVec_;
+    vector <AbstractTablePartitioner *> partitionerVec_;
     vector<ColumnInfo> columnInfoVec;
     for (int r = 0; r < numRows; ++r) {
         int tableId = pgConnector_.getData<int>(r,0);
         if (tableId != prevTableId && partitionerVec_.size() > 0) {
-            tableToPartitionerMap_[pervTableId] = partitionerVec_;
+            tableToPartitionerMap_[prevTableId] = partitionerVec_;
             partitionerVec_.clear(); // will this not delete 
             prevTableId = tableId;
             vector <Metadata_Namespace::ColumnRow> columnRows;
             catalog_.getAllColumnMetadataForTable(tableId, columnRows);
             columnInfoVec.clear();
-            translateColumnRowsToColumnInfoVec(columnRows, columnInfoVec)
+            translateColumnRowsToColumnInfoVec(columnRows, columnInfoVec);
         }
         int partitionerId = pgConnector_.getData<int>(r,1);
         if (partitionerId > maxPartitionerId_)
@@ -128,9 +136,11 @@ void TablePartitionMgr::writeState() {
         for (auto partMapIt = tableToPartitionerMap_.begin(); partMapIt != tableToPartitionerMap_.end(); ++partMapIt) {
             string tableId = boost::lexical_cast<string>(partMapIt -> first);
             for (auto partIt = (partMapIt -> second).begin(); partIt != (partMapIt -> second).end(); ++partIt) {
-                int partitionerId = partIt -> getPartitionerId();
-                string partitionerType = partIt -> getPartitionerType();
-                string insertQuery("INSERT INTO partitioners (table_id, partitioner_id, partitioner_type) VALUES (" + boost::lexical_cast<string>(tableId) + "," + boost::lexical_cast<string>(paritionerId) + ",'" + partitionerType + "'");
+                AbstractTablePartitioner *abstractTablePartitioner = *partIt;
+
+                int partitionerId = abstractTablePartitioner -> getPartitionerId();
+                string partitionerType = abstractTablePartitioner -> getPartitionerType();
+                string insertQuery("INSERT INTO partitioners (table_id, partitioner_id, partitioner_type) VALUES (" + boost::lexical_cast<string>(tableId) + "," + boost::lexical_cast<string>(partitionerId) + ",'" + partitionerType + "'");
                 mapd_err_t status = pgConnector_.query(insertQuery);
                 assert (status == MAPD_SUCCESS);
             }

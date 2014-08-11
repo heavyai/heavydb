@@ -46,7 +46,7 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
         createNewPartition();
     }
 
-    for (int c = 0; c != columnIds.size(); ++c) {
+    for (int c = 0; c != insertDataStruct.columnIds.size(); ++c) {
         int columnId =insertDataStruct.columnIds[c];
         map <int, ColumnInfo>::iterator colMapIt = columnMap_.find(columnId);
         // This SHOULD be found and this iterator should not be end()
@@ -55,10 +55,10 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
         assert(colMapIt != columnMap_.end());
         //cout << "Insert buffer before insert: " << colMapIt -> second.insertBuffer << endl;
         //cout << "Insert buffer before insert length: " << colMapIt -> second.insertBuffer -> length() << endl;
-        colMapIt -> second.insertBuffer -> append(colMapIt -> second.bitSize * insertDataStruct_.numRows / 8, static_cast <mapd_addr_t> (insertDataStruct.data[c]));
+        colMapIt -> second.insertBuffer -> append(colMapIt -> second.bitSize * insertDataStruct.numRows / 8, static_cast <mapd_addr_t> (insertDataStruct.data[c]));
     }
     //currentInsertBufferSize_ += numRows;
-    partitionInfoVec_.back().numTuples += insertDataStruct.numRows_;
+    partitionInfoVec_.back().numTuples += insertDataStruct.numRows;
     isDirty_ = true;
 }
 
@@ -73,7 +73,7 @@ void LinearTablePartitioner::createNewPartition() {
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
         if (colMapIt -> second.insertBuffer != 0)
             colMapIt -> second.insertBuffer -> unpin();
-        ChunkKey chunkKey = {partitonerId_, maxPartitionId_,  colMapIt -> second.columnId};
+        ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnId};
         // We will allocate enough pages to hold the maximum number of rows of
         // this type
         mapd_size_t numPages = ceil(static_cast <float> (maxPartitionRows_) / (pageSize_ * 8 / colMapIt -> second.bitSize)); // number of pages for a partition is celing maximum number of rows for a partition divided by how many elements of this column type can fit on a page 

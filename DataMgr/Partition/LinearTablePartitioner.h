@@ -25,19 +25,19 @@ class LinearTablePartitioner : public AbstractTablePartitioner { // implements
 public:
     LinearTablePartitioner(const int partitionerId,  std::vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows =1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
-    ~LinearTablePartitioner();
+    virtual ~LinearTablePartitioner();
 
     virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0);
 
     //virtual void insertData (const std::vector <int> &columnIds, const std::vector <void *> &data, const int numRows);
     virtual void insertData (const InsertData &insertDataStruct);
     //mapd_size_t currentInsertBufferSize_;
-    inline int getPartitionerId () {return partitionerId_};
-    inline std::string getPartitionerType () {return partitionerType_};
+    inline int getPartitionerId () {return partitionerId_;}
+    inline std::string getPartitionerType () {return partitionerType_;}
 
 private:
 	int partitionerId_;
-    string partitionerType_;
+    std::string partitionerType_;
 	mapd_size_t maxPartitionRows_;
     int maxPartitionId_;
     mapd_size_t pageSize_;

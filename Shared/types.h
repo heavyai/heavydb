@@ -50,7 +50,7 @@ mapd_size_t getBitSizeForType(const mapd_data_t dataType) {
         case FLOAT_TYPE:
             return 32;
             break;
-        case BOOL_TYPE:
+        case BOOLEAN_TYPE:
             return 1;
             break;
     }

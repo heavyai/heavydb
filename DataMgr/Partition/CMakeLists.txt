@@ -8,10 +8,14 @@ SET (partitioner_source_files
     LinearTablePartitioner.cpp
     LinearTablePartitioner.h
     AbstractTablePartitioner.h
+    TablePartitionMgr.h
+    TablePartitionMgr.cpp
 )
 
 set (partitioner_include_dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../Buffer
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Metadata
+    "/usr/local/include"
 )
 
 include_directories(${partitioner_include_dirs})
@@ -23,6 +27,8 @@ if (BUILD_TEST)
     ADD_SUBDIRECTORY (${CMAKE_CURRENT_SOURCE_DIR}/../PgConnector ${CMAKE_CURRENT_BINARY_DIR}/PgConnector)
     message( "Including Buffer" )
     ADD_SUBDIRECTORY (${CMAKE_CURRENT_SOURCE_DIR}/../Buffer ${CMAKE_CURRENT_BINARY_DIR}/Buffer)
+    message( "Including Catalog" )
+    ADD_SUBDIRECTORY (${CMAKE_CURRENT_SOURCE_DIR}/../Metadata ${CMAKE_CURRENT_BINARY_DIR}/Metadata)
     ADD_EXECUTABLE (PartitionTest LinearTablePartitionerTest.cpp)
     TARGET_LINK_LIBRARIES(PartitionTest LinearTablePartitioner PgConnector Buffer) 
 endif(BUILD_TEST)

@@ -14,7 +14,15 @@
 #include <vector>
 
 // forward declaration(s)
-class BufferMgr;
+namespace Buffer_Namespace {
+    class BufferMgr;
+};
+
+namespace Metadata_Namespace {
+    class Catalog;
+    struct ColumnRow;
+}
+
 class TablePartitioner;
 
 /**
@@ -28,16 +36,7 @@ class TablePartitioner;
  * @todo support for variable-length data types
  */
 
-enum PartitionerType {
-    LINEAR
-};
 
-struct InsertData {
-	int tableId;						/// identifies the table into which the data is being inserted
-	std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
-	mapd_size_t numRows;				/// the number of rows being inserted
-	vector <void *> data;							/// points to the start of the data for the row(s) being inserted
-};
 
 
 /**
@@ -51,12 +50,13 @@ class TablePartitionMgr {
 
 public:
 	/// Constructor
-	TablePartitionMgr(Catalog &catalog, BufferMgr &bm);
+	TablePartitionMgr(Metadata_Namespace::Catalog &catalog, Buffer_Namespace::BufferMgr &bm);
 
 	/// Destructor
 	~TablePartitionMgr();
 
-    void createPartitionerForTable (const int tableId, const PartitionType partititonType, std::vector <ColumnInfo> &columnInfoVec, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
+    void getQueryPartitionInfo(const int tableId, QueryInfo &queryInfo, const void *predicate);
+    void createPartitionerForTable (const int tableId, const PartitionerType partititonerType, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
 	/// Insert the data (insertData) into the table
 	void insertData(const InsertData &insertDataStruct);
 
@@ -70,10 +70,17 @@ public:
 	void getPartitionIds(const int tableId,  std::vector<int> &partitionIds, const void *predicate = 0);
 
 private:
+
+    void createStateTableIfDne();
+    void readState();
+    void writeState();
+    void translateColumnRowsToColumnInfoVec (std::vector <Metadata_Namespace::ColumnRow> &columnRows, std::vector<ColumnInfo> &columnInfoVec);
+
+
     int maxPartitionerId_;
-	std::map<int, vector <AbstractTablePartitioner *> > tableToPartitionerMap_; 	/// maps table ids to TablePartitioner objects
-    Catalog &catalog_;
-	BufferMgr & bufferMgr_;									/// pointer to the buffer manager object
+	std::map<int, std::vector <AbstractTablePartitioner *> > tableToPartitionerMap_; 	/// maps table ids to TablePartitioner objects
+    Metadata_Namespace::Catalog &catalog_;
+    Buffer_Namespace::BufferMgr & bufferMgr_;									/// pointer to the buffer manager object
     PgConnector pgConnector_;
     bool isDirty_;  /**< Specifies if the TablePartitionMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */
 };
