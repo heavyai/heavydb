@@ -28,6 +28,10 @@ class TablePartitioner;
  * @todo support for variable-length data types
  */
 
+enum PartitionerType {
+    LINEAR
+};
+
 struct InsertData {
 	int tableId;						/// identifies the table into which the data is being inserted
 	std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
@@ -52,7 +56,7 @@ public:
 	/// Destructor
 	~TablePartitionMgr();
 
-    void createPartitionerForTable (const int tableId, const PartitionType partititonType, std::vector <ColumnInfo> &columnInfoVec, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize = 1048576);
+    void createPartitionerForTable (const int tableId, const PartitionType partititonType, std::vector <ColumnInfo> &columnInfoVec, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
 	/// Insert the data (insertData) into the table
 	void insertData(const InsertData &insertDataStruct);
 
@@ -67,10 +71,11 @@ public:
 
 private:
     int maxPartitionerId_;
-	std::map<int, vector <AbstractTablePartitioner &> > tableToPartitionerMap_; 	/// maps table ids to TablePartitioner objects
+	std::map<int, vector <AbstractTablePartitioner *> > tableToPartitionerMap_; 	/// maps table ids to TablePartitioner objects
     Catalog &catalog_;
 	BufferMgr & bufferMgr_;									/// pointer to the buffer manager object
     PgConnector pgConnector_;
+    bool isDirty_;  /**< Specifies if the TablePartitionMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */
 };
 
 #endif // _TABLE_PARTITION_MGR_H

@@ -324,19 +324,6 @@ bool test_AddTableWithColumns() {
     return true;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 //utility/helper methods
 
 void reset() {

@@ -43,6 +43,18 @@ enum mapd_data_t {
     FLOAT_TYPE,
     BOOLEAN_TYPE
 };
+//@todo should this be somewhere else
+mapd_size_t getBitSizeForType(const mapd_data_t dataType) {
+    switch (dataType) {
+        case INT_TYPE:
+        case FLOAT_TYPE:
+            return 32;
+            break;
+        case BOOL_TYPE:
+            return 1;
+            break;
+    }
+}
 
 #endif	/* _TYPES_H */
 

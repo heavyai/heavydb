@@ -23,7 +23,7 @@
 class LinearTablePartitioner : public AbstractTablePartitioner { // implements
 
 public:
-    LinearTablePartitioner(const int partitionerId,  std::vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
+    LinearTablePartitioner(const int partitionerId,  std::vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows =1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
     ~LinearTablePartitioner();
 
@@ -32,9 +32,12 @@ public:
     //virtual void insertData (const std::vector <int> &columnIds, const std::vector <void *> &data, const int numRows);
     virtual void insertData (const InsertData &insertDataStruct);
     //mapd_size_t currentInsertBufferSize_;
+    inline int getPartitionerId () {return partitionerId_};
+    inline std::string getPartitionerType () {return partitionerType_};
 
 private:
 	int partitionerId_;
+    string partitionerType_;
 	mapd_size_t maxPartitionRows_;
     int maxPartitionId_;
     mapd_size_t pageSize_;
@@ -43,6 +46,7 @@ private:
     //int currentInsertBufferPartitionId_;
     Buffer_Namespace::BufferMgr &bufferManager_;
     PgConnector pgConnector_;
+    bool isDirty_;  /**< Specifies if the LinearTablePartitioner has been modified in memory since the last flush to file - no need to rewrite file if this is false. */
     
     void createNewPartition();
     void createStateTableIfDne();

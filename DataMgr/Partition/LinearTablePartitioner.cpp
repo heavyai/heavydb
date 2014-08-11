@@ -15,7 +15,7 @@ using namespace std;
 
 
 LinearTablePartitioner::LinearTablePartitioner(const int partitionerId,  vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
-		partitionerId_(partitionerId), bufferManager_(bufferManager), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), pgConnector_("mapd","tmostak")/*, currentInsertBufferSize_(0) */ {
+		partitionerId_(partitionerId), bufferManager_(bufferManager), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), pgConnector_("mapd","tmostak"), partitionerType_("linear"), isDirty_(false)/*, currentInsertBufferSize_(0) */ {
     // @todo Actually get user's name to feed to pgConnector_
     // populate map with ColumnInfo structs
     for (vector <ColumnInfo>::iterator colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
@@ -59,6 +59,7 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
     }
     //currentInsertBufferSize_ += numRows;
     partitionInfoVec_.back().numTuples += insertDataStruct.numRows_;
+    isDirty_ = true;
 }
 
 
@@ -142,12 +143,15 @@ void LinearTablePartitioner::writeState() {
     // newest state back in?
     // Will do latter for now as we do not 
     // plan on using postgres forever for metadata
-     string deleteQuery ("delete from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
-     mapd_err_t status = pgConnector_.query(deleteQuery);
-     assert(status == MAPD_SUCCESS);
-    for (auto partIt = partitionInfoVec_.begin(); partIt != partitionInfoVec_.end(); ++partIt) {
-        string insertQuery("INSERT INTO fragments (partitioner_id, fragment_id, num_rows) VALUES (" + boost::lexical_cast<string>(partitionerId_) + "," + boost::lexical_cast<string>(partIt -> partitionId) + "," + boost::lexical_cast<string>(partIt -> numTuples) + ")"); 
-        status = pgConnector_.query(insertQuery);
+    if (isDirty_) {
+         string deleteQuery ("delete from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
+         mapd_err_t status = pgConnector_.query(deleteQuery);
          assert(status == MAPD_SUCCESS);
+        for (auto partIt = partitionInfoVec_.begin(); partIt != partitionInfoVec_.end(); ++partIt) {
+            string insertQuery("INSERT INTO fragments (partitioner_id, fragment_id, num_rows) VALUES (" + boost::lexical_cast<string>(partitionerId_) + "," + boost::lexical_cast<string>(partIt -> partitionId) + "," + boost::lexical_cast<string>(partIt -> numTuples) + ")"); 
+            status = pgConnector_.query(insertQuery);
+             assert(status == MAPD_SUCCESS);
+        }
     }
+    isDirty_ = false;
 }
