@@ -60,6 +60,9 @@ public:
 	/// Insert the data (insertData) into the table
 	void insertData(const InsertData &insertDataStruct);
 
+
+
+
 	/**
 	 * Obtain partition ids via a partition manager.
 	 * @entityId	The id of an data entity being managed
@@ -71,6 +74,17 @@ public:
 
 private:
 
+    inline mapd_size_t getBitSizeForType(const mapd_data_t dataType) {
+        switch (dataType) {
+            case INT_TYPE:
+            case FLOAT_TYPE:
+                return 32;
+                break;
+            case BOOLEAN_TYPE:
+                return 1;
+                break;
+        }
+    }
     void createStateTableIfDne();
     void readState();
     void writeState();

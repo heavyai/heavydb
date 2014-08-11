@@ -95,7 +95,7 @@ void TablePartitionMgr::insertData(const InsertData &insertDataStruct) {
 }
 
 void TablePartitionMgr::createStateTableIfDne() {
-     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS partitioners(table_id INT, part_id INT, PRIMARY KEY (table_id, part_id))");
+     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS partitioners(table_id INT, partitioner_id INT, partitioner_type text, PRIMARY KEY (table_id, partitioner_id))");
      assert(status == MAPD_SUCCESS);
 }
 

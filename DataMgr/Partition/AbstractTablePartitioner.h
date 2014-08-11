@@ -53,7 +53,7 @@ struct QueryInfo {
 class AbstractTablePartitioner { 
 
     public:
-        virtual ~AbstractTablePartitioner() = 0;
+        virtual ~AbstractTablePartitioner() {}
         virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
         virtual void insertData (const InsertData &insertDataStruct) = 0;
         virtual int getPartitionerId() = 0;
