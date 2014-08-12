@@ -284,8 +284,38 @@ class Catalog {
          * Catalog files are written by Catalog and represent the pre-valicated
          * in-memory state of the database metadata.
          */
+        
+        inline std::string getTypeName(mapd_data_t type) {
+            switch (type) {
+                case INT_TYPE:
+                    return "int";
+                    break;
+                case FLOAT_TYPE:
+                    return "float";
+                    break;
+                case BOOLEAN_TYPE:
+                    return "bool";
+                    break;
+            }
+        }
+
+        inline mapd_data_t getTypeFromString(const std::string &typeName) {
+            if (typeName == "int") {
+                return INT_TYPE;
+            }
+            else if (typeName == "float") {
+                return FLOAT_TYPE;
+            }
+            else if (typeName == "bool") {
+                return BOOLEAN_TYPE;
+            }
+            return INT_TYPE;
+        }
+        void createStateTableIfDne();
 
         mapd_err_t readCatalogFromFile();
+        mapd_err_t readState();
+        mapd_err_t writeState();
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableRowMap tableRowMap_;
