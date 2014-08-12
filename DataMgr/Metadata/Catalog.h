@@ -16,14 +16,17 @@
 #ifndef CATALOG_H
 #define CATALOG_H
 
+
+#include "../../Shared/errors.h"
+#include "../../Shared/types.h"
+#include "../PgConnector/PgConnector.h"
+
 #include <string>
 #include <tuple>
 #include <map>
 #include <vector>
 #include <utility>
-
-#include "../../Shared/errors.h"
-#include "../../Shared/types.h"
+#include <boost/lexical_cast.hpp>
 
 namespace Metadata_Namespace {
 
@@ -320,6 +323,7 @@ class Catalog {
         std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableRowMap tableRowMap_;
         ColumnRowMap columnRowMap_;
+        PgConnector pgConnector_;
         int maxTableId_; /**< Serves as monotonically increasing counter to assign to each generated table. Increments on table creation but never decrements on deletion - so may have "gaps" */
         int maxColumnId_; /**< Serves as monotonically increasing counter to assign to each generated column. Increments on column creation but never decrements on deletion - so may have "gaps".  Right now we use a global columnId counter, making columnId a primary key for each column, but we may change this in the future so that each table has its own space for column keys. */
         bool isDirty_; /**< Specifies if the catalog has been modified in memory since the last flush to file - no need to rewrite file if this is false. */

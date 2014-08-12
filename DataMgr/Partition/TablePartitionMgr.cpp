@@ -16,7 +16,7 @@ using std::string;
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr::TablePartitionMgr(Metadata_Namespace::Catalog &catalog, Buffer_Namespace::BufferMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), pgConnector_("mapd","tmostak"), isDirty_(false) {
+TablePartitionMgr::TablePartitionMgr(Metadata_Namespace::Catalog &catalog, Buffer_Namespace::BufferMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), pgConnector_("mapd","mapd"), isDirty_(false) {
     createStateTableIfDne();
     readState();
 }

@@ -5,4 +5,6 @@ SET (catalog_source_files
     Catalog.h
 )
 
+include_directories("/usr/local/include")
+
 ADD_LIBRARY (Catalog ${catalog_source_files})
