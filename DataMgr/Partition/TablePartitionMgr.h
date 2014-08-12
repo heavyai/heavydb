@@ -56,7 +56,7 @@ public:
 	~TablePartitionMgr();
 
     void getQueryPartitionInfo(const int tableId, QueryInfo &queryInfo, const void *predicate);
-    void createPartitionerForTable (const int tableId, const PartitionerType partititonerType, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
+    void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
 	/// Insert the data (insertData) into the table
 	void insertData(const InsertData &insertDataStruct);
 

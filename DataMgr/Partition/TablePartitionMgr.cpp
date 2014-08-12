@@ -57,12 +57,13 @@ void TablePartitionMgr::getQueryPartitionInfo(const int tableId, QueryInfo &quer
 
 
 
-void TablePartitionMgr::createPartitionerForTable(const int tableId, const PartitionerType partitionerType, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize) {
+void TablePartitionMgr::createPartitionerForTable(const string &tableName, const PartitionerType partitionerType, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize) {
     // need to query catalog for needed metadata
     vector <Metadata_Namespace::ColumnRow> columnRows;
-    mapd_err_t status = catalog_.getAllColumnMetadataForTable(tableId, columnRows);
+    mapd_err_t status = catalog_.getAllColumnMetadataForTable(tableName, columnRows);
     assert(status == MAPD_SUCCESS);
     vector<ColumnInfo> columnInfoVec;
+    int tableId = columnRows[0].tableId;
     translateColumnRowsToColumnInfoVec(columnRows, columnInfoVec);
 
     maxPartitionerId_++;
@@ -74,6 +75,8 @@ void TablePartitionMgr::createPartitionerForTable(const int tableId, const Parti
     auto partMapIt = tableToPartitionerMap_.find(tableId);
     if (partMapIt != tableToPartitionerMap_.end()) {
         (partMapIt -> second).push_back(partitioner);
+        //@todo if there is already a partitioner for this
+        //table we need to copy its data to this partitioner
     }
     else { // first time we've seen this table id
         vector <AbstractTablePartitioner *> partitionerVec;
@@ -140,7 +143,7 @@ void TablePartitionMgr::writeState() {
 
                 int partitionerId = abstractTablePartitioner -> getPartitionerId();
                 string partitionerType = abstractTablePartitioner -> getPartitionerType();
-                string insertQuery("INSERT INTO partitioners (table_id, partitioner_id, partitioner_type) VALUES (" + boost::lexical_cast<string>(tableId) + "," + boost::lexical_cast<string>(partitionerId) + ",'" + partitionerType + "'");
+                string insertQuery("INSERT INTO partitioners (table_id, partitioner_id, partitioner_type) VALUES (" + boost::lexical_cast<string>(tableId) + "," + boost::lexical_cast<string>(partitionerId) + ",'" + partitionerType + "')");
                 mapd_err_t status = pgConnector_.query(insertQuery);
                 assert (status == MAPD_SUCCESS);
             }
