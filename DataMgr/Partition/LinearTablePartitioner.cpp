@@ -12,7 +12,7 @@ using Buffer_Namespace::BufferMgr;
 
 using namespace std;
 
-
+namespace Partition_Namespace {
 
 LinearTablePartitioner::LinearTablePartitioner(const int partitionerId,  vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
 		partitionerId_(partitionerId), bufferManager_(bufferManager), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), pgConnector_("mapd","mapd"), partitionerType_("linear"), isDirty_(false)/*, currentInsertBufferSize_(0) */ {
@@ -155,3 +155,5 @@ void LinearTablePartitioner::writeState() {
     }
     isDirty_ = false;
 }
+
+} // Partition_Namespace

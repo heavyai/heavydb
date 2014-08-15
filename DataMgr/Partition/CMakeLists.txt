@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 2.8)
 set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
 
 SET (partitioner_source_files
+    PartitionIncludes.h
     LinearTablePartitioner.cpp
     LinearTablePartitioner.h
     AbstractTablePartitioner.h

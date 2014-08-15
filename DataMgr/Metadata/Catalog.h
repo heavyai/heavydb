@@ -43,6 +43,7 @@ struct TableRow {
 
 
     TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
+    TableRow() {}
 };
 
 /**
@@ -233,6 +234,7 @@ class Catalog {
 
         mapd_err_t removeColumnFromTable(const std::string &tableName, const std::string &columnName);
 
+        mapd_err_t getMetadataForTable (const std::string &tableName, TableRow &tableRow);
         /**
          * @brief Passes back via reference a ColumnRow struct for the column specified by table name and column name 
          * @param tableName table specified column belongs to

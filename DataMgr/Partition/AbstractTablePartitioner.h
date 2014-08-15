@@ -7,6 +7,7 @@
 #define _ABSTRACT_TABLE_PARTITIONER_H
 
 #include "../../Shared/types.h"
+#include "PartitionIncludes.h"
 #include <vector>
 #include <string>
 
@@ -18,9 +19,7 @@ namespace Buffer_Namespace {
     class BufferMgr;
 };
 
-enum PartitionerType {
-    LINEAR
-};
+namespace Partition_Namespace {
 
 struct ColumnInfo {
     int columnId; // for when we iterate over all structs of ColumnInfo instead of using a map
@@ -32,12 +31,6 @@ struct ColumnInfo {
 	//ColumnInfo& operator=(const ColumnInfo&);
 };
 
-struct InsertData {
-	int tableId;						/// identifies the table into which the data is being inserted
-	std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
-	mapd_size_t numRows;				/// the number of rows being inserted
-    std::vector <void *> data;							/// points to the start of the data for the row(s) being inserted
-};
 
 struct PartitionInfo {
     int partitionId;
@@ -62,5 +55,7 @@ class AbstractTablePartitioner {
         //virtual void insertData (const std::vector <int> &columnIds, const std::vector <void *> &data, const int numRows) = 0;
 
 };
+
+} // Partition_Namespace
 
 #endif // _ABSTRACT_TABLE_PARTITIONER 

@@ -6,6 +6,7 @@
 #ifndef _TABLE_PARTITION_MGR_H
 #define _TABLE_PARTITION_MGR_H
 
+#include "PartitionIncludes.h"
 #include "AbstractTablePartitioner.h"
 #include "../../Shared/types.h"
 #include "../PgConnector/PgConnector.h"
@@ -23,21 +24,7 @@ namespace Metadata_Namespace {
     struct ColumnRow;
 }
 
-class TablePartitioner;
-
-/**
- * @struct InsertData
- * @brief The data to be inserted using the partition manager.
- *
- * The data being inserted is assumed to be in columnar format, and so the offset
- * to the beginning of each column can be calculated by multiplying the column size
- * by the number of rows.
- *
- * @todo support for variable-length data types
- */
-
-
-
+namespace Partition_Namespace {
 
 /**
  * @class TablePartitionMgr
@@ -46,7 +33,10 @@ class TablePartitioner;
  * An concrete partition manager that implements the AbstractPartitionMgr
  * interface for the relational table model.
  */
+
 class TablePartitionMgr {
+
+friend class TablePartitionerTest;
 
 public:
 	/// Constructor
@@ -60,17 +50,6 @@ public:
 	/// Insert the data (insertData) into the table
 	void insertData(const InsertData &insertDataStruct);
 
-
-
-
-	/**
-	 * Obtain partition ids via a partition manager.
-	 * @entityId	The id of an data entity being managed
-	 * @predicate	A pointer to a predicate by which the data is partitioned
-	 *
-	 * @todo The type of predicate should be changed to point to the subtree of the predicate in the AST
-	 */
-	void getPartitionIds(const int tableId,  std::vector<int> &partitionIds, const void *predicate = 0);
 
 private:
 
@@ -98,5 +77,7 @@ private:
     PgConnector pgConnector_;
     bool isDirty_;  /**< Specifies if the TablePartitionMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */
 };
+
+} // Partition_Namespace
 
 #endif // _TABLE_PARTITION_MGR_H

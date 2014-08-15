@@ -12,6 +12,7 @@
 #include <vector>
 #include <map>
 
+namespace Partition_Namespace {
 
 /**
  * @brief	The LinearTablePartitioner maps partial keys to partition ids.
@@ -59,4 +60,7 @@ private:
 
 };
 
+} // Partition_Namespace
+
  #endif // LINEAR_TABLE_PARTITIONER_H
+

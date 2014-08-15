@@ -14,6 +14,8 @@
 using std::vector;
 using std::string;
 
+namespace Partition_Namespace {
+
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
 TablePartitionMgr::TablePartitionMgr(Metadata_Namespace::Catalog &catalog, Buffer_Namespace::BufferMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), pgConnector_("mapd","mapd"), isDirty_(false) {
@@ -162,3 +164,5 @@ void TablePartitionMgr::translateColumnRowsToColumnInfoVec (vector <Metadata_Nam
         columnInfoVec.push_back(columnInfo);
     }
 }
+
+} // Partition_Namespace
