@@ -85,7 +85,7 @@ void TablePartitionMgr::createPartitionerForTable(const string &tableName, const
         partitionerVec.push_back(partitioner);
         tableToPartitionerMap_[tableId] = partitionerVec;
     }
-    isDirty_ = true;
+    isDirty_ = true; //metadata has changed so needs to be written to disk by next checkpoint
 }
 
 void TablePartitionMgr::insertData(const InsertData &insertDataStruct) {
@@ -135,7 +135,7 @@ void TablePartitionMgr::readState() {
 
 void TablePartitionMgr::writeState() {
     if (isDirty_) { // only need to rewrite state if we've made modifications since last write
-        string deleteQuery ("DELETE FROM partitioners");
+        string deleteQuery ("DELETE FROM partitioners"); // clear partitioners table
         mapd_err_t status = pgConnector_.query(deleteQuery);
         assert(status == MAPD_SUCCESS);
         for (auto partMapIt = tableToPartitionerMap_.begin(); partMapIt != tableToPartitionerMap_.end(); ++partMapIt) {
@@ -150,17 +150,19 @@ void TablePartitionMgr::writeState() {
                 assert (status == MAPD_SUCCESS);
             }
         }
-        isDirty_ = false;
+        isDirty_ = false; // now that we've written our state to disk, our metadata isn't dirty anymore
     }
 }
 
 void TablePartitionMgr::translateColumnRowsToColumnInfoVec (vector <Metadata_Namespace::ColumnRow> &columnRows, vector<ColumnInfo> &columnInfoVec) {
+    // Iterate over all entries in columnRows and translate to 
+    // columnInfoVec needed  by partitioner
     for (auto colRowIt = columnRows.begin(); colRowIt != columnRows.end(); ++colRowIt) {
         ColumnInfo columnInfo;
         columnInfo.columnId = colRowIt -> columnId;
         columnInfo.columnType = colRowIt -> columnType;
         columnInfo.bitSize = getBitSizeForType(columnInfo.columnType);  
-        columnInfo.insertBuffer = 0;
+        columnInfo.insertBuffer = NULL; // set as NULL
         columnInfoVec.push_back(columnInfo);
     }
 }

@@ -32,16 +32,7 @@ struct ColumnInfo {
 };
 
 
-struct PartitionInfo {
-    int partitionId;
-    mapd_size_t numTuples;
-};
 
-struct QueryInfo {
-    int partitionerId;
-    std::vector<PartitionInfo> partitions;
-    mapd_size_t numTuples; 
-};
 
 class AbstractTablePartitioner { 
 
