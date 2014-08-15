@@ -90,17 +90,31 @@ class TablePartitionerTest {
     }
 
     bool insertIntoPartitioners() {
-        vector <string> columnNames = {"a", "b", "c"};
+        vector <string> tableNames;
+        tableNames.push_back("test1");
+        vector <pair <string,string> > columnNames;
+        columnNames.push_back(make_pair("","a"));
+        columnNames.push_back(make_pair("","b"));
+        columnNames.push_back(make_pair("","c"));
+        vector <Metadata_Namespace::ColumnRow> columnRows;
+        catalog_ -> getMetadataForColumns(tableNames, columnNames, columnRows);
+        InsertData insertData;
+        for (auto colRowIt = columnRows.begin(); colRowIt != columnRows.end(); ++colRowIt) {
+            insertData.tableId = colRowIt -> tableId;
+            insertData.columnIds.push_back(colRowIt -> columnId);
+        }
+        insertData.numRows = 1;
+        int col0Data = 4;
+        int col1Data = 6;
+        float col2Data = 3.5;
+        insertData.data.push_back(static_cast <void *> (&col0Data));
+        insertData.data.push_back(static_cast <void *> (&col1Data));
+        insertData.data.push_back(static_cast <void *> (&col2Data));
+        for (int i = 0; i != 5000000; ++i)
+            tablePartitionMgr_ -> insertData(insertData);
+        Testing::pass++;
 
-       
-        vector <int> columnIds; 
-        vector <void *> data;
-        columnIds.push_back(0);
-        columnIds.push_back(1);
-        columnIds.push_back(2);
-        int intData = 3;
         return true;
-
     }
 
     
@@ -122,5 +136,8 @@ int main(void) {
         PPASS("Instanciate") : PFAIL("Instanciate");
     tablePartitionerTest.createTableAndPartitioners() ?
         PPASS("Create Table and partitioners") : PFAIL("Create Table and partitioners");
+    tablePartitionerTest.insertIntoPartitioners() ?
+        PPASS("Insert into partitioners") : PFAIL("Insert into partitioners");
+
     return 0;
 }

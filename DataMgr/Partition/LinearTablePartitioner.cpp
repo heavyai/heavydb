@@ -102,13 +102,13 @@ void LinearTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo, const v
 }
 
 void LinearTablePartitioner::createStateTableIfDne() {
-     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS fragments(part_id INT, fragment_id INT, num_rows INT, PRIMARY KEY (part_id, fragment_id))");
+     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS fragments(partitioner_id INT, fragment_id INT, num_rows INT, PRIMARY KEY (partitioner_id, fragment_id))");
      assert(status == MAPD_SUCCESS);
 }
 
 
 void LinearTablePartitioner::readState() {
-    string partitionQuery ("select fragment_id, num_rows from fragments where part_id = " + boost::lexical_cast <string> (partitionerId_));
+    string partitionQuery ("select fragment_id, num_rows from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
     partitionQuery += " order by fragment_id";
     mapd_err_t status = pgConnector_.query(partitionQuery);
     assert(status == MAPD_SUCCESS);
