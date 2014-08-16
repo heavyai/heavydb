@@ -4,6 +4,13 @@
 #include "../../Shared/types.h"
 #include <vector>
 namespace Partition_Namespace {
+
+    /**
+     * @enum PartitionerType
+     * stores the type of a child class of 
+     * AbstractTablePartitioner
+     */
+
     enum PartitionerType {
         LINEAR
     };
@@ -28,10 +35,26 @@ namespace Partition_Namespace {
     };
 }
 
+/**
+ * @struct PartitionInfo
+ * @brief Used by Partitioner classes to store info about each 
+ * partition - the partition id and number of tuples(rows)
+ * currently stored by that partition
+ */
+
 struct PartitionInfo {
     int partitionId;
     mapd_size_t numTuples;
 };
+
+/**
+ * @struct QueryInfo
+ * @brief returned by Partitioner classes in 
+ * getPartitionsForQuery - tells Executor which 
+ * partitions to scan from which partitioner 
+ * (partitioner id and partition id needed for building
+ * ChunkKey)
+ */
 
 struct QueryInfo {
     int partitionerId;
