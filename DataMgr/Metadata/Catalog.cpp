@@ -12,13 +12,18 @@ using std::ifstream;
 using std::ofstream;
 using std::pair;
 
-Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false) {
-    readCatalogFromFile();
+namespace Metadata_Namespace {
+
+Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false), pgConnector_("mapd","mapd") {
+    //readCatalogFromFile();
+    createStateTableIfDne();
+    readState();
 }
 
 Catalog::~Catalog() {
     // first flush in-memory representation of Catalog to file
-    writeCatalogToFile();
+    //writeCatalogToFile();
+    writeState();
 
     // must clean up heap-allocated TableRow and ColumnRow structs
     for (TableRowMap::iterator tableRowIt = tableRowMap_.begin(); tableRowIt != tableRowMap_.end(); ++tableRowIt)
@@ -67,6 +72,69 @@ mapd_err_t Catalog::readCatalogFromFile() {
         }
     }
 
+    return MAPD_SUCCESS;
+}
+
+mapd_err_t Catalog::readState() {
+    string tableQuery("SELECT table_name, table_id from tables ORDER BY table_id");
+    mapd_err_t status = pgConnector_.query(tableQuery);
+    assert(status == MAPD_SUCCESS);
+    size_t numRows = pgConnector_.getNumRows();
+    for (int r = 0; r < numRows; ++r) {
+        string tableName = pgConnector_.getData<string>(r,0);
+        int tableId = pgConnector_.getData<int>(r,1);
+        tableRowMap_[tableName] = new TableRow(tableName,tableId);
+        if (tableId > maxTableId_)
+            maxTableId_ = tableId;
+    }
+    string columnQuery("SELECT table_id, column_name, column_id, column_type, not_null from columns ORDER BY table_id,column_id");
+    status = pgConnector_.query(columnQuery);
+    numRows = pgConnector_.getNumRows();
+    for (int r = 0; r < numRows; ++r) {
+        int tableId = pgConnector_.getData<int>(r,0);
+        string columnName = pgConnector_.getData<string>(r,1);
+        int columnId = pgConnector_.getData<int>(r,2);
+        mapd_data_t columnType = getTypeFromString(pgConnector_.getData<string>(r,3));
+        bool notNull = pgConnector_.getData<bool>(r,4);
+        ColumnKey columnKey(tableId,columnName);
+        columnRowMap_[columnKey] = new ColumnRow(tableId,columnName,columnId,columnType,notNull);
+        if (columnId > maxColumnId_)
+            maxColumnId_ = columnId;
+    }
+    return MAPD_SUCCESS;
+}
+
+
+void Catalog::createStateTableIfDne() {
+     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS tables(table_name TEXT, table_id INT UNIQUE, PRIMARY KEY (table_name))");
+     assert(status == MAPD_SUCCESS);
+     status = pgConnector_.query("CREATE TABLE IF NOT EXISTS columns(table_id INT, column_name TEXT, column_id INT, column_type TEXT, not_null boolean, PRIMARY KEY (table_id, column_name))");
+     assert(status == MAPD_SUCCESS);
+}
+
+mapd_err_t Catalog::writeState() {
+    if (isDirty_) {
+        // we will just overwrite table and column files with all TableRows and ColumnRows
+        string deleteTableQuery ("DELETE FROM tables");
+        mapd_err_t status = pgConnector_.query(deleteTableQuery);
+        assert(status == MAPD_SUCCESS);
+        string deleteColumnQuery ("DELETE FROM columns");
+        status = pgConnector_.query(deleteColumnQuery);
+        assert(status == MAPD_SUCCESS);
+        for (TableRowMap::iterator tableRowIt = tableRowMap_.begin(); tableRowIt != tableRowMap_.end(); ++tableRowIt) {
+            TableRow *tableRow = tableRowIt -> second;
+            string insertTableQuery("INSERT INTO tables (table_name, table_id) VALUES ('" + tableRow -> tableName + "'," + boost::lexical_cast<string>(tableRow -> tableId) + ")");
+            status = pgConnector_.query(insertTableQuery);
+            assert (status == MAPD_SUCCESS);
+        }
+        for (ColumnRowMap::iterator columnRowIt = columnRowMap_.begin(); columnRowIt != columnRowMap_.end(); ++columnRowIt) {
+            ColumnRow *columnRow = columnRowIt -> second;
+            string insertColumnQuery("INSERT INTO columns (table_id, column_name, column_id, column_type, not_null) VALUES (" + boost::lexical_cast<string>(columnRow -> tableId)  + ",'" + columnRow -> columnName + "'," + boost::lexical_cast<string>(columnRow -> columnId) + ",'" + getTypeName(columnRow -> columnType) + "'," + (columnRow -> notNull == true ? "true" : "false") + ")" );
+            status = pgConnector_.query(insertColumnQuery);
+            assert (status == MAPD_SUCCESS);
+        }
+    }
+    isDirty_ = false;
     return MAPD_SUCCESS;
 }
 
@@ -199,6 +267,14 @@ mapd_err_t Catalog::removeColumnFromTable(const string &tableName, const string 
     return MAPD_SUCCESS;
 }
 
+mapd_err_t Catalog::getMetadataForTable (const string &tableName, TableRow &tableRow) {
+    TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
+    if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
+        return MAPD_ERR_TABLE_DOES_NOT_EXIST;
+    tableRow = *(tableRowIt -> second); 
+    return MAPD_SUCCESS;
+}
+
 mapd_err_t Catalog::getMetadataForColumn (const string &tableName, const string &columnName,  ColumnRow &columnRow) {
     TableRowMap::iterator tableRowIt = tableRowMap_.find(tableName);
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
@@ -232,6 +308,17 @@ mapd_err_t Catalog::getAllColumnMetadataForTable(const string &tableName, vector
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
     int tableId = tableRowIt -> second -> tableId;
+    getAllColumnMetadataForTable(tableId, columnRows); 
+
+    for (auto colRowIt = columnRowMap_.begin(); colRowIt != columnRowMap_.end(); ++colRowIt) {
+        if (colRowIt -> second -> tableId == tableId) {
+            columnRows.push_back(*(colRowIt -> second));
+        }
+    }
+    return MAPD_SUCCESS;
+}
+
+mapd_err_t Catalog::getAllColumnMetadataForTable(const int tableId, vector <ColumnRow> &columnRows) {
     for (auto colRowIt = columnRowMap_.begin(); colRowIt != columnRowMap_.end(); ++colRowIt) {
         if (colRowIt -> second -> tableId == tableId) {
             columnRows.push_back(*(colRowIt -> second));
@@ -289,4 +376,5 @@ mapd_err_t Catalog::getMetadataForColumns(const vector <string>  &tableNames, co
     return MAPD_SUCCESS;
 }
 
+} // Metadata_Namespace
 

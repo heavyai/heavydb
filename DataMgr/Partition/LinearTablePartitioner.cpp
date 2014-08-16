@@ -12,10 +12,10 @@ using Buffer_Namespace::BufferMgr;
 
 using namespace std;
 
-
+namespace Partition_Namespace {
 
 LinearTablePartitioner::LinearTablePartitioner(const int partitionerId,  vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
-		partitionerId_(partitionerId), bufferManager_(bufferManager), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), pgConnector_("mapd","tmostak")/*, currentInsertBufferSize_(0) */ {
+		partitionerId_(partitionerId), bufferManager_(bufferManager), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), pgConnector_("mapd","mapd"), partitionerType_("linear"), isDirty_(false)/*, currentInsertBufferSize_(0) */ {
     // @todo Actually get user's name to feed to pgConnector_
     // populate map with ColumnInfo structs
     for (vector <ColumnInfo>::iterator colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
@@ -46,7 +46,7 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
         createNewPartition();
     }
 
-    for (int c = 0; c != columnIds.size(); ++c) {
+    for (int c = 0; c != insertDataStruct.columnIds.size(); ++c) {
         int columnId =insertDataStruct.columnIds[c];
         map <int, ColumnInfo>::iterator colMapIt = columnMap_.find(columnId);
         // This SHOULD be found and this iterator should not be end()
@@ -55,10 +55,11 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
         assert(colMapIt != columnMap_.end());
         //cout << "Insert buffer before insert: " << colMapIt -> second.insertBuffer << endl;
         //cout << "Insert buffer before insert length: " << colMapIt -> second.insertBuffer -> length() << endl;
-        colMapIt -> second.insertBuffer -> append(colMapIt -> second.bitSize * insertDataStruct_.numRows / 8, static_cast <mapd_addr_t> (insertDataStruct.data[c]));
+        colMapIt -> second.insertBuffer -> append(colMapIt -> second.bitSize * insertDataStruct.numRows / 8, static_cast <mapd_addr_t> (insertDataStruct.data[c]));
     }
     //currentInsertBufferSize_ += numRows;
-    partitionInfoVec_.back().numTuples += insertDataStruct.numRows_;
+    partitionInfoVec_.back().numTuples += insertDataStruct.numRows;
+    isDirty_ = true;
 }
 
 
@@ -72,7 +73,7 @@ void LinearTablePartitioner::createNewPartition() {
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
         if (colMapIt -> second.insertBuffer != 0)
             colMapIt -> second.insertBuffer -> unpin();
-        ChunkKey chunkKey = {partitonerId_, maxPartitionId_,  colMapIt -> second.columnId};
+        ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnId};
         // We will allocate enough pages to hold the maximum number of rows of
         // this type
         mapd_size_t numPages = ceil(static_cast <float> (maxPartitionRows_) / (pageSize_ * 8 / colMapIt -> second.bitSize)); // number of pages for a partition is celing maximum number of rows for a partition divided by how many elements of this column type can fit on a page 
@@ -101,13 +102,13 @@ void LinearTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo, const v
 }
 
 void LinearTablePartitioner::createStateTableIfDne() {
-     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS fragments(part_id INT, fragment_id INT, num_rows INT, PRIMARY KEY (part_id, fragment_id))");
+     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS fragments(partitioner_id INT, fragment_id INT, num_rows INT, PRIMARY KEY (partitioner_id, fragment_id))");
      assert(status == MAPD_SUCCESS);
 }
 
 
 void LinearTablePartitioner::readState() {
-    string partitionQuery ("select fragment_id, num_rows from fragments where part_id = " + boost::lexical_cast <string> (partitionerId_));
+    string partitionQuery ("select fragment_id, num_rows from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
     partitionQuery += " order by fragment_id";
     mapd_err_t status = pgConnector_.query(partitionQuery);
     assert(status == MAPD_SUCCESS);
@@ -142,12 +143,17 @@ void LinearTablePartitioner::writeState() {
     // newest state back in?
     // Will do latter for now as we do not 
     // plan on using postgres forever for metadata
-     string deleteQuery ("delete from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
-     mapd_err_t status = pgConnector_.query(deleteQuery);
-     assert(status == MAPD_SUCCESS);
-    for (auto partIt = partitionInfoVec_.begin(); partIt != partitionInfoVec_.end(); ++partIt) {
-        string insertQuery("INSERT INTO fragments (partitioner_id, fragment_id, num_rows) VALUES (" + boost::lexical_cast<string>(partitionerId_) + "," + boost::lexical_cast<string>(partIt -> partitionId) + "," + boost::lexical_cast<string>(partIt -> numTuples) + ")"); 
-        status = pgConnector_.query(insertQuery);
+    if (isDirty_) {
+         string deleteQuery ("delete from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
+         mapd_err_t status = pgConnector_.query(deleteQuery);
          assert(status == MAPD_SUCCESS);
+        for (auto partIt = partitionInfoVec_.begin(); partIt != partitionInfoVec_.end(); ++partIt) {
+            string insertQuery("INSERT INTO fragments (partitioner_id, fragment_id, num_rows) VALUES (" + boost::lexical_cast<string>(partitionerId_) + "," + boost::lexical_cast<string>(partIt -> partitionId) + "," + boost::lexical_cast<string>(partIt -> numTuples) + ")"); 
+            status = pgConnector_.query(insertQuery);
+             assert(status == MAPD_SUCCESS);
+        }
     }
+    isDirty_ = false;
 }
+
+} // Partition_Namespace

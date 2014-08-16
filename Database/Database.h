@@ -98,7 +98,7 @@ class Database {
         std::string tcpPort_;
         int numThreads_;
 
-        Catalog catalog_;
+        Metadata_Namespace::Catalog catalog_;
 
         /// The io_service used to perform asynchronous operations
         boost::asio::io_service ioService_;

@@ -1,3 +1,8 @@
+/**
+ * @file	LinearTablePartitionerTest 
+ * @author	Todd Mostak <todd@map-d.com>
+ */
+
 #include "LinearTablePartitioner.h"
 #include "../File/FileMgr.h"
 #include "../Buffer/BufferMgr.h"

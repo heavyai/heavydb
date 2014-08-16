@@ -16,14 +16,19 @@
 #ifndef CATALOG_H
 #define CATALOG_H
 
+
+#include "../../Shared/errors.h"
+#include "../../Shared/types.h"
+#include "../PgConnector/PgConnector.h"
+
 #include <string>
 #include <tuple>
 #include <map>
 #include <vector>
 #include <utility>
+#include <boost/lexical_cast.hpp>
 
-#include "../../Shared/errors.h"
-#include "../../Shared/types.h"
+namespace Metadata_Namespace {
 
 /**
  * @type TableRow
@@ -38,6 +43,7 @@ struct TableRow {
 
 
     TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
+    TableRow() {}
 };
 
 /**
@@ -228,6 +234,7 @@ class Catalog {
 
         mapd_err_t removeColumnFromTable(const std::string &tableName, const std::string &columnName);
 
+        mapd_err_t getMetadataForTable (const std::string &tableName, TableRow &tableRow);
         /**
          * @brief Passes back via reference a ColumnRow struct for the column specified by table name and column name 
          * @param tableName table specified column belongs to
@@ -269,6 +276,7 @@ class Catalog {
         mapd_err_t getMetadataForColumns(const std::vector <std::string>  &tableNames, const std::vector <std::pair <std::string, std::string> > &columnNames, std::vector <ColumnRow> &columnRows);
 
         mapd_err_t getAllColumnMetadataForTable(const std::string &tableName, std::vector <ColumnRow> &columnRows);
+        mapd_err_t getAllColumnMetadataForTable(const int tableId, std::vector <ColumnRow> &columnRows);
 
     private:
 
@@ -281,17 +289,50 @@ class Catalog {
          * Catalog files are written by Catalog and represent the pre-valicated
          * in-memory state of the database metadata.
          */
+        
+        inline std::string getTypeName(mapd_data_t type) {
+            switch (type) {
+                case INT_TYPE:
+                    return "int";
+                    break;
+                case FLOAT_TYPE:
+                    return "float";
+                    break;
+                case BOOLEAN_TYPE:
+                    return "bool";
+                    break;
+            }
+        }
+
+        inline mapd_data_t getTypeFromString(const std::string &typeName) {
+            if (typeName == "int") {
+                return INT_TYPE;
+            }
+            else if (typeName == "float") {
+                return FLOAT_TYPE;
+            }
+            else if (typeName == "bool") {
+                return BOOLEAN_TYPE;
+            }
+            return INT_TYPE;
+        }
+        void createStateTableIfDne();
 
         mapd_err_t readCatalogFromFile();
+        mapd_err_t readState();
+        mapd_err_t writeState();
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableRowMap tableRowMap_;
         ColumnRowMap columnRowMap_;
+        PgConnector pgConnector_;
         int maxTableId_; /**< Serves as monotonically increasing counter to assign to each generated table. Increments on table creation but never decrements on deletion - so may have "gaps" */
         int maxColumnId_; /**< Serves as monotonically increasing counter to assign to each generated column. Increments on column creation but never decrements on deletion - so may have "gaps".  Right now we use a global columnId counter, making columnId a primary key for each column, but we may change this in the future so that each table has its own space for column keys. */
         bool isDirty_; /**< Specifies if the catalog has been modified in memory since the last flush to file - no need to rewrite file if this is false. */
 
 
 };
+
+} // Metadata_Namespace
 
 #endif // CATALOG_H

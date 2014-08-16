@@ -5,6 +5,8 @@
 #ifndef DATAMGR_PARTITION_ABSTRACTPARTITIONER_H
 #define DATAMGR_PARTITION_ABSTRACTPARTITIONER_H
 
+namespace Partition_Namespace { 
+
 /**
  * @class AbstractPartitionMgr
  * @brief An abstract class for a partition manager.
@@ -33,5 +35,7 @@ public:
 	 */
 	virtual void getPartitionIds(const int entityId, const void *predicate, std::vector<int> &result) = 0;
 };
+
+} // Partition_Namespace
 
 #endif // DATAMGR_PARTITION_ABSTRACTPARTITIONER_H
