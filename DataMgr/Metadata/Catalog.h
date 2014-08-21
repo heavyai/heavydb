@@ -34,13 +34,12 @@ namespace Metadata_Namespace {
  * @type TableRow
  * @brief specifies the content in-memory of a row in the table metadata table
  * 
- * A TableRow type currently includes only the table name and the tableId (zero-based) that it maps to. Other metadata could be added in the future
+ * A TableRow type currently includes only the table name and the tableId (zero-based) that it maps to. Other metadata could be added in the future.
  */
 
 struct TableRow {
-    std::string tableName; /**< tableId is the primary key to access rows in the table table -must bew unique */
+    std::string tableName; /**< tableName is the name of the table table -must be unique */
     int tableId; /**< tableId starts at 0 for valid tables. */
-
 
     TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
     TableRow() {}
@@ -52,6 +51,7 @@ struct TableRow {
  * 
  * A ColumnRow is uniquely identified by a tableId and columnName (or tableId and columnId).  It also specifies the type of the column and whether nulls are allowed. Other metadata could be added in the future
  */
+
 struct ColumnRow {
     int tableId; /**< tableId and columnName constitute the primary key to access rows in the column table - the pair must be unique> */
     std::string columnName;  /**< tableId and columnName constitute the primary key to access rows in the column table - the pair must be unique */
@@ -238,7 +238,7 @@ class Catalog {
         /**
          * @brief Passes back via reference a ColumnRow struct for the column specified by table name and column name 
          * @param tableName table specified column belongs to
-         * @param columnName name of column we want metadata for
+          @param columnName name of column we want metadata for
          * @param columnRow ColumnRow struct of metadata that
          * is returned by reference. 
          * @return error code or MAPD_SUCCESS
@@ -273,6 +273,8 @@ class Catalog {
          */
 
         mapd_err_t getMetadataForColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
+
+
         mapd_err_t getMetadataForColumns(const std::vector <std::string>  &tableNames, const std::vector <std::pair <std::string, std::string> > &columnNames, std::vector <ColumnRow> &columnRows);
 
         mapd_err_t getAllColumnMetadataForTable(const std::string &tableName, std::vector <ColumnRow> &columnRows);

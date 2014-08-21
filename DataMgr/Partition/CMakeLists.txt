@@ -16,12 +16,15 @@ SET (partitioner_source_files
 set (partitioner_include_dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../Buffer
     ${CMAKE_CURRENT_SOURCE_DIR}/../Metadata
+    ${CMAKE_CURRENT_SOURCE_DIR}/../PgConnector
     "/usr/local/include"
 )
 
 include_directories(${partitioner_include_dirs})
 
 ADD_LIBRARY (TablePartitioner ${partitioner_source_files})
+
+TARGET_LINK_LIBRARIES (TablePartitioner PgConnector)
 
 if (BUILD_TEST)
      

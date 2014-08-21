@@ -97,7 +97,7 @@ class OutputBuffer {
         /**
          * @brief Appends a void buffer to end of SubBuffer at the back of the queue.
          * @param data data to append
-         * @size size in bytes of data to append
+         * @param size in bytes of data to append
          */
 
         void appendData (const void *data, const size_t size);
