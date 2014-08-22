@@ -1,8 +1,10 @@
 #include <iostream>
+#include "../../Shared/types.h"
 #include "Database.h"
 #include "OutputBuffer.h"
 #include "OutputWriter.h"
 #include "parser.h"
+#include "TypeChecker.h"
 #include <boost/thread.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
@@ -68,10 +70,17 @@ bool Database::processRequest(const std::string &request, OutputBuffer &outputBu
         outputWriter.writeError(errorString);
         return false;
     }
-    else {
-        outputWriter.writeStatusMessage("OK");
-        return true;
+    Analysis_Namespace::TypeChecker typeChecker (catalog_);
+    parseRoot -> accept(typeChecker);
+    std::pair<bool, std::string> insertError = typeChecker.isError();
+    if (insertError.first == true) {
+        cout << "Error: " << insertError.second << std::endl;
+        outputWriter.writeError(insertError.second);
+        return false;
     }
+    outputWriter.writeStatusMessage("OK");
+    return true;
+
 }
         
 } // Database_Namespace

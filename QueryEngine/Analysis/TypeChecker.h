@@ -61,7 +61,11 @@ public:
 	virtual void visit(Table *v);
 
 private:
+<<<<<<< HEAD
 	Metadata_Namespace::Catalog &c_;							/// a reference to a Catalog, which holds table/column metadata
+=======
+    Metadata_Namespace::Catalog &c_;							/// a reference to a Catalog, which holds table/column metadata
+>>>>>>> origin
 	std::string errMsg_;					/// holds an error message, if applicable; otherwise, it is ""
 	bool errFlag_ = false;					/// indicates the existence of an error when true
 

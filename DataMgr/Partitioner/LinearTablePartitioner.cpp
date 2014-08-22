@@ -41,28 +41,39 @@ LinearTablePartitioner::~LinearTablePartitioner() {
 
 //void LinearTablePartitioner::insertData (const vector <int> &columnIds, const vector <void *> &data, const int numRows) {
 void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
-    if (maxPartitionId_ < 0 || partitionInfoVec_.back().numTuples + insertDataStruct.numRows > maxPartitionRows_) { // create new partition - note that this as currently coded will leave empty tuplesspace at end of current buffer chunks in the case of an insert of multiple rows at a time 
-        // should we also do this if magPartitionId_ < 0 and allocate lazily?
+    mapd_size_t numRowsLeft = insertDataStruct.numRows;
+    mapd_size_t numRowsInserted = 0;
+    if (maxPartitionId_ < 0 && numRowsLeft > 0) // if no partitions exist for table and there is > 1 row to insert
         createNewPartition();
-    }
+    while (numRowsLeft > 0) { // may have to create multiple partitions for bulk insert
+        // loop until done inserting all rows
+        mapd_size_t rowsLeftInCurrentPartition = maxPartitionRows_ - partitionInfoVec_.back().numTuples;
+        if (rowsLeftInCurrentPartition == 0) {
+            createNewPartition();
+            rowsLeftInCurrentPartition = maxPartitionRows_;
+        }
+        mapd_size_t numRowsToInsert = min(rowsLeftInCurrentPartition, numRowsLeft);
 
-    for (int c = 0; c != insertDataStruct.columnIds.size(); ++c) {
-        int columnId =insertDataStruct.columnIds[c];
-        map <int, ColumnInfo>::iterator colMapIt = columnMap_.find(columnId);
-        // This SHOULD be found and this iterator should not be end()
-        // as SemanticChecker should have already checked each column reference
-        // for validity
-        assert(colMapIt != columnMap_.end());
-        //cout << "Insert buffer before insert: " << colMapIt -> second.insertBuffer << endl;
-        //cout << "Insert buffer before insert length: " << colMapIt -> second.insertBuffer -> length() << endl;
-        colMapIt -> second.insertBuffer -> append(colMapIt -> second.bitSize * insertDataStruct.numRows / 8, static_cast <mapd_addr_t> (insertDataStruct.data[c]));
+        for (int c = 0; c != insertDataStruct.columnIds.size(); ++c) {
+            //@todo only lookup ColumnInfo once instead of once for each
+            //partition created
+            int columnId =insertDataStruct.columnIds[c];
+            map <int, ColumnInfo>::iterator colMapIt = columnMap_.find(columnId);
+            // This SHOULD be found and this iterator should not be end()
+            // as SemanticChecker should have already checked each column reference
+            // for validity
+            assert(colMapIt != columnMap_.end());
+            //cout << "Insert buffer before insert: " << colMapIt -> second.insertBuffer << endl;
+            //cout << "Insert buffer before insert length: " << colMapIt -> second.insertBuffer -> length() << endl;
+            mapd_size_t colByteSize = colMapIt -> second.bitSize / 8;
+            colMapIt -> second.insertBuffer -> append(colByteSize * numRowsToInsert, static_cast <mapd_addr_t> (insertDataStruct.data[c]) + colByteSize * numRowsInserted);
+        }
+        partitionInfoVec_.back().numTuples += numRowsToInsert;
+        numRowsLeft -= numRowsToInsert;
+        numRowsInserted += numRowsToInsert;
     }
-    //currentInsertBufferSize_ += numRows;
-    partitionInfoVec_.back().numTuples += insertDataStruct.numRows;
     isDirty_ = true;
 }
-
-
 
 void LinearTablePartitioner::createNewPartition() { 
     // also sets the new partition as the insertBuffer for each column
