@@ -14,6 +14,7 @@
 #include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace std;
+using namespace Metadata_Namespace;
 using Analysis_Namespace::TypeChecker;
 
 int main(int argc, char ** argv) {
