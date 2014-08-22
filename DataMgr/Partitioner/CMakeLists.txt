@@ -22,9 +22,9 @@ set (partitioner_include_dirs
 
 include_directories(${partitioner_include_dirs})
 
-ADD_LIBRARY (TablePartitioner ${partitioner_source_files})
+ADD_LIBRARY (Partitioner ${partitioner_source_files})
 
-TARGET_LINK_LIBRARIES (TablePartitioner PgConnector)
+TARGET_LINK_LIBRARIES (Partitioner PgConnector)
 
 if (BUILD_TEST)
      

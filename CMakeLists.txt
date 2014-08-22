@@ -5,16 +5,17 @@ PROJECT			(MapD_exe)
 set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
 include_directories(${Boost_INCLUDE_DIR} "/usr/local/include")
 ADD_SUBDIRECTORY    (DataMgr/PgConnector)
+ADD_SUBDIRECTORY    (DataMgr/Partitioner)
+ADD_SUBDIRECTORY    (DataMgr/Metadata/)
 ADD_SUBDIRECTORY    (QueryEngine/Parse/SQL)
 ADD_SUBDIRECTORY    (QueryEngine/Analysis)
-ADD_SUBDIRECTORY    (DataMgr/Metadata/)
 ADD_SUBDIRECTORY	(Server)
 ADD_SUBDIRECTORY	(Database)
 
 set(mapd_source_files main.cpp)
 add_executable(MapD ${mapd_source_files})
 
-target_link_libraries (MapD Database Catalog TcpServer Output  ${Boost_SYSTEM_LIBRARY} )
+target_link_libraries (MapD Database Catalog Partitioner TcpServer Output  ${Boost_SYSTEM_LIBRARY} )
 
 # add a target to generate API documentation with Doxygen
 find_package(Doxygen)
