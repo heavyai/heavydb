@@ -76,6 +76,29 @@ struct ColumnRow {
      */
 
     ColumnRow(const std::string columnName, const mapd_data_t columnType, const bool notNull): columnName(columnName), columnType(columnType), notNull(notNull), tableId(-1), columnId(-1) {} /**< constructor for adding columns - assumes that tableId and columnId are unknown at this point */
+    
+    /**
+     * @brief   Constructor that requires only the name of the column.
+     * @author  Steven Stewart <steve@map-d.com>
+     *
+     * This constructor was created so that an "empty" ColumnRow object can be declared, 
+     * where only the name of the column is known.
+     *
+     * One use case for this constructor arises during parsing. An AST node has a ColumnRow
+     * object. When a column name is parsed, the only known metadata is the name itself --
+     * other metadata about the column will be obtained during a tree walking phase in which
+     * such nodes are annotated by calling the appropriate Catalog method.
+     *
+     * @param columnName    The name of the column.
+     */
+    ColumnRow(const std::string columnName) : columnName(columnName) {}
+    
+    /**
+     * @brief   Prints a representation of the ColumnRow object to stdout
+     */
+    void print() {
+        printf("ColumnRow: tableId=%d columnId=%d columnName=%s columnType=%d notNull=%d\n", tableId, columnId, columnName.c_str(), columnType, notNull);
+    }
 };
 
 /**

@@ -1,21 +1,18 @@
 /**
- * @file	insertWalkerTest.h
+ * @file	nameWalkerTest.h
  * @author	Steven Stewart <steve@map-d.com>
- *
- * Used for testing the insert walker. In order to test the walker,
- * enter INSERT statements at the parser's prompt.
  */
 #include <iostream>
 #include <string>
 #include <vector>
 #include "../../Shared/types.h"
 #include "../Parse/SQL/parser.h"
-#include "TypeChecker.h"
+#include "NameWalker.h"
 #include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace std;
 using namespace Metadata_Namespace;
-using Analysis_Namespace::TypeChecker;
+using Analysis_Namespace::NameWalker;
 
 int main(int argc, char ** argv) {
     // Add a table to the catalog
@@ -30,7 +27,7 @@ int main(int argc, char ** argv) {
         printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
         //exit(EXIT_FAILURE);
     }
-
+    
     // Create a parser for SQL and... do stuff
     SQLParser parser;
     string sql;
@@ -40,7 +37,7 @@ int main(int argc, char ** argv) {
         if (sql == "q")
             break;
         else sql = sql + "\n";
-
+        
         ASTNode *parseRoot = 0;
         string lastParsed;
         int numErrors = parser.parse(sql, parseRoot,lastParsed);
@@ -51,9 +48,9 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
-        TypeChecker tc(c);
+        NameWalker tc(c);
         if (parseRoot != 0) {
-            parseRoot->accept(tc); 
+            parseRoot->accept(tc);
             std::pair<bool, std::string> insertErr = tc.isError();
             if (insertErr.first == true) {
                 cout << "Error: " << insertErr.second << std::endl;

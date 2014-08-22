@@ -154,7 +154,7 @@ select_stmt:
 
 selection:
 	scalar_expr_list	{ $$ = new Selection((ScalarExprList*)$1); }
-|	MULTIPLY 			{ $$ = new Selection(true); }
+|	MULTIPLY			{ $$ = new Selection(true); }
 ;
 
 scalar_expr_list:

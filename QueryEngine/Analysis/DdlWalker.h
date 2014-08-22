@@ -11,6 +11,7 @@
 #include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace SQL_Namespace;
+using namespace Metadata_Namespace;
 
 namespace Analysis_Namespace {
 

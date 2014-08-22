@@ -5,6 +5,9 @@
 #include <utility>
 #include <string>
 #include "ASTNode.h"
+#include "../../../../DataMgr/Metadata/Catalog.h"
+
+using Metadata_Namespace::TableRow;
 
 namespace SQL_Namespace {
 
@@ -14,7 +17,8 @@ public:
 	std::pair<std::string, std::string> name;
 
 	// table_id is obtained from Catalog during semantic analysis
-	int table_id = -1;
+	//int table_id = -1;
+    TableRow metadata;
 
 	/// Constructor
 	explicit Table(const std::string &name) {
