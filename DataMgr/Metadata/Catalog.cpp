@@ -308,13 +308,7 @@ mapd_err_t Catalog::getAllColumnMetadataForTable(const string &tableName, vector
     if (tableRowIt == tableRowMap_.end()) // check to make sure table exists
         return MAPD_ERR_TABLE_DOES_NOT_EXIST;
     int tableId = tableRowIt -> second -> tableId;
-    getAllColumnMetadataForTable(tableId, columnRows); 
-
-    for (auto colRowIt = columnRowMap_.begin(); colRowIt != columnRowMap_.end(); ++colRowIt) {
-        if (colRowIt -> second -> tableId == tableId) {
-            columnRows.push_back(*(colRowIt -> second));
-        }
-    }
+    getAllColumnMetadataForTable(tableId, columnRows);
     return MAPD_SUCCESS;
 }
 
