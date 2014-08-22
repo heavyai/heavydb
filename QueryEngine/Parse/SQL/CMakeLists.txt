@@ -54,6 +54,7 @@ ADD_CUSTOM_TARGET(ScannerFiles DEPENDS ${FlexppOutput})
 
 #ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
 #ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput}  ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
+#set(CMAKE_CXX_FLAGS "-Wdeprecated-register")
 
 ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})

@@ -22,7 +22,7 @@ class TypeChecker : public Visitor {
 
 public:
 	/// Constructor
-	TypeChecker(Catalog &c) : c_(c), errFlag_(false) {}
+	TypeChecker(Metadata_Namespace::Catalog &c) : c_(c), errFlag_(false) {}
 
 	/// Returns an error message if an error was encountered
 	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
@@ -61,7 +61,7 @@ public:
 	virtual void visit(Table *v);
 
 private:
-	Catalog &c_;							/// a reference to a Catalog, which holds table/column metadata
+    Metadata_Namespace::Catalog &c_;							/// a reference to a Catalog, which holds table/column metadata
 	std::string errMsg_;					/// holds an error message, if applicable; otherwise, it is ""
 	bool errFlag_ = false;					/// indicates the existence of an error when true
 
