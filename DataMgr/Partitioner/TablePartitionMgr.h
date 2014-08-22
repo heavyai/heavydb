@@ -6,7 +6,7 @@
 #ifndef _TABLE_PARTITION_MGR_H
 #define _TABLE_PARTITION_MGR_H
 
-#include "PartitionIncludes.h"
+#include "Partitioner.h"
 #include "AbstractTablePartitioner.h"
 #include "../../Shared/types.h"
 #include "../PgConnector/PgConnector.h"
@@ -24,7 +24,7 @@ namespace Metadata_Namespace {
     struct ColumnRow;
 }
 
-namespace Partition_Namespace {
+namespace Partitioner_Namespace {
 
 /**
  * @class TablePartitionMgr
@@ -90,10 +90,12 @@ public:
      * each partition for this partitioner (default 1,048,576)
      * @param pageSize Page/Block size for partitions of this
      * partitioner (default 1MB)
+     *
+     * @todo add createPartitionerForTable taking tableId instead of tableName
      * @see Catalog
      */
 
-    void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
+    void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = LINEAR, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
 
 	/**
      * @brief Insert data (insertDataStruct) into the table
@@ -184,6 +186,6 @@ private:
     bool isDirty_;  /**< Specifies if the TablePartitionMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */
 };
 
-} // Partition_Namespace
+} // Partitioner_Namespace
 
 #endif // _TABLE_PARTITION_MGR_H

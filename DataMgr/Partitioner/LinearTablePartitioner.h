@@ -12,7 +12,7 @@
 #include <vector>
 #include <map>
 
-namespace Partition_Namespace {
+namespace Partitioner_Namespace {
 
 /**
  * @type LinearTablePartitioner
@@ -100,7 +100,7 @@ private:
 
 };
 
-} // Partition_Namespace
+} // Partitioner_Namespace
 
  #endif // LINEAR_TABLE_PARTITIONER_H
 

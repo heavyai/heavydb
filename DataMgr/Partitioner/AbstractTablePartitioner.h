@@ -7,7 +7,7 @@
 #define _ABSTRACT_TABLE_PARTITIONER_H
 
 #include "../../Shared/types.h"
-#include "PartitionIncludes.h"
+#include "Partitioner.h"
 #include <vector>
 #include <string>
 
@@ -19,7 +19,7 @@ namespace Buffer_Namespace {
     class BufferMgr;
 };
 
-namespace Partition_Namespace {
+namespace Partitioner_Namespace {
 
 /**
  * @type ColumnInfo
@@ -34,7 +34,7 @@ struct ColumnInfo {
     int bitSize;
     Buffer_Namespace::Buffer * insertBuffer; // a pointer so can be null
     //@todo get the constructor for ColumnInfo compiling
-    //ColumnInfo(const int columnId, const mapd_data_t columnType, const int bitSize): columnId_(columnId), columnType_(columnType), bitSize_(bitSize) {}
+    //ColumnInfo(const int columnId, const mapd_data_t columnType, const int bitSize): columnId(columnId), columnType(columnType), bitSize(bitSize), insertBuffer(NULL) {}
 	//ColumnInfo& operator=(const ColumnInfo&);
 };
 
@@ -86,6 +86,6 @@ class AbstractTablePartitioner {
 
 };
 
-} // Partition_Namespace
+} // Partitioner_Namespace
 
 #endif // _ABSTRACT_TABLE_PARTITIONER 

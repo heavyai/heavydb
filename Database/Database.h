@@ -13,9 +13,23 @@
 #include <string>
 
 #include "../Server/TcpServer/TcpServer.h"
-#include "../DataMgr/Metadata/Catalog.h"
 
 class OutputBuffer;
+
+namespace File_Namespace {
+    class FileMgr;
+}
+namespace Buffer_Namespace {
+    class BufferMgr;
+};
+
+namespace Metadata_Namespace {
+    class Catalog;
+}
+
+namespace Partitioner_Namespace {
+    class TablePartitionMgr;
+}
 
 namespace Database_Namespace {
 
@@ -47,6 +61,14 @@ class Database {
          */
 
         Database(const std::string &tcpPort, const int numThreads); 
+        
+        /**
+         * @brief Destructor frees partition manager, catalog, bufferMgr
+         * and fileMgr objects 
+         */
+
+        ~Database();
+        
 
         /**
          * @brief Starts database.
@@ -98,7 +120,10 @@ class Database {
         std::string tcpPort_;
         int numThreads_;
 
-        Metadata_Namespace::Catalog catalog_;
+        Buffer_Namespace::BufferMgr * bufferMgr_;
+        File_Namespace::FileMgr * fileMgr_;
+        Metadata_Namespace::Catalog * catalog_;
+        Partitioner_Namespace::TablePartitionMgr * tablePartitionMgr_;
 
         /// The io_service used to perform asynchronous operations
         boost::asio::io_service ioService_;

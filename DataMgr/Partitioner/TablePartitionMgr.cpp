@@ -14,7 +14,7 @@
 using std::vector;
 using std::string;
 
-namespace Partition_Namespace {
+namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
@@ -163,8 +163,9 @@ void TablePartitionMgr::translateColumnRowsToColumnInfoVec (vector <Metadata_Nam
         columnInfo.columnType = colRowIt -> columnType;
         columnInfo.bitSize = getBitSizeForType(columnInfo.columnType);  
         columnInfo.insertBuffer = NULL; // set as NULL
+        //ColumnInfo columnInfo (colRowIt -> columnId, colRowIt -> columnType, getBitSizeForType(columnInfo.columnType));
         columnInfoVec.push_back(columnInfo);
     }
 }
 
-} // Partition_Namespace
+} // Partitioner_Namespace

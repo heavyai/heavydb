@@ -3,7 +3,7 @@
  * @author	Todd Mostak <todd@map-d.com>
  */
 
-#include "PartitionIncludes.h"
+#include "Partitioner.h"
 #include "TablePartitionMgr.h"
 #include "../File/FileMgr.h"
 #include "../Buffer/BufferMgr.h"
@@ -19,7 +19,7 @@
 using namespace Testing;
 using namespace std;
 
-namespace Partition_Namespace { 
+namespace Partitioner_Namespace { 
 
 class TablePartitionerTest { 
 
@@ -127,10 +127,10 @@ class TablePartitionerTest {
 
 
 
-} // Partition_Namespace
+} // Partitioner_Namespace
 
 int main(void) {
-    Partition_Namespace::TablePartitionerTest tablePartitionerTest;
+    Partitioner_Namespace::TablePartitionerTest tablePartitionerTest;
     tablePartitionerTest.reset();
     tablePartitionerTest.instanciate() ?
         PPASS("Instanciate") : PFAIL("Instanciate");

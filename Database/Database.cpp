@@ -5,6 +5,12 @@
 #include "OutputWriter.h"
 #include "parser.h"
 #include "TypeChecker.h"
+#include "FileMgr.h"
+#include "BufferMgr.h"
+#include "Catalog.h"
+#include "TablePartitionMgr.h"
+
+
 #include <boost/thread.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
@@ -14,9 +20,21 @@ using namespace std;
 
 namespace Database_Namespace {
 
-Database::Database(const std::string &tcpPort, const int numThreads): tcpPort_(tcpPort), numThreads_(numThreads), signals_(ioService_), catalog_("data"),  tcpServer_("0.0.0.0",tcpPort,ioService_, *this)   { 
+Database::Database(const std::string &tcpPort, const int numThreads): tcpPort_(tcpPort), numThreads_(numThreads), signals_(ioService_), tcpServer_("0.0.0.0",tcpPort,ioService_, *this)   { 
     registerSignals();
+    fileMgr_ = new File_Namespace::FileMgr ("data");
+    bufferMgr_ = new Buffer_Namespace::BufferMgr (128*1048576, fileMgr_);
+    catalog_ = new Metadata_Namespace::Catalog ("data");
+    tablePartitionMgr_ = new Partitioner_Namespace::TablePartitionMgr (*catalog_, *bufferMgr_);
 }
+
+Database::~Database() {
+    delete tablePartitionMgr_;
+    delete catalog_;
+    delete bufferMgr_;
+    delete fileMgr_;
+}
+
 
 void Database::registerSignals() {
   // Register to handle the signals that indicate when the server should exit.
@@ -70,7 +88,7 @@ bool Database::processRequest(const std::string &request, OutputBuffer &outputBu
         outputWriter.writeError(errorString);
         return false;
     }
-    Analysis_Namespace::TypeChecker typeChecker (catalog_);
+    Analysis_Namespace::TypeChecker typeChecker (*catalog_);
     parseRoot -> accept(typeChecker);
     std::pair<bool, std::string> insertError = typeChecker.isError();
     if (insertError.first == true) {

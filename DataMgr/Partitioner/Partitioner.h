@@ -3,7 +3,7 @@
 
 #include "../../Shared/types.h"
 #include <vector>
-namespace Partition_Namespace {
+namespace Partitioner_Namespace {
 
     /**
      * @enum PartitionerType
@@ -33,33 +33,33 @@ namespace Partition_Namespace {
         mapd_size_t numRows;				/// the number of rows being inserted
         std::vector <void *> data;							/// points to the start of the data for the row(s) being inserted
     };
-}
 
-/**
- * @struct PartitionInfo
- * @brief Used by Partitioner classes to store info about each 
- * partition - the partition id and number of tuples(rows)
- * currently stored by that partition
- */
+    /**
+     * @struct PartitionInfo
+     * @brief Used by Partitioner classes to store info about each 
+     * partition - the partition id and number of tuples(rows)
+     * currently stored by that partition
+     */
 
-struct PartitionInfo {
-    int partitionId;
-    mapd_size_t numTuples;
-};
+    struct PartitionInfo {
+        int partitionId;
+        mapd_size_t numTuples;
+    };
 
-/**
- * @struct QueryInfo
- * @brief returned by Partitioner classes in 
- * getPartitionsForQuery - tells Executor which 
- * partitions to scan from which partitioner 
- * (partitioner id and partition id needed for building
- * ChunkKey)
- */
+    /**
+     * @struct QueryInfo
+     * @brief returned by Partitioner classes in 
+     * getPartitionsForQuery - tells Executor which 
+     * partitions to scan from which partitioner 
+     * (partitioner id and partition id needed for building
+     * ChunkKey)
+     */
 
-struct QueryInfo {
-    int partitionerId;
-    std::vector<PartitionInfo> partitions;
-    mapd_size_t numTuples; 
-};
+    struct QueryInfo {
+        int partitionerId;
+        std::vector<PartitionInfo> partitions;
+        mapd_size_t numTuples; 
+    };
+} // Partitioner_Namespace
 
 #endif

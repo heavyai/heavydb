@@ -11,6 +11,10 @@ set (database_include_dirs
     ${CMAKE_SOURCE_DIR}/QueryEngine/Parse/SQL/
     ${CMAKE_BINARY_DIR}/QueryEngine/Parse/SQL/
     ${CMAKE_SOURCE_DIR}/QueryEngine/Analysis/
+    ${CMAKE_SOURCE_DIR}/DataMgr/File/
+    ${CMAKE_SOURCE_DIR}/DataMgr/Buffer/
+    ${CMAKE_SOURCE_DIR}/DataMgr/Metadata/
+    ${CMAKE_SOURCE_DIR}/DataMgr/Partitioner/
 )
 #message("CMAKE_INCLUDE_PATH 2 = " ${CMAKE_INCLUDE_PATH})
 find_package(Boost 1.50.0 REQUIRED system thread)
@@ -18,4 +22,4 @@ include_directories(${database_include_dirs} ${Boost_INCLUDE_DIR})
 
 ADD_LIBRARY (Database ${database_source_files})
 
-TARGET_LINK_LIBRARIES (Database Parser Analysis pthread ${Boost_THREAD_LIBRARY} )
+TARGET_LINK_LIBRARIES (Database File Catalog Buffer Partitioner Parser Analysis pthread ${Boost_THREAD_LIBRARY} )

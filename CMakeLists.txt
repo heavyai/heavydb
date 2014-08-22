@@ -4,6 +4,8 @@ PROJECT			(MapD_exe)
 
 set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
 include_directories(${Boost_INCLUDE_DIR} "/usr/local/include")
+ADD_SUBDIRECTORY    (DataMgr/File/)
+ADD_SUBDIRECTORY    (DataMgr/Buffer/)
 ADD_SUBDIRECTORY    (DataMgr/PgConnector)
 ADD_SUBDIRECTORY    (DataMgr/Partitioner)
 ADD_SUBDIRECTORY    (DataMgr/Metadata/)
