@@ -330,7 +330,8 @@ mapd_err_t Catalog::getMetadataForColumns(const vector <string>  &tableNames, co
             return MAPD_ERR_TABLE_DOES_NOT_EXIST;
         tableIds.push_back(tableRowIt -> second -> tableId);
     }
-    int numTables = tableIds.size();
+    // size_t numTables = tableIds.size();
+    
     // If here then all tables exist
     for (auto colNameIt = columnNames.begin(); colNameIt != columnNames.end(); ++colNameIt) {
         string tableName (colNameIt -> first);

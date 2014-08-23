@@ -87,7 +87,12 @@ std::vector<double> realData;
 [:(),.;]	{ return yytext[0]; }
 
 	/* names */
-[A-Za-z][A-Za-z0-9]* 		{ strData.push_back(yytext); return SQLParser::NAME; }
+[A-Za-z][A-Za-z0-9]* 		{
+    for (char *p = yytext ; *p; ++p)
+        *p = tolower(*p);
+    strData.push_back(yytext);
+    return SQLParser::NAME;
+}
 
 	/* numbers */
 -?[0-9]+					{ intData.push_back(strtol(yytext, NULL, 10)); return SQLParser::INTVAL; }

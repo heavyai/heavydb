@@ -32,7 +32,8 @@ void InsertWalker::visit(InsertStmt *v) {
 		//printf("table = %s\n", v->n1->name.second.c_str());
 		
 		// visiting v->n2 will populate the colNames_ vector
-		v->n2->accept(*this);
+		v->n2->accept(*this); // InsertColumnList
+
 		/*for (auto it = colNames_.begin(); it != colNames_.end(); ++it) {
 			printf("column = %s\n", (*it).c_str());
 		}*/
@@ -57,7 +58,7 @@ void InsertWalker::visit(InsertStmt *v) {
 		}
 		
 		// Otherwise, check that the values match the column types
-		v->n3->accept(*this);
+		v->n3->accept(*this); // LiteralList
 		
 		// Check that the values in the insert statement are the right type
 		if (colTypes_.size() == colNames_.size()) {
@@ -74,9 +75,13 @@ void InsertWalker::visit(InsertStmt *v) {
 		}
 		else {
 			errFlag_ = true;
-			errMsg_ = "Column count does not match value count.";				
+			errMsg_ = "Column count does not match value count.";
+			colNames_.clear();
+			colMetadata.clear();
+			return;
 		}
 	}
+
 }
 
 void InsertWalker::visit(InsertColumnList *v) {

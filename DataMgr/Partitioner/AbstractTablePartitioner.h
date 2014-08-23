@@ -31,7 +31,7 @@ namespace Partitioner_Namespace {
 struct ColumnInfo {
     int columnId; // for when we iterate over all structs of ColumnInfo instead of using a map
     mapd_data_t columnType; 
-    int bitSize;
+    mapd_size_t bitSize;
     Buffer_Namespace::Buffer * insertBuffer; // a pointer so can be null
     //@todo get the constructor for ColumnInfo compiling
     //ColumnInfo(const int columnId, const mapd_data_t columnType, const int bitSize): columnId(columnId), columnType(columnType), bitSize(bitSize), insertBuffer(NULL) {}

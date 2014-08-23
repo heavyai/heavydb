@@ -10,21 +10,29 @@
 #include <vector>
 #include "../../Shared/types.h"
 #include "../Parse/SQL/parser.h"
- #include "DdlWalker.h"
+#include "DdlWalker.h"
 #include "../../DataMgr/Metadata/Catalog.h"
+#include "../../Datamgr/Partitioner/TablePartitionMgr.h"
+#include "../../DataMgr/File/FileMgr.h"
+#include "../../DataMgr/Buffer/BufferMgr.h"
 
 using namespace std;
 using Analysis_Namespace::DdlWalker;
+using Partitioner_Namespace::TablePartitionMgr;
+using File_Namespace::FileMgr;
+using Buffer_Namespace::BufferMgr;
 
 int main(int argc, char ** argv) {
-    // Add a table to the catalog
+    FileMgr fm(".");
+    BufferMgr bm(128*1048576, &fm);
     Catalog c(".");
+    TablePartitionMgr tpm(c, bm);
     
     std::vector<ColumnRow*> cols;
     cols.push_back(new ColumnRow("a", INT_TYPE, true));
     cols.push_back(new ColumnRow("b", FLOAT_TYPE, true));
     
-    mapd_err_t err = c.addTableWithColumns("T1", cols);
+    mapd_err_t err = c.addTableWithColumns("t0", cols);
     if (err != MAPD_SUCCESS) {
         printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
         //exit(EXIT_FAILURE);
@@ -50,7 +58,7 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
-        DdlWalker dw(c);
+        DdlWalker dw(&c, &tpm);
         if (parseRoot != 0) {
             parseRoot->accept(dw); 
             std::pair<bool, std::string> insertErr = dw.isError();

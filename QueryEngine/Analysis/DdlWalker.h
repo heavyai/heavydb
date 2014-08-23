@@ -9,9 +9,12 @@
 #include "../../Shared/types.h"
 #include "../Parse/SQL/visitor/Visitor.h"
 #include "../../DataMgr/Metadata/Catalog.h"
+#include "../../DataMgr/Partitioner/TablePartitionMgr.h"
+#include "../../DataMgr/Partitioner/Partitioner.h"
 
 using namespace SQL_Namespace;
 using namespace Metadata_Namespace;
+using namespace Partitioner_Namespace;
 
 namespace Analysis_Namespace {
 
@@ -23,7 +26,7 @@ class DdlWalker : public Visitor {
 
 public:
 	/// Constructor
-	DdlWalker(Catalog &c) : c_(c), errFlag_(false) {}
+	DdlWalker(Catalog *c, TablePartitionMgr *tpm) : c_(c), tpm_(tpm), errFlag_(false) {}
 
 	/// Returns an error message if an error was encountered
 	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
@@ -56,7 +59,9 @@ public:
 	virtual void visit(Table *v);
 
 private:
-	Catalog &c_;			/// a reference to a Catalog, which holds table/column metadata
+	Catalog *c_;                /// a reference to a Catalog, which holds table/column metadata
+    TablePartitionMgr *tpm_;    /// a reference to a TablePartitionMgr object
+    
 	std::string errMsg_;	/// holds an error message, if applicable; otherwise, it is ""
 	bool errFlag_ = false;	/// indicates the existence of an error when true
 

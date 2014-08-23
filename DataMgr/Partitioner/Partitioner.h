@@ -1,20 +1,21 @@
-#ifndef PARTITIONERINCLUDES_H
-#define PARTITIONERINCLUDES_H
+#ifndef DATAMGR_PARTITIONER_PARTITIONER_H
+#define DATAMGR_PARTITIONER_PARTITIONER_H
 
 #include "../../Shared/types.h"
 #include <vector>
-namespace Partitioner_Namespace {
 
+namespace Partitioner_Namespace {
+    
     /**
      * @enum PartitionerType
-     * stores the type of a child class of 
+     * stores the type of a child class of
      * AbstractTablePartitioner
      */
-
+    
     enum PartitionerType {
         LINEAR
     };
-
+    
     /**
      * @struct InsertData
      * @brief The data to be inserted using the partition manager.
@@ -25,41 +26,42 @@ namespace Partitioner_Namespace {
      *
      * @todo support for variable-length data types
      */
-
-
+    
+    
     struct InsertData {
         int tableId;						/// identifies the table into which the data is being inserted
         std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
         mapd_size_t numRows;				/// the number of rows being inserted
         std::vector <void *> data;							/// points to the start of the data for the row(s) being inserted
     };
-
+    
     /**
      * @struct PartitionInfo
-     * @brief Used by Partitioner classes to store info about each 
+     * @brief Used by Partitioner classes to store info about each
      * partition - the partition id and number of tuples(rows)
      * currently stored by that partition
      */
-
+    
     struct PartitionInfo {
         int partitionId;
         mapd_size_t numTuples;
     };
-
+    
     /**
      * @struct QueryInfo
-     * @brief returned by Partitioner classes in 
-     * getPartitionsForQuery - tells Executor which 
-     * partitions to scan from which partitioner 
+     * @brief returned by Partitioner classes in
+     * getPartitionsForQuery - tells Executor which
+     * partitions to scan from which partitioner
      * (partitioner id and partition id needed for building
      * ChunkKey)
      */
-
+    
     struct QueryInfo {
         int partitionerId;
         std::vector<PartitionInfo> partitions;
-        mapd_size_t numTuples; 
+        mapd_size_t numTuples;
     };
+    
 } // Partitioner_Namespace
 
-#endif
+#endif // DATAMGR_PARTITIONER_PARTITIONER_H

@@ -13,8 +13,10 @@
 #include "../../Shared/types.h"
 #include "../Parse/SQL/visitor/Visitor.h"
 #include "../../DataMgr/Metadata/Catalog.h"
+#include "../../DataMgr/Partitioner/Partitioner.h"
 
 using namespace SQL_Namespace;
+using namespace Metadata_Namespace;
 
 namespace Analysis_Namespace {
 
@@ -74,6 +76,8 @@ public:
 
 private:
 	Catalog &c_;							/// a reference to a Catalog, which holds table/column metadata
+    Partitioner_Namespace::InsertData insertObj;
+    
 	std::vector<std::string> colNames_;		/// saves parsed column names from the INSERT statement
 	std::vector<mapd_data_t> colTypes_;		/// saves parsed column types from the INSERT statement
 	std::string errMsg_;					/// holds an error message, if applicable; otherwise, it is ""
