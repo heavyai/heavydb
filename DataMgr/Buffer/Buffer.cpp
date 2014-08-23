@@ -9,13 +9,8 @@
 
 namespace Buffer_Namespace {
     
-    Buffer::Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize) {
-        assert(pageSize > 0);
-        host_ptr_ = host_ptr;
-        length_ = 0;
-        pageSize_ = pageSize;
-        pins_ = 1;
-        dirty_ = false;
+    Buffer::Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize, mapd_size_t lastUsedTime): host_ptr_(host_ptr), pageSize_(pageSize),  lastUsedTime_(lastUsedTime), length_(0), pins_(1), dirty_(false) {
+        assert(pageSize_ > 0);
         for (mapd_size_t i = 0; i < numPages; ++i)
             pages_.push_back(new Page(host_ptr + (i * pageSize), false));
     }

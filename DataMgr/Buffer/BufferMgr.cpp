@@ -16,7 +16,7 @@ using File_Namespace::Chunk;
 
 namespace Buffer_Namespace {
     
-    BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm) {
+    BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm): opCounter_(0) {
         assert(hostMemSize > 0);
         if (fm == NULL)
             fprintf(stderr, "[%s:%d] Warning: null reference to file manager.\n", __func__, __LINE__);
@@ -62,7 +62,7 @@ namespace Buffer_Namespace {
         // @todo Defragmentation
         
         // Create Buffer object and add to the BufferMgr
-        Buffer *b = new Buffer(bufAddr, numPages, pageSize);
+        Buffer *b = new Buffer(bufAddr, numPages, pageSize, opCounter_++);
         buffers_.push_back(b);
         return b;
     }
@@ -129,9 +129,14 @@ namespace Buffer_Namespace {
         
         // Check if buffer is already cached
         b = findChunkBuffer(key);
-        
-        if (b && !b->pinned())
+       
+        //@todo create read pins and write pins
+        if (b && b->pinned())
             return NULL;
+        else if (b) {
+            b -> pin(opCounter_++);
+            return b;
+        }
         
         // Determine number of pages and page size for chunk
         mapd_size_t numPages;
@@ -173,7 +178,7 @@ namespace Buffer_Namespace {
             return NULL;
         
         if (length) *length = b->length();
-        b->pin();
+        b->pin(opCounter_++);
         return b->host_ptr();
     }
     
@@ -222,5 +227,11 @@ namespace Buffer_Namespace {
             return NULL;
         return it->second;
     }
+
+    //void BufferMgr::evictLRU () {
+
+
+
+
     
 } // Buffer_Namespace

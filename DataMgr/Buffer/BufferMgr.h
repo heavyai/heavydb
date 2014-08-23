@@ -187,15 +187,19 @@ namespace Buffer_Namespace {
         FileMgr *fm_;               /// pointer to the file manager
         mapd_size_t hostMemSize_;   /// number of bytes allocated for host buffer pool
         mapd_addr_t hostMem_;       /// beginning memory address of host buffer pool
+
+        mapd_size_t opCounter_;
         
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
         
         std::list<Buffer*> buffers_;        // a list of the buffers being managed
         ChunkKeyToBufferMap chunkIndex_;    // an index of chunk keys mapped to buffers
-        
         /// Looks up a Chunk's buffer in the chunkIndex
         Buffer* findChunkBuffer(const ChunkKey &key);
+
+        // eviction strategy functions
+        
         
     }; // BufferMgr
     

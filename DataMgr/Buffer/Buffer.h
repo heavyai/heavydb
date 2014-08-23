@@ -31,7 +31,7 @@ namespace Buffer_Namespace {
     class Buffer {
     public:
         /// Constructor
-        Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize);
+        Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize, mapd_size_t lastTouchedTime);
         
         /// Destructor
         ~Buffer();
@@ -81,6 +81,9 @@ namespace Buffer_Namespace {
         
         // Mutators
         inline void pin() { pins_++; }
+        inline void pin(mapd_size_t lastUsedTime) {
+            lastUsedTime_ = lastUsedTime;
+            pins_++; }
         inline void unpin() { pins_--; }
         
         // Accessors
@@ -103,6 +106,8 @@ namespace Buffer_Namespace {
         int pins_;                  /// the number of pins (i.e., resources using the buffer)
         bool dirty_;                /// indicates that some page within the buffer has been modified
         std::vector<Page*> pages_;  /// a vector of pages that form the content of the buffer
+
+        mapd_size_t lastUsedTime_; /// Set to when buffer was last pinned
     };
     
 } // Buffer_Namespace
