@@ -450,7 +450,7 @@ namespace File_Namespace {
         chunkIndex_.insert(std::pair<ChunkKey, Chunk>(key, Chunk()));
         
         // Call putChunk to copy src into the new Chunk
-        mapd_err_t err;
+        mapd_err_t err = MAPD_SUCCESS;
         if (src != NULL)
             err = putChunk(key, size, src, epoch, blockSize);
         
