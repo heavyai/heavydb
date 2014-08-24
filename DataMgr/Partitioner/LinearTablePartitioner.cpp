@@ -136,7 +136,7 @@ void LinearTablePartitioner::readState() {
 
 void LinearTablePartitioner::getInsertBufferChunks() {
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
-        if (colMapIt -> second.insertBuffer != 0)
+        if (colMapIt -> second.insertBuffer != NULL)
             colMapIt -> second.insertBuffer -> unpin();
         ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnId};
         colMapIt -> second.insertBuffer = bufferManager_.getChunkBuffer(chunkKey);
