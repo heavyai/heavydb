@@ -9,7 +9,14 @@
 
 namespace Buffer_Namespace {
     
-    Buffer::Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize, mapd_size_t lastUsedTime): host_ptr_(host_ptr), pageSize_(pageSize),  lastUsedTime_(lastUsedTime), length_(0), pins_(1), dirty_(false) {
+    Buffer::Buffer(mapd_addr_t host_ptr, mapd_size_t numPages, mapd_size_t pageSize, mapd_size_t lastUsedTime) :
+    host_ptr_(host_ptr),
+    pageSize_(pageSize),
+    lastUsedTime_(lastUsedTime),
+    length_(0),
+    pins_(1),
+    dirty_(false)
+    {
         assert(pageSize_ > 0);
         for (mapd_size_t i = 0; i < numPages; ++i)
             pages_.push_back(new Page(host_ptr + (i * pageSize), false));
@@ -21,30 +28,26 @@ namespace Buffer_Namespace {
             pages_.pop_back();
         }
     }
-    
-    
+
     /// this method returns 0 if it cannot write the full n bytes
     size_t Buffer::write(mapd_size_t offset, mapd_size_t n, mapd_addr_t src) {
         assert(n > 0); // cannot write 0 bytes
         
         // check for buffer overflow
-        if ((length_ + n) > size()) {
-            //printf("overflow\n");
+        if ((length_ + n) > size())
             return 0;
-        }
         
         // write source contents to buffer
         assert(host_ptr_ && src);
         memcpy(host_ptr_ + offset, src, n);
         length_ = std::max(length_, offset + n);
-        //printf("new length: %d\n", length_);
         
         // update dirty flags for buffer and each affected page
         dirty_ = true;
         mapd_size_t firstPage = offset / pageSize_;
         mapd_size_t lastPage = (offset + n) / pageSize_;
-        //printf("first page: %u, last page: %u\n", firstPage, lastPage);
-        for (mapd_size_t i = firstPage; i < lastPage; ++i)
+
+        for (mapd_size_t i = firstPage; i <= lastPage; ++i)
             pages_[i]->dirty = true;
         
         return n;

@@ -20,8 +20,7 @@ namespace Buffer_Namespace {
         bool dirty = false;         /// indicates the page has been modified
         
         /// Constructor
-        Page(mapd_addr_t addrIn, bool dirtyIn = false)
-        : addr(addrIn), dirty(dirtyIn) {}
+        Page(mapd_addr_t addrIn, bool dirtyIn = false) : addr(addrIn), dirty(dirtyIn) {}
     };
     
     /**

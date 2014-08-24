@@ -125,24 +125,26 @@ namespace Buffer_Namespace {
     
     /// Presently, only returns the Buffer if it is not currently pinned
     Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
-        Buffer *b;
+        Buffer *b = NULL;
         
         // Check if buffer is already cached
         b = findChunkBuffer(key);
        
         //@todo create read pins and write pins
-        if (b && b->pinned())
-            return NULL;
-        else if (b) {
-            b -> pin(opCounter_++);
-            return b;
+        if (b != NULL) {
+            if (b->pinned())
+                return NULL;
+            else {
+                b->pin(opCounter_++);
+                return b;
+            }
         }
         
         // Determine number of pages and page size for chunk
         mapd_size_t numPages;
         mapd_size_t size;
         if ((fm_->getChunkSize(key, &numPages, &size)) != MAPD_SUCCESS)
-            return NULL;
+            return NULL; // Chunk does not exist in file system
         
         //    printf("size: %d numPages: %d\n", size, numPages);
         if (size == 0) {
