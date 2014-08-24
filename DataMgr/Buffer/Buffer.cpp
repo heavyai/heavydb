@@ -45,7 +45,7 @@ namespace Buffer_Namespace {
         // update dirty flags for buffer and each affected page
         dirty_ = true;
         mapd_size_t firstPage = offset / pageSize_;
-        mapd_size_t lastPage = (offset + n) / pageSize_;
+        mapd_size_t lastPage = (offset + n - 1) / pageSize_;
 
         for (mapd_size_t i = firstPage; i <= lastPage; ++i)
             pages_[i]->dirty = true;
