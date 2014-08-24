@@ -15,6 +15,7 @@
 #include <sstream>
 #include <FlexLexer.h>
 #include <vector>
+#include "../../../Shared/types.h"
 
 // AST nodes
 #include "ast/ASTNode.h"
@@ -67,7 +68,7 @@ using namespace SQL_Namespace;
 extern ASTNode* parse_root;
 
 extern std::vector<std::string> strData;
-extern std::vector<long int> intData;
+extern std::vector<int> intData;
 extern std::vector<double> realData;
 
 %}
@@ -132,8 +133,8 @@ literal_list:
 ;
 
 literal:
-	INTVAL 					{ $$ = new Literal(intData.back()); intData.pop_back(); }
-|	FLOATVAL 				{ $$ = new Literal(realData.back()); realData.pop_back(); }
+	INTVAL 					{ $$ = new Literal((float)intData.back(), INT_TYPE); intData.pop_back(); }
+|	FLOATVAL 				{ $$ = new Literal((float)realData.back(), FLOAT_TYPE); realData.pop_back(); }
 | 	STRING 					{ $$ = new Literal(strData.back()); strData.pop_back(); }
 ;
 

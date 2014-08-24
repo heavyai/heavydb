@@ -10,15 +10,25 @@
 #include <vector>
 #include "../../Shared/types.h"
 #include "../Parse/SQL/parser.h"
- #include "InsertWalker.h"
+#include "NameWalker.h"
+#include "InsertWalker.h"
 #include "../../DataMgr/Metadata/Catalog.h"
+#include "../../Datamgr/Partitioner/TablePartitionMgr.h"
+#include "../../DataMgr/File/FileMgr.h"
+#include "../../DataMgr/Buffer/BufferMgr.h"
 
 using namespace std;
+using Partitioner_Namespace::TablePartitionMgr;
+using File_Namespace::FileMgr;
+using Buffer_Namespace::BufferMgr;
+using Analysis_Namespace::NameWalker;
 using Analysis_Namespace::InsertWalker;
 
 int main(int argc, char ** argv) {
-    // Add a table to the catalog
+    FileMgr fm(".");
+    BufferMgr bm(128*1048576, &fm);
     Catalog c(".");
+    TablePartitionMgr tpm(c, bm);
     
     std::vector<ColumnRow*> cols;
     cols.push_back(new ColumnRow("a", INT_TYPE, true));
@@ -50,7 +60,19 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
-        InsertWalker iw(c);
+        
+        // annotate nodes with metadata from Catalog
+        NameWalker nw(c);
+        if (parseRoot != 0) {
+            parseRoot->accept(nw);
+            std::pair<bool, std::string> insertErr = nw.isError();
+            if (insertErr.first == true) {
+                cout << "Error: " << insertErr.second << std::endl;
+                continue;
+            }
+        }
+        
+        InsertWalker iw(&c, &tpm);
         if (parseRoot != 0) {
             parseRoot->accept(iw); 
             std::pair<bool, std::string> insertErr = iw.isError();

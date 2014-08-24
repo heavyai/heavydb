@@ -19,7 +19,8 @@
 namespace Analysis_Namespace {
 
 void InsertWalker::visit(SqlStmt *v) {
-	if (v->n1) v->n1->accept(*this); // DmlStmt
+    insertObj_.numRows = 0;
+    if (v->n1) v->n1->accept(*this); // DmlStmt
 }
 
 void InsertWalker::visit(DmlStmt *v) {
@@ -28,65 +29,83 @@ void InsertWalker::visit(DmlStmt *v) {
 
 void InsertWalker::visit(InsertStmt *v) {
 	assert(v->n1 && v->n2 && v->n3);
-	if (v->n1->name.second != "") {
-		//printf("table = %s\n", v->n1->name.second.c_str());
-		
-		// visiting v->n2 will populate the colNames_ vector
-		v->n2->accept(*this); // InsertColumnList
 
-		/*for (auto it = colNames_.begin(); it != colNames_.end(); ++it) {
-			printf("column = %s\n", (*it).c_str());
-		}*/
-		
-		// Request metadata for the columns
-		std::vector<ColumnRow> colMetadata;
-		mapd_err_t err = c_.getMetadataForColumns(v->n1->name.second, colNames_, colMetadata);
+    insertObj_.tableId = v->n1->metadata.tableId;
+    insertObj_.numRows++;
+    
+    // visit the columns
+    v->n2->accept(*this); // InsertColumnList
+    
+    // visit the literals
+    v->n3->accept(*this); // LiteralList
+    
+    // set variables for number of columns and values
+    size_t numColumns = colNodes_.size();
+    size_t numValues = literalTypes_.size();
+    assert(numColumns == insertObj_.columnIds.size());
+    
+    // check that the number of column matches the number of literals
+    // (note that this isn't caught by the parser)
+    if (numColumns > numValues) {
+        errFlag_ = true;
+        errMsg_ = "not enough values listed";
+        return;
+    }
+    else if (numValues > numColumns) {
+        errFlag_ = true;
+        errMsg_ = "not enough columns listed";
+        return;
+    }
+    
+    // type check
+    for (int i = 0; i < numColumns; ++i) {
+        if (colNodes_[i]->metadata.columnType == INT_TYPE && literalTypes_[i] == FLOAT_TYPE) {
+            errFlag_ = true;
+            errMsg_ = "Type mismatch at column '" + colNodes_[i]->name +"' (cannot downcast float to int)";
+            return;
+        }
+    }
 
-		// Check for error (table or column does not exists)
-		if (err != MAPD_SUCCESS) {
-			errFlag_ = true;
-			if (err == MAPD_ERR_TABLE_DOES_NOT_EXIST)
-				errMsg_ = "Table \"" + v->n1->name.second + "\" does not exist";
-			else if (err == MAPD_ERR_COLUMN_DOES_NOT_EXIST)
-				errMsg_ = "Column \"" + colNames_[colMetadata.size()] + "\" does not exist";
-			else if (err != MAPD_SUCCESS)
-				errMsg_ = "Catalog returned an error.";
-			
-			colNames_.clear();
-			colMetadata.clear();
-			return;
-		}
-		
-		// Otherwise, check that the values match the column types
-		v->n3->accept(*this); // LiteralList
-		
-		// Check that the values in the insert statement are the right type
-		if (colTypes_.size() == colNames_.size()) {
-			for (int i = 0; i < colTypes_.size(); ++i) {
-				//printf("colMetadata[i].columnName=\"%s\" colNames_[i]=\"%s\" colMetadata[i].columnType=%d\n", colMetadata[i].columnName.c_str(), colNames_[i].c_str(), colMetadata[i].columnType);
-				if (colMetadata[i].columnType == INT_TYPE && colTypes_[i] == FLOAT_TYPE) {
-					std::stringstream ss;
-					ss << "Type mismatch at column \"" << colMetadata[i].columnName << "\"";
-					errFlag_ = true;
-					errMsg_ = ss.str();
-					break;
-				}
-			}
-		}
-		else {
-			errFlag_ = true;
-			errMsg_ = "Column count does not match value count.";
-			colNames_.clear();
-			colMetadata.clear();
-			return;
-		}
-	}
+    // package the data
+    for (int i = 0; i < numValues; ++i) {
+        mapd_byte_t *data = new mapd_byte_t[byteCount_];
+        mapd_byte_t *pData = data;
+        mapd_size_t currentByte = 0;
 
+        printf("[%d] int=%d float=%f\n", i, literalNodes_[i]->intData, literalNodes_[i]->realData);
+        
+        // for each possible type, the bytes are copied one at a time into
+        // the bytes of the mapd_byte_t data pointer
+        if (literalNodes_[i]->type == INT_TYPE) {
+            mapd_byte_t *tmp = (mapd_byte_t*)&literalNodes_[i]->intData;
+            for (int j = 0; j < sizeof(int); ++j, ++tmp, ++pData)
+                *pData = *tmp;
+            // printf("%d == %d\n", *((int*)(data+currentByte)), literalNodes_[i]->intData);
+            assert(*((int*)(data+currentByte)) == literalNodes_[i]->intData);
+            currentByte += sizeof(int);
+        }
+        else if (literalNodes_[i]->type == FLOAT_TYPE) {
+            mapd_byte_t *tmp = (mapd_byte_t*)&literalNodes_[i]->realData;
+            for (int j = 0; j < sizeof(float); ++j, ++tmp, ++pData)
+                *pData = *tmp;
+            // printf("%f == %f\n", *((float*)(data+currentByte)), literalNodes_[i]->realData);
+            assert(*((float*)(data+currentByte)) == literalNodes_[i]->realData);
+            currentByte += sizeof(int);
+        }
+
+        // push the packaged data into insertObj_
+        insertObj_.data.push_back((void*)data);
+    }
+    
+    // insert the data via the TablePartitionMgr object
+    tpm_->insertData(insertObj_);
 }
 
 void InsertWalker::visit(InsertColumnList *v) {
 	if (v->n1) v->n1->accept(*this);
-	colNames_.push_back(v->name);
+    assert(v->metadata.tableId == insertObj_.tableId);
+    insertObj_.columnIds.push_back(v->metadata.columnId);
+    colNodes_.push_back(v);
 }
 
 void InsertWalker::visit(LiteralList *v) {
@@ -95,7 +114,11 @@ void InsertWalker::visit(LiteralList *v) {
 }
 
 void InsertWalker::visit(Literal *v) {
-	this->colTypes_.push_back(v->type);
+    literalNodes_.push_back(v);
+    literalTypes_.push_back(v->type);
+    
+    assert(sizeof(int) == sizeof(float));
+    byteCount_ += sizeof(float); // @todo clearly, we will need to know the sizes of any type
 }
 
 } // Analysis_Namespace

@@ -5,6 +5,7 @@
 #undef yyFlexLexer
 #include <iostream>
 #include <vector>
+#include <stdlib.h>
 #include "parser.h"
 
 extern YY_Parser_STYPE yylval;
@@ -13,7 +14,7 @@ using namespace std;
 
 // Variables used to share data with the parser
 std::vector<std::string> strData;
-std::vector<long int> intData;
+std::vector<int> intData;
 std::vector<double> realData;
 
 
@@ -95,7 +96,7 @@ std::vector<double> realData;
 }
 
 	/* numbers */
--?[0-9]+					{ intData.push_back(strtol(yytext, NULL, 10)); return SQLParser::INTVAL; }
+-?[0-9]+					{ intData.push_back(atoi(yytext)); return SQLParser::INTVAL; }
 
 [0-9]+"."[0-9]* |
 "."[0-9]+  					{ realData.push_back(atof(yytext)); return SQLParser::FLOATVAL; }

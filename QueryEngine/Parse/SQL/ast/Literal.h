@@ -11,23 +11,25 @@ class Literal : public ASTNode {
 
 public:
 
-	long int n1;
-	double n2;
-	std::string n3;
+    int intData;
+    float realData;
+    std::string strData;
 	mapd_data_t type;
 
-	explicit Literal(long int n1) {
-		this->n1 = n1;
-		this->type = INT_TYPE;
+    Literal(float data, mapd_data_t type) {
+		this->type = type;
+        if (type == INT_TYPE)
+            this->intData = (int)data;
+        else if (type == FLOAT_TYPE)
+            this->realData = data;
+        else
+            assert(NULL); // unsupported type
+        // printf("intData=%d floatData=%f\n", intData, realData);
 	}
 
-	explicit Literal(double n2) {
-		this->n2 = n2;
-		this->type = FLOAT_TYPE;
-	}
-
-	explicit Literal(const std::string &n3) {
-		this->n3 = n3;
+	explicit Literal(const std::string &strData) {
+        this->strData = strData;
+        assert(NULL); // string data is not supported yet
 	}
 	
 	virtual void accept(Visitor &v) {
