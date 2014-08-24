@@ -54,20 +54,19 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
         }
         mapd_size_t numRowsToInsert = min(rowsLeftInCurrentPartition, numRowsLeft);
 
-        for (int c = 0; c != insertDataStruct.columnIds.size(); ++c) {
-            //@todo only lookup ColumnInfo once instead of once for each
-            //partition created
-            int columnId =insertDataStruct.columnIds[c];
-            map <int, ColumnInfo>::iterator colMapIt = columnMap_.find(columnId);
-            // This SHOULD be found and this iterator should not be end()
-            // as SemanticChecker should have already checked each column reference
-            // for validity
+        // for each column, append the data in the appropriate insert buffer
+        for (int i = 0; i < insertDataStruct.columnIds.size(); ++i) {
+            int columnId = insertDataStruct.columnIds[i];
+            auto colMapIt = columnMap_.find(columnId);
             assert(colMapIt != columnMap_.end());
-            //cout << "Insert buffer before insert: " << colMapIt -> second.insertBuffer << endl;
-            //cout << "Insert buffer before insert length: " << colMapIt -> second.insertBuffer -> length() << endl;
-            mapd_size_t colByteSize = colMapIt -> second.bitSize / 8;
-            colMapIt -> second.insertBuffer -> append(colByteSize * numRowsToInsert, static_cast <mapd_addr_t> (insertDataStruct.data[c]) + colByteSize * numRowsInserted);
+            mapd_size_t colByteSize = colMapIt->second.bitSize / 8;
+            
+            // append the data (size of data is colBytesize * numRowsToInsert)
+            Buffer *insertBuffer = colMapIt->second.insertBuffer;
+            insertBuffer->append(colByteSize * numRowsToInsert, static_cast<mapd_addr_t>(insertDataStruct.data[i]));
+            // insertBuffer->print();
         }
+
         partitionInfoVec_.back().numTuples += numRowsToInsert;
         numRowsLeft -= numRowsToInsert;
         numRowsInserted += numRowsToInsert;
