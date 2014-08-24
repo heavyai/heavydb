@@ -350,25 +350,28 @@ namespace File_Namespace {
         mapd_err_t putChunk(const ChunkKey &key, mapd_size_t n, mapd_addr_t src, int epoch, mapd_size_t optBlockSize = -1);
         
         /**
-         * Given a key, this method requests the file manager to create a new chunk of the requested
-         * number of bytes (size). A pointer to the new Chunk object is returned, or NULL upon failure.
-         * If failure occurs, an error code may be stored in err.
+         * Given a key, this method requests the file manager to create a new chunk of the
+         * requested number of bytes (size). A pointer to the new Chunk object is returned,
+         * or NULL upon failure.
          *
-         * If src is NULL, then each block of the chunk will be empty; otherwise, the src data will be copied
-         * into it.
+         * If src is NULL, then each block of the chunk will be empty; otherwise, the src
+         * data will be copied into it.
          *
-         * If the chunk already exists (based on looking up the key), then NULL is returned and err is set to
-         * MAPD_ERR_CHUNK_DUPL.
+         * If the chunk already exists (based on looking up the key), or if the Chunk cannot
+         * be created, then NULL is returned.
+         * @todo proper-error handling for Chunk creation in FileMgr
          *
-         * @param key The unique identifier of the new chunk.
-         * @param size The amount of memory requested for the new chunk.
-         * @param blockSize The size of the logical disk blocks for which the chunk will be stored
-         * @param src The source data to be copied into the chunk (can be NULL).
-         * @param err An error code, should an error happen to occur.
+         * Note that epoch is only used if src is not NULL (i.e., src contains data to be
+         * written to blocks, where epoch is stored in the block metadata).
+         *
+         * @param key   The unique identifier of the new chunk.
+         * @param size  The amount of memory requested for the new chunk.
+         * @param block Size The size of the logical disk blocks for which the chunk will be stored
+         * @param src   The source data to be copied into the chunk (can be NULL).
+         * @param epoch The epoch (time) at which the Chunk is being created.
          * @return A pointer to a new Chunk, or NULL.
          */
-        
-        Chunk* createChunk(ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, mapd_addr_t src, int epoch);
+        Chunk* createChunk(const ChunkKey &key, const mapd_size_t n, const mapd_size_t blockSize, mapd_addr_t src, int epoch);
         
         /**
          * Given a chunk, this method deletes a chunk from the file system by freeing all
@@ -412,11 +415,12 @@ namespace File_Namespace {
         void print();
 
     private:
-        std::string basePath_; 				/**< The OS file system path containing the files. */
-        std::vector<FileInfo*> files_;		/**< A vector of files accessible via a file identifier. */
-        BlockSizeFileMMap fileIndex_; 		/**< Maps block sizes to FileInfo objects. */
-        ChunkKeyToChunkMap chunkIndex_; 	/**< Index for looking up chunks, which are vectors of MultiBlock */
-        unsigned nextFileId_;				/**< the index of the next file id */
+        std::string basePath_; 				/// The OS file system path containing the files. */
+        std::vector<FileInfo*> files_;		/// A vector of files accessible via a file identifier. */
+        BlockSizeFileMMap fileIndex_; 		/// Maps block sizes to FileInfo objects. */
+        ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks, which are vectors of MultiBlock */
+        unsigned nextFileId_;				/// the index of the next file id */
+        bool isDirty_;                      /// true if metadata changed since last writeState()
         
         /// Postgres connector object -- currently used for reading/writing file manager metadata
         PgConnector pgConnector_;

@@ -16,6 +16,8 @@ using File_Namespace::Chunk;
 
 namespace Buffer_Namespace {
     
+    /// Prints a warning if fm_ is NULL. It is possible to use BufferMgr without a
+    /// file manager, hence why a warning is issued to stderr.
     BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm): opCounter_(0) {
         assert(hostMemSize > 0);
         if (fm == NULL)
@@ -91,11 +93,15 @@ namespace Buffer_Namespace {
             return b;
         }
         
+        // Ask the file manager to create the new Chunk
+        fm_->createChunk(key, numPages * pageSize, 4, NULL, -1);
+        
         // Create a new buffer for the new chunk
         b = createBuffer(numPages, pageSize);
         if (b == NULL) {
             return NULL; // unable to create the new buffer
         }
+        
         // Insert an entry in chunkIndex_ for the new chunk. Just do it.
         chunkIndex_[key] = b;
         return b;

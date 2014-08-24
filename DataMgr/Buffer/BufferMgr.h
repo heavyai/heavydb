@@ -69,10 +69,21 @@ namespace Buffer_Namespace {
          * The createBuffer method will search for numPages*pageSize bytes of memory in the
          * free space of the buffer pool. If found, it allocates that memory for a new Buffer
          * object, returning a pointer to said Buffer; otherwise, NULL is returned.
+         *
+         * @param numPages  The number of pages to be created for the new Buffer.
+         * @param pageSize  The size of each page in the new Buffer.
+         * @return Buffer*  Returns a pointer to the new Buffer, or NULL on failure.
          */
         Buffer* createBuffer(mapd_size_t numPages, mapd_size_t pageSize);
         
-        /// Deletes a buffer
+        /**
+         * @brief Deletes a buffer, releasing its memory
+         *
+         * This method deletes a buffer, and should NOT be confused with deleteChunk().
+         * It is "Chunk unaware" and simply frees the memory occupied by the buffer.
+         *
+         * @param Buffer*   A pointer to the Buffer whose memory is to be freed.
+         */
         void deleteBuffer(Buffer *b);
         
         /**
@@ -195,7 +206,16 @@ namespace Buffer_Namespace {
         
         std::list<Buffer*> buffers_;        // a list of the buffers being managed
         ChunkKeyToBufferMap chunkIndex_;    // an index of chunk keys mapped to buffers
-        /// Looks up a Chunk's buffer in the chunkIndex
+        
+        /**
+         * @brief Looks up a Chunk's buffer in the Chunk index.
+         *
+         * Given the ChunkKey of a Chunk, this method looks up and returns the Buffer
+         * object for the buffer that holds the contents of the Chunk.
+         *
+         * @param ChunkKey  The unique identifier for a Chunk object.
+         * @return Buffer*  A pointer to the found Buffer, or NULL if it is not found.
+         */
         Buffer* findChunkBuffer(const ChunkKey &key);
 
         // eviction strategy functions

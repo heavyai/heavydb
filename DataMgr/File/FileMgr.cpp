@@ -56,9 +56,9 @@ namespace File_Namespace {
         }
     }
     
-    FileMgr::FileMgr(const std::string &basePath) : basePath_(basePath), pgConnector_("mapd", "mapd") {
+    FileMgr::FileMgr(const std::string &basePath) : basePath_(basePath), pgConnector_("mapd", "mapd"), isDirty_(false), nextFileId_(0)
+    {
         mapd_err_t status;
-        nextFileId_ = 0;
         
         // Create FileInfo table for storing metadata
         status = pgConnector_.query("CREATE TABLE IF NOT EXISTS FileInfo(file_id integer PRIMARY KEY, block_size integer, nblocks integer)");
@@ -438,7 +438,7 @@ namespace File_Namespace {
     }
     
     // Inserts free blocks into the chunk; creates a new file if necessary
-    Chunk* FileMgr::createChunk(ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, mapd_addr_t src, int epoch) {
+    Chunk* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t size, const mapd_size_t blockSize, mapd_addr_t src, int epoch) {
         // check if the chunk already exists based on key
         Chunk *ctmp = NULL;
         if ((ctmp = getChunkRef(key)) != NULL) {
@@ -450,7 +450,9 @@ namespace File_Namespace {
         chunkIndex_.insert(std::pair<ChunkKey, Chunk>(key, Chunk()));
         
         // Call putChunk to copy src into the new Chunk
-        mapd_err_t err = putChunk(key, size, src, epoch, blockSize);
+        mapd_err_t err;
+        if (src != NULL)
+            err = putChunk(key, size, src, epoch, blockSize);
         
         // if putChunk() fails, then remove key from chunkIndex and return NULL
         if (err != MAPD_SUCCESS) {
