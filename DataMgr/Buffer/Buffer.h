@@ -26,6 +26,16 @@ namespace Buffer_Namespace {
     /**
      * @class Buffer
      * @brief A buffer is an area of memory in the buffer pool consisting of pages.
+     *
+     * A Buffer object refers to a region of host memory whose address begins at that
+     * pointed to by a host pointer (host_ptr), and which consists of a set of
+     * equally-sized pages established upon instantiation.
+     *
+     * The API provides basic I/O operations
+     *
+     *
+     * Patterns:
+     *      Forbid Copying Idiom 4.1
      */
     class Buffer {
     public:
@@ -78,26 +88,45 @@ namespace Buffer_Namespace {
          */
         void print();
         
-        // Mutators
+        /// Increments the pin count
         inline void pin() { pins_++; }
+        
+        /// Incremenets the pin count while setting lastUsedTime
         inline void pin(mapd_size_t lastUsedTime) {
             lastUsedTime_ = lastUsedTime;
-            pins_++; }
+            pins_++;
+        }
+        
+        /// Decrements the pin count
         inline void unpin() { pins_--; }
         
-        // Accessors
-        inline mapd_addr_t  host_ptr() { return host_ptr_; }
-        inline bool pinned() { return pins_ > 0; }
-        inline bool dirty() { return dirty_; }
-        inline mapd_size_t numPages() { return pages_.size(); }
-        inline mapd_size_t pageSize() { return pageSize_; }
-        inline mapd_size_t length() { return length_; }
+        /// Sets the length of the Buffer (number of used bytes)
         inline void length(mapd_size_t length) { assert(length <= size()); this->length_ = length; }
+        
+        /// Returns a pointer to host memory for the Buffer
+        inline mapd_addr_t  host_ptr() { return host_ptr_; }
+        
+        /// Returns true if the Buffer is pinned
+        inline bool pinned() { return pins_ > 0; }
+        
+        /// Returns true if the Buffer is dirty (has been modified)
+        inline bool dirty() { return dirty_; }
+        
+        /// Returns the number of pages in the Buffer
+        inline mapd_size_t numPages() { return pages_.size(); }
+        
+        /// Returns the page size of the pages in the Buffer
+        inline mapd_size_t pageSize() { return pageSize_; }
+        
+        /// Returns the length (number of used bytes) in the Buffer
+        inline mapd_size_t length() { return length_; }
+        
+        /// Returns the total size of the Buffer in bytes
         inline mapd_size_t size() { return pageSize_ * pages_.size(); }
         
     private:
-        Buffer(const Buffer&);
-        Buffer& operator =(const Buffer&);
+        Buffer(const Buffer&); /// cannot copy via copy constructor
+        Buffer& operator =(const Buffer&); /// cannot copy via assignment operator
         
         mapd_addr_t host_ptr_;      /// memory address of first page of buffer in host memory
         mapd_size_t length_;        /// the length (used bytes) of the buffer
@@ -106,7 +135,7 @@ namespace Buffer_Namespace {
         bool dirty_;                /// indicates that some page within the buffer has been modified
         std::vector<Page*> pages_;  /// a vector of pages that form the content of the buffer
 
-        mapd_size_t lastUsedTime_; /// Set to when buffer was last pinned
+        mapd_size_t lastUsedTime_;  /// Set to when buffer was last pinned
     };
     
 } // Buffer_Namespace
