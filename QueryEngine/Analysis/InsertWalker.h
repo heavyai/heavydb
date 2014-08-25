@@ -13,10 +13,12 @@
 #include "../../Shared/types.h"
 #include "../Parse/SQL/visitor/Visitor.h"
 #include "../../DataMgr/Metadata/Catalog.h"
+#include "../../DataMgr/Partitioner/TablePartitionMgr.h"
 #include "../../DataMgr/Partitioner/Partitioner.h"
 
 using namespace SQL_Namespace;
 using namespace Metadata_Namespace;
+using namespace Partitioner_Namespace;
 
 namespace Analysis_Namespace {
 
@@ -51,7 +53,7 @@ class InsertWalker : public Visitor {
 
 public:
 	/// Constructor
-	InsertWalker(Catalog &c) : c_(c), errFlag_(false) {}
+	InsertWalker(Catalog *c, TablePartitionMgr *tpm) : c_(c), tpm_(tpm), errFlag_(false) {}
 
 	/// Returns an error message if an error was encountered
 	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
@@ -75,13 +77,16 @@ public:
 	virtual void visit(Literal *v);
 
 private:
-	Catalog &c_;							/// a reference to a Catalog, which holds table/column metadata
-    Partitioner_Namespace::InsertData insertObj;
+	Catalog *c_;                    /// a reference to a Catalog, which holds table/column metadata
+    TablePartitionMgr *tpm_;        /// a reference to a TablePartitionMgr object
+    std::vector<InsertColumnList*> colNodes_;
+    std::vector<Literal*> literalNodes_;
+    std::vector<mapd_data_t> literalTypes_;
+    InsertData insertObj_;          /// represents the insert statement in a struct
+    size_t byteCount_ = 0;          /// counts the number of bytes to allocate for the data being inserted
     
-	std::vector<std::string> colNames_;		/// saves parsed column names from the INSERT statement
-	std::vector<mapd_data_t> colTypes_;		/// saves parsed column types from the INSERT statement
-	std::string errMsg_;					/// holds an error message, if applicable; otherwise, it is ""
-	bool errFlag_ = false;					/// indicates the existence of an error when true
+	std::string errMsg_;			/// holds an error message, if applicable; otherwise, it is ""
+	bool errFlag_ = false;			/// indicates the existence of an error when true
 };
 
 } // Analysis_Namespace

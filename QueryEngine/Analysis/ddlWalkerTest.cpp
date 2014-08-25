@@ -37,6 +37,7 @@ int main(int argc, char ** argv) {
         printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
         //exit(EXIT_FAILURE);
     }
+    tpm.createPartitionerForTable("t0", Partitioner_Namespace::LINEAR);
 
     // Create a parser for SQL and... do stuff
     SQLParser parser;
