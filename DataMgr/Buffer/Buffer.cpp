@@ -96,4 +96,21 @@ namespace Buffer_Namespace {
         printf("dirty        = %s\n", dirty_ ? "true" : "false");
     }
     
+    void Buffer::print(mapd_data_t type) {
+        if (type == INT_TYPE) {
+            int *pInt = (int*)host_ptr_;
+            for (int i = 0; i < length_; i += sizeof(int)) {
+                printf("[%d]->%d\n", i, pInt[i]);
+            }
+            printf("\n");
+        }
+        else if(type == FLOAT_TYPE) {
+            float *pFloat = (float*)host_ptr_;
+            for (int i = 0; i < length_; i += sizeof(float)) {
+                printf("[%d]->%f\n", i, pFloat[i]);
+            }
+            printf("\n");
+        }
+    }
+    
 } // Buffer_Namespace

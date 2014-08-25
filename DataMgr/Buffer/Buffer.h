@@ -88,6 +88,11 @@ namespace Buffer_Namespace {
          */
         void print();
         
+        /**
+         * @brief Prints a representation of the contents of the Buffer as the specified type
+         */
+        void print(mapd_data_t type);
+        
         /// Increments the pin count
         inline void pin() { pins_++; }
         
