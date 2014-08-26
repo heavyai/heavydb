@@ -77,12 +77,12 @@ namespace File_Namespace {
         assert(status == MAPD_SUCCESS);
         
         // read in metadata and update internal data structures
-        readState();
+        //readState();
     }
     
     FileMgr::~FileMgr() {
         // write file manager metadata to postgres database
-        writeState();
+        //writeState();
         
         // free memory used by FileInfo objects
         for (int i = 0; i < files_.size(); ++i)
@@ -208,30 +208,24 @@ namespace File_Namespace {
         assert(buf);
         
         // find chunk
-        auto it = chunkIndex_.find(key);
-        if (it == chunkIndex_.end())
+        auto chunkIt = chunkIndex_.find(key);
+        if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
         
-        // copy contents of chunk to buf
-        Chunk &c = it->second;
+        // copy contents of Chunk to buf
+        Chunk &c = chunkIt->second;
         for (int i = 0; i < c.size(); ++i) {
-            
-            // get most recent address of current block
             Block *blk = c[i]->current();
-            
-            // obtain a reference to the file of the block address
-            int fileId = blk->fileId;
-            FileInfo *fInfo = getFile(fileId);
+            FileInfo *fInfo = getFile(blk->fileId); // file that owns blk
             if (!fInfo)
                 throw std::runtime_error("Unable to obtain file for the requested block.");
-            
-            // open the file if it is not open already
-            openFile(fInfo);
+            else
+                openFile(fInfo);
             
             // read block from file into buf
-            mapd_size_t used = c[i]->current()->used;
-            read(fInfo->f, blk->blockNum * c[i]->blockSize, used, buf);
-            buf += used;
+            if (blk->used > 0)
+                read(fInfo->f, blk->blockNum * c[i]->blockSize, blk->used, buf);
+            buf += blk->used;
         }
     }
     
@@ -283,19 +277,22 @@ namespace File_Namespace {
         
         mapd_size_t blockSize = chunkBlockSize_[key]; // the block size for the Chunk
         mapd_size_t nblocks = (size + blockSize - 1) / blockSize; // number of blocks to copy
-        mapd_size_t blockCount = 0; // blockCount: number of blocks written so
+        mapd_size_t blockCount = 0; // blockCount: number of blocks written so far
         auto fileIt = fileIndex_.lower_bound(blockSize); // file iterator over target block size
         
         // Traverse the MultiBlock* objects of the Chunk, writing blockSize bytes to a new
         // version of each affected logical block of the Chunk
         for (int i = 0; i < c->size(); ++i) {
+            MultiBlock *mb = (*c)[i];
             
             // find a suitable file (i.e., having the desired block size)
             FileInfo* fInfo = nullptr;
-            for (; fileIt != fileIndex_.end(); ++fileIt)
-                if (getFile(fileIt->second)->available() > 0)
-                    fInfo = getFile(fileIt->second);
-            fileIt--; // preserve iterator position
+            if (fileIndex_.size() > 0) {
+                for (; fileIt != fileIndex_.end(); ++fileIt)
+                    if (getFile(fileIt->second)->available() > 0)
+                        fInfo = getFile(fileIt->second);
+                fileIt--; // preserve iterator position
+            }
             
             // if no file exists, create a new one
             if (fInfo == nullptr)
@@ -311,11 +308,10 @@ namespace File_Namespace {
             // Push the obtained block to be used as the new version
             // of the current MultiBlock with the specified epoch
             Block *b = getBlock(fInfo, freeBlockNum);
-            (*c)[i]->push(b->fileId, b->blockNum, epoch_);
+            mb->push(b, epoch_);
             
             // Write the contents of the block in buf to the obtained block
-            writeBlock(fInfo->f,blockSize,freeBlockNum, buf+blockCount*blockSize);
-            
+            b->used = writeBlock(fInfo->f, blockSize, freeBlockNum, buf+blockCount*blockSize);
             nblocks--;
             blockCount++;
         }
@@ -325,10 +321,12 @@ namespace File_Namespace {
             
             // find a suitable file (i.e., having the desired block size)
             FileInfo* fInfo = NULL;
-            for (; fileIt != fileIndex_.end(); ++fileIt)
-                if (getFile(fileIt->second)->available() > 0)
-                    fInfo = getFile(fileIt->second);
-            fileIt--; // preserve iterator position
+            if (fileIndex_.size() > 0) {
+                for (; fileIt != fileIndex_.end(); ++fileIt)
+                    if (getFile(fileIt->second)->available() > 0)
+                        fInfo = getFile(fileIt->second);
+                fileIt--; // preserve iterator position
+            }
             
             // if no file exists, create a new one
             if (fInfo == nullptr)
@@ -344,11 +342,11 @@ namespace File_Namespace {
             // push the new MultiBlock into the Chunk
             MultiBlock* mb = new MultiBlock(fInfo->blockSize);
             Block *b = getBlock(fInfo, freeBlockNum);
-            mb->push(b->fileId, b->blockNum, epoch_);
+            mb->push(b, epoch_);
             c->push_back(mb);
             
             // Write the contents of the block in buf to the obtained block
-            writeBlock(fInfo->f,blockSize,freeBlockNum, buf+blockCount*blockSize);
+            b->used = writeBlock(fInfo->f,blockSize,freeBlockNum, buf+blockCount*blockSize);
             
             nblocks--;
             blockCount++;

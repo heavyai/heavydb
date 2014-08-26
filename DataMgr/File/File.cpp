@@ -63,6 +63,7 @@ namespace File_Namespace {
     size_t read(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf) {
         assert(f);
         assert(buf);
+        assert(size > 0);
         
         // read "size" bytes from the offset location in the file into the buffer
         fseek(f, offset, SEEK_SET);

@@ -42,6 +42,9 @@ namespace File_Namespace {
      * Associated with each version of a block is an "epoch" value, which is a temporal
      * reference.
      *
+     * Note that pointers to Block are stored. MultiBlock is NOT responsible for freeing
+     * memory allocated for these Block objects.
+     *
      * Note that it should always be the case that version.size() == epoch.size().
      */
     struct MultiBlock {
@@ -71,17 +74,16 @@ namespace File_Namespace {
         }
         
         /// Pushes a new block with epoch value
-        inline void push(const int fileId, const mapd_size_t blockNum, const int epoch) {
-            blkVersions.push_back(new Block(fileId, blockNum));
+        inline void push(Block *b, const int epoch) {
+            blkVersions.push_back(b);
             this->epochs.push_back(epoch);
             assert(this->blkVersions.size() == this->epochs.size());
         }
         
-        /// Purges the oldest block
+        /// Purges the oldest Block pointer
         inline void pop() {
             if (blkVersions.size() < 1)
                 throw std::runtime_error("No block to pop.");
-            delete blkVersions.front(); // frees memory used by oldest Block
             blkVersions.pop_front();
             this->epochs.pop_front();
             assert(this->blkVersions.size() == this->epochs.size());

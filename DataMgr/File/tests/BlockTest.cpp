@@ -32,7 +32,8 @@ TEST(MultiBlock, pushAndPop) {
     
     // push()
     for (int i = 0; i < loopCount; ++i) {
-        m.push(0, i, i);
+        Block b(0, i);
+        m.push(&b, i);
         EXPECT_EQ(m.blkVersions.size(), i + 1);
         EXPECT_EQ(m.epochs.size(), i + 1);
         EXPECT_EQ(m.current()->fileId, 0);
