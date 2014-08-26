@@ -85,6 +85,7 @@ void TablePartitionMgr::createPartitionerForTable(const string &tableName, const
 
 void TablePartitionMgr::insertData(const InsertData &insertDataStruct) {
 	auto mapIt = tableToPartitionerMMap_.find(insertDataStruct.tableId);
+    printf("# of partitioners = %lu\n", tableToPartitionerMMap_.count(insertDataStruct.tableId));
     assert (mapIt != tableToPartitionerMMap_.end());
     
     // Now iterate over all partitioners for given table

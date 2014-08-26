@@ -99,14 +99,14 @@ namespace Buffer_Namespace {
     void Buffer::print(mapd_data_t type) {
         if (type == INT_TYPE) {
             int *pInt = (int*)host_ptr_;
-            for (int i = 0; i < length_; i += sizeof(int)) {
+            for (int i = 0; i < length_/sizeof(int); ++i) {
                 printf("[%d]->%d\n", i, pInt[i]);
             }
             printf("\n");
         }
         else if(type == FLOAT_TYPE) {
             float *pFloat = (float*)host_ptr_;
-            for (int i = 0; i < length_; i += sizeof(float)) {
+            for (int i = 0; i < length_/sizeof(float); ++i) {
                 printf("[%d]->%f\n", i, pFloat[i]);
             }
             printf("\n");

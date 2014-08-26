@@ -26,15 +26,11 @@ namespace File_Namespace {
      */
     struct Block {
         int fileId;				/// unique identifier of the owning file
-        mapd_size_t blockNum;	/// beginning byte offset of block within file
-        mapd_size_t used;		/// ending of block (1 byte beyond the last used byte)
+        mapd_size_t blockNum;	/// block number
+        mapd_size_t used;		/// number of used bytes within the block
         
         /// Constructor
-        Block(int fileId, mapd_size_t blockNum) {
-            this->fileId = fileId;
-            this->blockNum = blockNum;
-            this->used = 0;
-        }
+        Block(int fileId, mapd_size_t blockNum) : fileId(fileId), blockNum(blockNum), used(0) {}
     };
     
     /**
@@ -50,8 +46,8 @@ namespace File_Namespace {
      */
     struct MultiBlock {
         mapd_size_t blockSize;
-        std::deque<Block*> version;
-        std::deque<int> epoch;
+        std::deque<Block*> blkVersions;
+        std::deque<int> epochs;
         
         /// Constructor
         MultiBlock(mapd_size_t blockSizeIn) :
@@ -59,32 +55,36 @@ namespace File_Namespace {
         
         /// Destructor -- purges all blocks
         ~MultiBlock() {
-            while (version.size() > 0)
+            while (blkVersions.size() > 0)
                 pop();
         }
         
         /// Returns a reference to the most recent version of the block (optionally, the epoch
         /// is returned via the parameter "epoch").
-        inline Block& current(int *epoch = NULL) {
-            assert(version.size() > 0); // @todo should use proper exception handling
+        inline Block* current(int *epoch = NULL) {
+            if (blkVersions.size() < 1)
+                throw std::runtime_error("No current version of the block exists in this MultiBlock.");
+            assert(blkVersions.size() > 0); // @todo should use proper exception handling
             if (epoch != NULL)
-                *epoch = this->epoch.back();
-            return *version.back();
+                *epoch = this->epochs.back();
+            return blkVersions.back();
         }
         
         /// Pushes a new block with epoch value
-        inline void push(Block *b, int epoch) {
-            version.push_back(b);
-            this->epoch.push_back(epoch);
-            assert(this->version.size() == this->epoch.size());
+        inline void push(const int fileId, const mapd_size_t blockNum, const int epoch) {
+            blkVersions.push_back(new Block(fileId, blockNum));
+            this->epochs.push_back(epoch);
+            assert(this->blkVersions.size() == this->epochs.size());
         }
         
         /// Purges the oldest block
         inline void pop() {
-            delete version.front(); // frees memory used by oldest Block
-            version.pop_front();
-            this->epoch.pop_front();
-            assert(this->version.size() == this->epoch.size());
+            if (blkVersions.size() < 1)
+                throw std::runtime_error("No block to pop.");
+            delete blkVersions.front(); // frees memory used by oldest Block
+            blkVersions.pop_front();
+            this->epochs.pop_front();
+            assert(this->blkVersions.size() == this->epochs.size());
         }
     };
     

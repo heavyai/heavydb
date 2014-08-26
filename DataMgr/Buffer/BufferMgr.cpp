@@ -29,6 +29,16 @@ namespace Buffer_Namespace {
     }
     
     BufferMgr::~BufferMgr() {
+        // unpin all buffers before flushing
+        for (auto bufferIt = buffers_.begin(); bufferIt != buffers_.end(); ++bufferIt) {
+            Buffer *b = *bufferIt;
+            while(b->pinned())
+                b->unpin();
+        }
+        
+        // flush all chunks to disk
+        flushAllChunks();
+        
         // Delete buffers
         while (buffers_.size() > 0) {
             delete buffers_.back();

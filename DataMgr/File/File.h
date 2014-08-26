@@ -14,24 +14,22 @@
 
 namespace File_Namespace {
     
-    FILE* create(int fileId, mapd_size_t blockSize, mapd_size_t nblocks, mapd_err_t *err);
+    FILE* create(const int fileId, const mapd_size_t blockSize, const mapd_size_t nblocks);
     
     /**
      * @brief Opens/creates the file with the given id; returns NULL on error.
      *
      * @param fileId The id of the file to open.
-     * @param err An error code, should an error occur.
      * @return FILE* A pointer to a FILE pointer, or NULL on error.
      */
-    FILE* open(int fileId, mapd_err_t *err);
+    FILE* open(int fileId);
     
     /**
      * @brief Closes the file pointed to by the FILE pointer.
      *
      * @param f Pointer to the FILE.
-     * @return mapd_err_t Returns an error code when unable to close the file properly.
      */
-    mapd_err_t close(FILE *f);
+    void close(FILE *f);
     
     /**
      * @brief Deletes the file pointed to by the FILE pointer.
@@ -52,19 +50,19 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes read.
      */
-    size_t read(FILE *f, mapd_size_t offset, mapd_size_t n, mapd_addr_t buf, mapd_err_t *err);
+    size_t read(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf);
     
     /**
      * @brief Writes the specified number of bytes to the offset position in file f from buf.
      *
      * @param f Pointer to the FILE.
      * @param offset The location within the file where data is being written.
-     * @param n The number of bytes to write to the file.
+     * @param size The number of bytes to write to the file.
      * @param buf The source buffer containing the data to be written.
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes written.
      */
-    size_t write(FILE *f, mapd_size_t offset, mapd_size_t n, mapd_addr_t buf, mapd_err_t *err);
+    size_t write(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf);
     
     /**
      * @brief Appends the specified number of bytes to the end of the file f from buf.
@@ -75,7 +73,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes written.
      */
-    size_t append(FILE *f, mapd_size_t n, mapd_addr_t buf, mapd_err_t *err);
+    size_t append(FILE *f, const mapd_size_t size, mapd_addr_t buf);
     
     /**
      * @brief Reads the specified block from the file f into buf.
@@ -87,7 +85,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes read (should be equal to blockSize).
      */
-    size_t readBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, mapd_addr_t buf, mapd_err_t *err);
+    size_t readBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf);
     
     /**
      * @brief Writes a block from buf to the file.
@@ -99,7 +97,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes written (should be equal to blockSize).
      */
-    size_t writeBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, mapd_addr_t buf, mapd_err_t *err);
+    size_t writeBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf);
     
     /**
      * @brief Appends a block from buf to the file.
@@ -110,7 +108,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes appended (should be equal to blockSize).
      */
-    size_t appendBlock(FILE *f, mapd_size_t blockSize, mapd_addr_t buf, mapd_err_t *err);
+    size_t appendBlock(FILE *f, const mapd_size_t blockSize, mapd_addr_t buf);
     
     /**
      * @brief Returns the size of the specified file.
