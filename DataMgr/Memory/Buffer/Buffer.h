@@ -29,7 +29,8 @@ namespace Buffer_Namespace {
      * @brief
      */
     class Buffer : public AbstractDatum {
-
+        friend class BufferMgr;
+        
     public:
         Buffer(mapd_addr_t mem, mapd_size_t numPages, mapd_size_t pageSize, int epoch);
         virtual ~Buffer();
@@ -39,6 +40,7 @@ namespace Buffer_Namespace {
         virtual void append(mapd_addr_t src, const mapd_size_t nbytes);
         
         virtual mapd_size_t pageCount() const;
+        virtual mapd_size_t pageSize() const;
         virtual mapd_size_t size() const;
         virtual mapd_size_t used() const;
         virtual bool isDirty() const;

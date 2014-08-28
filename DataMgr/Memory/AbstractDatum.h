@@ -24,6 +24,7 @@ namespace Memory_Namespace {
         virtual void append(mapd_addr_t src, const mapd_size_t nbytes) = 0;
         
         virtual mapd_size_t pageCount() const = 0;
+        virtual mapd_size_t pageSize() const = 0;
         virtual mapd_size_t size() const = 0;
         virtual mapd_size_t used() const = 0;
         virtual bool isDirty() const = 0;

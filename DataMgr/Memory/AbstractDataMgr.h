@@ -30,15 +30,15 @@ namespace Memory_Namespace {
         virtual ~AbstractDataMgr() {}
         
         // Chunk API
-        virtual AbstractDatum* createChunk(const ChunkKey &key, mapd_size_t pageSize, mapd_size_t nbytes = 0, mapd_addr_t buf = nullptr) = 0;
+        virtual void createChunk(const ChunkKey &key, mapd_size_t pageSize) = 0;
         virtual void deleteChunk(const ChunkKey &key) = 0;
         virtual void releaseChunk(const ChunkKey &key) = 0;
-        virtual void getChunk(ChunkKey &key) = 0;
+        virtual AbstractDatum* getChunk(ChunkKey &key) = 0;
         virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d) = 0;
 
         // Datum API
-        virtual void createDatum(mapd_size_t pageSize, mapd_size_t nbytes = 0) = 0;
-        virtual void deleteDatum(int id) = 0;
+        virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t nbytes) = 0;
+        virtual void deleteDatum(AbstractDatum *d) = 0;
         virtual AbstractDatum* putDatum(AbstractDatum *d) = 0;
     };
     

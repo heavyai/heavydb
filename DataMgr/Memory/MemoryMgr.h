@@ -32,8 +32,8 @@ namespace Memory_Namespace {
         virtual void copyChunkToDatum(const ChunkKey &key, AbstractDatum *datum);
         
         // Datum API
-        virtual void createDatum(mapd_size_t pageSize, mapd_size_t nbytes = 0);
-        virtual void deleteDatum(int id);
+        virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t nbytes = 0);
+        virtual void deleteDatum(AbstractDatum *d);
         
         // MemoryMgr-specific API
         

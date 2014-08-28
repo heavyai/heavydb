@@ -61,6 +61,10 @@ namespace Buffer_Namespace {
         return nbytes_ / pageSize_;
     }
     
+    mapd_size_t Buffer::pageSize() const {
+        return pageSize_;
+    }
+    
     mapd_size_t Buffer::size() const {
         return nbytes_;
     }
