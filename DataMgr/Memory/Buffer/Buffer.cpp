@@ -24,38 +24,36 @@ namespace Buffer_Namespace {
         
     }
     
-    void Buffer::read(mapd_addr_t const buf, const mapd_size_t offset, const mapd_size_t nbytes) {
-        assert(buf);
-        if (nbytes < 1 || nbytes > this->nbytes_)
+    void Buffer::read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes) {
+        assert(dst && mem_);
+        if (nbytes + offset < 1 || nbytes + offset > this->nbytes_)
             throw std::runtime_error("");
-        memcpy(buf, mem_ + offset, nbytes);
+        memcpy(dst, mem_ + offset, nbytes);
     }
     
-    void Buffer::write(mapd_addr_t buf, const mapd_size_t offset, const mapd_size_t nbytes) {
-        assert(n > 0); // cannot write 0 bytes
+    void Buffer::write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes) {
+        assert(nbytes > 0); // cannot write 0 bytes
         
         // check for buffer overflow
-        if ((length_ + n) > size())
-            return 0;
+        if ((used_ + nbytes) > size())
+            throw std::runtime_error("Attempted write exceeds boundaries of Buffer.");
         
         // write source contents to buffer
-        assert(host_ptr_ && src);
-        memcpy(host_ptr_ + offset, src, n);
-        length_ = std::max(length_, offset + n);
+        assert(mem_ && src);
+        memcpy(mem_ + offset, src, nbytes);
+        used_ = std::max(used_, offset + nbytes);
         
         // update dirty flags for buffer and each affected page
         dirty_ = true;
         mapd_size_t firstPage = offset / pageSize_;
-        mapd_size_t lastPage = (offset + n - 1) / pageSize_;
+        mapd_size_t lastPage = (offset + nbytes - 1) / pageSize_;
         
         for (mapd_size_t i = firstPage; i <= lastPage; ++i)
-            pages_[i]->dirty = true;
-        
-        return n;
+            pages_[i].dirty = true;
     }
     
-    void Buffer::append(mapd_addr_t buf, const mapd_size_t nbytes) {
-        
+    void Buffer::append(mapd_addr_t src, const mapd_size_t nbytes) {
+        write(src, used_, nbytes);
     }
     
     mapd_size_t Buffer::pageCount() const {

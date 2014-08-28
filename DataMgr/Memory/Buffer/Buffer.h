@@ -34,9 +34,9 @@ namespace Buffer_Namespace {
         Buffer(mapd_addr_t mem, mapd_size_t numPages, mapd_size_t pageSize, int epoch);
         virtual ~Buffer();
         
-        virtual void read(mapd_addr_t const buf, const mapd_size_t offset, const mapd_size_t nbytes = 0);
-        virtual void write(mapd_addr_t buf, const mapd_size_t offset, const mapd_size_t nbytes);
-        virtual void append(mapd_addr_t buf, const mapd_size_t nbytes);
+        virtual void read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes = 0);
+        virtual void write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes);
+        virtual void append(mapd_addr_t src, const mapd_size_t nbytes);
         
         virtual mapd_size_t pageCount() const;
         virtual mapd_size_t size() const;
