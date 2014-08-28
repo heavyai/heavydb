@@ -1,14 +1,48 @@
-//
-//  MemoryMgr.h
-//  mapd2
-//
-//  Created by Steven Stewart on 8/27/14.
-//  Copyright (c) 2014 Map-D Technologies, Inc. All rights reserved.
-//
-
-#ifndef __mapd2__MemoryMgr__
-#define __mapd2__MemoryMgr__
+/**
+ * @file    MemoryMgr.h
+ */
+#ifndef DATAMGR_MEMORY_MEMORYMGR_H
+#define DATAMGR_MEMORY_MEMORYMGR_H
 
 #include <iostream>
+#include <map>
+#include "../../Shared/types.h"
+#include "AbstractDataMgr.h"
+#include "AbstractDatum.h"
 
-#endif /* defined(__mapd2__MemoryMgr__) */
+namespace Memory_Namespace {
+    
+    typedef std::multimap<ChunkKey, AbstractDataMgr*> ChunkKeyToDataMgrMMap;
+    
+    /**
+     * @class   MemoryMgr
+     * @brief   Managing memory is fun.
+     */
+    class MemoryMgr : public AbstractDataMgr {
+        
+    public:
+        MemoryMgr();
+        ~MemoryMgr();
+        
+        // Chunk API
+        virtual AbstractDatum* createChunk(const ChunkKey &key, mapd_size_t pageSize, mapd_size_t nbytes = 0, mapd_addr_t buf = nullptr);
+        
+        virtual void deleteChunk(const ChunkKey &key);
+        virtual void releaseChunk(const ChunkKey &key);
+        virtual void copyChunkToDatum(const ChunkKey &key, AbstractDatum *datum);
+        
+        // Datum API
+        virtual void createDatum(mapd_size_t pageSize, mapd_size_t nbytes = 0);
+        virtual void deleteDatum(int id);
+        
+        // MemoryMgr-specific API
+        
+        
+    private:
+        ChunkKeyToDataMgrMMap chunkIndex_;
+        
+    };
+
+} // Memory_Namespace
+    
+#endif // DATAMGR_MEMORY_MEMORYMGR_H

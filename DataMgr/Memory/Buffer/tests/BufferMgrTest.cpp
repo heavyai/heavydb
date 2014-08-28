@@ -1,9 +1,10 @@
-//
-//  BufferMgrTest.cpp
-//  mapd2
-//
-//  Created by Steven Stewart on 8/27/14.
-//  Copyright (c) 2014 Map-D Technologies, Inc. All rights reserved.
-//
+#include "gtest/gtest.h"
+#include "../BufferMgr.h"
 
-#include "BufferMgrTest.h"
+using namespace Buffer_Namespace;
+
+GTEST_API_ int main(int argc, char **argv) {
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+}
+
