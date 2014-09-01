@@ -11,7 +11,7 @@
 
 namespace Buffer_Namespace {
     
-    Buffer::Buffer(mapd_addr_t mem, mapd_size_t numPages, mapd_size_t pageSize, int epoch)
+    Buffer::Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch)
     : mem_(mem), nbytes_(numPages * pageSize), pageSize_(pageSize), used_(0), epoch_(epoch), dirty_(false)
     {
         assert(pageSize_ > 0);
@@ -54,6 +54,10 @@ namespace Buffer_Namespace {
     
     void Buffer::append(mapd_addr_t src, const mapd_size_t nbytes) {
         write(src, used_, nbytes);
+    }
+    
+    const mapd_byte_t* Buffer::getMemoryPtr() const {
+        return mem_;
     }
     
     mapd_size_t Buffer::pageCount() const {

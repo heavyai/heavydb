@@ -22,6 +22,7 @@ namespace Memory_Namespace {
         virtual void read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes = 0) = 0;
         virtual void write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes) = 0;
         virtual void append(mapd_addr_t src, const mapd_size_t nbytes) = 0;
+        virtual const mapd_byte_t* getMemoryPtr() const = 0;
         
         virtual mapd_size_t pageCount() const = 0;
         virtual mapd_size_t pageSize() const = 0;

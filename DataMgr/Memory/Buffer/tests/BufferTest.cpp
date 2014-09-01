@@ -66,3 +66,4 @@ TEST_F(BufferTest, readAndWrite)
     for (int i = 0; i < numInts; ++i)
         ASSERT_EQ(A[i], B[i]);
 }
+
