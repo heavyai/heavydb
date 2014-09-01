@@ -17,7 +17,7 @@ namespace Buffer_Namespace {
      * @brief   A page holds a memory location and a "dirty" flag.
      */
     struct Page {
-        mapd_addr_t addr = NULL;    /// memory address for beginning of page
+        mapd_addr_t addr = nullptr; /// memory address for beginning of page
         bool dirty = false;         /// indicates the page has been modified
         
         /// Constructor
@@ -111,7 +111,7 @@ namespace Buffer_Namespace {
         mapd_size_t pageSize_;      /// the size of each page in the datum buffer
         int epoch_;                 /// indicates when the datum was last flushed
         bool dirty_;                /// true if buffer has been modified
-        std::vector<Page> pages_;   /// a vector of pages that form the content of the buffer
+        std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
     };
     
 } // Buffer_Namespace

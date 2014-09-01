@@ -7,6 +7,7 @@
 
 namespace Buffer_Namespace {
 
+    /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
     BufferMgr::BufferMgr(mapd_size_t memSize) {
         assert(memSize > 0);
         memSize_ = memSize;
@@ -14,19 +15,20 @@ namespace Buffer_Namespace {
         freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(memSize_, mem_));
     }
 
+    /// Frees the heap-allocated buffer pool memory
     BufferMgr::~BufferMgr() {
         delete[] mem_;
     }
     
+    /// Throws a runtime_error if the Chunk already exists
     void BufferMgr::createChunk(const ChunkKey &key, mapd_size_t pageSize) {
-        // if the Chunk already exists, throw an exception
         if (chunkPageSize_.find(key) != chunkPageSize_.end())
             throw std::runtime_error("Chunk already exists.");
         chunkPageSize_.insert(std::pair<ChunkKey, mapd_size_t>(key, pageSize));
     }
     
+    /// This method throws a runtime_error when deleting a Chunk that does not exist.
     void BufferMgr::deleteChunk(const ChunkKey &key) {
-        // check the ChunkKey to pageSize map
         auto chunkPageSizeIt = chunkPageSize_.find(key);
         if (chunkPageSizeIt == chunkPageSize_.end()) {
             assert(chunkIndex_.find(key) == chunkIndex_.end());
@@ -41,14 +43,17 @@ namespace Buffer_Namespace {
         }
 
         // return the free memory used by the Chunk back to the free memory pool
+        // by inserting the buffer's size mapped to the buffer's address
         Buffer *b = chunkIt->second;
         freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(b->size(), b->mem_));
         // @todo some work still to do on free-space mgmt.
         
         // erase the Chunk's index entries
+        chunkPageSize_.erase(chunkPageSizeIt);
         chunkIndex_.erase(chunkIt);
     }
     
+    /// Frees the buffer/memory used by the Chunk, but keeps its chunkPageSize_ entry
     void BufferMgr::releaseChunk(const ChunkKey &key) {
         // lookup the buffer for the Chunk in chunkIndex_
         auto chunkIt = chunkIndex_.find(key);
@@ -65,6 +70,8 @@ namespace Buffer_Namespace {
         chunkIndex_.erase(chunkIt);
     }
     
+    /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
+    /// throws a runtime_error.
     AbstractDatum* BufferMgr::getChunk(ChunkKey &key) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIndex_.find(key) == chunkIndex_.end())
@@ -117,8 +124,6 @@ namespace Buffer_Namespace {
             freeMem_.erase(freeMemIt);
             if (freeMemSize - nbytes > 0)
                 freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(freeMemSize - nbytes, bufAddr + nbytes));
-            
-
         }
         
         // b and d should be the same size
