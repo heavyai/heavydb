@@ -38,6 +38,7 @@ class QPCompilingExec : public Visitor {
 public:
 	/// Constructor
 	QPCompilingExec(); 
+    ~QPCompilingExec();
 	//QPCompilingExec(Catalog &c) : c_(c), errFlag_(false) {}
 	
 	/// Returns an error message if an error was encountered
@@ -82,6 +83,7 @@ public:
 private:
 
     void setupLlvm();
+    void matchOperands();
 
 
 	//Catalog &c_;			/// a reference to a Catalog, which holds table/column metadata

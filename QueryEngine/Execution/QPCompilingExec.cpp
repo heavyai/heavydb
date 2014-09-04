@@ -31,15 +31,17 @@ QPCompilingExec::QPCompilingExec(): context_(llvm::getGlobalContext()), builder_
     setupLlvm();
 } 
 
+QPCompilingExec::~QPCompilingExec() {
+    module_ -> dump();
+}
+
 void QPCompilingExec::setupLlvm() {
     module_ = new llvm::Module("kernel",context_);
     llvm::FunctionType *funcType = llvm::FunctionType::get(builder_ -> getVoidTy(),false);
     llvm::Function *func = llvm::Function::Create(funcType,llvm::Function::ExternalLinkage, "func", module_);
     llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint",func);
     builder_ -> SetInsertPoint(entry);
-    module_ -> dump();
 }
-
 void QPCompilingExec::visit(Attribute *v) {
 	printf("<Attribute>\n");
 }
@@ -61,33 +63,78 @@ void QPCompilingExec::visit(Comparison *v) {
 	if (v->n2) v->n2->accept(*this);
 }
 
+void QPCompilingExec::matchOperands() {
+    llvm::Value * right = valueStack_.top();
+    valueStack_.pop();
+    llvm::Value * left = valueStack_.top();
+    valueStack_.pop();
+    if (left->getType() != right->getType()) {
+        //one is a float type
+        if (left->getType()->isFloatTy()) {
+            right = builder_->CreateSIToFP(right,llvm::Type::getFloatTy(context_),"conv");
+        }
+        else {
+            left = builder_->CreateSIToFP(left,llvm::Type::getFloatTy(context_),"conv");
+        }
+    }
+    valueStack_.push(left);
+    valueStack_.push(right);
+}
+
+
 void QPCompilingExec::visit(MathExpr *v) {
 	printf("<MathExpr>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
 	if (v->n3) v->n3->accept(*this);
 	if (v->n4) v->n4->accept(*this);
-    /*
     if (v->isBinaryOp) {
-        Visitor * right = valueStack_.top();
-        Visitor * left = valueStack_.top();
+        cout << "Is binary op" << endl;
+        matchOperands(); // will ensure operands are either both int or both float
+        llvm::Value * right = valueStack_.top();
         valueStack_.pop();
+        llvm::Value * left = valueStack_.top();
         valueStack_.pop();
-        switch (v->op) {
-            case OP_PLUS:
-                valueStack_.push(builder_->createFAdd(left,rihgt,"addtmp"));
-                break;
-            case OP_MINUS:
-                valueStack_.push(builder_->createFSub(left,rihgt,"addtmp"));
-
-        else if (v->op == "MINUS") {
-        
-
-
-
-
+        bool operandsAreIntegers = left->getType()->isIntegerTy(); // will mean right is integer also 
+        if (operandsAreIntegers) { 
+            cout << "Ops are integers" << endl;
+            switch (v->op) {
+                case OP_ADD:
+                    cout << "iadd" << endl;
+                    valueStack_.push(builder_->CreateAdd(left,right,"add_tmp"));
+                    break;
+                case OP_SUBTRACT:
+                    valueStack_.push(builder_->CreateSub(left,right,"sub_tmp"));
+                    break;
+                case OP_MULTIPLY:
+                    cout << "imul" << endl;
+                    valueStack_.push(builder_->CreateMul(left,right,"mul_tmp"));
+                    break;
+                case OP_DIVIDE:
+                    valueStack_.push(builder_->CreateSDiv(left,right,"div_tmp"));
+                    break;
+            }
+        }
+        else { // floats
+            cout << "Ops are floats" << endl;
+            switch (v->op) {
+                case OP_ADD:
+                    cout << "fadd" << endl;
+                    valueStack_.push(builder_->CreateFAdd(left,right,"add_tmp"));
+                    break;
+                case OP_SUBTRACT:
+                    valueStack_.push(builder_->CreateFSub(left,right,"sub_tmp"));
+                    break;
+                case OP_MULTIPLY:
+                    cout << "fmul" << endl;
+                    valueStack_.push(builder_->CreateFMul(left,right,"mul_tmp"));
+                    break;
+                case OP_DIVIDE:
+                    valueStack_.push(builder_->CreateFDiv(left,right,"div_tmp"));
+                    break;
+            }
+        }
     }
-    */
     else if (v->isScalar) {
         if (v->intFloatFlag) {
             cout << "Int: " << v->intVal << endl;

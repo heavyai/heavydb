@@ -18,7 +18,7 @@
 namespace RA_Namespace {
 
 enum Op {
-    OP_PLUS,OP_MINUS,OP_TIMES,OP_DIVIDE
+    OP_ADD,OP_SUBTRACT,OP_MULTIPLY,OP_DIVIDE
 };
 
 class MathExpr : public RelAlgNode {
@@ -42,15 +42,15 @@ public:
 		this->n1 = n1;
 		this->n2 = n2;
 		if (op == "PLUS")
-			this->op = PLUS;
+			this->op = OP_ADD;
 		else if (op == "MINUS")
-			this->op = MINUS; 
+			this->op = OP_SUBTRACT; 
 		else if (op == "MULTIPLY")
-			this->op = MULTIPLY; 
+			this->op = OP_MULTIPLY; 
 		else if (op == "DIVIDE")
-			this->op = DIVIDE; 
+			this->op = OP_DIVIDE; 
 
-        binaryOp = true;
+        isBinaryOp = true;
 	}
 
 	explicit MathExpr(MathExpr *n1) {
