@@ -17,10 +17,6 @@
 
 namespace RA_Namespace {
 
-enum Op {
-    OP_ADD,OP_SUBTRACT,OP_MULTIPLY,OP_DIVIDE
-};
-
 class MathExpr : public RelAlgNode {
     
 public:
@@ -29,18 +25,19 @@ public:
 	Attribute *n3 = NULL;
 	AggrExpr *n4 = NULL;
 	//std::string op = "";
-    Op op;
+    OpType op;
     bool isScalar;
 	int intVal;
 	float floatVal;
 	bool intFloatFlag;	// true if int; otherwise float
     bool isBinaryOp;
 
-	MathExpr(std::string op, MathExpr *n1, MathExpr *n2) {
-		assert(op == "PLUS" || op == "MINUS" || op == "MULTIPLY" || op == "DIVIDE");
+	MathExpr(OpType opType, MathExpr *n1, MathExpr *n2): op(opType)  {
+		assert(op == OP_ADD || op == OP_SUBTRACT || op == OP_MULTIPLY || op == OP_DIVIDE);
 		assert(n1 && n2);
 		this->n1 = n1;
 		this->n2 = n2;
+        /*
 		if (op == "PLUS")
 			this->op = OP_ADD;
 		else if (op == "MINUS")
@@ -49,7 +46,7 @@ public:
 			this->op = OP_MULTIPLY; 
 		else if (op == "DIVIDE")
 			this->op = OP_DIVIDE; 
-
+        */
         isBinaryOp = true;
 	}
 

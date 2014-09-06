@@ -241,7 +241,7 @@ void QPTranslator::visit(JoinOp *v) {
 
 void QPTranslator::visit(MathExpr *v) {
     // case: MathExpr OP MathExpr
-    if (v->op != "") {
+    if (v->isBinaryOp) {
         v->n1->accept(*this);
         cout << " " << v->op << " ";
         v->n2->accept(*this);

@@ -14,6 +14,7 @@
 #include <llvm/IR/IRBuilder.h>
 #include <iostream>
 #include <stack>
+#include <map>
 
 
 //#include "../../DataMgr/Metadata/Catalog.h"
@@ -93,10 +94,8 @@ private:
     llvm::LLVMContext& context_;
     llvm::Module * module_;
     llvm::IRBuilder <> * builder_;
-
     std::stack<llvm::Value *> valueStack_;
-    
-
+    std::map <std::string,llvm::Value *> varMap_;
 
 };
 

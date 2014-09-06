@@ -65,6 +65,7 @@ extern std::vector<std::string> strData;
 extern std::vector<long int> intData;
 extern std::vector<double> realData;
 
+
 %}
 
 %left PLUS MINUS
@@ -167,10 +168,10 @@ Predicate:
 
 
 MathExpr:
-	MathExpr PLUS MathExpr				{ $$ = new MathExpr("PLUS", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr MINUS MathExpr				{ $$ = new MathExpr("MINUS", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr MULTIPLY MathExpr			{ $$ = new MathExpr("MULTIPLY", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr DIVIDE MathExpr			{ $$ = new MathExpr("DIVIDE", (MathExpr*)$1, (MathExpr*)$3); }
+	MathExpr PLUS MathExpr				{ $$ = new MathExpr(OP_ADD, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr MINUS MathExpr				{ $$ = new MathExpr(OP_SUBTRACT, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr MULTIPLY MathExpr			{ $$ = new MathExpr(OP_MULTIPLY, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr DIVIDE MathExpr			{ $$ = new MathExpr(OP_DIVIDE, (MathExpr*)$1, (MathExpr*)$3); }
 |	'(' MathExpr ')'					{ $$ = new MathExpr((MathExpr*)$2); }
 |	Attribute							{ $$ = new MathExpr((Attribute*)$1); }
 |	AggrExpr							{ $$ = new MathExpr((AggrExpr*)$1); }
@@ -179,12 +180,12 @@ MathExpr:
 ;
 
 Comparison:
-	MathExpr NEQ MathExpr				{ $$ = new Comparison("NEQ", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr EQ MathExpr				{ $$ = new Comparison("EQ", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr GT MathExpr				{ $$ = new Comparison("GT", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr GTE MathExpr				{ $$ = new Comparison("GTE", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr LT MathExpr				{ $$ = new Comparison("LT", (MathExpr*)$1, (MathExpr*)$3); }
-|	MathExpr LTE MathExpr				{ $$ = new Comparison("LTE", (MathExpr*)$1, (MathExpr*)$3); }
+	MathExpr NEQ MathExpr				{ $$ = new Comparison(OP_NEQ, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr EQ MathExpr				{ $$ = new Comparison(OP_EQ, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr GT MathExpr				{ $$ = new Comparison(OP_GT, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr GTE MathExpr				{ $$ = new Comparison(OP_GTE, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr LT MathExpr				{ $$ = new Comparison(OP_LT, (MathExpr*)$1, (MathExpr*)$3); }
+|	MathExpr LTE MathExpr				{ $$ = new Comparison(OP_LTE, (MathExpr*)$1, (MathExpr*)$3); }
 ;
 
 Relation: 	

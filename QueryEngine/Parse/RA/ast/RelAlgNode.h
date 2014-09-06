@@ -10,6 +10,10 @@
 
 namespace RA_Namespace {
 
+enum OpType {  
+    OP_GT,OP_LT,OP_GTE,OP_LTE,OP_NEQ,OP_EQ,OP_ADD,OP_SUBTRACT,OP_MULTIPLY,OP_DIVIDE,OP_AND,OP_OR,OP_NOT
+};
+
 class RelAlgNode {
     
 public:

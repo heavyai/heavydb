@@ -118,7 +118,7 @@ public:
 
     void visit(class Comparison *v) {
         printTabs(INCR);
-        if (v->op != "")
+        if (v->isBinaryOp)
             cout << "<Comparison op=\"" << v->op << "\">" << endl;
         else
             cout << "<Comparison op=\"NOOP\">" << endl;
@@ -196,7 +196,7 @@ public:
     void visit(class MathExpr *v) {
         printTabs(INCR);
         if (v->n1 || v->n2 || v->n3 || v->n4) { 
-            if (v->op != "")
+            if (v->isBinaryOp)
                 cout << "<MathExpr op=\"" << v->op << "\">" << endl;
             else
                 cout << "<MathExpr>" << endl;

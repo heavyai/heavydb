@@ -1,6 +1,7 @@
 /**
  * @file	QPCompilingExec.cpp
- * @author	Todd Mostak <steve@map-d.com>
+ * @author	Todd Mostak <todd@map-d.com>
+ * @author	Steve Stewart <steve@map-d.com>
  *
  * Implementation of RA query plan walker/compiler.
  */
@@ -40,10 +41,25 @@ void QPCompilingExec::setupLlvm() {
     llvm::FunctionType *funcType = llvm::FunctionType::get(builder_ -> getVoidTy(),false);
     llvm::Function *func = llvm::Function::Create(funcType,llvm::Function::ExternalLinkage, "func", module_);
     llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint",func);
+    /*
+    llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint");
+    */
     builder_ -> SetInsertPoint(entry);
+
 }
 void QPCompilingExec::visit(Attribute *v) {
+    /*
 	printf("<Attribute>\n");
+    auto varMapIt = varMap_.find(v->name1);
+    if (varMapIt != varMap_.end()) { // var already exists in map
+        valueStack_.push(varMapIt -> second);  
+    }
+    else { // first time we've seen this variable
+        //@todo - get attribute type - for now just assume float
+        Value *value =  
+         
+    }
+    */
 }
 
 void QPCompilingExec::visit(AggrExpr *v) {
@@ -61,6 +77,70 @@ void QPCompilingExec::visit(Comparison *v) {
 	printf("<Comparison>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
+    matchOperands();
+    llvm::Value * right = valueStack_.top();
+    valueStack_.pop();
+    llvm::Value * left = valueStack_.top();
+    valueStack_.pop();
+    bool operandsAreIntegers = left->getType()->isIntegerTy(); // will mean right is integer also 
+    if (operandsAreIntegers) { 
+        switch (v->op) {
+            case OP_GT:
+                cout << "i-gt" << endl;
+                valueStack_.push(builder_->CreateICmpSGT(left,right,"cmpigt"));
+                break;
+            case OP_LT:
+                cout << "i-lt" << endl;
+                valueStack_.push(builder_->CreateICmpSLT(left,right,"cmpilt"));
+                break;
+            case OP_GTE:
+                cout << "i-gte" << endl;
+                valueStack_.push(builder_->CreateICmpSGE(left,right,"cmpigte"));
+                break;
+            case OP_LTE:
+                cout << "i-lte" << endl;
+                valueStack_.push(builder_->CreateICmpSLE(left,right,"cmpilte"));
+                break;
+            case OP_NEQ:
+                cout << "i-neq" << endl;
+                valueStack_.push(builder_->CreateICmpNE(left,right,"cmpineq"));
+                break;
+            case OP_EQ:
+                cout << "i-eq" << endl;
+                valueStack_.push(builder_->CreateICmpEQ(left,right,"cmpieq"));
+                break;
+        }
+    }
+    else {
+        switch (v->op) {
+            case OP_GT:
+                cout << "f-gt" << endl;
+                valueStack_.push(builder_->CreateFCmpUGT(left,right,"cmpfgt"));
+                break;
+            case OP_LT:
+                cout << "f-lt" << endl;
+                valueStack_.push(builder_->CreateFCmpULT(left,right,"cmpflt"));
+                break;
+            case OP_GTE:
+                cout << "f-gte" << endl;
+                valueStack_.push(builder_->CreateFCmpUGE(left,right,"cmpfgte"));
+                break;
+            case OP_LTE:
+                cout << "f-lte" << endl;
+                valueStack_.push(builder_->CreateFCmpULE(left,right,"cmpflte"));
+                break;
+            case OP_NEQ:
+                cout << "f-neq" << endl;
+                valueStack_.push(builder_->CreateFCmpUNE(left,right,"cmpfneq"));
+                break;
+            case OP_EQ:
+                cout << "f-eq" << endl;
+                valueStack_.push(builder_->CreateFCmpUEQ(left,right,"cmpfeq"));
+                break;
+        }
+
+    }
+
 }
 
 void QPCompilingExec::matchOperands() {
@@ -158,6 +238,7 @@ void QPCompilingExec::visit(Predicate *v) {
 void QPCompilingExec::visit(Program *v) {
 	printf("<Program>\n");
 	if (v->n1) v->n1->accept(*this);
+    builder_ -> CreateRetVoid();
 }
 
 void QPCompilingExec::visit(ProjectOp *v) {
