@@ -1,9 +1,13 @@
-//
-//  FileMgr.cpp
-//  mapd2
-//
-//  Created by Steven Stewart on 8/27/14.
-//  Copyright (c) 2014 Map-D Technologies, Inc. All rights reserved.
-//
-
+/**
+ * @file        FileMgr.h
+ * @author      Steven Stewart <steve@map-d.com>
+ */
 #include "FileMgr.h"
+
+namespace File_Namespace {
+    
+    FileMgr::FileMgr(std::string basePath = ".") {
+        
+    }
+    
+}

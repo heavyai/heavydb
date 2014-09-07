@@ -85,8 +85,8 @@ namespace Analysis_Namespace {
             }
         }
         
-        /*for (int i = 0; i < colNodes_.size(); ++i)
-            printf("tableId=%d columnId=%d columnName=%s\n", colNodes_[i]->metadata.tableId, colNodes_[i]->metadata.columnId, colNodes_[i]->metadata.columnName.c_str());*/
+        for (int i = 0; i < insertColNodes_.size(); ++i)
+            printf("tableId=%d columnId=%d columnName=%s\n", insertColNodes_[i]->metadata.tableId, insertColNodes_[i]->metadata.columnId, insertColNodes_[i]->metadata.columnName.c_str());
     }
     
     void NameWalker::visit(OptGroupby *v) {

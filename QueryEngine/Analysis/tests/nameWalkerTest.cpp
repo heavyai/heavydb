@@ -5,10 +5,10 @@
 #include <iostream>
 #include <string>
 #include <vector>
-#include "../../Shared/types.h"
-#include "../Parse/SQL/parser.h"
-#include "NameWalker.h"
-#include "../../DataMgr/Metadata/Catalog.h"
+#include "../../../Shared/types.h"
+#include "../../Parse/SQL/parser.h"
+#include "../NameWalker.h"
+#include "../../../DataMgr/Metadata/Catalog.h"
 
 using namespace std;
 using namespace Metadata_Namespace;
