@@ -24,18 +24,25 @@ namespace Analysis_Namespace {
 
 /**
  * @class InsertWalker
- * @brief Parses and type-checks INSERT statements.
+ * @brief Type-checks INSERT statements.
  *
  * The InsertWalker will traverse the SQL AST in order to parse statements of
  * the following form:
  *
  * INSERT INTO table (column1 [, column2, column3 ... ]) VALUES (value1 [, value2, value3 ... ])
  *
- * It verifies the existence of the table and column names, and it verifies that
- * the specified values are of the correct type for the corresponding column. If
- * not, then a local member called "errFlag_" is set to true, and "errMsg_" will
+ * InsertWalker assumes that the table and column metadata is stored in the metadata
+ * attribute of table and column nodes, and so does not need to consult the Catalog
+ * object.
+ *
+ * InsertWalker type checks by ensuring that column and value types are compatible,
+ * and that the number of columns listed matches the number of variables listed.
+ * If not, then a local member called "errFlag_" is set to true, and "errMsg_" will
  * contain an appropriate error message. These members are accessible to the
  * client via the isError() method, which are returned as a pair<bool, string>.
+ *
+ * If type-checking passes, then the member variable "insertObj_" will represent the 
+ * insert statement, and can be accessed via getInsertObj().
  *
  * Example usage given an SQL AST node "parseRoot" and a Catalog "c":
  *
@@ -53,7 +60,7 @@ class InsertWalker : public Visitor {
 
 public:
 	/// Constructor
-	InsertWalker(Catalog *c, TablePartitionMgr *tpm) : c_(c), tpm_(tpm), errFlag_(false) {}
+	InsertWalker(TablePartitionMgr *tpm) : tpm_(tpm), errFlag_(false) {}
 
 	/// Returns an error message if an error was encountered
 	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
@@ -75,10 +82,12 @@ public:
 
 	/// @brief Visit an Literal node
 	virtual void visit(Literal *v);
+    
+    /// @brief Returns a struct representing the insert statement
+    inline InsertData getInsertObj() { return insertObj_; }
 
 private:
-	Catalog *c_;                    /// a reference to a Catalog, which holds table/column metadata
-    TablePartitionMgr *tpm_;        /// a reference to a TablePartitionMgr object
+	TablePartitionMgr *tpm_;        /// a reference to a TablePartitionMgr object
     std::vector<InsertColumnList*> colNodes_;
     std::vector<Literal*> literalNodes_;
     std::vector<mapd_data_t> literalTypes_;

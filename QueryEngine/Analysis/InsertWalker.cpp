@@ -64,6 +64,10 @@ void InsertWalker::visit(InsertStmt *v) {
             errMsg_ = "Type mismatch at column '" + colNodes_[i]->name +"' (cannot downcast float to int)";
             return;
         }
+        else if (colNodes_[i]->metadata.columnType == FLOAT_TYPE && literalTypes_[i] == INT_TYPE) {
+            literalNodes_[i]->realData = (float)literalNodes_[i]->intData;
+            literalNodes_[i]->type = FLOAT_TYPE;
+        }
     }
 
     // package the data

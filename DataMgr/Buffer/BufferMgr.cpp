@@ -16,6 +16,8 @@ using File_Namespace::Chunk;
 
 namespace Buffer_Namespace {
     
+    /// Prints a warning if fm_ is NULL. It is possible to use BufferMgr without a
+    /// file manager, hence why a warning is issued to stderr.
     BufferMgr::BufferMgr(mapd_size_t hostMemSize, FileMgr *fm): opCounter_(0) {
         assert(hostMemSize > 0);
         if (fm == NULL)
@@ -27,6 +29,16 @@ namespace Buffer_Namespace {
     }
     
     BufferMgr::~BufferMgr() {
+        // unpin all buffers before flushing
+        for (auto bufferIt = buffers_.begin(); bufferIt != buffers_.end(); ++bufferIt) {
+            Buffer *b = *bufferIt;
+            while(b->pinned())
+                b->unpin();
+        }
+        
+        // flush all chunks to disk
+        flushAllChunks();
+        
         // Delete buffers
         while (buffers_.size() > 0) {
             delete buffers_.back();
@@ -91,11 +103,15 @@ namespace Buffer_Namespace {
             return b;
         }
         
+        // Ask the file manager to create the new Chunk
+        fm_->createChunk(key, numPages * pageSize, 4, NULL, -1);
+        
         // Create a new buffer for the new chunk
         b = createBuffer(numPages, pageSize);
         if (b == NULL) {
             return NULL; // unable to create the new buffer
         }
+        
         // Insert an entry in chunkIndex_ for the new chunk. Just do it.
         chunkIndex_[key] = b;
         return b;
@@ -125,24 +141,26 @@ namespace Buffer_Namespace {
     
     /// Presently, only returns the Buffer if it is not currently pinned
     Buffer* BufferMgr::getChunkBuffer(const ChunkKey &key) {
-        Buffer *b;
+        Buffer *b = NULL;
         
         // Check if buffer is already cached
         b = findChunkBuffer(key);
        
         //@todo create read pins and write pins
-        if (b && b->pinned())
-            return NULL;
-        else if (b) {
-            b -> pin(opCounter_++);
-            return b;
+        if (b != NULL) {
+            if (b->pinned())
+                return NULL;
+            else {
+                b->pin(opCounter_++);
+                return b;
+            }
         }
         
         // Determine number of pages and page size for chunk
         mapd_size_t numPages;
         mapd_size_t size;
         if ((fm_->getChunkSize(key, &numPages, &size)) != MAPD_SUCCESS)
-            return NULL;
+            return NULL; // Chunk does not exist in file system
         
         //    printf("size: %d numPages: %d\n", size, numPages);
         if (size == 0) {

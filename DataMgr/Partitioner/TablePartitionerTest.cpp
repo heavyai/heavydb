@@ -67,22 +67,23 @@ class TablePartitionerTest {
             if (status != MAPD_SUCCESS)
                 return false;
             int tableId = tableRow.tableId; 
-            auto tableIt = tablePartitionMgr_ -> tableToPartitionerMap_.find(tableId);
-            if (tableIt == tablePartitionMgr_ -> tableToPartitionerMap_.end())
+            
+            if (tablePartitionMgr_->tableToPartitionerMMap_.count(tableId) != 2)
                 return false;
             Testing::pass++;
-            if (tableIt -> second.size() != 2)
-                return false;
-            Testing::pass++;
+            
             // Verify partitioner ids are different
-            int partId1 = tableIt -> second[0] -> getPartitionerId();
-            int partId2 = tableIt -> second[1] -> getPartitionerId();
+            auto tableIt = tablePartitionMgr_->tableToPartitionerMMap_.find(tableId);
+            int partId1 = tableIt->second->getPartitionerId();
+            int partId2 = (++tableIt)->second->getPartitionerId();
             if (partId1 == partId2)
                 return false;
+            --tableIt;
             Testing::pass++;
+
             // Verify both partitioners are linear
-            string partType1 = tableIt -> second[0] -> getPartitionerType();
-            string partType2 = tableIt -> second[1] -> getPartitionerType();
+            string partType1 = tableIt->second->getPartitionerType();
+            string partType2 = (++tableIt)->second->getPartitionerType();
             if (partType1 != "linear" || partType2 != "linear")
                 return false;
             Testing::pass++;

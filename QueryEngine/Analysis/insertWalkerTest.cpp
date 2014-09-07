@@ -34,11 +34,13 @@ int main(int argc, char ** argv) {
     cols.push_back(new ColumnRow("a", INT_TYPE, true));
     cols.push_back(new ColumnRow("b", FLOAT_TYPE, true));
     
-    mapd_err_t err = c.addTableWithColumns("T1", cols);
+    mapd_err_t err = c.addTableWithColumns("t0", cols);
     if (err != MAPD_SUCCESS) {
         printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
         //exit(EXIT_FAILURE);
     }
+    else
+        tpm.createPartitionerForTable("t0", Partitioner_Namespace::LINEAR);
 
     // Create a parser for SQL and... do stuff
     SQLParser parser;

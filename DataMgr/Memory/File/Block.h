@@ -1,16 +1,15 @@
 /**
  * @file	Block.h
  * @author 	Steven Stewart <steve@map-d.com>
- * @author	Gil Walzer <gil@map-d.com>
  * This file contains the declaration and definition of a Block type and a MultiBlock type.
  */
 
-#ifndef DATAMGR_FILE_BLOCK_H
-#define DATAMGR_FILE_BLOCK_H
+#ifndef DATAMGR_MEMORY_FILE_BLOCK_H
+#define DATAMGR_MEMORY_FILE_BLOCK_H
 
 #include <cassert>
 #include <deque>
-#include "../../Shared/types.h"
+#include "../../../Shared/types.h"
 
 namespace File_Namespace {
     
@@ -92,4 +91,4 @@ namespace File_Namespace {
     
 } // File_Namespace
 
-#endif // DATAMGR_FILE_BLOCK_H
+#endif // DATAMGR_MEMORY_FILE_BLOCK_H

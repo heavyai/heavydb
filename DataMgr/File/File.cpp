@@ -15,50 +15,42 @@
 
 namespace File_Namespace {
     
-    FILE* create(int fileId, mapd_size_t blockSize, mapd_size_t nblocks, mapd_err_t *err) {
-        if (nblocks < 1 || blockSize < 1) {
-            if (err) *err = MAPD_ERR_FILE_CREATE;
-            return NULL;
-        }
+    FILE* create(const int fileId, const mapd_size_t blockSize, const mapd_size_t nblocks) {
+        if (nblocks < 1 || blockSize < 1)
+            throw std::invalid_argument("Number of blocks and block size must be positive integers.");
         
         FILE *f;
         std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
         if ((f = fopen(s.c_str(), "w+b")) == NULL) {
             fprintf(stderr, "[%s:%d] Warning: unable to create file: fopen returned a NULL pointer.\n", __func__, __LINE__);
-            return NULL;
+            return nullptr;
         }
         
         fseek(f, (blockSize * nblocks)-1, SEEK_SET);
         fputc(EOF, f);
         fseek(f, 0, SEEK_SET); // rewind
         assert(fileSize(f) == (blockSize * nblocks));
-        // fprintf(stdout, "[FileMgr] created file %d (blk_sz=%lu, nblocks=%lu, file_sz=%lu)\n", fileId, blockSize, nblocks, fileSize(f));
-        
-        if (err) {
-            if ((fileSize(f) != blockSize * nblocks) || !f)
-                *err = MAPD_ERR_FILE_CREATE;
-            else
-                *err = MAPD_SUCCESS;
-        }
+                
         return f;
     }
     
-    FILE* open(int fileId, mapd_err_t *err) {
+    FILE* open(int fileId) {
         FILE *f;
         std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
         f = fopen(s.c_str(), "r+b"); // opens existing file for updates
-        
-        if (f != NULL && err)
-            *err = MAPD_SUCCESS;
-        else if (err)
-            *err = MAPD_ERR_FILE_OPEN;
-        
+        if (f == nullptr)
+            throw std::runtime_error("Unable to open file.");
         return f;
     }
     
-    mapd_err_t close(FILE *f) {
+    void close(FILE *f) {
         assert(f);
-        return (fclose(f) == 0) ? MAPD_SUCCESS : MAPD_ERR_FILE_CLOSE;
+        fflush(f);
+        if (fsync(fileno(f)) != 0)
+            throw std::runtime_error("Unable to close file.");
+        if (fclose(f) != 0)
+            throw std::runtime_error("Unable to close file.");
+        
     }
     
     mapd_err_t removeFile(const std::string basePath, const std::string filename) {
@@ -68,52 +60,45 @@ namespace File_Namespace {
         return MAPD_SUCCESS;
     }
     
-    size_t read(FILE *f, mapd_size_t offset, mapd_size_t n, mapd_addr_t buf, mapd_err_t *err) {
+    size_t read(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf) {
         assert(f);
         assert(buf);
+        assert(size > 0);
         
-        // read n bytes from the offset location in the file into the buffer
+        // read "size" bytes from the offset location in the file into the buffer
         fseek(f, offset, SEEK_SET);
-        size_t bytesRead = fread(buf, sizeof(mapd_byte_t), n, f);
-        if (bytesRead < 1) {
-            fprintf(stderr, "[%s:%d] Error reading file contents into buffer.\n", __func__, __LINE__);
-            if (err) *err = MAPD_ERR_FILE_READ;
-        }
-        else if (err)
-            *err = MAPD_SUCCESS;
+        size_t bytesRead = fread(buf, sizeof(mapd_byte_t), size, f);
+        if (bytesRead < 1)
+            throw std::runtime_error("Error reading file contents into buffer.");
         return bytesRead;
     }
     
-    size_t write(FILE *f, mapd_size_t offset, mapd_size_t n, mapd_addr_t buf, mapd_err_t *err) {
+    size_t write(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf) {
         assert(f);
         assert(buf);
         
-        // write n bytes from the buffer to the offset location in the file
+        // write size bytes from the buffer to the offset location in the file
         fseek(f, offset, SEEK_SET);
-        size_t bytesWritten = fwrite(buf, sizeof(mapd_byte_t), n, f);
-        if (bytesWritten < 1) {
-            fprintf(stderr, "[%s:%d] Error writing buffer contents to file.\n", __func__, __LINE__);
-            if (err) *err = MAPD_ERR_FILE_WRITE;
-        }
-        else if (err)
-            *err = MAPD_SUCCESS;
+        size_t bytesWritten = fwrite(buf, sizeof(mapd_byte_t), size, f);
+        if (bytesWritten < 1)
+            throw std::runtime_error("Error writing buffer to file.");
         return bytesWritten;
     }
     
-    size_t append(FILE *f, mapd_size_t n, mapd_addr_t buf, mapd_err_t *err) {
-        return write(f, fileSize(f), n, buf, err);
+    size_t append(FILE *f, const mapd_size_t size, mapd_addr_t buf) {
+        return write(f, fileSize(f), size, buf);
     }
     
-    size_t readBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, mapd_addr_t buf, mapd_err_t *err) {
-        return read(f, blockNum * blockSize, blockSize, buf, err);
+    size_t readBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf) {
+        return read(f, blockNum * blockSize, blockSize, buf);
     }
     
-    size_t writeBlock(FILE *f, mapd_size_t blockSize, mapd_size_t blockNum, mapd_addr_t buf, mapd_err_t *err) {
-        return write(f, blockNum * blockSize, blockSize, buf, err);
+    size_t writeBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf) {
+        return write(f, blockNum * blockSize, blockSize, buf);
     }
     
-    size_t appendBlock(FILE *f, mapd_size_t blockSize, mapd_addr_t buf, mapd_err_t *err) {
-        return write(f, fileSize(f), blockSize, buf, err);
+    size_t appendBlock(FILE *f, const mapd_size_t blockSize, mapd_addr_t buf) {
+        return write(f, fileSize(f), blockSize, buf);
     }
     
     /// @todo There may be an issue casting to size_t from long.
