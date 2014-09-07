@@ -17,28 +17,32 @@ class Comparison : public RelAlgNode {
 public:
     MathExpr *n1;
     MathExpr *n2;
-    std::string op;
+    //std::string op;
+    OpType op;
+    bool isBinaryOp;
+     
 
     /// Constructor
-    Comparison(std::string op, MathExpr *n1, MathExpr *n2) {
+    Comparison(OpType opType, MathExpr *n1, MathExpr *n2): op(opType) {
     	assert(n1 && n2);
         this->n1 = n1;
     	this->n2 = n2;
-    	
+        isBinaryOp = true;
+    
+        /*
         if (op == "GT")
-            this->op = ">";
+            this->op = OP_GT;
         else if (op == "LT")
-            this->op = "<";
+            this->op = OP_LT; 
         else if (op == "GTE")
-            this->op = ">=";
+            this->op = OP_GTE;
         else if (op == "LTE")
-            this->op = "<=";
+            this->op = OP_LTE;
         else if (op == "NEQ")
-            this->op = "!=";
+            this->op = OP_NEQ;
         else if (op == "EQ")
-            this->op = "=";
-        else
-            this->op = op;
+            this->op = OP_EQ;
+        */
     }
 
 	virtual void accept(class Visitor &v) {
