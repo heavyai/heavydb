@@ -48,9 +48,11 @@ public:
 	*/
 
 private:
-	std::vector<int> tableIds_;
-	std::vector<int> columnIds_;
-
+	//std::vector<int> tableIds_;
+	//std::vector<int> columnIds_;
+    std::vector<Table*> tableNodes_;
+    std::vector<Column*> columnNodes_;
+    
 	RA_Namespace::RelExpr *nodeFromClause_ = NULL;
 	RA_Namespace::AttrList *nodeSelection_ = NULL;
 	RA_Namespace::ProjectOp *nodeSelectStmt_ = NULL;

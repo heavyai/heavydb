@@ -98,9 +98,20 @@ public:
     void visit(class Attribute *v) {
         printTabs(INCR);
         cout << "<Attribute>";
-        cout << v->name1;
-        if (v->name2 != "")
-            cout << "." << v->name2;
+        
+        if (v->metadata.columnType == INT_TYPE)
+            cout << "int ";
+        else if (v->metadata.columnType == FLOAT_TYPE)
+            cout << "float ";
+        else if (v->metadata.columnType == BOOLEAN_TYPE)
+            cout << "boolean ";
+        cout << v->metadata.columnName;
+        cout << " (" << v->metadata.columnId << ")";
+
+        // cout << v->name1;
+        // if (v->name2 != "")
+        //    cout << "." << v->name2;
+        
         cout << "</Attribute>" << endl;
         tabLevel_--;
     }
@@ -279,7 +290,8 @@ public:
     void visit(class Relation *v) {
         printTabs(INCR);
         cout << "<Relation>";
-        cout << v->name;
+        // cout << v->name;
+        cout << v->metadata.tableName << "(" << v->metadata.tableId << ")";
         cout << "</Relation>" << endl;
         tabLevel_--;
     }
