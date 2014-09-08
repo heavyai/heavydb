@@ -55,6 +55,13 @@ namespace SQL_Namespace {
         virtual void visit(Table *v);
         virtual void visit(TableList *v);
 
+    private:
+        int tabCount_ = 0;
+        
+        inline void printTabs() {
+            for (int i = 0; i < tabCount_; ++i)
+                std::cout << " ";
+        }
     };
     
 } // SQL_Namespace
