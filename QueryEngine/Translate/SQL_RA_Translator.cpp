@@ -65,7 +65,7 @@ namespace Translate_Namespace {
         // printf("<FromClause>\n");
         if (v->n1) v->n1->accept(*this); // TableList
         // if (v->n2) v->n1->accept(*this); // SelectStmt (nested query)
-        int numTbls = tableIds_.size();
+        size_t numTbls = tableNodes_.size();
         
         // Print out collected table ids (for debugging)
         /*printf("numTbls = %d\n", numTbls);
@@ -75,17 +75,18 @@ namespace Translate_Namespace {
         
         // case: 1 table
         if (numTbls == 1)
-            nodeFromClause_ = new RelExpr(new Relation(to_string(tableIds_[0])));
+            nodeFromClause_ = new RelExpr(new Relation(tableNodes_[0]->metadata));
+        
         
         // case: > 1 table
         else if (numTbls > 1) {
-            ProductOp *n = new ProductOp(new RelExpr(new Relation(to_string(tableIds_.back()))), new RelExpr(new Relation(to_string(tableIds_.back()))));
-            tableIds_.pop_back();
-            tableIds_.pop_back();
+            ProductOp *n = new ProductOp(new RelExpr(new Relation(tableNodes_.back()->metadata)), new RelExpr(new Relation(tableNodes_.back()->metadata)));
+            tableNodes_.pop_back();
+            tableNodes_.pop_back();
             
-            while (tableIds_.size() > 0) {
-                n = new ProductOp(new RelExpr(new Relation(to_string(tableIds_.back()))), new RelExpr(n));
-                tableIds_.pop_back();
+            while (tableNodes_.size() > 0) {
+                n = new ProductOp(new RelExpr(new Relation(tableNodes_.back()->metadata)), new RelExpr(n));
+                tableNodes_.pop_back();
             }
             nodeFromClause_ = new RelExpr(n);
         }
@@ -97,7 +98,8 @@ namespace Translate_Namespace {
     
     void SQL_RA_Translator::visit(Column *v) {
         // printf("<Column>\n");
-        columnIds_.push_back(v->column_id);
+        // columnIds_.push_back(v->column_id);
+        columnNodes_.push_back(v);
     }
 
     void SQL_RA_Translator::visit(Comparison *v) {
@@ -190,7 +192,7 @@ namespace Translate_Namespace {
     void SQL_RA_Translator::visit(Selection *v) {
         // printf("<Selection>\n");
         if (v->n1) v->n1->accept(*this); // ScalarExprList
-        int numCols = columnIds_.size();
+        size_t numCols = columnNodes_.size();
         
         // Print out collected columns ids (for debugging)
         /*printf("numCols = %d\n", numCols);
@@ -201,16 +203,17 @@ namespace Translate_Namespace {
         // case: 1 column
         AttrList *n = NULL;
         if (numCols == 1) {
-            n = new AttrList(new Attribute(to_string(columnIds_[0])));
+            // n = new AttrList(new Attribute(to_string(columnIds_[0])));
+            n = new AttrList(new Attribute(columnNodes_[0]->metadata));
         }
         
         // case: > 1 column
         else if (numCols > 1) {
-            n = new AttrList(new Attribute(to_string(columnIds_[0])));
-            columnIds_.pop_back();
-            while (columnIds_.size() > 0) {
-                n = new AttrList(n, new Attribute(to_string(columnIds_.back())));
-                columnIds_.pop_back();
+            n = new AttrList(new Attribute(columnNodes_[0]->metadata));
+            columnNodes_.pop_back();
+            while (columnNodes_.size() > 0) {
+                n = new AttrList(n, new Attribute(columnNodes_.back()->metadata));
+                columnNodes_.pop_back();
             }
         }
         nodeSelection_ = n;
@@ -248,7 +251,8 @@ namespace Translate_Namespace {
     
     void SQL_RA_Translator::visit(Table *v) {
         // printf("<Table>\n");
-        tableIds_.push_back(v->table_id);
+        // tableIds_.push_back(v->table_id);
+        tableNodes_.push_back(v);
     }
     
 } // Translate_Namespace

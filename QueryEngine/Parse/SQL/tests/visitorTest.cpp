@@ -1,6 +1,12 @@
-#include "parser.h"
-#include "visitor/Visitor.h"
-//#include "translator/XMLTranslatorSQL.h"
+/**
+ * The main function in this file is used for testing a visitor of an
+ * SQL AST.
+ *
+ *
+ */
+#include "../parser.h"
+#include "../visitor/Visitor.h"
+#include "../visitor/XMLTranslator.h"
 #include <iostream>
 #include <string>
 
@@ -16,7 +22,7 @@ int main(int argc, char ** argv) {
         if (sql == "q")
             break;
         else sql = sql + "\n";
-
+        
         ASTNode *parseRoot = 0;
         string lastParsed;
         int numErrors = parser.parse(sql, parseRoot,lastParsed);
@@ -27,9 +33,9 @@ int main(int argc, char ** argv) {
         if (numErrors > 0)
             cout << "# Errors: " << numErrors << endl;
         
-        /*XMLTranslator xml;
-        if (parseRoot != 0)
-            parseRoot->accept(xml);*/      
+         XMLTranslator xml;
+         if (parseRoot != 0)
+             parseRoot->accept(xml);
     }
     while (true);
     cout << "Good-bye." << endl;

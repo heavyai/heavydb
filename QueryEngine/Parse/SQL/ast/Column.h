@@ -17,7 +17,7 @@ class Column : public ASTNode {
 public:
 	std::pair<std::string, std::string> name;
 	mapd_data_t column_type;
-    ColumnRow metadata; // metadata obtained during semantic analysis phases
+    ColumnRow metadata;
 
 	/// Constructor
 	explicit Column(const std::string &s1) : metadata(s1) {

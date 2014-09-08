@@ -8,6 +8,9 @@
 
 #include "RelAlgNode.h"
 #include "../visitor/Visitor.h"
+#include "../../../../DataMgr/Metadata/Catalog.h"
+
+using Metadata_Namespace::ColumnRow;
 
 namespace RA_Namespace {
 
@@ -16,13 +19,19 @@ class Attribute : public RelAlgNode {
 public:
     std::string name1 = "";
     std::string name2 = "";
-
+    ColumnRow metadata; // metadata obtained during SQL to RA translation
+    
     /// Constructor
-    explicit Attribute(const std::string &name1) {
+    explicit Attribute(const std::string &name1) : metadata(name1) {
     	this->name1 = name1;
     }
 
-	Attribute(std::string name1, const std::string &name2) {
+    /// Constructor -- accepts metadata object only
+    explicit Attribute(const ColumnRow &metadata) : metadata(metadata) {
+        // nothing to do
+    }
+    
+	Attribute(std::string name1, const std::string &name2) : metadata(name1) {
 		this->name1 = name1;
 		this->name2 = name2;
     }

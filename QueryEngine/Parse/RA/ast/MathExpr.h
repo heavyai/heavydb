@@ -3,11 +3,6 @@
  * @author	Steven Stewart <steve@map-d.com>
  * @author	Gil Walzer <gil@map-d.com>
  */
-/**
- * @file	MathExpr.h
- * @author	Steven Stewart <steve@map-d.com>
- * @author	Gil Walzer <gil@map-d.com>
- */
 #ifndef RA_MATHEXPR_NODE_H
 #define RA_MATHEXPR_NODE_H
 
@@ -24,29 +19,19 @@ public:
 	MathExpr *n2 = NULL;
 	Attribute *n3 = NULL;
 	AggrExpr *n4 = NULL;
-	//std::string op = "";
-    OpType op;
-    bool isScalar;
-	int intVal;
+    bool isBinaryOp = false;
+    bool isScalar = false;
+
+    bool intFloatFlag; // true if int; otherwise float
+    int intVal;
 	float floatVal;
-	bool intFloatFlag;	// true if int; otherwise float
-    bool isBinaryOp;
+    OpType op;
 
 	MathExpr(OpType opType, MathExpr *n1, MathExpr *n2): op(opType)  {
 		assert(op == OP_ADD || op == OP_SUBTRACT || op == OP_MULTIPLY || op == OP_DIVIDE);
 		assert(n1 && n2);
 		this->n1 = n1;
 		this->n2 = n2;
-        /*
-		if (op == "PLUS")
-			this->op = OP_ADD;
-		else if (op == "MINUS")
-			this->op = OP_SUBTRACT; 
-		else if (op == "MULTIPLY")
-			this->op = OP_MULTIPLY; 
-		else if (op == "DIVIDE")
-			this->op = OP_DIVIDE; 
-        */
         isBinaryOp = true;
 	}
 
@@ -67,7 +52,7 @@ public:
 
 	explicit MathExpr(int intVal) {
 		this->intVal = intVal;
-        isScalar = true; // will this default to false
+        isScalar = true;
 		intFloatFlag = true;
 	}
 

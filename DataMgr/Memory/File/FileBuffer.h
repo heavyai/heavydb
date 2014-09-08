@@ -67,7 +67,7 @@ namespace File_Namespace {
         FileBuffer(const FileBuffer&);      // private copy constructor
         FileBuffer& operator=(const FileBuffer&); // private overloaded assignment operator
 
-        std::vector<MultiBlock> blocks;
+        std::vector<MultiBlock> blocks_;
     };
     
 } // File_Namespace
