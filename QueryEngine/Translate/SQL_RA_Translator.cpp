@@ -74,8 +74,10 @@ namespace Translate_Namespace {
         printf("\n");*/
         
         // case: 1 table
-        if (numTbls == 1)
+        if (numTbls == 1) {
+            printf("table[0].name = %s\n", tableNodes_[0]->metadata.tableName.c_str());
             nodeFromClause_ = new RelExpr(new Relation(tableNodes_[0]->metadata));
+        }
         
         
         // case: > 1 table

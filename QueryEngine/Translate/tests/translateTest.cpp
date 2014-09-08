@@ -13,9 +13,11 @@
 #include "../../Translate/SQL_RA_Translator.h"
 #include "../../Parse/RA/visitor/XMLTranslator.h"
 #include "../../Parse/RA/visitor/QPTranslator.h"
+#include "../../Analysis/TypeChecker.h"
 
 using namespace std;
 using Translate_Namespace::SQL_RA_Translator;
+using Analysis_Namespace::TypeChecker;
 
 int main(int argc, char ** argv) {
     
@@ -29,6 +31,7 @@ int main(int argc, char ** argv) {
             break;
         else sql = sql + "\n";
         
+        // Lexing and Parsing
         ASTNode *parseRoot = 0;
         string lastParsed;
         int numErrors = parser.parse(sql, parseRoot,lastParsed);
@@ -40,10 +43,17 @@ int main(int argc, char ** argv) {
             cout << "# Errors: " << numErrors << endl;
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
         
+        // Type Checking
+        /*TypeChecker typeChecker(catalog);
+        if (parseRoot != 0)
+            parseRoot->accept(typeChecker);*/
+
+        // Translation from SQL to RA
         SQL_RA_Translator sql2ra;
         if (parseRoot != 0)
             parseRoot->accept(sql2ra);
         
+        // XML output of RA AST
         RA_Namespace::XMLTranslator ra_xml;
         printf("\nXML Output of translated Relational Algebra AST\n");
         printf("-----------------------------------------------\n");
@@ -51,6 +61,7 @@ int main(int argc, char ** argv) {
             sql2ra.root->accept(ra_xml);
         printf("\n\n");
         
+        // Translation to Query Plan
         RA_Namespace::QPTranslator ra_qp;
         printf("\nQuery Plan output of translated Relational Algebra AST\n");
         printf("------------------------------------------------------\n");
