@@ -148,8 +148,7 @@ select_stmt:
 		opt_having
 		opt_orderby
 		opt_limit {
-			$$ = new SelectStmt((OptAllDistinct*)$2, (Selection*)$3, (FromClause*)$4, (OptWhere*)$5, (OptGroupby*)$6, 
-				(OptHaving*)$7, (OptOrderby*)$8, (OptLimit*)$9);
+			$$ = new SelectStmt((OptAllDistinct*)$2, (Selection*)$3, (FromClause*)$4, (OptWhere*)$5, (OptGroupby*)$6, (OptHaving*)$7, (OptOrderby*)$8, (OptLimit*)$9);
 		}
 ;
 
@@ -178,7 +177,7 @@ scalar_expr:
 opt_all_distinct:
 	ALL 				{ $$ = new OptAllDistinct(); }
 |	DISTINCT 			{ $$ = new OptAllDistinct(); }
-|
+|   { $$ = NULL; }
 ;
 
 from_clause:
@@ -187,28 +186,28 @@ from_clause:
 ;
 
 opt_where:
-	WHERE search_condition	{ $$ = new OptWhere((SearchCondition*)$2); }
-|
+    WHERE search_condition	{ $$ = new OptWhere((SearchCondition*)$2); }
+|   { $$ = NULL; }
 ;
 
 opt_groupby:
 	GROUPBY column_list		{ $$ = new OptGroupby((ColumnList*)$2); }
-|
+|   { $$ = NULL; }
 ;
 
 opt_having:
 	HAVING  				{ $$ = new OptHaving(); }
-|
+|   { $$ = NULL; }
 ;
 
 opt_orderby:
 	ORDERBY orderby_column_list	{ $$ = new OptOrderby((OrderbyColumnList*)$2); }
-|
+|   { $$ = NULL; }
 ;
 
 opt_limit:
 	LIMIT 					{ $$ = new OptLimit(); }
-|
+|   { $$ = NULL; }
 ;
 
 table_list:
