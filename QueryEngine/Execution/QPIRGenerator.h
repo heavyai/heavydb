@@ -1,10 +1,10 @@
 /**
- * @file	QPCompilingExec.h
+ * @file	QPIRGenerator.h
  * @author	Todd Mostak <todd@map-d.com>
  * @author	Steve Stewart <steve@map-d.com>
  */
-#ifndef QUERYENGINE_EXECUTION_QPCOMPILINGEXEC_H
-#define QUERYENGINE_EXECUTION_QPCOMPILINGEXEC_H
+#ifndef QUERYENGINE_EXECUTION_QPIRGENERATOR_H
+#define QUERYENGINE_EXECUTION_QPIRGENERATOR_H
 
 
 #include "../../Shared/types.h"
@@ -33,16 +33,16 @@ namespace llvm {
 namespace Execution_Namespace {
 
 /**
- * @class 	QPCompilingExec
+ * @class 	QPIRGenerator
  * @brief	This class walks/compiles a query plan, which is an AST of relational algebra statements.
  */
-class QPCompilingExec : public Visitor {
+class QPIRGenerator : public Visitor {
 
 public:
 	/// Constructor
-	QPCompilingExec(std::vector <Attribute *> &attributeNodes, std::vector<MathExpr *> &constantNodes);
-    ~QPCompilingExec();
-	//QPCompilingExec(Catalog &c) : c_(c), errFlag_(false) {}
+	QPIRGenerator(std::vector <Attribute *> &attributeNodes, std::vector<MathExpr *> &constantNodes);
+    ~QPIRGenerator();
+	//QPIRGenerator(Catalog &c) : c_(c), errFlag_(false) {}
 	
 	/// Returns an error message if an error was encountered
 	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
@@ -110,4 +110,4 @@ private:
 
 } // Execution_Namespace
 
-#endif // QUERYENGINE_EXECUTION_QPCHAININGEXEC_H
+#endif // QUERYENGINE_EXECUTION_QPIRGENERATOR_H

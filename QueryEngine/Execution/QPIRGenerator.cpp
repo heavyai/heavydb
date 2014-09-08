@@ -1,11 +1,11 @@
 /**
- * @file	QPCompilingExec.cpp
+ * @file	QPIRGenerator.cpp
  * @author	Todd Mostak <todd@map-d.com>
  * @author	Steve Stewart <steve@map-d.com>
  *
  * Implementation of RA query plan walker/compiler.
  */
-#include "QPCompilingExec.h"
+#include "QPIRGenerator.h"
 
 #include "../Parse/RA/ast/AggrExpr.h"
 #include "../Parse/RA/ast/Attribute.h"
@@ -28,15 +28,15 @@ using namespace std;
 
 namespace Execution_Namespace {
 
-QPCompilingExec::QPCompilingExec(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)) {
+QPIRGenerator::QPIRGenerator(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)) {
     setupLlvm();
 } 
 
-QPCompilingExec::~QPCompilingExec() {
+QPIRGenerator::~QPIRGenerator() {
     //module_ -> dump();
 }
 
-void QPCompilingExec::setupLlvm() {
+void QPIRGenerator::setupLlvm() {
     module_ = new llvm::Module("kernel",context_);
     //vector<Type *> argumentTypes(attributeNodes_.size() + constantNodes_.size());
     /*
@@ -61,7 +61,7 @@ void QPCompilingExec::setupLlvm() {
     builder_ -> SetInsertPoint(entry);
 
 }
-void QPCompilingExec::visit(Attribute *v) {
+void QPIRGenerator::visit(Attribute *v) {
     /*
 	printf("<Attribute>\n");
     auto varMapIt = varMap_.find(v->name1);
@@ -76,18 +76,18 @@ void QPCompilingExec::visit(Attribute *v) {
     */
 }
 
-void QPCompilingExec::visit(AggrExpr *v) {
+void QPIRGenerator::visit(AggrExpr *v) {
 	printf("<AggrExpr>\n");
 	if (v->n1) v->n1->accept(*this);
 }
 
-void QPCompilingExec::visit(AttrList *v) {
+void QPIRGenerator::visit(AttrList *v) {
 	printf("<AttrList>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
 }
 
-void QPCompilingExec::visit(Comparison *v) {
+void QPIRGenerator::visit(Comparison *v) {
 	printf("<Comparison>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
@@ -157,7 +157,7 @@ void QPCompilingExec::visit(Comparison *v) {
 
 }
 
-void QPCompilingExec::matchOperands() {
+void QPIRGenerator::matchOperands() {
     llvm::Value * right = valueStack_.top();
     valueStack_.pop();
     llvm::Value * left = valueStack_.top();
@@ -176,7 +176,7 @@ void QPCompilingExec::matchOperands() {
 }
 
 
-void QPCompilingExec::visit(MathExpr *v) {
+void QPIRGenerator::visit(MathExpr *v) {
 	printf("<MathExpr>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
@@ -242,30 +242,30 @@ void QPCompilingExec::visit(MathExpr *v) {
 
 }
 
-void QPCompilingExec::visit(Predicate *v) {
+void QPIRGenerator::visit(Predicate *v) {
 	printf("<Predicate>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
 	if (v->n3) v->n3->accept(*this);
 }
 
-void QPCompilingExec::visit(Program *v) {
+void QPIRGenerator::visit(Program *v) {
 	printf("<Program>\n");
 	if (v->n1) v->n1->accept(*this);
     builder_ -> CreateRetVoid();
 }
 
-void QPCompilingExec::visit(ProjectOp *v) {
+void QPIRGenerator::visit(ProjectOp *v) {
 	printf("<ProjectOp>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
 }
 
-void QPCompilingExec::visit(Relation *v) {
+void QPIRGenerator::visit(Relation *v) {
 	printf("<Relation>\n");
 }
 
-void QPCompilingExec::visit(RelExpr *v) {
+void QPIRGenerator::visit(RelExpr *v) {
 	printf("<RelExpr>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
@@ -273,13 +273,13 @@ void QPCompilingExec::visit(RelExpr *v) {
 	if (v->n4) v->n4->accept(*this);
 }
 
-void QPCompilingExec::visit(RelExprList *v) {
+void QPIRGenerator::visit(RelExprList *v) {
 	printf("<RelExprList>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
 }
 
-void QPCompilingExec::visit(SelectOp *v) {
+void QPIRGenerator::visit(SelectOp *v) {
 	printf("<SelectOp>\n");
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);

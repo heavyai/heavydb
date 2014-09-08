@@ -5,7 +5,7 @@
 #include "../../Shared/types.h"
 #include "../Parse/RA/parser.h"
 #include "QPIRPrepper.h"
-#include "QPCompilingExec.h"
+#include "QPIRGenerator.h"
 
 #include <iostream>
 #include <string>
@@ -16,7 +16,7 @@
 
 using namespace std;
 using Execution_Namespace::QPIRPrepper;
-using Execution_Namespace::QPCompilingExec;
+using Execution_Namespace::QPIRGenerator;
 using RA_Namespace::RelAlgNode;
 
 int main(int argc, char ** argv) {
@@ -46,10 +46,10 @@ int main(int argc, char ** argv) {
         // Walk it!
         llvm::Module * code;
         if (parseRoot != 0) {
-            QPIRPrepper prepper;
-            parseRoot->accept(prepper); 
+            QPIRPrepper irPrepper;
+            parseRoot->accept(irPrepper); 
             string signatureString;
-            prepper.getSignatureString(signatureString);
+            irPrepper.getSignatureString(signatureString);
             cout << "Signature String: " << signatureString << endl;
             auto codeIt = codeMap.find(signatureString);
             if (codeIt != codeMap.end()) { // found 
@@ -59,7 +59,7 @@ int main(int argc, char ** argv) {
             }
             else {
                 cout << "Code not found" << endl;
-                QPCompilingExec irGenerator(prepper.attributeNodes_,prepper.constantNodes_);
+                QPIRGenerator irGenerator(irPrepper.attributeNodes_,irPrepper.constantNodes_);
                 parseRoot->accept(irGenerator); 
                 std::pair<bool, std::string> insertErr = irGenerator.isError();
                 if (insertErr.first == true) {
