@@ -28,16 +28,30 @@ using namespace std;
 
 namespace Execution_Namespace {
 
-QPCompilingExec::QPCompilingExec(): context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)) {
+QPCompilingExec::QPCompilingExec(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)) {
     setupLlvm();
 } 
 
 QPCompilingExec::~QPCompilingExec() {
-    module_ -> dump();
+    //module_ -> dump();
 }
 
 void QPCompilingExec::setupLlvm() {
     module_ = new llvm::Module("kernel",context_);
+    //vector<Type *> argumentTypes(attributeNodes_.size() + constantNodes_.size());
+    /*
+    vector<Type *> argumentTypes;
+    for (auto attrIt = attributeNodes_.begin(); attrIt != attributeNodes_.end(); ++attrIt) {
+        argumentTypes.push_back(Type::getFloatTY(context_));
+    }
+    for (auto constIt = constantNodes_.begin(); constIt != constantNodes_.end(); ++constIt) {
+        if (*(constIt) -> intFloatFlag) { // is int
+            argumentTypes.push_back(Type::
+
+        switch(*(constIt)
+    */
+    
+
     llvm::FunctionType *funcType = llvm::FunctionType::get(builder_ -> getVoidTy(),false);
     llvm::Function *func = llvm::Function::Create(funcType,llvm::Function::ExternalLinkage, "func", module_);
     llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint",func);

@@ -2,15 +2,20 @@
  * @file	testQPChainingExec.cpp
  * @author	Steven Stewart <steve@map-d.com>
  */
+#include "../../Shared/types.h"
+#include "../Parse/RA/parser.h"
+#include "QPIRPrepper.h"
+#include "QPCompilingExec.h"
+
 #include <iostream>
 #include <string>
 #include <vector>
-#include "../../Shared/types.h"
-#include "../Parse/RA/parser.h"
-#include "QPCompilingExec.h"
+#include <map>
+
 //#include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace std;
+using Execution_Namespace::QPIRPrepper;
 using Execution_Namespace::QPCompilingExec;
 using RA_Namespace::RelAlgNode;
 
@@ -19,6 +24,7 @@ int main(int argc, char ** argv) {
     // Create a parser for RA and... do stuff
     RAParser parser;
     string relAlg;
+    map <string,llvm::Module *> codeMap;
     do {
         cout << "mapd> ";
         getline(cin,relAlg);
@@ -38,12 +44,32 @@ int main(int argc, char ** argv) {
         if (parseRoot == NULL) printf("parseRoot is NULL\n");
         
         // Walk it!
-        QPCompilingExec executioner;
+        llvm::Module * code;
         if (parseRoot != 0) {
-            parseRoot->accept(executioner); 
-            std::pair<bool, std::string> insertErr = executioner.isError();
-            if (insertErr.first == true) {
-                cout << "Error: " << insertErr.second << std::endl;
+            QPIRPrepper prepper;
+            parseRoot->accept(prepper); 
+            string signatureString;
+            prepper.getSignatureString(signatureString);
+            cout << "Signature String: " << signatureString << endl;
+            auto codeIt = codeMap.find(signatureString);
+            if (codeIt != codeMap.end()) { // found 
+                code = codeIt -> second;
+                cout << "CODE CACHED" << endl;
+                code -> dump();
+            }
+            else {
+                cout << "Code not found" << endl;
+                QPCompilingExec irGenerator(prepper.attributeNodes_,prepper.constantNodes_);
+                parseRoot->accept(irGenerator); 
+                std::pair<bool, std::string> insertErr = irGenerator.isError();
+                if (insertErr.first == true) {
+                    cout << "Error: " << insertErr.second << std::endl;
+                }
+                else {
+                    codeMap[signatureString] = irGenerator.getModule();
+                    cout << "CODE GENERATED" << endl;
+                    codeMap[signatureString] -> dump();
+                }
             }
         }
     }

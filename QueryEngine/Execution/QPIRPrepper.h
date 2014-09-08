@@ -1,20 +1,15 @@
 /**
- * @file	QPCompilingExec.h
+ * @file	QPIRPrepper.h
  * @author	Todd Mostak <todd@map-d.com>
- * @author	Steve Stewart <steve@map-d.com>
  */
-#ifndef QUERYENGINE_EXECUTION_QPCOMPILINGEXEC_H
-#define QUERYENGINE_EXECUTION_QPCOMPILINGEXEC_H
+#ifndef QUERYENGINE_EXECUTION_QPIRPREPPER_H
+#define QUERYENGINE_EXECUTION_QPIRPREPPER_H
 
 
 #include "../../Shared/types.h"
 #include "../Parse/RA/visitor/Visitor.h"
 
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/IR/IRBuilder.h>
 #include <iostream>
-#include <stack>
 #include <vector>
 #include <map>
 
@@ -22,27 +17,19 @@
 //#include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace RA_Namespace;
-/*
-namespace llvm {
-    class LLVMContext; 
-    class Module;
-    class IRBuilder;
-}
-*/
 
 namespace Execution_Namespace {
 
 /**
- * @class 	QPCompilingExec
+ * @class 	QPStringifyTree
  * @brief	This class walks/compiles a query plan, which is an AST of relational algebra statements.
  */
-class QPCompilingExec : public Visitor {
+class QPIRPrepper : public Visitor {
 
 public:
 	/// Constructor
-	QPCompilingExec(std::vector <Attribute *> &attributeNodes, std::vector<MathExpr *> &constantNodes);
-    ~QPCompilingExec();
-	//QPCompilingExec(Catalog &c) : c_(c), errFlag_(false) {}
+	//QPIRPrepper(); 
+    ~QPIRPrepper();
 	
 	/// Returns an error message if an error was encountered
 	inline std::pair<bool, std::string> isError() { return std::pair<bool, std::string>(errFlag_, errMsg_); }
@@ -83,31 +70,21 @@ public:
 	/// @brief Visit a SelectOp node
 	virtual void visit(SelectOp *v);
 
-    inline llvm::Module * getModule() {
-        return module_;
+    inline void getSignatureString(std::string &sigString) {
+        sigString = signatureString_;
     }
+
+    std::vector <Attribute *> attributeNodes_;
+    std::vector <MathExpr *> constantNodes_;
 
 private:
 
-    void setupLlvm();
-    void matchOperands();
-
-
-	//Catalog &c_;			/// a reference to a Catalog, which holds table/column metadata
+    std::string signatureString_;
 	std::string errMsg_;	/// holds an error message, if applicable; otherwise, it is ""
 	bool errFlag_ = false;	/// indicates the existence of an error when true
-
-    std::vector<Attribute *> &attributeNodes_;
-    std::vector<MathExpr *> &constantNodes_;
-
-    llvm::LLVMContext& context_;
-    llvm::Module * module_;
-    llvm::IRBuilder <> * builder_;
-    std::stack<llvm::Value *> valueStack_;
-    std::map <std::string,llvm::Value *> varMap_;
 
 };
 
 } // Execution_Namespace
 
-#endif // QUERYENGINE_EXECUTION_QPCHAININGEXEC_H
+#endif // QUERYENGINE_EXECUTION_QPIRPREPPER_H
