@@ -99,12 +99,17 @@ private:
 
     std::vector<Attribute *> &attributeNodes_;
     std::vector<MathExpr *> &constantNodes_;
+    std::vector<llvm::Value *> attrVals_;
+    std::vector<llvm::Value *> constVals_;
+    llvm::Value * numElemsVal_;
 
     llvm::LLVMContext& context_;
     llvm::Module * module_;
     llvm::IRBuilder <> * builder_;
     std::stack<llvm::Value *> valueStack_;
     std::map <std::string,llvm::Value *> varMap_;
+    unsigned int attrCounter_;
+    unsigned int constCounter_;
 
 };
 

@@ -24,11 +24,12 @@
 
 #include <iostream>
 #include <utility>
+#include <boost/lexical_cast.hpp>
 using namespace std;
 
 namespace Execution_Namespace {
 
-QPIRGenerator::QPIRGenerator(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)) {
+QPIRGenerator::QPIRGenerator(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)), attrCounter_(0), constCounter_(0) {
     setupLlvm();
 } 
 
@@ -39,21 +40,41 @@ QPIRGenerator::~QPIRGenerator() {
 void QPIRGenerator::setupLlvm() {
     module_ = new llvm::Module("kernel",context_);
     //vector<Type *> argumentTypes(attributeNodes_.size() + constantNodes_.size());
-    /*
-    vector<Type *> argumentTypes;
+    vector<llvm::Type *> argumentTypes;
+    argumentTypes.push_back(llvm::Type::getInt32Ty(context_));
     for (auto attrIt = attributeNodes_.begin(); attrIt != attributeNodes_.end(); ++attrIt) {
-        argumentTypes.push_back(Type::getFloatTY(context_));
+        argumentTypes.push_back(llvm::Type::getFloatPtrTy(context_));
     }
     for (auto constIt = constantNodes_.begin(); constIt != constantNodes_.end(); ++constIt) {
-        if (*(constIt) -> intFloatFlag) { // is int
-            argumentTypes.push_back(Type::
+        if ((*constIt) -> intFloatFlag) { // is int
+            argumentTypes.push_back(llvm::Type::getInt32Ty(context_));
+        }
+        else { // is float
+            argumentTypes.push_back(llvm::Type::getFloatTy(context_));
+        }
+    }
 
-        switch(*(constIt)
-    */
-    
-
-    llvm::FunctionType *funcType = llvm::FunctionType::get(builder_ -> getVoidTy(),false);
+    llvm::FunctionType *funcType = llvm::FunctionType::get(builder_ -> getVoidTy(),argumentTypes,false);
     llvm::Function *func = llvm::Function::Create(funcType,llvm::Function::ExternalLinkage, "func", module_);
+
+    unsigned int idx = 0;
+    unsigned int numAttrs = attributeNodes_.size();
+    unsigned int numVars = 1+attributeNodes_.size() + constantNodes_.size();
+    for (llvm::Function::arg_iterator aI = func->arg_begin();  idx < numVars; ++aI, ++idx) { 
+        if (idx == 0) {
+            aI -> setName ("num_elems");
+            numElemsVal_ = aI;
+        }
+        else if (idx <= numAttrs) {
+            aI -> setName("a" + boost::lexical_cast <string> (idx - 1));
+            attrVals_.push_back(aI);
+        }
+        else {
+            aI -> setName("c" + boost::lexical_cast <string> (idx - 1 - numAttrs));
+            constVals_.push_back(aI);
+        }
+    }
+
     llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint",func);
     /*
     llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint");
@@ -61,6 +82,8 @@ void QPIRGenerator::setupLlvm() {
     builder_ -> SetInsertPoint(entry);
 
 }
+
+
 void QPIRGenerator::visit(Attribute *v) {
     /*
 	printf("<Attribute>\n");
@@ -232,12 +255,14 @@ void QPIRGenerator::visit(MathExpr *v) {
     else if (v->isScalar) {
         if (v->intFloatFlag) {
             cout << "Int: " << v->intVal << endl;
-            valueStack_.push(llvm::ConstantInt::get(context_,llvm::APInt(32,v->intVal,true)));
+
+            //valueStack_.push(llvm::ConstantInt::get(context_,llvm::APInt(32,v->intVal,true)));
         }
         else {
             cout << "Float: " << v->floatVal << endl;
-            valueStack_.push(llvm::ConstantFP::get(context_,llvm::APFloat(v->floatVal)));
+            //valueStack_.push(llvm::ConstantFP::get(context_,llvm::APFloat(v->floatVal)));
         }
+        valueStack_.push(constVals_[constCounter_++]);
     }
 
 }
@@ -251,7 +276,27 @@ void QPIRGenerator::visit(Predicate *v) {
 
 void QPIRGenerator::visit(Program *v) {
 	printf("<Program>\n");
+    //need to generate outer for loop
+    llvm::Value *startVal =  llvm::ConstantInt::get(context_,llvm::APInt(32,0,true));
+    llvm::Function * curFunction = builder_ -> GetInsertBlock()->getParent();
+    llvm::BasicBlock *preHeaderBB = builder_ -> GetInsertBlock();
+    llvm::BasicBlock *loopBB =  llvm::BasicBlock::Create(context_, "loop", curFunction);
+    builder_ -> CreateBr(loopBB);
+    builder_ -> SetInsertPoint(loopBB);
+    llvm::PHINode *counterVar = builder_ -> CreatePHI(llvm::Type::getInt32Ty(context_),2,"counter");
+    counterVar->addIncoming(startVal,preHeaderBB);
+    // generate main body of loop
 	if (v->n1) v->n1->accept(*this);
+
+    llvm::Value *stepVal = llvm::ConstantInt::get(context_,llvm::APInt(32,1,true));
+    llvm::Value *nextVar = builder_->CreateAdd(counterVar,stepVal,"nextVar");
+
+    llvm::Value *endCond = builder_ -> CreateICmpNE(numElemsVal_,counterVar,"loopcond");
+    llvm::BasicBlock *loopEndBB = builder_ -> GetInsertBlock();
+    llvm::BasicBlock *afterBB = llvm::BasicBlock::Create(context_, "afterloop", curFunction); 
+    builder_ -> CreateCondBr(endCond,loopBB,afterBB);
+    builder_ -> SetInsertPoint(afterBB);
+    counterVar -> addIncoming(nextVar,loopEndBB);
     builder_ -> CreateRetVoid();
 }
 
