@@ -317,7 +317,7 @@ void QPTranslator::visit(Predicate *v) {
         v->n2->accept(*this);
     }
     else if (v->n1) {
-        if (v->op == "NOT")
+        if (v->op == OP_NOT)
             cout << v->op << " ";
         v->n1->accept(*this);
     }

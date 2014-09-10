@@ -159,9 +159,9 @@ Attribute:
 ;
 
 Predicate:
-  Predicate OR Predicate				{ $$ = new Predicate("OR", (Predicate*)$1, (Predicate*)$3); }
-| Predicate AND Predicate				{ $$ = new Predicate("AND", (Predicate*)$1, (Predicate*)$3); }
-| NOT Predicate							{ $$ = new Predicate("NOT", (Predicate*)$2); }
+  Predicate OR Predicate				{ $$ = new Predicate(OP_OR, (Predicate*)$1, (Predicate*)$3); }
+| Predicate AND Predicate				{ $$ = new Predicate(OP_AND, (Predicate*)$1, (Predicate*)$3); }
+| NOT Predicate							{ $$ = new Predicate(OP_NOT, (Predicate*)$2); }
 | '(' Predicate ')'						{ $$ = new Predicate((Predicate*)$2); }	
 | Comparison							{ $$ = new Predicate((Comparison*)$1); }
 ;

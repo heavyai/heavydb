@@ -18,38 +18,34 @@ public:
 	Predicate *n1 = NULL;
 	Predicate *n2 = NULL;
 	Comparison *n3 = NULL;
-    std::string op = "";
+    OpType op;
 
     /// Constructor
-    Predicate(const std::string &op, Predicate *n1, Predicate *n2) {
-    	assert(op == "AND" || op == "OR");
+    Predicate(const OpType opType, Predicate *n1, Predicate *n2): op(opType) {
+    	assert(op == OP_AND || op == OP_OR);
         assert(n1 && n2);
-    	this->op = op;
     	this->n1 = n1;
     	this->n2 = n2;
         this->n3 = NULL;
     }
 
-    Predicate(const std::string &op, Predicate *n1) {
-    	assert(op == "NOT");
+    Predicate(const OpType opType, Predicate *n1): op(opType) {
+    	assert(op == OP_NOT);
         assert(n1);
-    	this->op = op;
     	this->n1 = n1;
         this->n2 = NULL;
         this->n3 = NULL;
     }
 
-    explicit Predicate(Predicate *n1) {
+    explicit Predicate(Predicate *n1): op(OP_NOOP) {
         assert(n1);
-        this->op = "";
     	this->n1 = n1;
         this->n2 = NULL;
         this->n3 = NULL;
     }
 
-    explicit Predicate(Comparison *n3) {
+    explicit Predicate(Comparison *n3): op(OP_NOOP) {
         assert(n3);
-        this->op = "";
         this->n1 = NULL;
         this->n2 = NULL;
     	this->n3 = n3;

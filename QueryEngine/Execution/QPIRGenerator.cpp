@@ -327,7 +327,25 @@ void QPIRGenerator::visit(RelExprList *v) {
 void QPIRGenerator::visit(SelectOp *v) {
 	printf("<SelectOp>\n");
 	if (v->n1) v->n1->accept(*this);
+    // should always have predicate below?
 	if (v->n2) v->n2->accept(*this);
+
+    llvm::Value * condV = valueStack_.top();
+    valueStack_.pop();
+    // now check if condBool == 1 - need 32 bits here?
+    //llvm::Value *CondV = builder_ -> CreateICmpEQ(condBool,llvm::ConstntInt::get(context_,llvm::APInt(1,0,true)),"select_cond");
+    llvm::Function *func = builder_ -> GetInsertBlock() -> getParent();
+    llvm::BasicBlock *thenBB = llvm::BasicBlock::Create(context_,"then",func);
+    llvm::BasicBlock *mergeBB = llvm::BasicBlock::Create(context_,"ifcont");
+
+    builder_ -> CreateCondBr(condV,thenBB,mergeBB);
+
+    builder_ -> SetInsertPoint(thenBB);
+    builder_ -> CreateBr(mergeBB);
+    thenBB = builder_ -> GetInsertBlock();
+    func -> getBasicBlockList().push_back(mergeBB);
+    builder_ -> SetInsertPoint(mergeBB);
+
 }
 
 } // Execution_Namespace

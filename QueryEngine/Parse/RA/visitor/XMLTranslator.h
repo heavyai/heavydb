@@ -242,7 +242,7 @@ public:
 
     void visit(class Predicate *v) {
         printTabs(INCR);
-        if (v->op != "")
+        if (v->op != OP_NOOP)
             cout << "<Predicate op=\"" << v->op << "\">" << endl;
         else
             cout << "<Predicate>" << endl;
