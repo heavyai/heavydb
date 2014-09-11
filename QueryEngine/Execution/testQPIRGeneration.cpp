@@ -59,7 +59,7 @@ int main(int argc, char ** argv) {
             }
             else {
                 cout << "Code not found" << endl;
-                QPIRGenerator irGenerator(irPrepper.attributeNodes_,irPrepper.constantNodes_);
+                QPIRGenerator irGenerator(irPrepper.attributeNodes_,irPrepper.constantNodes_, irPrepper.projectNodes_);
                 parseRoot->accept(irGenerator); 
                 std::pair<bool, std::string> insertErr = irGenerator.isError();
                 if (insertErr.first == true) {

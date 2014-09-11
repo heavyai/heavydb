@@ -29,7 +29,7 @@ using namespace std;
 
 namespace Execution_Namespace {
 
-QPIRGenerator::QPIRGenerator(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)), attrCounter_(0), constCounter_(0), projBB_(0), hasSelect_(false) {
+QPIRGenerator::QPIRGenerator(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes, vector<Attribute *> &projectNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), projectNodes_(projectNodes),  context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)), attrCounter_(0), constCounter_(0), projCounter_(0), projBB_(0), hasSelect_(false), inProject_(false) {
     setupLlvm();
 } 
 
@@ -43,6 +43,7 @@ void QPIRGenerator::setupLlvm() {
     vector<llvm::Type *> argumentTypes;
     argumentTypes.push_back(llvm::Type::getInt32Ty(context_));
     for (auto attrIt = attributeNodes_.begin(); attrIt != attributeNodes_.end(); ++attrIt) {
+        //@todo get actual types
         argumentTypes.push_back(llvm::Type::getFloatPtrTy(context_));
     }
     for (auto constIt = constantNodes_.begin(); constIt != constantNodes_.end(); ++constIt) {
@@ -53,13 +54,19 @@ void QPIRGenerator::setupLlvm() {
             argumentTypes.push_back(llvm::Type::getFloatTy(context_));
         }
     }
+    for (auto projIt = projectNodes_.begin(); projIt != projectNodes_.end(); ++projIt) {
+        //@todo get actual types
+        argumentTypes.push_back(llvm::Type::getFloatPtrTy(context_));
+    }
 
     llvm::FunctionType *funcType = llvm::FunctionType::get(builder_ -> getVoidTy(),argumentTypes,false);
     func_ = llvm::Function::Create(funcType,llvm::Function::ExternalLinkage, "func", module_);
 
     unsigned int idx = 0;
     unsigned int numAttrs = attributeNodes_.size();
-    unsigned int numVars = 1+attributeNodes_.size() + constantNodes_.size();
+    unsigned int numConsts = constantNodes_.size();
+
+    unsigned int numVars = 1+ numAttrs + numConsts + projectNodes_.size();
     for (llvm::Function::arg_iterator aI = func_->arg_begin();  idx < numVars; ++aI, ++idx) { 
         if (idx == 0) {
             aI -> setName ("num_elems");
@@ -69,9 +76,13 @@ void QPIRGenerator::setupLlvm() {
             aI -> setName("a" + boost::lexical_cast <string> (idx - 1));
             attrVals_.push_back(aI);
         }
-        else {
+        else if (idx <= numAttrs + numConsts) {
             aI -> setName("c" + boost::lexical_cast <string> (idx - 1 - numAttrs));
             constVals_.push_back(aI);
+        }
+        else {
+            aI -> setName("p" + boost::lexical_cast <string> (idx - 1 - numAttrs - numConsts));
+            projVals_.push_back(aI);
         }
     }
 
@@ -85,8 +96,17 @@ void QPIRGenerator::setupLlvm() {
 
 void QPIRGenerator::visit(Attribute *v) {
 	printf("<Attribute>\n");
-    llvm::Value * address = builder_-> CreateGEP(attrVals_[attrCounter_++], counterVar_, "attr_addr_a" + boost::lexical_cast<string>(attrCounter_-1));
-    valueStack_.push(builder_ -> CreateLoad(address,"attr_load_a" + boost::lexical_cast<string>(attrCounter_-1)));
+    llvm::Value * loadAddress = builder_-> CreateGEP(attrVals_[attrCounter_++], inCounterVar_, "attr_addr_a" + boost::lexical_cast<string>(attrCounter_-1));
+    llvm::Value *loadValue = builder_ -> CreateLoad(loadAddress,"attr_load_a" + boost::lexical_cast<string>(attrCounter_-1));
+    if (inProject_) {
+        llvm::Value *storeAddress = builder_ -> CreateGEP(projVals_[projCounter_++],outCounterVar_, "out_addr_p" + boost::lexical_cast<string>(projCounter_-1));
+        builder_ -> CreateStore(loadValue,storeAddress);
+    }
+    else {
+        valueStack_.push(loadValue);
+    }
+
+
     /*
     auto varMapIt = varMap_.find(v->name1);
     if (varMapIt != varMap_.end()) { // var already exists in map
@@ -284,8 +304,10 @@ void QPIRGenerator::visit(Program *v) {
     llvm::BasicBlock *loopBB =  llvm::BasicBlock::Create(context_, "loop", curFunction);
     builder_ -> CreateBr(loopBB);
     builder_ -> SetInsertPoint(loopBB);
-    counterVar_ = builder_ -> CreatePHI(llvm::Type::getInt32Ty(context_),2,"counter");
-    counterVar_->addIncoming(startVal,preHeaderBB);
+    inCounterVar_ = builder_ -> CreatePHI(llvm::Type::getInt32Ty(context_),2,"inCounter");
+    inCounterVar_->addIncoming(startVal,preHeaderBB);
+    outCounterVar_ = builder_ -> CreatePHI(llvm::Type::getInt32Ty(context_),2,"outCounter");
+    outCounterVar_->addIncoming(startVal,preHeaderBB); // start it at 0
     // generate main body of loop
 	if (v->n1) v->n1->accept(*this);
     if (projBB_ != 0 && hasSelect_ == false) {
@@ -297,14 +319,14 @@ void QPIRGenerator::visit(Program *v) {
     }
 
     llvm::Value *stepVal = llvm::ConstantInt::get(context_,llvm::APInt(32,1,true));
-    llvm::Value *nextVar = builder_->CreateAdd(counterVar_,stepVal,"nextVar");
+    llvm::Value *nextInVar = builder_->CreateAdd(inCounterVar_,stepVal,"nextInVar");
 
-    llvm::Value *endCond = builder_ -> CreateICmpNE(numElemsVal_,counterVar_,"loopcond");
+    llvm::Value *endCond = builder_ -> CreateICmpNE(numElemsVal_,inCounterVar_,"loopcond");
     llvm::BasicBlock *loopEndBB = builder_ -> GetInsertBlock();
     llvm::BasicBlock *afterBB = llvm::BasicBlock::Create(context_, "afterloop", curFunction); 
     builder_ -> CreateCondBr(endCond,loopBB,afterBB);
     builder_ -> SetInsertPoint(afterBB);
-    counterVar_ -> addIncoming(nextVar,loopEndBB);
+    inCounterVar_ -> addIncoming(nextInVar,loopEndBB);
     builder_ -> CreateRetVoid();
 
     bool status = llvm::verifyFunction(*curFunction);
@@ -315,6 +337,7 @@ void QPIRGenerator::visit(Program *v) {
 void QPIRGenerator::visit(ProjectOp *v) {
 	printf("<ProjectOp>\n");
 	if (v->n1) v->n1->accept(*this);
+    inProject_ = true;
     if (projBB_ == 0) {
         projBB_ = llvm::BasicBlock::Create(context_,"proj");
         builder_ -> SetInsertPoint(projBB_);
@@ -323,6 +346,12 @@ void QPIRGenerator::visit(ProjectOp *v) {
         builder_ -> SetInsertPoint(projBB_);
     }
 	if (v->n2) v->n2->accept(*this);
+
+    inProject_ = false;
+    llvm::Value *stepVal = llvm::ConstantInt::get(context_,llvm::APInt(32,1,true));
+    llvm::Value *nextOutVar =  builder_->CreateAdd(outCounterVar_,stepVal,"nextoutvar");
+    llvm::BasicBlock *projEndBlock = builder_ -> GetInsertBlock();
+    outCounterVar_->addIncoming(nextOutVar,projEndBlock);
 }
 
 void QPIRGenerator::visit(Relation *v) {

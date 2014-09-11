@@ -41,7 +41,7 @@ class QPIRGenerator : public Visitor {
 
 public:
 	/// Constructor
-	QPIRGenerator(std::vector <Attribute *> &attributeNodes, std::vector<MathExpr *> &constantNodes);
+	QPIRGenerator(std::vector <Attribute *> &attributeNodes, std::vector<MathExpr *> &constantNodes, std::vector<Attribute *> &projectNodes);
     ~QPIRGenerator();
 	//QPIRGenerator(Catalog &c) : c_(c), errFlag_(false) {}
 	
@@ -101,8 +101,12 @@ private:
 
     std::vector<Attribute *> &attributeNodes_;
     std::vector<MathExpr *> &constantNodes_;
+    std::vector<Attribute *> &projectNodes_;
+
     std::vector<llvm::Value *> attrVals_;
     std::vector<llvm::Value *> constVals_;
+    std::vector<llvm::Value *> projVals_;
+
     llvm::Value * numElemsVal_;
     llvm::Function *func_;
 
@@ -114,7 +118,11 @@ private:
     std::map <std::string,llvm::Value *> varMap_;
     unsigned int attrCounter_;
     unsigned int constCounter_;
-    llvm::PHINode * counterVar_;
+    unsigned int projCounter_;
+    bool inProject_;
+
+    llvm::PHINode * inCounterVar_;
+    llvm::PHINode * outCounterVar_;
 
 };
 

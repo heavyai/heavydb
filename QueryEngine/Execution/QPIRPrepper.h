@@ -28,7 +28,7 @@ class QPIRPrepper : public Visitor {
 
 public:
 	/// Constructor
-	//QPIRPrepper(); 
+	QPIRPrepper(); 
     ~QPIRPrepper();
 	
 	/// Returns an error message if an error was encountered
@@ -74,6 +74,7 @@ public:
         sigString = signatureString_;
     }
 
+    std::vector <Attribute *> projectNodes_;
     std::vector <Attribute *> attributeNodes_;
     std::vector <MathExpr *> constantNodes_;
 
@@ -82,6 +83,7 @@ private:
     std::string signatureString_;
 	std::string errMsg_;	/// holds an error message, if applicable; otherwise, it is ""
 	bool errFlag_ = false;	/// indicates the existence of an error when true
+    bool inProject_;
 
 };
 

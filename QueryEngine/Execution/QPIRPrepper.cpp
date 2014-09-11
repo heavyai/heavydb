@@ -27,6 +27,8 @@ using namespace std;
 
 namespace Execution_Namespace {
 
+QPIRPrepper::QPIRPrepper(): inProject_(false) {}
+
 QPIRPrepper::~QPIRPrepper() {
     //cout << "QPIRPrepper:\n" << signatureString_ << endl;  
 }
@@ -34,8 +36,11 @@ QPIRPrepper::~QPIRPrepper() {
 void QPIRPrepper::visit(Attribute *v) {
     signatureString_ += "<Attribute>";
     //@todo temporary for testing
-    signatureString_ += "<Int Attr>";
+    signatureString_ += "<Float Attr>";
     attributeNodes_.push_back(v);
+    if (inProject_)
+        projectNodes_.push_back(v);
+
     //@todo should be some type of function
     /*
     switch(v->metadata->columnType) {
@@ -140,8 +145,10 @@ void QPIRPrepper::visit(Program *v) {
 
 void QPIRPrepper::visit(ProjectOp *v) {
 	signatureString_ += "<ProjectOp>";
+    inProject_ = true;
 	if (v->n1) v->n1->accept(*this);
 	if (v->n2) v->n2->accept(*this);
+    inProject_ = false;
 	signatureString_ += "</ProjectOp>";
 }
 
