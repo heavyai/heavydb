@@ -13,6 +13,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/Analysis/Verifier.h>
 #include <iostream>
 #include <stack>
 #include <vector>
@@ -96,20 +97,24 @@ private:
 	//Catalog &c_;			/// a reference to a Catalog, which holds table/column metadata
 	std::string errMsg_;	/// holds an error message, if applicable; otherwise, it is ""
 	bool errFlag_ = false;	/// indicates the existence of an error when true
+    bool hasSelect_; 
 
     std::vector<Attribute *> &attributeNodes_;
     std::vector<MathExpr *> &constantNodes_;
     std::vector<llvm::Value *> attrVals_;
     std::vector<llvm::Value *> constVals_;
     llvm::Value * numElemsVal_;
+    llvm::Function *func_;
 
     llvm::LLVMContext& context_;
     llvm::Module * module_;
     llvm::IRBuilder <> * builder_;
+    llvm::BasicBlock *projBB_;
     std::stack<llvm::Value *> valueStack_;
     std::map <std::string,llvm::Value *> varMap_;
     unsigned int attrCounter_;
     unsigned int constCounter_;
+    llvm::PHINode * counterVar_;
 
 };
 

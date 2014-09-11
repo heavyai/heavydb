@@ -29,7 +29,7 @@ using namespace std;
 
 namespace Execution_Namespace {
 
-QPIRGenerator::QPIRGenerator(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)), attrCounter_(0), constCounter_(0) {
+QPIRGenerator::QPIRGenerator(vector<Attribute *> &attributeNodes, vector<MathExpr *> &constantNodes): attributeNodes_(attributeNodes), constantNodes_(constantNodes), context_(llvm::getGlobalContext()), builder_(new llvm::IRBuilder <> (context_)), attrCounter_(0), constCounter_(0), projBB_(0), hasSelect_(false) {
     setupLlvm();
 } 
 
@@ -55,12 +55,12 @@ void QPIRGenerator::setupLlvm() {
     }
 
     llvm::FunctionType *funcType = llvm::FunctionType::get(builder_ -> getVoidTy(),argumentTypes,false);
-    llvm::Function *func = llvm::Function::Create(funcType,llvm::Function::ExternalLinkage, "func", module_);
+    func_ = llvm::Function::Create(funcType,llvm::Function::ExternalLinkage, "func", module_);
 
     unsigned int idx = 0;
     unsigned int numAttrs = attributeNodes_.size();
     unsigned int numVars = 1+attributeNodes_.size() + constantNodes_.size();
-    for (llvm::Function::arg_iterator aI = func->arg_begin();  idx < numVars; ++aI, ++idx) { 
+    for (llvm::Function::arg_iterator aI = func_->arg_begin();  idx < numVars; ++aI, ++idx) { 
         if (idx == 0) {
             aI -> setName ("num_elems");
             numElemsVal_ = aI;
@@ -75,7 +75,7 @@ void QPIRGenerator::setupLlvm() {
         }
     }
 
-    llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint",func);
+    llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint",func_);
     /*
     llvm::BasicBlock *entry = llvm::BasicBlock::Create(context_,"entrypoint");
     */
@@ -83,10 +83,11 @@ void QPIRGenerator::setupLlvm() {
 
 }
 
-
 void QPIRGenerator::visit(Attribute *v) {
-    /*
 	printf("<Attribute>\n");
+    llvm::Value * address = builder_-> CreateGEP(attrVals_[attrCounter_++], counterVar_, "attr_addr_a" + boost::lexical_cast<string>(attrCounter_-1));
+    valueStack_.push(builder_ -> CreateLoad(address,"attr_load_a" + boost::lexical_cast<string>(attrCounter_-1)));
+    /*
     auto varMapIt = varMap_.find(v->name1);
     if (varMapIt != varMap_.end()) { // var already exists in map
         valueStack_.push(varMapIt -> second);  
@@ -283,26 +284,44 @@ void QPIRGenerator::visit(Program *v) {
     llvm::BasicBlock *loopBB =  llvm::BasicBlock::Create(context_, "loop", curFunction);
     builder_ -> CreateBr(loopBB);
     builder_ -> SetInsertPoint(loopBB);
-    llvm::PHINode *counterVar = builder_ -> CreatePHI(llvm::Type::getInt32Ty(context_),2,"counter");
-    counterVar->addIncoming(startVal,preHeaderBB);
+    counterVar_ = builder_ -> CreatePHI(llvm::Type::getInt32Ty(context_),2,"counter");
+    counterVar_->addIncoming(startVal,preHeaderBB);
     // generate main body of loop
 	if (v->n1) v->n1->accept(*this);
+    if (projBB_ != 0 && hasSelect_ == false) {
+        // need to insert proj block
+        builder_ -> SetInsertPoint(loopBB);
+        builder_ -> CreateBr(projBB_);
+        curFunction -> getBasicBlockList().push_back(projBB_); 
+        builder_ -> SetInsertPoint(projBB_);
+    }
 
     llvm::Value *stepVal = llvm::ConstantInt::get(context_,llvm::APInt(32,1,true));
-    llvm::Value *nextVar = builder_->CreateAdd(counterVar,stepVal,"nextVar");
+    llvm::Value *nextVar = builder_->CreateAdd(counterVar_,stepVal,"nextVar");
 
-    llvm::Value *endCond = builder_ -> CreateICmpNE(numElemsVal_,counterVar,"loopcond");
+    llvm::Value *endCond = builder_ -> CreateICmpNE(numElemsVal_,counterVar_,"loopcond");
     llvm::BasicBlock *loopEndBB = builder_ -> GetInsertBlock();
     llvm::BasicBlock *afterBB = llvm::BasicBlock::Create(context_, "afterloop", curFunction); 
     builder_ -> CreateCondBr(endCond,loopBB,afterBB);
     builder_ -> SetInsertPoint(afterBB);
-    counterVar -> addIncoming(nextVar,loopEndBB);
+    counterVar_ -> addIncoming(nextVar,loopEndBB);
     builder_ -> CreateRetVoid();
+
+    bool status = llvm::verifyFunction(*curFunction);
+    cout << "Function verification: " << status << endl;
+
 }
 
 void QPIRGenerator::visit(ProjectOp *v) {
 	printf("<ProjectOp>\n");
 	if (v->n1) v->n1->accept(*this);
+    if (projBB_ == 0) {
+        projBB_ = llvm::BasicBlock::Create(context_,"proj");
+        builder_ -> SetInsertPoint(projBB_);
+    }
+    else { // proj block was already created by select
+        builder_ -> SetInsertPoint(projBB_);
+    }
 	if (v->n2) v->n2->accept(*this);
 }
 
@@ -326,6 +345,7 @@ void QPIRGenerator::visit(RelExprList *v) {
 
 void QPIRGenerator::visit(SelectOp *v) {
 	printf("<SelectOp>\n");
+    hasSelect_ = true;
 	if (v->n1) v->n1->accept(*this);
     // should always have predicate below?
 	if (v->n2) v->n2->accept(*this);
@@ -335,14 +355,18 @@ void QPIRGenerator::visit(SelectOp *v) {
     // now check if condBool == 1 - need 32 bits here?
     //llvm::Value *CondV = builder_ -> CreateICmpEQ(condBool,llvm::ConstntInt::get(context_,llvm::APInt(1,0,true)),"select_cond");
     llvm::Function *func = builder_ -> GetInsertBlock() -> getParent();
-    llvm::BasicBlock *thenBB = llvm::BasicBlock::Create(context_,"then",func);
+    if (projBB_ == 0) {
+        projBB_ = llvm::BasicBlock::Create(context_,"proj",func);
+    }
+    else { //projBB_ has already been generated
+        func -> getBasicBlockList().push_back(projBB_);
+    }
     llvm::BasicBlock *mergeBB = llvm::BasicBlock::Create(context_,"ifcont");
 
-    builder_ -> CreateCondBr(condV,thenBB,mergeBB);
-
-    builder_ -> SetInsertPoint(thenBB);
+    builder_ -> CreateCondBr(condV,projBB_,mergeBB);
+    builder_ -> SetInsertPoint(projBB_);
     builder_ -> CreateBr(mergeBB);
-    thenBB = builder_ -> GetInsertBlock();
+    projBB_ = builder_ -> GetInsertBlock();
     func -> getBasicBlockList().push_back(mergeBB);
     builder_ -> SetInsertPoint(mergeBB);
 
