@@ -26,6 +26,7 @@ class Relation;
 class RelExpr;
 class RelExprList;
 class RenameOp;
+class ScanOp;
 class SelectOp;
 class SemijoinOp;
 class SortOp;
@@ -56,6 +57,7 @@ class Visitor {
  	    virtual void visit(RelExpr *v) {}
  	    virtual void visit(RelExprList *v) {}
  	    virtual void visit(RenameOp *v) {}
+        virtual void visit(ScanOp *v) {}
  	    virtual void visit(SelectOp *v) {}
  	    virtual void visit(SemijoinOp *v) {}
  	    virtual void visit(SortOp *v) {}

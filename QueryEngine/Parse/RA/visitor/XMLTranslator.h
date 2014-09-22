@@ -28,6 +28,7 @@
 #include "../ast/RelExpr.h"
 #include "../ast/RelExprList.h"
 #include "../ast/RenameOp.h"
+#include "../ast/ScanOp.h"
 #include "../ast/SelectOp.h"
 #include "../ast/SemijoinOp.h"
 #include "../ast/SortOp.h"
@@ -332,6 +333,18 @@ public:
 
         printTabs(DECR);
         cout << "</RenameOp>" << endl;
+    }
+    
+    void visit(class ScanOp *v) {
+        printTabs(INCR);
+        cout << "<ScanOp>" << endl;
+        
+        if (v->n1) v->n1->accept(*this);
+        if (v->n2) v->n2->accept(*this);
+        if (v->n3) v->n3->accept(*this);
+        
+        printTabs(DECR);
+        cout << "</ScanOp>" << endl;
     }
 
     void visit(class SelectOp *v) {

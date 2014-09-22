@@ -23,6 +23,7 @@ using namespace std;
 %%
 
 	/* relational ops: 1 table */
+"scan"                      { /* count() */; return RAParser::SCAN; }
 "select"					{ /* count() */; return RAParser::SELECT; }
 "project"					{ /* count() */; return RAParser::PROJECT; }
 "sort"						{ /* count() */; return RAParser::SORT; }
