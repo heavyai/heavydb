@@ -26,10 +26,9 @@ namespace File_Namespace {
     struct Block {
         int fileId;				/// unique identifier of the owning file
         mapd_size_t blockNum;	/// block number
-        mapd_size_t used;		/// number of used bytes within the block
         
         /// Constructor
-        Block(int fileId, mapd_size_t blockNum) : fileId(fileId), blockNum(blockNum), used(0) {}
+        Block(int fileId, mapd_size_t blockNum) : fileId(fileId), blockNum(blockNum) {}
     };
     
     /**
@@ -48,7 +47,7 @@ namespace File_Namespace {
      */
     struct MultiBlock {
         mapd_size_t blockSize;
-        std::deque<Block*> blkVersions;
+        std::deque<Block> blkVersions;
         std::deque<int> epochs;
         
         /// Constructor
@@ -63,7 +62,7 @@ namespace File_Namespace {
         
         /// Returns a reference to the most recent version of the block (optionally, the epoch
         /// is returned via the parameter "epoch").
-        inline Block* current(int *epoch = NULL) {
+        inline Block current(int *epoch = NULL) {
             if (blkVersions.size() < 1)
                 throw std::runtime_error("No current version of the block exists in this MultiBlock.");
             assert(blkVersions.size() > 0); // @todo should use proper exception handling
@@ -73,7 +72,7 @@ namespace File_Namespace {
         }
         
         /// Pushes a new block with epoch value
-        inline void push(Block *b, const int epoch) {
+        inline void push(Block &b, const int epoch) {
             blkVersions.push_back(b);
             this->epochs.push_back(epoch);
             assert(this->blkVersions.size() == this->epochs.size());

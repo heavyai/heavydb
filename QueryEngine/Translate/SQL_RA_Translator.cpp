@@ -118,6 +118,10 @@ namespace Translate_Namespace {
     void SQL_RA_Translator::visit(MathExpr *v) {
         // printf("<MathExpr>\n");
 
+        // case: '(' MathExpr ')'
+        if (v->n0)
+            v->accept(*this);
+        
         // case: column
 
 

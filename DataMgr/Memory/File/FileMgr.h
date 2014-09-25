@@ -12,6 +12,7 @@
 #include <map>
 #include <set>
 #include "Block.h"
+#include "FileBuffer.h"
 #include "../AbstractDatum.h"
 #include "../AbstractDataMgr.h"
 #include "../../PgConnector/PgConnector.h"
@@ -19,10 +20,7 @@
 using namespace Memory_Namespace;
 
 namespace File_Namespace {
-    
-    // forward declaration
-    class FileBuffer;
-    
+
     /**
      * @type FileInfo
      * @brief A FileInfo type has a file pointer and metadata about a file.
@@ -62,6 +60,11 @@ namespace File_Namespace {
         /// Returns the number of free bytes available
         inline mapd_size_t available() {
             return freeBlocks.size() * blockSize;
+        }
+        
+        /// Returns the number of free blocks available
+        inline mapd_size_t numFreeBlocks() {
+            return freeBlocks.size();
         }
         
         /// Returns the amount of used bytes; size() - available()
@@ -125,7 +128,9 @@ namespace File_Namespace {
         virtual void deleteChunk(const ChunkKey &key);
         
         /// Releases (frees) the memory used by the chunk with the specified key
-        virtual void releaseChunk(const ChunkKey &key);
+        virtual void releaseChunk(const ChunkKey &key) {
+            throw std::runtime_error("Operation not supported.");
+        }
         
         /// Returns the a pointer to the chunk with the specified key.
         virtual AbstractDatum* getChunk(ChunkKey &key);
@@ -143,6 +148,23 @@ namespace File_Namespace {
         virtual void deleteDatum(AbstractDatum *d);
         virtual AbstractDatum* putDatum(AbstractDatum *d);
         
+        /**
+         * @brief Obtains free blocks -- creates new files if necessary -- of the requested size.
+         *
+         * Given a block size and number of blocks, this method updates the vector "blocks"
+         * to include free blocks of the requested size. These blocks are immediately removed
+         * from the free list of the affected file(s). If there are not enough blocks available
+         * among current files, new files are created and their blocks are included in the vector.
+         *
+         * @param nblocks       The number of free blocks requested
+         * @param blockSize     The size of each requested block
+         * @param blocks        A vector containing the free blocks obtained by this method
+         */
+        void requestFreeBlocks(mapd_size_t nblocks, mapd_size_t blockSize, std::vector<Block> &blocks);
+        
+        /// Returns the current value of epoch
+        inline int epoch() { return epoch_; }
+        
     private:
         std::string basePath_; 				/// The OS file system path containing the files.
         std::vector<FileInfo*> files_;		/// A vector of files accessible via a file identifier.
@@ -155,6 +177,22 @@ namespace File_Namespace {
         std::map<ChunkKey, mapd_size_t> chunkBlockSize_; /// maps a Chunk to its block size
         
         PgConnector pgConnector_; /// Postgres connector for reading/writing file manager metadata
+        
+        /**
+         * @brief Adds a file to the file manager repository.
+         *
+         * This method will create a FileInfo object for the file being added, and it will create
+         * the corresponding file on physical disk with the indicated number of blocks pre-allocated.
+         *
+         * A pointer to the FileInfo object is returned, which itself has a file pointer (FILE*) and
+         * a file identifier (int fileId).
+         *
+         * @param fileName The name given to the file in physical storage.
+         * @param blockSize The logical block size for the blocks in the file.
+         * @param numBlocks The number of logical blocks to initially allocate for the file.
+         * @return FileInfo* A pointer to the FileInfo object of the added file.
+         */
+        FileInfo* createFile(const mapd_size_t blockSize, const mapd_size_t nblocks);
         
     };
     

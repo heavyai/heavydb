@@ -1,9 +1,7 @@
 /**
- * @file	insertWalkerTest.h
+ * @file	translateTest.cpp
  * @author	Steven Stewart <steve@map-d.com>
  *
- * Used for testing the insert walker. In order to test the walker,
- * enter INSERT statements at the parser's prompt.
  */
 #include <iostream>
 #include <string>
@@ -14,9 +12,13 @@
 #include "../../Parse/RA/visitor/XMLTranslator.h"
 #include "../../Parse/RA/visitor/QPTranslator.h"
 #include "../../Analysis/TypeChecker.h"
+#include "../../Analysis/NameWalker.h"
+#include "../../../DataMgr/Metadata/Catalog.h"
+
 
 using namespace std;
 using Translate_Namespace::SQL_RA_Translator;
+using Analysis_Namespace::NameWalker;
 using Analysis_Namespace::TypeChecker;
 
 int main(int argc, char ** argv) {
@@ -25,6 +27,21 @@ int main(int argc, char ** argv) {
     SQLParser parser;
     string sql;
     do {
+        
+        // Add a table to the catalog
+        Catalog c(".");
+        
+        std::vector<ColumnRow*> cols;
+        cols.push_back(new ColumnRow("a", INT_TYPE, true));
+        cols.push_back(new ColumnRow("b", FLOAT_TYPE, true));
+        
+        mapd_err_t err = c.addTableWithColumns("T1", cols);
+        if (err != MAPD_SUCCESS) {
+            printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
+            //exit(EXIT_FAILURE);
+        }
+        
+        // Take input from client
         cout << "mapd> ";
         getline(cin,sql);
         if (sql == "q")

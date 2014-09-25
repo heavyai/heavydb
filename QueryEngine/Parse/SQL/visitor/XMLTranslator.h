@@ -18,6 +18,9 @@ namespace SQL_Namespace {
         /// Constructor
         XMLTranslator() {}
         
+        /// Destructor
+        ~XMLTranslator() {}
+        
         virtual void visit(AggrExpr *v);
         virtual void visit(AlterStmt *v);
         virtual void visit(Column *v);
@@ -60,7 +63,7 @@ namespace SQL_Namespace {
         
         inline void printTabs() {
             for (int i = 0; i < tabCount_; ++i)
-                std::cout << " ";
+                std::cout << "   ";
         }
     };
     

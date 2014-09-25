@@ -1,5 +1,5 @@
 /**
- * @file	insertWalkerTest.h
+ * @file	translateTest.cpp
  * @author	Steven Stewart <steve@map-d.com>
  *
  * Used for testing the insert walker. In order to test the walker,

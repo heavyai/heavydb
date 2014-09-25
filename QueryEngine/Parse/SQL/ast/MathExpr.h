@@ -14,6 +14,7 @@ namespace SQL_Namespace {
 class MathExpr : public ASTNode {
 
 public:
+    MathExpr *n0 = NULL; // case: '(' MathExpr ')'
 	MathExpr *n1 = NULL;
 	MathExpr *n2 = NULL;
 	Column *n3 = NULL;
@@ -41,9 +42,9 @@ public:
 			this->op = op;
 	}
 
-	explicit MathExpr(MathExpr *n1) {
-		assert(n1);
-		this->n1 = n1;
+	explicit MathExpr(MathExpr *n0) { // case: '(' MathExpr ')'
+		assert(n0);
+		this->n0 = n0;
 	}
 
 	explicit MathExpr(Column *n3) {

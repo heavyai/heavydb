@@ -72,7 +72,7 @@ namespace File_Namespace {
             throw std::runtime_error("Error reading file contents into buffer.");
         return bytesRead;
     }
-    
+
     size_t write(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf) {
         assert(f);
         assert(buf);

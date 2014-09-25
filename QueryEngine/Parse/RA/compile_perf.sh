@@ -4,4 +4,5 @@ g++ -O3 parser.cpp -c -w -DNDEBUG
 g++ -O3 scanner.cpp -c -w
 g++ -O3 -c perfTest.cpp -w
 g++ -O3 -o perfTest perfTest.o parser.o scanner.o -w -lboost_timer -lboost_system
+
 rm perfTest.o scanner.o parser.o

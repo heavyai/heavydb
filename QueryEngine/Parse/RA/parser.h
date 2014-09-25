@@ -64,6 +64,7 @@
 #include "ast/RelExpr.h"
 #include "ast/RelExprList.h"
 #include "ast/RenameOp.h"
+#include "ast/ScanOp.h"
 #include "ast/SelectOp.h"
 #include "ast/SemijoinOp.h"
 #include "ast/SortOp.h"
@@ -138,21 +139,21 @@ extern std::vector<double> realData;
 #ifndef YY_Parser_PURE
 
 /* #line 63 "/usr/local/lib/bison.h" */
-#line 142 "parser.h"
+#line 143 "parser.h"
 
 #line 63 "/usr/local/lib/bison.h"
 /* YY_Parser_PURE */
 #endif
 
 /* #line 65 "/usr/local/lib/bison.h" */
-#line 149 "parser.h"
+#line 150 "parser.h"
 
 #line 65 "/usr/local/lib/bison.h"
 /* prefix */
 #ifndef YY_Parser_DEBUG
 
 /* #line 67 "/usr/local/lib/bison.h" */
-#line 156 "parser.h"
+#line 157 "parser.h"
 
 #line 67 "/usr/local/lib/bison.h"
 /* YY_Parser_DEBUG */
@@ -160,7 +161,7 @@ extern std::vector<double> realData;
 #ifndef YY_Parser_LSP_NEEDED
 
 /* #line 70 "/usr/local/lib/bison.h" */
-#line 164 "parser.h"
+#line 165 "parser.h"
 
 #line 70 "/usr/local/lib/bison.h"
  /* YY_Parser_LSP_NEEDED*/
@@ -238,7 +239,7 @@ extern YY_Parser_STYPE YY_Parser_LVAL;
 
 
 /* #line 143 "/usr/local/lib/bison.h" */
-#line 242 "parser.h"
+#line 243 "parser.h"
 #define	PLUS	258
 #define	MINUS	259
 #define	MULTIPLY	260
@@ -252,34 +253,35 @@ extern YY_Parser_STYPE YY_Parser_LVAL;
 #define	GTE	268
 #define	LT	269
 #define	LTE	270
-#define	SELECT	271
-#define	PROJECT	272
-#define	SORT	273
-#define	RENAME	274
-#define	EXTEND	275
-#define	GROUPBY	276
-#define	PRODUCT	277
-#define	JOIN	278
-#define	SEMIJOIN	279
-#define	ANTIJOIN	280
-#define	OUTERJOIN	281
-#define	UNION	282
-#define	DIFF	283
-#define	INTERSECTION	284
-#define	MAX	285
-#define	MIN	286
-#define	COUNT	287
-#define	SUM	288
-#define	AVG	289
-#define	MAX_DISTINCT	290
-#define	MIN_DISTINCT	291
-#define	COUNT_DISTINCT	292
-#define	SUM_DISTINCT	293
-#define	AVG_DISTINCT	294
-#define	NAME	295
-#define	INTVAL	296
-#define	FLOATVAL	297
-#define	STRVAL	298
+#define	SCAN	271
+#define	SELECT	272
+#define	PROJECT	273
+#define	SORT	274
+#define	RENAME	275
+#define	EXTEND	276
+#define	GROUPBY	277
+#define	PRODUCT	278
+#define	JOIN	279
+#define	SEMIJOIN	280
+#define	ANTIJOIN	281
+#define	OUTERJOIN	282
+#define	UNION	283
+#define	DIFF	284
+#define	INTERSECTION	285
+#define	MAX	286
+#define	MIN	287
+#define	COUNT	288
+#define	SUM	289
+#define	AVG	290
+#define	MAX_DISTINCT	291
+#define	MIN_DISTINCT	292
+#define	COUNT_DISTINCT	293
+#define	SUM_DISTINCT	294
+#define	AVG_DISTINCT	295
+#define	NAME	296
+#define	INTVAL	297
+#define	FLOATVAL	298
+#define	STRVAL	299
 
 
 #line 143 "/usr/local/lib/bison.h"
@@ -324,7 +326,7 @@ public:
 /* static const int token ... */
 
 /* #line 182 "/usr/local/lib/bison.h" */
-#line 328 "parser.h"
+#line 330 "parser.h"
 static const int PLUS;
 static const int MINUS;
 static const int MULTIPLY;
@@ -338,6 +340,7 @@ static const int GT;
 static const int GTE;
 static const int LT;
 static const int LTE;
+static const int SCAN;
 static const int SELECT;
 static const int PROJECT;
 static const int SORT;
@@ -374,7 +377,7 @@ static const int STRVAL;
 enum YY_Parser_ENUM_TOKEN { YY_Parser_NULL_TOKEN=0
 
 /* #line 185 "/usr/local/lib/bison.h" */
-#line 378 "parser.h"
+#line 381 "parser.h"
 	,PLUS=258
 	,MINUS=259
 	,MULTIPLY=260
@@ -388,34 +391,35 @@ enum YY_Parser_ENUM_TOKEN { YY_Parser_NULL_TOKEN=0
 	,GTE=268
 	,LT=269
 	,LTE=270
-	,SELECT=271
-	,PROJECT=272
-	,SORT=273
-	,RENAME=274
-	,EXTEND=275
-	,GROUPBY=276
-	,PRODUCT=277
-	,JOIN=278
-	,SEMIJOIN=279
-	,ANTIJOIN=280
-	,OUTERJOIN=281
-	,UNION=282
-	,DIFF=283
-	,INTERSECTION=284
-	,MAX=285
-	,MIN=286
-	,COUNT=287
-	,SUM=288
-	,AVG=289
-	,MAX_DISTINCT=290
-	,MIN_DISTINCT=291
-	,COUNT_DISTINCT=292
-	,SUM_DISTINCT=293
-	,AVG_DISTINCT=294
-	,NAME=295
-	,INTVAL=296
-	,FLOATVAL=297
-	,STRVAL=298
+	,SCAN=271
+	,SELECT=272
+	,PROJECT=273
+	,SORT=274
+	,RENAME=275
+	,EXTEND=276
+	,GROUPBY=277
+	,PRODUCT=278
+	,JOIN=279
+	,SEMIJOIN=280
+	,ANTIJOIN=281
+	,OUTERJOIN=282
+	,UNION=283
+	,DIFF=284
+	,INTERSECTION=285
+	,MAX=286
+	,MIN=287
+	,COUNT=288
+	,SUM=289
+	,AVG=290
+	,MAX_DISTINCT=291
+	,MIN_DISTINCT=292
+	,COUNT_DISTINCT=293
+	,SUM_DISTINCT=294
+	,AVG_DISTINCT=295
+	,NAME=296
+	,INTVAL=297
+	,FLOATVAL=298
+	,STRVAL=299
 
 
 #line 185 "/usr/local/lib/bison.h"
@@ -472,5 +476,5 @@ public:
 /* END */
 
 /* #line 236 "/usr/local/lib/bison.h" */
-#line 476 "parser.h"
+#line 480 "parser.h"
 #endif

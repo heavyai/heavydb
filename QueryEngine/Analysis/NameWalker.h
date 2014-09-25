@@ -19,7 +19,7 @@ namespace Analysis_Namespace {
      * @class 	NameWalker
      * @brief	This class is a visitor that resolves names of tables and columns to their ids.
      */
-    class NameWalker : public Visitor {
+    class NameWalker : public RA_Namespace::Visitor {
         
     public:
         /// Constructor

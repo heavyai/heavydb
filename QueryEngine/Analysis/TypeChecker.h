@@ -18,7 +18,7 @@ namespace Analysis_Namespace {
  * @class 	TypeChecker
  * @brief	This class implements the Visitor interface for type checking of an SQL statement.
  */
-class TypeChecker : public Visitor {
+    class TypeChecker : public SQL_Namespace::Visitor {
 
 public:
 	/// Constructor
