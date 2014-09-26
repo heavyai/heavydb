@@ -2,7 +2,6 @@
  * @file	Parse.h
  * @author	Steven Stewart <steve@map-d.com>
  */
-#include <string>
  
 // forward declarations
 namespace SQL_Namespace { class ASTNode; }
