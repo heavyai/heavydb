@@ -1,0 +1,8 @@
+#define YY_Parser_h_included
+
+/*  A Bison++ parser, made from parser.y  */
+
+ /* with Bison++ version bison++ version 1.21-45, adapted from GNU Bison by coetmeur@icdc.fr
+  */
+
+
