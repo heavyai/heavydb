@@ -28,7 +28,7 @@ public:
 
     /// Constructor -- accepts metadata object only
     explicit Attribute(const ColumnRow &metadata) : metadata(metadata) {
-        // nothing to do
+        this->name1 = metadata.columnName + "(" + std::to_string(metadata.columnId) + ")";
     }
     
 	Attribute(std::string name1, const std::string &name2) : metadata(name1) {

@@ -3,8 +3,9 @@
  * @author  Steven Stewart <steve@map-d.com>
  */
 #include "Planner.h"
-#include "../Parse/SQL/parser.h"
 #include "Translator.h"
+#include "Annotator.h"
+#include "../Parse/SQL/parser.h"
 #include "../Parse/RA/visitor/XMLTranslator.h"
 
 namespace Plan_Namespace {
@@ -41,6 +42,10 @@ namespace Plan_Namespace {
         
         // annotate (obtain metadata from Catalog for named relation and attribute nodes)
         if (annotate) {
+            Annotator a;
+            std::pair<int, std::string> err = a.annotate(queryPlan_);
+            numErrors = err.first;
+            errorMsg = err.second;
             if (numErrors > 0) {
                 errorMsg = "Catalog error at '" + lastParsed + "'";
                 return pair<int, std::string>(numErrors, errorMsg);

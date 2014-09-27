@@ -9,8 +9,10 @@
 #include "../Parse/SQL/visitor/Visitor.h"
 #include "../Parse/SQL/ast/ASTNode.h"
 #include "../Parse/RA/ast/RelAlgNode.h"
+#include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace SQL_Namespace;
+using Metadata_Namespace::Catalog;
 
 namespace Plan_Namespace {
     
@@ -29,12 +31,16 @@ namespace Plan_Namespace {
 
     public:
         /// Constructor
-        Translator() {}
+        Translator(Catalog &c) : c_(c) {}
         
         /// Destructor
         ~Translator() {}
         
         RA_Namespace::RelAlgNode* translate(SQL_Namespace::ASTNode *parseTreeRoot);
+        
+        inline std::pair<bool, std::string> checkError() {
+            return catalogError_;
+        }
         
         // virtual void visit(AggrExpr *v);
         // virtual void visit(AlterStmt *v);
@@ -74,6 +80,8 @@ namespace Plan_Namespace {
         virtual void visit(TableList *v);
         
     private:
+        Catalog &c_; /// a reference to a Catalog, which holds table/column metadata
+        
         // type of query; initialized to "unknown"
         QueryStmtType stmtType_ = UNKNOWN_STMT;
         
@@ -100,6 +108,14 @@ namespace Plan_Namespace {
         SQL_Namespace::Table *createTableName_ = nullptr;
         std::vector<SQL_Namespace::Column*> createColumns_;
         std::vector<SQL_Namespace::MapdDataT*> createValues_;
+        
+        // collect table and column names (passed to Catalog for
+        // optional annotation of nodes)
+        std::vector<std::string> tableNames_;
+        std::vector<std::pair<std::string, std::string>> columnNames_;
+        
+        // sets an error (used to indicate Catalog errors)
+        std::pair<bool, std::string> catalogError_;
         
         /**
          * @brief Returns a query plan for a query (sql select statement)

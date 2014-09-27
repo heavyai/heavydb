@@ -76,11 +76,52 @@ namespace Plan_Namespace {
 
     RA_Namespace::RelAlgNode* Translator::translate(SQL_Namespace::ASTNode *parseTreeRoot) {
         assert(parseTreeRoot);
-        printf("translate()\n");
+        RelAlgNode *queryPlan = nullptr;
         parseTreeRoot->accept(*this);
         
-        RelAlgNode *queryPlan = nullptr;
+        /*
+         for (size_t i = 0; i < tableNames_.size(); ++i)
+            printf("tableNames_[%zu] = %s\n", i, tableNames_[i].c_str());
+         for (size_t i = 0; i < columnNames_.size(); ++i)
+            printf("columnNames[%zu] = %s\n", i, columnNames_[i].second.c_str());
+         */
         
+        // retieve table metadata from Catalog
+        // set error if a table does not exist
+        if (stmtType_ == QUERY_STMT) {
+            TableRow tableMetadata;
+            for (size_t i = 0; i < queryTables_.size(); ++i) {
+                mapd_err_t err = c_.getMetadataForTable(queryTables_[i]->name.second, tableMetadata);
+                if (err != MAPD_SUCCESS) {
+                    catalogError_.first = true;
+                    catalogError_.second = "Table '" + tableNames_[i] + "' not found";
+                    return nullptr;
+                }
+                queryTables_[i]->metadata = tableMetadata;
+            }
+        }
+        
+        // retrieve column metadata from Catalog
+        // set error if column does not exist or there is ambiguity
+        std::vector<ColumnRow> columnMetadata;
+        mapd_err_t err = c_.getMetadataForColumns(tableNames_, columnNames_, columnMetadata);
+        if (err != MAPD_SUCCESS) {
+            catalogError_.first = true;
+            catalogError_.second = "Catalog error";
+            if (err == MAPD_ERR_COLUMN_DOES_NOT_EXIST) {
+                std::string colNotFound = columnNames_[columnMetadata.size()].second;
+                catalogError_.second = "Column '" + colNotFound + "' not found";
+            }
+            return nullptr;
+        }
+        assert(columnMetadata.size() == columnNames_.size());
+        
+        // annotate SQL column nodes with Catalog metadata
+        if (stmtType_ == QUERY_STMT)
+            for (size_t i = 0; i < queryColumns_.size(); ++i)
+                queryColumns_[i]->metadata = columnMetadata[i];
+        
+        // translate the SQL AST to an RA query plan tree
         if (stmtType_ == QUERY_STMT) {
             printf("Translate a QUERY_STMT\n");
             queryPlan = translateQuery();
@@ -94,6 +135,7 @@ namespace Plan_Namespace {
         
         // fill out the rest of the query plan
         queryPlan = new Program(new RelExprList((RelExpr*)queryPlan));
+        
         return queryPlan;
     }
 
@@ -104,7 +146,7 @@ namespace Plan_Namespace {
         std::vector<Relation*> relations;
         size_t numTables = queryTables_.size();
         for (size_t i = 0; i < numTables; ++i)
-            relations.push_back(new Relation(queryTables_[i]->name.second));
+            relations.push_back(new Relation(queryTables_[i]->metadata));
         
         // Step 2:  take the product of the relations from Step 1
         ProductOp* productOfRelations = nullptr;
@@ -124,19 +166,10 @@ namespace Plan_Namespace {
             throw std::runtime_error("No columns specified. Probably a 'select *'. Not yet supported.");
         }
 
-        AttrList *fields = nullptr;
-
-        if (queryColumns_[0]->name.first != "")
-            fields = new AttrList(new Attribute(queryColumns_[0]->name.first, queryColumns_[0]->name.second));
-        else
-            fields = new AttrList(new Attribute(queryColumns_[0]->name.second));
-        
+        AttrList *fields = new AttrList(new Attribute(queryColumns_[0]->metadata));
         for (size_t i = 1; i < numFields; ++i) {
             assert(queryColumns_[0]->name.second != "");
-            if (queryColumns_[i]->name.first != "")
-                fields = new AttrList(fields, new Attribute(queryColumns_[i]->name.first, queryColumns_[i]->name.second));
-            else
-                fields = new AttrList(fields, new Attribute(queryColumns_[i]->name.second));
+            fields = new AttrList(fields, new Attribute(queryColumns_[i]->metadata));
         }
         
         ProjectOp *project = nullptr;
@@ -156,12 +189,13 @@ namespace Plan_Namespace {
     }
     
     void Translator::visit(DmlStmt *v) {
-        printf("<DmlStmt>\n");
+        // printf("<DmlStmt>\n");
         if (v->n1) v->n1->accept(*this); // InsertStmt
         if (v->n2) v->n2->accept(*this); // SelectStmt
     }
     
     void Translator::visit(Column *v) {
+        columnNames_.push_back(v->name);
         if (stmtType_ == QUERY_STMT)
             queryColumns_.push_back(v);
         else
@@ -169,7 +203,7 @@ namespace Plan_Namespace {
     }
 
     void Translator::visit(FromClause *v) {
-        printf("<FromClause>\n");
+        // printf("<FromClause>\n");
         if (v->n1)
             v->n1->accept(*this); // TableList
         else
@@ -178,37 +212,37 @@ namespace Plan_Namespace {
     }
     
     void Translator::visit(OptAllDistinct *v) {
-        printf("<OptAllDistinct>\n");
+        // printf("<OptAllDistinct>\n");
         throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(OptGroupby *v) {
-        printf("<OptGroupby>\n");
+        // printf("<OptGroupby>\n");
         throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(OptHaving *v) {
-        printf("<OptHaving>\n");
+        // printf("<OptHaving>\n");
         throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(OptLimit *v) {
-        printf("<OptLimit>\n");
+        // printf("<OptLimit>\n");
         throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(OptOrderby *v) {
-        printf("<OptOrderby>\n");
+        // printf("<OptOrderby>\n");
         throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(OptWhere *v) {
-        printf("<OptWhere>\n");
+        // printf("<OptWhere>\n");
         throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(SQL_Namespace::Predicate *v) {
-        printf("<Predicate>\n");
+        // printf("<Predicate>\n");
         
         if (stmtType_ == QUERY_STMT)
             queryPredicate_ = v;
@@ -220,7 +254,7 @@ namespace Plan_Namespace {
     
     
     void Translator::visit(ScalarExpr *v) {
-        printf("<ScalarExpr>\n");
+        // printf("<ScalarExpr>\n");
         
         if (v->n4)
             v->n4->accept(*this); // Column
@@ -229,23 +263,23 @@ namespace Plan_Namespace {
     }
     
     void Translator::visit(ScalarExprList *v) {
-        printf("<ScalarExprList>\n");
+        // printf("<ScalarExprList>\n");
         if (v->n1) v->n1->accept(*this); // ScalarExprList
         if (v->n2) v->n2->accept(*this); // ScalarExpr
     }
     
     void Translator::visit(SearchCondition *v) {
-        printf("<SearchCondition>\n");
+        // printf("<SearchCondition>\n");
         if (v->n1) v->n1->accept(*this); // Predicate
     }
     
     void Translator::visit(Selection *v) {
-        printf("<Selection>\n");
+        // printf("<Selection>\n");
         if (v->n1) v->n1->accept(*this); // ScalarExprList
     }
 
     void Translator::visit(SelectStmt *v) {
-        printf("<SelectStmt>\n");
+        // printf("<SelectStmt>\n");
         stmtType_ = QUERY_STMT;
         
         if (v->n1) v->n1->accept(*this); // OptAllDistinct
@@ -259,14 +293,15 @@ namespace Plan_Namespace {
     }
     
     void Translator::visit(SqlStmt *v) {
-        printf("<SqlStmt>\n");
+        // printf("<SqlStmt>\n");
         if (v->n1) v->n1->accept(*this); // DmlStmt
         if (v->n2) v->n2->accept(*this); // DdlStmt
     }
     
     void Translator::visit(Table *v) {
         assert(v->name.first == ""); // @todo this should pass until we support NAME AS NAME
-        printf("<Table>\n");
+        // printf("<Table>\n");
+        tableNames_.push_back(v->name.second);
         if (stmtType_ == QUERY_STMT)
             queryTables_.push_back(v);
         else
@@ -274,7 +309,7 @@ namespace Plan_Namespace {
     }
     
     void Translator::visit(TableList *v) {
-        printf("<TableList>\n");
+        // printf("<TableList>\n");
         if (v->n1) v->n1->accept(*this); // TableList
         if (v->n2) v->n2->accept(*this); // Table
     }
