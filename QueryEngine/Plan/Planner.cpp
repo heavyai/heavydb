@@ -4,13 +4,12 @@
  */
 #include "Planner.h"
 #include "Translator.h"
-#include "Annotator.h"
 #include "../Parse/SQL/parser.h"
 #include "../Parse/RA/visitor/XMLTranslator.h"
 
 namespace Plan_Namespace {
     
-    Planner::Planner() {
+    Planner::Planner(Catalog &c) : c_(c) {
         // NOP
     }
     
@@ -18,7 +17,7 @@ namespace Plan_Namespace {
         // NOP
     }
  
-    std::pair<int, std::string> Planner::makePlan(std::string sql, bool annotate, bool typeCheck) {
+    std::pair<int, std::string> Planner::makePlan(std::string sql) {
         SQLParser parser;
         ASTNode *parseRoot = nullptr;
         string lastParsed;
@@ -33,31 +32,16 @@ namespace Plan_Namespace {
         }
         
         // translate SQL AST to RA query plan
-        Translator tr;
+        Translator tr(c_);
         queryPlan_ = tr.translate(parseRoot);
+        if (tr.isError()) {
+            return pair<int, std::string>(1, tr.errorMsg());
+        }
 
         // print for debugging
-        XMLTranslator ra2xml;
-        queryPlan_->accept(ra2xml);
-        
-        // annotate (obtain metadata from Catalog for named relation and attribute nodes)
-        if (annotate) {
-            Annotator a;
-            std::pair<int, std::string> err = a.annotate(queryPlan_);
-            numErrors = err.first;
-            errorMsg = err.second;
-            if (numErrors > 0) {
-                errorMsg = "Catalog error at '" + lastParsed + "'";
-                return pair<int, std::string>(numErrors, errorMsg);
-            }
-        }
-        
-        // type check
-        if (typeCheck) {
-            if (numErrors > 0) {
-                errorMsg = "Type mismatch error at '" + lastParsed + "'";
-                return pair<int, std::string>(numErrors, errorMsg);
-            }
+        if (tr.getType() == QUERY_STMT) {
+            XMLTranslator ra2xml;
+            queryPlan_->accept(ra2xml);
         }
         
         // return (should be successful here)

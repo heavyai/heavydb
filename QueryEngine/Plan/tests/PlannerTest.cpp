@@ -7,14 +7,26 @@
 #include <iostream>
 #include <string>
 #include "../Planner.h"
+#include "../../../DataMgr/Metadata/Catalog.h"
 
 using namespace std;
 using namespace Plan_Namespace;
 
 int main() {
-    Planner planner;
+    // set up Catalog with table T1 and columns 'a' and 'b'
+    Catalog catalog(".");
+    
+    std::vector<ColumnRow*> cols;
+    cols.push_back(new ColumnRow("a", INT_TYPE, true));
+    cols.push_back(new ColumnRow("b", FLOAT_TYPE, true));
+    
+    mapd_err_t err = catalog.addTableWithColumns("t1", cols);
+    if (err != MAPD_SUCCESS)
+        printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
+    
+    Planner planner(catalog);
     string sql;
-    pair<int, string> err;
+    pair<int, string> error;
     
     do {
         // obtain user input
@@ -25,10 +37,10 @@ int main() {
         else sql = sql + "\n";
         
         // get query plan
-        err = planner.makePlan(sql);
+        error = planner.makePlan(sql);
         
-        if (err.first > 0)
-            cout << err.second << endl;
+        if (error.first > 0)
+            cout << error.second << endl;
 
     } while (true);
 }

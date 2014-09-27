@@ -13,8 +13,10 @@
 
 #include <string>
 #include "../Parse/RA/ast/RelAlgNode.h"
+#include "../../DataMgr/Metadata/Catalog.h"
 
 using namespace RA_Namespace;
+using namespace Metadata_Namespace;
 
 namespace Plan_Namespace {
     
@@ -22,7 +24,7 @@ namespace Plan_Namespace {
 
     public:
         /// Constructor
-        Planner();
+        Planner(Catalog &c);
         
         /// Destructor
         ~Planner();
@@ -34,7 +36,7 @@ namespace Plan_Namespace {
          * @param bool If true, the query plan is type checked.
          * @return A pair (int - number of erros, string - error message).
          */
-        std::pair<int, std::string> makePlan(std::string sql, bool annotate = true, bool typeCheck = true);
+        std::pair<int, std::string> makePlan(std::string sql);
         
         /**
          * @brief Returns a pointer to the root node of the RA query plan tree.
@@ -43,6 +45,7 @@ namespace Plan_Namespace {
         
     private:
         RelAlgNode *queryPlan_ = nullptr;
+        Catalog &c_; /// a reference to a Catalog, which holds table/column metadata
         
         /**
          * @brief Annotates the query plan with metadata obtained from the catalog
