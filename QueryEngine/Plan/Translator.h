@@ -39,8 +39,8 @@ namespace Plan_Namespace {
         
         RA_Namespace::RelAlgNode* translate(SQL_Namespace::ASTNode *parseTreeRoot);
         
-        inline bool isCatalogError() { return catalogError_ ; }
-        inline std::string catalogErrorMsg() { return catalogErrorMsg_; }
+        inline bool isError() { return error_ ; }
+        inline std::string errorMsg() { return errorMsg_; }
         
         /**
          * @brief Returns an InsertData object (for sql insert statements)
@@ -127,8 +127,8 @@ namespace Plan_Namespace {
         std::vector<std::pair<std::string, std::string>> columnNames_;
         
         // sets an error (used to indicate Catalog errors)
-        bool catalogError_ = false;
-        std::string catalogErrorMsg_;
+        bool error_ = false;
+        std::string errorMsg_;
         
         /**
          * @brief Returns a query plan for a query (sql select statement)
@@ -136,14 +136,20 @@ namespace Plan_Namespace {
         RA_Namespace::RelAlgNode* translateQuery();
         
         /**
+         * @brief Annotates SQL AST nodes (Table, Column) with Catalog metadata
+         */
+        void annotateQuery();
+        
+        /**
          * @brief Sets the insertData_ object for an sql insert statement
          */
         void translateInsert();
         
         /**
-         * @brief Annotates SQL AST nodes (Table, Column) with Catalog metadata
+         * @brief Type checks an insert statement.
          */
-        void annotateQuery();
+        void typeCheckInsert();
+        
     };
     
 } // Plan_Namespace

@@ -94,15 +94,14 @@ namespace Plan_Namespace {
         // translate the SQL AST to an RA query plan tree
         if (stmtType_ == QUERY_STMT) {
             annotateQuery();
-            if (catalogError_)
+            if (error_)
                 return nullptr;
             // @todo type check expressions
             queryPlan = translateQuery();
         }
         else if (stmtType_ == INSERT_STMT) {
-            printf("Translate an INSERT_STMT\n");
             translateInsert();
-            if (catalogError_)
+            if (error_)
                 return nullptr;
             assert(insertData_.numRows > 0);
             // @todo type check insert stmt
@@ -174,8 +173,8 @@ namespace Plan_Namespace {
         for (size_t i = 0; i < queryTables_.size(); ++i) {
             mapd_err_t err = c_.getMetadataForTable(queryTables_[i]->name.second, tableMetadata);
             if (err != MAPD_SUCCESS) {
-                catalogError_ = true;
-                catalogErrorMsg_ = "Table '" + tableNames_[i] + "' not found";
+                error_ = true;
+                errorMsg_ = "Table '" + tableNames_[i] + "' not found";
                 return;
             }
             queryTables_[i]->metadata = tableMetadata;
@@ -186,15 +185,15 @@ namespace Plan_Namespace {
         std::vector<ColumnRow> columnMetadata;
         mapd_err_t err = c_.getMetadataForColumns(tableNames_, columnNames_, columnMetadata);
         if (err != MAPD_SUCCESS) {
-            catalogError_ = true;
-            catalogErrorMsg_ = "Catalog error";
+            error_ = true;
+            errorMsg_ = "Catalog error";
             if (err == MAPD_ERR_COLUMN_DOES_NOT_EXIST) {
                 std::string col = columnNames_[columnMetadata.size()].second;
-                catalogErrorMsg_ = "Column '" + col + "' not found";
+                errorMsg_ = "Column '" + col + "' not found";
             }
             else if (err == MAPD_ERR_COLUMN_IS_AMBIGUOUS) {
                 std::string col = columnNames_[columnMetadata.size()].second;
-                catalogErrorMsg_ = "Ambiguous column '" + col + "'";
+                errorMsg_ = "Ambiguous column '" + col + "'";
             }
             return;
         }
@@ -216,8 +215,8 @@ namespace Plan_Namespace {
         // set table id (obtain table metadata from Catalog)
         err = c_.getMetadataForTable(insertTable_->name.second, insertTable_->metadata);
         if (err != MAPD_SUCCESS) {
-            catalogError_ = true;
-            catalogErrorMsg_ = "Table '" + insertTable_->name.second + "' not found";
+            error_ = true;
+            errorMsg_ = "Table '" + insertTable_->name.second + "' not found";
             return;
         }
         insertData_.tableId = insertTable_->metadata.tableId;
@@ -232,9 +231,16 @@ namespace Plan_Namespace {
         err = c_.getMetadataForColumns(insertTable_->name.second, insertColumnNames, insertColumnMetadata);
         assert(insertColumns_.size() == insertColumnMetadata.size());
         
-        for (size_t i  = 0; i < insertColumnMetadata.size(); ++i)
+        for (size_t i  = 0; i < insertColumnMetadata.size(); ++i) {
             insertData_.columnIds.push_back(insertColumnMetadata[i].columnId);
+            insertColumns_[i]->metadata = insertColumnMetadata[i];
+        }
 
+        // type check insert statement
+        typeCheckInsert();
+        if (isError())
+            return;
+        
         // package the data to be inserted
         for (size_t i = 0; i < insertValues_.size(); ++i) {
             mapd_byte_t *data = new mapd_byte_t[byteCount_];
@@ -266,6 +272,20 @@ namespace Plan_Namespace {
             insertData_.data.push_back((void*)data);
         }
         
+    }
+    
+    void Translator::typeCheckInsert() {
+        for (size_t i = 0; i < insertColumns_.size(); ++i) {
+            if (insertColumns_[i]->metadata.columnType == INT_TYPE && insertValues_[i]->type == FLOAT_TYPE) {
+                error_ = true;
+                errorMsg_ = "Type mismatch at column '" + insertColumns_[i]->name +"' (cannot downcast float to int)";
+                return;
+            }
+            else if (insertColumns_[i]->metadata.columnType == FLOAT_TYPE && insertValues_[i]->type == INT_TYPE) {
+                insertValues_[i]->realData = (float)insertValues_[i]->intData;
+                insertValues_[i]->type = FLOAT_TYPE;
+            }
+        }
     }
     
     void Translator::visit(Column *v) {

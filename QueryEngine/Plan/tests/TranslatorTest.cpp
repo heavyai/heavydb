@@ -54,8 +54,8 @@ int main() {
         Translator tr(catalog);
         RA_Namespace::RelAlgNode *queryPlanRoot = tr.translate(parseRoot);
         
-        if (tr.isCatalogError()) {
-            cout << tr.catalogErrorMsg() << endl;
+        if (tr.isError()) {
+            cout << tr.errorMsg() << endl;
             continue;
         }
         

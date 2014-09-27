@@ -58,4 +58,4 @@ namespace RA_Namespace {
     
 } // RA_Namespace
 
-#endif QueryEngine_Parse_RA_Visitor_XMLTranslator_h
+#endif // QueryEngine_Parse_RA_Visitor_XMLTranslator_h
