@@ -10,6 +10,7 @@
 #include "../Parse/SQL/ast/ASTNode.h"
 #include "../Parse/RA/ast/RelAlgNode.h"
 #include "../../DataMgr/Metadata/Catalog.h"
+#include "../../DataMgr/Partitioner/Partitioner.h"
 
 using namespace SQL_Namespace;
 using Metadata_Namespace::Catalog;
@@ -31,16 +32,25 @@ namespace Plan_Namespace {
 
     public:
         /// Constructor
-        Translator(Catalog &c) : c_(c) {}
+        Translator(Catalog &c);
         
         /// Destructor
         ~Translator() {}
         
         RA_Namespace::RelAlgNode* translate(SQL_Namespace::ASTNode *parseTreeRoot);
         
-        inline std::pair<bool, std::string> checkError() {
-            return catalogError_;
-        }
+        inline bool isCatalogError() { return catalogError_ ; }
+        inline std::string catalogErrorMsg() { return catalogErrorMsg_; }
+        
+        /**
+         * @brief Returns an InsertData object (for sql insert statements)
+         */
+        inline Partitioner_Namespace::InsertData getInsertData() { return insertData_; }
+        
+        /**
+         * @brief Returns the type of the parsed query
+         */
+        inline QueryStmtType getType() { return stmtType_; }
         
         // virtual void visit(AggrExpr *v);
         // virtual void visit(AlterStmt *v);
@@ -54,10 +64,10 @@ namespace Plan_Namespace {
         virtual void visit(DmlStmt *v);
         // virtual void visit(DropStmt *v);
         virtual void visit(FromClause *v);
-        // virtual void visit(InsertColumnList *v);
-        // virtual void visit(InsertStmt *v);
-        // virtual void visit(Literal *v);
-        // virtual void visit(LiteralList *v);
+        virtual void visit(InsertColumnList *v);
+        virtual void visit(InsertStmt *v);
+        virtual void visit(Literal *v);
+        virtual void visit(LiteralList *v);
         // virtual void visit(MapdDataT *v);
         // virtual void visit(MathExpr *v);
         virtual void visit(OptAllDistinct *v);
@@ -91,9 +101,11 @@ namespace Plan_Namespace {
         SQL_Namespace::Predicate *queryPredicate_ = nullptr;
         
         // insert data (sql: insert into)
-        SQL_Namespace::Table *insertTableName_ = nullptr;
-        std::vector<SQL_Namespace::Column*> insertColumns_;
-        std::vector<SQL_Namespace::MapdDataT*> insertValues_;
+        SQL_Namespace::Table *insertTable_ = nullptr;
+        std::vector<SQL_Namespace::InsertColumnList*> insertColumns_;
+        std::vector<SQL_Namespace::Literal*> insertValues_;
+        Partitioner_Namespace::InsertData insertData_;
+        size_t byteCount_ = 0; // total number of bytes to be inserted
         
         // delete data (sql: delete from)
         SQL_Namespace::Table *deleteTableName_ = nullptr;
@@ -115,13 +127,23 @@ namespace Plan_Namespace {
         std::vector<std::pair<std::string, std::string>> columnNames_;
         
         // sets an error (used to indicate Catalog errors)
-        std::pair<bool, std::string> catalogError_;
+        bool catalogError_ = false;
+        std::string catalogErrorMsg_;
         
         /**
          * @brief Returns a query plan for a query (sql select statement)
          */
         RA_Namespace::RelAlgNode* translateQuery();
         
+        /**
+         * @brief Sets the insertData_ object for an sql insert statement
+         */
+        void translateInsert();
+        
+        /**
+         * @brief Annotates SQL AST nodes (Table, Column) with Catalog metadata
+         */
+        void annotateQuery();
     };
     
 } // Plan_Namespace

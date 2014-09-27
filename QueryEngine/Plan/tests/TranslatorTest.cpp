@@ -54,17 +54,18 @@ int main() {
         Translator tr(catalog);
         RA_Namespace::RelAlgNode *queryPlanRoot = tr.translate(parseRoot);
         
-        std::pair<bool, std::string> catalogErr = tr.checkError();
-        if (catalogErr.first) {
-            cout << catalogErr.second << endl;
+        if (tr.isCatalogError()) {
+            cout << tr.catalogErrorMsg() << endl;
             continue;
         }
         
         // assert(queryPlanRoot);
         
         // print out XML representation of the RA query plan
-        RA_Namespace::XMLTranslator ra2xml;
-        queryPlanRoot->accept(ra2xml);
+        if (tr.getType() == QUERY_STMT) {
+            RA_Namespace::XMLTranslator ra2xml;
+            queryPlanRoot->accept(ra2xml);
+        }
     }
     
     while (true);

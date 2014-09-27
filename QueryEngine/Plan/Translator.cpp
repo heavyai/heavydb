@@ -74,6 +74,11 @@ using namespace RA_Namespace;
 
 namespace Plan_Namespace {
 
+    Translator::Translator(Catalog &c) : c_(c) {
+        insertData_.numRows = 0;
+        insertData_.tableId = -1;
+    }
+    
     RA_Namespace::RelAlgNode* Translator::translate(SQL_Namespace::ASTNode *parseTreeRoot) {
         assert(parseTreeRoot);
         RelAlgNode *queryPlan = nullptr;
@@ -86,49 +91,23 @@ namespace Plan_Namespace {
             printf("columnNames[%zu] = %s\n", i, columnNames_[i].second.c_str());
          */
         
-        // retieve table metadata from Catalog
-        // set error if a table does not exist
-        if (stmtType_ == QUERY_STMT) {
-            TableRow tableMetadata;
-            for (size_t i = 0; i < queryTables_.size(); ++i) {
-                mapd_err_t err = c_.getMetadataForTable(queryTables_[i]->name.second, tableMetadata);
-                if (err != MAPD_SUCCESS) {
-                    catalogError_.first = true;
-                    catalogError_.second = "Table '" + tableNames_[i] + "' not found";
-                    return nullptr;
-                }
-                queryTables_[i]->metadata = tableMetadata;
-            }
-        }
-        
-        // retrieve column metadata from Catalog
-        // set error if column does not exist or there is ambiguity
-        std::vector<ColumnRow> columnMetadata;
-        mapd_err_t err = c_.getMetadataForColumns(tableNames_, columnNames_, columnMetadata);
-        if (err != MAPD_SUCCESS) {
-            catalogError_.first = true;
-            catalogError_.second = "Catalog error";
-            if (err == MAPD_ERR_COLUMN_DOES_NOT_EXIST) {
-                std::string colNotFound = columnNames_[columnMetadata.size()].second;
-                catalogError_.second = "Column '" + colNotFound + "' not found";
-            }
-            return nullptr;
-        }
-        assert(columnMetadata.size() == columnNames_.size());
-        
-        // annotate SQL column nodes with Catalog metadata
-        if (stmtType_ == QUERY_STMT)
-            for (size_t i = 0; i < queryColumns_.size(); ++i)
-                queryColumns_[i]->metadata = columnMetadata[i];
-        
         // translate the SQL AST to an RA query plan tree
         if (stmtType_ == QUERY_STMT) {
-            printf("Translate a QUERY_STMT\n");
+            annotateQuery();
+            if (catalogError_)
+                return nullptr;
+            // @todo type check expressions
             queryPlan = translateQuery();
         }
         else if (stmtType_ == INSERT_STMT) {
             printf("Translate an INSERT_STMT\n");
-            exit(EXIT_SUCCESS);
+            translateInsert();
+            if (catalogError_)
+                return nullptr;
+            assert(insertData_.numRows > 0);
+            // @todo type check insert stmt
+            //typeCheckInsert();
+            return nullptr; // "plan" is accessed via call to getInsertData()
         }
         else
             throw std::runtime_error("Unable to translate SQL statement to RA query plan");
@@ -188,10 +167,105 @@ namespace Plan_Namespace {
         return project;
     }
     
-    void Translator::visit(DmlStmt *v) {
-        // printf("<DmlStmt>\n");
-        if (v->n1) v->n1->accept(*this); // InsertStmt
-        if (v->n2) v->n2->accept(*this); // SelectStmt
+    void Translator::annotateQuery() {
+        // retieve table metadata from Catalog
+        // set error if a table does not exist
+        TableRow tableMetadata;
+        for (size_t i = 0; i < queryTables_.size(); ++i) {
+            mapd_err_t err = c_.getMetadataForTable(queryTables_[i]->name.second, tableMetadata);
+            if (err != MAPD_SUCCESS) {
+                catalogError_ = true;
+                catalogErrorMsg_ = "Table '" + tableNames_[i] + "' not found";
+                return;
+            }
+            queryTables_[i]->metadata = tableMetadata;
+        }
+        
+        // retrieve column metadata from Catalog
+        // set error if column does not exist or there is ambiguity
+        std::vector<ColumnRow> columnMetadata;
+        mapd_err_t err = c_.getMetadataForColumns(tableNames_, columnNames_, columnMetadata);
+        if (err != MAPD_SUCCESS) {
+            catalogError_ = true;
+            catalogErrorMsg_ = "Catalog error";
+            if (err == MAPD_ERR_COLUMN_DOES_NOT_EXIST) {
+                std::string col = columnNames_[columnMetadata.size()].second;
+                catalogErrorMsg_ = "Column '" + col + "' not found";
+            }
+            else if (err == MAPD_ERR_COLUMN_IS_AMBIGUOUS) {
+                std::string col = columnNames_[columnMetadata.size()].second;
+                catalogErrorMsg_ = "Ambiguous column '" + col + "'";
+            }
+            return;
+        }
+        assert(columnMetadata.size() == columnNames_.size());
+        
+        // annotate SQL column nodes with Catalog metadata
+        for (size_t i = 0; i < queryColumns_.size(); ++i)
+            queryColumns_[i]->metadata = columnMetadata[i];
+    }
+    
+    void Translator::translateInsert() {
+        assert(insertValues_.size() == insertColumns_.size());
+        mapd_err_t err = MAPD_SUCCESS;
+        
+        // presently, only 1 row inserted at a time
+        // @todo Support for bulk insert instead of just one row at a time
+        insertData_.numRows = 1;
+        
+        // set table id (obtain table metadata from Catalog)
+        err = c_.getMetadataForTable(insertTable_->name.second, insertTable_->metadata);
+        if (err != MAPD_SUCCESS) {
+            catalogError_ = true;
+            catalogErrorMsg_ = "Table '" + insertTable_->name.second + "' not found";
+            return;
+        }
+        insertData_.tableId = insertTable_->metadata.tableId;
+        
+        // set column ids (obtain column metadata from Catalog)
+        std::vector<std::string> insertColumnNames;
+        for (size_t i  = 0; i < insertColumns_.size(); ++i)
+            insertColumnNames.push_back(insertColumns_[i]->name);
+        assert(insertColumns_.size() == insertColumnNames.size());
+        
+        std::vector<ColumnRow> insertColumnMetadata;
+        err = c_.getMetadataForColumns(insertTable_->name.second, insertColumnNames, insertColumnMetadata);
+        assert(insertColumns_.size() == insertColumnMetadata.size());
+        
+        for (size_t i  = 0; i < insertColumnMetadata.size(); ++i)
+            insertData_.columnIds.push_back(insertColumnMetadata[i].columnId);
+
+        // package the data to be inserted
+        for (size_t i = 0; i < insertValues_.size(); ++i) {
+            mapd_byte_t *data = new mapd_byte_t[byteCount_];
+            mapd_byte_t *pData = data;
+            mapd_size_t currentByte = 0;
+            
+            printf("[%zu] int=%d float=%f\n", i, insertValues_[i]->intData, insertValues_[i]->realData);
+            
+            // for each possible type, the bytes are copied one at a time into
+            // the bytes of the mapd_byte_t data pointer
+            if (insertValues_[i]->type == INT_TYPE) {
+                mapd_byte_t *tmp = (mapd_byte_t*)&insertValues_[i]->intData;
+                for (int j = 0; j < sizeof(int); ++j, ++tmp, ++pData)
+                    *pData = *tmp;
+                // printf("%d == %d\n", *((int*)(data+currentByte)), literalNodes_[i]->intData);
+                assert(*((int*)(data+currentByte)) == insertValues_[i]->intData);
+                currentByte += sizeof(int);
+            }
+            else if (insertValues_[i]->type == FLOAT_TYPE) {
+                mapd_byte_t *tmp = (mapd_byte_t*)&insertValues_[i]->realData;
+                for (int j = 0; j < sizeof(float); ++j, ++tmp, ++pData)
+                    *pData = *tmp;
+                // printf("%f == %f\n", *((float*)(data+currentByte)), literalNodes_[i]->realData);
+                assert(*((float*)(data+currentByte)) == insertValues_[i]->realData);
+                currentByte += sizeof(int);
+            }
+            
+            // push the packaged data into insertData_
+            insertData_.data.push_back((void*)data);
+        }
+        
     }
     
     void Translator::visit(Column *v) {
@@ -200,6 +274,12 @@ namespace Plan_Namespace {
             queryColumns_.push_back(v);
         else
             throw std::runtime_error("Unsupported SQL feature.");
+    }
+    
+    void Translator::visit(DmlStmt *v) {
+        // printf("<DmlStmt>\n");
+        if (v->n1) v->n1->accept(*this); // InsertStmt
+        if (v->n2) v->n2->accept(*this); // SelectStmt
     }
 
     void Translator::visit(FromClause *v) {
@@ -211,34 +291,66 @@ namespace Plan_Namespace {
         
     }
     
+    void Translator::visit(InsertColumnList *v) {
+        // printf("<InsertColumnList>\n");
+        if (v->n1) v->n1->accept(*this); // InsertColumnList
+        insertColumns_.push_back(v);
+    }
+    
+    void Translator::visit(InsertStmt *v) {
+        // printf("<InsertStmt>\n");
+        stmtType_ = INSERT_STMT;
+        if (v->n1) v->n1->accept(*this); // Table
+        if (v->n2) v->n2->accept(*this); // InsertColumnList
+        if (v->n3) v->n3->accept(*this); // LiteralList
+    }
+    
+    void Translator::visit(Literal *v) {
+        // printf("<Literal>\n");
+        insertValues_.push_back(v);
+        
+        if (v->type == INT_TYPE)
+            byteCount_ += sizeof(int);
+        else if (v->type == FLOAT_TYPE)
+            byteCount_ += sizeof(float);
+        else
+            throw std::runtime_error("Unsupported data type: " + std::to_string(v->type));
+    }
+    
+    void Translator::visit(LiteralList *v) {
+        // printf("<LiteralList>\n");
+        if (v->n1) v->n1->accept(*this); // LiteralList
+        if (v->n2) v->n2->accept(*this); // Literal
+    }
+    
     void Translator::visit(OptAllDistinct *v) {
         // printf("<OptAllDistinct>\n");
-        throw std::runtime_error("Unsupported SQL feature.");
+        throw std::runtime_error("OptAllDistinct - unsupported SQL feature.");
     }
     
     void Translator::visit(OptGroupby *v) {
         // printf("<OptGroupby>\n");
-        throw std::runtime_error("Unsupported SQL feature.");
+        throw std::runtime_error("OptGroupby - unsupported SQL feature.");
     }
     
     void Translator::visit(OptHaving *v) {
         // printf("<OptHaving>\n");
-        throw std::runtime_error("Unsupported SQL feature.");
+        throw std::runtime_error("OptHaving - unsupported SQL feature.");
     }
     
     void Translator::visit(OptLimit *v) {
         // printf("<OptLimit>\n");
-        throw std::runtime_error("Unsupported SQL feature.");
+        throw std::runtime_error("OptLimit - unsupported SQL feature.");
     }
     
     void Translator::visit(OptOrderby *v) {
         // printf("<OptOrderby>\n");
-        throw std::runtime_error("Unsupported SQL feature.");
+        throw std::runtime_error("OptOrderby - unsupported SQL feature.");
     }
     
     void Translator::visit(OptWhere *v) {
         // printf("<OptWhere>\n");
-        throw std::runtime_error("Unsupported SQL feature.");
+        throw std::runtime_error("OptWhere - unsupported SQL feature.");
     }
     
     void Translator::visit(SQL_Namespace::Predicate *v) {
@@ -304,6 +416,8 @@ namespace Plan_Namespace {
         tableNames_.push_back(v->name.second);
         if (stmtType_ == QUERY_STMT)
             queryTables_.push_back(v);
+        else if (stmtType_ == INSERT_STMT)
+            insertTable_ = v;
         else
             throw std::runtime_error("Unsupported SQL feature.");
     }
