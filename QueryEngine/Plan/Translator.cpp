@@ -84,6 +84,8 @@ namespace Plan_Namespace {
         queryColumns_.clear();
         queryPredicate_ = nullptr;
         
+        insertData_.numRows = 0;
+        insertData_.tableId = -1;
         insertTable_ = nullptr;
         insertColumns_.clear();
         insertValues_.clear();
