@@ -79,8 +79,41 @@ namespace Plan_Namespace {
         insertData_.tableId = -1;
     }
     
+    void Translator::clearState() {
+        queryTables_.clear();
+        queryColumns_.clear();
+        queryPredicate_ = nullptr;
+        
+        insertTable_ = nullptr;
+        insertColumns_.clear();
+        insertValues_.clear();
+        byteCount_ = 0;
+        
+        deleteTableName_ = nullptr;
+        deletePredicate_ = nullptr;
+        
+        updateTableName_ = nullptr;
+        updateColumns_.clear();
+        updateValues_.clear();
+        
+        createTableName_ = nullptr;
+        createColumns_.clear();
+        createValues_.clear();
+        
+        tableNames_.clear();
+        columnNames_.clear();
+        
+        error_ = false;
+        errorMsg_ = "";
+    }
+    
     RA_Namespace::RelAlgNode* Translator::translate(SQL_Namespace::ASTNode *parseTreeRoot) {
         assert(parseTreeRoot);
+
+        // clear private data structures
+        clearState();
+        
+        // translate (visit) the parse tree
         RelAlgNode *queryPlan = nullptr;
         parseTreeRoot->accept(*this);
         
@@ -93,6 +126,7 @@ namespace Plan_Namespace {
         
         // translate the SQL AST to an RA query plan tree
         if (stmtType_ == QUERY_STMT) {
+            
             annotateQuery();
             if (error_)
                 return nullptr;
@@ -212,7 +246,7 @@ namespace Plan_Namespace {
         // @todo Support for bulk insert instead of just one row at a time
         insertData_.numRows = 1;
         
-        // set table id (obtain table metadata from Catalog)
+        // set table id for insertData_ (obtain table metadata from Catalog)
         err = c_.getMetadataForTable(insertTable_->name.second, insertTable_->metadata);
         if (err != MAPD_SUCCESS) {
             error_ = true;
@@ -221,7 +255,7 @@ namespace Plan_Namespace {
         }
         insertData_.tableId = insertTable_->metadata.tableId;
         
-        // set column ids (obtain column metadata from Catalog)
+        // set column ids for insertData_ (obtain column metadata from Catalog)
         std::vector<std::string> insertColumnNames;
         for (size_t i  = 0; i < insertColumns_.size(); ++i)
             insertColumnNames.push_back(insertColumns_[i]->name);

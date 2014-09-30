@@ -11,6 +11,7 @@
 
 using namespace std;
 using namespace Plan_Namespace;
+using namespace Metadata_Namespace;
 
 int main() {
     // set up Catalog with table T1 and columns 'a' and 'b'
@@ -23,8 +24,9 @@ int main() {
     mapd_err_t err = catalog.addTableWithColumns("t1", cols);
     if (err != MAPD_SUCCESS)
         printf("[%s:%d] Catalog::addTableWithColumns: err = %d\n", __FILE__, __LINE__, err);
-    
-    Planner planner(catalog);
+
+    Translator tr(catalog);
+    Planner planner(tr);
     string sql;
     pair<int, string> error;
     
@@ -37,7 +39,9 @@ int main() {
         else sql = sql + "\n";
         
         // get query plan
-        error = planner.makePlan(sql);
+        RelAlgNode *queryPlan = nullptr;
+        QueryStmtType stmtType = UNKNOWN_STMT;
+        error = planner.makePlan(sql, &queryPlan, stmtType);
         
         if (error.first > 0)
             cout << error.second << endl;

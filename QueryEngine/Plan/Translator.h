@@ -129,6 +129,9 @@ namespace Plan_Namespace {
         // sets an error (used to indicate Catalog errors)
         bool error_ = false;
         std::string errorMsg_;
+
+        /// Clears (resets or nullifies) the internal state of Translator
+        void clearState();
         
         /**
          * @brief Returns a query plan for a query (sql select statement)
