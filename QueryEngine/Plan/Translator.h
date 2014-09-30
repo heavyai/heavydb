@@ -56,12 +56,12 @@ namespace Plan_Namespace {
         // virtual void visit(AggrExpr *v);
         // virtual void visit(AlterStmt *v);
         virtual void visit(Column *v);
-        // virtual void visit(ColumnDef *v);
-        // virtual void visit(ColumnDefList *v);
+        virtual void visit(ColumnDef *v);
+        virtual void visit(ColumnDefList *v);
         // virtual void visit(ColumnList *v);
         // virtual void visit(Comparison *v);
-        // virtual void visit(CreateStmt *v);
-        // virtual void visit(DdlStmt *v);
+        virtual void visit(CreateStmt *v);
+        virtual void visit(DdlStmt *v);
         virtual void visit(DmlStmt *v);
         // virtual void visit(DropStmt *v);
         virtual void visit(FromClause *v);
@@ -69,7 +69,7 @@ namespace Plan_Namespace {
         virtual void visit(InsertStmt *v);
         virtual void visit(Literal *v);
         virtual void visit(LiteralList *v);
-        // virtual void visit(MapdDataT *v);
+        virtual void visit(MapdDataT *v);
         // virtual void visit(MathExpr *v);
         virtual void visit(OptAllDistinct *v);
         virtual void visit(OptGroupby *v);
@@ -120,7 +120,7 @@ namespace Plan_Namespace {
         // create table data (sql: create table)
         SQL_Namespace::Table *createTableName_ = nullptr;
         std::vector<SQL_Namespace::Column*> createColumns_;
-        std::vector<SQL_Namespace::MapdDataT*> createValues_;
+        std::vector<SQL_Namespace::MapdDataT*> createTypes_;
         
         // collect table and column names (passed to Catalog for
         // optional annotation of nodes)
@@ -148,6 +148,11 @@ namespace Plan_Namespace {
          * @brief Sets the insertData_ object for an sql insert statement
          */
         InsertPlan* translateInsert();
+        
+        /**
+         * @brief 
+         */
+        CreatePlan* translateCreate();
         
         /**
          * @brief Type checks an insert statement.

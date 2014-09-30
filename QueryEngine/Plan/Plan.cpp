@@ -48,4 +48,25 @@ namespace Plan_Namespace {
         return root_;
     }
     
+    CreatePlan::CreatePlan(const std::string &tableName, const std::vector<std::string> &columnNames, const std::vector<mapd_data_t> columnTypes) : tableName_(tableName), columnNames_(columnNames), columnTypes_(columnTypes)
+    {
+        // NOP
+    }
+    
+    int CreatePlan::execute() {
+        return 0;
+    }
+    
+    int CreatePlan::optimize() {
+        return 0;
+    }
+    
+    void* CreatePlan::getPlan() {
+        return nullptr;
+    }
+    
+    void CreatePlan::print() {
+        
+    }
+    
 } // Plan_Namespace

@@ -100,7 +100,7 @@ namespace Plan_Namespace {
         
         createTableName_ = nullptr;
         createColumns_.clear();
-        createValues_.clear();
+        createTypes_.clear();
         
         tableNames_.clear();
         columnNames_.clear();
@@ -134,15 +134,21 @@ namespace Plan_Namespace {
             // @todo type check expressions
             queryPlan = translateQuery();
         }
+        
         else if (stmtType_ == INSERT_STMT) {
             translateInsert();
             if (error_)
                 return nullptr;
             assert(insertData_.numRows > 0);
-            // @todo type check insert stmt
-            //typeCheckInsert();
             return nullptr; // "plan" is accessed via call to getInsertData()
         }
+        
+        else if (stmtType_ == CREATE_STMT) {
+            translateCreate();
+            if (error_)
+                return nullptr;
+        }
+        
         else
             throw std::runtime_error("Unable to translate SQL statement to RA query plan");
         
@@ -321,12 +327,64 @@ namespace Plan_Namespace {
         }
     }
     
+    CreatePlan* Translator::translateCreate() {
+        assert(createTableName_);
+        assert(createColumns_.size() > 0);
+        assert(createColumns_.size() == createTypes_.size());
+        
+        // set table name
+        std::string tableName = createTableName_->name.first;
+    
+        // insert column names
+        std::vector<std::string> columnNames;
+        for (int i = 0; i < columnNames_.size(); ++i)
+            columnNames.push_back(columnNames_[i].second);
+        
+        // insert column types
+        std::vector<mapd_data_t> columnTypes;
+        for (int i = 0; i < createTypes_.size(); ++i)
+            columnTypes.push_back(createTypes_[i]->type);
+        
+        // return the plan
+        return new CreatePlan(tableName, columnNames, columnTypes);
+    }
+    
     void Translator::visit(Column *v) {
         columnNames_.push_back(v->name);
         if (stmtType_ == QUERY_STMT)
             queryColumns_.push_back(v);
+        else if (stmtType_ == CREATE_STMT)
+            createColumns_.push_back(v);
         else
             throw std::runtime_error("Unsupported SQL feature.");
+    }
+    
+    void Translator::visit(ColumnDef *v) {
+        // printf("<ColumnDef>\n");
+        if (v->n1) v->n1->accept(*this); // Column
+        if (v->n2) v->n2->accept(*this); // MapdDataT
+    }
+    
+    void Translator::visit(ColumnDefList *v) {
+        // printf("<ColumnDefList>\n");
+        if (v->n1) v->n1->accept(*this); // ColumnDefList
+        if (v->n2) v->n2->accept(*this); // ColumnDef
+    }
+    
+    void Translator::visit(CreateStmt *v) {
+        // printf("<CreateStmt>\n");
+        stmtType_ = CREATE_STMT;
+        if (v->n1) v->n1->accept(*this); // Table
+        if (v->n2) v->n2->accept(*this); // ColumnDefList
+    }
+
+    void Translator::visit(DdlStmt *v) {
+        // printf("<DdlStmt>\n");
+        if (v->n1) v->n1->accept(*this); // CreateStmt
+        else
+            throw std::runtime_error("Unsupported SQL feature.");
+        //if (v->n2) v->n2->accept(*this); // DropStmt
+        //if (v->n3) v->n3->accept(*this); // AlterStmt
     }
     
     void Translator::visit(DmlStmt *v) {
@@ -375,6 +433,12 @@ namespace Plan_Namespace {
         if (v->n1) v->n1->accept(*this); // LiteralList
         if (v->n2) v->n2->accept(*this); // Literal
     }
+    
+    void Translator::visit(MapdDataT *v) {
+        // printf("<MapdDataT>\n");
+        createTypes_.push_back(v);
+    }
+    
     
     void Translator::visit(OptAllDistinct *v) {
         // printf("<OptAllDistinct>\n");
@@ -471,6 +535,8 @@ namespace Plan_Namespace {
             queryTables_.push_back(v);
         else if (stmtType_ == INSERT_STMT)
             insertTable_ = v;
+        else if (stmtType_ == CREATE_STMT)
+            createTableName_ = v;
         else
             throw std::runtime_error("Unsupported SQL feature.");
     }

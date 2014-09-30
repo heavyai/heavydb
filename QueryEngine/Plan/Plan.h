@@ -8,6 +8,7 @@
 #include "../../DataMgr/Partitioner/Partitioner.h"
 #include "../../DataMgr/Partitioner/TablePartitionMgr.h"
 #include "../Parse/RA/ast/RelAlgNode.h"
+#include "../Parse/SQL/ast/MapdDataT.h"
 
 using namespace Partitioner_Namespace;
 
@@ -93,6 +94,27 @@ namespace Plan_Namespace {
     private:
         InsertData data_;
 
+    };
+    
+    /**
+     * A "create plan" encodes the information necessary in order
+     * to create table in the relational database.
+     */
+    class CreatePlan : public AbstractPlan {
+
+    public:
+        CreatePlan(const std::string &tableName, const std::vector<std::string> &columnNames, const std::vector<mapd_data_t> columnTypes);
+        ~CreatePlan();
+        
+        int execute();
+        int optimize();
+        void *getPlan();
+        void print();
+        
+    private:
+        std::string tableName_;
+        std::vector<std::string> columnNames_;
+        std::vector<mapd_data_t> columnTypes_;
     };
 
 } // Plan_Namespace
