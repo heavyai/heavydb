@@ -146,11 +146,7 @@ namespace Plan_Namespace {
         else
             throw std::runtime_error("Unable to translate SQL statement to RA query plan");
         
-        // fill out the rest of the query plan
-        RelAlgNode *root = (RelAlgNode*)queryPlan->plan();
-        root = new Program(new RelExprList((RelExpr*)root));
-        
-        return queryPlan;
+        return queryPlan; // returns a Project-Select query tree (Scan)
     }
 
     QueryPlan* Translator::translateQuery() {
@@ -283,7 +279,7 @@ namespace Plan_Namespace {
             mapd_byte_t *pData = data;
             mapd_size_t currentByte = 0;
             
-            printf("[%zu] int=%d float=%f\n", i, insertValues_[i]->intData, insertValues_[i]->realData);
+            // printf("[%zu] int=%d float=%f\n", i, insertValues_[i]->intData, insertValues_[i]->realData);
             
             // for each possible type, the bytes are copied one at a time into
             // the bytes of the mapd_byte_t data pointer

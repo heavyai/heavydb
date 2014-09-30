@@ -6,7 +6,7 @@
 
 namespace Plan_Namespace {
     
-    InsertPlan::InsertPlan(const InsertData insertData_)
+    InsertPlan::InsertPlan(const InsertData &insertData_)
     : data_(insertData_)
     {
         // NOP
@@ -20,7 +20,7 @@ namespace Plan_Namespace {
         return 0;
     }
     
-    void* InsertPlan::plan() {
+    void* InsertPlan::getPlan() {
         return &data_;
     }
     
@@ -44,7 +44,7 @@ namespace Plan_Namespace {
         
     }
     
-    void* QueryPlan::plan() {
+    void* QueryPlan::getPlan() {
         return root_;
     }
     

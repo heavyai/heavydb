@@ -13,16 +13,53 @@ using namespace Partitioner_Namespace;
 
 namespace Plan_Namespace {
 
+    /**
+     * This class specifies an interface for a "Plan" object. A plan
+     * represents a "program" or specification for carrying out some
+     * task; for example, a scan (QueryPlan), an insert (InsertPlan),
+     * etc. (This is a pure virtual class -- an abstract interface.)
+     *
+     * The rationale behind these abstractions is that it permits
+     * query plans of different forms: for example, a tree or other
+     * kind of data structure.
+     */
     class AbstractPlan {
 
     public:
+        
+        /**
+         * @brief Executes the plan.
+         * @return Non-zero for success; otherwise, an error code
+         */
         virtual int execute() = 0;
+        
+        /**
+         * @brief Optimizes the plan.
+         * @return Non-zero for success; otherwise, an error code
+         */
         virtual int optimize() = 0;
-        virtual void* plan() = 0;
+        
+        /**
+         * @brief Returns a void pointer to the underlying plan.
+         */
+        virtual void* getPlan() = 0;
+        
+        /**
+         * Prints a representation of the plan to stdout.
+         */
         virtual void print() = 0;
-    
     };
     
+    /**
+     * A "query plan" encodes the instructions needed to execute a
+     * database scan in the form of an operator tree (mainly,
+     * conventional relational algebra operators). A post-order
+     * traversal of the tree (i.e., visit the operands before the
+     * operator) is suitable for executing the plan. The plan can
+     * also be passed to an optimizer in order to produce a lower
+     * cost plan (if possible). QueryPlan implements the AbstractPlan
+     * interface.
+     */
     class QueryPlan : public AbstractPlan {
         
     public:
@@ -30,22 +67,27 @@ namespace Plan_Namespace {
         int execute();
         int optimize();
         void print();
-        void* plan();
+        void* getPlan();
         
     private:
         RA_Namespace::RelAlgNode *root_;
         
     };
     
+    /**
+     * An "insert plan" encodes the information necessary in order
+     * to insert a tuple into a relational table. It implements the
+     * the AbstractPlan interface.
+     */
     class InsertPlan : public AbstractPlan {
 
     public:
-        InsertPlan(const InsertData insertData_);
+        InsertPlan(const InsertData &insertData_);
         ~InsertPlan();
         
         int execute();
         int optimize();
-        void *plan();
+        void *getPlan();
         void print();
         
     private:
