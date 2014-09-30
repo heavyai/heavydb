@@ -5,7 +5,6 @@
 #include "Planner.h"
 #include "Translator.h"
 #include "../Parse/SQL/parser.h"
-#include "../Parse/RA/visitor/XMLTranslator.h"
 
 namespace Plan_Namespace {
  
@@ -33,14 +32,17 @@ namespace Plan_Namespace {
             return pair<int, std::string>(1, tr_.errorMsg());
         }
         
-        // print for debugging
-        if (tr_.getType() == QUERY_STMT) {
-            XMLTranslator ra2xml;
-            (*plan)->accept(ra2xml);
-        }
+        // set statement type
+        stmtType = tr_.getType();
         
         // return (should be successful here)
         assert(numErrors == 0);
         return std::pair<int, std::string>(0, "");
     }
+
+    int Planner::executeInsert(const RelAlgNode &plan) {
+        
+        return 0;
+    }
+    
 } // Plan_Namespace

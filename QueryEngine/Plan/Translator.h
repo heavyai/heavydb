@@ -6,6 +6,7 @@
 #define QueryEngine_Plan_Translator_h
 
 #include <vector>
+#include "Plan.h"
 #include "../Parse/SQL/visitor/Visitor.h"
 #include "../Parse/SQL/ast/ASTNode.h"
 #include "../Parse/RA/ast/RelAlgNode.h"
@@ -37,7 +38,7 @@ namespace Plan_Namespace {
         /// Destructor
         ~Translator() {}
         
-        RA_Namespace::RelAlgNode* translate(SQL_Namespace::ASTNode *parseTreeRoot);
+        AbstractPlan* translate(SQL_Namespace::ASTNode *parseTreeRoot);
         
         inline bool isError() { return error_ ; }
         inline std::string errorMsg() { return errorMsg_; }
@@ -136,7 +137,7 @@ namespace Plan_Namespace {
         /**
          * @brief Returns a query plan for a query (sql select statement)
          */
-        RA_Namespace::RelAlgNode* translateQuery();
+        QueryPlan* translateQuery();
         
         /**
          * @brief Annotates SQL AST nodes (Table, Column) with Catalog metadata
@@ -146,7 +147,7 @@ namespace Plan_Namespace {
         /**
          * @brief Sets the insertData_ object for an sql insert statement
          */
-        void translateInsert();
+        InsertPlan* translateInsert();
         
         /**
          * @brief Type checks an insert statement.

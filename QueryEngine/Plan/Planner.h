@@ -19,7 +19,7 @@
 using namespace RA_Namespace;
 
 namespace Plan_Namespace {
-
+    
     class Planner {
 
     public:
@@ -37,6 +37,9 @@ namespace Plan_Namespace {
          * @return A pair (int - number of errors, string - error message).
          */
         std::pair<int, std::string> makePlan(std::string sql, RelAlgNode **plan, QueryStmtType &stmtType);
+        
+        
+        int executeInsert(const RelAlgNode &plan);
         
     private:
         Translator &tr_; /// a reference to a Translator object

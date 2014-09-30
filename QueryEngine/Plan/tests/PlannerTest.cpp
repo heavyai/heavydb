@@ -8,6 +8,7 @@
 #include <string>
 #include "../Planner.h"
 #include "../../../DataMgr/Metadata/Catalog.h"
+#include "../../Parse/RA/visitor/XMLTranslator.h"
 
 using namespace std;
 using namespace Plan_Namespace;
@@ -42,6 +43,15 @@ int main() {
         RelAlgNode *queryPlan = nullptr;
         QueryStmtType stmtType = UNKNOWN_STMT;
         error = planner.makePlan(sql, &queryPlan, stmtType);
+        
+        // print for debugging
+        if (stmtType == QUERY_STMT) {
+            XMLTranslator ra2xml;
+            queryPlan->accept(ra2xml);
+        }
+        else if (stmtType == INSERT_STMT) {
+            planner.executeInsert(*queryPlan);
+        }
         
         if (error.first > 0)
             cout << error.second << endl;

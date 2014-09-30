@@ -107,14 +107,14 @@ namespace Plan_Namespace {
         errorMsg_ = "";
     }
     
-    RA_Namespace::RelAlgNode* Translator::translate(SQL_Namespace::ASTNode *parseTreeRoot) {
+    AbstractPlan* Translator::translate(SQL_Namespace::ASTNode *parseTreeRoot) {
         assert(parseTreeRoot);
 
         // clear private data structures
         clearState();
         
         // translate (visit) the parse tree
-        RelAlgNode *queryPlan = nullptr;
+        QueryPlan *queryPlan = nullptr;
         parseTreeRoot->accept(*this);
         
         /*
@@ -126,7 +126,6 @@ namespace Plan_Namespace {
         
         // translate the SQL AST to an RA query plan tree
         if (stmtType_ == QUERY_STMT) {
-            
             annotateQuery();
             if (error_)
                 return nullptr;
@@ -146,12 +145,13 @@ namespace Plan_Namespace {
             throw std::runtime_error("Unable to translate SQL statement to RA query plan");
         
         // fill out the rest of the query plan
-        queryPlan = new Program(new RelExprList((RelExpr*)queryPlan));
+        RelAlgNode *root = (RelAlgNode*)queryPlan->plan();
+        root = new Program(new RelExprList((RelExpr*)root));
         
         return queryPlan;
     }
 
-    RA_Namespace::RelAlgNode* Translator::translateQuery() {
+    QueryPlan* Translator::translateQuery() {
         assert(queryTables_.size() > 0);
 
         // Step 1:  create Relation nodes for each table
@@ -197,7 +197,7 @@ namespace Plan_Namespace {
         
         // Step 6:  return
         assert(project);
-        return project;
+        return new QueryPlan(project);
     }
     
     void Translator::annotateQuery() {
@@ -238,7 +238,7 @@ namespace Plan_Namespace {
             queryColumns_[i]->metadata = columnMetadata[i];
     }
     
-    void Translator::translateInsert() {
+    InsertPlan* Translator::translateInsert() {
         assert(insertValues_.size() == insertColumns_.size());
         mapd_err_t err = MAPD_SUCCESS;
         
@@ -251,7 +251,7 @@ namespace Plan_Namespace {
         if (err != MAPD_SUCCESS) {
             error_ = true;
             errorMsg_ = "Table '" + insertTable_->name.second + "' not found";
-            return;
+            return nullptr;
         }
         insertData_.tableId = insertTable_->metadata.tableId;
         
@@ -273,7 +273,7 @@ namespace Plan_Namespace {
         // type check insert statement
         typeCheckInsert();
         if (isError())
-            return;
+            return nullptr;
         
         // package the data to be inserted
         for (size_t i = 0; i < insertValues_.size(); ++i) {
@@ -306,6 +306,7 @@ namespace Plan_Namespace {
             insertData_.data.push_back((void*)data);
         }
         
+        return new InsertPlan(insertData_);
     }
     
     void Translator::typeCheckInsert() {

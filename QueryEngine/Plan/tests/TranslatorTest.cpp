@@ -6,9 +6,10 @@
  */
 #include <iostream>
 #include <string>
+#include "../Translator.h"
+#include "../Plan.h"
 #include "../../Parse/SQL/parser.h"
 #include "../../Parse/SQL/visitor/Visitor.h"
-#include "../Translator.h"
 #include "../../Parse/RA/visitor/XMLTranslator.h"
 #include "../../../DataMgr/Metadata/Catalog.h"
 
@@ -52,7 +53,7 @@ int main() {
         
         // translate the SQL parse tree into an RA query plan
         Translator tr(catalog);
-        RA_Namespace::RelAlgNode *queryPlanRoot = tr.translate(parseRoot);
+        AbstractPlan *queryPlan = tr.translate(parseRoot);
         
         if (tr.isError()) {
             cout << tr.errorMsg() << endl;
@@ -64,7 +65,7 @@ int main() {
         // print out XML representation of the RA query plan
         if (tr.getType() == QUERY_STMT) {
             RA_Namespace::XMLTranslator ra2xml;
-            queryPlanRoot->accept(ra2xml);
+            ((RA_Namespace::RelAlgNode*)queryPlan->plan())->accept(ra2xml);
         }
     }
     
