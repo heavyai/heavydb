@@ -144,7 +144,7 @@ namespace Plan_Namespace {
         
     public:
         DeletePlan(const std::string &tableName);
-        DeletePlan();
+        ~DeletePlan();
         
         int execute();
         int optimize();
@@ -154,6 +154,29 @@ namespace Plan_Namespace {
     private:
         std::string tableName_;
     };
+    
+    /**
+     * A "delete plan" encodes the information necessary in order
+     * to delete tuples from a table in the relational database.
+     */
+    class AlterPlan : public AbstractPlan {
+        
+    public:
+        AlterPlan(const std::string &tableName, const std::string &columnName, const mapd_data_t columnType, bool drop = false);
+        ~AlterPlan();
+        
+        int execute();
+        int optimize();
+        void *getPlan();
+        void print();
+        
+    private:
+        std::string tableName_;
+        std::string columnName_;
+        mapd_data_t columnType_;
+        bool drop_;
+    };
+    
     
 } // Plan_Namespace
 

@@ -13,11 +13,11 @@ namespace Plan_Namespace {
     }
     
     int InsertPlan::execute() {
-        return 0;
+        throw std::runtime_error( "execute() for InsertPlan is currently unsupported" );
     }
     
     int InsertPlan::optimize() {
-        return 0;
+        throw std::runtime_error( "optimize() for InsertPlan is currently unsupported" );
     }
     
     void* InsertPlan::getPlan() {
@@ -33,11 +33,11 @@ namespace Plan_Namespace {
     }
     
     int QueryPlan::execute() {
-        return 0;
+        throw std::runtime_error( "execute() for QueryPlan is currently unsupported" );
     }
     
     int QueryPlan::optimize() {
-        return 0;
+        throw std::runtime_error( "optimize() for QueryPlan is currently unsupported" );
     }
     
     void QueryPlan::print() {
@@ -54,11 +54,11 @@ namespace Plan_Namespace {
     }
     
     int CreatePlan::execute() {
-        return 0;
+        throw std::runtime_error( "execute() for CreatePlan is currently unsupported" );
     }
     
     int CreatePlan::optimize() {
-        return 0;
+        throw std::runtime_error( "optimize() for CreatePlan is currently unsupported" );
     }
     
     void* CreatePlan::getPlan() {
@@ -74,11 +74,11 @@ namespace Plan_Namespace {
     }
     
     int DropPlan::execute() {
-        return 0;
+        throw std::runtime_error( "execute() for DropPlan is currently unsupported" );
     }
     
     int DropPlan::optimize() {
-        return 0;
+        throw std::runtime_error( "optimize() for DropPlan is currently unsupported" );
     }
     
     void* DropPlan::getPlan() {
@@ -95,11 +95,11 @@ namespace Plan_Namespace {
     }
     
     int DeletePlan::execute() {
-        return 0;
+        throw std::runtime_error( "execute() for DeletePlan is currently unsupported" );
     }
     
     int DeletePlan::optimize() {
-        return 0;
+        throw std::runtime_error( "optimize() for DeletePlan is currently unsupported" );
     }
     
     void* DeletePlan::getPlan() {
@@ -108,6 +108,28 @@ namespace Plan_Namespace {
     
     void DeletePlan::print() {
         std::cout << "DELETE FROM " << tableName_.c_str() << ";" << std::endl;
+    }
+    
+    AlterPlan::AlterPlan(const std::string &tableName, const std::string &columnName, const mapd_data_t columnType, bool drop) : tableName_(tableName), columnName_(columnName), columnType_(columnType), drop_(drop)
+    {
+        // NOP
+    }
+
+    
+    int AlterPlan::execute() {
+        throw std::runtime_error( "execute() for AlterPlan is currently unsupported" );
+    }
+    
+    int AlterPlan::optimize() {
+        throw std::runtime_error( "optimize() for AlterPlan is currently unsupported" );
+    }
+    
+    void* AlterPlan::getPlan() {
+        return nullptr;
+    }
+    
+    void AlterPlan::print() {
+        
     }
 
 } // Plan_Namespace

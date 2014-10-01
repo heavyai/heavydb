@@ -80,6 +80,8 @@ namespace Plan_Namespace {
         insertData_.tableId = -1;
     }
     
+    // it's important to update this function to clear the state when adding
+    // support for additional SQL statements/features
     void Translator::clearState() {
         queryTables_.clear();
         queryColumns_.clear();
@@ -150,6 +152,9 @@ namespace Plan_Namespace {
         }
         else if (stmtType_ == DELETE_STMT) {
             queryPlan = translateDelete();
+        }
+        else if (stmtType_ == ALTER_STMT) {
+            queryPlan = translateAlter();
         }
         else
             throw std::runtime_error("Unable to translate SQL statement to RA query plan");
@@ -364,12 +369,26 @@ namespace Plan_Namespace {
         return new DeletePlan(deleteTableName_->name.second);
     }
     
+    AlterPlan* Translator::translateAlter() {
+        assert(tableNames_.size() == 1 && columnNames_.size() == 1);
+        return new AlterPlan(tableNames_[0], columnNames_[0].second, alterColumnType_, alterDrop_);
+    }
+    
+    void Translator::visit(AlterStmt *v) {
+        stmtType_ = ALTER_STMT;
+        if (v->n1) v->n1->accept(*this); // Table
+        if (v->n2) v->n2->accept(*this); // Column
+        if (v->n3) v->n3->accept(*this); // MapdDataT
+    }
+    
     void Translator::visit(Column *v) {
         columnNames_.push_back(v->name);
         if (stmtType_ == QUERY_STMT)
             queryColumns_.push_back(v);
         else if (stmtType_ == CREATE_STMT)
             createColumns_.push_back(v);
+        else if (stmtType_ == ALTER_STMT)
+            ; // NOP; collected columnNames_ vector is sufficient
         else
             throw std::runtime_error("Unsupported SQL feature.");
     }
@@ -569,6 +588,8 @@ namespace Plan_Namespace {
             dropTableName_ = v;
         else if (stmtType_ == DELETE_STMT)
             deleteTableName_ = v;
+        else if (stmtType_ == ALTER_STMT)
+            ; // NOP; collected table names vector is sufficient
         else
             throw std::runtime_error("Unsupported SQL statement.");
     }

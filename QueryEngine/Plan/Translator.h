@@ -22,7 +22,7 @@ namespace Plan_Namespace {
      * @brief Indicates the type of query represented by the SQL parse tree.
      */
     enum QueryStmtType {
-        UNKNOWN_STMT, QUERY_STMT, INSERT_STMT, DELETE_STMT, UPDATE_STMT, CREATE_STMT, DROP_STMT
+        UNKNOWN_STMT, QUERY_STMT, INSERT_STMT, DELETE_STMT, UPDATE_STMT, CREATE_STMT, DROP_STMT, ALTER_STMT
     };
     
     /**
@@ -54,7 +54,7 @@ namespace Plan_Namespace {
         inline QueryStmtType getType() { return stmtType_; }
         
         // virtual void visit(AggrExpr *v);
-        // virtual void visit(AlterStmt *v);
+        virtual void visit(AlterStmt *v);
         virtual void visit(Column *v);
         virtual void visit(ColumnDef *v);
         virtual void visit(ColumnDefList *v);
@@ -126,6 +126,10 @@ namespace Plan_Namespace {
         // drop table data (sql: drop table)
         SQL_Namespace::Table *dropTableName_ = nullptr;
         
+        // alter table data (sql: alter table
+        bool alterDrop_;
+        mapd_data_t alterColumnType_;
+        
         // collect table and column names (passed to Catalog for
         // optional annotation of nodes)
         std::vector<std::string> tableNames_;
@@ -172,6 +176,11 @@ namespace Plan_Namespace {
          * @brief
          */
         DeletePlan* translateDelete();
+        
+        /**
+         * @brief
+         */
+        AlterPlan* translateAlter();
         
     };
     
