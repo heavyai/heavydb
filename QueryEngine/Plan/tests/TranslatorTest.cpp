@@ -65,11 +65,13 @@ int main() {
         // print out XML representation of the RA query plan
         if (tr.getType() == QUERY_STMT) {
             RA_Namespace::XMLTranslator ra2xml;
-            ((RA_Namespace::RelAlgNode*)queryPlan->plan())->accept(ra2xml);
+            ((RA_Namespace::RelAlgNode*)queryPlan->getPlan())->accept(ra2xml);
         }
-    }
+        else if (tr.getType() == DROP_STMT) {
+            
+        }
+    } while (true);
     
-    while (true);
     cout << "Good-bye." << endl;
 
 }

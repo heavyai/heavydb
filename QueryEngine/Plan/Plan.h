@@ -117,6 +117,44 @@ namespace Plan_Namespace {
         std::vector<mapd_data_t> columnTypes_;
     };
 
+    /**
+     * A "drop plan" encodes the information necessary in order
+     * to drop a table from the relational database.
+     */
+    class DropPlan : public AbstractPlan {
+        
+    public:
+        DropPlan(const std::string &tableName);
+        ~DropPlan();
+        
+        int execute();
+        int optimize();
+        void *getPlan();
+        void print();
+        
+    private:
+        std::string tableName_;
+    };
+    
+    /**
+     * A "delete plan" encodes the information necessary in order
+     * to delete tuples from a table in the relational database.
+     */
+    class DeletePlan : public AbstractPlan {
+        
+    public:
+        DeletePlan(const std::string &tableName);
+        DeletePlan();
+        
+        int execute();
+        int optimize();
+        void *getPlan();
+        void print();
+        
+    private:
+        std::string tableName_;
+    };
+    
 } // Plan_Namespace
 
 #endif // QueryEngine_Plan_Plan_h

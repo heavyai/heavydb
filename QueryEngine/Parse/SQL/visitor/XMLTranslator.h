@@ -30,6 +30,7 @@ namespace SQL_Namespace {
         virtual void visit(Comparison *v);
         virtual void visit(CreateStmt *v);
         virtual void visit(DdlStmt *v);
+        virtual void visit(DeleteStmt *v);
         virtual void visit(DmlStmt *v);
         virtual void visit(DropStmt *v);
         virtual void visit(FromClause *v);

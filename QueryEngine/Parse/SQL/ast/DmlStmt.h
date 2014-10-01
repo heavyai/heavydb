@@ -12,6 +12,7 @@ public:
 
 	InsertStmt *n1 = NULL;
 	SelectStmt *n2 = NULL;
+    DeleteStmt *n3 = NULL;
 	
 	explicit DmlStmt(InsertStmt *n1) {
 		assert(n1);
@@ -22,6 +23,11 @@ public:
 		assert(n2);
 		this->n2 = n2;
 	}
+    
+    explicit DmlStmt(DeleteStmt *n3) {
+        assert(n3);
+        this->n3 = n3;
+    }
 	
 	virtual void accept(Visitor &v) {
 		v.visit(this);

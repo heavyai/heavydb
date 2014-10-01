@@ -9,6 +9,7 @@
 #include "../ast/Comparison.h"
 #include "../ast/CreateStmt.h"
 #include "../ast/DdlStmt.h"
+#include "../ast/DeleteStmt.h"
 #include "../ast/DmlStmt.h"
 #include "../ast/DropStmt.h"
 #include "../ast/FromClause.h"
@@ -179,6 +180,19 @@ namespace SQL_Namespace {
         cout << "</DdlStmt>" << endl;
     }
     
+    void XMLTranslator::visit(DeleteStmt *v) {
+        printTabs();
+        tabCount_++;
+        cout << "<DeleteStmt>" << endl;
+        
+        if (v->n1) v->n1->accept(*this); // Table
+        if (v->n2) v->n2->accept(*this); // Predicate
+        
+        tabCount_--;
+        printTabs();
+        cout << "</DeleteStmt>" << endl;
+    }
+    
     void XMLTranslator::visit(DmlStmt *v) {
         printTabs();
         tabCount_++;
@@ -188,6 +202,7 @@ namespace SQL_Namespace {
         
         if (v->n1) v->n1->accept(*this); // InsertStmt
         if (v->n2) v->n2->accept(*this); // SelectStmt
+        if (v->n3) v->n3->accept(*this); // DeleteStmt
         
         tabCount_--;
         printTabs();

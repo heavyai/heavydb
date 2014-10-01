@@ -14,6 +14,7 @@
 #include "../Parse/SQL/ast/Comparison.h"
 #include "../Parse/SQL/ast/CreateStmt.h"
 #include "../Parse/SQL/ast/DdlStmt.h"
+#include "../Parse/SQL/ast/DeleteStmt.h"
 #include "../Parse/SQL/ast/DmlStmt.h"
 #include "../Parse/SQL/ast/DropStmt.h"
 #include "../Parse/SQL/ast/FromClause.h"
@@ -116,7 +117,7 @@ namespace Plan_Namespace {
         clearState();
         
         // translate (visit) the parse tree
-        QueryPlan *queryPlan = nullptr;
+        AbstractPlan *queryPlan = nullptr;
         parseTreeRoot->accept(*this);
         
         /*
@@ -134,7 +135,6 @@ namespace Plan_Namespace {
             // @todo type check expressions
             queryPlan = translateQuery();
         }
-        
         else if (stmtType_ == INSERT_STMT) {
             translateInsert();
             if (error_)
@@ -142,15 +142,21 @@ namespace Plan_Namespace {
             assert(insertData_.numRows > 0);
             return nullptr; // "plan" is accessed via call to getInsertData()
         }
-        
         else if (stmtType_ == CREATE_STMT) {
-            translateCreate();
-            if (error_)
-                return nullptr;
+            queryPlan = translateCreate();
         }
-        
+        else if (stmtType_ == DROP_STMT) {
+            queryPlan = translateDrop();
+        }
+        else if (stmtType_ == DELETE_STMT) {
+            queryPlan = translateDelete();
+        }
         else
             throw std::runtime_error("Unable to translate SQL statement to RA query plan");
+
+        // check for error state
+        if (error_)
+            return nullptr;
         
         return queryPlan; // returns a Project-Select query tree (Scan)
     }
@@ -349,6 +355,15 @@ namespace Plan_Namespace {
         return new CreatePlan(tableName, columnNames, columnTypes);
     }
     
+    DropPlan* Translator::translateDrop() {
+        printf("[%s] [%s]\n", dropTableName_->name.first.c_str(), dropTableName_->name.second.c_str());
+        return new DropPlan(dropTableName_->name.second);
+    }
+    
+    DeletePlan* Translator::translateDelete() {
+        return new DeletePlan(deleteTableName_->name.second);
+    }
+    
     void Translator::visit(Column *v) {
         columnNames_.push_back(v->name);
         if (stmtType_ == QUERY_STMT)
@@ -381,18 +396,31 @@ namespace Plan_Namespace {
     void Translator::visit(DdlStmt *v) {
         // printf("<DdlStmt>\n");
         if (v->n1) v->n1->accept(*this); // CreateStmt
-        else
-            throw std::runtime_error("Unsupported SQL feature.");
-        //if (v->n2) v->n2->accept(*this); // DropStmt
-        //if (v->n3) v->n3->accept(*this); // AlterStmt
+        if (v->n2) v->n2->accept(*this); // DropStmt
+        if (v->n3) v->n3->accept(*this); // AlterStmt
+        if (v->n4) v->n4->accept(*this); // RenameStmt
+    }
+    
+    void Translator::visit(DeleteStmt *v) {
+        // printf("<DeleteStmt>\n");
+        stmtType_ = DELETE_STMT;
+        if (v->n1) v->n1->accept(*this); // Table
+        if (v->n2) v->n2->accept(*this); // Predicate
     }
     
     void Translator::visit(DmlStmt *v) {
         // printf("<DmlStmt>\n");
         if (v->n1) v->n1->accept(*this); // InsertStmt
         if (v->n2) v->n2->accept(*this); // SelectStmt
+        if (v->n3) v->n3->accept(*this); // DeleteStmt
     }
 
+    void Translator::visit(DropStmt *v) {
+        // printf("<DropStmt>\n");
+        stmtType_ = DROP_STMT;
+        if (v->n1) v->n1->accept(*this); // Table
+    }
+    
     void Translator::visit(FromClause *v) {
         // printf("<FromClause>\n");
         if (v->n1)
@@ -537,8 +565,12 @@ namespace Plan_Namespace {
             insertTable_ = v;
         else if (stmtType_ == CREATE_STMT)
             createTableName_ = v;
+        else if (stmtType_ == DROP_STMT)
+            dropTableName_ = v;
+        else if (stmtType_ == DELETE_STMT)
+            deleteTableName_ = v;
         else
-            throw std::runtime_error("Unsupported SQL feature.");
+            throw std::runtime_error("Unsupported SQL statement.");
     }
     
     void Translator::visit(TableList *v) {

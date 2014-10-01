@@ -69,4 +69,45 @@ namespace Plan_Namespace {
         
     }
     
+    DropPlan::DropPlan(const std::string &tableName) : tableName_(tableName) {
+        // NOP
+    }
+    
+    int DropPlan::execute() {
+        return 0;
+    }
+    
+    int DropPlan::optimize() {
+        return 0;
+    }
+    
+    void* DropPlan::getPlan() {
+        return nullptr;
+    }
+    
+    void DropPlan::print() {
+        
+    }
+    
+    DeletePlan::DeletePlan(const std::string &tableName) : tableName_(tableName)
+    {
+        this->print();
+    }
+    
+    int DeletePlan::execute() {
+        return 0;
+    }
+    
+    int DeletePlan::optimize() {
+        return 0;
+    }
+    
+    void* DeletePlan::getPlan() {
+        return nullptr;
+    }
+    
+    void DeletePlan::print() {
+        std::cout << "DELETE FROM " << tableName_.c_str() << ";" << std::endl;
+    }
+
 } // Plan_Namespace

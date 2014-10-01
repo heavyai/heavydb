@@ -28,6 +28,7 @@
 #include "ast/ColumnList.h"
 #include "ast/Comparison.h"
 #include "ast/CreateStmt.h"
+#include "ast/DeleteStmt.h"
 #include "ast/DdlStmt.h"
 #include "ast/DmlStmt.h"
 #include "ast/DropStmt.h"
@@ -110,8 +111,14 @@ sql_stmt:
 	/***** Data manipulation language *****/
 
 dml_stmt:
-	insert_stmt			{ $$ = new DmlStmt((InsertStmt*)$1); }
+    delete_stmt         { $$ = new DmlStmt((DeleteStmt*)$1); }
+|	insert_stmt			{ $$ = new DmlStmt((InsertStmt*)$1); }
 |	select_stmt			{ $$ = new DmlStmt((SelectStmt*)$1); }
+;
+
+delete_stmt:
+    DELETE FROM table                   { $$ = new DeleteStmt((Table*)$3); }
+|   DELETE FROM table WHERE predicate   { $$ = new DeleteStmt((Table*)$3, (Predicate*)$5); }
 ;
 
 insert_stmt:

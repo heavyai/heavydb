@@ -22,7 +22,7 @@ namespace Plan_Namespace {
      * @brief Indicates the type of query represented by the SQL parse tree.
      */
     enum QueryStmtType {
-        UNKNOWN_STMT, QUERY_STMT, INSERT_STMT, DELETE_STMT, UPDATE_STMT, CREATE_STMT
+        UNKNOWN_STMT, QUERY_STMT, INSERT_STMT, DELETE_STMT, UPDATE_STMT, CREATE_STMT, DROP_STMT
     };
     
     /**
@@ -62,8 +62,9 @@ namespace Plan_Namespace {
         // virtual void visit(Comparison *v);
         virtual void visit(CreateStmt *v);
         virtual void visit(DdlStmt *v);
+        virtual void visit(DeleteStmt *v);
         virtual void visit(DmlStmt *v);
-        // virtual void visit(DropStmt *v);
+        virtual void visit(DropStmt *v);
         virtual void visit(FromClause *v);
         virtual void visit(InsertColumnList *v);
         virtual void visit(InsertStmt *v);
@@ -122,6 +123,9 @@ namespace Plan_Namespace {
         std::vector<SQL_Namespace::Column*> createColumns_;
         std::vector<SQL_Namespace::MapdDataT*> createTypes_;
         
+        // drop table data (sql: drop table)
+        SQL_Namespace::Table *dropTableName_ = nullptr;
+        
         // collect table and column names (passed to Catalog for
         // optional annotation of nodes)
         std::vector<std::string> tableNames_;
@@ -150,14 +154,24 @@ namespace Plan_Namespace {
         InsertPlan* translateInsert();
         
         /**
-         * @brief 
+         * @brief Type checks an insert statement.
+         */
+        void typeCheckInsert();
+        
+        /**
+         * @brief
          */
         CreatePlan* translateCreate();
         
         /**
-         * @brief Type checks an insert statement.
+         * @brief
          */
-        void typeCheckInsert();
+        DropPlan* translateDrop();
+        
+        /**
+         * @brief
+         */
+        DeletePlan* translateDelete();
         
     };
     
