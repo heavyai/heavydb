@@ -12,37 +12,42 @@ namespace Plan_Namespace {
         // NOP
     }
     
-    std::pair<int, std::string> Planner::makePlan(std::string sql, RelAlgNode **plan, QueryStmtType &stmtType) {
+    AbstractPlan* Planner::makePlan(std::string sql, QueryStmtType &stmtType) {
+        isError_ = false;
+        errorMsg_ = "";
+        
         SQLParser parser;
         ASTNode *parseRoot = nullptr;
         string lastParsed;
-        std::string errorMsg;
         int numErrors = 0;
         
         // parse SQL
         numErrors = parser.parse(sql, parseRoot, lastParsed);
         if (numErrors > 0) {
-            errorMsg = "Syntax error at '" + lastParsed + "'";
-            return pair<int, std::string>(numErrors, errorMsg);
+            isError_ = true;
+            errorMsg_ = "Syntax error at '" + lastParsed + "'";
+            return nullptr;
         }
         
         // translate SQL AST to RA query plan
-        *plan = tr_.translate(parseRoot);
-        if (tr_.isError()) {
-            return pair<int, std::string>(1, tr_.errorMsg());
-        }
-        
-        // set statement type
+        AbstractPlan *queryPlan = tr_.translate(parseRoot);
+
+        // get statement type
         stmtType = tr_.getType();
+        
+        if (tr_.isError()) {
+            isError_ = true;
+            errorMsg_ = tr_.errorMsg();
+            return nullptr;
+        }
         
         // return (should be successful here)
         assert(numErrors == 0);
-        return std::pair<int, std::string>(0, "");
+        return queryPlan;
     }
-
-    int Planner::executeInsert(const RelAlgNode &plan) {
-        
-        return 0;
+    
+    std::pair<bool, std::string> Planner::checkError() {
+        return std::pair<bool, std::string>(isError_, errorMsg_);
     }
     
 } // Plan_Namespace

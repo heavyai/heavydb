@@ -94,6 +94,9 @@ namespace Plan_Namespace {
     private:
         Catalog &c_; /// a reference to a Catalog, which holds table/column metadata
         
+        // the plan
+        AbstractPlan *plan_;
+        
         // type of query; initialized to "unknown"
         QueryStmtType stmtType_ = UNKNOWN_STMT;
         

@@ -36,13 +36,17 @@ namespace Plan_Namespace {
          * @param stmtType Returns the type of the generated plan
          * @return A pair (int - number of errors, string - error message).
          */
-        std::pair<int, std::string> makePlan(std::string sql, RelAlgNode **plan, QueryStmtType &stmtType);
+        AbstractPlan* makePlan(std::string sql, QueryStmtType &stmtType);
         
-        
-        int executeInsert(const RelAlgNode &plan);
+        /**
+         * @brief Returns whether there is an error and, if so, an error message.
+         */
+        std::pair<bool, std::string> checkError();
         
     private:
         Translator &tr_; /// a reference to a Translator object
+        bool isError_;
+        std::string errorMsg_;
     };
     
 } // Plan_Namespace

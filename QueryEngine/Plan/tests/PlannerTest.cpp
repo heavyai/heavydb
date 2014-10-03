@@ -13,6 +13,7 @@
 using namespace std;
 using namespace Plan_Namespace;
 using namespace Metadata_Namespace;
+using namespace Plan_Namespace;
 
 int main() {
     // set up Catalog with table T1 and columns 'a' and 'b'
@@ -40,21 +41,23 @@ int main() {
         else sql = sql + "\n";
         
         // get query plan
-        RelAlgNode *queryPlan = nullptr;
         QueryStmtType stmtType = UNKNOWN_STMT;
-        error = planner.makePlan(sql, &queryPlan, stmtType);
+        AbstractPlan *queryPlan = planner.makePlan(sql, stmtType);
         
-        // print for debugging
-        if (stmtType == QUERY_STMT) {
-            XMLTranslator ra2xml;
-            queryPlan->accept(ra2xml);
-        }
-        else if (stmtType == INSERT_STMT) {
-            planner.executeInsert(*queryPlan);
-        }
-        
-        if (error.first > 0)
-            cout << error.second << endl;
+        std::pair<bool, std::string> error = planner.checkError();
 
+        if (error.first)
+            cout << error.second << endl;
+        else {
+            // print for debugging
+            if (stmtType == QUERY_STMT) {
+                XMLTranslator ra2xml;
+                ((RelAlgNode*)((QueryPlan*)queryPlan)->getPlan())->accept(ra2xml);
+            }
+            else if (stmtType == INSERT_STMT) {
+                // execute the insert plan
+            }
+        }
+        
     } while (true);
 }
