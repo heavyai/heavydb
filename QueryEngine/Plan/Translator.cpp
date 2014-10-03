@@ -361,7 +361,7 @@ namespace Plan_Namespace {
     }
     
     DropPlan* Translator::translateDrop() {
-        printf("[%s] [%s]\n", dropTableName_->name.first.c_str(), dropTableName_->name.second.c_str());
+        // printf("[%s] [%s]\n", dropTableName_->name.first.c_str(), dropTableName_->name.second.c_str());
         return new DropPlan(dropTableName_->name.second);
     }
     
