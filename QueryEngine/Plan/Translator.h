@@ -104,6 +104,7 @@ namespace Plan_Namespace {
         std::vector<SQL_Namespace::Table*> queryTables_;
         std::vector<SQL_Namespace::Column*> queryColumns_;
         SQL_Namespace::Predicate *queryPredicate_ = nullptr;
+        bool querySelectAllFields_;
         
         // insert (sql: insert into)
         SQL_Namespace::Table *insertTable_ = nullptr;

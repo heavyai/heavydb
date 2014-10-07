@@ -189,11 +189,16 @@ namespace Plan_Namespace {
         // @todo Implement the translation of an SQL predicate to a query plan
         SelectOp *select = nullptr;
         
-        // Step 4:  project on the fields in the selection clause
-        size_t numFields = queryColumns_.size();
-        if (numFields == 0) {
-            throw std::runtime_error("No columns specified. Probably a 'select *'. Not yet supported.");
+        // Step 4a: check for "*" (i.e., "select *, ... from ...)
+        std::vector<ColumnRow> columnsFromSelectAll;
+        if (querySelectAllFields_) {
+            for (int i = 0; i < numTables; ++i)
+                c_.getAllColumnMetadataForTable("t0", columnsFromSelectAll);
         }
+        
+        // Step 4b: project on the fields in the selection clause
+        size_t numFields = queryColumns_.size();
+        assert(numFields > 0);
 
         AttrList *fields = new AttrList(new Attribute(queryColumns_[0]->metadata));
         for (size_t i = 1; i < numFields; ++i) {
@@ -564,6 +569,7 @@ namespace Plan_Namespace {
     
     void Translator::visit(Selection *v) {
         // printf("<Selection>\n");
+        querySelectAllFields_ = v->all;
         if (v->n1) v->n1->accept(*this); // ScalarExprList
     }
 
