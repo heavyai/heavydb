@@ -190,13 +190,15 @@ namespace Plan_Namespace {
         SelectOp *select = nullptr;
         
         // Step 4a: check for "*" (i.e., "select *, ... from ...)
-        std::vector<ColumnRow> columnsFromSelectAll;
+        /*std::vector<ColumnRow> columnsFromSelectAll;
         if (querySelectAllFields_) {
             for (int i = 0; i < numTables; ++i)
                 c_.getAllColumnMetadataForTable("t0", columnsFromSelectAll);
-        }
+            for (int i = 0; i < columnsFromSelectAll.size(); ++i)
+                queryColumns_.push_back(new SQL_Namespace::Column(columnsFromSelectAll[i]));
+        }*/
         
-        // Step 4b: project on the fields in the selection clause
+        // Step 4: project on the fields in the selection clause
         size_t numFields = queryColumns_.size();
         assert(numFields > 0);
 
@@ -569,8 +571,35 @@ namespace Plan_Namespace {
     
     void Translator::visit(Selection *v) {
         // printf("<Selection>\n");
-        querySelectAllFields_ = v->all;
-        if (v->n1) v->n1->accept(*this); // ScalarExprList
+        
+        if (v->all) {
+            
+            assert(stmtType_ == QUERY_STMT);
+            assert(queryTables_.size() > 0);
+            
+            // perform an in-place translation of '*' in a selection clause
+            // to a ScalarExprList of columns.
+            std::vector<ColumnRow> columnsFromAllTables;
+            for (size_t i = 0; i < queryTables_.size(); ++i)
+                c_.getAllColumnMetadataForTable(queryTables_[i]->name.second, columnsFromAllTables);
+
+            assert(columnsFromAllTables.size() > 0);
+            
+            ASTNode *subtree = new ScalarExprList(new ScalarExpr(new Column(columnsFromAllTables.back())));
+            columnsFromAllTables.pop_back();
+            ScalarExprList *tmpNode = nullptr;
+            
+            while (columnsFromAllTables.size() > 0) {
+                tmpNode = (ScalarExprList*)subtree;
+                tmpNode->n1 = new ScalarExprList(new ScalarExpr(new Column(columnsFromAllTables.back())));
+                columnsFromAllTables.pop_back();
+            }
+            
+            subtree->accept(*this);
+            
+        }
+        else if (v->n1)
+            v->n1->accept(*this); // ScalarExprList
     }
 
     void Translator::visit(SelectStmt *v) {
@@ -578,8 +607,12 @@ namespace Plan_Namespace {
         stmtType_ = QUERY_STMT;
         
         if (v->n1) v->n1->accept(*this); // OptAllDistinct
-        if (v->n2) v->n2->accept(*this); // Selection
+
+        // The FromClause must be visited before the Selection in order to
+        // correct translate a "*" symbol in a Selection clause
         if (v->n3) v->n3->accept(*this); // FromClause
+        if (v->n2) v->n2->accept(*this); // Selection
+        
         if (v->n4) v->n4->accept(*this); // OptWhere
         if (v->n5) v->n5->accept(*this); // OptGroupby
         if (v->n6) v->n6->accept(*this); // OptHaving

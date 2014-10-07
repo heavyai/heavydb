@@ -23,6 +23,13 @@ public:
 		this->all = all;
 	}
 
+    /// Constructor
+    explicit Selection(bool all, ScalarExprList *n1) {
+        assert(n1);
+        this->all = all;
+        this->n1 = n1;
+    }
+    
 	virtual void accept(Visitor &v) {
 		v.visit(this);
 	}

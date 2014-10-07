@@ -514,7 +514,7 @@ namespace SQL_Namespace {
             cout << "</Selection>" << endl;
             return;
         }
-        else if (v->n1) {
+        if (v->n1) {
             cout << endl;
             v->n1->accept(*this); // ScalarExprList
         }
