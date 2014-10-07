@@ -22,7 +22,7 @@ namespace Plan_Namespace {
      * @brief Indicates the type of query represented by the SQL parse tree.
      */
     enum QueryStmtType {
-        UNKNOWN_STMT, QUERY_STMT, INSERT_STMT, DELETE_STMT, UPDATE_STMT, CREATE_STMT, DROP_STMT, ALTER_STMT
+        UNKNOWN_STMT, QUERY_STMT, INSERT_STMT, DELETE_STMT, UPDATE_STMT, CREATE_STMT, DROP_STMT, ALTER_STMT, RENAME_STMT
     };
     
     /**
@@ -81,7 +81,7 @@ namespace Plan_Namespace {
         // virtual void visit(OrderbyColumn *v);
         // virtual void visit(OrderbyColumnList *v);
         virtual void visit(SQL_Namespace::Predicate *v);
-        // virtual void visit(RenameStmt *v);
+        virtual void visit(SQL_Namespace::RenameStmt *v);
         virtual void visit(ScalarExpr *v);
         virtual void visit(ScalarExprList *v);
         virtual void visit(SearchCondition *v);
@@ -100,38 +100,42 @@ namespace Plan_Namespace {
         // type of query; initialized to "unknown"
         QueryStmtType stmtType_ = UNKNOWN_STMT;
         
-        // query data (sql: select)
+        // query (sql: select)
         std::vector<SQL_Namespace::Table*> queryTables_;
         std::vector<SQL_Namespace::Column*> queryColumns_;
         SQL_Namespace::Predicate *queryPredicate_ = nullptr;
         
-        // insert data (sql: insert into)
+        // insert (sql: insert into)
         SQL_Namespace::Table *insertTable_ = nullptr;
         std::vector<SQL_Namespace::InsertColumnList*> insertColumns_;
         std::vector<SQL_Namespace::Literal*> insertValues_;
         Partitioner_Namespace::InsertData insertData_;
         size_t byteCount_ = 0; // total number of bytes to be inserted
         
-        // delete data (sql: delete from)
+        // delete (sql: delete from)
         SQL_Namespace::Table *deleteTableName_ = nullptr;
         SQL_Namespace::Predicate *deletePredicate_ = nullptr;
         
-        // update data (sql: update)
+        // update (sql: update)
         SQL_Namespace::Table *updateTableName_ = nullptr;
         std::vector<SQL_Namespace::Column*> updateColumns_;
         std::vector<SQL_Namespace::MapdDataT*> updateValues_;
         
-        // create table data (sql: create table)
+        // create table (sql: create table)
         SQL_Namespace::Table *createTableName_ = nullptr;
         std::vector<SQL_Namespace::Column*> createColumns_;
         std::vector<SQL_Namespace::MapdDataT*> createTypes_;
         
-        // drop table data (sql: drop table)
+        // drop table (sql: drop table)
         SQL_Namespace::Table *dropTableName_ = nullptr;
         
-        // alter table data (sql: alter table
+        // alter table (sql: alter table
         bool alterDrop_;
         mapd_data_t alterColumnType_;
+        
+        // rename table (sql: rename table)
+        // uses tableNames_ vector for the source table name
+        std::string renameTableNewName_;
         
         // collect table and column names (passed to Catalog for
         // optional annotation of nodes)
@@ -184,6 +188,11 @@ namespace Plan_Namespace {
          * @brief
          */
         AlterPlan* translateAlter();
+        
+        /**
+         * @brief
+         */
+        RenamePlan* translateRename();
         
     };
     

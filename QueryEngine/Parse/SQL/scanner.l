@@ -49,6 +49,7 @@ std::vector<double> realData;
 "rename"		{ return SQLParser::RENAME; }
 "select"		{ return SQLParser::SELECT; }
 "table"			{ return SQLParser::TABLE; }
+"to"			{ return SQLParser::TO; }
 "values"		{ return SQLParser::VALUES; }
 "where"			{ return SQLParser::WHERE; }
 

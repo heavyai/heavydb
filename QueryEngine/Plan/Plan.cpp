@@ -131,5 +131,27 @@ namespace Plan_Namespace {
     void AlterPlan::print() {
         
     }
+    
+    RenamePlan::RenamePlan(const std::string &oldTableName, const std::string &newTableName)
+    : oldTableName_(oldTableName), newTableName_(newTableName)
+    {
+        // NOP
+    }
+    
+    int RenamePlan::execute() {
+        throw std::runtime_error( "execute() for RenamePlan is currently unsupported" );
+    }
+    
+    int RenamePlan::optimize() {
+        throw std::runtime_error( "optimize() for RenamePlan is currently unsupported" );
+    }
+    
+    void* RenamePlan::getPlan() {
+        throw std::runtime_error( "getPlan() for RenamePlan is currently unsupported" );
+    }
+    
+    void RenamePlan::print() {
+        throw std::runtime_error( "print() for RenamePlan is currently unsupported" );
+    }
 
 } // Plan_Namespace

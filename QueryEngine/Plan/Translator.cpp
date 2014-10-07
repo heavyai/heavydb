@@ -156,6 +156,8 @@ namespace Plan_Namespace {
         else if (stmtType_ == ALTER_STMT) {
             queryPlan = translateAlter();
         }
+        else if (stmtType_ == RENAME_STMT)
+            queryPlan = translateRename();
         else
             throw std::runtime_error("Unable to translate SQL statement to RA query plan");
 
@@ -373,6 +375,11 @@ namespace Plan_Namespace {
         assert(tableNames_.size() == 1 && columnNames_.size() == 1);
         return new AlterPlan(tableNames_[0], columnNames_[0].second, alterColumnType_, alterDrop_);
     }
+
+    RenamePlan* Translator::translateRename() {
+        assert(tableNames_.size() == 1);
+        return new RenamePlan(tableNames_[0], renameTableNewName_);
+    }
     
     void Translator::visit(AlterStmt *v) {
         stmtType_ = ALTER_STMT;
@@ -528,6 +535,12 @@ namespace Plan_Namespace {
             throw std::runtime_error("Unsupported SQL feature.");
     }
     
+    void Translator::visit(RenameStmt *v) {
+        // printf("<RenameStmt>\n");
+        stmtType_ = RENAME_STMT;
+        if (v->n1) v->n1->accept(*this); // Table
+        renameTableNewName_ = v->name;
+    }
     
     void Translator::visit(ScalarExpr *v) {
         // printf("<ScalarExpr>\n");
@@ -589,7 +602,9 @@ namespace Plan_Namespace {
         else if (stmtType_ == DELETE_STMT)
             deleteTableName_ = v;
         else if (stmtType_ == ALTER_STMT)
-            ; // NOP; collected table names vector is sufficient
+            ; // NOP; collected tableNames_ vector holds source table name
+        else if (stmtType_ == RENAME_STMT)
+            ; // NOP; collected tableNames_ vector holds source table name
         else
             throw std::runtime_error("Unsupported SQL statement.");
     }

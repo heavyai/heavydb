@@ -177,6 +177,24 @@ namespace Plan_Namespace {
         bool drop_;
     };
     
+    /**
+     * A "delete plan" encodes the information necessary in order
+     * to delete tuples from a table in the relational database.
+     */
+    class RenamePlan : public AbstractPlan {
+        
+    public:
+        RenamePlan(const std::string &oldTableName, const std::string &newTableName);
+        
+        int execute();
+        int optimize();
+        void *getPlan();
+        void print();
+        
+    private:
+        std::string oldTableName_;
+        std::string newTableName_;
+    };
     
 } // Plan_Namespace
 
