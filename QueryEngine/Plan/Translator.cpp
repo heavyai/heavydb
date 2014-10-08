@@ -680,7 +680,27 @@ namespace Plan_Namespace {
     }
     
     RA_Namespace::Comparison* Translator::translateComparison(SQL_Namespace::Comparison* v) {
-        return nullptr;
+        OpType compOp; // @todo OpType should be available to both SQL and RA, and these checks below would then be unnecessary. Definitely should fix this, but for now it should work.
+        
+        if (v->op == ">")
+            compOp = OP_GT;
+        else if (v->op == "<")
+            compOp = OP_LT;
+        else if (v->op == ">=")
+            compOp = OP_GTE;
+        else if (v->op == "<=")
+            compOp = OP_LTE;
+        else if (v->op == "!=")
+            compOp = OP_NEQ;
+        else if (v->op == "=")
+            compOp = OP_EQ;
+        else
+            throw std::runtime_error("Unsupported operator in comparison.");
+        
+        if (v->n1 &&  v->n2)
+            return new RA_Namespace::Comparison(compOp, translateMathExpr(v->n1), translateMathExpr((v->n2)));
+        else
+            throw std::runtime_error("Unsupported SQL statement.");
     }
     
     RA_Namespace::MathExpr* Translator::translateMathExpr(SQL_Namespace::MathExpr* v) {
