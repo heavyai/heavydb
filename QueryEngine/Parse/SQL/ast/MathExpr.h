@@ -22,8 +22,10 @@ public:
 	std::string op = "";
 	int intVal;
 	float floatVal;
-	bool intFloatFlag;	// true if int; otherwise float
-
+    bool intFlag = false;
+    bool floatFlag = false;
+    bool numericFlag = false;
+    
 	MathExpr(std::string op, MathExpr *n1, MathExpr *n2) {
 		assert(op == "PLUS" || op == "MINUS" || op == "MULTIPLY" || op == "DIVIDE");
 		assert(n1 && n2);
@@ -58,13 +60,15 @@ public:
 	}
 
 	explicit MathExpr(int intVal) {
-		this->intVal = intVal;
-		intFloatFlag = true;
+        this->numericFlag = true;
+		intFlag = true;
+        this->intVal = intVal;
 	}
 
 	explicit MathExpr(float floatVal) {
+        this->numericFlag = true;
+        floatFlag = true;
 		this->floatVal = floatVal;
-		intFloatFlag = false;
 	}
 
 	virtual void accept(class Visitor &v) {

@@ -200,8 +200,13 @@ namespace Plan_Namespace {
         
         // Step 3:  select on the predicate in the where clause
         SelectOp *select = nullptr;
-        if (queryPredicate_)
+        if (numTables == 1 && queryPredicate_) {
+            select = new SelectOp((RelExpr*)relations[0], translatePredicate(queryPredicate_));
+        }
+        else if (queryPredicate_) {
+            assert(numTables > 1);
             select = new SelectOp((RelExpr*)productOfRelations, translatePredicate(queryPredicate_));
+        }
         
         // Step 4: project on the fields in the selection clause
         size_t numFields = queryColumns_.size();
@@ -663,6 +668,8 @@ namespace Plan_Namespace {
     }
     
     RA_Namespace::Predicate* Translator::translatePredicate(SQL_Namespace::Predicate* v) {
+        assert(v);
+        
         if (v->op != "" && v->n1 && !v->n2) { // unary op with predicate
             return new RA_Namespace::Predicate(v->op, (RA_Namespace::Predicate*)translatePredicate(v->n1));
         }
@@ -680,6 +687,8 @@ namespace Plan_Namespace {
     }
     
     RA_Namespace::Comparison* Translator::translateComparison(SQL_Namespace::Comparison* v) {
+        assert(v);
+        
         OpType compOp; // @todo OpType should be available to both SQL and RA, and these checks below would then be unnecessary. Definitely should fix this, but for now it should work.
         
         if (v->op == ">")
@@ -704,14 +713,54 @@ namespace Plan_Namespace {
     }
     
     RA_Namespace::MathExpr* Translator::translateMathExpr(SQL_Namespace::MathExpr* v) {
-        return nullptr;
+        assert(v);
+
+        // numeric type
+        if (v->numericFlag) {
+            if (v->intFlag)
+                return new RA_Namespace::MathExpr(v->intVal);
+            else if (v->floatFlag)
+                return new RA_Namespace::MathExpr(v->floatVal);
+            else
+                throw std::runtime_error("Unsupported data type in math expression.");
+        }
+        
+        // Column
+        else if (v->n3) {
+            return new RA_Namespace::MathExpr(translateColumn(v->n3));
+        }
+        
+        // ( MathExpr )
+        else if (v->n0)
+            return new RA_Namespace::MathExpr(translateMathExpr(v->n0));
+        
+        // MathExpr op MathExpr
+        else if (v->op != "" && v->n1 && v->n2) {
+            OpType mathOp;
+            if (v->op == "/")
+                mathOp = OP_DIVIDE;
+            else if (v->op == "*")
+                mathOp = OP_MULTIPLY;
+            else if (v->op == "+")
+                mathOp = OP_ADD;
+            else if (v->op == "-")
+                mathOp = OP_SUBTRACT;
+            else
+                throw std::runtime_error("Unsupported operator in math expression.");
+            
+            return new RA_Namespace::MathExpr(mathOp, translateMathExpr(v->n1), translateMathExpr(v->n2));
+        }
+        else
+            throw std::runtime_error("Unsupported SQL statement.");
     }
     
     RA_Namespace::Attribute* Translator::translateColumn(SQL_Namespace::Column* v) {
-        return nullptr;
+        assert(v);
+        return new RA_Namespace::Attribute(v->metadata);
     }
     
-    void* Translator::translateMapdDataT(SQL_Namespace::MapdDataT*) {
+    void* Translator::translateMapdDataT(SQL_Namespace::MapdDataT* v) {
+        assert(v);
         return nullptr;
     }
 

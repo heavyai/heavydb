@@ -191,6 +191,7 @@ namespace RA_Namespace {
             else
                 cout << v->floatVal;
             cout << "</MathExpr>";
+            tabCount_--;
         }
         else {
             if (v->n1 && v->n2)
@@ -202,11 +203,12 @@ namespace RA_Namespace {
             if (v->n2) v->n2->accept(*this);
             if (v->n3) v->n3->accept(*this);
             if (v->n4) v->n4->accept(*this);
+            
+            tabCount_--;
+            printTabs();
+            cout << "</MathExpr>" << endl;
         }
         
-        tabCount_--;
-        printTabs();
-        cout << "</MathExpr>" << endl;
     }
     
     void XMLTranslator::visit(OuterjoinOp *v) {
