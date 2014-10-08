@@ -42,7 +42,7 @@ int main() {
         
         // get query plan
         QueryStmtType stmtType = UNKNOWN_STMT;
-        AbstractPlan *queryPlan = planner.makePlan(sql, stmtType);
+        AbstractPlan *thePlan = planner.makePlan(sql, stmtType);
         
         std::pair<bool, std::string> error = planner.checkError();
 
@@ -52,10 +52,11 @@ int main() {
             // print for debugging
             if (stmtType == QUERY_STMT) {
                 XMLTranslator ra2xml;
-                ((RelAlgNode*)((QueryPlan*)queryPlan)->getPlan())->accept(ra2xml);
+                ((RelAlgNode*)((QueryPlan*)thePlan)->getPlan())->accept(ra2xml);
             }
             else if (stmtType == INSERT_STMT) {
                 // execute the insert plan
+                thePlan->execute();
             }
         }
         

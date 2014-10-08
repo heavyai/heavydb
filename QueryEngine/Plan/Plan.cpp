@@ -13,6 +13,7 @@ namespace Plan_Namespace {
     }
     
     int InsertPlan::execute() {
+        
         throw std::runtime_error( "execute() for InsertPlan is currently unsupported" );
     }
     

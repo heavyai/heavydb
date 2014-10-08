@@ -2,11 +2,14 @@
  * @file    Planner.h
  * @author  Steven Stewart <steve@map-d.com>
  *
- * The planner transforms an SQL statement into a query plan. Its responsibilities
+ * The planner transforms an SQL statement into a plan. Its responsibilities
  * include:
  *
  * 1) Verification: determine whether the SQL statement is meaningful
  * 2) Query Planning: construct a plan
+ *
+ * Different types of queries produce different types of Plan objects, each of
+ * which implement an AbstractPlan interface.
  */
 #ifndef QueryEngine_Plan_Planner_h
 #define QueryEngine_Plan_Planner_h
@@ -20,6 +23,12 @@ using namespace RA_Namespace;
 
 namespace Plan_Namespace {
     
+    /**
+     * This class provides two methods: makePlan and checkError. The former
+     * takes an sql string (any kind of sql statement), and produces a Plan
+     * object. A Plan object can be of many different types, including
+     * a QueryPlan (for a select), an InsertPlan (for an insert), etc.
+     */
     class Planner {
 
     public:

@@ -108,6 +108,9 @@ namespace Plan_Namespace {
         tableNames_.clear();
         columnNames_.clear();
         
+        while (!nodeStack_.empty())
+            nodeStack_.pop();
+        
         error_ = false;
         errorMsg_ = "";
     }
@@ -142,7 +145,7 @@ namespace Plan_Namespace {
             if (error_)
                 return nullptr;
             assert(insertData_.numRows > 0);
-            return nullptr; // "plan" is accessed via call to getInsertData()
+            return new InsertPlan(insertData_); // "plan" is accessed via call to getInsertData()
         }
         else if (stmtType_ == CREATE_STMT) {
             queryPlan = translateCreate();
@@ -166,6 +169,19 @@ namespace Plan_Namespace {
             return nullptr;
         
         return queryPlan; // returns a Project-Select query tree (Scan)
+    }
+    
+    RA_Namespace::Predicate* Translator::translatePredicate(const SQL_Namespace::Predicate &sqlPred) {
+
+        /*if (sqlPred.n3) {
+            sqlPred.n3->accept(*this); // Comparison
+        }
+        else {
+            sqlPred.n1->accept(*this); // Predicate
+            sqlPred.n2->accept(*this); // Predicate
+        }*/
+
+        return nullptr;
     }
 
     QueryPlan* Translator::translateQuery() {
@@ -653,4 +669,25 @@ namespace Plan_Namespace {
         if (v->n1) v->n1->accept(*this); // TableList
         if (v->n2) v->n2->accept(*this); // Table
     }
+    
+    RA_Namespace::RelExpr* visitRA(SQL_Namespace::Comparison*) {
+        return nullptr;
+    }
+    
+    RA_Namespace::RelExpr* visitRA(SQL_Namespace::MathExpr*) {
+        return nullptr;
+    }
+    
+    RA_Namespace::RelExpr* visitRA(SQL_Namespace::Predicate*) {
+        return nullptr;
+    }
+
+    RA_Namespace::RelExpr* visitRA(SQL_Namespace::Column*) {
+        return nullptr;
+    }
+    
+    RA_Namespace::RelExpr* visitRA(SQL_Namespace::MapdDataT*) {
+        return nullptr;
+    }
+
 }
