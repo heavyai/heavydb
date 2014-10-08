@@ -108,9 +108,6 @@ namespace Plan_Namespace {
         tableNames_.clear();
         columnNames_.clear();
         
-        while (!nodeStack_.empty())
-            nodeStack_.pop();
-        
         error_ = false;
         errorMsg_ = "";
     }
@@ -202,17 +199,9 @@ namespace Plan_Namespace {
         }
         
         // Step 3:  select on the predicate in the where clause
-        // @todo Implement the translation of an SQL predicate to a query plan
         SelectOp *select = nullptr;
-        
-        // Step 4a: check for "*" (i.e., "select *, ... from ...)
-        /*std::vector<ColumnRow> columnsFromSelectAll;
-        if (querySelectAllFields_) {
-            for (int i = 0; i < numTables; ++i)
-                c_.getAllColumnMetadataForTable("t0", columnsFromSelectAll);
-            for (int i = 0; i < columnsFromSelectAll.size(); ++i)
-                queryColumns_.push_back(new SQL_Namespace::Column(columnsFromSelectAll[i]));
-        }*/
+        if (queryPredicate_)
+            select = new SelectOp((RelExpr*)productOfRelations, translatePredicate(queryPredicate_));
         
         // Step 4: project on the fields in the selection clause
         size_t numFields = queryColumns_.size();
@@ -544,7 +533,7 @@ namespace Plan_Namespace {
     
     void Translator::visit(OptWhere *v) {
         // printf("<OptWhere>\n");
-        throw std::runtime_error("OptWhere - unsupported SQL feature.");
+        if (v->n1) v->n1->accept(*this); // SearchCondition
     }
     
     void Translator::visit(SQL_Namespace::Predicate *v) {
@@ -582,7 +571,10 @@ namespace Plan_Namespace {
     
     void Translator::visit(SearchCondition *v) {
         // printf("<SearchCondition>\n");
-        if (v->n1) v->n1->accept(*this); // Predicate
+        if (stmtType_ == QUERY_STMT)
+            queryPredicate_ = v->n1;
+        else
+            throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(Selection *v) {
@@ -670,23 +662,36 @@ namespace Plan_Namespace {
         if (v->n2) v->n2->accept(*this); // Table
     }
     
-    RA_Namespace::RelExpr* visitRA(SQL_Namespace::Comparison*) {
+    RA_Namespace::Predicate* Translator::translatePredicate(SQL_Namespace::Predicate* v) {
+        if (v->op != "" && v->n1 && !v->n2) { // unary op with predicate
+            return new RA_Namespace::Predicate(v->op, (RA_Namespace::Predicate*)translatePredicate(v->n1));
+        }
+        else if (v->op != "" && v->n1 && v->n2) { // binary op with predicate
+            return new RA_Namespace::Predicate(v->op, (RA_Namespace::Predicate*)translatePredicate(v->n1), (RA_Namespace::Predicate*)translatePredicate(v->n2));
+        }
+        else if (v->op == "" && v->n1 && !v->n2) { // predicate nested in brackets
+            return new RA_Namespace::Predicate((RA_Namespace::Predicate*)translatePredicate(v->n1));
+        }
+        else if (v->n3) { // Comparison
+            return new RA_Namespace::Predicate(translateComparison(v->n3));
+        }
+        else
+            throw std::runtime_error("Unsupported SQL statement.");
+    }
+    
+    RA_Namespace::Comparison* Translator::translateComparison(SQL_Namespace::Comparison* v) {
         return nullptr;
     }
     
-    RA_Namespace::RelExpr* visitRA(SQL_Namespace::MathExpr*) {
+    RA_Namespace::MathExpr* Translator::translateMathExpr(SQL_Namespace::MathExpr* v) {
         return nullptr;
     }
     
-    RA_Namespace::RelExpr* visitRA(SQL_Namespace::Predicate*) {
-        return nullptr;
-    }
-
-    RA_Namespace::RelExpr* visitRA(SQL_Namespace::Column*) {
+    RA_Namespace::Attribute* Translator::translateColumn(SQL_Namespace::Column* v) {
         return nullptr;
     }
     
-    RA_Namespace::RelExpr* visitRA(SQL_Namespace::MapdDataT*) {
+    void* Translator::translateMapdDataT(SQL_Namespace::MapdDataT*) {
         return nullptr;
     }
 

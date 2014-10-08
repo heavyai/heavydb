@@ -6,7 +6,6 @@
 #define QueryEngine_Plan_Translator_h
 
 #include <vector>
-#include <stack>
 #include "Plan.h"
 #include "../Parse/SQL/visitor/Visitor.h"
 #include "../Parse/SQL/ast/ASTNode.h"
@@ -94,11 +93,11 @@ namespace Plan_Namespace {
         
         // non-void visitor methods for translating predicates, math expressions,
         // and comparisons expressions
-        RA_Namespace::RelExpr* visitRA(SQL_Namespace::Comparison*);
-        RA_Namespace::RelExpr* visitRA(SQL_Namespace::MathExpr*);
-        RA_Namespace::RelExpr* visitRA(SQL_Namespace::Predicate*);
-        RA_Namespace::RelExpr* visitRA(SQL_Namespace::Column*);
-        RA_Namespace::RelExpr* visitRA(SQL_Namespace::MapdDataT*);
+        RA_Namespace::Comparison* translateComparison(SQL_Namespace::Comparison*);
+        RA_Namespace::MathExpr* translateMathExpr(SQL_Namespace::MathExpr*);
+        RA_Namespace::Predicate* translatePredicate(SQL_Namespace::Predicate*);
+        RA_Namespace::Attribute* translateColumn(SQL_Namespace::Column*);
+        void* translateMapdDataT(SQL_Namespace::MapdDataT*);
         
     private:
         Catalog &c_; /// a reference to a Catalog, which holds table/column metadata
@@ -151,10 +150,7 @@ namespace Plan_Namespace {
         // optional annotation of nodes)
         std::vector<std::string> tableNames_;
         std::vector<std::pair<std::string, std::string>> columnNames_;
-        
-        // stack needed to translate an SQL predicate to an RA predicate
-        std::stack<SQL_Namespace::ASTNode*> nodeStack_;
-        
+
         // sets an error (used to indicate Catalog errors)
         bool error_ = false;
         std::string errorMsg_;
