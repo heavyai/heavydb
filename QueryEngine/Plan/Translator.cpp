@@ -756,7 +756,15 @@ namespace Plan_Namespace {
     
     RA_Namespace::Attribute* Translator::translateColumn(SQL_Namespace::Column* v) {
         assert(v);
-        return new RA_Namespace::Attribute(v->metadata);
+        
+        std::vector<std::pair<std::string, std::string>> columnNames;
+        std::vector<ColumnRow> columnRows;
+        
+        columnNames.push_back(v->name);
+        c_.getMetadataForColumns(tableNames_, columnNames, columnRows);
+        
+        assert(columnRows.size() == 1);
+        return new RA_Namespace::Attribute(columnRows[0]);
     }
     
     void* Translator::translateMapdDataT(SQL_Namespace::MapdDataT* v) {
