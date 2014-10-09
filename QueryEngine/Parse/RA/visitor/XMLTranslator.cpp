@@ -102,7 +102,24 @@ namespace RA_Namespace {
     void XMLTranslator::visit(Comparison *v) {
         printTabs();
         tabCount_++;
-        cout << "<Comparison op=\'" << v->op << "\'>" << endl;
+        cout << "<Comparison op=\'";
+        
+        if (v->op == OP_GT)
+            cout << ">";
+        else if (v->op == OP_GTE)
+            cout << ">=";
+        else if (v->op == OP_LT)
+            cout << "<";
+        else if (v->op == OP_LTE)
+            cout << "<=";
+        else if (v->op == OP_EQ)
+            cout << "=";
+        else if (v->op == OP_NEQ)
+            cout << "!=";
+        else
+            cout << "?";
+        
+        cout << "\'" << ">" << endl;
         
         if (v->n1) v->n1->accept(*this);
         if (v->n2) v->n2->accept(*this);
@@ -181,29 +198,60 @@ namespace RA_Namespace {
     }
     
     void XMLTranslator::visit(MathExpr *v) {
-        printTabs();
-        tabCount_++;
-        
+
         if (v->isScalar) {
+            printTabs();
+            tabCount_++;
             cout << "<MathExpr>";
             if (v->intFloatFlag)
                 cout << v->intVal;
             else
                 cout << v->floatVal;
-            cout << "</MathExpr>";
+            cout << "</MathExpr>" << endl;
             tabCount_--;
+            return;
         }
-        else {
-            if (v->n1 && v->n2)
-                cout << "<MathExpr op='" << v->op << "'>" << endl;
+        else if (v->n1 && !v->n2) {
+            v->n1->accept(*this);
+        }
+        else if (v->n1 && v->n2) {
+            printTabs();
+            tabCount_++;
+            cout << "<MathExpr op='";
+            if (v->op == OP_SUBTRACT)
+                cout << "-";
+            else if (v->op == OP_ADD)
+                cout << "+";
+            else if (v->op == OP_DIVIDE)
+                cout << "/";
+            else if (v->op == OP_MULTIPLY)
+                cout << "*";
             else
-                cout << "<MathExpr>" << endl;
+                cout << "?";
+            cout << "'>" << endl;
             
-            if (v->n1) v->n1->accept(*this);
-            if (v->n2) v->n2->accept(*this);
-            if (v->n3) v->n3->accept(*this);
-            if (v->n4) v->n4->accept(*this);
+            if (v->n1) v->n1->accept(*this); // MathExpr
+            if (v->n2) v->n2->accept(*this); // MathExpr
             
+            tabCount_--;
+            printTabs();
+            cout << "</MathExpr>" << endl;
+            return;
+        }
+        else if (v->n3) {
+            printTabs();
+            tabCount_++;
+            cout << "<MathExpr>" << endl;
+            v->n3->accept(*this); // Attribute
+            tabCount_--;
+            printTabs();
+            cout << "</MathExpr>" << endl;
+        }
+        else if (v->n4) {
+            printTabs();
+            tabCount_++;
+            cout << "<MathExpr>";
+            v->n4->accept(*this);
             tabCount_--;
             printTabs();
             cout << "</MathExpr>" << endl;
