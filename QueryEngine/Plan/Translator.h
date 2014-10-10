@@ -59,7 +59,7 @@ namespace Plan_Namespace {
         virtual void visit(ColumnDef *v);
         virtual void visit(ColumnDefList *v);
         // virtual void visit(ColumnList *v);
-        // virtual void visit(Comparison *v);
+        virtual void visit(Comparison *v);
         virtual void visit(CreateStmt *v);
         virtual void visit(DdlStmt *v);
         virtual void visit(DeleteStmt *v);
@@ -71,7 +71,7 @@ namespace Plan_Namespace {
         virtual void visit(Literal *v);
         virtual void visit(LiteralList *v);
         virtual void visit(MapdDataT *v);
-        // virtual void visit(MathExpr *v);
+        virtual void visit(MathExpr *v);
         virtual void visit(OptAllDistinct *v);
         virtual void visit(OptGroupby *v);
         virtual void visit(OptHaving *v);
@@ -108,9 +108,13 @@ namespace Plan_Namespace {
         // type of query; initialized to "unknown"
         QueryStmtType stmtType_ = UNKNOWN_STMT;
         
+        // indicates state; i.e., whether or not the visitor is inside a predicate
+        bool queryInsidePredicate_ = false;
+        
         // query (sql: select)
         std::vector<SQL_Namespace::Table*> queryTables_;
         std::vector<SQL_Namespace::Column*> queryColumns_;
+        std::vector<std::pair<std::string, std::string>> queryPredicateColumnNames_;
         SQL_Namespace::Predicate *queryPredicate_ = nullptr;
         bool querySelectAllFields_;
         

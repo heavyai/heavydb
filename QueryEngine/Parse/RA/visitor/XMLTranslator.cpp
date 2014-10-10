@@ -198,7 +198,6 @@ namespace RA_Namespace {
     }
     
     void XMLTranslator::visit(MathExpr *v) {
-
         if (v->isScalar) {
             printTabs();
             tabCount_++;

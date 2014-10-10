@@ -398,6 +398,139 @@ namespace Plan_Namespace {
         return new RenamePlan(tableNames_[0], renameTableNewName_);
     }
     
+    RA_Namespace::Predicate* Translator::translatePredicate(SQL_Namespace::Predicate* v) {
+        assert(v);
+        
+        if (v->op != "" && v->n1 && !v->n2) { // unary op with predicate
+            return new RA_Namespace::Predicate(v->op, (RA_Namespace::Predicate*)translatePredicate(v->n1));
+        }
+        else if (v->op != "" && v->n1 && v->n2) { // binary op with predicate
+            return new RA_Namespace::Predicate(v->op, (RA_Namespace::Predicate*)translatePredicate(v->n1), (RA_Namespace::Predicate*)translatePredicate(v->n2));
+        }
+        else if (v->op == "" && v->n1 && !v->n2) { // predicate nested in brackets
+            return new RA_Namespace::Predicate((RA_Namespace::Predicate*)translatePredicate(v->n1));
+        }
+        else if (v->n3) { // Comparison
+            return new RA_Namespace::Predicate(translateComparison(v->n3));
+        }
+        else
+            throw std::runtime_error("Unsupported SQL statement.");
+    }
+    
+    RA_Namespace::Comparison* Translator::translateComparison(SQL_Namespace::Comparison* v) {
+        assert(v);
+        
+        OpType compOp; // @todo OpType should be available to both SQL and RA, and these checks below would then be unnecessary. Definitely should fix this, but for now it should work.
+        
+        if (v->op == ">")
+            compOp = OP_GT;
+        else if (v->op == "<")
+            compOp = OP_LT;
+        else if (v->op == ">=")
+            compOp = OP_GTE;
+        else if (v->op == "<=")
+            compOp = OP_LTE;
+        else if (v->op == "!=")
+            compOp = OP_NEQ;
+        else if (v->op == "=")
+            compOp = OP_EQ;
+        else
+            throw std::runtime_error("Unsupported operator in comparison.");
+        
+        if (v->n1 &&  v->n2)
+            return new RA_Namespace::Comparison(compOp, translateMathExpr(v->n1), translateMathExpr((v->n2)));
+        else
+            throw std::runtime_error("Unsupported SQL statement.");
+    }
+    
+    RA_Namespace::MathExpr* Translator::translateMathExpr(SQL_Namespace::MathExpr* v) {
+        assert(v);
+        
+        // numeric type
+        if (v->numericFlag) {
+            if (v->intFlag)
+                return new RA_Namespace::MathExpr(v->intVal);
+            else if (v->floatFlag)
+                return new RA_Namespace::MathExpr(v->floatVal);
+            else
+                throw std::runtime_error("Unsupported data type in math expression.");
+        }
+        
+        // Column
+        else if (v->n3) {
+            return new RA_Namespace::MathExpr(translateColumn(v->n3));
+        }
+        
+        // ( MathExpr )
+        else if (v->n0)
+            return new RA_Namespace::MathExpr(translateMathExpr(v->n0));
+        
+        // MathExpr op MathExpr
+        else if (v->op != "" && v->n1 && v->n2) {
+            OpType mathOp;
+            if (v->op == "/")
+                mathOp = OP_DIVIDE;
+            else if (v->op == "*")
+                mathOp = OP_MULTIPLY;
+            else if (v->op == "+")
+                mathOp = OP_ADD;
+            else if (v->op == "-")
+                mathOp = OP_SUBTRACT;
+            else
+                throw std::runtime_error("Unsupported operator in math expression.");
+            
+            return new RA_Namespace::MathExpr(mathOp, translateMathExpr(v->n1), translateMathExpr(v->n2));
+        }
+        else
+            throw std::runtime_error("Unsupported SQL statement.");
+    }
+    
+    RA_Namespace::Attribute* Translator::translateColumn(SQL_Namespace::Column* v) {
+        assert(v);
+        
+        // obtain column metadata from Catalog
+        std::vector<std::pair<std::string, std::string>> columnNames;
+        std::vector<ColumnRow> columnRows;
+        columnNames.push_back(v->name);
+        c_.getMetadataForColumns(tableNames_, columnNames, columnRows);
+        
+        assert(columnRows.size() == 1);
+        return new RA_Namespace::Attribute(columnRows[0]);
+    }
+    
+    void* Translator::translateMapdDataT(SQL_Namespace::MapdDataT* v) {
+        assert(v);
+        return nullptr;
+    }
+    
+    mapd_data_t typeCheckMathExpr(SQL_Namespace::MathExpr *v) {
+        assert(v);
+        
+        if (v->numericFlag) { // base case
+            if (v->intFlag)
+                return INT_TYPE;
+            else if (v->floatFlag)
+                return FLOAT_TYPE;
+            else
+                throw std::runtime_error("Unsupported data type.");
+        }
+        else if (v->n0)
+            return typeCheckMathExpr(v->n0);
+        else if (v->n1 && v->n2) {
+            mapd_data_t left = typeCheckMathExpr(v->n1);
+            mapd_data_t right = typeCheckMathExpr(v->n2);
+            assert(left == INT_TYPE || left == FLOAT_TYPE);
+            assert(right == INT_TYPE || right == FLOAT_TYPE);
+            
+            if (left == FLOAT_TYPE || right == FLOAT_TYPE)
+                return FLOAT_TYPE;
+            else
+                return INT_TYPE;
+        }
+        
+        throw std::runtime_error("Type-checking error.");
+    }
+    
     void Translator::visit(AlterStmt *v) {
         stmtType_ = ALTER_STMT;
         if (v->n1) v->n1->accept(*this); // Table
@@ -407,8 +540,13 @@ namespace Plan_Namespace {
     
     void Translator::visit(Column *v) {
         columnNames_.push_back(v->name);
-        if (stmtType_ == QUERY_STMT)
-            queryColumns_.push_back(v);
+        
+        if (stmtType_ == QUERY_STMT) {
+            if (queryInsidePredicate_)
+                queryPredicateColumnNames_.push_back(v->name);
+            else
+                queryColumns_.push_back(v);
+        }
         else if (stmtType_ == CREATE_STMT)
             createColumns_.push_back(v);
         else if (stmtType_ == ALTER_STMT)
@@ -427,6 +565,16 @@ namespace Plan_Namespace {
         // printf("<ColumnDefList>\n");
         if (v->n1) v->n1->accept(*this); // ColumnDefList
         if (v->n2) v->n2->accept(*this); // ColumnDef
+    }
+    
+    void Translator::visit(SQL_Namespace::Comparison *v) {
+        // printf("<Comparison>\n");
+        if (v->op != "" && v->n1 && v->n2) {
+            v->n1->accept(*this); // MathExpr
+            v->n2->accept(*this); // MathExpr
+        }
+        else
+            throw std::runtime_error("Unsupported SQL feature.");
     }
     
     void Translator::visit(CreateStmt *v) {
@@ -510,6 +658,24 @@ namespace Plan_Namespace {
         createTypes_.push_back(v);
     }
     
+    void Translator::visit(SQL_Namespace::MathExpr *v) {
+        // printf("<MathExpr>\n");
+        if (v->numericFlag)
+            return;
+        else if (v->n0)
+            v->n0->accept(*this); // MathExpr
+        else if (v->n1 && v->n2) {
+            v->n1->accept(*this); // MathExpr
+            v->n2->accept(*this); // MathExpr
+        }
+        else if (v->n3)
+            v->n3->accept(*this); // Column
+        else if (v->n4)
+            v->n4->accept(*this); // AggrExpr
+        else
+            throw std::runtime_error("Unsupported SQL feature or badly formed math expression.");
+    }
+    
     
     void Translator::visit(OptAllDistinct *v) {
         // printf("<OptAllDistinct>\n");
@@ -543,13 +709,17 @@ namespace Plan_Namespace {
     
     void Translator::visit(SQL_Namespace::Predicate *v) {
         // printf("<Predicate>\n");
-        
-        if (stmtType_ == QUERY_STMT)
-            queryPredicate_ = v;
-        else if (stmtType_ == DELETE_STMT)
-            deletePredicate_ = v;
+        queryInsidePredicate_ = true;
+        if (v->op != "" && v->n1 && v->n2) {
+            v->n1->accept(*this); // Predicate
+            v->n2->accept(*this); // Predicate
+        }
+        else if (v->n3) {
+            v->n3->accept(*this); // Comparison
+        }
         else
-            throw std::runtime_error("Unsupported SQL feature.");
+            throw std::runtime_error("Predicate - unsupported SQL feature.");
+        queryInsidePredicate_ = false;
     }
     
     void Translator::visit(RenameStmt *v) {
@@ -576,8 +746,10 @@ namespace Plan_Namespace {
     
     void Translator::visit(SearchCondition *v) {
         // printf("<SearchCondition>\n");
-        if (stmtType_ == QUERY_STMT)
+        if (stmtType_ == QUERY_STMT) {
             queryPredicate_ = v->n1;
+            if (v->n1) v->n1->accept(*this); // Predicate
+        }
         else
             throw std::runtime_error("Unsupported SQL feature.");
     }
@@ -665,111 +837,6 @@ namespace Plan_Namespace {
         // printf("<TableList>\n");
         if (v->n1) v->n1->accept(*this); // TableList
         if (v->n2) v->n2->accept(*this); // Table
-    }
-    
-    RA_Namespace::Predicate* Translator::translatePredicate(SQL_Namespace::Predicate* v) {
-        assert(v);
-        
-        if (v->op != "" && v->n1 && !v->n2) { // unary op with predicate
-            return new RA_Namespace::Predicate(v->op, (RA_Namespace::Predicate*)translatePredicate(v->n1));
-        }
-        else if (v->op != "" && v->n1 && v->n2) { // binary op with predicate
-            return new RA_Namespace::Predicate(v->op, (RA_Namespace::Predicate*)translatePredicate(v->n1), (RA_Namespace::Predicate*)translatePredicate(v->n2));
-        }
-        else if (v->op == "" && v->n1 && !v->n2) { // predicate nested in brackets
-            return new RA_Namespace::Predicate((RA_Namespace::Predicate*)translatePredicate(v->n1));
-        }
-        else if (v->n3) { // Comparison
-            return new RA_Namespace::Predicate(translateComparison(v->n3));
-        }
-        else
-            throw std::runtime_error("Unsupported SQL statement.");
-    }
-    
-    RA_Namespace::Comparison* Translator::translateComparison(SQL_Namespace::Comparison* v) {
-        assert(v);
-        
-        OpType compOp; // @todo OpType should be available to both SQL and RA, and these checks below would then be unnecessary. Definitely should fix this, but for now it should work.
-        
-        if (v->op == ">")
-            compOp = OP_GT;
-        else if (v->op == "<")
-            compOp = OP_LT;
-        else if (v->op == ">=")
-            compOp = OP_GTE;
-        else if (v->op == "<=")
-            compOp = OP_LTE;
-        else if (v->op == "!=")
-            compOp = OP_NEQ;
-        else if (v->op == "=")
-            compOp = OP_EQ;
-        else
-            throw std::runtime_error("Unsupported operator in comparison.");
-        
-        if (v->n1 &&  v->n2)
-            return new RA_Namespace::Comparison(compOp, translateMathExpr(v->n1), translateMathExpr((v->n2)));
-        else
-            throw std::runtime_error("Unsupported SQL statement.");
-    }
-    
-    RA_Namespace::MathExpr* Translator::translateMathExpr(SQL_Namespace::MathExpr* v) {
-        assert(v);
-
-        // numeric type
-        if (v->numericFlag) {
-            if (v->intFlag)
-                return new RA_Namespace::MathExpr(v->intVal);
-            else if (v->floatFlag)
-                return new RA_Namespace::MathExpr(v->floatVal);
-            else
-                throw std::runtime_error("Unsupported data type in math expression.");
-        }
-        
-        // Column
-        else if (v->n3) {
-            return new RA_Namespace::MathExpr(translateColumn(v->n3));
-        }
-        
-        // ( MathExpr )
-        else if (v->n0)
-            return new RA_Namespace::MathExpr(translateMathExpr(v->n0));
-        
-        // MathExpr op MathExpr
-        else if (v->op != "" && v->n1 && v->n2) {
-            OpType mathOp;
-            if (v->op == "/")
-                mathOp = OP_DIVIDE;
-            else if (v->op == "*")
-                mathOp = OP_MULTIPLY;
-            else if (v->op == "+")
-                mathOp = OP_ADD;
-            else if (v->op == "-")
-                mathOp = OP_SUBTRACT;
-            else
-                throw std::runtime_error("Unsupported operator in math expression.");
-            
-            return new RA_Namespace::MathExpr(mathOp, translateMathExpr(v->n1), translateMathExpr(v->n2));
-        }
-        else
-            throw std::runtime_error("Unsupported SQL statement.");
-    }
-    
-    RA_Namespace::Attribute* Translator::translateColumn(SQL_Namespace::Column* v) {
-        assert(v);
-        
-        // obtain column metadata from Catalog
-        std::vector<std::pair<std::string, std::string>> columnNames;
-        std::vector<ColumnRow> columnRows;
-        columnNames.push_back(v->name);
-        c_.getMetadataForColumns(tableNames_, columnNames, columnRows);
-
-        assert(columnRows.size() == 1);
-        return new RA_Namespace::Attribute(columnRows[0]);
-    }
-    
-    void* Translator::translateMapdDataT(SQL_Namespace::MapdDataT* v) {
-        assert(v);
-        return nullptr;
     }
 
 }
