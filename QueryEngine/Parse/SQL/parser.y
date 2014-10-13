@@ -175,7 +175,8 @@ scalar_expr:
 |	scalar_expr MULTIPLY scalar_expr 		{ $$ = new ScalarExpr("MULTIPLY", (ScalarExpr*)$1, (ScalarExpr*)$3); }
 |	scalar_expr DIVIDE scalar_expr 			{ $$ = new ScalarExpr("DIVIDE", (ScalarExpr*)$1, (ScalarExpr*)$3); }
 |	literal 								{ $$ = new ScalarExpr((Literal*)$1); }
-|	column 									{ $$ = new ScalarExpr((Column*)$1); }
+|   column 									{ $$ = new ScalarExpr((Column*)$1); }
+|   aggr_expr                               { $$ = new ScalarExpr((AggrExpr*)$1); }
 |	'(' scalar_expr ')' 					{ $$ = new ScalarExpr((ScalarExpr*)$1); }
 	/* 	|	'+' scalar_expr %prec UMINUS
 		|	'-' scalar_expr %prec UMINUS */

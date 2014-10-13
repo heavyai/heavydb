@@ -13,9 +13,6 @@ namespace Plan_Namespace {
     }
     
     AbstractPlan* Planner::makePlan(std::string sql, QueryStmtType &stmtType) {
-        isError_ = false;
-        errorMsg_ = "";
-        
         SQLParser parser;
         ASTNode *parseRoot = nullptr;
         string lastParsed;
@@ -24,8 +21,6 @@ namespace Plan_Namespace {
         // parse SQL
         numErrors = parser.parse(sql, parseRoot, lastParsed);
         if (numErrors > 0) {
-            isError_ = true;
-            errorMsg_ = "Syntax error at '" + lastParsed + "'";
             return nullptr;
         }
         
@@ -35,11 +30,8 @@ namespace Plan_Namespace {
         // get statement type
         stmtType = tr_.getType();
         
-        if (tr_.isError()) {
-            isError_ = true;
-            errorMsg_ = tr_.errorMsg();
+        if (tr_.isError())
             return nullptr;
-        }
         
         // return (should be successful here)
         assert(numErrors == 0);
@@ -47,7 +39,7 @@ namespace Plan_Namespace {
     }
     
     std::pair<bool, std::string> Planner::checkError() {
-        return std::pair<bool, std::string>(isError_, errorMsg_);
+        return std::pair<bool, std::string>(tr_.isError(), tr_.errorMsg());
     }
     
 } // Plan_Namespace

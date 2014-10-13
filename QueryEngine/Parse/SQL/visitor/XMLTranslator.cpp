@@ -45,9 +45,8 @@ namespace SQL_Namespace {
     void XMLTranslator::visit(AggrExpr *v) {
         printTabs();
         tabCount_++;
-        cout << "<AggrExpr>" << endl;
-        
-        cout << v->func << " ";
+        cout << "<AggrExpr \'" << v->func << "\'>" << endl;
+
         if (v->n1) v->n1->accept(*this); // Column
         
         tabCount_--;
@@ -316,11 +315,23 @@ namespace SQL_Namespace {
         printTabs();
         tabCount_++;
         cout << "<MathExpr>" << endl;
-        
-        if (v->n1) v->n1->accept(*this); // MathExpr
-        if (v->n2) v->n2->accept(*this); // MathExpr
-        if (v->n3) v->n3->accept(*this); // Column
-        if (v->n4) v->n4->accept(*this); // AggrExpr
+        if (v->numericFlag) {
+            printTabs();
+            
+            if (v->intFlag)
+                cout << v->intVal;
+            else if (v->floatFlag)
+                cout << v->floatFlag;
+            cout << endl;
+            tabCount_--;
+            printTabs();
+        }
+        else {
+            if (v->n1) v->n1->accept(*this); // MathExpr
+            if (v->n2) v->n2->accept(*this); // MathExpr
+            if (v->n3) v->n3->accept(*this); // Column
+            if (v->n4) v->n4->accept(*this); // AggrExpr
+        }
         // op
         
         tabCount_--;
@@ -452,6 +463,7 @@ namespace SQL_Namespace {
         if (v->n2) v->n2->accept(*this); // ScalarExpr
         if (v->n3) v->n3->accept(*this); // Literal
         if (v->n4) v->n4->accept(*this); // Column
+        if (v->n5) v->n5->accept(*this); // AggrExpr
         // op
         
         tabCount_--;

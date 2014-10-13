@@ -181,6 +181,12 @@ namespace Plan_Namespace {
         return nullptr;
     }
 
+    /**
+     * The translate query method translates an SQL query (i.e., select statement)
+     * into a query plan, a pointer to which is returned. It does so by a multi-step
+     * procedure, outlined in body of the method. The procedure was adapted from
+     * Sciore's Database Design and Implementation text book.
+     */
     QueryPlan* Translator::translateQuery() {
         assert(queryTables_.size() > 0);
 
@@ -234,6 +240,14 @@ namespace Plan_Namespace {
         return new QueryPlan(project);
     }
     
+    /**
+     * This method annonates the AST for a query (i.e., select statement). It traverses
+     * the list of nodes collected in the queryTables_ vector, requesting metadata for
+     * table from the system catalog (@see Catalog). It also obtains the necessary column
+     * metadata for the gathered columns. The Translator's error state is updated if
+     * a table or column is not found, or if a column name is ambiguous due to appearing
+     * in more than one the tables in queryTables_.
+     */
     void Translator::annotateQuery() {
         // retieve table metadata from Catalog
         // set error if a table does not exist
@@ -567,6 +581,12 @@ namespace Plan_Namespace {
         if (v->n2) v->n2->accept(*this); // ColumnDef
     }
     
+    void Translator::visit(ColumnList *v) {
+        // printf("<ColumnList>\n");
+        if (v->n1) v->n1->accept(*this); // ColumnList
+        if (v->n2) v->n2->accept(*this); // Column
+    }
+    
     void Translator::visit(SQL_Namespace::Comparison *v) {
         // printf("<Comparison>\n");
         if (v->op != "" && v->n1 && v->n2) {
@@ -684,7 +704,10 @@ namespace Plan_Namespace {
     
     void Translator::visit(OptGroupby *v) {
         // printf("<OptGroupby>\n");
-        throw std::runtime_error("OptGroupby - unsupported SQL feature.");
+        if (v->n1)
+            v->n1->accept(*this); // ColumnList
+        else
+            throw std::runtime_error("OptGroupby - unsupported SQL feature.");
     }
     
     void Translator::visit(OptHaving *v) {

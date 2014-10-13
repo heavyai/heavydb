@@ -2,14 +2,13 @@
  * @file    Planner.h
  * @author  Steven Stewart <steve@map-d.com>
  *
- * The planner transforms an SQL statement into a plan. Its responsibilities
- * include:
- *
- * 1) Verification: determine whether the SQL statement is meaningful
- * 2) Query Planning: construct a plan
+ * The planner transforms an SQL statement into a plan. It's quite handy.
  *
  * Different types of queries produce different types of Plan objects, each of
  * which implement an AbstractPlan interface.
+ *
+ * Presently, the Planner acts is mainly a wrapper around the Translator.
+ * Additional functionality may be added at some future time.
  */
 #ifndef QueryEngine_Plan_Planner_h
 #define QueryEngine_Plan_Planner_h
@@ -24,6 +23,9 @@ using namespace RA_Namespace;
 namespace Plan_Namespace {
     
     /**
+     * @class Planner
+     * @brief Presently, a wrapper around a query translator.
+     *
      * This class provides two methods: makePlan and checkError. The former
      * takes an sql string (any kind of sql statement), and produces a Plan
      * object. A Plan object can be of many different types, including
@@ -49,13 +51,12 @@ namespace Plan_Namespace {
         
         /**
          * @brief Returns whether there is an error and, if so, an error message.
+         * @return A bool indicating whether an error occurred, and a string for the error message.
          */
         std::pair<bool, std::string> checkError();
         
     private:
-        Translator &tr_; /// a reference to a Translator object
-        bool isError_;
-        std::string errorMsg_;
+        Translator &tr_;        /// a reference to a Translator object
     };
     
 } // Plan_Namespace
