@@ -8,11 +8,10 @@
 #include "../QueryEngine/Parse/RA/visitor/XMLTranslator.h"
 #include "../QueryEngine/Plan/Planner.h"
 #include "../QueryEngine/Plan/Translator.h"
-// #include "TypeChecker.h"
 //#include "FileMgr.h"
 //#include "BufferMgr.h"
 #include "../DataMgr/Metadata/Catalog.h"
-//#include "TablePartitionMgr.h"
+#include "../DataMgr/Partitioner/TablePartitionMgr.h"
 
 
 #include <boost/thread.hpp>
