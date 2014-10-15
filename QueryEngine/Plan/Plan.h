@@ -65,10 +65,10 @@ namespace Plan_Namespace {
         
     public:
         QueryPlan(RA_Namespace::RelAlgNode *root);
-        int execute();
-        int optimize();
-        void print();
-        void* getPlan();
+        virtual int execute();
+        virtual int optimize();
+        virtual void print();
+        virtual void* getPlan();
         
     private:
         RA_Namespace::RelAlgNode *root_;
@@ -86,10 +86,10 @@ namespace Plan_Namespace {
         InsertPlan(const InsertData &insertData_);
         ~InsertPlan();
         
-        int execute();
-        int optimize();
+        virtual int execute();
+        virtual int optimize();
         void *getPlan();
-        void print();
+        virtual void print();
         
     private:
         InsertData data_;
@@ -106,10 +106,10 @@ namespace Plan_Namespace {
         CreatePlan(const std::string &tableName, const std::vector<std::string> &columnNames, const std::vector<mapd_data_t> columnTypes);
         ~CreatePlan();
         
-        int execute();
-        int optimize();
+        virtual int execute();
+        virtual int optimize();
         void *getPlan();
-        void print();
+        virtual void print();
         
     private:
         std::string tableName_;
@@ -127,10 +127,10 @@ namespace Plan_Namespace {
         DropPlan(const std::string &tableName);
         ~DropPlan();
         
-        int execute();
-        int optimize();
+        virtual int execute();
+        virtual int optimize();
         void *getPlan();
-        void print();
+        virtual void print();
         
     private:
         std::string tableName_;
@@ -146,10 +146,10 @@ namespace Plan_Namespace {
         DeletePlan(const std::string &tableName);
         ~DeletePlan();
         
-        int execute();
-        int optimize();
+        virtual int execute();
+        virtual int optimize();
         void *getPlan();
-        void print();
+        virtual void print();
         
     private:
         std::string tableName_;
@@ -165,10 +165,10 @@ namespace Plan_Namespace {
         AlterPlan(const std::string &tableName, const std::string &columnName, const mapd_data_t columnType, bool drop = false);
         ~AlterPlan();
         
-        int execute();
-        int optimize();
+        virtual int execute();
+        virtual int optimize();
         void *getPlan();
-        void print();
+        virtual void print();
         
     private:
         std::string tableName_;
@@ -186,10 +186,10 @@ namespace Plan_Namespace {
     public:
         RenamePlan(const std::string &oldTableName, const std::string &newTableName);
         
-        int execute();
-        int optimize();
+        virtual int execute();
+        virtual int optimize();
         void *getPlan();
-        void print();
+        virtual void print();
         
     private:
         std::string oldTableName_;
