@@ -3,6 +3,7 @@
  * @author  Steven Stewart <steve@map-d.com>
  */
 #include "Plan.h"
+#include "../../QueryEngine/Parse/RA/visitor/XMLTranslator.h"
 
 namespace Plan_Namespace {
     
@@ -42,7 +43,8 @@ namespace Plan_Namespace {
     }
     
     void QueryPlan::print() {
-        
+        RA_Namespace::XMLTranslator ra2xml;
+        root_->accept(ra2xml);
     }
     
     void* QueryPlan::getPlan() {

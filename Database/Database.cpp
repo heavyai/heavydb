@@ -11,7 +11,7 @@
 //#include "FileMgr.h"
 //#include "BufferMgr.h"
 #include "../DataMgr/Metadata/Catalog.h"
-#include "../DataMgr/Partitioner/TablePartitionMgr.h"
+//#include "../DataMgr/Partitioner/TablePartitionMgr.h"
 
 
 #include <boost/thread.hpp>
@@ -70,15 +70,23 @@ namespace Database_Namespace {
         QueryStmtType stmtType;
         
         AbstractPlan *plan = planner.makePlan(request, stmtType);
+        if (printToStdout)
+            plan->print();
         
-        if (stmtType == QUERY_STMT) {
+        /*if (stmtType == QUERY_STMT) {
             RA_Namespace::RelAlgNode *qp = (RelAlgNode*)plan->getPlan();
-            if (printToStdout) {
-                cout << "\tQUERY PLAN:" << endl;
-                RA_Namespace::XMLTranslator ra2qp;
-                qp->accept(ra2qp);
-            }
+            if (printToStdout)
+                plan->print();
         }
+        else if (stmtType == INSERT_STMT) {
+            InsertPlan *plan = (InsertPlan*)plan->getPlan();
+            if (printToStdout)
+                plan->print();
+        }
+         cout << "\tQUERY PLAN:" << endl;
+         RA_Namespace::XMLTranslator ra2qp;
+         qp->accept(ra2qp);
+         */
         
         return true;
     }
