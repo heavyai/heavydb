@@ -115,6 +115,28 @@ void LinearTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo, const v
 void LinearTablePartitioner::createStateTableIfDne() {
      mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS fragments(partitioner_id INT, fragment_id INT, num_rows INT, PRIMARY KEY (partitioner_id, fragment_id))");
      assert(status == MAPD_SUCCESS);
+     string createTableStatsQuery ("CREATE TABLE IF NOT EXISTS partitioner_" + boost::lexical_cast <string> (partitionerId_) + "_stats (fragment_id INT, ");  
+    for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
+        int columnId = colMapIt -> first;
+        string baseStatsColumnName = "col_" + boost::lexical_cast <string> (columnId);
+        string typeName;
+        switch(colMapIt -> second.columnType) {
+            case INT_TYPE:
+                typeName = " INT, ";
+                break;
+            case FLOAT_TYPE:
+                typeName = " REAL, ";
+                break;
+            case BOOLEAN_TYPE:
+                typeName = " BOOLEAN, ";
+                break;
+        }
+        createTableStatsQuery += baseStatsColumnName = "_min" + typeName;
+        createTableStatsQuery += baseStatsColumnName = "_max" + typeName;
+
+    }
+    createTableStatsQuery.replace(createTableStatsQuery.size() -1, 1, ")");
+    status = pgConnector_.query(createTableStatsQuery);
 }
 
 
@@ -133,6 +155,16 @@ void LinearTablePartitioner::readState() {
         maxPartitionId_ = partitionInfoVec_[numRows-1].partitionId; 
         getInsertBufferChunks();
     }
+    string statsQuery ("select fragment_id");
+    for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
+        int columnId = colMapIt -> first;
+        string baseStatsColumnName = "col_" + boost::lexical_cast <string> (columnId);
+        statsQuery += "," + baseStatsColumnName + "_min," + baseStatsColumnName + "_max";
+    }
+    statsQuery += " from partitioner_" + boost::lexical_cast <string> (partitionerId_) + "_stats";
+    status = pgConnector_.query(statsQuery);
+    assert(status == MAPD_SUCCESS);
+    numRows = pgConnector_.getNumRows();
 }
 
 void LinearTablePartitioner::getInsertBufferChunks() {

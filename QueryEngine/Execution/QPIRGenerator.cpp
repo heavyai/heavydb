@@ -1,7 +1,6 @@
 /**
  * @file	QPIRGenerator.cpp
  * @author	Todd Mostak <todd@map-d.com>
- * @author	Steve Stewart <steve@map-d.com>
  *
  * Implementation of RA query plan walker/compiler.
  */
@@ -327,10 +326,22 @@ void QPIRGenerator::visit(Program *v) {
     builder_ -> CreateCondBr(endCond,loopBB,afterBB);
     builder_ -> SetInsertPoint(afterBB);
     inCounterVar_ -> addIncoming(nextInVar,loopEndBB);
+    outCounterVar_ -> addIncoming(nextOutVar,loopEndBB);
+    /*
+    if (hasSelect_ == false) {
+        outCounterVar_ -> addIncoming(nextInVar,loopEndBB);
+    }
+    else {
+        outCounterVar_ -> addIncoming(nextInVar,loopEndBB);
+    }
+    */
+
+
+    }
     builder_ -> CreateRetVoid();
 
-    bool status = llvm::verifyFunction(*curFunction);
-    cout << "Function verification: " << status << endl;
+    //bool status = llvm::verifyFunction(*curFunction);
+    //cout << "Function verification: " << status << endl;
 
 }
 
@@ -349,7 +360,7 @@ void QPIRGenerator::visit(ProjectOp *v) {
 
     inProject_ = false;
     llvm::Value *stepVal = llvm::ConstantInt::get(context_,llvm::APInt(32,1,true));
-    llvm::Value *nextOutVar =  builder_->CreateAdd(outCounterVar_,stepVal,"nextoutvar");
+    llvm::Value *nextOutVar =  builder_->CreateAdd(outCounterVar_,stepVal,"nextOutVar");
     llvm::BasicBlock *projEndBlock = builder_ -> GetInsertBlock();
     outCounterVar_->addIncoming(nextOutVar,projEndBlock);
 }
