@@ -11,17 +11,19 @@
 #include "AbstractDatum.h"
 
 namespace Memory_Namespace {
-    
-    typedef std::multimap<ChunkKey, AbstractDataMgr*> ChunkKeyToDataMgrMMap;
-    
+   
+    typedef vector <vector <AbstractDataMgr *> > AbstractDataMgrVec; // one vector for each level 
+    typedef std::map<int,std::vector<int> > FirstLevelPartitionToDevicesMap;
+    typedef std::map<ChunkKey,std::vector<bool> > ChunkKeyLocationMap; // maybe should be 
+
     /**
      * @class   MemoryMgr
      * @brief   Managing memory is fun.
      */
-    class MemoryMgr : public AbstractDataMgr {
+    class MemoryMgr {
         
     public:
-        MemoryMgr();
+        MemoryMgr(const size_t cpuBufferSize);
         ~MemoryMgr();
         
         // Chunk API
@@ -39,7 +41,14 @@ namespace Memory_Namespace {
         
         
     private:
-        ChunkKeyToDataMgrMMap chunkIndex_;
+        AbstractDataMgrVec abstractDataMgrVec_;
+        FirstLevelPartitionToDevicesMap firstLevelPartitionToDevicesMap_;
+        ChunkKeyLocationMap chunkKeyLocationMap_;
+        // needs to store page size
+    
+        // need a map of partition id to device at each level 
+        // need a map of chunk key to level that its on
+
         
     };
 
