@@ -11,14 +11,25 @@
 #include "AbstractDatum.h"
 
 namespace Memory_Namespace {
+
+    enum Level {DISK_LEVEL = 0, CPU_LEVEL = 1, GPU_LEVEL = 2};
+
    
     typedef vector <vector <AbstractDataMgr *> > AbstractDataMgrVec; // one vector for each level 
-    typedef std::map<int,std::vector<int> > FirstLevelPartitionToDevicesMap;
+    //typedef std::map<int,std::vector<int> > FirstLevelPartitionToDevicesMap; // this probably needs to be different for each table
+    /*
+     * @type FirstLevelPartitionToDevicesMap
+     * @brief Maps a pair of ints signifying table and
+     * first-level/inter-node partion id to the devices
+     * for that table
+     */
+
+    typedef std::map<poir<int,int>,std::vector<int> > FirstLevelPartitionToDevicesMap; // this probably needs to be different for each table
     typedef std::map<ChunkKey,std::vector<bool> > ChunkKeyLocationMap; // maybe should be 
 
     /**
      * @class   MemoryMgr
-     * @brief   Managing memory is fun.
+     * @brief   Manages Memory
      */
     class MemoryMgr {
         
@@ -27,10 +38,9 @@ namespace Memory_Namespace {
         ~MemoryMgr();
         
         // Chunk API
-        virtual AbstractDatum* createChunk(const ChunkKey &key, mapd_size_t pageSize, mapd_size_t nbytes = 0, mapd_addr_t buf = nullptr);
+        virtual AbstractDatum* createChunk(const ChunkKey &key, mapd_size_t pageSize, mapd_size_t numBytes = 0, enum level,  mapd_addr_t buf = nullptr);
         
         virtual void deleteChunk(const ChunkKey &key);
-        virtual void releaseChunk(const ChunkKey &key);
         virtual void copyChunkToDatum(const ChunkKey &key, AbstractDatum *datum);
         
         // Datum API
@@ -44,6 +54,7 @@ namespace Memory_Namespace {
         AbstractDataMgrVec abstractDataMgrVec_;
         FirstLevelPartitionToDevicesMap firstLevelPartitionToDevicesMap_;
         ChunkKeyLocationMap chunkKeyLocationMap_;
+        int partIdIndex_; // which slot of the ChunkKey are we partitioning between devices on
         // needs to store page size
     
         // need a map of partition id to device at each level 
