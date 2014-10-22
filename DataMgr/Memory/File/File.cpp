@@ -21,10 +21,8 @@ namespace File_Namespace {
         
         FILE *f;
         std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
-        if ((f = fopen(s.c_str(), "w+b")) == NULL) {
-            fprintf(stderr, "[%s:%d] Warning: unable to create file: fopen returned a NULL pointer.\n", __func__, __LINE__);
-            return nullptr;
-        }
+        if ((f = fopen(s.c_str(), "w+b")) == NULL)
+            throw std::runtime_error("Unable to create file");
         
         fseek(f, (blockSize * nblocks)-1, SEEK_SET);
         fputc(EOF, f);

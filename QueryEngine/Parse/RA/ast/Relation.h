@@ -28,9 +28,8 @@ public:
     
     /// Constructor -- metadata only
 	explicit Relation(const TableRow &metadata) : metadata(metadata) {
-		this->name = name;
+        this->name = metadata.tableName + "(" + std::to_string(metadata.tableId) + ")";
 	}
-    
 
 	virtual void accept(class Visitor &v) {
 		v.visit(this);

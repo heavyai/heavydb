@@ -14,6 +14,7 @@ namespace SQL_Namespace {
 class MathExpr : public ASTNode {
 
 public:
+    MathExpr *n0 = NULL; // case: '(' MathExpr ')'
 	MathExpr *n1 = NULL;
 	MathExpr *n2 = NULL;
 	Column *n3 = NULL;
@@ -21,8 +22,10 @@ public:
 	std::string op = "";
 	int intVal;
 	float floatVal;
-	bool intFloatFlag;	// true if int; otherwise float
-
+    bool intFlag = false;
+    bool floatFlag = false;
+    bool numericFlag = false;
+    
 	MathExpr(std::string op, MathExpr *n1, MathExpr *n2) {
 		assert(op == "PLUS" || op == "MINUS" || op == "MULTIPLY" || op == "DIVIDE");
 		assert(n1 && n2);
@@ -41,9 +44,9 @@ public:
 			this->op = op;
 	}
 
-	explicit MathExpr(MathExpr *n1) {
-		assert(n1);
-		this->n1 = n1;
+	explicit MathExpr(MathExpr *n0) { // case: '(' MathExpr ')'
+		assert(n0);
+		this->n0 = n0;
 	}
 
 	explicit MathExpr(Column *n3) {
@@ -57,13 +60,15 @@ public:
 	}
 
 	explicit MathExpr(int intVal) {
-		this->intVal = intVal;
-		intFloatFlag = true;
+        this->numericFlag = true;
+		intFlag = true;
+        this->intVal = intVal;
 	}
 
 	explicit MathExpr(float floatVal) {
+        this->numericFlag = true;
+        floatFlag = true;
 		this->floatVal = floatVal;
-		intFloatFlag = false;
 	}
 
 	virtual void accept(class Visitor &v) {

@@ -5,10 +5,8 @@
  * a singleton that is the central hub that pushes queries through
  * the QueryEngine pipeline.
  */
-
-
-#ifndef DATABASE_H
-#define DATABASE_H
+#ifndef Database_h
+#define Database_h
 
 #include <string>
 
@@ -87,7 +85,6 @@ class Database {
          *
          * @see registerSignals() 
          */
-
         void stop();
 
         /**
@@ -113,17 +110,17 @@ class Database {
          * @see Parser
          */
 
-        bool processRequest(const std::string &request, OutputBuffer &outputBuffer);
+        bool processRequest(const std::string &request, OutputBuffer &outputBuffer, bool printToStdout = false);
 
 
     private:
         std::string tcpPort_;
         int numThreads_;
 
-        Buffer_Namespace::BufferMgr * bufferMgr_;
-        File_Namespace::FileMgr * fileMgr_;
+        // Buffer_Namespace::BufferMgr * bufferMgr_;
+        // File_Namespace::FileMgr * fileMgr_;
         Metadata_Namespace::Catalog * catalog_;
-        Partitioner_Namespace::TablePartitionMgr * tablePartitionMgr_;
+        // Partitioner_Namespace::TablePartitionMgr * tablePartitionMgr_;
 
         /// The io_service used to perform asynchronous operations
         boost::asio::io_service ioService_;
@@ -149,4 +146,4 @@ class Database {
 } // Database_Namespace
 
 
-#endif
+#endif // Database_h

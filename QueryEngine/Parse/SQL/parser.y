@@ -7,7 +7,7 @@
     private:                   \
        yyFlexLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
-%define ERROR_BODY {cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed:" << lexer.YYText() << endl;}
+%define ERROR_BODY { /*cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed: " << lexer.YYText() << endl;*/ }
 
 %header{
 #include <iostream>
@@ -28,6 +28,7 @@
 #include "ast/ColumnList.h"
 #include "ast/Comparison.h"
 #include "ast/CreateStmt.h"
+#include "ast/DeleteStmt.h"
 #include "ast/DdlStmt.h"
 #include "ast/DmlStmt.h"
 #include "ast/DropStmt.h"
@@ -80,8 +81,8 @@ extern std::vector<double> realData;
 %left NOT
 
 %left NEQ EQ GT GTE LT LTE
-%token SELECT INSERT UPDATE DELETE
-%token INTO VALUES
+%token SELECT INSERT UPDATE DELETE RENAME
+%token INTO VALUES TO
 %token ALL DISTINCT
 %token FROM WHERE GROUPBY HAVING ORDERBY LIMIT
 %token AVG COUNT MAX MIN SUM
@@ -110,8 +111,14 @@ sql_stmt:
 	/***** Data manipulation language *****/
 
 dml_stmt:
-	insert_stmt			{ $$ = new DmlStmt((InsertStmt*)$1); }
+    delete_stmt         { $$ = new DmlStmt((DeleteStmt*)$1); }
+|	insert_stmt			{ $$ = new DmlStmt((InsertStmt*)$1); }
 |	select_stmt			{ $$ = new DmlStmt((SelectStmt*)$1); }
+;
+
+delete_stmt:
+    DELETE FROM table                   { $$ = new DeleteStmt((Table*)$3); }
+|   DELETE FROM table WHERE predicate   { $$ = new DeleteStmt((Table*)$3, (Predicate*)$5); }
 ;
 
 insert_stmt:
@@ -168,7 +175,8 @@ scalar_expr:
 |	scalar_expr MULTIPLY scalar_expr 		{ $$ = new ScalarExpr("MULTIPLY", (ScalarExpr*)$1, (ScalarExpr*)$3); }
 |	scalar_expr DIVIDE scalar_expr 			{ $$ = new ScalarExpr("DIVIDE", (ScalarExpr*)$1, (ScalarExpr*)$3); }
 |	literal 								{ $$ = new ScalarExpr((Literal*)$1); }
-|	column 									{ $$ = new ScalarExpr((Column*)$1); }
+|   column 									{ $$ = new ScalarExpr((Column*)$1); }
+|   aggr_expr                               { $$ = new ScalarExpr((AggrExpr*)$1); }
 |	'(' scalar_expr ')' 					{ $$ = new ScalarExpr((ScalarExpr*)$1); }
 	/* 	|	'+' scalar_expr %prec UMINUS
 		|	'-' scalar_expr %prec UMINUS */

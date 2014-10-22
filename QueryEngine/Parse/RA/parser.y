@@ -45,6 +45,7 @@
 #include "ast/RelExpr.h"
 #include "ast/RelExprList.h"
 #include "ast/RenameOp.h"
+#include "ast/ScanOp.h"
 #include "ast/SelectOp.h"
 #include "ast/SemijoinOp.h"
 #include "ast/SortOp.h"
@@ -75,7 +76,7 @@ extern std::vector<double> realData;
 %left NOT
 
 %left NEQ EQ GT GTE LT LTE
-%token SELECT PROJECT SORT RENAME EXTEND GROUPBY
+%token SCAN SELECT PROJECT SORT RENAME EXTEND GROUPBY
 %token PRODUCT JOIN SEMIJOIN ANTIJOIN OUTERJOIN UNION DIFF INTERSECTION
 %token MAX MIN COUNT SUM AVG
 %token MAX_DISTINCT MIN_DISTINCT COUNT_DISTINCT SUM_DISTINCT AVG_DISTINCT 
@@ -103,7 +104,8 @@ RelExpr:
 ;
 
 UnaryOp:
-	SELECT 	'(' RelExpr ',' Predicate ')'		 	{ $$ = new SelectOp((RelExpr*)$3, (Predicate*)$5); }
+    SCAN    '(' RelExpr ',' '{' AttrList '}' ',' Predicate ')' { $$ = new ScanOp((RelExpr*)$3, (AttrList*)$6, (Predicate*)$9); }
+|	SELECT 	'(' RelExpr ',' Predicate ')'		 	{ $$ = new SelectOp((RelExpr*)$3, (Predicate*)$5); }
 |	PROJECT '(' RelExpr ',' '{' AttrList '}' ')' 	{ $$ = new ProjectOp((RelExpr*)$3, (AttrList*)$6); }
 |	SORT	'(' RelExpr ',' '[' AttrList ']' ')' 	{ $$ = new SortOp((RelExpr*)$3, (AttrList*)$6); }
 |	RENAME 	'(' RelExpr ',' NAME ',' NAME ')'		{ assert(strData.size() == 2); $$ = new RenameOp((RelExpr*)$3, strData.front(), strData.back()); strData.pop_back(); strData.pop_back();}

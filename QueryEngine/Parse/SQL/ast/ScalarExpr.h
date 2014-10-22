@@ -14,10 +14,11 @@ namespace SQL_Namespace {
 class ScalarExpr : public Expression {
 
 public:
-	ScalarExpr *n1 = NULL;
-	ScalarExpr *n2 = NULL;
-	Literal *n3 = NULL;
-	Column *n4 = NULL;
+	ScalarExpr *n1 = nullptr;
+	ScalarExpr *n2 = nullptr;
+	Literal *n3 = nullptr;
+	Column *n4 = nullptr;
+    AggrExpr *n5 = nullptr;
 	std::string op = "";
 
 	ScalarExpr(std::string op, ScalarExpr *n1, ScalarExpr *n2) {
@@ -53,6 +54,11 @@ public:
 		this->n4 = n4;
 	}
 
+    explicit ScalarExpr(AggrExpr *n5) {
+        assert(n5);
+        this->n5 = n5;
+    }
+    
 	virtual void accept(class Visitor &v) {
 		v.visit(this);
 	}

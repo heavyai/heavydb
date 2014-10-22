@@ -29,6 +29,7 @@ namespace Buffer_Namespace {
     public:
         
         /// Constructs a BufferMgr object that allocates memSize bytes.
+        //@todo change this to size_t
         explicit BufferMgr(mapd_size_t memSize);
         
         /// Destructor
@@ -71,6 +72,7 @@ namespace Buffer_Namespace {
         mapd_addr_t mem_;       /// beginning memory address of the buffer pool
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
+        //@todo change this to multimap
         std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
     };
 

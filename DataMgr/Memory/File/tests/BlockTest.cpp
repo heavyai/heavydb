@@ -33,12 +33,12 @@ TEST(MultiBlock, pushAndPop) {
     // push()
     for (int i = 0; i < loopCount; ++i) {
         Block b(0, i);
-        m.push(&b, i);
+        m.push(b, i);
         EXPECT_EQ(m.blkVersions.size(), i + 1);
         EXPECT_EQ(m.epochs.size(), i + 1);
-        EXPECT_EQ(m.current()->fileId, 0);
-        ASSERT_EQ(m.current()->blockNum, i);
-        EXPECT_EQ(m.current()->used, 0);
+        EXPECT_EQ(m.current().fileId, 0);
+        ASSERT_EQ(m.current().blockNum, i);
+        EXPECT_EQ(m.current().used, 0);
     }
     
     // pop()

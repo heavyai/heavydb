@@ -32,6 +32,11 @@ public:
 		name.first = s1;
 		name.second = s2;
 	}
+    
+    /// Constructor
+    explicit Column(const ColumnRow &metadataIn) : metadata(metadataIn) {
+        this->name.second = metadata.columnName;
+    }
 	
 	virtual void accept(Visitor &v) {
 		v.visit(this);
