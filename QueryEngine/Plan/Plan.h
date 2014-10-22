@@ -88,7 +88,7 @@ namespace Plan_Namespace {
         
         virtual int execute();
         virtual int optimize();
-        void *getPlan();
+        virtual void *getPlan();
         virtual void print();
         
     private:
@@ -108,7 +108,7 @@ namespace Plan_Namespace {
         
         virtual int execute();
         virtual int optimize();
-        void *getPlan();
+        virtual void *getPlan();
         virtual void print();
         
     private:
@@ -129,7 +129,7 @@ namespace Plan_Namespace {
         
         virtual int execute();
         virtual int optimize();
-        void *getPlan();
+        virtual void *getPlan();
         virtual void print();
         
     private:
@@ -148,7 +148,7 @@ namespace Plan_Namespace {
         
         virtual int execute();
         virtual int optimize();
-        void *getPlan();
+        virtual void *getPlan();
         virtual void print();
         
     private:
@@ -167,7 +167,7 @@ namespace Plan_Namespace {
         
         virtual int execute();
         virtual int optimize();
-        void *getPlan();
+        virtual void *getPlan();
         virtual void print();
         
     private:
@@ -188,7 +188,7 @@ namespace Plan_Namespace {
         
         virtual int execute();
         virtual int optimize();
-        void *getPlan();
+        virtual void *getPlan();
         virtual void print();
         
     private:
