@@ -89,6 +89,9 @@ namespace File_Namespace {
     
     /// "Chunk" is an alias for "FileBuffer"
     AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *d) {
+        // TM: do we really want to only be able to put to a chunk that already
+        // exists?
+        
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
@@ -113,21 +116,22 @@ namespace File_Namespace {
         return nullptr;
     }
     
-    void FileMgr::requestFreeBlocks(mapd_size_t nblocks, mapd_size_t blockSize, std::vector<Block> &blocks) {
+    void FileMgr::requestFreeBlocks(mapd_size_t numBlocksRequested, mapd_size_t blockSize, std::vector<Block> &blocks) {
         mapd_size_t numFreeBlocksAvailable = 0;
         std::vector<FileInfo*> fileList;
         
         // determine if there are enough free blocks available
         auto ret = fileIndex_.equal_range(blockSize);
         for (auto fileIt = ret.first; fileIt != ret.second; ++fileIt) {
-            mapd_size_t tmp = files_[fileIt->second]->numFreeBlocks();
-            if (tmp > 0)
+            mapd_size_t fileFreeBlocks = files_[fileIt->second]->numFreeBlocks();
+            if (fileFreeBlocks > 0) {
                 fileList.push_back(files_[fileIt->second]);
-            numFreeBlocksAvailable += files_[fileIt->second]->numFreeBlocks();
+                numFreeBlocksAvailable += fileFreeBlocks;
+            }
         }
         
         // create new file(s) if there are not enough free blocks
-        mapd_size_t numBlocksToCreate = nblocks - numFreeBlocksAvailable;
+        mapd_size_t numBlocksToCreate = numBlocksRequested - numFreeBlocksAvailable;
         mapd_size_t numFilesToCreate = (numBlocksToCreate + MAPD_DEFAULT_N_BLOCKS - 1) / MAPD_DEFAULT_N_BLOCKS;
         for (; numFilesToCreate > 0; --numFilesToCreate) {
             FileInfo *fInfo = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
@@ -138,7 +142,7 @@ namespace File_Namespace {
         
         // Traverse the file list, adding the free blocks to the blocks vector, and erasing
         // the acquired blocks from their respective free block lists
-        mapd_size_t numBlocksRemaining = nblocks;
+        mapd_size_t numBlocksRemaining = numBlocksRequested;
         for (size_t i = 0; i < fileList.size() && numBlocksRemaining > 0; ++i) {
             FileInfo *fInfo = fileList[i];
             assert(fInfo->freeBlocks.size() == MAPD_DEFAULT_N_BLOCKS);
@@ -147,33 +151,31 @@ namespace File_Namespace {
                 numBlocksRemaining > 0; --numBlocksRemaining) {
 
                 mapd_size_t blockNum = *blockNumIt;
-                ++blockNumIt; // advance to next element before erasing
-                
+                fInfo->freeBlocks.erase(blockNumIt++);
                 blocks.push_back(Block(fInfo->fileId, blockNum));
-                fInfo->freeBlocks.erase(blockNum);
-                
+                //changed from Steve's code - make sure pasts test
             }
         }
-        assert(blocks.size() == nblocks);
+        assert(blocks.size() == numBlocksRequested);
         
         /*printf("blocks.size() = %lu\n", blocks.size());
         for (int i = 0; i < blocks.size(); ++i)
             printf("block: fileId=%d blockNum=%lu\n", blocks[i].fileId, blocks[i].blockNum);*/
     }
     
-    FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t nblocks) {
+    FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t numBlocks) {
         // check arguments
-        if (blockSize == 0 || nblocks == 0)
-            throw std::invalid_argument("blockSize and nblocks must be greater than 0.");
+        if (blockSize == 0 || numBlocks == 0)
+            throw std::invalid_argument("blockSize and numBlocks must be greater than 0.");
         
         // create the new file
-        FILE *f = create(nextFileId_, blockSize, nblocks);
+        FILE *f = create(nextFileId_, blockSize, numBlocks); //TM: not sure if I like naming scheme here - should be in separate namespace?
         if (f == nullptr)
             throw std::runtime_error("Unable to create the new file.");
         
         // instantiate a new FileInfo for the newly created file
         int fileId = nextFileId_++;
-        FileInfo *fInfo = new FileInfo(fileId, f, blockSize, nblocks);
+        FileInfo *fInfo = new FileInfo(fileId, f, blockSize, numBlocks);
         assert(fInfo);
         
         // update file manager data structures
