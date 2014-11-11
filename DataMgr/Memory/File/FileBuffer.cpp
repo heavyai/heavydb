@@ -15,6 +15,7 @@ namespace File_Namespace {
     }
     
     FileBuffer::~FileBuffer() {
+        // need to free blocks
         // NOP
     }
 
@@ -80,7 +81,12 @@ namespace File_Namespace {
         
         // initializations
         bytesToWrite = nbytes;
+        // Wrong?
         numBlocks = (offset + nbytes + blockSize_ - 1) / blockSize_;
+
+        start = (offset / blockSize_)
+        end = (offset + nBytes) / blockSize_
+        blocks to write  = end - start + 1 
         
         // determine how many new blocks are needed
         numNewBlocks = 0;
@@ -93,6 +99,7 @@ namespace File_Namespace {
         fm_->requestFreeBlocks(numNewBlocks, blockSize_, freeBlocks);
 
         // append the new blocks
+        // this is WRONG!
         for (auto blkIt = freeBlocks.begin(); blkIt != freeBlocks.end(); ++blkIt) {
             Block b = *blkIt;
             MultiBlock mb(blockSize_);
@@ -139,6 +146,8 @@ namespace File_Namespace {
     }
 
     void FileBuffer::append(mapd_addr_t src, const mapd_size_t nbytes) {
+
+
         
     }
 
