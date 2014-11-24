@@ -1,44 +1,47 @@
 /**
  * @file        FileBuffer.cpp
  * @author      Steven Stewart <steve@map-d.com>
+ * @author      Todd Mostak <todd@map-d.com>
  */
+
 #include "FileBuffer.h"
 #include "File.h"
 #include "FileMgr.h"
 #include <map>
 
-namespace File_Namespace {
-    
-    FileBuffer::FileBuffer(mapd_size_t pageSize, FileMgr *fm) : blockSize_(pageSize), fm_(fm) {
+using namespace std;
+
+    FileBuffer::FileBuffer(mapd_size_t pageSize, FileMgr *fm) : pageSize_(pageSize), fm_(fm) {
         assert(fm_);
         // NOP
     }
-    
+
     FileBuffer::~FileBuffer() {
-        // need to free blocks
+        // need to free pages
         // NOP
     }
-
-    void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes) {
+    void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
         // variable declarations
-        size_t nblocks;     // the number of logical blocks in this FileBuffer
+        size_t numPages;     // the number of logical pages in this FileBuffer
         mapd_addr_t cur;    // a pointer to the current location in dst being written to
         std::map<int, FILE*> openFiles; // keeps track of opened files
-        mapd_size_t nblocksToRead; // the number of blocks to be read
-        
+        mapd_size_t numPagesToRead; // the number of pages to be read
+
         // initialize variables
-        nblocks = blocks_.size();
-        cur = dst + offset;
-        nblocksToRead = (nbytes + blockSize_ - 1) / blockSize_;
-        
-        // Traverse the logical blocks
-        for (size_t i = 0; i < nblocksToRead; ++i) {
-            assert(blocks_[i].blockSize == blockSize_);
-            
-            // Obtain the most recent version of the current block
-            Block b = blocks_[i].current();
-            printf("read: fileId=%d blockNum=%lu blockSize=%lu\n", b.fileId, b.blockNum, blockSize_);
-            
+        // need to take into account offset
+        cur = dst;
+        mapd_size_t startPage = offset / pageSize_;
+        mapd_size_t startPageOffset = offset % pageSize_;
+        numPagesToRead = (numBytes + startPageOffset + pageSize_ - 1) / pageSize_;
+        assert (startPage + numPagesToRead <= pages_.size());
+        // Traverse the logical pages
+        mapd_size_t bytesLeft = numBytes;
+        for (size_t pageNum = startPage; pageNum < startPage  + numPagesToRead; ++pageNum) {
+
+            assert(pages_[pageNum].pageSize == pageSize_);
+            Page b = pages_[pageNum].current();
+            printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", b.fileId, b.pageNum, pageSize_);
+
             // Open the file
             FILE *f = nullptr;
             auto fileIt = openFiles.find(b.fileId);
@@ -49,131 +52,61 @@ namespace File_Namespace {
             else
                 f = fileIt->second;
             assert(f);
-            
-            // Read the block into the destination (dst) buffer at its
+
+            // Read the page into the destination (dst) buffer at its
             // current (cur) location
-            // size_t bytesRead = File_Namespace::readBlock(f, blockSize_, b.blockNum, cur);
-            size_t bytesRead = File_Namespace::read(f, i * blockSize_, blockSize_, cur);
-            // assert(bytesRead == blockSize_);
-            
-            // testing
-            mapd_byte_t tmp[bytesRead];
-            File_Namespace::read(f, b.blockNum * blockSize_, bytesRead, tmp);
-            int *p_tmp = (int*)&tmp;
-            for (int i = 0; i < blockSize_; ++i) {
-                printf("read: %d\n", p_tmp[i]);
-            }
-            
-            cur += blockSize_;
+            size_t bytesRead;
+            if (pageNum == startPage) 
+                bytesRead = File_Namespace::read(f, b.pageNum * pageSize_ + startPageOffset, min(pageSize_ - startPageOffset,bytesLeft), cur);
+            else 
+                bytesRead = File_Namespace::read(f, b.pageNum * pageSize_, min(pageSize_,bytesLeft), cur);
+            bytesLeft -= bytesRead
+            cur += bytesRead
         }
-        
-        // Close any open files
+        assert (bytesLeft == 0);
+
+        // is this below thread safe? Maybe Instead let's just leave the files open
+        // for now
         for (auto fileIt = openFiles.begin(); fileIt != openFiles.end(); ++fileIt)
             close(fileIt->second);
     }
 
-    void FileBuffer::write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes) {
-        // variable declarations
-        mapd_size_t bytesToWrite;           // number of bytes remaining to be written
-        mapd_size_t numBlocks;              // number of blocks to be written
-        mapd_size_t numNewBlocks;           // number of free blocks to request from file manager
-        std::vector<Block> freeBlocks;      // new blocks to be appended to this buffer
-        
-        // initializations
-        bytesToWrite = nbytes;
-        // Wrong?
-        numBlocks = (offset + nbytes + blockSize_ - 1) / blockSize_;
 
-        start = (offset / blockSize_)
-        end = (offset + nBytes) / blockSize_
-        blocks to write  = end - start + 1 
-        
-        // determine how many new blocks are needed
-        numNewBlocks = 0;
-        for (mapd_size_t i = 0; i < blocks_.size() && i < numBlocks; ++i)
-            if (blocks_[i].epochs.back() < fm_->epoch())
-                numNewBlocks++;
-        numNewBlocks += numBlocks - numNewBlocks; // add number of blocks to append
-        
-        // request the new blocks from the file manager
-        fm_->requestFreeBlocks(numNewBlocks, blockSize_, freeBlocks);
 
-        // append the new blocks
-        // this is WRONG!
-        for (auto blkIt = freeBlocks.begin(); blkIt != freeBlocks.end(); ++blkIt) {
-            Block b = *blkIt;
-            MultiBlock mb(blockSize_);
-            mb.epochs.push_back(fm_->epoch());
-            mb.blkVersions.push_back(b);
-            blocks_.push_back(mb);
-        }
-        freeBlocks.clear();
-
-        // write
-        mapd_size_t curOffset = offset;
-        int j = 0;
-        for (int i = 0; i < blocks_.size() && i < numBlocks; i++) {
-            if (((i+1) * blockSize_) < offset)
-                continue;
-            
-            // determine number of bytes to write to current block
-            mapd_size_t curBytesToWrite = std::min(bytesToWrite, blockSize_ - (curOffset % blockSize_));
-            assert(curBytesToWrite <= blockSize_);
-            
-            // write to the block
-            Block b = blocks_[j].current();
-            FILE *f = File_Namespace::open(b.fileId);
-            File_Namespace::write(f, b.blockNum, curBytesToWrite, src + curOffset);
-            File_Namespace::close(f);
-            printf("write: fileId=%d blockNum=%lu curBytesToWrite=%lu\n", b.fileId, b.blockNum, curBytesToWrite);
-            
-            
-            // testing
-            f = File_Namespace::open(b.fileId);
-            mapd_byte_t tmp[curBytesToWrite];
-            File_Namespace::read(f, b.blockNum * blockSize_, curBytesToWrite, tmp);
-            int *p_tmp = (int*)&tmp;
-            for (int i = 0; i < blockSize_; ++i) {
-                printf("wrote: %d\n", p_tmp[i]);
+    void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset) {
+        mapd_size_t bytesToWrite = numBytes;           // number of bytes remaining to be written
+        mapd_size_t startPage = offset / pageSize_;
+        mapd_size_t startPageOffset = offset % pageSize_;
+        mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageSize_ - 1) / pageSize_; 
+        mapd_size_t numNewPages;           // number of free pages to request from file manager
+        std::vector<Page> freePages;      // new pages to be appended to this buffer
+        mapd_size_t bytesLeft = numBytes;
+        int epoch = fm_-> epoch();
+        mapd_size_t numNewPages = 0;
+        for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
+            if (pageNum >= pages_.size() ||  pages_[i].epochs.back() < epoch) {
+                numNewPages++;
             }
-            
-            
-            // update counters
-            curOffset += curBytesToWrite;
-            bytesToWrite -= curBytesToWrite;
-            j++;
         }
-    }
-
-    void FileBuffer::append(mapd_addr_t src, const mapd_size_t nbytes) {
+        fm_->requestFreeBlocks(numNewPages, pageSize_, freePages);
 
 
         
-    }
 
-    /// Returns the number of pages in the FileBuffer.
-    mapd_size_t FileBuffer::pageCount() const {
-        return 0;
-    }
+
+
     
-    /// Returns the size in bytes of each page in the FileBuffer.
-    mapd_size_t FileBuffer::pageSize() const {
-        return blockSize_;
-    }
-    
-    /// Returns the total number of bytes allocated for the FileBuffer.
-    mapd_size_t FileBuffer::size() const {
-        return 0;
-    }
-    
-    /// Returns the total number of used bytes in the FileBuffer.
-    mapd_size_t FileBuffer::used() const {
-        return 0;
-    }
-    
-    /// Returns whether or not the FileBuffer has been modified since the last flush/checkpoint.
-    bool FileBuffer::isDirty() const {
-        return 0;
-    }
-    
-} // File_Namespace
+
+        
+        `
+
+
+
+
+
+
+
+
+
+
+

@@ -90,9 +90,17 @@ namespace File_Namespace {
     size_t readBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf) {
         return read(f, blockNum * blockSize, blockSize, buf);
     }
+
+    size_t readPartialBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t offset, const mapd_size_t readSize, const mapd_size_t blockNum, mapd_addr_t buf) {
+        return read(f, blockNum * blockSize + offset, readSize, buf);
+    }
     
     size_t writeBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf) {
         return write(f, blockNum * blockSize, blockSize, buf);
+    }
+
+    size_t writePartialBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t offset, const mapd_size_t writeSize, const mapd_size_t blockNum, mapd_addr_t buf) {
+        return write(f, blockNum * blockSize + offset, writeSize, buf);
     }
     
     size_t appendBlock(FILE *f, const mapd_size_t blockSize, mapd_addr_t buf) {
