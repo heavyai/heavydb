@@ -56,6 +56,7 @@ namespace File_Namespace {
             virtual void write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
             virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
+            void copyPage(Block srcPage, Block destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
             /// Not implemented for FileMgr -- throws a runtime_error
             virtual const mapd_byte_t* getMemoryPtr() const {
@@ -83,7 +84,7 @@ namespace File_Namespace {
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
             
-            std::vector<Multipage> pages_;
+            std::vector<MultiBlock> multiPages_;
             mapd_size_t pageSize_;
     };
     

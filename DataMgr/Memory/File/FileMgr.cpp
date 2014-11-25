@@ -17,8 +17,9 @@ namespace File_Namespace {
 
     FileMgr::~FileMgr() {
         // free memory used by FileInfo objects
-        for (int i = 0; i < files_.size(); ++i)
+        for (int i = 0; i < files_.size(); ++i) {
             delete files_[i];
+        }
     }
 
     void FileMgr::createChunk(const ChunkKey &key, mapd_size_t pageSize) {
@@ -73,6 +74,24 @@ namespace File_Namespace {
         throw std::runtime_error("Operation not supported");
     }
 
+    Block FileMgr::requestFreeBlock(mapd_size_t blockSize) {
+        auto candidateFiles = fileIndex_.equal_range(blockSize);
+        FileInfo * freeFile = 0;
+        for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
+            mapd_size_t fileFreeBlocks = files_[fileIt->second]->numFreeBlocks();
+            freeFile = files_[fileIt->second];
+        }
+        if (freeFile == nullptr) { // didn't find free file and need to create one
+            freeFile = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
+        }
+        assert (freeFile != nullptr); // should have file by now
+        auto blockNumIt = freeFile -> freeBlocks.begin();
+        mapd_size_t blockNum = *blockNumIt;
+        freeFile -> freeBlocks.erase(blockNum);
+        Block block (freeFile->fileId,blockNum);
+        return block;
+    }
+
     void FileMgr::requestFreeBlocks(mapd_size_t numBlocksRequested, mapd_size_t blockSize, std::vector<Block> &blocks) {
         mapd_size_t numFreeBlocksAvailable = 0;
         std::vector<FileInfo*> fileList;
@@ -99,7 +118,7 @@ namespace File_Namespace {
         mapd_size_t numBlocksRemaining = numBlocksRequested;
         for (size_t i = 0; i < fileList.size() && numBlocksRemaining > 0; ++i) {
             FileInfo *fInfo = fileList[i];
-            assert(fInfo->freeBlocks.size() == MAPD_DEFAULT_N_BLOCKS);
+            //assert(fInfo->freeBlocks.size() == MAPD_DEFAULT_N_BLOCKS); // error?? this will only be true if the file is newly created
 
             for (auto blockNumIt = fInfo->freeBlocks.begin(); blockNumIt != fInfo->freeBlocks.end() &&
                 numBlocksRemaining > 0; --numBlocksRemaining) {

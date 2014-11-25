@@ -33,24 +33,16 @@ using namespace std;
         mapd_size_t startPage = offset / pageSize_;
         mapd_size_t startPageOffset = offset % pageSize_;
         numPagesToRead = (numBytes + startPageOffset + pageSize_ - 1) / pageSize_;
-        assert (startPage + numPagesToRead <= pages_.size());
+        assert (startPage + numPagesToRead <= multiPages_.size());
         // Traverse the logical pages
         mapd_size_t bytesLeft = numBytes;
         for (size_t pageNum = startPage; pageNum < startPage  + numPagesToRead; ++pageNum) {
 
-            assert(pages_[pageNum].pageSize == pageSize_);
-            Page b = pages_[pageNum].current();
+            assert(multiPages_[pageNum].pageSize == pageSize_);
+            Page b = multiPages_[pageNum].current();
             printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", b.fileId, b.pageNum, pageSize_);
 
-            // Open the file
-            FILE *f = nullptr;
-            auto fileIt = openFiles.find(b.fileId);
-            if (fileIt == openFiles.end()) {
-                f = File_Namespace::open(b.fileId);
-                openFiles[b.fileId] = f;
-            }
-            else
-                f = fileIt->second;
+            FILE *f = fm_ -> files_[b.fileId] -> f;
             assert(f);
 
             // Read the page into the destination (dst) buffer at its
@@ -60,17 +52,23 @@ using namespace std;
                 bytesRead = File_Namespace::read(f, b.pageNum * pageSize_ + startPageOffset, min(pageSize_ - startPageOffset,bytesLeft), cur);
             else 
                 bytesRead = File_Namespace::read(f, b.pageNum * pageSize_, min(pageSize_,bytesLeft), cur);
-            bytesLeft -= bytesRead
-            cur += bytesRead
+            bytesLeft -= bytesRead;
+            cur += bytesRead;
         }
         assert (bytesLeft == 0);
 
-        // is this below thread safe? Maybe Instead let's just leave the files open
-        // for now
-        for (auto fileIt = openFiles.begin(); fileIt != openFiles.end(); ++fileIt)
-            close(fileIt->second);
     }
 
+    void FileBuffer::copyPage(Block srcPage, Block destPage, const mapd_size_t numBytes, const mapd_size_t offset) { 
+        FILE *srcFile = fm_ -> files_[srcPage.fileId] -> f;
+        FILE *destFile = fm_ -> files_[destPage.fileId] -> f;
+        mapd_addr_t buffer = new mapd_byte_t [numBytes]; 
+        size_t bytesRead = File_Namespace::read(srcFile,srcPage.pageNum * pageSize_ + offset, buffer);
+        assert(bytesRead == numBytes);
+        size_t bytesWritten = File_Namespace::write(destFile,destPage.pageNum * pageSize_ + offset,buffer);
+        assert(bytesWritten == numBytes);
+        delete [] buffer;
+    }
 
 
     void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset) {
@@ -84,29 +82,15 @@ using namespace std;
         int epoch = fm_-> epoch();
         mapd_size_t numNewPages = 0;
         for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
-            if (pageNum >= pages_.size() ||  pages_[i].epochs.back() < epoch) {
-                numNewPages++;
+            Block *page = nullptr;
+            if (pageNum >= multiPages_.size() ||  multiPages_[pageNum].epochs.back() < epoch) {
+                page = fm_ -> requestFreeBlock(pageSize_);
             }
+            else {
+                page = multiPages_[pageNum].current();
+            }
+            // now determine if we need to copy this page?
+            if (pageNum == startPage && startPageOffset > 0) {
+                //copy(
         }
-        fm_->requestFreeBlocks(numNewPages, pageSize_, freePages);
-
-
-        
-
-
-
-    
-
-        
-        `
-
-
-
-
-
-
-
-
-
-
-
+    }

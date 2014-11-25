@@ -100,6 +100,7 @@ namespace File_Namespace {
         virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t nbytes);
         virtual void deleteDatum(AbstractDatum *d);
         virtual AbstractDatum* putDatum(AbstractDatum *d);
+        Block requestFreeBlock(mapd_size_t blockSize);
 
         /**
          * @brief Obtains free blocks -- creates new files if necessary -- of the requested size.
