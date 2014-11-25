@@ -34,7 +34,7 @@ void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const m
     for (size_t pageNum = startPage; pageNum < startPage  + numPagesToRead; ++pageNum) {
 
         assert(multiPages_[pageNum].pageSize == pageSize_);
-        Page page = multiPages_[pageNum].current();
+        Block page = multiPages_[pageNum].current();
         printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", page.fileId, page.pageNum, pageSize_);
 
         FILE *f = fm_ -> files_[page.fileId] -> f;
@@ -76,15 +76,30 @@ void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_
     mapd_size_t initialNumPages = multiPages_size();
     int epoch = fm_-> epoch();
 
+    if (startPage > initalNumPages) { // means there is a gap we need to allocate pages for
+        for (size_t pageNum = initialNumPages; pageNum < startPage; ++pageNum) {
+            page = fm_ -> requestFreeBlock(pageSize_);
+            MultiBlock multiBlock(pageSize_);
+            multiBlock.epochs.push_back(epoch);
+            multiBlock.blkVersions.push_back(page);
+            multiPages_.push_back(multiBlock);
+        }
+    }
     for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
         Block *page = nullptr;
         if (pageNum >= initialNumPages) {
             page = fm_ -> requestFreeBlock(pageSize_);
+            MultiBlock multiBlock(pageSize_);
+            multiBlock.epochs.push_back(epoch);
+            multiBlock.blkVersions.push_back(page);
+            multiPages_.push_back(multiBlock);
         }
         else if (multiPages_[pageNum].epochs.back() < epoch) { // need to create new page b/c this current one lags epoch and we can't overwrite it 
 // also need to copy if we are on first or last page
             Block *lastPage = multiPages_[pageNum].current();
             page = fm_ -> requestFreeBlock(pageSize_);
+            multiPages_[pageNum].epochs.push_back(epoch);
+            multiPages_[pageNum].blkVersions.push_back(page);
             if (pageNum == startPage && startPageOffset > 0) {
                 copyPage(lastPage,page,startOffset,0);
             }
