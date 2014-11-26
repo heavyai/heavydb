@@ -58,7 +58,7 @@ namespace File_Namespace {
      * and so ChunkKeyToChunkMap maps chunk keys to Chunk types, which are
      * vectors of MultiPage* pointers (logical pages).
      */
-    typedef std::map<ChunkKey, Chunk> ChunkKeyToChunkMap;
+    typedef std::map<ChunkKey, Chunk *> ChunkKeyToChunkMap;
 
     /**
      * @class   FileMgr
@@ -112,6 +112,8 @@ namespace File_Namespace {
 
         /// Returns the current value of epoch
         inline int epoch() { return epoch_; }
+
+        FILE * getFileForFileId(const int fileId);
 
     private:
         std::string basePath_; 				/// The OS file system path containing the files.

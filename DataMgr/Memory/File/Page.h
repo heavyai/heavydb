@@ -29,6 +29,7 @@ namespace File_Namespace {
         
         /// Constructor
         Page(int fileId, mapd_size_t pageNum) : fileId(fileId), pageNum(pageNum) {}
+        Page(): fileId(-1), pageNum(0) {}
     };
     
     /**

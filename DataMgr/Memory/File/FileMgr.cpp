@@ -26,11 +26,12 @@ namespace File_Namespace {
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
-            Chunk chunk(pageSize,this);
-            //chunkIndex_[key] = std::move(Chunk(pageSize,this)); // should avoid copy?
+            Chunk *chunk = new Chunk (this,pageSize);
+            //chunkIndex_[key] = std::move(Chunk(this,pageSize)); // should avoid copy?
             //chunkIndex_[key] = std::move(chunk); // should avoid copy?
             chunkIndex_[key] = chunk;
-            return (&chunkIndex_[key]);
+            return (chunkIndex_[key]);
+            //return 0;
             //Chunk chunk(pageSize,this);
             //chunkIndex_[key] = chunk;
         }
@@ -47,7 +48,7 @@ namespace File_Namespace {
             throw std::runtime_error("Chunk does not exist.");
         }
         // does the below happen automatically
-        //delete chunkIt -> second;
+        delete chunkIt -> second;
         chunkIndex_.erase(chunkIt);
     }
 
@@ -55,7 +56,7 @@ namespace File_Namespace {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
-        return &chunkIt->second;
+        return chunkIt->second;
     }
 
     AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum) {
@@ -66,7 +67,7 @@ namespace File_Namespace {
             chunk = createChunk(key,datum->pageSize());
         }
         else {
-            chunk = &chunkIt->second;
+            chunk = chunkIt->second;
         }
         // write the datum's data to the Chunk
         chunk->write((mapd_addr_t)datum->getMemoryPtr(), 0, datum->pageSize() * datum->pageCount());
@@ -167,6 +168,12 @@ namespace File_Namespace {
         assert(files_.back() == fInfo); // postcondition
         return fInfo;
     }
+
+    FILE * FileMgr::getFileForFileId(const int fileId) {
+        assert (fileId >= 0 && fileId < nextFileId_);
+        return files_[fileId] -> f;
+    }
+
 
 
 } // File_Namespace

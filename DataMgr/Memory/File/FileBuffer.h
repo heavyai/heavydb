@@ -39,7 +39,7 @@ namespace File_Namespace {
             /**
              * @brief Constructs a FileBuffer object.
              */
-            FileBuffer(mapd_size_t pageSize, FileMgr *fm, const mapd_size_t numBytes = 0);
+            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const mapd_size_t numBytes = 0);
             
             /// Destructor
             virtual ~FileBuffer();
@@ -55,8 +55,8 @@ namespace File_Namespace {
              */
             virtual void write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
-            virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
-            void copyPage(Page srcPage, Page destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
+            //virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
+            void copyPage(Page &srcPage, Page &destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
             /// Not implemented for FileMgr -- throws a runtime_error
             virtual const mapd_byte_t* getMemoryPtr() const {
@@ -64,28 +64,37 @@ namespace File_Namespace {
             }
 
             /// Returns the number of pages in the FileBuffer.
-            virtual mapd_size_t pageCount() const;
+            inline virtual mapd_size_t pageCount() const {
+                return multiPages_.size();
+            }
             
             /// Returns the size in bytes of each page in the FileBuffer.
-            virtual mapd_size_t pageSize() const;
+            inline virtual mapd_size_t pageSize() const {
+                return pageSize_;
+            }
             
             /// Returns the total number of bytes allocated for the FileBuffer.
-            virtual mapd_size_t size() const;
+            inline virtual mapd_size_t size() const {
+                return multiPages_.size() * pageSize_;
+            }
             
             /// Returns the total number of used bytes in the FileBuffer.
-            virtual mapd_size_t used() const;
+            //inline virtual mapd_size_t used() const {
             
             /// Returns whether or not the FileBuffer has been modified since the last flush/checkpoint.
-            virtual bool isDirty() const;
+            virtual bool isDirty() const {
+                return isDirty_;
+            }
 
         private:
-            FileBuffer(const FileBuffer&);      // private copy constructor
-            FileBuffer& operator=(const FileBuffer&); // private overloaded assignment operator
+            //FileBuffer(const FileBuffer&);      // private copy constructor
+            //FileBuffer& operator=(const FileBuffer&); // private overloaded assignment operator
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
             
             std::vector<MultiPage> multiPages_;
             mapd_size_t pageSize_;
+            bool isDirty_;
     };
     
 } // File_Namespace
