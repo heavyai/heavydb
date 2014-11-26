@@ -15,13 +15,13 @@ GTEST_API_ int main(int argc, char **argv) {
 TEST(FileMgr, getFreeBlocks)
 {
     FileMgr fm(".");
-    std::vector<Block> freeBlocks;
-    mapd_size_t nblocks = 1024;
-    mapd_size_t blockSize = 4096;
+    std::vector<Page> freePages;
+    mapd_size_t numPages = 1024;
+    mapd_size_t pageSize = 4096;
     
-    EXPECT_EQ(freeBlocks.size(), 0);
-    fm.requestFreeBlocks(nblocks, blockSize, freeBlocks);
-    EXPECT_EQ(freeBlocks.size(), nblocks);
+    EXPECT_EQ(freePages.size(), 0);
+    fm.requestFreePages(numPages, pageSize, freePages);
+    EXPECT_EQ(freePages.size(), numPages);
     
 }
 

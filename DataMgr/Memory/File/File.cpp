@@ -15,19 +15,19 @@
 
 namespace File_Namespace {
     
-    FILE* create(const int fileId, const mapd_size_t blockSize, const mapd_size_t nblocks) {
-        if (nblocks < 1 || blockSize < 1)
-            throw std::invalid_argument("Number of blocks and block size must be positive integers.");
+    FILE* create(const int fileId, const mapd_size_t pageSize, const mapd_size_t npages) {
+        if (npages < 1 || pageSize < 1)
+            throw std::invalid_argument("Number of pages and page size must be positive integers.");
         
         FILE *f;
         std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
         if ((f = fopen(s.c_str(), "w+b")) == NULL)
             throw std::runtime_error("Unable to create file");
         
-        fseek(f, (blockSize * nblocks)-1, SEEK_SET);
+        fseek(f, (pageSize * npages)-1, SEEK_SET);
         fputc(EOF, f);
         fseek(f, 0, SEEK_SET); // rewind
-        assert(fileSize(f) == (blockSize * nblocks));
+        assert(fileSize(f) == (pageSize * npages));
         
         return f;
     }
@@ -87,24 +87,24 @@ namespace File_Namespace {
         return write(f, fileSize(f), size, buf);
     }
     
-    size_t readBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf) {
-        return read(f, blockNum * blockSize, blockSize, buf);
+    size_t readPage(FILE *f, const mapd_size_t pageSize, const mapd_size_t pageNum, mapd_addr_t buf) {
+        return read(f, pageNum * pageSize, pageSize, buf);
     }
 
-    size_t readPartialBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t offset, const mapd_size_t readSize, const mapd_size_t blockNum, mapd_addr_t buf) {
-        return read(f, blockNum * blockSize + offset, readSize, buf);
+    size_t readPartialPage(FILE *f, const mapd_size_t pageSize, const mapd_size_t offset, const mapd_size_t readSize, const mapd_size_t pageNum, mapd_addr_t buf) {
+        return read(f, pageNum * pageSize + offset, readSize, buf);
     }
     
-    size_t writeBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf) {
-        return write(f, blockNum * blockSize, blockSize, buf);
+    size_t writePage(FILE *f, const mapd_size_t pageSize, const mapd_size_t pageNum, mapd_addr_t buf) {
+        return write(f, pageNum * pageSize, pageSize, buf);
     }
 
-    size_t writePartialBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t offset, const mapd_size_t writeSize, const mapd_size_t blockNum, mapd_addr_t buf) {
-        return write(f, blockNum * blockSize + offset, writeSize, buf);
+    size_t writePartialPage(FILE *f, const mapd_size_t pageSize, const mapd_size_t offset, const mapd_size_t writeSize, const mapd_size_t pageNum, mapd_addr_t buf) {
+        return write(f, pageNum * pageSize + offset, writeSize, buf);
     }
     
-    size_t appendBlock(FILE *f, const mapd_size_t blockSize, mapd_addr_t buf) {
-        return write(f, fileSize(f), blockSize, buf);
+    size_t appendPage(FILE *f, const mapd_size_t pageSize, mapd_addr_t buf) {
+        return write(f, fileSize(f), pageSize, buf);
     }
     
     /// @todo There may be an issue casting to size_t from long.

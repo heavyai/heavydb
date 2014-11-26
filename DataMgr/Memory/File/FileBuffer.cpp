@@ -34,7 +34,7 @@ void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const m
     for (size_t pageNum = startPage; pageNum < startPage  + numPagesToRead; ++pageNum) {
 
         assert(multiPages_[pageNum].pageSize == pageSize_);
-        Block page = multiPages_[pageNum].current();
+        Page page = multiPages_[pageNum].current();
         printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", page.fileId, page.pageNum, pageSize_);
 
         FILE *f = fm_ -> files_[page.fileId] -> f;
@@ -55,7 +55,7 @@ void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const m
     assert (bytesLeft == 0);
 }
 
-void FileBuffer::copyPage(Block srcPage, Block destPage, const mapd_size_t numBytes, const mapd_size_t offset) { 
+void FileBuffer::copyPage(Page srcPage, Page destPage, const mapd_size_t numBytes, const mapd_size_t offset) { 
     FILE *srcFile = fm_ -> files_[srcPage.fileId] -> f;
     FILE *destFile = fm_ -> files_[destPage.fileId] -> f;
     mapd_addr_t buffer = new mapd_byte_t [numBytes]; 
@@ -73,33 +73,33 @@ void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_
     mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageSize_ - 1) / pageSize_; 
     mapd_size_t bytesLeft = numBytes;
     mapd_addr_t curPtr = src;    // a pointer to the current location in dst being written to
-    mapd_size_t initialNumPages = multiPages_size();
+    mapd_size_t initialNumPages = multiPages_.size();
     int epoch = fm_-> epoch();
 
     if (startPage > initalNumPages) { // means there is a gap we need to allocate pages for
         for (size_t pageNum = initialNumPages; pageNum < startPage; ++pageNum) {
-            page = fm_ -> requestFreeBlock(pageSize_);
-            MultiBlock multiBlock(pageSize_);
-            multiBlock.epochs.push_back(epoch);
-            multiBlock.blkVersions.push_back(page);
-            multiPages_.push_back(multiBlock);
+            page = fm_ -> requestFreePage(pageSize_);
+            MultiPage multiPage(pageSize_);
+            multiPage.epochs.push_back(epoch);
+            multiPage.pageVersions.push_back(page);
+            multiPages_.push_back(multiPage);
         }
     }
     for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
-        Block *page = nullptr;
+        Page *page = nullptr;
         if (pageNum >= initialNumPages) {
-            page = fm_ -> requestFreeBlock(pageSize_);
-            MultiBlock multiBlock(pageSize_);
-            multiBlock.epochs.push_back(epoch);
-            multiBlock.blkVersions.push_back(page);
-            multiPages_.push_back(multiBlock);
+            page = fm_ -> requestFreePage(pageSize_);
+            MultiPage multiPage(pageSize_);
+            multiPage.epochs.push_back(epoch);
+            multiPage.pageVersions.push_back(page);
+            multiPages_.push_back(multiPage);
         }
         else if (multiPages_[pageNum].epochs.back() < epoch) { // need to create new page b/c this current one lags epoch and we can't overwrite it 
 // also need to copy if we are on first or last page
-            Block *lastPage = multiPages_[pageNum].current();
-            page = fm_ -> requestFreeBlock(pageSize_);
+            Page *lastPage = multiPages_[pageNum].current();
+            page = fm_ -> requestFreePage(pageSize_);
             multiPages_[pageNum].epochs.push_back(epoch);
-            multiPages_[pageNum].blkVersions.push_back(page);
+            multiPages_[pageNum].pageVersions.push_back(page);
             if (pageNum == startPage && startPageOffset > 0) {
                 copyPage(lastPage,page,startOffset,0);
             }
@@ -108,7 +108,7 @@ void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_
             }
         }
         else {
-            // we already have a new block at current
+            // we already have a new page at current
             // epoch for this page - just grab this page
             page = multiPages_[pageNum].current();
         }

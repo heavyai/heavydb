@@ -22,10 +22,22 @@ namespace File_Namespace {
         }
     }
 
-    void FileMgr::createChunk(const ChunkKey &key, mapd_size_t pageSize) {
-        if (chunkBlockSize_.find(key) != chunkBlockSize_.end())
+    AbstractDatum* FileMgr::createChunk(const ChunkKey &key, mapd_size_t pageSize) {
+        // we will do this lazily and not allocate space for the Chunk (i.e.
+        // FileBuffer yet)
+        if (chunkIndex_.find(key) != chunkIndex_.end()) {
+            Chunk chunk(pageSize,this);
+            //chunkIndex_[key] = std::move(Chunk(pageSize,this)); // should avoid copy?
+            //chunkIndex_[key] = std::move(chunk); // should avoid copy?
+            chunkIndex_[key] = chunk;
+            return (&chunkIndex_[key]);
+            //Chunk chunk(pageSize,this);
+            //chunkIndex_[key] = chunk;
+        }
+        else {
             throw std::runtime_error("Chunk already exists.");
-        chunkBlockSize_[key] = pageSize;
+            return 0;
+        }
     }
 
     void FileMgr::deleteChunk(const ChunkKey &key) {
@@ -35,7 +47,7 @@ namespace File_Namespace {
             throw std::runtime_error("Chunk does not exist.");
         }
         // does the below happen automatically
-        delete chunkIt -> second;
+        //delete chunkIt -> second;
         chunkIndex_.erase(chunkIt);
     }
 
@@ -47,19 +59,20 @@ namespace File_Namespace {
     }
 
     AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum) {
-        // TM: do we really want to only be able to put to a chunk that already
-        // exists?
-        
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
-        if (chunkIt == chunkIndex_.end())
-            throw std::runtime_error("Chunk does not exist.");
-        Chunk *chunk = &chunkIt->second;
-        // write the d's data to the Chunk
+        AbstractDatum *chunk;
+        if (chunkIt == chunkIndex_.end()) {
+            chunk = createChunk(key,datum->pageSize());
+        }
+        else {
+            chunk = &chunkIt->second;
+        }
+        // write the datum's data to the Chunk
         chunk->write((mapd_addr_t)datum->getMemoryPtr(), 0, datum->pageSize() * datum->pageCount());
-        
-        return c;
+        return chunk;
     }
+
 
     AbstractDatum* FileMgr::createDatum(mapd_size_t pageSize, mapd_size_t nbytes) {
         throw std::runtime_error("Operation not supported");
@@ -74,82 +87,82 @@ namespace File_Namespace {
         throw std::runtime_error("Operation not supported");
     }
 
-    Block FileMgr::requestFreeBlock(mapd_size_t blockSize) {
-        auto candidateFiles = fileIndex_.equal_range(blockSize);
+    Page FileMgr::requestFreePage(mapd_size_t pageSize) {
+        auto candidateFiles = fileIndex_.equal_range(pageSize);
         FileInfo * freeFile = 0;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-            mapd_size_t fileFreeBlocks = files_[fileIt->second]->numFreeBlocks();
+            mapd_size_t fileFreePages = files_[fileIt->second]->numFreePages();
             freeFile = files_[fileIt->second];
         }
         if (freeFile == nullptr) { // didn't find free file and need to create one
-            freeFile = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
+            freeFile = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
         }
         assert (freeFile != nullptr); // should have file by now
-        auto blockNumIt = freeFile -> freeBlocks.begin();
-        mapd_size_t blockNum = *blockNumIt;
-        freeFile -> freeBlocks.erase(blockNum);
-        Block block (freeFile->fileId,blockNum);
-        return block;
+        auto pageNumIt = freeFile -> freePages.begin();
+        mapd_size_t pageNum = *pageNumIt;
+        freeFile -> freePages.erase(pageNum);
+        Page page (freeFile->fileId,pageNum);
+        return page;
     }
 
-    void FileMgr::requestFreeBlocks(mapd_size_t numBlocksRequested, mapd_size_t blockSize, std::vector<Block> &blocks) {
-        mapd_size_t numFreeBlocksAvailable = 0;
+    void FileMgr::requestFreePages(mapd_size_t numPagesRequested, mapd_size_t pageSize, std::vector<Page> &pages) {
+        mapd_size_t numFreePagesAvailable = 0;
         std::vector<FileInfo*> fileList;
         
-        // determine if there are enough free blocks available
-        auto candidateFiles = fileIndex_.equal_range(blockSize);
+        // determine if there are enough free pages available
+        auto candidateFiles = fileIndex_.equal_range(pageSize);
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-            mapd_size_t fileFreeBlocks = files_[fileIt->second]->numFreeBlocks();
-            if (fileFreeBlocks > 0) {
+            mapd_size_t fileFreePages = files_[fileIt->second]->numFreePages();
+            if (fileFreePages > 0) {
                 fileList.push_back(files_[fileIt->second]);
-                numFreeBlocksAvailable += fileFreeBlocks;
+                numFreePagesAvailable += fileFreePages;
             }
         }
-        // create new file(s) if there are not enough free blocks
-        mapd_size_t numBlocksToCreate = numBlocksRequested - numFreeBlocksAvailable;
-        mapd_size_t numFilesToCreate = (numBlocksToCreate + MAPD_DEFAULT_N_BLOCKS - 1) / MAPD_DEFAULT_N_BLOCKS;
+        // create new file(s) if there are not enough free pages
+        mapd_size_t numPagesToCreate = numPagesRequested - numFreePagesAvailable;
+        mapd_size_t numFilesToCreate = (numPagesToCreate + MAPD_DEFAULT_N_PAGES - 1) / MAPD_DEFAULT_N_PAGES;
         for (; numFilesToCreate > 0; --numFilesToCreate) {
-            FileInfo *fInfo = createFile(blockSize, MAPD_DEFAULT_N_BLOCKS);
+            FileInfo *fInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
             if (fInfo == nullptr)
-                throw std::runtime_error("Unable to create file for free blocks.");
+                throw std::runtime_error("Unable to create file for free pages.");
             fileList.push_back(fInfo);
         }
 
-        mapd_size_t numBlocksRemaining = numBlocksRequested;
-        for (size_t i = 0; i < fileList.size() && numBlocksRemaining > 0; ++i) {
+        mapd_size_t numPagesRemaining = numPagesRequested;
+        for (size_t i = 0; i < fileList.size() && numPagesRemaining > 0; ++i) {
             FileInfo *fInfo = fileList[i];
-            //assert(fInfo->freeBlocks.size() == MAPD_DEFAULT_N_BLOCKS); // error?? this will only be true if the file is newly created
+            //assert(fInfo->freePages.size() == MAPD_DEFAULT_N_PAGES); // error?? this will only be true if the file is newly created
 
-            for (auto blockNumIt = fInfo->freeBlocks.begin(); blockNumIt != fInfo->freeBlocks.end() &&
-                numBlocksRemaining > 0; --numBlocksRemaining) {
+            for (auto pageNumIt = fInfo->freePages.begin(); pageNumIt != fInfo->freePages.end() &&
+                numPagesRemaining > 0; --numPagesRemaining) {
 
-                mapd_size_t blockNum = *blockNumIt;
-                fInfo->freeBlocks.erase(blockNumIt++);
-                blocks.push_back(Block(fInfo->fileId, blockNum));
+                mapd_size_t pageNum = *pageNumIt;
+                fInfo->freePages.erase(pageNumIt++);
+                pages.push_back(Page(fInfo->fileId, pageNum));
                 //changed from Steve's code - make sure pasts test
             }
         }
-        assert(blocks.size() == numBlocksRequested);
+        assert(pages.size() == numPagesRequested);
     }
 
-    FileInfo* FileMgr::createFile(const mapd_size_t blockSize, const mapd_size_t numBlocks) {
+    FileInfo* FileMgr::createFile(const mapd_size_t pageSize, const mapd_size_t numPages) {
         // check arguments
-        if (blockSize == 0 || numBlocks == 0)
-            throw std::invalid_argument("blockSize and numBlocks must be greater than 0.");
+        if (pageSize == 0 || numPages == 0)
+            throw std::invalid_argument("pageSize and numPages must be greater than 0.");
         
         // create the new file
-        FILE *f = create(nextFileId_, blockSize, numBlocks); //TM: not sure if I like naming scheme here - should be in separate namespace?
+        FILE *f = create(nextFileId_, pageSize, numPages); //TM: not sure if I like naming scheme here - should be in separate namespace?
         if (f == nullptr)
             throw std::runtime_error("Unable to create the new file.");
         
         // instantiate a new FileInfo for the newly created file
         int fileId = nextFileId_++;
-        FileInfo *fInfo = new FileInfo(fileId, f, blockSize, numBlocks);
+        FileInfo *fInfo = new FileInfo(fileId, f, pageSize, numPages);
         assert(fInfo);
         
         // update file manager data structures
         files_.push_back(fInfo);
-        fileIndex_.insert(std::pair<mapd_size_t, int>(blockSize, fileId));
+        fileIndex_.insert(std::pair<mapd_size_t, int>(pageSize, fileId));
         
         assert(files_.back() == fInfo); // postcondition
         return fInfo;

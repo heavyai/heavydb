@@ -8,7 +8,7 @@
 #define DATAMGR_MEMORY_FILE_FILEBUFFER_H
 
 #include "../AbstractDatum.h"
-#include "Block.h"
+#include "Page.h"
 
 #include <iostream>
 
@@ -24,7 +24,7 @@ namespace File_Namespace {
      *
      * The FileBuffer consists of logical pages, which can map to any identically-sized
      * page in any file of the underlying file system. A page's metadata (file and page
-     * number) are stored in MultiBlock objects, and each MultiBlock includes page
+     * number) are stored in MultiPage objects, and each MultiPage includes page
      * metadata for multiple versions of the same page.
      *
      * Note that a "Chunk" is brought into a FileBuffer by the FileMgr.
@@ -56,7 +56,7 @@ namespace File_Namespace {
             virtual void write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
             virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
-            void copyPage(Block srcPage, Block destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
+            void copyPage(Page srcPage, Page destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
             /// Not implemented for FileMgr -- throws a runtime_error
             virtual const mapd_byte_t* getMemoryPtr() const {
@@ -84,7 +84,7 @@ namespace File_Namespace {
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
             
-            std::vector<MultiBlock> multiPages_;
+            std::vector<MultiPage> multiPages_;
             mapd_size_t pageSize_;
     };
     

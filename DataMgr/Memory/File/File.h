@@ -14,7 +14,7 @@
 
 namespace File_Namespace {
     
-    FILE* create(const int fileId, const mapd_size_t blockSize, const mapd_size_t nblocks);
+    FILE* create(const int fileId, const mapd_size_t pageSize, const mapd_size_t npages);
     
     /**
      * @brief Opens/creates the file with the given id; returns NULL on error.
@@ -76,39 +76,39 @@ namespace File_Namespace {
     size_t append(FILE *f, const mapd_size_t size, mapd_addr_t buf);
     
     /**
-     * @brief Reads the specified block from the file f into buf.
+     * @brief Reads the specified page from the file f into buf.
      *
      * @param f Pointer to the FILE.
-     * @param blockSize The logical block size of the file.
-     * @param blockNum The block number from where data is being read.
+     * @param pageSize The logical page size of the file.
+     * @param pageNum The page number from where data is being read.
      * @param buf The destination buffer to where data is being written.
      * @param err If not NULL, will hold an error code should an error occur.
-     * @return size_t The number of bytes read (should be equal to blockSize).
+     * @return size_t The number of bytes read (should be equal to pageSize).
      */
-    size_t readBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf);
+    size_t readPage(FILE *f, const mapd_size_t pageSize, const mapd_size_t pageNum, mapd_addr_t buf);
     
     /**
-     * @brief Writes a block from buf to the file.
+     * @brief Writes a page from buf to the file.
      *
      * @param f Pointer to the FILE.
-     * @param blockSize The logical block size of the file.
-     * @param blockNum The block number to where data is being written.
+     * @param pageSize The logical page size of the file.
+     * @param pageNum The page number to where data is being written.
      * @param buf The source buffer from where data is being read.
      * @param err If not NULL, will hold an error code should an error occur.
-     * @return size_t The number of bytes written (should be equal to blockSize).
+     * @return size_t The number of bytes written (should be equal to pageSize).
      */
-    size_t writeBlock(FILE *f, const mapd_size_t blockSize, const mapd_size_t blockNum, mapd_addr_t buf);
+    size_t writePage(FILE *f, const mapd_size_t pageSize, const mapd_size_t pageNum, mapd_addr_t buf);
     
     /**
-     * @brief Appends a block from buf to the file.
+     * @brief Appends a page from buf to the file.
      *
      * @param f Pointer to the FILE.
-     * @param blockSize The logical block size of the file.
+     * @param pageSize The logical page size of the file.
      * @param buf The source buffer from where data is being read.
      * @param err If not NULL, will hold an error code should an error occur.
-     * @return size_t The number of bytes appended (should be equal to blockSize).
+     * @return size_t The number of bytes appended (should be equal to pageSize).
      */
-    size_t appendBlock(FILE *f, const mapd_size_t blockSize, mapd_addr_t buf);
+    size_t appendPage(FILE *f, const mapd_size_t pageSize, mapd_addr_t buf);
     
     /**
      * @brief Returns the size of the specified file.
