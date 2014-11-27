@@ -17,6 +17,9 @@ namespace File_Namespace {
 
     FileMgr::~FileMgr() {
         // free memory used by FileInfo objects
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            delete chunkIt -> second;
+        }
         for (int i = 0; i < files_.size(); ++i) {
             delete files_[i];
         }
@@ -26,14 +29,8 @@ namespace File_Namespace {
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
-            Chunk *chunk = new Chunk (this,pageSize);
-            //chunkIndex_[key] = std::move(Chunk(this,pageSize)); // should avoid copy?
-            //chunkIndex_[key] = std::move(chunk); // should avoid copy?
-            chunkIndex_[key] = chunk;
+            chunkIndex_[key] = new Chunk (this,pageSize);
             return (chunkIndex_[key]);
-            //return 0;
-            //Chunk chunk(pageSize,this);
-            //chunkIndex_[key] = chunk;
         }
         else {
             throw std::runtime_error("Chunk already exists.");
@@ -93,7 +90,10 @@ namespace File_Namespace {
         FileInfo * freeFile = 0;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
             mapd_size_t fileFreePages = files_[fileIt->second]->numFreePages();
-            freeFile = files_[fileIt->second];
+            if (fileFreePages > 0) {
+                freeFile = files_[fileIt->second];
+                break;
+            }
         }
         if (freeFile == nullptr) { // didn't find free file and need to create one
             freeFile = createFile(pageSize, MAPD_DEFAULT_N_PAGES);

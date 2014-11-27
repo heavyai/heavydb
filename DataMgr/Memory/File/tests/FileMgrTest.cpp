@@ -12,11 +12,11 @@ GTEST_API_ int main(int argc, char **argv) {
     return RUN_ALL_TESTS();
 }
 
-TEST(FileMgr, getFreeBlocks)
+TEST(FileMgr, getFreePages)
 {
     FileMgr fm(".");
     std::vector<Page> freePages;
-    mapd_size_t numPages = 1024;
+    mapd_size_t numPages = 2048;
     mapd_size_t pageSize = 4096;
     
     EXPECT_EQ(freePages.size(), 0);
@@ -25,3 +25,10 @@ TEST(FileMgr, getFreeBlocks)
     
 }
 
+TEST(FileMgr, getFreePage)
+{
+    FileMgr fm(".");
+    mapd_size_t pageSize = 1024796;
+    Page page = fm.requestFreePage(pageSize);
+    EXPECT_EQ(page.isValid(),true);
+}

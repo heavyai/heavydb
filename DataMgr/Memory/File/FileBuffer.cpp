@@ -29,6 +29,9 @@ namespace File_Namespace {
         mapd_size_t startPage = offset / pageSize_;
         mapd_size_t startPageOffset = offset % pageSize_;
         mapd_size_t numPagesToRead = (numBytes + startPageOffset + pageSize_ - 1) / pageSize_;
+        cout << "Start Page: " << startPage << endl;
+        cout << "Num pages To Read: " << numPagesToRead << endl;
+        cout << "Num pages existing: " << multiPages_.size() << endl;
         assert (startPage + numPagesToRead <= multiPages_.size());
         mapd_size_t bytesLeft = numBytes;
 
@@ -119,6 +122,7 @@ namespace File_Namespace {
                 // epoch for this page - just grab this page
                 page = multiPages_[pageNum].current();
             }
+            cout << "Page: " << page.fileId << " " << page.pageNum << endl;
             assert(page.fileId >= 0); // make sure page was initialized
             FILE *f = fm_ -> getFileForFileId(page.fileId);
             size_t bytesWritten;
