@@ -39,10 +39,12 @@ namespace File_Namespace {
             /**
              * @brief Constructs a FileBuffer object.
              */
-            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const mapd_size_t numBytes = 0, const mapd_size_t maxHeaderSize = 128);
+            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes = 0, const mapd_size_t maxHeaderSize = 128);
             
             /// Destructor
             virtual ~FileBuffer();
+
+            Page addNewMultiPage(const int epoch);
             
             virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes = 0, const mapd_size_t offset = 0);
 
@@ -89,10 +91,12 @@ namespace File_Namespace {
         private:
             //FileBuffer(const FileBuffer&);      // private copy constructor
             //FileBuffer& operator=(const FileBuffer&); // private overloaded assignment operator
+            void writeHeader(Page &page, const int pageId, const int epoch);
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
             
             std::vector<MultiPage> multiPages_;
+            ChunkKey chunkKey_;
             mapd_size_t pageSize_;
             mapd_size_t pageDataSize_;
             mapd_size_t maxHeaderSize_; // lets make this a constant now for simplicity - 128 bytes

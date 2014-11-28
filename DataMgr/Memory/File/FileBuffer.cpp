@@ -12,7 +12,7 @@
 using namespace std;
 
 namespace File_Namespace {
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const mapd_size_t numBytes, const mapd_size_t maxHeaderSize) : pageSize_(pageSize), fm_(fm), isDirty_(false), maxHeaderSize_(maxHeaderSize), pageDataSize_(pageSize-maxHeaderSize) {
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes, const mapd_size_t maxHeaderSize) : fm_(fm), pageSize_(pageSize), chunkKey_(chunkKey), isDirty_(false), maxHeaderSize_(maxHeaderSize), pageDataSize_(pageSize-maxHeaderSize) {
         assert(fm_);
         // should expand to numBytes bytes
         // NOP
@@ -75,6 +75,26 @@ namespace File_Namespace {
         delete [] buffer;
     }
 
+    Page FileBuffer::addNewMultiPage(const int epoch) {
+        Page page = fm_ -> requestFreePage(pageSize_);
+        MultiPage multiPage(pageSize_);
+        multiPage.epochs.push_back(epoch);
+        multiPage.pageVersions.push_back(page);
+        multiPages_.push_back(multiPage);
+        return page;
+    }
+
+    void FileBuffer::writeHeader(Page &page, const int pageId, const int epoch) {
+        int headerSize = chunkKey_.size() + 3;
+        vector <int> header (headerSize);
+        // in addition to chunkkey we need size of header, pageId, version
+        header[0] = headerSize;
+        std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
+        header[headerSize-2] = pageId;
+        header[headerSize-1] = epoch;
+        FILE *f = fm_ -> getFileForFileId(page.fileId);
+        File_Namespace::write(f, page.pageNum*pageSize_,headerSize * sizeof(int),(mapd_addr_t)&header[0]);
+    }
 
     void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset) {
         isDirty_ = true;
@@ -88,21 +108,15 @@ namespace File_Namespace {
 
         if (startPage > initialNumPages) { // means there is a gap we need to allocate pages for
             for (size_t pageNum = initialNumPages; pageNum < startPage; ++pageNum) {
-                Page page = fm_ -> requestFreePage(pageSize_);
-                MultiPage multiPage(pageSize_);
-                multiPage.epochs.push_back(epoch);
-                multiPage.pageVersions.push_back(page);
-                multiPages_.push_back(multiPage);
+                Page page = addNewMultiPage(epoch);
+                writeHeader(page,pageNum,epoch);
             }
         }
         for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
             Page page;
             if (pageNum >= initialNumPages) {
-                page = fm_ -> requestFreePage(pageSize_);
-                MultiPage multiPage(pageSize_);
-                multiPage.epochs.push_back(epoch);
-                multiPage.pageVersions.push_back(page);
-                multiPages_.push_back(multiPage);
+                page = addNewMultiPage(epoch);
+                writeHeader(page,pageNum,epoch);
             }
             else if (multiPages_[pageNum].epochs.back() < epoch) { // need to create new page b/c this current one lags epoch and we can't overwrite it 
     // also need to copy if we are on first or last page
@@ -118,6 +132,7 @@ namespace File_Namespace {
                 if (pageNum == startPage + numPagesToWrite && bytesLeft > 0) { // bytesLeft should always > 0
                     copyPage(lastPage,page,pageDataSize_-bytesLeft,bytesLeft); // these would be empty if we're appending but we won't worry about it right now
                 }
+                writeHeader(page,pageNum,epoch);
             }
             else {
                 // we already have a new page at current

@@ -50,8 +50,10 @@ TEST(FileBuffer, interleaved_read_and_write)
     mapd_size_t numPages = 400;
     mapd_size_t pageSize = 4096;
     FileMgr fm("data");
-    FileBuffer fb1(&fm,pageSize);
-    FileBuffer fb2(&fm,pageSize);
+    ChunkKey chunkKey1 = {4,2,1,5};
+    FileBuffer fb1(&fm,pageSize,chunkKey1);
+    ChunkKey chunkKey2 = {3,9,27,2};
+    FileBuffer fb2(&fm,pageSize,chunkKey2);
     
     // create some data
     mapd_size_t numInserts = numPages * (pageSize / sizeof(int));

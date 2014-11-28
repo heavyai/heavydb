@@ -85,7 +85,7 @@ namespace File_Namespace {
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
-            chunkIndex_[key] = new Chunk (this,pageSize);
+            chunkIndex_[key] = new Chunk (this,pageSize,key);
             return (chunkIndex_[key]);
         }
         else {
