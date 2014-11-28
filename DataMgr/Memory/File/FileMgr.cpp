@@ -4,14 +4,27 @@
  * @author      Todd Mostak <todd@map-d.com>
  */
 
-#include <string>
 #include "FileMgr.h"
 #include "File.h"
 #include "../../../Shared/global.h"
+#include <string>
+#include <boost/filesystem.hpp>
+
 
 namespace File_Namespace {
 
     FileMgr::FileMgr(std::string basePath) : basePath_(basePath), pgConnector_("mapd", "mapd"), nextFileId_(0), epoch_(0) {
+        if (basePath_.size() > 0 && basePath_[basePath.size()-1] != '/')
+            basePath_.push_back('/');
+        boost::filesystem::path path (basePath_);
+        if (boost::filesystem::exists(path)) {
+            std::cout << basePath_ << " exists." << std::endl;
+        }
+        else {
+            std::cout << basePath_ << " does not exist. Creating" << std::endl;
+            if (boost::filesystem::create_directory(path))
+                std::cout << basePath_ << " created." << std::endl;
+        }
         // NOP
     }
 
@@ -55,6 +68,21 @@ namespace File_Namespace {
             throw std::runtime_error("Chunk does not exist.");
         return chunkIt->second;
     }
+    /*
+    void FileMgr::getChunk(ChunkKey &key, AbstractDatum *datum, const mapd_size_t numBytes) {
+        // reads chunk specified by ChunkKey into AbstractDatum provided by
+        // Datum
+        auto chunkIt = chunkIndex_.find(key);
+        if (chunkIt == chunkIndex_.end()) 
+            throw std::runtime_error("Chunk does not exist");
+        AbstractDatum *chunk = chunkIt -> second;
+        // ChunkSize is either specified in function call with numBytes or we
+        // just look at pageSize * numPages in FileBuffer
+        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        datum->reserve(chunkSize);
+        chunk->read(mapd_addr_t)datum->getMemoryPtr(),chunkSize,0);
+    }
+    */
 
     AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum) {
         // obtain a pointer to the Chunk
@@ -152,7 +180,7 @@ namespace File_Namespace {
             throw std::invalid_argument("pageSize and numPages must be greater than 0.");
         
         // create the new file
-        FILE *f = create(nextFileId_, pageSize, numPages); //TM: not sure if I like naming scheme here - should be in separate namespace?
+        FILE *f = create(basePath_,nextFileId_, pageSize, numPages); //TM: not sure if I like naming scheme here - should be in separate namespace?
         if (f == nullptr)
             throw std::runtime_error("Unable to create the new file.");
         

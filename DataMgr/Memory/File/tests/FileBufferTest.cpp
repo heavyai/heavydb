@@ -49,7 +49,7 @@ TEST(FileBuffer, interleaved_read_and_write)
 {
     mapd_size_t numPages = 400;
     mapd_size_t pageSize = 4096;
-    FileMgr fm(".");
+    FileMgr fm("data");
     FileBuffer fb1(&fm,pageSize);
     FileBuffer fb2(&fm,pageSize);
     

@@ -14,7 +14,7 @@
 
 namespace File_Namespace {
     
-    FILE* create(const int fileId, const mapd_size_t pageSize, const mapd_size_t npages);
+    FILE* create(const std::string &basePath, const int fileId, const mapd_size_t pageSize, const mapd_size_t npages);
     
     /**
      * @brief Opens/creates the file with the given id; returns NULL on error.

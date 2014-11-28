@@ -15,19 +15,19 @@
 
 namespace File_Namespace {
     
-    FILE* create(const int fileId, const mapd_size_t pageSize, const mapd_size_t npages) {
-        if (npages < 1 || pageSize < 1)
+    FILE* create(const std::string &basePath, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages) {
+        if (numPages < 1 || pageSize < 1)
             throw std::invalid_argument("Number of pages and page size must be positive integers.");
         
         FILE *f;
-        std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
-        if ((f = fopen(s.c_str(), "w+b")) == NULL)
+        std::string path (basePath + std::to_string(fileId) + std::string(MAPD_FILE_EXT));
+        if ((f = fopen(path.c_str(), "w+b")) == NULL)
             throw std::runtime_error("Unable to create file");
         
-        fseek(f, (pageSize * npages)-1, SEEK_SET);
+        fseek(f, (pageSize * numPages)-1, SEEK_SET);
         fputc(EOF, f);
         fseek(f, 0, SEEK_SET); // rewind
-        assert(fileSize(f) == (pageSize * npages));
+        assert(fileSize(f) == (pageSize * numPages));
         
         return f;
     }

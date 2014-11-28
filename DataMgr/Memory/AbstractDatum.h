@@ -19,8 +19,9 @@ namespace Memory_Namespace {
     public:
         virtual ~AbstractDatum() {}
         
-        virtual void read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes = 0) = 0;
-        virtual void write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes) = 0;
+        virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset = 0) = 0;
+        virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset = 0) = 0;
+        //virtual void reserve(mapd_size_t numBytes) = 0;
         //virtual void append(mapd_addr_t src, const mapd_size_t nbytes) = 0;
         virtual const mapd_byte_t* getMemoryPtr() const = 0;
         
