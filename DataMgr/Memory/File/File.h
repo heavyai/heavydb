@@ -7,6 +7,8 @@
 #ifndef DATAMGR_FILE_FILE_H
 #define DATAMGR_FILE_FILE_H
 
+#define MAPD_FILE_EXT ".mapd"
+
 #include <iostream>
 #include <string>
 #include "../../../Shared/errors.h"
@@ -23,6 +25,8 @@ namespace File_Namespace {
      * @return FILE* A pointer to a FILE pointer, or NULL on error.
      */
     FILE* open(int fileId);
+
+    FILE* open(const std::string &path);
     
     /**
      * @brief Closes the file pointed to by the FILE pointer.

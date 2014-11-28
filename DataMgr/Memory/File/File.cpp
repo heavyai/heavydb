@@ -11,7 +11,6 @@
 #include <unistd.h>
 #include "File.h"
 
-#define MAPD_FILE_EXT ".mapd"
 
 namespace File_Namespace {
     
@@ -20,7 +19,7 @@ namespace File_Namespace {
             throw std::invalid_argument("Number of pages and page size must be positive integers.");
         
         FILE *f;
-        std::string path (basePath + std::to_string(fileId) + std::string(MAPD_FILE_EXT));
+        std::string path (basePath + std::to_string(fileId) + "." + std::to_string(pageSize) +  std::string(MAPD_FILE_EXT)); // MAPD_FILE_EXT has preceding "."
         if ((f = fopen(path.c_str(), "w+b")) == NULL)
             throw std::runtime_error("Unable to create file");
         
@@ -34,8 +33,16 @@ namespace File_Namespace {
     
     FILE* open(int fileId) {
         FILE *f;
-        std::string s = std::to_string(fileId) + std::string(MAPD_FILE_EXT);
+        std::string s (std::to_string(fileId) + std::string(MAPD_FILE_EXT));
         f = fopen(s.c_str(), "r+b"); // opens existing file for updates
+        if (f == nullptr)
+            throw std::runtime_error("Unable to open file.");
+        return f;
+    }
+
+    FILE* open(const std::string &path) {
+        FILE *f;
+        f = fopen(path.c_str(), "r+b"); // opens existing file for updates
         if (f == nullptr)
             throw std::runtime_error("Unable to open file.");
         return f;

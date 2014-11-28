@@ -12,7 +12,7 @@
 using namespace std;
 
 namespace File_Namespace {
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const mapd_size_t numBytes) : pageSize_(pageSize), fm_(fm), isDirty_(false) {
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const mapd_size_t numBytes, const mapd_size_t maxHeaderSize) : pageSize_(pageSize), fm_(fm), isDirty_(false), maxHeaderSize_(maxHeaderSize), pageDataSize_(pageSize-maxHeaderSize) {
         assert(fm_);
         // should expand to numBytes bytes
         // NOP
@@ -26,9 +26,9 @@ namespace File_Namespace {
     void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
         // variable declarations
         mapd_addr_t curPtr = dst;    // a pointer to the current location in dst being written to
-        mapd_size_t startPage = offset / pageSize_;
-        mapd_size_t startPageOffset = offset % pageSize_;
-        mapd_size_t numPagesToRead = (numBytes + startPageOffset + pageSize_ - 1) / pageSize_;
+        mapd_size_t startPage = offset / pageDataSize_;
+        mapd_size_t startPageOffset = offset % pageDataSize_;
+        mapd_size_t numPagesToRead = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_;
         cout << "Start Page: " << startPage << endl;
         cout << "Num pages To Read: " << numPagesToRead << endl;
         cout << "Num pages existing: " << multiPages_.size() << endl;
@@ -40,7 +40,7 @@ namespace File_Namespace {
 
             assert(multiPages_[pageNum].pageSize == pageSize_);
             Page page = multiPages_[pageNum].current();
-            printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", page.fileId, page.pageNum, pageSize_);
+            printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", page.fileId, page.pageNum, pageDataSize_);
 
             //FILE *f = fm_ -> files_[page.fileId] -> f;
             FILE *f = fm_ -> getFileForFileId(page.fileId);
@@ -50,10 +50,10 @@ namespace File_Namespace {
             // current (cur) location
             size_t bytesRead;
             if (pageNum == startPage) {
-                bytesRead = File_Namespace::read(f, page.pageNum * pageSize_ + startPageOffset, min(pageSize_ - startPageOffset,bytesLeft), curPtr);
+                bytesRead = File_Namespace::read(f, page.pageNum * pageSize_ + startPageOffset + maxHeaderSize_, min(pageDataSize_ - startPageOffset,bytesLeft), curPtr);
             }
             else {
-                bytesRead = File_Namespace::read(f, page.pageNum * pageSize_, min(pageSize_,bytesLeft), curPtr);
+                bytesRead = File_Namespace::read(f, page.pageNum * pageSize_ + maxHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
             }
             curPtr += bytesRead;
             bytesLeft -= bytesRead;
@@ -64,13 +64,13 @@ namespace File_Namespace {
     void FileBuffer::copyPage(Page &srcPage, Page &destPage, const mapd_size_t numBytes, const mapd_size_t offset) { 
         //FILE *srcFile = fm_ -> files_[srcPage.fileId] -> f;
         //FILE *destFile = fm_ -> files_[destPage.fileId] -> f;
-        assert(offset + numBytes < pageSize_);
+        assert(offset + numBytes < pageDataSize_);
         FILE *srcFile = fm_ -> getFileForFileId(srcPage.fileId); 
         FILE *destFile = fm_ -> getFileForFileId(destPage.fileId); 
         mapd_addr_t buffer = new mapd_byte_t [numBytes]; 
-        size_t bytesRead = File_Namespace::read(srcFile,srcPage.pageNum * pageSize_ + offset, numBytes, buffer);
+        size_t bytesRead = File_Namespace::read(srcFile,srcPage.pageNum * pageSize_ + offset+maxHeaderSize_, numBytes, buffer);
         assert(bytesRead == numBytes);
-        size_t bytesWritten = File_Namespace::write(destFile,destPage.pageNum * pageSize_ + offset, numBytes, buffer);
+        size_t bytesWritten = File_Namespace::write(destFile,destPage.pageNum * pageSize_ + offset + maxHeaderSize_, numBytes, buffer);
         assert(bytesWritten == numBytes);
         delete [] buffer;
     }
@@ -78,9 +78,9 @@ namespace File_Namespace {
 
     void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset) {
         isDirty_ = true;
-        mapd_size_t startPage = offset / pageSize_;
-        mapd_size_t startPageOffset = offset % pageSize_;
-        mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageSize_ - 1) / pageSize_; 
+        mapd_size_t startPage = offset / pageDataSize_;
+        mapd_size_t startPageOffset = offset % pageDataSize_;
+        mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
         mapd_size_t bytesLeft = numBytes;
         mapd_addr_t curPtr = src;    // a pointer to the current location in dst being written to
         mapd_size_t initialNumPages = multiPages_.size();
@@ -111,10 +111,12 @@ namespace File_Namespace {
                 multiPages_[pageNum].epochs.push_back(epoch);
                 multiPages_[pageNum].pageVersions.push_back(page);
                 if (pageNum == startPage && startPageOffset > 0) {
+                    // copyPage takes care of header offset so don't worry
+                    // about it
                     copyPage(lastPage,page,startPageOffset,0);
                 }
                 if (pageNum == startPage + numPagesToWrite && bytesLeft > 0) { // bytesLeft should always > 0
-                    copyPage(lastPage,page,pageSize_-bytesLeft,bytesLeft); // these would be empty if we're appending but we won't worry about it right now
+                    copyPage(lastPage,page,pageDataSize_-bytesLeft,bytesLeft); // these would be empty if we're appending but we won't worry about it right now
                 }
             }
             else {
@@ -127,10 +129,10 @@ namespace File_Namespace {
             FILE *f = fm_ -> getFileForFileId(page.fileId);
             size_t bytesWritten;
             if (pageNum == startPage) {
-                bytesWritten = File_Namespace::write(f,page.pageNum*pageSize_ + startPageOffset, min (pageSize_ - startPageOffset,bytesLeft),curPtr);
+                bytesWritten = File_Namespace::write(f,page.pageNum*pageSize_ + startPageOffset + maxHeaderSize_, min (pageDataSize_ - startPageOffset,bytesLeft),curPtr);
             }
             else {
-                bytesWritten = File_Namespace::write(f, page.pageNum * pageSize_, min(pageSize_,bytesLeft), curPtr);
+                bytesWritten = File_Namespace::write(f, page.pageNum * pageSize_+maxHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
             }
             curPtr += bytesWritten;
             bytesLeft -= bytesWritten;

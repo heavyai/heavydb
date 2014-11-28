@@ -9,23 +9,16 @@
 #include "../../../Shared/global.h"
 #include <string>
 #include <boost/filesystem.hpp>
+#include <boost/lexical_cast.hpp>
+
+#include <vector>
+#include <utility>
 
 
 namespace File_Namespace {
 
     FileMgr::FileMgr(std::string basePath) : basePath_(basePath), pgConnector_("mapd", "mapd"), nextFileId_(0), epoch_(0) {
-        if (basePath_.size() > 0 && basePath_[basePath.size()-1] != '/')
-            basePath_.push_back('/');
-        boost::filesystem::path path (basePath_);
-        if (boost::filesystem::exists(path)) {
-            std::cout << basePath_ << " exists." << std::endl;
-        }
-        else {
-            std::cout << basePath_ << " does not exist. Creating" << std::endl;
-            if (boost::filesystem::create_directory(path))
-                std::cout << basePath_ << " created." << std::endl;
-        }
-        // NOP
+        init();
     }
 
     FileMgr::~FileMgr() {
@@ -35,6 +28,56 @@ namespace File_Namespace {
         }
         for (int i = 0; i < files_.size(); ++i) {
             delete files_[i];
+        }
+    }
+
+    void FileMgr::init() {
+        boost::filesystem::path path (basePath_);
+        if (basePath_.size() > 0 && basePath_[basePath_.size()-1] != '/')
+            basePath_.push_back('/');
+        if (boost::filesystem::exists(path)) {
+            if (!boost::filesystem::is_directory(path))
+                throw std::runtime_error("Specified path is not a directory.");
+            std::cout << basePath_ << " exists." << std::endl;
+            boost::filesystem::directory_iterator endItr; // default construction yields past-the-end
+            int maxFileId = -1;
+            for (boost::filesystem::directory_iterator fileIt (path); fileIt != endItr; ++fileIt) {
+                if (boost::filesystem::is_regular_file(fileIt ->status())) {
+                    //note that boost::filesystem leaves preceding dot on
+                    //extension - hence MAPD_FILE_EXT is ".mapd"
+                    std::string extension (fileIt ->path().extension().string());
+                    
+                    if (extension == MAPD_FILE_EXT) { 
+                        std::string fileStem(fileIt -> path().stem().string());
+                        // remove trailing dot if any
+                        if (fileStem.size() > 0 && fileStem.back() == '.') {
+                            fileStem = fileStem.substr(0,fileStem.size()-1);
+                        }
+                        size_t dotPos =  fileStem.find_last_of("."); // should only be one
+                        if (dotPos == std::string::npos) {
+                            throw std::runtime_error("Filename does not carry page size information");
+                        }
+                        int fileId = boost::lexical_cast<int>(fileStem.substr(0,dotPos));
+                        if (fileId > maxFileId) {
+                            maxFileId = fileId;
+                        }
+                        mapd_size_t pageSize = boost::lexical_cast<mapd_size_t>(fileStem.substr(dotPos+1,fileStem.size()));
+                        std::string filePath(fileIt ->path().string());
+                        size_t fileSize = boost::filesystem::file_size(filePath);
+                        assert (fileSize % pageSize == 0); // should be no partial pages
+                        mapd_size_t numPages = fileSize / pageSize;
+
+                        std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
+                        openExistingFile(filePath,fileId,pageSize,numPages);
+                    }
+                }
+            }
+            nextFileId_ = maxFileId + 1;
+        }
+        else {
+            std::cout << basePath_ << " does not exist. Creating" << std::endl;
+            if (boost::filesystem::create_directory(path))
+                std::cout << basePath_ << " created." << std::endl;
         }
     }
 
@@ -174,6 +217,20 @@ namespace File_Namespace {
         assert(pages.size() == numPagesRequested);
     }
 
+    FileInfo* FileMgr::openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages) {
+
+        FILE *f = open(path);
+        FileInfo *fInfo = new FileInfo (fileId, f, pageSize, numPages,false); // false means don't init file
+        std::vector<std::pair<Page,std::vector<int> > > headerVec;
+        fInfo -> openExistingFile(headerVec);
+        if (fileId >= files_.size()) {
+            files_.resize(fileId+1);
+        }
+        files_[fileId] = fInfo;
+        fileIndex_.insert(std::pair<mapd_size_t, int>(pageSize, fileId));
+        return fInfo;
+    }
+
     FileInfo* FileMgr::createFile(const mapd_size_t pageSize, const mapd_size_t numPages) {
         // check arguments
         if (pageSize == 0 || numPages == 0)
@@ -186,7 +243,7 @@ namespace File_Namespace {
         
         // instantiate a new FileInfo for the newly created file
         int fileId = nextFileId_++;
-        FileInfo *fInfo = new FileInfo(fileId, f, pageSize, numPages);
+        FileInfo *fInfo = new FileInfo(fileId, f, pageSize, numPages, true); // true means init file
         assert(fInfo);
         
         // update file manager data structures

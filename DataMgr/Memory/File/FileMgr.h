@@ -96,6 +96,8 @@ namespace File_Namespace {
         virtual AbstractDatum* putDatum(AbstractDatum *d);
         Page requestFreePage(mapd_size_t pagesize);
 
+        void init();
+
         /**
          * @brief Obtains free pages -- creates new files if necessary -- of the requested size.
          *
@@ -144,6 +146,7 @@ namespace File_Namespace {
          * @return FileInfo* A pointer to the FileInfo object of the added file.
          */
         FileInfo* createFile(const mapd_size_t pageSize, const mapd_size_t numPages);
+        FileInfo* openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages);
         
     };
     

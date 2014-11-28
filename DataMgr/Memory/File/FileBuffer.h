@@ -39,7 +39,7 @@ namespace File_Namespace {
             /**
              * @brief Constructs a FileBuffer object.
              */
-            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const mapd_size_t numBytes = 0);
+            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const mapd_size_t numBytes = 0, const mapd_size_t maxHeaderSize = 128);
             
             /// Destructor
             virtual ~FileBuffer();
@@ -94,6 +94,8 @@ namespace File_Namespace {
             
             std::vector<MultiPage> multiPages_;
             mapd_size_t pageSize_;
+            mapd_size_t pageDataSize_;
+            mapd_size_t maxHeaderSize_; // lets make this a constant now for simplicity - 128 bytes
             bool isDirty_;
     };
     
