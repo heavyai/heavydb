@@ -39,9 +39,9 @@ namespace File_Namespace {
             /**
              * @brief Constructs a FileBuffer object.
              */
-            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes = 0, const mapd_size_t maxHeaderSize = 128);
+            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes = 0);
 
-            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt, const mapd_size_t maxHeaderSize = 0);
+            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt);
             
             /// Destructor
             virtual ~FileBuffer();
@@ -97,14 +97,15 @@ namespace File_Namespace {
             /// Write header writes header at top of page in format
             // headerSize(numBytes), ChunkKey, pageId, version epoch
             void writeHeader(Page &page, const int pageId, const int epoch);
+            void calcHeaderBuffer();
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
-            
+            static mapd_size_t headerBufferOffset_; 
             std::vector<MultiPage> multiPages_;
             ChunkKey chunkKey_;
             mapd_size_t pageSize_;
             mapd_size_t pageDataSize_;
-            mapd_size_t maxHeaderSize_; // lets make this a constant now for simplicity - 128 bytes
+            mapd_size_t reservedHeaderSize_; // lets make this a constant now for simplicity - 128 bytes
             bool isDirty_;
     };
     
