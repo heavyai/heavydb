@@ -96,7 +96,15 @@ namespace File_Namespace {
      * a Page struct itself (File id and Page num)
      */
 
-    typedef std::pair<std::pair<std::vector<int>,std::vector<int> >, Page > HeaderInfo;
+    //typedef std::pair<std::pair<std::vector<int>,std::vector<int> >, Page > HeaderInfo;
+    struct HeaderInfo {
+        ChunkKey chunkKey; // a vector of ints
+        int pageId;
+        int versionEpoch; 
+        Page page;
+
+        HeaderInfo(const ChunkKey &chunkKey, const int pageId, const int versionEpoch, const Page &page): chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page) {}
+    };
     
 } // File_Namespace
 

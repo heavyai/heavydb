@@ -20,9 +20,17 @@ namespace File_Namespace {
     bool headerCompare(const HeaderInfo &firstElem, const HeaderInfo &secondElem) {
         // HeaderInfo.first is a pair of Chunk key with a vector containing
         // pageId and version
+        if(firstElem.chunkKey != secondElem.chunkKey) 
+            return firstElem.chunkKey < secondElem.chunkKey;
+        if (firstElem.pageId != secondElem.pageId)
+            return firstElem.pageId < secondElem.pageId;
+        return firstElem.versionEpoch < secondElem.versionEpoch;
+
+        /*
         if (firstElem.first.first != secondElem.first.first)
             return firstElem.first.first < secondElem.first.first;
         return firstElem.first.second < secondElem.first.second;
+        */
     }
 
 
@@ -82,32 +90,45 @@ namespace File_Namespace {
                     }
                 }
             }
+            // Sort headerVec so that all HeaderInfos from a chunk will be
+            // grouped together and in order of increasing PageId - Version
+            // Epoch
             std::sort(headerVec.begin(),headerVec.end(),headerCompare);
-            for (auto headerIt = headerVec.begin(); headerIt != headerVec.end(); ++headerIt) {
+            /*
 
-                for (auto vecIt = headerIt -> first.first.begin(); vecIt != headerIt ->first.first.end(); ++vecIt) {
-                    std::cout << *vecIt << " ";
-                }
-                std::cout << " -> ";
-                for (auto vecIt = headerIt -> first.second.begin(); vecIt != headerIt ->first.second.end(); ++vecIt) {
-                    std::cout << *vecIt << " ";
-                }
-                std::cout << std::endl;
-
-            }
-           /* 
-            vector <int> startEntry = headerVec.begin() -> first;
-            vector <int> curChunkKey = copy(startEntry.begin();startEntry.end()-2);
-            size_t curChunk = 0;
+            auto headerStart = headerVec.begin();
             for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end(); ++headerIt) {
+                if (headerIt -> first.first != headerStart -> first.first) {
 
-                for (auto vecIt = headerIt -> first.begin(); vecIt != headerIt ->first.end(); ++vecIt) {
-                    std::cout << *vecIt << " ";
+                    
+
+
+
                 }
-                std::cout << std::endl;
+                */
+            if (headerVec.size() > 0) {
+                ChunkKey lastChunkKey = headerVec.begin() -> chunkKey;
+                auto startIt = headerVec.begin();
+
+                for (auto headerIt = headerVec.begin() + 1 ; headerIt != headerVec.end(); ++headerIt) {
+                    for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
+                        std::cout << *chunkIt << " ";
+                    }
+                    std::cout << " -> " << headerIt -> pageId << "," << headerIt -> versionEpoch << std::endl;
+                    if (headerIt -> chunkKey != lastChunkKey) {
+                        std::cout << "New chunkkey" << std::endl;
+                        
+                        mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                        chunkIndex_[lastChunkKey] = new Chunk (this,pageSize,lastChunkKey,startIt,headerIt);
+                        lastChunkKey = headerIt -> chunkKey;
+                        startIt = headerIt;
+                    }
+                }
+                // now need to insert last Chunk
+                mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                chunkIndex_[lastChunkKey] = new Chunk (this,pageSize,lastChunkKey,startIt,headerVec.end());
 
             }
-            */
             nextFileId_ = maxFileId + 1;
         }
         else {

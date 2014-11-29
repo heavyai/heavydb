@@ -40,6 +40,8 @@ namespace File_Namespace {
              * @brief Constructs a FileBuffer object.
              */
             FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes = 0, const mapd_size_t maxHeaderSize = 128);
+
+            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt, const mapd_size_t maxHeaderSize = 0);
             
             /// Destructor
             virtual ~FileBuffer();

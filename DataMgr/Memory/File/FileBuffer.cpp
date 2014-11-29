@@ -17,13 +17,25 @@ namespace File_Namespace {
         // should expand to numBytes bytes
         // NOP
     }
-
-    /*
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey,  const std::vector<std::pair<std::vector<int>, Page > > &headerVec, const mapd_size_t maxHeaderSize) {
-
-    
+    //FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo> &headerVec, const mapd_size_t maxHeaderSize): fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey),isDirty_(false) {
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt, const mapd_size_t maxHeaderSize): fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey),isDirty_(false), maxHeaderSize_(maxHeaderSize), pageDataSize_(pageSize-maxHeaderSize) {
+        MultiPage multiPage(pageSize_);
+        multiPages_.push_back(multiPage);
+        vector <int> pageAndVersionId = {-1,-1};
+        int lastPageId = -1;
+        //for (auto vecIt = headerVec.begin(); vecIt != headerVec.end(); ++vecIt) {
+        for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
+            int curPageId = vecIt -> pageId;
+            if (curPageId != lastPageId) {
+                assert (curPageId == lastPageId + 1);
+                MultiPage multiPage(pageSize_);
+                multiPages_.push_back(multiPage);
+                lastPageId = curPageId;
+            }
+            multiPages_.back().epochs.push_back(vecIt -> versionEpoch);
+            multiPages_.back().pageVersions.push_back(vecIt -> page);
+        }
     }
-    */
 
     FileBuffer::~FileBuffer() {
         // need to free pages
