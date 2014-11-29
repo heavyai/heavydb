@@ -13,9 +13,18 @@
 
 #include <vector>
 #include <utility>
-
+#include <algorithm>
 
 namespace File_Namespace {
+
+    bool headerCompare(const HeaderInfo &firstElem, const HeaderInfo &secondElem) {
+        // HeaderInfo.first is a pair of Chunk key with a vector containing
+        // pageId and version
+        if (firstElem.first.first != secondElem.first.first)
+            return firstElem.first.first < secondElem.first.first;
+        return firstElem.first.second < secondElem.first.second;
+    }
+
 
     FileMgr::FileMgr(std::string basePath) : basePath_(basePath), pgConnector_("mapd", "mapd"), nextFileId_(0), epoch_(0) {
         init();
@@ -41,6 +50,7 @@ namespace File_Namespace {
             std::cout << basePath_ << " exists." << std::endl;
             boost::filesystem::directory_iterator endItr; // default construction yields past-the-end
             int maxFileId = -1;
+            std::vector <HeaderInfo> headerVec;
             for (boost::filesystem::directory_iterator fileIt (path); fileIt != endItr; ++fileIt) {
                 if (boost::filesystem::is_regular_file(fileIt ->status())) {
                     //note that boost::filesystem leaves preceding dot on
@@ -68,10 +78,36 @@ namespace File_Namespace {
                         mapd_size_t numPages = fileSize / pageSize;
 
                         std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
-                        openExistingFile(filePath,fileId,pageSize,numPages);
+                        openExistingFile(filePath,fileId,pageSize,numPages,headerVec);
                     }
                 }
             }
+            std::sort(headerVec.begin(),headerVec.end(),headerCompare);
+            for (auto headerIt = headerVec.begin(); headerIt != headerVec.end(); ++headerIt) {
+
+                for (auto vecIt = headerIt -> first.first.begin(); vecIt != headerIt ->first.first.end(); ++vecIt) {
+                    std::cout << *vecIt << " ";
+                }
+                std::cout << " -> ";
+                for (auto vecIt = headerIt -> first.second.begin(); vecIt != headerIt ->first.second.end(); ++vecIt) {
+                    std::cout << *vecIt << " ";
+                }
+                std::cout << std::endl;
+
+            }
+           /* 
+            vector <int> startEntry = headerVec.begin() -> first;
+            vector <int> curChunkKey = copy(startEntry.begin();startEntry.end()-2);
+            size_t curChunk = 0;
+            for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end(); ++headerIt) {
+
+                for (auto vecIt = headerIt -> first.begin(); vecIt != headerIt ->first.end(); ++vecIt) {
+                    std::cout << *vecIt << " ";
+                }
+                std::cout << std::endl;
+
+            }
+            */
             nextFileId_ = maxFileId + 1;
         }
         else {
@@ -217,11 +253,11 @@ namespace File_Namespace {
         assert(pages.size() == numPagesRequested);
     }
 
-    FileInfo* FileMgr::openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages) {
+    FileInfo* FileMgr::openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages, std::vector<HeaderInfo> &headerVec) {
 
         FILE *f = open(path);
         FileInfo *fInfo = new FileInfo (fileId, f, pageSize, numPages,false); // false means don't init file
-        std::vector<std::pair<Page,std::vector<int> > > headerVec;
+        
         fInfo -> openExistingFile(headerVec);
         if (fileId >= files_.size()) {
             files_.resize(fileId+1);

@@ -91,6 +91,9 @@ namespace File_Namespace {
         private:
             //FileBuffer(const FileBuffer&);      // private copy constructor
             //FileBuffer& operator=(const FileBuffer&); // private overloaded assignment operator
+            
+            /// Write header writes header at top of page in format
+            // headerSize(numBytes), ChunkKey, pageId, version epoch
             void writeHeader(Page &page, const int pageId, const int epoch);
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files

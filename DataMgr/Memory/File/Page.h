@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <deque>
+#include <vector>
 #include "../../../Shared/types.h"
 
 namespace File_Namespace {
@@ -88,6 +89,14 @@ namespace File_Namespace {
             assert(pageVersions.size() == epochs.size());
         }
     };
+
+    /**
+     * @type HeaderInfo 
+     * @brief Stores Pair of ChunkKey and Page id and version, in a pair with
+     * a Page struct itself (File id and Page num)
+     */
+
+    typedef std::pair<std::pair<std::vector<int>,std::vector<int> >, Page > HeaderInfo;
     
 } // File_Namespace
 

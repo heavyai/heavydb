@@ -146,7 +146,7 @@ namespace File_Namespace {
          * @return FileInfo* A pointer to the FileInfo object of the added file.
          */
         FileInfo* createFile(const mapd_size_t pageSize, const mapd_size_t numPages);
-        FileInfo* openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages);
+        FileInfo* openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages, std::vector<HeaderInfo> &headerVec);
         
     };
     

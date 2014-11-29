@@ -18,10 +18,18 @@ namespace File_Namespace {
         // NOP
     }
 
+    /*
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey,  const std::vector<std::pair<std::vector<int>, Page > > &headerVec, const mapd_size_t maxHeaderSize) {
+
+    
+    }
+    */
+
     FileBuffer::~FileBuffer() {
         // need to free pages
         // NOP
     }
+
 
     void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
         // variable declarations
@@ -88,7 +96,7 @@ namespace File_Namespace {
         int headerSize = chunkKey_.size() + 3;
         vector <int> header (headerSize);
         // in addition to chunkkey we need size of header, pageId, version
-        header[0] = headerSize;
+        header[0] = (headerSize - 1) * sizeof(int); // don't need to include size of headerSize vlaue
         std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
         header[headerSize-2] = pageId;
         header[headerSize-1] = epoch;
