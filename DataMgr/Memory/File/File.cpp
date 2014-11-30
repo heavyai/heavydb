@@ -30,6 +30,24 @@ namespace File_Namespace {
         
         return f;
     }
+
+    FILE* create(const std::string &fullPath, const size_t requestedFileSize) {
+        if (requestedFileSize <= 0) {
+            throw std::invalid_argument("Created file size must be > 0");
+        }
+        FILE *f;
+        if ((f = fopen(fullPath.c_str(), "w+b")) == NULL)
+            throw std::runtime_error ("Unable to create file");
+
+        fseek(f, requestedFileSize-1, SEEK_SET);
+        fputc(EOF, f);
+        fseek(f, 0, SEEK_SET); // rewind
+        assert(fileSize(f) == requestedFileSize);
+        return f;
+    }
+
+
+
     
     FILE* open(int fileId) {
         FILE *f;

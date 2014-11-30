@@ -15,6 +15,8 @@
 #include <utility>
 #include <algorithm>
 
+#define EPOCH_FILENAME "epoch"
+
 namespace File_Namespace {
 
     bool headerCompare(const HeaderInfo &firstElem, const HeaderInfo &secondElem) {
@@ -48,6 +50,7 @@ namespace File_Namespace {
         }
     }
 
+
     void FileMgr::init() {
         boost::filesystem::path path (basePath_);
         if (basePath_.size() > 0 && basePath_[basePath_.size()-1] != '/')
@@ -56,6 +59,8 @@ namespace File_Namespace {
             if (!boost::filesystem::is_directory(path))
                 throw std::runtime_error("Specified path is not a directory.");
             std::cout << basePath_ << " exists." << std::endl;
+            openEpochFile(EPOCH_FILENAME);
+
             boost::filesystem::directory_iterator endItr; // default construction yields past-the-end
             int maxFileId = -1;
             std::vector <HeaderInfo> headerVec;
@@ -90,22 +95,18 @@ namespace File_Namespace {
                     }
                 }
             }
-            // Sort headerVec so that all HeaderInfos from a chunk will be
-            // grouped together and in order of increasing PageId - Version
-            // Epoch
+
+            /* Sort headerVec so that all HeaderInfos
+             * from a chunk will be grouped together 
+             * and in order of increasing PageId
+             * - Version Epoch */
+
             std::sort(headerVec.begin(),headerVec.end(),headerCompare);
-            /*
 
-            auto headerStart = headerVec.begin();
-            for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end(); ++headerIt) {
-                if (headerIt -> first.first != headerStart -> first.first) {
+            /* Goal of next section is to find sequences in the
+             * sorted headerVec of the same ChunkId, which we
+             * can then initiate a FileBuffer with */
 
-                    
-
-
-
-                }
-                */
             if (headerVec.size() > 0) {
                 ChunkKey lastChunkKey = headerVec.begin() -> chunkKey;
                 auto startIt = headerVec.begin();
@@ -131,12 +132,46 @@ namespace File_Namespace {
             }
             nextFileId_ = maxFileId + 1;
         }
-        else {
+        else { // data directory does not exist
             std::cout << basePath_ << " does not exist. Creating" << std::endl;
-            if (boost::filesystem::create_directory(path))
-                std::cout << basePath_ << " created." << std::endl;
+            if (!boost::filesystem::create_directory(path)) {
+                throw std::runtime_error("Could not create data directory");
+            }
+            std::cout << basePath_ << " created." << std::endl;
+            // now create epoch file
+            createEpochFile(EPOCH_FILENAME);
         }
+
     }
+
+    void FileMgr::createEpochFile(const std::string &epochFileName) {
+        std::string epochFilePath(basePath_ + epochFileName);
+        if (boost::filesystem::exists(epochFilePath)) {
+            throw std::runtime_error("Epoch file already exists");
+        }
+        epochFile_ = create(epochFilePath,sizeof(int));
+        // Write out current epoch to file - which if this
+        // function is being called should be 0
+        write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        epoch_ += 1;
+    }
+
+    void FileMgr::openEpochFile(const std::string &epochFileName) {
+        std::string epochFilePath(basePath_ + epochFileName);
+        if (!boost::filesystem::exists(epochFilePath)) {
+            throw std::runtime_error("Epoch file does not exist");
+        }
+        if (!boost::filesystem::is_regular_file(epochFilePath)) {
+            throw std::runtime_error("Epoch file is not a regular file");
+        }
+        if (boost::filesystem::file_size(epochFilePath) < 4) {
+            throw std::runtime_error("Epoch file is not sized properly");
+        }
+        epochFile_ = open(epochFilePath);
+        read(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        epoch_ += 1; // we are in new epoch from last checkpoint
+    }
+
 
     AbstractDatum* FileMgr::createChunk(const ChunkKey &key, mapd_size_t pageSize) {
         // we will do this lazily and not allocate space for the Chunk (i.e.
@@ -279,7 +314,7 @@ namespace File_Namespace {
         FILE *f = open(path);
         FileInfo *fInfo = new FileInfo (fileId, f, pageSize, numPages,false); // false means don't init file
         
-        fInfo -> openExistingFile(headerVec);
+        fInfo -> openExistingFile(headerVec,epoch_);
         if (fileId >= files_.size()) {
             files_.resize(fileId+1);
         }
