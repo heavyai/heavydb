@@ -14,6 +14,7 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
+#include <unistd.h>
 
 #define EPOCH_FILENAME "epoch"
 
@@ -41,6 +42,7 @@ namespace File_Namespace {
     }
 
     FileMgr::~FileMgr() {
+        checkpoint();
         // free memory used by FileInfo objects
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
             delete chunkIt -> second;
@@ -170,6 +172,25 @@ namespace File_Namespace {
         epochFile_ = open(epochFilePath);
         read(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
         epoch_ += 1; // we are in new epoch from last checkpoint
+    }
+
+    void FileMgr::writeAndSyncEpochToDisk() {
+        write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        int status = fsync(fileno(epochFile_)); // gets file descriptor
+        if (status != 0)
+            throw std::runtime_error("Could not sync epoch file to disk");
+        
+        // for epoch file and then uses it to fsync
+        ++epoch_;
+    }
+
+    void FileMgr::checkpoint() {
+        for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
+            int status = (*fileIt) -> syncToDisk();
+            if (status != 0)
+                throw std::runtime_error("Could not sync file to disk");
+        }
+        writeAndSyncEpochToDisk();
     }
 
 

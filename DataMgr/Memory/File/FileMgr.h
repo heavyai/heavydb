@@ -151,6 +151,8 @@ namespace File_Namespace {
         FileInfo* openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages, std::vector<HeaderInfo> &headerVec);
         void createEpochFile(const std::string &epochFileName);
         void openEpochFile(const std::string &epochFileName);
+        void writeAndSyncEpochToDisk();
+        void checkpoint();
         
     };
     
