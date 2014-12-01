@@ -30,7 +30,7 @@ namespace Memory_Namespace {
         virtual ~AbstractDataMgr() {}
         
         // Chunk API
-        virtual AbstractDatum* createChunk(const ChunkKey &key, mapd_size_t pageSize) = 0;
+        virtual AbstractDatum* createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
         virtual void deleteChunk(const ChunkKey &key) = 0;
         //virtual void releaseChunk(const ChunkKey &key) = 0;
         virtual AbstractDatum* getChunk(ChunkKey &key) = 0;

@@ -2,41 +2,112 @@
  * @file    BufferMgr.cpp
  * @author  Steven Stewart <steve@map-d.com>
  */
-#include <cassert>
 #include "BufferMgr.h"
+
+#include <cassert>
+#include <limits>
 
 namespace Buffer_Namespace {
 
     /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
-    BufferMgr::BufferMgr(mapd_size_t memSize) {
-        assert(memSize > 0);
-        memSize_ = memSize;
-        mem_ = (mapd_addr_t) new mapd_byte_t[memSize_];
-        freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(memSize_, mem_));
+    BufferMgr::BufferMgr(const size_t bufferSize, const size_t pageSize): bufferSize_(bufferSize),pageSize_(pageSize) {
+        assert(bufferSize_ > 0 && pageSize_ > 0);
+        numPages_ = bufferSize_ / pageSize_; 
+        bufferPool_ = (mapd_addr_t) new mapd_byte_t[bufferSize_];
+        bufferSegments_.push_back(BufferSeg(0,numPages_));
+
+        //freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(numPages_, bufferPool_));
     }
 
     /// Frees the heap-allocated buffer pool memory
     BufferMgr::~BufferMgr() {
-        delete[] mem_;
-    }
+        delete[] buffer_;
     
     /// Throws a runtime_error if the Chunk already exists
-    void BufferMgr::createChunk(const ChunkKey &key, mapd_size_t pageSize) {
-        if (chunkPageSize_.find(key) != chunkPageSize_.end())
+    void AbstractDatum * BufferMgr::createChunk(const ChunkKey &key, const mapd_size_t chunkPageSize, const size_t initialSize) {
+        assert (chunkPageSize_ % pageSize_ == 0);
+        // ChunkPageSize here is just for recording dirty pages
+        if (chunkIndex_.find(key) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists.");
-        chunkPageSize_.insert(std::pair<ChunkKey, mapd_size_t>(key, pageSize));
+        }
+        chunkIndex_[key] = new Buffer (this,pageSize,key);
+        Buffer *buffer = chunkIndex_[key];
+        /*
+        if (initialSize > 0) {
+            size_t chunkNumPages = (initialSize + pageSize_ - 1) / pageSize_;
+            buffer -> reserve(chunkNumPages);
+        */
+        return (buffer);
     }
+
+    void BufferMgr::findFreeSpace(size_t numBytes) {
+        size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
+        for (auto bufferIt = bufferSegments_.begin(); bufferIt != bufferSegments_.end(); ++bufferIt) {
+            if (bufferIt -> memStatus == FREE && bufferIt -> numPages >= numPagesRequsted) {
+                return bufferIt;
+            }
+        }
+        // If we're here then we didn't find a free segment of sufficient size
+        // - need to evict
+        
+        BufferList::iterator bestEvictionStart = bufferList_.end();
+        unsigned int minScore = std::numeric_limits<unsigned int>::max(); 
+        // We're going for lowest score here, like golf
+        // This is because score is the sum of the lastTouched score for all
+        // pages evicted. Evicting less pages and older pages will lower the
+        // score
+
+        for (auto bufferIt = bufferSegments_.begin(); bufferIt != bufferSegments_.end(); ++bufferIt) {
+            // We can't evict pinned  buffers - only normal used
+            // buffers
+            if (bufferIt -> memStatus != PINNED) {
+                size_t pageCount = 0;
+                size_t score = 0;
+                bool solutionFound = false;
+                for (auto evictIt = bufferIt; evictIt != bufferSegments_.end(); ++evictIt) {
+                   if (evictIt -> memStatus == PINNED) { // If pinned then we're at a dead end
+                       break;
+                    }
+                    pageCount += evictIt -> numPages;
+                    if (evictIt -> memStatus == USED) {
+                        score += evictIt -> lastTouched;
+                    }
+                    if (pageCount >= numPagesRequsted) {
+                        solutionFound = true;
+                        break;
+                    }
+                }
+                if (solutionFound && score < minScore) {
+                    minScore = score;
+                    bestEvictionStart = bufferIt;
+                }
+                else if (evictIt == bufferSegments_.end()) {
+                    // this means that every segment after this will fail as
+                    // well, so our search has proven futile
+                    throw std::runtime_error ("Couldn't evict chunks to get free space");
+                    break;
+                    // in reality we should try to rearrange the buffer to get
+                    // more contiguous free space
+                }
+                // other possibility is ending at PINNED - do nothing in this
+                // case
+
+            }
+        }
+        return bestEvictionStart;
+    }
+
+
+
     
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
     void BufferMgr::deleteChunk(const ChunkKey &key) {
-        auto chunkPageSizeIt = chunkPageSize_.find(key);
-        if (chunkPageSizeIt == chunkPageSize_.end()) {
-            assert(chunkIndex_.find(key) == chunkIndex_.end());
-            throw std::runtime_error("Chunk does not exist");
-        }
-        
         // lookup the buffer for the Chunk in chunkIndex_
         auto chunkIt = chunkIndex_.find(key);
+        Buffer *buffer = chunkIt -> second;
+
+
+
         if (chunkIndex_.find(key) == chunkIndex_.end()) {
             chunkPageSize_.erase(chunkPageSizeIt);
             return;

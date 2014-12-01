@@ -13,13 +13,25 @@ using namespace std;
 
 namespace File_Namespace {
     mapd_size_t FileBuffer::headerBufferOffset_ = 32;
+
     FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes) : fm_(fm), pageSize_(pageSize), chunkKey_(chunkKey), isDirty_(false) {
+        // Create a new FileBuffer
         assert(fm_);
         calcHeaderBuffer();
-        // should expand to numBytes bytes
-        // NOP
+        if (numBytes > 0) {
+            // should expand to numBytes bytes
+            size_t initialNumPages = (numBytes + pageSize_ -1) / pageSize_;
+            int epoch = fm_-> epoch();
+            for (size_t pageNum = 0; pageNum < initialNumPages; ++pageNum) {
+                Page page = addNewMultiPage(epoch);
+                writeHeader(page,pageNum,epoch);
+            }
+        }
     }
+
     FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey),isDirty_(false) {
+        // We are being assigned an existing FileBuffer on disk
+
         assert(fm_);
         calcHeaderBuffer();
         MultiPage multiPage(pageSize_);

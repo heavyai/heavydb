@@ -194,17 +194,14 @@ namespace File_Namespace {
     }
 
 
-    AbstractDatum* FileMgr::createChunk(const ChunkKey &key, mapd_size_t pageSize) {
+    AbstractDatum* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes = 0) {
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
-            chunkIndex_[key] = new Chunk (this,pageSize,key);
-            return (chunkIndex_[key]);
-        }
-        else {
             throw std::runtime_error("Chunk already exists.");
-            return 0;
         }
+        chunkIndex_[key] = new Chunk (this,pageSize,key,numBytes);
+        return (chunkIndex_[key]);
     }
 
     void FileMgr::deleteChunk(const ChunkKey &key) {

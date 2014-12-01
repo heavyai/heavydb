@@ -18,6 +18,23 @@ using namespace Memory_Namespace;
 
 namespace Buffer_Namespace {
 
+    // Memory Pages types in buffer pool
+    enum MemStatus {FREE, USED, PINNED};
+
+    struct BufferSeg {
+        size_t startPage;
+        size_t numPages;
+        MemStatus memStatus;
+        Buffer * buffer;
+        unsigned int lastTouched;
+
+        BufferSeg(): memStatus (FREE), buffer(0) {}
+        BufferSeg(size_t startPage, size_t numPages): startPage(startPage), numPages(numPages),  memStatus (FREE), buffer(0) {}
+    };
+
+    typedef std::list<BufferSeg> BufferList;
+
+
     /**
      * @class   BufferMgr
      * @brief
@@ -30,7 +47,7 @@ namespace Buffer_Namespace {
         
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t
-        explicit BufferMgr(mapd_size_t memSize);
+        explicit BufferMgr(const size_t bufferSize, const mapd_size_t pageSize);
         
         /// Destructor
         virtual ~BufferMgr();
@@ -66,14 +83,23 @@ namespace Buffer_Namespace {
     private:
         BufferMgr(const BufferMgr&); // private copy constructor
         BufferMgr& operator=(const BufferMgr&); // private assignment
+        
+
+
         std::map<ChunkKey, Buffer*> chunkIndex_;
-        std::map<ChunkKey, mapd_size_t> chunkPageSize_;
-        mapd_size_t memSize_;   /// number of bytes allocated for the buffer pool
-        mapd_addr_t mem_;       /// beginning memory address of the buffer pool
+        size_t bufferSize_;   /// number of bytes allocated for the buffer pool
+        size_t pageSize_;
+        size_t numPages_;
+        mapd_addr_t bufferPool_;       /// beginning memory address of the buffer pool
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap
         std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
+        BufferList bufferList_;
+        std::map<mapd_size_t, mapd_addr_t> freeMem_;
+
+        void findFreeSpace(size_t numBytes);
+
     };
 
 } // Buffer_Namespace

@@ -20,7 +20,7 @@
 #include "FileInfo.h"
 #include "../AbstractDatum.h"
 #include "../AbstractDataMgr.h"
-#include "../../PgConnector/PgConnector.h"
+//#include "../../PgConnector/PgConnector.h"
 
 using namespace Memory_Namespace;
 
@@ -112,8 +112,24 @@ namespace File_Namespace {
          */
         void requestFreePages(mapd_size_t npages, mapd_size_t pagesize, std::vector<Page> &pages);
 
-        /// Returns the current value of epoch
+        /**
+         * @brief Fsyncs data files, writes out epoch and
+         * fsyncs that
+         */
+
+        void checkpoint();
+        /**
+         * @brief Returns current value of epoch - should be
+         * one greater than recorded at last checkpoint
+         */
         inline int epoch() { return epoch_; }
+
+        /**
+         * @brief Returns FILE pointer associated with
+         * requested fileId 
+         *
+         * @see FileBuffer
+         */
 
         FILE * getFileForFileId(const int fileId);
 
@@ -129,9 +145,8 @@ namespace File_Namespace {
 
         ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks
         // #TM Not sure if we need this below
-        //std::map<ChunkKey, mapd_size_t> chunkPageSize_; /// maps a Chunk to its page size
 
-        PgConnector pgConnector_; /// Postgres connector for reading/writing file manager metadata
+
         /**
          * @brief Adds a file to the file manager repository.
          *
@@ -152,7 +167,6 @@ namespace File_Namespace {
         void createEpochFile(const std::string &epochFileName);
         void openEpochFile(const std::string &epochFileName);
         void writeAndSyncEpochToDisk();
-        void checkpoint();
         
     };
     
