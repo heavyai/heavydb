@@ -29,7 +29,9 @@ namespace Buffer_Namespace {
         unsigned int lastTouched;
 
         BufferSeg(): memStatus (FREE), buffer(0) {}
-        BufferSeg(size_t startPage, size_t numPages): startPage(startPage), numPages(numPages),  memStatus (FREE), buffer(0) {}
+        BufferSeg(const size_t startPage, const size_t numPages): startPage(startPage), numPages(numPages),  memStatus (FREE), buffer(0) {}
+        BufferSeg(const size_t startPage, const size_t numPages, const MemStatus memStatus): startPage(startPage), numPages(numPages),  memStatus (memStatus), buffer(0) {}
+        BufferSeg(const size_t startPage, const size_t numPages, const MemStatus memStatus, const int lastTouched): startPage(startPage), numPages(numPages),  memStatus (memStatus), lastTouched(lastTouched) buffer(0) {}
     };
 
     typedef std::list<BufferSeg> BufferList;
@@ -86,7 +88,8 @@ namespace Buffer_Namespace {
         
 
 
-        std::map<ChunkKey, Buffer*> chunkIndex_;
+        //std::map<ChunkKey, Buffer*> chunkIndex_;
+        std::map<ChunkKey, BufferList::iterator> chunkIndex_;
         size_t bufferSize_;   /// number of bytes allocated for the buffer pool
         size_t pageSize_;
         size_t numPages_;
@@ -94,11 +97,27 @@ namespace Buffer_Namespace {
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap
-        std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
+        //std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
         BufferList bufferList_;
-        std::map<mapd_size_t, mapd_addr_t> freeMem_;
+        //std::map<mapd_size_t, mapd_addr_t> freeMem_;
 
-        void findFreeSpace(size_t numBytes);
+        BufferList::iterator evict(BufferList::iterator &evictStart, const size_t numPagesRequested);
+
+        /**
+         * @brief Gets a buffer of required size and returns an iterator to it
+         *
+         * If possible, this function will just select a free buffer of
+         * sufficient size and use that. If not, it will evict as many
+         * non-pinned but used buffers as needed to have enough space for the
+         * buffer
+         *
+         * @return An iterator to the reserved buffer. We guarantee that this
+         * buffer won't be evicted by PINNING it - caller should change this to
+         * USED if applicable
+         *
+         */
+
+        BufferList::iterator reserveBuffer(size_t numBytes);
 
     };
 

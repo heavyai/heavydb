@@ -40,10 +40,51 @@ namespace Buffer_Namespace {
         return (buffer);
     }
 
-    void BufferMgr::findFreeSpace(size_t numBytes) {
+    BufferList::iterator BufferMgr::evict(BufferList::iterator &evictStart, const size_t numPagesRequested) {
+        // We can assume here that buffer for evictStart either doesn't exist
+        // (evictStart is first buffer) or was not free, so don't need ot merge
+        // it
+        auto evictIt = evictStart;
+        size_t numPages = 0;
+        size_t startPage = evictStart -> startPage;
+        while (numPages < numPagesRequsted) {
+            assert (evictIt -> memStatus != PINNED):
+            numPages += evictIt -> numPages;
+            evictIt = bufferList_.erase(evictIt); // erase operations returns next iterator - safe if we ever move to a vector (as opposed to erase(evictIt++)
+        }
+        BufferSeg dataSeg(startPage,numPagesRequested,PINNED,bufferEpoch_++); // until we can 
+        bufferList_.insert(evictIt,dataSeg); // Will insert before evictIt
+        if (numPagesRequsted < numPages) {
+            size_t excessPages = numPages - numPagesRequsted;
+            if (evictIt != bufferList_.end() && evictIt -> memStatus == FREE) { // need to merge with current page
+                evictIt -> startPage = startPage + numPagesRequsted;
+                evictIt -> numPages += excessPages;
+            }
+            else { // need to insert a free seg before evictIt for excessPages
+                BufferSeg freeSeg(startPage + numPagesRequsted,excessPages,FREE);
+                bufferList_.insert(evictIt,freeSeg);
+            }
+        }
+        return dataSeg;
+    }
+
+
+    void BufferMgr::reserveBuffer(size_t numBytes) {
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
         for (auto bufferIt = bufferSegments_.begin(); bufferIt != bufferSegments_.end(); ++bufferIt) {
             if (bufferIt -> memStatus == FREE && bufferIt -> numPages >= numPagesRequsted) {
+                // startPage doesn't change
+                size_t excessPages = bufferIt -> numPages - numPagesRequsted;
+                bufferIt -> numPages = numPagesRequested;
+                bufferIt -> memStatus = PINNED:
+                bufferIt -> lastTouched  = bufferEpoch_++;
+                if (excessPages > 0) {
+                    BufferSeg freeSeg(bufferIt->startPage+numPagesRequsted,excessPages,FREE);
+                    auto tempIt = bufferIt; // this should make a copy and not be a reference
+                    // - as we do not want to increment bufferIt
+                    tempIt++;
+                    bufferList_.insert(tempIt,freeSeg);
+                }
                 return bufferIt;
             }
         }
@@ -58,8 +99,15 @@ namespace Buffer_Namespace {
         // score
 
         for (auto bufferIt = bufferSegments_.begin(); bufferIt != bufferSegments_.end(); ++bufferIt) {
+            /* Note there are some shortcuts we could take here - like we
+             * should never consider a USED buffer coming after a free buffer
+             * as we would have used the FREE buffer, but we won't worry about
+             * this for now
+             */
+
             // We can't evict pinned  buffers - only normal used
             // buffers
+
             if (bufferIt -> memStatus != PINNED) {
                 size_t pageCount = 0;
                 size_t score = 0;
@@ -94,10 +142,9 @@ namespace Buffer_Namespace {
 
             }
         }
+        bestEvictionStart = evict(bestEvictionStart,numPagesRequested);
         return bestEvictionStart;
     }
-
-
 
     
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
@@ -145,9 +192,12 @@ namespace Buffer_Namespace {
     /// throws a runtime_error.
     AbstractDatum* BufferMgr::getChunk(ChunkKey &key) {
         auto chunkIt = chunkIndex_.find(key);
-        if (chunkIndex_.find(key) == chunkIndex_.end())
-            throw std::runtime_error("Chunk does not exist.");
-        return chunkIt->second;
+        if (chunkIt != chunkIndex_.end()) {
+            chunkIt -> second -> memStatus == PINNED; // necessary?
+            chunkIt -> second -> lastTouched == bufferEpoch++; // necessary?
+            return chunkIt -> second -> buffer; 
+        }
+        // If wasn't in pool then we need to fetch it
     }
     
     AbstractDatum* BufferMgr::putChunk(const ChunkKey &key, AbstractDatum *d) {
