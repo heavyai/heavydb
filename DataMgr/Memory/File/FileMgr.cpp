@@ -221,10 +221,11 @@ namespace File_Namespace {
             throw std::runtime_error("Chunk does not exist.");
         return chunkIt->second;
     }
-    /*
-    void FileMgr::getChunk(ChunkKey &key, AbstractDatum *datum, const mapd_size_t numBytes) {
+
+
+    void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractDatum provided by
-        // Datum
+        // destDatum
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end()) 
             throw std::runtime_error("Chunk does not exist");
@@ -233,9 +234,8 @@ namespace File_Namespace {
         // just look at pageSize * numPages in FileBuffer
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
         datum->reserve(chunkSize);
-        chunk->read(mapd_addr_t)datum->getMemoryPtr(),chunkSize,0);
+        chunk->read(datum->getMemoryPtr(),chunkSize,0);
     }
-    */
 
     AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum) {
         // obtain a pointer to the Chunk

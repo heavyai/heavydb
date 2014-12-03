@@ -48,11 +48,12 @@ namespace Buffer_Namespace {
         size_t numPages = 0;
         size_t startPage = evictStart -> startPage;
         while (numPages < numPagesRequsted) {
-            assert (evictIt -> memStatus != PINNED):
+            assert (evictIt -> pinCount == 0):
             numPages += evictIt -> numPages;
             evictIt = bufferList_.erase(evictIt); // erase operations returns next iterator - safe if we ever move to a vector (as opposed to erase(evictIt++)
         }
-        BufferSeg dataSeg(startPage,numPagesRequested,PINNED,bufferEpoch_++); // until we can 
+        BufferSeg dataSeg(startPage,numPagesRequested,USED,bufferEpoch_++); // until we can 
+        dataSeg.pinCount++;
         bufferList_.insert(evictIt,dataSeg); // Will insert before evictIt
         if (numPagesRequsted < numPages) {
             size_t excessPages = numPages - numPagesRequsted;
@@ -69,14 +70,15 @@ namespace Buffer_Namespace {
     }
 
 
-    void BufferMgr::reserveBuffer(size_t numBytes) {
+    BufferList::iterator BufferMgr::reserveBuffer(size_t numBytes) {
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
         for (auto bufferIt = bufferSegments_.begin(); bufferIt != bufferSegments_.end(); ++bufferIt) {
             if (bufferIt -> memStatus == FREE && bufferIt -> numPages >= numPagesRequsted) {
                 // startPage doesn't change
                 size_t excessPages = bufferIt -> numPages - numPagesRequsted;
                 bufferIt -> numPages = numPagesRequested;
-                bufferIt -> memStatus = PINNED:
+                bufferIt -> memStatus = USED;
+                bufferIt -> pinCount = 1;
                 bufferIt -> lastTouched  = bufferEpoch_++;
                 if (excessPages > 0) {
                     BufferSeg freeSeg(bufferIt->startPage+numPagesRequsted,excessPages,FREE);
@@ -108,12 +110,12 @@ namespace Buffer_Namespace {
             // We can't evict pinned  buffers - only normal used
             // buffers
 
-            if (bufferIt -> memStatus != PINNED) {
+            if (bufferIt -> pinCount == 0) {
                 size_t pageCount = 0;
                 size_t score = 0;
                 bool solutionFound = false;
                 for (auto evictIt = bufferIt; evictIt != bufferSegments_.end(); ++evictIt) {
-                   if (evictIt -> memStatus == PINNED) { // If pinned then we're at a dead end
+                   if (evictIt -> pinCount > 0) { // If pinned then we're at a dead end
                        break;
                     }
                     pageCount += evictIt -> numPages;
@@ -190,14 +192,19 @@ namespace Buffer_Namespace {
     
     /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
     /// throws a runtime_error.
-    AbstractDatum* BufferMgr::getChunk(ChunkKey &key) {
+    AbstractDatum* BufferMgr::getChunk(ChunkKey &key,size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt != chunkIndex_.end()) {
-            chunkIt -> second -> memStatus == PINNED; // necessary?
-            chunkIt -> second -> lastTouched == bufferEpoch++; // necessary?
+            chunkIt -> second -> memStatus = USED; // necessary?
+            chunkIt -> second -> pinCount++; 
+            chunkIt -> second -> lastTouched = bufferEpoch++; // necessary?
             return chunkIt -> second -> buffer; 
         }
-        // If wasn't in pool then we need to fetch it
+        else { // If wasn't in pool then we need to fetch it
+            Buffer *buffer;
+            fileMgr_ -> fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
+            return buffer;
+        }
     }
     
     AbstractDatum* BufferMgr::putChunk(const ChunkKey &key, AbstractDatum *d) {

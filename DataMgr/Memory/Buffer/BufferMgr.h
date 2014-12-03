@@ -19,7 +19,7 @@ using namespace Memory_Namespace;
 namespace Buffer_Namespace {
 
     // Memory Pages types in buffer pool
-    enum MemStatus {FREE, USED, PINNED};
+    enum MemStatus {FREE, USED};
 
     struct BufferSeg {
         size_t startPage;
@@ -27,11 +27,12 @@ namespace Buffer_Namespace {
         MemStatus memStatus;
         Buffer * buffer;
         unsigned int lastTouched;
+        unsigned int pinCount;
 
-        BufferSeg(): memStatus (FREE), buffer(0) {}
-        BufferSeg(const size_t startPage, const size_t numPages): startPage(startPage), numPages(numPages),  memStatus (FREE), buffer(0) {}
-        BufferSeg(const size_t startPage, const size_t numPages, const MemStatus memStatus): startPage(startPage), numPages(numPages),  memStatus (memStatus), buffer(0) {}
-        BufferSeg(const size_t startPage, const size_t numPages, const MemStatus memStatus, const int lastTouched): startPage(startPage), numPages(numPages),  memStatus (memStatus), lastTouched(lastTouched) buffer(0) {}
+        BufferSeg(): memStatus (FREE), buffer(0),pinCount(0) {}
+        BufferSeg(const size_t startPage, const size_t numPages): startPage(startPage), numPages(numPages),  memStatus (FREE), buffer(0),pinCount(0) {}
+        BufferSeg(const size_t startPage, const size_t numPages, const MemStatus memStatus): startPage(startPage), numPages(numPages),  memStatus (memStatus), buffer(0),pinCount(0) {}
+        BufferSeg(const size_t startPage, const size_t numPages, const MemStatus memStatus, const int lastTouched): startPage(startPage), numPages(numPages),  memStatus (memStatus), lastTouched(lastTouched) buffer(0),pinCount(0) {}
     };
 
     typedef std::list<BufferSeg> BufferList;
@@ -94,6 +95,7 @@ namespace Buffer_Namespace {
         size_t pageSize_;
         size_t numPages_;
         mapd_addr_t bufferPool_;       /// beginning memory address of the buffer pool
+        FileMgr *fileMgr_;
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap
