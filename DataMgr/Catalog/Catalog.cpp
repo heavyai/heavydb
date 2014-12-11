@@ -14,7 +14,7 @@ using std::pair;
 
 namespace Metadata_Namespace {
 
-Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false), pgConnector_("mapd","mapd") {
+Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false), sqliteConnector_("mapd","mapd") {
     //readCatalogFromFile();
     createStateTableIfDne();
     readState();

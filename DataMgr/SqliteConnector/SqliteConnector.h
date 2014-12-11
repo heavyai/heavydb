@@ -20,6 +20,7 @@ class SqliteConnector {
     public:
         SqliteConnector (const std::string &dbName, const std::string &dir = ".");
         void query(const std::string &queryString);
+        void queryWithCallback(const std::string &queryString);
 
         inline size_t getNumRows() {return numRows_;}
         inline size_t getNumCols() {return numCols_;}
@@ -33,6 +34,8 @@ class SqliteConnector {
 
 
     private:
+        void throwError();
+
         sqlite3 *db_;
         std::string dbName_;
         bool atFirstResult_;

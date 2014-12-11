@@ -14,7 +14,7 @@ int resultCallback(void *connObj, int argc, char ** argv, char **colNames) {
         sqliteConnector -> results_.resize(argc);
         sqliteConnector -> atFirstResult_ = false;
     }
-    sqliteConnector -> numRows_ = argc;
+    sqliteConnector -> numRows_++;
     for (int c = 0; c < argc; ++c) {
         sqliteConnector -> results_[c].push_back(argv[c]);
     }
@@ -29,12 +29,53 @@ SqliteConnector::SqliteConnector (const string &dbName, const string &dir) {
     connectString += dbName;
     int returnCode = sqlite3_open(connectString.c_str(), &db_);
     if (returnCode != SQLITE_OK) {
-        string errorMsg (sqlite3_errmsg(db_));
-        throw std::runtime_error("Sqlite3 Error: " + errorMsg);
+        throwError();
     }
 }
 
-void SqliteConnector::query(const std::string &queryString) {
+void SqliteConnector::throwError() {
+    string errorMsg (sqlite3_errmsg(db_));
+    throw runtime_error("Sqlite3 Error: " + errorMsg);
+}
+
+void SqliteConnector::query (const std::string &queryString) {
+    atFirstResult_ = true;
+    numRows_ = 0;
+    numCols_ = 0;
+    columnNames.clear();
+    results_.clear();
+    sqlite3_stmt *stmt;
+    int returnCode = sqlite3_prepare_v2(db_, queryString.c_str(), -1, &stmt, NULL);
+    if (returnCode != SQLITE_OK) {
+        throwError();
+    }
+
+    do {
+        returnCode = sqlite3_step(stmt);
+        if (returnCode != SQLITE_ROW && returnCode != SQLITE_DONE) {
+            throwError();
+        }
+        if (returnCode == SQLITE_DONE) {
+            break;  
+        }
+        if (atFirstResult_) {
+            numCols_ = sqlite3_column_count(stmt);
+            for (int c = 0; c < numCols_; ++c) {
+                columnNames.push_back(sqlite3_column_name(stmt,c));
+            }
+            results_.resize(numCols_);
+            atFirstResult_ = false;
+        }
+        numRows_++;
+        for (int c = 0; c < numCols_; ++c) {
+            results_[c].push_back(reinterpret_cast <const char *> (sqlite3_column_text(stmt,c))); // b/c sqlite returns unsigned char* which can't be used in constructor of string
+        }
+    } while (1 == 1); // Loop control in break statement above
+
+    sqlite3_finalize(stmt);
+}
+
+void SqliteConnector::queryWithCallback (const std::string &queryString) {
     atFirstResult_ = true;
     numRows_ = 0;
     numCols_ = 0;
@@ -43,10 +84,7 @@ void SqliteConnector::query(const std::string &queryString) {
     char *errorMsg;
     int returnCode = sqlite3_exec(db_,queryString.c_str(), resultCallback,this,&errorMsg);
     if (returnCode != SQLITE_OK) {
-        string errorString ("Sqlite3 Error: ");
-        errorString += errorMsg;
-        throw std::runtime_error(errorString);
-        //string errorMsg (sqlite3_errmsg(db_)):
+        throwError();
     }
 }
 
