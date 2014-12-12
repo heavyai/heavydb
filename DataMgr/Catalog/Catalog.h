@@ -68,7 +68,7 @@ struct ColumnDescriptor {
     ColumnDescriptor(const int tableId, const std::string columnName, const int columnId, const mapd_data_t columnType, const bool notNull): tableId(tableId), columnName(columnName), columnId(columnId), columnType(columnType), notNull(notNull) {}
 
     /**
-     * @brief Constructor that does not specify tableId 
+     * @brief Constructor that does not specify tableId or columnId 
      * and columnId - these will be filled in by Catalog.
      * @param columnName name of column
      * @param columnType data type of column
@@ -103,7 +103,8 @@ struct ColumnDescriptor {
 
 /**
  * @type TableDescriptorMap
- * @brief Maps table names to pointers to table row structs 
+ * @brief Maps table names to pointers to table descriptors allocated on the
+ * heap 
  */
 
 typedef std::map<std::string, TableDescriptor *> TableDescriptorMap;
@@ -117,15 +118,16 @@ typedef std::tuple <int, std::string> ColumnKey;
 
 /**
  * @type ColumnDescriptorMap
- * @brief Maps a Column Key to column row structs
+ * @brief Maps a Column Key to column descriptors allocated on the heap
  */
 
 typedef std::map < ColumnKey, ColumnDescriptor *> ColumnDescriptorMap;
         
 /**
  * @type Catalog
- * @brief Serves as the system catalog.  Currently just uses
- * uses ASCII files to store the Table Table and Column Table.
+ * @brief Serves as the system catalog.  Currently can use
+ * either ASCII files to store the Table and Column Tables
+ * or Sqlite (default)
  */
 
 class Catalog {
@@ -143,13 +145,13 @@ class Catalog {
         /**
          * @brief Destructor - deletes all
          * ColumnDescriptor and TableDescriptor structures 
-         * which were allocated on the heap
+         * which were allocated on the heap and writes
+         * Catalog to Sqlite
          */
         ~Catalog();
 
         /**
          * @brief Writes in-memory representation of table table and column table to file 
-         * @return error code or MAPD_SUCCESS
          *
          * This method only writes to file if the catalog is "dirty", as specified
          * by the isDirty_ member variable.  It overwrites the existing catalog files.
@@ -161,10 +163,10 @@ class Catalog {
         /**
          * @brief Adds an empty table to the catalog 
          * @param tableName name of table to be added
-         * @return error code or MAPD_SUCCESS
+         * @return integer tableId of created table
          *
          * This method tries to add a new table to the Catalog (the table table),
-         * returning an error if a table by the same name already exists.
+         * - throwing a runtime_error if a table by the same name already exists.
          * It autoincrements the nextTableId_ counter so that the next table created
          * will have an id one higher.
          */
@@ -173,17 +175,13 @@ class Catalog {
         /**
          * @brief Adds a table and a set of columns to the catalog 
          * @param tableName name of table to be added
-         * @param columns vector of ColumnDescriptor
-         * pointers that should have been 
-         * allocated on the heap (with new) and
+         * @param columns vector of ColumnDescriptors
+         * that should have been
          * instanciated with second (partial)
          * constrructor. tableId and columnId will
          * be populated by Catalog for each.
-         * Catalog takes responsibilitty for deleting
-         * these when Catalog goes out-of-scope.
-         * @return error code or MAPD_SUCCESS
          *
-         *
+         * @return integer tableId of created table 
          *
          * This method first determines whether the table and columns can be added
          * to the Catalog (i.e ensuring the table does not already exist and none 
@@ -192,9 +190,7 @@ class Catalog {
          * fields for.
          *
          * Expects that ColumnDescriptor structs are initialized with second
-         * constructor (without tableId and columnId) and that they are
-         * allocated on the heap - ownership of them transfers from the calling
-         * function to the Catalog
+         * constructor (without tableId and columnId) 
          *
          * Called by SQL DDL CREATE TABLE
          *
@@ -207,16 +203,13 @@ class Catalog {
         /**
          * @brief Adds a column to the catalog for an already extant table 
          *
-         * @param ColumnDescriptor pointer to heap-allocated ColumnDescriptor
-         * structure instanciated with second (partial) 
-         * constructor.  tableID and columnId will be populated
-         * by Catalog.  Catalog takes responsibility for
-         * deleting this object when Catalog goes out-of-scope.
-         * @return error code or MAPD_SUCCESS
+         * @param ColumnDescriptor structure instanciated with second
+         * (partial) constructor.  tableID and columnId will be populated
+         * by Catalog.  
          *
          * This method tries to add a new column to a table that is already in 
          * the catalog - equivalent to SQL's alter table add column command.
-         * It returns an error if the table does not exist, or if the table does 
+         * It throws a runtime_error if the table does not exist, or if the table does 
          * exist but a column with the same name as the column being inserted for
          * that table already exists
          *
@@ -224,17 +217,14 @@ class Catalog {
          *
          * @see ColumnDescriptor
          */
-        void addColumnToTable(const std::string &tableName, const ColumnDescriptor &columnRow);
-
-
+        void addColumnToTable(const std::string &tableName, const ColumnDescriptor &columnDescriptor);
 
         /**
          * @brief Removes a table and all of its associated columns from the catalog
          * @param tableName name of table to be removed from catalog
-         * @return error code or MAPD_SUCCESS
          *
          * This method tries to remove the table specified by tableName from the 
-         * Catalog.  It returns an error if no table by that name exists.  
+         * Catalog.  It thrwos a runtime_error if no table by that name exists.  
          *
          * Called by SQL DDL DROP TABLE
          */
@@ -245,10 +235,9 @@ class Catalog {
          * @brief Removes a name-specified column from a given table from the catalog
          * @param tableName table specified column belongs to
          * @param columnName name of column to be removed
-         * @return error code or MAPD_SUCCESS
          *
          * This method tries to remove the column specified by columnName from the
-         * table specified by tableName, returning an error if no table by the given
+         * table specified by tableName, throwing a runtime error if no table by the given
          * table name exists for no column by the given column name exists for the
          * table specified. 
          *
@@ -257,63 +246,92 @@ class Catalog {
 
         void removeColumnFromTable(const std::string &tableName, const std::string &columnName);
 
-        const TableDescriptor * getMetadataForTable (const std::string &tableName) const;
         /**
-         * @brief Passes back via reference a ColumnDescriptor struct for the column specified by table name and column name 
+         * @brief Returns a pointer to a const TableDescriptor struct matching
+         * the provided tableName
          * @param tableName table specified column belongs to
-          @param columnName name of column we want metadata for
-         * @param columnRow ColumnDescriptor struct of metadata that
-         * is returned by reference. 
-         * @return error code or MAPD_SUCCESS
+         * @return pointer to const TableDescriptor object queried for
+         * 
+         * Throws a runtime error if the specified table does not exist
+         */
+
+        const TableDescriptor * getMetadataForTable (const std::string &tableName) const;
+
+        /**
+         * @brief Returns a pointer to a const ColumnDescriptor struct
+         * for the column specified by table name and column name 
+         * @param tableName table specified column belongs to
+         * @param columnName name of column we want metadata for
+         * @return pointer to const ColumnDescriptor for desired column 
          *
          * This method first checks to see if the table and column specified by
-         * the tableName and columnName parameters exist, returning an error if
-         * they do not.  It then makes a copy of the ColumnDescriptor struct representing
-         * that column which returned via the columnRow parameter.  For now we
-         * choose not to return the raw pointer as this could be invalidated by
-         * the Catalog before the calling function can access it in a multithreaded
-         * environment, although this might be a moot point if we never allow 
-         * such query overlap in the first place
+         * the tableName and columnName parameters exist, throwing an error if
+         * they do not.  It then returns a pointer to the const desired ColumnDescriptor
+         * struct. It is const because this points to the actual struct stored
+         * on the heap by the Catalog.
          */
 
         const ColumnDescriptor * getMetadataForColumn (const std::string &tableName, const std::string &columnName) const;
 
-
         /**
-         * @brief Passes back via reference a vector of ColumnDescriptor structs for the column specified by table name and column name 
+         * @brief Returns a vector of pointers to constant ColumnDescriptor structs for 
+         * the specified columns from a single table
          * @param tableName table specified columns belong to
          * @param columnNames vector of names of columns we want
-         * metadata for
-         * @param columnRows vector of ColumnDescriptor structs of 
-         * metadata that is returned by reference. 
-         * @return error code or MAPD_SUCCESS
+         * @return vector of pointers to const ColumnDescriptor structs  that
+         * match query
          *
          * This method first checks to see if the table and columns specified by
-         * the tableName and columnName parameters exist, returning an error if
-         * they do not.  It then inserts into the vector of ColumnDescriptor structs
-         * passed as an argument to the function copies of all structs matching
-         * the given columnName.
+         * the tableName and columnName parameters exist, throwing a runtime error if 
+         * they do not.  It then returns a vector of pointers to const
+         * ColumnDescriptor structs matching the provided columnNames
          */
 
         std::vector <const ColumnDescriptor *> getMetadataForColumns (const std::string &tableName, const std::vector<std::string> &columnNames) const;
 
+        /**
+         * @brief Returns a vector of pointers to constant ColumnDescriptor structs for the specified columns from multiple tables
+         * @param tableNames vector of table names columns can belong to
+         * @param columnNames vector of pairs of names of columns we want,
+         * signifying tableName.columnName.  tableName in the pair can be left
+         * blank ("") if it is not known - the method will attempt to
+         * disambiguate
+         * @return vector of pointers to const ColumnDescriptor structs  that
+         * match query
+         *
+         * This method expects a vector of table names and a vector of column
+         * name "pairs", specifying tableName.columnName.  If tableName is not
+         * given (i.e. left as ""), it will try to disambiguate, throwing an
+         * error if it cannot. 
+         */
 
          std::vector <const ColumnDescriptor *> getMetadataForColumns(const std::vector <std::string>  &tableNames, const std::vector <std::pair <std::string, std::string> > &columnNames) const;
 
+        /**
+         * @brief Returns a vector of pointers to constant ColumnDescriptor structs for all the columns from a particular table 
+         * @param tableName table name we want the column metadata for
+         * @return vector of pointers to const ColumnDescriptor structs - one
+         * for each and every column in the table
+         *
+         * Used for select * queries
+         */
+
          std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const std::string &tableName) const;
+
+        /**
+         * @brief Returns a vector of pointers to constant ColumnDescriptor structs for all the columns from a particular table 
+         * specified by table id
+         * @param tableId table id we want the column metadata for
+         * @return vector of pointers to const ColumnDescriptor structs - one
+         * for each and every column in the table
+         *
+         * Called internally by getAllColumnMetadataForTable(const string tableName)
+         */
+
          std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
     private:
 
-        /**
-         * @brief Reads files representing state of table table and column table into in-memory representation
-         *
-         * This method first checks to see if the table file and column file exist,
-         * only reading if they do.  It reads in data in the format specified by 
-         * writeCatalogToFile().  It performs no error-checking as we assume the 
-         * Catalog files are written by Catalog and represent the pre-valicated
-         * in-memory state of the database metadata.
-         */
         
         inline std::string getTypeName(mapd_data_t type) {
             switch (type) {
@@ -343,7 +361,18 @@ class Catalog {
         }
         void createStateTableIfDne();
 
+        /**
+         * @brief Reads files representing state of table table and column table into in-memory representation
+         *
+         * This method first checks to see if the table file and column file exist,
+         * only reading if they do.  It reads in data in the format specified by 
+         * writeCatalogToFile().  It performs no error-checking as we assume the 
+         * Catalog files are written by Catalog and represent the pre-valicated
+         * in-memory state of the database metadata.
+         */
+
         void readCatalogFromFile();
+
         void readState();
         void writeState();
 

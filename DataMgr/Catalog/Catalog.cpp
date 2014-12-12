@@ -16,7 +16,7 @@ using std::pair;
 
 namespace Catalog_Namespace {
 
-Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false), sqliteConnector_("mapd") {
+Catalog::Catalog(const string &basePath): basePath_(basePath), maxTableId_(-1), maxColumnId_(-1), isDirty_(false), sqliteConnector_("mapd",basePath) {
     //readCatalogFromFile();
     createStateTableIfDne();
     readState();
