@@ -28,31 +28,31 @@
 #include <utility>
 #include <boost/lexical_cast.hpp>
 
-namespace Metadata_Namespace {
+namespace Catalog_Namespace {
 
 /**
- * @type TableRow
+ * @type TableDescriptor
  * @brief specifies the content in-memory of a row in the table metadata table
  * 
- * A TableRow type currently includes only the table name and the tableId (zero-based) that it maps to. Other metadata could be added in the future.
+ * A TableDescriptor type currently includes only the table name and the tableId (zero-based) that it maps to. Other metadata could be added in the future.
  */
 
-struct TableRow {
+struct TableDescriptor {
     std::string tableName; /**< tableName is the name of the table table -must be unique */
     int tableId; /**< tableId starts at 0 for valid tables. */
 
-    TableRow(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
-    TableRow() {}
+    TableDescriptor(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
+    TableDescriptor() {}
 };
 
 /**
- * @type ColumnRow
+ * @type ColumnDescriptor
  * @brief specifies the content in-memory of a row in the column metadata table
  * 
- * A ColumnRow is uniquely identified by a tableId and columnName (or tableId and columnId).  It also specifies the type of the column and whether nulls are allowed. Other metadata could be added in the future
+ * A ColumnDescriptor is uniquely identified by a tableId and columnName (or tableId and columnId).  It also specifies the type of the column and whether nulls are allowed. Other metadata could be added in the future
  */
 
-struct ColumnRow {
+struct ColumnDescriptor {
     int tableId; /**< tableId and columnName constitute the primary key to access rows in the column table - the pair must be unique> */
     std::string columnName;  /**< tableId and columnName constitute the primary key to access rows in the column table - the pair must be unique */
     int columnId;
@@ -65,7 +65,7 @@ struct ColumnRow {
      * should be used by Catalog internally.  
      */
 
-    ColumnRow(const int tableId, const std::string columnName, const int columnId, const mapd_data_t columnType, const bool notNull): tableId(tableId), columnName(columnName), columnId(columnId), columnType(columnType), notNull(notNull) {}
+    ColumnDescriptor(const int tableId, const std::string columnName, const int columnId, const mapd_data_t columnType, const bool notNull): tableId(tableId), columnName(columnName), columnId(columnId), columnType(columnType), notNull(notNull) {}
 
     /**
      * @brief Constructor that does not specify tableId 
@@ -75,38 +75,38 @@ struct ColumnRow {
      * @param notNull boolean expressing that no values in column can be null
      */
 
-    ColumnRow(const std::string columnName, const mapd_data_t columnType, const bool notNull): columnName(columnName), columnType(columnType), notNull(notNull), tableId(-1), columnId(-1) {} /**< constructor for adding columns - assumes that tableId and columnId are unknown at this point */
+    ColumnDescriptor(const std::string columnName, const mapd_data_t columnType, const bool notNull): columnName(columnName), columnType(columnType), notNull(notNull), tableId(-1), columnId(-1) {} /**< constructor for adding columns - assumes that tableId and columnId are unknown at this point */
     
     /**
      * @brief   Constructor that requires only the name of the column.
      * @author  Steven Stewart <steve@map-d.com>
      *
-     * This constructor was created so that an "empty" ColumnRow object can be declared, 
+     * This constructor was created so that an "empty" ColumnDescriptor object can be declared, 
      * where only the name of the column is known.
      *
-     * One use case for this constructor arises during parsing. An AST node has a ColumnRow
+     * One use case for this constructor arises during parsing. An AST node has a ColumnDescriptor
      * object. When a column name is parsed, the only known metadata is the name itself --
      * other metadata about the column will be obtained during a tree walking phase in which
      * such nodes are annotated by calling the appropriate Catalog method.
      *
      * @param columnName    The name of the column.
      */
-    ColumnRow(const std::string columnName) : columnName(columnName) {}
+    ColumnDescriptor(const std::string columnName) : columnName(columnName) {}
     
     /**
-     * @brief   Prints a representation of the ColumnRow object to stdout
+     * @brief   Prints a representation of the ColumnDescriptor object to stdout
      */
     void print() {
-        printf("ColumnRow: tableId=%d columnId=%d columnName=%s columnType=%d notNull=%d\n", tableId, columnId, columnName.c_str(), columnType, notNull);
+        printf("ColumnDescriptor: tableId=%d columnId=%d columnName=%s columnType=%d notNull=%d\n", tableId, columnId, columnName.c_str(), columnType, notNull);
     }
 };
 
 /**
- * @type TableRowMap
+ * @type TableDescriptorMap
  * @brief Maps table names to pointers to table row structs 
  */
 
-typedef std::map<std::string, TableRow *> TableRowMap;
+typedef std::map<std::string, TableDescriptor *> TableDescriptorMap;
 
 /**
  * @type ColumnKey
@@ -116,11 +116,11 @@ typedef std::map<std::string, TableRow *> TableRowMap;
 typedef std::tuple <int, std::string> ColumnKey;
 
 /**
- * @type ColumnRowMap
+ * @type ColumnDescriptorMap
  * @brief Maps a Column Key to column row structs
  */
 
-typedef std::map < ColumnKey, ColumnRow *> ColumnRowMap;
+typedef std::map < ColumnKey, ColumnDescriptor *> ColumnDescriptorMap;
         
 /**
  * @type Catalog
@@ -142,7 +142,7 @@ class Catalog {
 
         /**
          * @brief Destructor - deletes all
-         * ColumnRow and TableRow structures 
+         * ColumnDescriptor and TableDescriptor structures 
          * which were allocated on the heap
          */
         ~Catalog();
@@ -153,10 +153,10 @@ class Catalog {
          *
          * This method only writes to file if the catalog is "dirty", as specified
          * by the isDirty_ member variable.  It overwrites the existing catalog files.
-         * Format is string (non-binary) with each field in the TableRow and ColumnRow
+         * Format is string (non-binary) with each field in the TableDescriptor and ColumnDescriptor
          * structs seperated by a tab, the rows themselves seperated by a newline
          */
-        mapd_err_t writeCatalogToFile();
+        void writeCatalogToFile();
 
         /**
          * @brief Adds an empty table to the catalog 
@@ -168,12 +168,12 @@ class Catalog {
          * It autoincrements the nextTableId_ counter so that the next table created
          * will have an id one higher.
          */
-        mapd_err_t addTable(const std::string &tableName);
+        int addTable(const std::string &tableName);
 
         /**
          * @brief Adds a table and a set of columns to the catalog 
          * @param tableName name of table to be added
-         * @param columns vector of ColumnRow
+         * @param columns vector of ColumnDescriptor
          * pointers that should have been 
          * allocated on the heap (with new) and
          * instanciated with second (partial)
@@ -188,26 +188,26 @@ class Catalog {
          * This method first determines whether the table and columns can be added
          * to the Catalog (i.e ensuring the table does not already exist and none 
          * of the column names are duplicates). Along with the table name it expects
-         * a vector of ColumnRow structs, which it fills in the tableId and columnId
+         * a vector of ColumnDescriptor structs, which it fills in the tableId and columnId
          * fields for.
          *
-         * Expects that ColumnRow structs are initialized with second
+         * Expects that ColumnDescriptor structs are initialized with second
          * constructor (without tableId and columnId) and that they are
          * allocated on the heap - ownership of them transfers from the calling
          * function to the Catalog
          *
          * Called by SQL DDL CREATE TABLE
          *
-         * @see ColumnRow
+         * @see ColumnDescriptor
          */
 
-        mapd_err_t addTableWithColumns(const std::string &tableName, std::vector <ColumnRow *> & columns);
+        int addTableWithColumns(const std::string &tableName, const std::vector <ColumnDescriptor> &columns);
 
 
         /**
          * @brief Adds a column to the catalog for an already extant table 
          *
-         * @param ColumnRow pointer to heap-allocated ColumnRow
+         * @param ColumnDescriptor pointer to heap-allocated ColumnDescriptor
          * structure instanciated with second (partial) 
          * constructor.  tableID and columnId will be populated
          * by Catalog.  Catalog takes responsibility for
@@ -222,9 +222,9 @@ class Catalog {
          *
          * Called by SQL DDL ALTER TABLE ADD COLUMN
          *
-         * @see ColumnRow
+         * @see ColumnDescriptor
          */
-        mapd_err_t addColumnToTable(const std::string &tableName, ColumnRow * columnRow);
+        void addColumnToTable(const std::string &tableName, const ColumnDescriptor &columnRow);
 
 
 
@@ -239,7 +239,7 @@ class Catalog {
          * Called by SQL DDL DROP TABLE
          */
 
-        mapd_err_t removeTable(const std::string &tableName);
+        void removeTable(const std::string &tableName);
 
         /**
          * @brief Removes a name-specified column from a given table from the catalog
@@ -255,20 +255,20 @@ class Catalog {
          * Called by SQL DDL ALTER TABLE DROP COLUMN
          */
 
-        mapd_err_t removeColumnFromTable(const std::string &tableName, const std::string &columnName);
+        void removeColumnFromTable(const std::string &tableName, const std::string &columnName);
 
-        mapd_err_t getMetadataForTable (const std::string &tableName, TableRow &tableRow);
+        const TableDescriptor * getMetadataForTable (const std::string &tableName) const;
         /**
-         * @brief Passes back via reference a ColumnRow struct for the column specified by table name and column name 
+         * @brief Passes back via reference a ColumnDescriptor struct for the column specified by table name and column name 
          * @param tableName table specified column belongs to
           @param columnName name of column we want metadata for
-         * @param columnRow ColumnRow struct of metadata that
+         * @param columnRow ColumnDescriptor struct of metadata that
          * is returned by reference. 
          * @return error code or MAPD_SUCCESS
          *
          * This method first checks to see if the table and column specified by
          * the tableName and columnName parameters exist, returning an error if
-         * they do not.  It then makes a copy of the ColumnRow struct representing
+         * they do not.  It then makes a copy of the ColumnDescriptor struct representing
          * that column which returned via the columnRow parameter.  For now we
          * choose not to return the raw pointer as this could be invalidated by
          * the Catalog before the calling function can access it in a multithreaded
@@ -276,32 +276,32 @@ class Catalog {
          * such query overlap in the first place
          */
 
-        mapd_err_t getMetadataForColumn (const std::string &tableName, const std::string &columnName, ColumnRow &columnRow);
+        const ColumnDescriptor * getMetadataForColumn (const std::string &tableName, const std::string &columnName) const;
 
 
         /**
-         * @brief Passes back via reference a vector of ColumnRow structs for the column specified by table name and column name 
+         * @brief Passes back via reference a vector of ColumnDescriptor structs for the column specified by table name and column name 
          * @param tableName table specified columns belong to
          * @param columnNames vector of names of columns we want
          * metadata for
-         * @param columnRows vector of ColumnRow structs of 
+         * @param columnRows vector of ColumnDescriptor structs of 
          * metadata that is returned by reference. 
          * @return error code or MAPD_SUCCESS
          *
          * This method first checks to see if the table and columns specified by
          * the tableName and columnName parameters exist, returning an error if
-         * they do not.  It then inserts into the vector of ColumnRow structs
+         * they do not.  It then inserts into the vector of ColumnDescriptor structs
          * passed as an argument to the function copies of all structs matching
          * the given columnName.
          */
 
-        mapd_err_t getMetadataForColumns (const std::string &tableName, const std::vector<std::string> &columnNames,  std::vector <ColumnRow> &columnRows);
+        std::vector <const ColumnDescriptor *> getMetadataForColumns (const std::string &tableName, const std::vector<std::string> &columnNames) const;
 
 
-        mapd_err_t getMetadataForColumns(const std::vector <std::string>  &tableNames, const std::vector <std::pair <std::string, std::string> > &columnNames, std::vector <ColumnRow> &columnRows);
+         std::vector <const ColumnDescriptor *> getMetadataForColumns(const std::vector <std::string>  &tableNames, const std::vector <std::pair <std::string, std::string> > &columnNames) const;
 
-        mapd_err_t getAllColumnMetadataForTable(const std::string &tableName, std::vector <ColumnRow> &columnRows);
-        mapd_err_t getAllColumnMetadataForTable(const int tableId, std::vector <ColumnRow> &columnRows);
+         std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const std::string &tableName) const;
+         std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
     private:
 
@@ -343,14 +343,14 @@ class Catalog {
         }
         void createStateTableIfDne();
 
-        mapd_err_t readCatalogFromFile();
-        mapd_err_t readState();
-        mapd_err_t writeState();
+        void readCatalogFromFile();
+        void readState();
+        void writeState();
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
-        TableRowMap tableRowMap_;
-        ColumnRowMap columnRowMap_;
-        SqliteConnector sqlConnector_;
+        TableDescriptorMap tableDescriptorMap_;
+        ColumnDescriptorMap columnDescriptorMap_;
+        SqliteConnector sqliteConnector_;
         int maxTableId_; /**< Serves as monotonically increasing counter to assign to each generated table. Increments on table creation but never decrements on deletion - so may have "gaps" */
         int maxColumnId_; /**< Serves as monotonically increasing counter to assign to each generated column. Increments on column creation but never decrements on deletion - so may have "gaps".  Right now we use a global columnId counter, making columnId a primary key for each column, but we may change this in the future so that each table has its own space for column keys. */
         bool isDirty_; /**< Specifies if the catalog has been modified in memory since the last flush to file - no need to rewrite file if this is false. */
@@ -358,6 +358,6 @@ class Catalog {
 
 };
 
-} // Metadata_Namespace
+} // Catalog_Namespace
 
 #endif // CATALOG_H

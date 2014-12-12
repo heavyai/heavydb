@@ -87,6 +87,7 @@ void SqliteConnector::queryWithCallback (const std::string &queryString) {
         throwError();
     }
 }
+/*
 
 int main () {
     SqliteConnector sqlConnector ("test");
@@ -102,4 +103,5 @@ int main () {
         cout << endl;
     }
 }
+*/
 
