@@ -20,7 +20,6 @@
 #include "FileInfo.h"
 #include "../AbstractDatum.h"
 #include "../AbstractDataMgr.h"
-//#include "../../PgConnector/PgConnector.h"
 
 using namespace Memory_Namespace;
 
@@ -74,7 +73,7 @@ namespace File_Namespace {
         virtual ~FileMgr();
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractDatum * createChunk(const ChunkKey &key, mapd_size_t pageSize);
+        virtual AbstractDatum * createChunk(const ChunkKey &key, mapd_size_t pageSize, const mapd_size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);

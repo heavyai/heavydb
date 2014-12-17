@@ -105,7 +105,9 @@ namespace Buffer_Namespace {
     private:
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
+        ChunkKey chunkKey_;
         mapd_addr_t mem_;           /// pointer to beginning of datum's memory
+        mapd_size_t numBytes_;
         mapd_size_t nbytes_;        /// total number of bytes allocated for head pointer
         mapd_size_t used_;          /// total number of used bytes in the datum
         mapd_size_t pageSize_;      /// the size of each page in the datum buffer

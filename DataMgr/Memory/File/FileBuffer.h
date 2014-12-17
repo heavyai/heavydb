@@ -47,6 +47,8 @@ namespace File_Namespace {
             virtual ~FileBuffer();
 
             Page addNewMultiPage(const int epoch);
+
+            void freePages();
             
             virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes = 0, const mapd_size_t offset = 0);
 

@@ -37,7 +37,7 @@ namespace File_Namespace {
     }
 
 
-    FileMgr::FileMgr(std::string basePath) : basePath_(basePath), pgConnector_("mapd", "mapd"), nextFileId_(0), epoch_(0) {
+    FileMgr::FileMgr(std::string basePath) : basePath_(basePath), nextFileId_(0), epoch_(0) {
         init();
     }
 
@@ -109,6 +109,7 @@ namespace File_Namespace {
              * sorted headerVec of the same ChunkId, which we
              * can then initiate a FileBuffer with */
 
+            std::cout << "Header vec size: " << headerVec.size() << std::endl;
             if (headerVec.size() > 0) {
                 ChunkKey lastChunkKey = headerVec.begin() -> chunkKey;
                 auto startIt = headerVec.begin();
@@ -155,7 +156,7 @@ namespace File_Namespace {
         // Write out current epoch to file - which if this
         // function is being called should be 0
         write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
-        epoch_ += 1;
+        epoch_++;
     }
 
     void FileMgr::openEpochFile(const std::string &epochFileName) {
@@ -171,20 +172,22 @@ namespace File_Namespace {
         }
         epochFile_ = open(epochFilePath);
         read(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
-        epoch_ += 1; // we are in new epoch from last checkpoint
+        std::cout << "Epoch after open file: " << epoch_ << std::endl;
+        epoch_++; // we are in new epoch from last checkpoint
     }
 
     void FileMgr::writeAndSyncEpochToDisk() {
         write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
-        int status = fsync(fileno(epochFile_)); // gets file descriptor
-        if (status != 0)
+        int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
+        if (status != 0) {
             throw std::runtime_error("Could not sync epoch file to disk");
+        }
         
-        // for epoch file and then uses it to fsync
         ++epoch_;
     }
 
     void FileMgr::checkpoint() {
+        std::cout << "Checkpointing " << epoch_ <<  std::endl;
         for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
             int status = (*fileIt) -> syncToDisk();
             if (status != 0)
@@ -194,7 +197,7 @@ namespace File_Namespace {
     }
 
 
-    AbstractDatum* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes = 0) {
+    AbstractDatum* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) {
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
@@ -210,7 +213,7 @@ namespace File_Namespace {
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist.");
         }
-        // does the below happen automatically
+        chunkIt -> second -> freePages();
         delete chunkIt -> second;
         chunkIndex_.erase(chunkIt);
     }
@@ -222,20 +225,20 @@ namespace File_Namespace {
         return chunkIt->second;
     }
 
-
-    void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
-        // reads chunk specified by ChunkKey into AbstractDatum provided by
-        // destDatum
-        auto chunkIt = chunkIndex_.find(key);
-        if (chunkIt == chunkIndex_.end()) 
-            throw std::runtime_error("Chunk does not exist");
-        AbstractDatum *chunk = chunkIt -> second;
-        // ChunkSize is either specified in function call with numBytes or we
-        // just look at pageSize * numPages in FileBuffer
-        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
-        datum->reserve(chunkSize);
-        chunk->read(datum->getMemoryPtr(),chunkSize,0);
-    }
+    
+    //void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
+    //    // reads chunk specified by ChunkKey into AbstractDatum provided by
+    //    // destDatum
+    //    auto chunkIt = chunkIndex_.find(key);
+    //    if (chunkIt == chunkIndex_.end()) 
+    //        throw std::runtime_error("Chunk does not exist");
+    //    AbstractDatum *chunk = chunkIt -> second;
+    //    // ChunkSize is either specified in function call with numBytes or we
+    //    // just look at pageSize * numPages in FileBuffer
+    //    mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+    //    datum->reserve(chunkSize);
+    //    chunk->read(datum->getMemoryPtr(),chunkSize,0);
+    //}
 
     AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum) {
         // obtain a pointer to the Chunk

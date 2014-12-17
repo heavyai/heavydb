@@ -7,9 +7,26 @@
 //
 #include <cassert>
 #include <stdexcept>
+
 #include "Buffer.h"
+#include "BufferMgr.h"
+
 
 namespace Buffer_Namespace {
+
+    Buffer::Buffer(BufferMgr *bm, const ChunkKey &chunkKey, BufferSeg::iterator &segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): bm_(bm), chunkKey_(chunkKey), pageSize_(pageSize), dirty_(false), mem_(0) {
+        if (numBytes > 0) {
+            numPages_ = (numBytes + pageSize_ -1 ) / pageSize_;
+            numBytes_ = numPages_ * pageSize_;
+            bm_ -> reserveBuffer(segIt,numBytes_);
+        }
+        else {
+            numBytes_ = 0;
+            numPages_ = 0;
+        }
+    }
+
+
     
     Buffer::Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch)
     : mem_(mem), nbytes_(numPages * pageSize), pageSize_(pageSize), used_(0), epoch_(epoch), dirty_(false)
@@ -24,15 +41,18 @@ namespace Buffer_Namespace {
         
     }
     
-    void Buffer::read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes) {
+    void Buffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
         assert(dst && mem_);
-        if (nbytes + offset < 1 || nbytes + offset > this->nbytes_)
-            throw std::runtime_error("");
-        memcpy(dst, mem_ + offset, nbytes);
+        if (numBytes offset > numBytes_) {
+            throw std::runtime_error("Buffer: Out of bounds read error");
+        }
+        memcpy(dst, mem_ + offset, numBytes);
     }
     
-    void Buffer::write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes) {
-        assert(nbytes > 0); // cannot write 0 bytes
+    void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset) {
+        assert(numBytes > 0); // cannot write 0 bytes
+        if (numBytes + offset > numBytes_) {
+
         
         // check for buffer overflow
         if ((used_ + nbytes) > size())

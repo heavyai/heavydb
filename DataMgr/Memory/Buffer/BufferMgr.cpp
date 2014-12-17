@@ -15,29 +15,33 @@ namespace Buffer_Namespace {
         numPages_ = bufferSize_ / pageSize_; 
         bufferPool_ = (mapd_addr_t) new mapd_byte_t[bufferSize_];
         bufferSegments_.push_back(BufferSeg(0,numPages_));
-
         //freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(numPages_, bufferPool_));
     }
 
     /// Frees the heap-allocated buffer pool memory
     BufferMgr::~BufferMgr() {
         delete[] buffer_;
+    }
     
     /// Throws a runtime_error if the Chunk already exists
-    void AbstractDatum * BufferMgr::createChunk(const ChunkKey &key, const mapd_size_t chunkPageSize, const size_t initialSize) {
-        assert (chunkPageSize_ % pageSize_ == 0);
+    void AbstractDatum * BufferMgr::createChunk(const ChunkKey &chunkKey, const mapd_size_t chunkPageSize, const size_t initialSize) {
+        assert (chunkPageSize % pageSize_ == 0);
         // ChunkPageSize here is just for recording dirty pages
-        if (chunkIndex_.find(key) != chunkIndex_.end()) {
+        if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists.");
         }
-        chunkIndex_[key] = new Buffer (this,pageSize,key);
-        Buffer *buffer = chunkIndex_[key];
+
+        bufferSegments_.push_back(BufferSeg(-1,0,PINNED);
+        bufferSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1) chunkPageSize,  initialSize)); 
+
+        chunkIndex_[chunkKey] = bufferSegments_.back();
         /*
         if (initialSize > 0) {
             size_t chunkNumPages = (initialSize + pageSize_ - 1) / pageSize_;
             buffer -> reserve(chunkNumPages);
+        }
         */
-        return (buffer);
+        return buffer;
     }
 
     BufferList::iterator BufferMgr::evict(BufferList::iterator &evictStart, const size_t numPagesRequested) {
@@ -69,9 +73,48 @@ namespace Buffer_Namespace {
         return dataSeg;
     }
 
+    BufferList::iterator BufferMgr::reserveBuffer(BufferSeg::iterator &segIt, size_t numBytes) {
+        // doesn't resize to be smaller - so more like reserve
 
-    BufferList::iterator BufferMgr::reserveBuffer(size_t numBytes) {
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
+        size_t numPagesExtraNeeded = numPagesRequested -  segIt -> numPages;
+        if (numPagesExtraNeeded < segIt -> numPages) { // We already have enough pages in existing segment
+            return segIt;
+        }
+        // First check for freeSeg after segIt 
+        if (segIt -> startPage >= 0) { //not dummy page
+            BufferSeg::iterator nextIt = std::next(segIt);
+            if (nextIt != bufferList_.end() && nextIt -> memStatus == FREE && nextIt -> numPages >= numPagesExtraNeeded) { // Then we can just use the next BufferSeg which happens to be free
+                size_t leftoverPages = nextIt -> numPages - numPagesExtraNeeded;
+                nextIt -> numPages = leftoverPages;
+                segIt -> numPages = numPagesRequested;
+                return segIt;
+            }
+        }
+        /* If we're here then we couldn't keep
+         * buffer in existing slot - need to find
+         * new segment, copy data over, and then
+         * delete old
+         */
+        
+        segIt -> pinCount++; // so we don't evict this while trying to find a new segment for it 
+        auto newSegIt = getBuffer(numBytes);
+        mapd_addr_t oldMem_ = segIt -> mem_;
+        newSegIt -> buffer = segIt -> buffer;
+        newSegIt -> buffer -> mem_ = bufferPool_ + newSegIt -> startPage * pageSize_;
+        // now need to copy over memory
+        // only do this if the old segment is valid (i.e. not new w/
+        // unallocated buffer
+        if (segIt -> startPage >= 0)  {
+            memcpy(newSegIt -> buffer -> mem_, oldMem_, newSegIt->numBytes_);
+        }
+        // Deincrement pin count to reverse effect above above
+        bufferList_.erase(segIt);
+        chunkIndex_[newSegIt -> buffer -> chunkKey] = newSegIt; 
+    }
+
+    BufferList::iterator BufferMgr::getBuffer(size_t numBytes) {
+
         for (auto bufferIt = bufferSegments_.begin(); bufferIt != bufferSegments_.end(); ++bufferIt) {
             if (bufferIt -> memStatus == FREE && bufferIt -> numPages >= numPagesRequsted) {
                 // startPage doesn't change

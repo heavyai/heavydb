@@ -68,6 +68,18 @@ namespace File_Namespace {
         pageDataSize_ = pageSize_-reservedHeaderSize_;
     }
 
+    void FileBuffer::freePages() {
+        // Need to zero headers (actually just first four bytes of header)
+        int zeroVal = 0;
+        mapd_addr_t zeroAddr = mapd_addr_t (&zeroVal);
+        for (auto multiPageIt = multiPages_.begin(); multiPageIt != multiPages_.end(); ++multiPageIt) {
+            for (auto pageIt = multiPageIt -> pageVersions.begin(); pageIt != multiPageIt -> pageVersions.end(); ++pageIt) { 
+                FILE *f = fm_ -> getFileForFileId(pageIt -> fileId);
+                File_Namespace::write(f,pageIt -> pageNum * pageSize_,sizeof(int),zeroAddr);
+            }
+        }
+    }
+
 
     void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
         // variable declarations
@@ -134,7 +146,7 @@ namespace File_Namespace {
         int headerSize = chunkKey_.size() + 3;
         vector <int> header (headerSize);
         // in addition to chunkkey we need size of header, pageId, version
-        header[0] = (headerSize - 1) * sizeof(int); // don't need to include size of headerSize vlaue
+        header[0] = (headerSize - 1) * sizeof(int); // don't need to include size of headerSize value
         std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
         header[headerSize-2] = pageId;
         header[headerSize-1] = epoch;
