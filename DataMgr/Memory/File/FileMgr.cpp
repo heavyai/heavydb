@@ -15,6 +15,7 @@
 #include <utility>
 #include <algorithm>
 #include <unistd.h>
+#include <fcntl.h>
 
 #define EPOCH_FILENAME "epoch"
 
@@ -92,7 +93,7 @@ namespace File_Namespace {
                         assert (fileSize % pageSize == 0); // should be no partial pages
                         mapd_size_t numPages = fileSize / pageSize;
 
-                        std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
+                        //std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
                         openExistingFile(filePath,fileId,pageSize,numPages,headerVec);
                     }
                 }
@@ -109,7 +110,7 @@ namespace File_Namespace {
              * sorted headerVec of the same ChunkId, which we
              * can then initiate a FileBuffer with */
 
-            std::cout << "Header vec size: " << headerVec.size() << std::endl;
+            //std::cout << "Header vec size: " << headerVec.size() << std::endl;
             if (headerVec.size() > 0) {
                 ChunkKey lastChunkKey = headerVec.begin() -> chunkKey;
                 auto startIt = headerVec.begin();
@@ -178,7 +179,8 @@ namespace File_Namespace {
 
     void FileMgr::writeAndSyncEpochToDisk() {
         write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
-        int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
+        //int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
+        int status = fcntl(fileno(epochFile_),51);
         if (status != 0) {
             throw std::runtime_error("Could not sync epoch file to disk");
         }

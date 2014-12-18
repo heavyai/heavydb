@@ -1,3 +1,5 @@
+#include "../FileMgr.h"
+
 #include <cstdlib>
 #include <ctime>
 #include <vector>
@@ -6,7 +8,7 @@
 #include <boost/filesystem.hpp>
 
 #include "gtest/gtest.h"
-#include "../FileMgr.h"
+#include <boost/timer/timer.hpp>
 
 using namespace File_Namespace;
 using namespace std;
@@ -84,6 +86,7 @@ TEST(FileMgr, deleteChunk) {
         // Test 1: Try to delete chunk
         try {
             fm.deleteChunk(chunkKey1); // should succeed
+            EXPECT_TRUE(1==1);
         }
         catch (std::runtime_error &error) {
             EXPECT_TRUE(1==2) << "Could not delete a chunk that does exist";
@@ -112,16 +115,16 @@ TEST(FileMgr, deleteChunk) {
         // Test 4: Try to delete chunk that had previously been deleted
         try {
             fm.deleteChunk(chunkKey1);
-            EXPECT_TRUE(1==2) << "Deleted chunk that had already bee deleted";
+            EXPECT_TRUE(1==2) << "Deleted chunk that had already been deleted";
         }
         catch (std::runtime_error &error) {
             string expectedErrorString ("Chunk does not exist.");
             EXPECT_EQ(error.what(),expectedErrorString);
         }
+        fm.checkpoint();
     }
     // Test 5: Destroy FileMgr and reinstanciate it to make sure it has no
     // trace of chunk with key chunkKey1
-    /*
     {
         FileMgr fm("data");
         try {
@@ -129,13 +132,69 @@ TEST(FileMgr, deleteChunk) {
             EXPECT_TRUE(1==2) << "getChunk succeeded on a chunk that was deleted after FileMgr reinstanciation";
         }
         catch (std::runtime_error &error) {
-            cout << "Error" << endl;
             string expectedErrorString ("Chunk does not exist.");
             EXPECT_EQ(error.what(),expectedErrorString);
         }
     }
-    */
 }
+
+TEST(FileMgr, readChunk) {
+    deleteData("data");
+    ChunkKey chunkKey1 = {1,2,3,4};
+    ChunkKey chunkKey2 = {2,3,4,5};
+    mapd_size_t pageSize = 1024796;
+    //mapd_size_t pageSize = 4096000;
+    FileMgr fm("data");
+    fm.createChunk(chunkKey1,pageSize);
+    fm.createChunk(chunkKey2,pageSize);
+    const boost::timer::nanosecond_type oneSecond(1000000000LL);
+    size_t numInts = 10000000;
+    int * data1 = new int [numInts];
+    for (size_t i = 0; i < numInts; ++i) {
+        data1[i] = i;
+    }
+    AbstractDatum *chunk1 = fm.getChunk(chunkKey1);
+    {
+        boost::timer::cpu_timer cpuTimer;
+        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),0);
+        fm.checkpoint();
+        double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
+        double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
+        cout << "Write Bandwidth with checkpoint: " << bandwidth << " GB/sec" << endl;
+    }
+    AbstractDatum *chunk2 = fm.getChunk(chunkKey2);
+    {
+        boost::timer::cpu_timer cpuTimer;
+        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),0);
+        double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
+        double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
+        cout << "Write Bandwidth without checkpoint: " << bandwidth << " GB/sec" << endl;
+    }
+
+    int * data2 = new int [numInts];
+    {
+        boost::timer::cpu_timer cpuTimer;
+        chunk1 -> read((mapd_addr_t)data2,numInts*sizeof(int),0);
+        double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
+        double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
+        cout << "Read Bandwidth: " << bandwidth << " GB/sec" << endl;
+    }
+
+    for (size_t i = 0; i < numInts; ++i) {
+        EXPECT_EQ(data1[i],data2[i]);
+    }
+
+    delete [] data1;
+    delete [] data2;
+}
+
+
+
+
+
+    
+
+
 
 
 
