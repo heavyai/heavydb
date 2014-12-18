@@ -138,7 +138,7 @@ TEST(FileMgr, deleteChunk) {
     }
 }
 
-TEST(FileMgr, readChunk) {
+TEST(FileMgr, writeReadChunk) {
     deleteData("data");
     ChunkKey chunkKey1 = {1,2,3,4};
     ChunkKey chunkKey2 = {2,3,4,5};

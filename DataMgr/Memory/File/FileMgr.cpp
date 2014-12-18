@@ -227,33 +227,35 @@ namespace File_Namespace {
         return chunkIt->second;
     }
 
-    
-    //void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
-    //    // reads chunk specified by ChunkKey into AbstractDatum provided by
-    //    // destDatum
-    //    auto chunkIt = chunkIndex_.find(key);
-    //    if (chunkIt == chunkIndex_.end()) 
-    //        throw std::runtime_error("Chunk does not exist");
-    //    AbstractDatum *chunk = chunkIt -> second;
-    //    // ChunkSize is either specified in function call with numBytes or we
-    //    // just look at pageSize * numPages in FileBuffer
-    //    mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
-    //    datum->reserve(chunkSize);
-    //    chunk->read(datum->getMemoryPtr(),chunkSize,0);
-    //}
+    /* 
+    void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
+        // reads chunk specified by ChunkKey into AbstractDatum provided by
+        // destDatum
+        auto chunkIt = chunkIndex_.find(key);
+        if (chunkIt == chunkIndex_.end()) 
+            throw std::runtime_error("Chunk does not exist");
+        AbstractDatum *chunk = chunkIt -> second;
+        // ChunkSize is either specified in function call with numBytes or we
+        // just look at pageSize * numPages in FileBuffer
+        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        datum->reserve(chunkSize);
+        chunk->read(datum->getMemoryPtr(),chunkSize,0);
+    }
+    */
 
-    AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum) {
+    AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum, mapd_size_t numBytes) {
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
         AbstractDatum *chunk;
         if (chunkIt == chunkIndex_.end()) {
-            chunk = createChunk(key,datum->pageSize());
+            chunk = createChunk(key,MAPD_DEFAULT_PAGE_SIZE);
         }
         else {
             chunk = chunkIt->second;
         }
         // write the datum's data to the Chunk
-        chunk->write((mapd_addr_t)datum->getMemoryPtr(), 0, datum->pageSize() * datum->pageCount());
+        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        chunk->write((mapd_addr_t)datum->getMemoryPtr(), 0,chunkSize);
         return chunk;
     }
 
