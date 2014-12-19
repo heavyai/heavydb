@@ -87,13 +87,15 @@ namespace File_Namespace {
          * @param d - An object representing the source data for the Chunk.
          * @return AbstractDatum*
          */
-        virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d);
+        virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d, const mapd_size_t numBytes = 0);
         
         // Datum API
         virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t nbytes);
         virtual void deleteDatum(AbstractDatum *d);
         virtual AbstractDatum* putDatum(AbstractDatum *d);
         Page requestFreePage(mapd_size_t pagesize);
+
+        inline MgrType getMgrType() { return FILE_MGR;};
 
         void init();
 

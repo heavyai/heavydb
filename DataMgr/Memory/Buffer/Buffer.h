@@ -1,28 +1,20 @@
 /**
  * @file		Buffer.h
  * @author		Steven Stewart <steve@map-d.com>
+ * @author		Todd Mostak <todd@map-d.com>
  */
 #ifndef DATAMGR_MEMORY_BUFFER_BUFFER_H
 #define DATAMGR_MEMORY_BUFFER_BUFFER_H
 
 #include <iostream>
 #include "../AbstractDatum.h"
+#include "BufferSeg.h"
 
 using namespace Memory_Namespace;
 
 namespace Buffer_Namespace {
-    
-    /**
-     * @struct  Page
-     * @brief   A page holds a memory location and a "dirty" flag.
-     */
-    struct Page {
-        mapd_addr_t addr = nullptr; /// memory address for beginning of page
-        bool dirty = false;         /// indicates the page has been modified
-        
-        /// Constructor
-        Page(const mapd_addr_t addrIn, const bool dirtyIn = false) : addr(addrIn), dirty(dirtyIn) {}
-    };
+
+    class BufferMgr;
     
     /**
      * @class   Buffer
@@ -45,7 +37,13 @@ namespace Buffer_Namespace {
          * @param pageSize  The size in bytes of each page that composes the buffer.
          * @param epoch     A temporal reference implying the buffer is up-to-date up to the epoch.
          */
+
+
+        /*
         Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch);
+        */
+
+        Buffer(BufferMgr *bm, const ChunkKey &chunkKey, BufferList::iterator &segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes);
         
         /// Destructor
         virtual ~Buffer();
@@ -72,14 +70,6 @@ namespace Buffer_Namespace {
          */
         virtual void write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes);
         
-        /**
-         * @brief Appends nbytes from src to the end of the buffer
-         * Appends nbytes from src to the end of the buffer.
-         *
-         * @param src       The source address from where data is being appended to the buffer.
-         * @param nbytes    The number of bytes being written (appended) to the buffer.
-         */
-        virtual void append(mapd_addr_t src, const mapd_size_t nbytes);
         
         /**
          * @brief Returns a raw, constant (read-only) pointer to the underlying buffer.
@@ -87,33 +77,44 @@ namespace Buffer_Namespace {
          */
         virtual const mapd_byte_t* getMemoryPtr() const;
         
-        /// Returns the number of pages in the buffer.
-        virtual mapd_size_t pageCount() const;
-        
-        /// Returns the size in bytes of each page in the buffer.
-        virtual mapd_size_t pageSize() const;
         
         /// Returns the total number of bytes allocated for the buffer.
-        virtual mapd_size_t size() const;
+        inline virtual mapd_size_t size() const {
+            return pageSize_ * numPages_;
+        }
+        /// Returns the number of pages in the buffer.
+
+        inline mapd_size_t pageCount() const {
+            return numPages_;
+        }
+
+        /// Returns the size in bytes of each page in the buffer.
         
-        /// Returns the total number of used bytes in the buffer.
-        virtual mapd_size_t used() const;
-        
+        inline mapd_size_t pageSize() const {
+            return pageSize_;
+        }
+
         /// Returns whether or not the buffer has been modified since the last flush/checkpoint.
-        virtual bool isDirty() const;
+        inline bool isDirty() const {
+            return dirty_;
+        }
         
     private:
+
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
         ChunkKey chunkKey_;
+
+        BufferList::iterator &segIt_;
         mapd_addr_t mem_;           /// pointer to beginning of datum's memory
-        mapd_size_t numBytes_;
-        mapd_size_t nbytes_;        /// total number of bytes allocated for head pointer
-        mapd_size_t used_;          /// total number of used bytes in the datum
+        BufferMgr * bm_;
+        //mapd_size_t numBytes_;
         mapd_size_t pageSize_;      /// the size of each page in the datum buffer
+        mapd_size_t numPages_;
         int epoch_;                 /// indicates when the datum was last flushed
         bool dirty_;                /// true if buffer has been modified
-        std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
+        //std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
+        std::vector<bool> pageDirtyFlags_;
     };
     
 } // Buffer_Namespace

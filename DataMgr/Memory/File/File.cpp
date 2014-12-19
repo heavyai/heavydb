@@ -84,25 +84,27 @@ namespace File_Namespace {
     }
     
     size_t read(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf) {
-        assert(f);
-        assert(buf);
-        assert(size > 0);
+        //assert(f);
+        //assert(buf);
+        //assert(size > 0);
         
         // read "size" bytes from the offset location in the file into the buffer
         fseek(f, offset, SEEK_SET);
         size_t bytesRead = fread(buf, sizeof(mapd_byte_t), size, f);
+        //size_t bytesRead = fread(buf, sizeof(mapd_byte_t)*size,1, f) * size;
         if (bytesRead < 1)
             throw std::runtime_error("Error reading file contents into buffer.");
         return bytesRead;
     }
     
     size_t write(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf) {
-        assert(f);
-        assert(buf);
+        //assert(f);
+        //assert(buf);
         
         // write size bytes from the buffer to the offset location in the file
         fseek(f, offset, SEEK_SET);
         size_t bytesWritten = fwrite(buf, sizeof(mapd_byte_t), size, f);
+        //size_t bytesWritten = fwrite(buf, sizeof(mapd_byte_t)*size,1, f) * size;
         if (bytesWritten < 1)
             throw std::runtime_error("Error writing buffer to file.");
         return bytesWritten;

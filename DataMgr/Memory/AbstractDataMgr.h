@@ -9,6 +9,8 @@
 #include "../../Shared/types.h"
 #include "AbstractDatum.h"
 
+enum MgrType {FILE_MGR, CPU_MGR, GPU_MGR};   
+
 namespace Memory_Namespace {
 
     /**
@@ -34,12 +36,15 @@ namespace Memory_Namespace {
         virtual void deleteChunk(const ChunkKey &key) = 0;
         //virtual void releaseChunk(const ChunkKey &key) = 0;
         virtual AbstractDatum* getChunk(ChunkKey &key) = 0;
-        virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d) = 0;
+        virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d, mapd_size_t numBytes = 0) = 0;
 
         // Datum API
-        virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t nbytes) = 0;
+        virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t numBytes) = 0;
         virtual void deleteDatum(AbstractDatum *d) = 0;
         virtual AbstractDatum* putDatum(AbstractDatum *d) = 0;
+        virtual MgrType getMgrType() = 0;
+
+
     };
     
 } // Memory_Namespace

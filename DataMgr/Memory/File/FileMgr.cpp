@@ -15,6 +15,7 @@
 #include <utility>
 #include <algorithm>
 #include <unistd.h>
+#include <fcntl.h>
 
 #define EPOCH_FILENAME "epoch"
 
@@ -92,7 +93,7 @@ namespace File_Namespace {
                         assert (fileSize % pageSize == 0); // should be no partial pages
                         mapd_size_t numPages = fileSize / pageSize;
 
-                        std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
+                        //std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
                         openExistingFile(filePath,fileId,pageSize,numPages,headerVec);
                     }
                 }
@@ -109,7 +110,7 @@ namespace File_Namespace {
              * sorted headerVec of the same ChunkId, which we
              * can then initiate a FileBuffer with */
 
-            std::cout << "Header vec size: " << headerVec.size() << std::endl;
+            //std::cout << "Header vec size: " << headerVec.size() << std::endl;
             if (headerVec.size() > 0) {
                 ChunkKey lastChunkKey = headerVec.begin() -> chunkKey;
                 auto startIt = headerVec.begin();
@@ -178,7 +179,8 @@ namespace File_Namespace {
 
     void FileMgr::writeAndSyncEpochToDisk() {
         write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
-        int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
+        //int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
+        int status = fcntl(fileno(epochFile_),51);
         if (status != 0) {
             throw std::runtime_error("Could not sync epoch file to disk");
         }
@@ -225,33 +227,35 @@ namespace File_Namespace {
         return chunkIt->second;
     }
 
-    
-    //void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
-    //    // reads chunk specified by ChunkKey into AbstractDatum provided by
-    //    // destDatum
-    //    auto chunkIt = chunkIndex_.find(key);
-    //    if (chunkIt == chunkIndex_.end()) 
-    //        throw std::runtime_error("Chunk does not exist");
-    //    AbstractDatum *chunk = chunkIt -> second;
-    //    // ChunkSize is either specified in function call with numBytes or we
-    //    // just look at pageSize * numPages in FileBuffer
-    //    mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
-    //    datum->reserve(chunkSize);
-    //    chunk->read(datum->getMemoryPtr(),chunkSize,0);
-    //}
+    /* 
+    void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
+        // reads chunk specified by ChunkKey into AbstractDatum provided by
+        // destDatum
+        auto chunkIt = chunkIndex_.find(key);
+        if (chunkIt == chunkIndex_.end()) 
+            throw std::runtime_error("Chunk does not exist");
+        AbstractDatum *chunk = chunkIt -> second;
+        // ChunkSize is either specified in function call with numBytes or we
+        // just look at pageSize * numPages in FileBuffer
+        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        datum->reserve(chunkSize);
+        chunk->read(datum->getMemoryPtr(),chunkSize,0);
+    }
+    */
 
-    AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum) {
+    AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum, mapd_size_t numBytes) {
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
         AbstractDatum *chunk;
         if (chunkIt == chunkIndex_.end()) {
-            chunk = createChunk(key,datum->pageSize());
+            chunk = createChunk(key,MAPD_DEFAULT_PAGE_SIZE);
         }
         else {
             chunk = chunkIt->second;
         }
         // write the datum's data to the Chunk
-        chunk->write((mapd_addr_t)datum->getMemoryPtr(), 0, datum->pageSize() * datum->pageCount());
+        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        chunk->write((mapd_addr_t)datum->getMemoryPtr(), 0,chunkSize);
         return chunk;
     }
 

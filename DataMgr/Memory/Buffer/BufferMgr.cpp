@@ -3,6 +3,7 @@
  * @author  Steven Stewart <steve@map-d.com>
  */
 #include "BufferMgr.h"
+#include "Buffer.h"
 
 #include <cassert>
 #include <limits>
@@ -10,12 +11,11 @@
 namespace Buffer_Namespace {
 
     /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
-    BufferMgr::BufferMgr(const size_t bufferSize, const size_t pageSize): bufferSize_(bufferSize),pageSize_(pageSize) {
+    BufferMgr::BufferMgr(const size_t bufferSize, const size_t pageSize, FileMgr *fileMgr): bufferSize_(bufferSize),pageSize_(pageSize), fileMgr_(fileMgr) {
         assert(bufferSize_ > 0 && pageSize_ > 0);
         numPages_ = bufferSize_ / pageSize_; 
         bufferPool_ = (mapd_addr_t) new mapd_byte_t[bufferSize_];
         bufferSegments_.push_back(BufferSeg(0,numPages_));
-        //freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(numPages_, bufferPool_));
     }
 
     /// Frees the heap-allocated buffer pool memory
@@ -25,15 +25,14 @@ namespace Buffer_Namespace {
     
     /// Throws a runtime_error if the Chunk already exists
     void AbstractDatum * BufferMgr::createChunk(const ChunkKey &chunkKey, const mapd_size_t chunkPageSize, const size_t initialSize) {
-        assert (chunkPageSize % pageSize_ == 0);
+        assert (chunkPageSize == pageSize_);
         // ChunkPageSize here is just for recording dirty pages
         if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
-            throw std::runtime_error("Chunk already exists.");
+            throw std::runtime_error("Chunk already exists");
         }
 
         bufferSegments_.push_back(BufferSeg(-1,0,PINNED);
         bufferSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1) chunkPageSize,  initialSize)); 
-
         chunkIndex_[chunkKey] = bufferSegments_.back();
         /*
         if (initialSize > 0) {
@@ -74,7 +73,7 @@ namespace Buffer_Namespace {
     }
 
     BufferList::iterator BufferMgr::reserveBuffer(BufferSeg::iterator &segIt, size_t numBytes) {
-        // doesn't resize to be smaller - so more like reserve
+        // doesn't resize to be smaller - like std::reserve
 
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
         size_t numPagesExtraNeeded = numPagesRequested -  segIt -> numPages;
@@ -113,7 +112,7 @@ namespace Buffer_Namespace {
         chunkIndex_[newSegIt -> buffer -> chunkKey] = newSegIt; 
     }
 
-    BufferList::iterator BufferMgr::getBuffer(size_t numBytes) {
+    BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
 
         for (auto bufferIt = bufferSegments_.begin(); bufferIt != bufferSegments_.end(); ++bufferIt) {
             if (bufferIt -> memStatus == FREE && bufferIt -> numPages >= numPagesRequsted) {
@@ -198,49 +197,74 @@ namespace Buffer_Namespace {
         auto chunkIt = chunkIndex_.find(key);
         Buffer *buffer = chunkIt -> second;
 
-
-
         if (chunkIndex_.find(key) == chunkIndex_.end()) {
-            chunkPageSize_.erase(chunkPageSizeIt);
-            return;
+            throw std::runtime_error("Chunk does not exist");
         }
+        auto  segIt = chunkIt->second;
+        delete segIt->buffer; // Delete Buffer for segment
+        if (segIt != bufferList_.begin()) {
+            auto prevIt = std::prev(segIt);
+            if (prevIt -> memStatus == FREE) { 
+                segIt -> startPage = prevIt -> startPage;
+                segIt -> numPages += prevIt -> numPages; 
+                bufferList_.erase(prevIt);
+            }
+        }
+        auto nextIt = std::next(segIt);
+        if (nextIt != bufferList_.end()) {
+            if (prevIt -> memStatus == FREE) { 
+                segIt -> numPages += nextIt -> numPages;
+                bufferList_.erase(nextIt);
+            }
+        }
+        segIt -> memStatus = FREE;
+        segIt -> pinCount = 0;
+        segIt -> buffer = 0;
 
-        // return the free memory used by the Chunk back to the free memory pool
-        // by inserting the buffer's size mapped to the buffer's address
-        Buffer *b = chunkIt->second;
-        freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(b->size(), b->mem_));
-        // @todo some work still to do on free-space mgmt.
-        
-        // erase the Chunk's index entries
-        chunkPageSize_.erase(chunkPageSizeIt);
-        chunkIndex_.erase(chunkIt);
+        /*Below is the other, more complicted algorithm originally chosen*/
+
+        //size_t numPageInSeg = segIt -> numPages;
+        //bool prevFree = false; 
+        //bool nextFree = false; 
+        //if (segIt != bufferList_.begin()) {
+        //    auto prevIt = std::prev(segIt);
+        //    if (prevIt -> memStatus == FREE) { 
+        //        prevFree = true;
+        //        prevIt -> numPages += numPagesInSeg;
+        //        segIt = prevIt;
+        //    }
+        //}
+        //auto nextIt = std::next(segIt);
+        //if (nextIt != bufferList_.end()) {
+        //    if (nextIt -> memStatus == FREE) {
+        //        nextFree = true;
+        //        if (prevFree) {
+        //            prevIt -> numPages += nextIt -> numPages; 
+        //            bufferList_.erase(nextIt);
+        //        }
+        //        else {
+        //            nextIt -> numPages += numPagesInSeg;
+        //        }
+        //    }
+        //}
+        //if (!prevFree && !nextFree) {
+        //    segIt -> memStatus = FREE;
+        //    segIt -> pinCount = 0;
+        //    segIt -> buffer = 0;
+        //}
+        //else {
+        //    bufferList_.erase(segIt);
+        //}
     }
-    
-    /// Frees the buffer/memory used by the Chunk, but keeps its chunkPageSize_ entry
-    void BufferMgr::releaseChunk(const ChunkKey &key) {
-        // lookup the buffer for the Chunk in chunkIndex_
-        auto chunkIt = chunkIndex_.find(key);
-        if (chunkIndex_.find(key) == chunkIndex_.end())
-            throw std::runtime_error("Chunk does not exist.");
-        assert(chunkPageSize_.find(key) != chunkPageSize_.end());
-        
-        // return the free memory used by the Chunk back to the free memory pool
-        Buffer *b = chunkIt->second;
-        freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(b->size(), b->mem_));
-        // @todo some work still to do on free-space mgmt.
-        
-        // remove the chunkIndex_ entry (but keep the chunkPageSize_ entry)
-        chunkIndex_.erase(chunkIt);
-    }
+
     
     /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
     /// throws a runtime_error.
     AbstractDatum* BufferMgr::getChunk(ChunkKey &key,size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt != chunkIndex_.end()) {
-            chunkIt -> second -> memStatus = USED; // necessary?
             chunkIt -> second -> pinCount++; 
-            chunkIt -> second -> lastTouched = bufferEpoch++; // necessary?
+            chunkIt -> second -> lastTouched = bufferEpoch++;
             return chunkIt -> second -> buffer; 
         }
         else { // If wasn't in pool then we need to fetch it
