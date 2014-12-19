@@ -28,13 +28,14 @@ extern "C"
 int64_t filter_placeholder(const int8_t** byte_stream, const int32_t pos);
 
 extern "C"
-int64_t filter_and_count_template(const int8_t** byte_stream,
-                                  const int32_t row_count) {
+void filter_and_count_template(const int8_t** byte_stream,
+                               const int32_t row_count,
+                               int32_t* out) {
   int64_t result = 0;
   for (int32_t pos = 0; pos < row_count; ++pos) {
     if (filter_placeholder(byte_stream, pos)) {
       ++result;
     }
   }
-  return result;
+  *out = result;
 }
