@@ -38,14 +38,14 @@ int main() {
     "filter_placeholder"
   );
 
-  int64_t N = 300 * 1000 * 1000L;
+  int32_t N = 300 * 1000 * 1000;
   int8_t* byte_stream_col_0 = new int8_t[N];
   memset(byte_stream_col_0, 42, N);
   const int8_t* byte_stream[] = { byte_stream_col_0 };
-  typedef int32_t (*agg_query)(const int8_t** byte_stream, const int32_t row_count, int32_t* out);
+  typedef int32_t (*agg_query)(const int8_t** byte_stream, const int32_t* row_count, int32_t* out);
   int32_t out;
   LOG(INFO) << measure<>::execution([&]() {
-    reinterpret_cast<agg_query>(cgen.getNativeCode())(byte_stream, N, &out);
+    reinterpret_cast<agg_query>(cgen.getNativeCode())(byte_stream, &N, &out);
     LOG(INFO) << out;
   });
   return 0;
