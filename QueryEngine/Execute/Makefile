@@ -9,5 +9,5 @@ runtime_ll.o: RuntimeFunctions.ll
 
 clean:
 	rm -f *.o
-	rm -f *.ll
+	rm -f RuntimeFunctions.ll
 	rm -f main
