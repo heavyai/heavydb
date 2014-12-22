@@ -44,12 +44,12 @@ void filter_and_count_template(const int8_t** byte_stream,
                                int32_t* out) {
   auto row_count = *row_count_ptr;
   int64_t result = 0;
-  int32_t start = pos_start();
+  const int32_t start = pos_start();
   int32_t step = pos_step();
   for (int32_t pos = start; pos < row_count; pos += step) {
     if (filter_placeholder(pos, byte_stream)) {
       ++result;
     }
   }
-  *out = result;
+  out[start] = result;
 }
