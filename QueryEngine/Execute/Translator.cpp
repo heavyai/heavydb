@@ -16,7 +16,7 @@
 #include <cstdint>
 
 
-FetchInt64Col::FetchInt64Col(const int64_t col_id,
+FetchInt64Col::FetchInt64Col(const int col_id,
                              const std::shared_ptr<Decoder> decoder)
   : col_id_{col_id}, decoder_{decoder} {}
 
@@ -32,19 +32,27 @@ llvm::Value* FetchInt64Col::codegen(
   }
   auto& in_arg_list = func->getArgumentList();
   CHECK_EQ(in_arg_list.size(), 2);
-  auto& byte_stream_arg = in_arg_list.front();
-  auto& pos_arg = in_arg_list.back();
-  auto& context = llvm::getGlobalContext();
-  auto it_ok = fetch_cache_.insert(std::make_pair(
-      col_id_,
-      decoder_->codegenDecode(
-        &byte_stream_arg,
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), col_id_),
-        &pos_arg,
-        ir_builder,
-        module)));
-  CHECK(it_ok.second);
-  return it_ok.first->second;
+  auto& pos_arg = in_arg_list.front();
+  size_t arg_idx = 0;
+  for (auto& arg : in_arg_list) {
+    if (arg_idx == col_id_ + 1) {
+      auto it_ok = fetch_cache_.insert(std::make_pair(
+        col_id_,
+        decoder_->codegenDecode(
+          &arg,
+          &pos_arg,
+          ir_builder,
+          module)));
+      CHECK(it_ok.second);
+      return it_ok.first->second;
+    }
+    ++arg_idx;
+  }
+  CHECK(false);
+}
+
+void FetchInt64Col::collectUsedColumns(std::unordered_set<int>& columns) {
+  columns.insert(col_id_);
 }
 
 std::unordered_map<int64_t, llvm::Value*> FetchInt64Col::fetch_cache_;
@@ -59,6 +67,8 @@ llvm::Value* ImmInt64::codegen(
   return llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), val_);
 }
 
+void ImmInt64::collectUsedColumns(std::unordered_set<int>& columns) {}
+
 OpGt::OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}
 
@@ -69,6 +79,11 @@ llvm::Value* OpGt::codegen(
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
   return ir_builder.CreateICmpSGT(lhs, rhs);
+}
+
+void OpGt::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
 }
 
 OpLt::OpLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
@@ -83,6 +98,11 @@ llvm::Value* OpLt::codegen(
   return ir_builder.CreateICmpSLT(lhs, rhs);
 }
 
+void OpLt::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
 OpGte::OpGte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}
 
@@ -93,6 +113,11 @@ llvm::Value* OpGte::codegen(
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
   return ir_builder.CreateICmpSGE(lhs, rhs);
+}
+
+void OpGte::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
 }
 
 OpLte::OpLte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
@@ -107,6 +132,11 @@ llvm::Value* OpLte::codegen(
   return ir_builder.CreateICmpSLE(lhs, rhs);
 }
 
+void OpLte::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
 OpNeq::OpNeq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}
 
@@ -117,6 +147,11 @@ llvm::Value* OpNeq::codegen(
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
   return ir_builder.CreateICmpNE(lhs, rhs);
+}
+
+void OpNeq::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
 }
 
 OpEq::OpEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
@@ -131,6 +166,11 @@ llvm::Value* OpEq::codegen(
   return ir_builder.CreateICmpEQ(lhs, rhs);
 }
 
+void OpEq::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
 OpAdd::OpAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}
 
@@ -141,6 +181,11 @@ llvm::Value* OpAdd::codegen(
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
   return ir_builder.CreateAdd(lhs, rhs);
+}
+
+void OpAdd::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
 }
 
 OpSub::OpSub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
@@ -155,6 +200,11 @@ llvm::Value* OpSub::codegen(
   return ir_builder.CreateSub(lhs, rhs);
 }
 
+void OpSub::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
 OpMul::OpMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}
 
@@ -165,6 +215,11 @@ llvm::Value* OpMul::codegen(
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
   return ir_builder.CreateMul(lhs, rhs);
+}
+
+void OpMul::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
 }
 
 OpDiv::OpDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
@@ -179,6 +234,11 @@ llvm::Value* OpDiv::codegen(
   return ir_builder.CreateSDiv(lhs, rhs);
 }
 
+void OpDiv::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
 OpAnd::OpAnd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}
 
@@ -189,6 +249,11 @@ llvm::Value* OpAnd::codegen(
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
   return ir_builder.CreateAnd(lhs, rhs);
+}
+
+void OpAnd::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
 }
 
 OpOr::OpOr(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
@@ -203,6 +268,11 @@ llvm::Value* OpOr::codegen(
   return ir_builder.CreateOr(lhs, rhs);
 }
 
+void OpOr::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
 OpNot::OpNot(std::shared_ptr<AstNode> op) : op_{op} {}
 
 llvm::Value* OpNot::codegen(
@@ -212,9 +282,39 @@ llvm::Value* OpNot::codegen(
   return ir_builder.CreateNot(op_->codegen(func, ir_builder, module));
 }
 
+void OpNot::collectUsedColumns(std::unordered_set<int>& columns) {
+  op_->collectUsedColumns(columns);
+}
+
 extern int _binary_RuntimeFunctions_ll_size;
 extern int _binary_RuntimeFunctions_ll_start;
 extern int _binary_RuntimeFunctions_ll_end;
+
+namespace {
+
+std::vector<llvm::Value*> generate_column_heads_load(
+    std::shared_ptr<AstNode> filter,
+    llvm::Function* query_func) {
+  std::unordered_set<int> columns_used;
+  filter->collectUsedColumns(columns_used);
+  auto& fetch_bb = query_func->front();
+  llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
+  fetch_ir_builder.SetInsertPoint(fetch_bb.begin());
+  auto& in_arg_list = query_func->getArgumentList();
+  CHECK_EQ(in_arg_list.size(), 3);
+  auto& byte_stream_arg = in_arg_list.front();
+  auto& context = llvm::getGlobalContext();
+  std::vector<llvm::Value*> col_heads;
+  for (const int col_id : columns_used) {
+    col_heads.emplace_back(fetch_ir_builder.CreateLoad(fetch_ir_builder.CreateGEP(
+      &byte_stream_arg,
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
+      col_id))));
+  }
+  return col_heads;
+}
+
+}
 
 AggQueryCodeGenerator::AggQueryCodeGenerator(
     std::shared_ptr<AstNode> filter,
@@ -231,15 +331,24 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   llvm::SMDiagnostic err;
   auto module = llvm::ParseIR(llir_mb, err, context);
   CHECK(module);
+
+  auto query_func = module->getFunction(query_template_name);
+  CHECK(query_func);
+
+  auto col_heads = generate_column_heads_load(filter, query_func);
+
+  std::vector<llvm::Type*> filter_arg_types { llvm::Type::getInt32Ty(context) };
+  for (size_t i = 0; i < col_heads.size(); ++i) {
+    filter_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
+  }
+
   // generate the filter
   auto ft = llvm::FunctionType::get(
     llvm::Type::getInt64Ty(context),
-    std::vector<llvm::Type*> {
-      llvm::PointerType::get(llvm::Type::getInt8PtrTy(context), 0),
-      llvm::Type::getInt32Ty(context)
-    },
+    filter_arg_types,
     false);
   auto filter_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "filter", module);
+
   // will trigger inlining of the filter to avoid call overhead and register spills / fills
   filter_func->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
   auto& arg_list = filter_func->getArgumentList();
@@ -251,9 +360,6 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   ir_builder.SetInsertPoint(bb);
   ir_builder.CreateRet(filter->codegen(filter_func, ir_builder, module));
 
-  auto query_func = module->getFunction(query_template_name);
-  CHECK(query_func);
-
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
   for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
@@ -263,9 +369,9 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
     auto& filter_call = llvm::cast<llvm::CallInst>(*it);
     CHECK_EQ(std::string(filter_call.getCalledFunction()->getName()), filter_placeholder_name);
     std::vector<llvm::Value*> args {
-      filter_call.getArgOperand(0),
-      filter_call.getArgOperand(1)
+      filter_call.getArgOperand(0)
     };
+    args.insert(args.end(), col_heads.begin(), col_heads.end());
     llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(filter_func, args, ""));
     break;
   }

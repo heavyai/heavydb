@@ -10,7 +10,6 @@ class Decoder {
 public:
   virtual llvm::Value* codegenDecode(
       llvm::Value* byte_stream,
-      llvm::Value* col_id,
       llvm::Value* pos,
       llvm::IRBuilder<>&,
       llvm::Module* module) = 0;
@@ -21,7 +20,6 @@ public:
   FixedWidthInt64(const size_t byte_width);
   llvm::Value* codegenDecode(
       llvm::Value* byte_stream,
-      llvm::Value* col_id,
       llvm::Value* pos,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);

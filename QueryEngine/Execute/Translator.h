@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/Function.h>
@@ -17,19 +18,22 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module) = 0;
+  virtual void collectUsedColumns(std::unordered_set<int>& columns) = 0;
 };
 
 class FetchInt64Col : public AstNode {
 public:
-  FetchInt64Col(const int64_t col_id, const std::shared_ptr<Decoder> decoder);
+  FetchInt64Col(const int col_id, const std::shared_ptr<Decoder> decoder);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
-  const int64_t col_id_;
+  const int col_id_;
   const std::shared_ptr<Decoder> decoder_;
   static std::unordered_map<int64_t, llvm::Value*> fetch_cache_;
 };
@@ -42,6 +46,9 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
   const int64_t val_;
 };
@@ -54,6 +61,8 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
 
 private:
   std::shared_ptr<AstNode> lhs_;
@@ -69,6 +78,8 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
   std::shared_ptr<AstNode> lhs_;
   std::shared_ptr<AstNode> rhs_;
@@ -82,6 +93,8 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
 
 private:
   std::shared_ptr<AstNode> lhs_;
@@ -97,6 +110,8 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
   std::shared_ptr<AstNode> lhs_;
   std::shared_ptr<AstNode> rhs_;
@@ -110,6 +125,8 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
 
 private:
   std::shared_ptr<AstNode> lhs_;
@@ -125,6 +142,8 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
   std::shared_ptr<AstNode> lhs_;
   std::shared_ptr<AstNode> rhs_;
@@ -138,6 +157,8 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
 
 private:
   std::shared_ptr<AstNode> lhs_;
@@ -153,6 +174,8 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
   std::shared_ptr<AstNode> lhs_;
   std::shared_ptr<AstNode> rhs_;
@@ -166,6 +189,8 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
 
 private:
   std::shared_ptr<AstNode> lhs_;
@@ -181,6 +206,8 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
   std::shared_ptr<AstNode> lhs_;
   std::shared_ptr<AstNode> rhs_;
@@ -194,6 +221,8 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
 
 private:
   std::shared_ptr<AstNode> lhs_;
@@ -209,6 +238,8 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
 private:
   std::shared_ptr<AstNode> lhs_;
   std::shared_ptr<AstNode> rhs_;
@@ -222,6 +253,8 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
 
 private:
   std::shared_ptr<AstNode> op_;
