@@ -56,21 +56,21 @@ void filter_and_count_template(const int8_t** byte_stream,
 }
 
 extern "C" __attribute__((always_inline))
-int64_t agg_sum(const int64_t agg, const int64_t val) {
-  return agg + val;
+void agg_sum(int64_t* agg, const int64_t val) {
+  *agg += val;
 }
 
 extern "C" __attribute__((always_inline))
-int64_t agg_max(const int64_t agg, const int64_t val) {
-  return std::max(agg, val);
+void agg_max(int64_t* agg, const int64_t val) {
+  *agg = std::max(*agg, val);
 }
 
 extern "C" __attribute__((always_inline))
-int64_t agg_min(const int64_t agg, const int64_t val) {
-  return std::min(agg, val);
+void agg_min(int64_t* agg, const int64_t val) {
+  *agg = std::min(*agg, val);
 }
 
-extern "C" int64_t agg_placeholder(const int64_t agg, const int32_t pos, const int8_t** byte_stream);
+extern "C" int64_t agg_placeholder(int64_t* agg, const int32_t pos, const int8_t* byte_stream);
 
 extern "C"
 void filter_and_agg_template(const int8_t** byte_stream,
@@ -82,7 +82,7 @@ void filter_and_agg_template(const int8_t** byte_stream,
   int32_t step = pos_step();
   for (int32_t pos = start; pos < row_count; pos += step) {
     if (filter_placeholder(pos, byte_stream)) {
-      result = agg_placeholder(result, pos, byte_stream);
+      agg_placeholder(&result, pos, nullptr);
     }
   }
   out[start] = result;

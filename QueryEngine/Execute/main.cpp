@@ -36,8 +36,12 @@ int main() {
     ),
     "filter_and_count_template",
     "filter_placeholder",
+    "agg_placeholder",
     "pos_start",
-    "pos_step"
+    "pos_step",
+    -1,
+    std::make_shared<FixedWidthInt64>(1),
+    "max"
   );
 
   int32_t N = 300 * 1000 * 1000;
