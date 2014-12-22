@@ -314,12 +314,27 @@ std::vector<llvm::Value*> generate_column_heads_load(
   return col_heads;
 }
 
+void bind_pos_placeholders(const std::string& pos_fn_name, llvm::Function* query_func, llvm::Module* module) {
+  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
+    if (!llvm::isa<llvm::CallInst>(*it)) {
+      continue;
+    }
+    auto& pos_call = llvm::cast<llvm::CallInst>(*it);
+    if (std::string(pos_call.getCalledFunction()->getName()) == pos_fn_name) {
+      llvm::ReplaceInstWithInst(&pos_call, llvm::CallInst::Create(module->getFunction(pos_fn_name + "_impl")));
+      break;
+    }
+  }
+}
+
 }
 
 AggQueryCodeGenerator::AggQueryCodeGenerator(
     std::shared_ptr<AstNode> filter,
     const std::string& query_template_name,
-    const std::string& filter_placeholder_name) {
+    const std::string& filter_placeholder_name,
+    const std::string& pos_start_name,
+    const std::string& pos_step_name) {
   auto& context = llvm::getGlobalContext();
   // read the LLIR embedded as ELF binary data
   auto llir_size = reinterpret_cast<size_t>(&_binary_RuntimeFunctions_ll_size);
@@ -367,14 +382,19 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
       continue;
     }
     auto& filter_call = llvm::cast<llvm::CallInst>(*it);
-    CHECK_EQ(std::string(filter_call.getCalledFunction()->getName()), filter_placeholder_name);
-    std::vector<llvm::Value*> args {
-      filter_call.getArgOperand(0)
-    };
-    args.insert(args.end(), col_heads.begin(), col_heads.end());
-    llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(filter_func, args, ""));
-    break;
+    if (std::string(filter_call.getCalledFunction()->getName()) == filter_placeholder_name) {
+      std::vector<llvm::Value*> args {
+        filter_call.getArgOperand(0)
+      };
+      args.insert(args.end(), col_heads.begin(), col_heads.end());
+      llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(filter_func, args, ""));
+      break;
+    }
   }
+
+  // same for pos_start and pos_step
+  bind_pos_placeholders(pos_start_name, query_func, module);
+  bind_pos_placeholders(pos_step_name, query_func, module);
 
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);

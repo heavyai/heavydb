@@ -35,7 +35,9 @@ int main() {
       std::make_shared<ImmInt64>(15)
     ),
     "filter_and_count_template",
-    "filter_placeholder"
+    "filter_placeholder",
+    "pos_start",
+    "pos_step"
   );
 
   int32_t N = 300 * 1000 * 1000;

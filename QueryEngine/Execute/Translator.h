@@ -265,7 +265,9 @@ public:
   AggQueryCodeGenerator(
       std::shared_ptr<AstNode> filter,
       const std::string& query_template_name,
-      const std::string& filter_placeholder_name);
+      const std::string& filter_placeholder_name,
+      const std::string& pos_start_name,
+      const std::string& pos_step_name);
 
   ~AggQueryCodeGenerator();
 
