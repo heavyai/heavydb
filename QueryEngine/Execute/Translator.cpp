@@ -297,6 +297,8 @@ std::vector<llvm::Value*> generate_column_heads_load(
     llvm::Function* query_func) {
   std::unordered_set<int> columns_used;
   filter->collectUsedColumns(columns_used);
+  auto max_col_used = *(std::max_element(columns_used.begin(), columns_used.end()));
+  CHECK_EQ(max_col_used + 1, columns_used.size());
   auto& fetch_bb = query_func->front();
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(fetch_bb.begin());
@@ -305,7 +307,7 @@ std::vector<llvm::Value*> generate_column_heads_load(
   auto& byte_stream_arg = in_arg_list.front();
   auto& context = llvm::getGlobalContext();
   std::vector<llvm::Value*> col_heads;
-  for (const int col_id : columns_used) {
+  for (int col_id = 0; col_id <= max_col_used; ++col_id) {
     col_heads.emplace_back(fetch_ir_builder.CreateLoad(fetch_ir_builder.CreateGEP(
       &byte_stream_arg,
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
