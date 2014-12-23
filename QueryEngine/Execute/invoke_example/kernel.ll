@@ -23,47 +23,54 @@ define i32 @pos_step_impl() {
 }
 
 ; Function Attrs: uwtable
-define void @kernel(i8** %byte_stream, i32* nocapture readonly %row_count_ptr, i32* nocapture %out) #2 {
+define void @kernel(i8** %byte_stream, i32* nocapture readonly %row_count_ptr, i64* nocapture readonly %agg_init_val, i32* nocapture %out) #3 {
   %1 = getelementptr i8** %byte_stream, i32 0
   %2 = load i8** %1
   %3 = load i32* %row_count_ptr, align 4
-  %4 = call i32 @pos_start_impl()
-  %5 = call i32 @pos_step_impl()
-  %6 = icmp slt i32 %4, %3
-  br i1 %6, label %.lr.ph.preheader, label %15
+  %4 = load i64* %agg_init_val, align 8
+  %5 = call i32 @pos_start_impl()
+  %6 = call i32 @pos_step_impl()
+  %7 = icmp slt i32 %5, %3
+  br i1 %7, label %.lr.ph.preheader, label %19
 
 .lr.ph.preheader:                                 ; preds = %0
   br label %.lr.ph
 
-.lr.ph:                                           ; preds = %.lr.ph, %.lr.ph.preheader
-  %pos.02 = phi i32 [ %13, %.lr.ph ], [ %4, %.lr.ph.preheader ]
-  %result.01 = phi i64 [ %result.0., %.lr.ph ], [ 0, %.lr.ph.preheader ]
-  %7 = sext i32 %pos.02 to i64
-  %8 = getelementptr inbounds i8* %2, i64 %7
-  %9 = load i8* %8, align 1
-  %10 = sext i8 %9 to i64
-  %11 = icmp sgt i64 %10, 15
-  %not. = icmp ne i1 %11, 0
-  %12 = zext i1 %not. to i64
-  %result.0. = add nsw i64 %12, %result.01
-  %13 = add nsw i32 %pos.02, %5
-  %14 = icmp slt i32 %13, %3
-  br i1 %14, label %.lr.ph, label %._crit_edge
+.lr.ph:                                           ; preds = %16, %.lr.ph.preheader
+  %result.0 = phi i64 [ %4, %.lr.ph.preheader ], [ %result.1, %16 ]
+  %pos.01 = phi i32 [ %17, %16 ], [ %5, %.lr.ph.preheader ]
+  %8 = sext i32 %pos.01 to i64
+  %9 = getelementptr inbounds i8* %2, i64 %8
+  %10 = load i8* %9, align 1
+  %11 = sext i8 %10 to i64
+  %12 = icmp sgt i64 %11, 41
+  %13 = icmp eq i1 %12, 0
+  br i1 %13, label %16, label %14
 
-._crit_edge:                                      ; preds = %.lr.ph
-  %result.0..lcssa = phi i64 [ %result.0., %.lr.ph ]
-  %phitmp = trunc i64 %result.0..lcssa to i32
-  br label %15
+; <label>:14                                      ; preds = %.lr.ph
+  %15 = add nsw i64 %result.0, 1
+  br label %16
 
-; <label>:15                                      ; preds = %._crit_edge, %0
-  %result.0.lcssa = phi i32 [ %phitmp, %._crit_edge ], [ 0, %0 ]
-  %16 = sext i32 %4 to i64
-  %17 = getelementptr inbounds i32* %out, i64 %16
-  store i32 %result.0.lcssa, i32* %17, align 4
+; <label>:16                                      ; preds = %14, %.lr.ph
+  %result.1 = phi i64 [ %result.0, %.lr.ph ], [ %15, %14 ]
+  %17 = add nsw i32 %pos.01, %6
+  %18 = icmp slt i32 %17, %3
+  br i1 %18, label %.lr.ph, label %._crit_edge
+
+._crit_edge:                                      ; preds = %16
+  br label %19
+
+; <label>:19                                      ; preds = %._crit_edge, %0
+  %20 = phi i64 [ %result.1, %._crit_edge ], [ %4, %0 ]
+  %21 = trunc i64 %20 to i32
+  %22 = sext i32 %5 to i64
+  %23 = getelementptr inbounds i32* %out, i64 %22
+  store i32 %21, i32* %23, align 4
   ret void
 }
 
 !nvvm.annotations = !{!0}
 !0 = metadata !{void (i8**,
                       i32*,
+                      i64*,
                       i32*)* @kernel, metadata !"kernel", i32 1}

@@ -80,7 +80,12 @@ int main(int argc, char **argv) {
   checkCudaErrors(cuMemAlloc(&devBufferN, sizeof(int32_t)));
   checkCudaErrors(cuMemcpyHtoD(devBufferN, &row_count, sizeof(int32_t)));  
 
-  void *KernelParams[] = { &devBufferAA, &devBufferN, &devBufferB };
+  CUdeviceptr devBufferI;
+  int64_t init_agg_val = 0;
+  checkCudaErrors(cuMemAlloc(&devBufferI, sizeof(int64_t)));
+  checkCudaErrors(cuMemcpyHtoD(devBufferI, &init_agg_val, sizeof(int64_t)));
+
+  void *KernelParams[] = { &devBufferAA, &devBufferN, &devBufferI, &devBufferB };
 
   LOG(INFO) << measure<std::chrono::microseconds>::execution([&]() {
     checkCudaErrors(cuLaunchKernel(function, gridSizeX, gridSizeY, gridSizeZ,
