@@ -24,7 +24,7 @@ protected:
         delete bm;
     }
     
-    mapd_size_t memSize = 1024*1048576; // 1GB
+    mapd_size_t memSize = 512*100; 
     BufferMgr *bm;
 
 };
@@ -57,6 +57,27 @@ TEST_F(BufferMgrTest, createChunk)
     EXPECT_NO_THROW(bm->createChunk(key, pageSize));
     bm->printSegs(); 
     
-    
-    
 }
+
+TEST_F(BufferMgrTest, createChunks)
+{
+    mapd_size_t pageSize = 512;
+    
+    for (int c = 1; c <= 100; c++) {
+        ChunkKey key;
+        for (int i = 0; i < 3; ++i) {
+            key.push_back(c+i);
+        }
+        bm->createChunk(key,pageSize,4096);
+    }
+    ChunkKey key1 {1000,1001,1002};
+    bm->createChunk(key1,pageSize,2048);
+    ChunkKey key2 {2000,2001,2002};
+    bm->createChunk(key2,pageSize,8704);
+    ChunkKey key3 {3000,3001,3002};
+    bm->createChunk(key3,pageSize,2500);
+    bm->printSegs(); 
+    bm->printMap();
+}
+
+

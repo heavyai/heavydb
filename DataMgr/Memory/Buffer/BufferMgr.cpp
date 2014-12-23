@@ -33,12 +33,15 @@ namespace Buffer_Namespace {
         if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists");
         }
-        bufferSegments_.push_back(BufferSeg(-1,0,USED));
+        BufferSeg bufferSeg(BufferSeg(-1,0,USED));
+        bufferSeg.chunkKey = chunkKey;
+        bufferSegments_.push_back(bufferSeg);
         chunkIndex_[chunkKey] = std::prev(bufferSegments_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
+    
         //bufferSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); 
-        new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
+        new Buffer(this, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
 
-        return bufferSegments_.back().buffer;
+        return chunkIndex_[chunkKey] -> buffer;
     }
 
     BufferList::iterator BufferMgr::evict(BufferList::iterator &evictStart, const size_t numPagesRequested) {
@@ -51,6 +54,9 @@ namespace Buffer_Namespace {
         while (numPages < numPagesRequested) {
             assert (evictIt -> pinCount == 0);
             numPages += evictIt -> numPages;
+            if (evictIt -> memStatus == USED && evictIt -> chunkKey.size() > 0) {
+                chunkIndex_.erase(evictIt -> chunkKey);
+            }
             evictIt = bufferSegments_.erase(evictIt); // erase operations returns next iterator - safe if we ever move to a vector (as opposed to erase(evictIt++)
         }
         BufferSeg dataSeg(startPage,numPagesRequested,USED,bufferEpoch_++); // until we can 
@@ -97,7 +103,10 @@ namespace Buffer_Namespace {
         
         segIt -> pinCount++; // so we don't evict this while trying to find a new segment for it 
         auto newSegIt = findFreeBuffer(numBytes);
+        /* Below should be in copy constructor for BufferSeg?*/
+
         newSegIt -> buffer = segIt -> buffer;
+        newSegIt -> chunkKey = segIt -> chunkKey;
 
         //std::cout << "Buffer pool: " << bufferPool_ << std::endl;
         mapd_addr_t newMem = bufferPool_ + (newSegIt->startPage) * pageSize_;
@@ -111,16 +120,8 @@ namespace Buffer_Namespace {
         }
         // Deincrement pin count to reverse effect above above
         bufferSegments_.erase(segIt);
-        chunkIndex_[newSegIt -> buffer -> chunkKey_] = newSegIt; 
+        chunkIndex_[newSegIt -> chunkKey] = newSegIt; 
         newSegIt -> pinCount = 0;
-        cout << "New seg It: " << endl;
-        printSeg(newSegIt);
-
-        auto checkSeg = chunkIndex_[newSegIt -> buffer -> chunkKey_];
-
-        cout << "Check segIt: " << newSegIt -> buffer -> chunkKey_[0] << "," << newSegIt -> buffer -> chunkKey_[1] << "," << newSegIt -> buffer -> chunkKey_[2] << endl;
-        printSeg(checkSeg);
-        printMap();
 
         return newSegIt;
     }
@@ -143,8 +144,8 @@ namespace Buffer_Namespace {
                     tempIt++;
                     bufferSegments_.insert(tempIt,freeSeg);
                 }
-                std::cout << "Find free bufferIt: " << std::endl;
-                printSeg(bufferIt);
+                //std::cout << "Find free bufferIt: " << std::endl;
+                //printSeg(bufferIt);
                 return bufferIt;
             }
         }
@@ -214,8 +215,13 @@ namespace Buffer_Namespace {
             std::cout << "Pin count: " << segIt -> pinCount << std::endl;
             if (segIt -> memStatus == FREE)
                 std::cout << "FREE" << std::endl;
-            else
-                std::cout << "USED" << std::endl;
+            else {
+                std::cout << "USED - Chunk: ";
+                for (auto vecIt = segIt -> chunkKey.begin(); vecIt != segIt -> chunkKey.end(); ++vecIt) {
+                    std::cout << *vecIt << ",";
+                }
+                std::cout << endl;
+            }
     }
 
 
@@ -259,12 +265,12 @@ namespace Buffer_Namespace {
         }
         auto  segIt = chunkIt->second;
         delete segIt->buffer; // Delete Buffer for segment
-        std::cout << "SegIt: " << std::endl;
-        printSeg(segIt);
+        //std::cout << "SegIt: " << std::endl;
+        //printSeg(segIt);
         if (segIt != bufferSegments_.begin()) {
             auto prevIt = std::prev(segIt);
-            std::cout << "PrevIt: " << std::endl;
-            printSeg(prevIt);
+            //std::cout << "PrevIt: " << std::endl;
+            //printSeg(prevIt);
             if (prevIt -> memStatus == FREE) { 
                 segIt -> startPage = prevIt -> startPage;
                 segIt -> numPages += prevIt -> numPages; 
@@ -273,7 +279,6 @@ namespace Buffer_Namespace {
         }
         auto nextIt = std::next(segIt);
         if (nextIt != bufferSegments_.end()) {
-            printSeg(nextIt);
             if (nextIt -> memStatus == FREE) { 
                 segIt -> numPages += nextIt -> numPages;
                 bufferSegments_.erase(nextIt);

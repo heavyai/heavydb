@@ -43,7 +43,7 @@ namespace Buffer_Namespace {
         Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch);
         */
 
-        Buffer(BufferMgr *bm, const ChunkKey &chunkKey, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes);
+        Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes);
         
         /// Destructor
         virtual ~Buffer();
@@ -104,7 +104,7 @@ namespace Buffer_Namespace {
 
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
-        ChunkKey chunkKey_;
+        //ChunkKey chunkKey_;
 
         BufferList::iterator segIt_;
         mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
