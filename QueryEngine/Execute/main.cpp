@@ -32,16 +32,16 @@ int main() {
   AggQueryCodeGenerator cgen(
     std::make_shared<OpGt>(
       std::make_shared<FetchInt64Col>(0, std::make_shared<FixedWidthInt64>(1)),
-      std::make_shared<ImmInt64>(15)
+      std::make_shared<ImmInt64>(41)
     ),
-    "filter_and_count_template",
+    "filter_and_agg_template",
     "filter_placeholder",
     "agg_placeholder",
     "pos_start",
     "pos_step",
-    -1,
+    0,
     std::make_shared<FixedWidthInt64>(1),
-    "max"
+    "count"
   );
 
   int32_t N = 300 * 1000 * 1000;

@@ -339,7 +339,7 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
     const std::string& agg_placeholder_name,
     const std::string& pos_start_name,
     const std::string& pos_step_name,
-    const int agg_col_id,
+    const unsigned agg_col_id,
     const std::shared_ptr<Decoder> agg_col_decoder,
     const std::string& agg_name) {
   auto& context = llvm::getGlobalContext();
@@ -403,33 +403,31 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   bind_pos_placeholders(pos_start_name, query_func, module);
   bind_pos_placeholders(pos_step_name, query_func, module);
 
-  if (agg_col_id >= 0) {
-    for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
-      if (!llvm::isa<llvm::CallInst>(*it)) {
-        continue;
+  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
+    if (!llvm::isa<llvm::CallInst>(*it)) {
+      continue;
+    }
+    auto& agg_call = llvm::cast<llvm::CallInst>(*it);
+    if (std::string(agg_call.getCalledFunction()->getName()) == agg_placeholder_name) {
+      auto byte_stream_arg = col_heads[agg_col_id];
+      auto pos_arg = agg_call.getArgOperand(1);
+      auto agg_func = module->getFunction("agg_" + agg_name);
+      {
+      // XXX(alex): de-hardcode the column type, use the actual decoder parameter
+      std::vector<llvm::Value*> dec_args {
+        byte_stream_arg,
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1),
+        pos_arg
+      };
+      auto decoded_val = llvm::CallInst::Create(module->getFunction("fixed_width_int64_decode"), dec_args);
+      agg_call.getParent()->getInstList().insert(&agg_call, decoded_val);
+      std::vector<llvm::Value*> args {
+        agg_call.getArgOperand(0),
+        decoded_val
+      };
+      llvm::ReplaceInstWithInst(&agg_call, llvm::CallInst::Create(agg_func, args, ""));
       }
-      auto& agg_call = llvm::cast<llvm::CallInst>(*it);
-      if (std::string(agg_call.getCalledFunction()->getName()) == agg_placeholder_name) {
-        auto byte_stream_arg = col_heads[agg_col_id];
-        auto pos_arg = agg_call.getArgOperand(1);
-        auto agg_func = module->getFunction("agg_" + agg_name);
-        {
-        // XXX(alex): de-hardcode the column type, use the actual decoder parameter
-        std::vector<llvm::Value*> dec_args {
-          byte_stream_arg,
-          llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1),
-          pos_arg
-        };
-        auto decoded_val = llvm::CallInst::Create(module->getFunction("fixed_width_int64_decode"), dec_args);
-        agg_call.getParent()->getInstList().insert(&agg_call, decoded_val);
-        std::vector<llvm::Value*> args {
-          agg_call.getArgOperand(0),
-          decoded_val
-        };
-        llvm::ReplaceInstWithInst(&agg_call, llvm::CallInst::Create(agg_func, args, ""));
-        }
-        break;
-      }
+      break;
     }
   }
 
@@ -451,6 +449,7 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.run(*module);
+  query_func->dump();
 
   query_native_code_ = execution_engine_->getPointerToFunction(query_func);
 }

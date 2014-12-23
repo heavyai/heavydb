@@ -269,7 +269,7 @@ public:
       const std::string& agg_placeholder_name,
       const std::string& pos_start_name,
       const std::string& pos_step_name,
-      const int agg_col_id,
+      const unsigned agg_col_id,
       const std::shared_ptr<Decoder> agg_col_decoder,
       const std::string& agg_name);
 

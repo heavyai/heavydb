@@ -39,20 +39,9 @@ int32_t pos_step_impl() {
   return 1;
 }
 
-extern "C"
-void filter_and_count_template(const int8_t** byte_stream,
-                               const int32_t* row_count_ptr,
-                               int32_t* out) {
-  auto row_count = *row_count_ptr;
-  int64_t result = 0;
-  const int32_t start = pos_start();
-  int32_t step = pos_step();
-  for (int32_t pos = start; pos < row_count; pos += step) {
-    if (filter_placeholder(pos, byte_stream)) {
-      ++result;
-    }
-  }
-  out[start] = result;
+extern "C" __attribute__((always_inline))
+void agg_count(int64_t* agg, const int64_t val) {
+  ++*agg;;
 }
 
 extern "C" __attribute__((always_inline))
