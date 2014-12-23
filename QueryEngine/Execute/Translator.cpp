@@ -417,7 +417,7 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
         // XXX(alex): de-hardcode the column type, use the actual decoder parameter
         std::vector<llvm::Value*> dec_args {
           byte_stream_arg,
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 1),
+          llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1),
           pos_arg
         };
         auto decoded_val = llvm::CallInst::Create(module->getFunction("fixed_width_int64_decode"), dec_args);
