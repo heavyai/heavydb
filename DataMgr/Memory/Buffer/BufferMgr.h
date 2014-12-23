@@ -11,8 +11,9 @@
 #include <iostream>
 #include <map>
 #include <list>
-#include "../AbstractDatum.h"
+#include "../AbstractBuffer.h"
 #include "../AbstractDataMgr.h"
+#include "../File/FileMgr.h"
 #include "BufferSeg.h"
 
 using namespace Memory_Namespace;
@@ -31,32 +32,34 @@ namespace Buffer_Namespace {
         
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t
-        explicit BufferMgr(const size_t bufferSize, const mapd_size_t pageSize);
+        //explicit BufferMgr(const size_t bufferSize, const mapd_size_t pageSize);
+        BufferMgr(const size_t bufferSize, const size_t pageSize = 512, File_Namespace::FileMgr *fileMgr = 0);
         
         /// Destructor
         virtual ~BufferMgr();
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractDatum * createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
         
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractDatum* getChunk(ChunkKey &key);
+        virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0);
         
         /**
          * @brief Puts the contents of d into the Buffer with ChunkKey key.
          * @param key - Unique identifier for a Chunk.
          * @param d - An object representing the source data for the Chunk.
-         * @return AbstractDatum*
+         * @return AbstractBuffer*
          */
-        virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d, mapd_size_t numBytes = 0);
+        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes = 0);
 
-        // Datum API
-        virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t numBytes = 0);
-        virtual void deleteDatum(AbstractDatum *d);
-        virtual AbstractDatum* putDatum(AbstractDatum *d);
+        // Buffer API
+        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t numBytes = 0);
+        virtual void deleteBuffer(AbstractBuffer *d);
+        virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         
         /// Returns the total number of bytes allocated.
         mapd_size_t size();
@@ -76,13 +79,15 @@ namespace Buffer_Namespace {
         size_t bufferSize_;   /// number of bytes allocated for the buffer pool
         size_t pageSize_;
         size_t numPages_;
+        unsigned int bufferEpoch_;
         mapd_addr_t bufferPool_;       /// beginning memory address of the buffer pool
-        //FileMgr *fileMgr_;
+        File_Namespace::FileMgr *fileMgr_;
+
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap
         //std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
-        BufferList bufferList_;
+        BufferList bufferSegments_;
         //std::map<mapd_size_t, mapd_addr_t> freeMem_;
 
         BufferList::iterator evict(BufferList::iterator &evictStart, const size_t numPagesRequested);

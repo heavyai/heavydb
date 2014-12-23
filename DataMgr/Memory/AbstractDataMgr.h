@@ -7,7 +7,7 @@
 #define DATAMGR_MEMORY_ABSTRACTDATAMGR_H
 
 #include "../../Shared/types.h"
-#include "AbstractDatum.h"
+#include "AbstractBuffer.h"
 
 enum MgrType {FILE_MGR, CPU_MGR, GPU_MGR};   
 
@@ -23,7 +23,7 @@ namespace Memory_Namespace {
      *
      * A data manager literally manages data. One assumption about the data manager
      * is that it divides up its data into buffers of data of some kind, each of which
-     * inherit the interface specified in AbstractDatum (@see AbstractDatum).
+     * inherit the interface specified in AbstractBuffer (@see AbstractBuffer).
      */
     class AbstractDataMgr {
 
@@ -32,16 +32,16 @@ namespace Memory_Namespace {
         virtual ~AbstractDataMgr() {}
         
         // Chunk API
-        virtual AbstractDatum* createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
+        virtual AbstractBuffer* createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
         virtual void deleteChunk(const ChunkKey &key) = 0;
-        //virtual void releaseChunk(const ChunkKey &key) = 0;
-        virtual AbstractDatum* getChunk(ChunkKey &key) = 0;
-        virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d, mapd_size_t numBytes = 0) = 0;
+        virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0) = 0;
+        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes = 0) = 0;
+        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes = 0) = 0;
 
-        // Datum API
-        virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t numBytes) = 0;
-        virtual void deleteDatum(AbstractDatum *d) = 0;
-        virtual AbstractDatum* putDatum(AbstractDatum *d) = 0;
+        // Buffer API
+        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t numBytes) = 0;
+        virtual void deleteBuffer(AbstractBuffer *d) = 0;
+        virtual AbstractBuffer* putBuffer(AbstractBuffer *d) = 0;
         virtual MgrType getMgrType() = 0;
 
 

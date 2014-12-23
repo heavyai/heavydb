@@ -199,7 +199,7 @@ namespace File_Namespace {
     }
 
 
-    AbstractDatum* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) {
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
@@ -220,56 +220,54 @@ namespace File_Namespace {
         chunkIndex_.erase(chunkIt);
     }
 
-    AbstractDatum* FileMgr::getChunk(ChunkKey &key) {
+    AbstractBuffer* FileMgr::getChunk(ChunkKey &key, const mapd_size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
         return chunkIt->second;
     }
 
-    /* 
-    void FileMgr::fetchChunk(const ChunkKey &key, AbstractDatum *destDatum, const mapd_size_t numBytes) {
-        // reads chunk specified by ChunkKey into AbstractDatum provided by
-        // destDatum
+    void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
+        // reads chunk specified by ChunkKey into AbstractBuffer provided by
+        // destBuffer
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end()) 
             throw std::runtime_error("Chunk does not exist");
-        AbstractDatum *chunk = chunkIt -> second;
+        AbstractBuffer *chunk = chunkIt -> second;
         // ChunkSize is either specified in function call with numBytes or we
         // just look at pageSize * numPages in FileBuffer
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
-        datum->reserve(chunkSize);
-        chunk->read(datum->getMemoryPtr(),chunkSize,0);
+        destBuffer->reserve(chunkSize);
+        chunk->read(destBuffer->getMemoryPtr(),chunkSize,0);
     }
-    */
 
-    AbstractDatum* FileMgr::putChunk(const ChunkKey &key, AbstractDatum *datum, mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, mapd_size_t numBytes) {
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
-        AbstractDatum *chunk;
+        AbstractBuffer *chunk;
         if (chunkIt == chunkIndex_.end()) {
             chunk = createChunk(key,MAPD_DEFAULT_PAGE_SIZE);
         }
         else {
             chunk = chunkIt->second;
         }
-        // write the datum's data to the Chunk
+        // write the buffer's data to the Chunk
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
-        chunk->write((mapd_addr_t)datum->getMemoryPtr(), 0,chunkSize);
+        chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), 0,chunkSize);
         return chunk;
     }
 
 
-    AbstractDatum* FileMgr::createDatum(mapd_size_t pageSize, mapd_size_t nbytes) {
+    AbstractBuffer* FileMgr::createBuffer(mapd_size_t pageSize, mapd_size_t nbytes) {
         throw std::runtime_error("Operation not supported");
     }
     
-    void FileMgr::deleteDatum(AbstractDatum *d) {
+    void FileMgr::deleteBuffer(AbstractBuffer *d) {
         throw std::runtime_error("Operation not supported");
 
     }
     
-    AbstractDatum* FileMgr::putDatum(AbstractDatum *d) {
+    AbstractBuffer* FileMgr::putBuffer(AbstractBuffer *d) {
         throw std::runtime_error("Operation not supported");
     }
 

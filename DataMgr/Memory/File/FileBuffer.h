@@ -7,7 +7,7 @@
 #ifndef DATAMGR_MEMORY_FILE_FILEBUFFER_H
 #define DATAMGR_MEMORY_FILE_FILEBUFFER_H
 
-#include "../AbstractDatum.h"
+#include "../AbstractBuffer.h"
 #include "Page.h"
 
 #include <iostream>
@@ -31,7 +31,7 @@ namespace File_Namespace {
      *
      * Note(s): Forbid Copying Idiom 4.1
      */
-    class FileBuffer : public AbstractDatum {
+    class FileBuffer : public AbstractBuffer {
         friend class FileMgr;
         
         public:
@@ -67,7 +67,7 @@ namespace File_Namespace {
             void copyPage(Page &srcPage, Page &destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
             /// Not implemented for FileMgr -- throws a runtime_error
-            virtual const mapd_byte_t* getMemoryPtr() const {
+            virtual mapd_byte_t* getMemoryPtr() {
                 throw std::runtime_error("Operation not supported.");
             }
 

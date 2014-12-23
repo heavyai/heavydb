@@ -18,7 +18,7 @@
 #include "Page.h"
 #include "FileBuffer.h"
 #include "FileInfo.h"
-#include "../AbstractDatum.h"
+#include "../AbstractBuffer.h"
 #include "../AbstractDataMgr.h"
 
 using namespace Memory_Namespace;
@@ -73,26 +73,28 @@ namespace File_Namespace {
         virtual ~FileMgr();
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractDatum * createChunk(const ChunkKey &key, mapd_size_t pageSize, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, mapd_size_t pageSize, const mapd_size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
 
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractDatum* getChunk(ChunkKey &key);
+        virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0);
+
+        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes);
 
         /**
          * @brief Puts the contents of d into the Chunk with the given key.
          * @param key - Unique identifier for a Chunk.
          * @param d - An object representing the source data for the Chunk.
-         * @return AbstractDatum*
+         * @return AbstractBuffer*
          */
-        virtual AbstractDatum* putChunk(const ChunkKey &key, AbstractDatum *d, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes = 0);
         
-        // Datum API
-        virtual AbstractDatum* createDatum(mapd_size_t pageSize, mapd_size_t nbytes);
-        virtual void deleteDatum(AbstractDatum *d);
-        virtual AbstractDatum* putDatum(AbstractDatum *d);
+        // Buffer API
+        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t nbytes);
+        virtual void deleteBuffer(AbstractBuffer *d);
+        virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         Page requestFreePage(mapd_size_t pagesize);
 
         inline MgrType getMgrType() { return FILE_MGR;};

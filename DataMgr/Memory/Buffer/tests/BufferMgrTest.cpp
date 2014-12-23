@@ -31,6 +31,7 @@ TEST_F(BufferMgrTest, Constructor)
     ASSERT_EQ(bm->size(), memSize);
 }
 
+/*
 TEST_F(BufferMgrTest, createChunk)
 {
     mapd_size_t pageSize = 4096;
@@ -51,3 +52,4 @@ TEST_F(BufferMgrTest, createChunk)
     
     
 }
+*/

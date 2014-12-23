@@ -1,29 +1,29 @@
 /**
- * @file    AbstractDatum.h
+ * @file    AbstractBuffer.h
  * @author  Steven Stewart <steve@map-d.com>
  * @author  Todd Mostak <todd@map-d.com>
  */
-#ifndef DATAMGR_MEMORY_ABSTRACTDATUM_H
-#define DATAMGR_MEMORY_ABSTRACTDATUM_H
+#ifndef DATAMGR_MEMORY_ABSTRACTBUFFER_H
+#define DATAMGR_MEMORY_ABSTRACTBUFFER_H
 
 #include "../../Shared/types.h"
 
 namespace Memory_Namespace {
     
     /**
-     * @class   AbstractDatum
-     * @brief   An AbstractDatum is a unit of data management for a data manager.
+     * @class   AbstractBuffer
+     * @brief   An AbstractBuffer is a unit of data management for a data manager.
      */
-    class AbstractDatum {
+    class AbstractBuffer {
         
     public:
-        virtual ~AbstractDatum() {}
+        virtual ~AbstractBuffer() {}
         
         virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset = 0) = 0;
         virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset = 0) = 0;
         virtual void reserve(mapd_size_t numBytes) = 0;
         //virtual void append(mapd_addr_t src, const mapd_size_t nbytes) = 0;
-        virtual const mapd_byte_t* getMemoryPtr() const = 0;
+        virtual mapd_byte_t* getMemoryPtr() = 0;
         
         virtual mapd_size_t pageCount() const = 0;
         virtual mapd_size_t pageSize() const = 0;
@@ -35,4 +35,4 @@ namespace Memory_Namespace {
     
 } // Memory_Namespace
 
-#endif // DATAMGR_MEMORY_ABSTRACTDATUM_H
+#endif // DATAMGR_MEMORY_ABSTRACTBUFFER_H

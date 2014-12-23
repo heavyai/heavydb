@@ -17,12 +17,12 @@ void deleteData(const std::string &dirName) {
     boost::filesystem::remove_all(dirName);
 }
 
-void writeToBuffer(AbstractDatum *datum, const size_t numInts) {
+void writeToBuffer(AbstractBuffer *buffer, const size_t numInts) {
     int * data = new int [numInts];
     for (size_t i = 0; i < numInts; ++i) {
         data[i] = i;
     }
-    datum -> write((mapd_addr_t)data,numInts*sizeof(int),0);
+    buffer -> write((mapd_addr_t)data,numInts*sizeof(int),0);
     delete [] data;
 }
 
@@ -59,8 +59,8 @@ TEST(FileMgr, createChunk) {
     FileMgr fm("data");
     ChunkKey chunkKey = {2,3,4,5};
     mapd_size_t pageSize = 4096;
-    AbstractDatum * chunk1 = fm.createChunk(chunkKey,pageSize);
-    AbstractDatum * chunk2 = fm.getChunk(chunkKey);
+    AbstractBuffer * chunk1 = fm.createChunk(chunkKey,pageSize);
+    AbstractBuffer * chunk2 = fm.getChunk(chunkKey);
     EXPECT_EQ(chunk1,chunk2);
     // Creating same chunk again should fail
     try {
@@ -81,7 +81,7 @@ TEST(FileMgr, deleteChunk) {
         FileMgr fm("data");
         mapd_size_t pageSize = 4096;
         fm.createChunk(chunkKey1,pageSize);
-        AbstractDatum *chunk = fm.getChunk(chunkKey1);
+        AbstractBuffer *chunk = fm.getChunk(chunkKey1);
         writeToBuffer(chunk,4096);
         // Test 1: Try to delete chunk
         try {
@@ -94,7 +94,7 @@ TEST(FileMgr, deleteChunk) {
 
         // Test 2: Try to get chunk after its deleted
         try {
-            AbstractDatum *chunk1 = fm.getChunk(chunkKey1);
+            AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
             EXPECT_TRUE(1==2) << "getChunk succeeded on a chunk that was deleted";
         }
         catch (std::runtime_error &error) {
@@ -128,7 +128,7 @@ TEST(FileMgr, deleteChunk) {
     {
         FileMgr fm("data");
         try {
-            AbstractDatum *chunk1 = fm.getChunk(chunkKey1);
+            AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
             EXPECT_TRUE(1==2) << "getChunk succeeded on a chunk that was deleted after FileMgr reinstanciation";
         }
         catch (std::runtime_error &error) {
@@ -153,7 +153,7 @@ TEST(FileMgr, writeReadChunk) {
     for (size_t i = 0; i < numInts; ++i) {
         data1[i] = i;
     }
-    AbstractDatum *chunk1 = fm.getChunk(chunkKey1);
+    AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
     {
         boost::timer::cpu_timer cpuTimer;
         chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),0);
@@ -162,7 +162,7 @@ TEST(FileMgr, writeReadChunk) {
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
         cout << "Write Bandwidth with checkpoint: " << bandwidth << " GB/sec" << endl;
     }
-    AbstractDatum *chunk2 = fm.getChunk(chunkKey2);
+    AbstractBuffer *chunk2 = fm.getChunk(chunkKey2);
     {
         boost::timer::cpu_timer cpuTimer;
         chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),0);

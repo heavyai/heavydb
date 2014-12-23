@@ -7,7 +7,7 @@
 #define DATAMGR_MEMORY_BUFFER_BUFFER_H
 
 #include <iostream>
-#include "../AbstractDatum.h"
+#include "../AbstractBuffer.h"
 #include "BufferSeg.h"
 
 using namespace Memory_Namespace;
@@ -22,7 +22,7 @@ namespace Buffer_Namespace {
      *
      * Note(s): Forbid Copying Idiom 4.1
      */
-    class Buffer : public AbstractDatum {
+    class Buffer : public AbstractBuffer {
         friend class BufferMgr;
         
     public:
@@ -43,7 +43,7 @@ namespace Buffer_Namespace {
         Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch);
         */
 
-        Buffer(BufferMgr *bm, const ChunkKey &chunkKey, BufferList::iterator &segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes);
+        Buffer(BufferMgr *bm, const ChunkKey &chunkKey, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes);
         
         /// Destructor
         virtual ~Buffer();
@@ -59,6 +59,7 @@ namespace Buffer_Namespace {
          */
         virtual void read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes = 0);
         
+        virtual void reserve(const mapd_size_t numBytes);
         /**
          * @brief Writes (copies) data from src into the buffer.
          * Writes (copies) nbytes of data into the buffer at the specified byte offset, from
@@ -75,7 +76,7 @@ namespace Buffer_Namespace {
          * @brief Returns a raw, constant (read-only) pointer to the underlying buffer.
          * @return A constant memory pointer for read-only access.
          */
-        virtual const mapd_byte_t* getMemoryPtr() const;
+        virtual mapd_byte_t* getMemoryPtr();
         
         
         /// Returns the total number of bytes allocated for the buffer.
@@ -105,13 +106,13 @@ namespace Buffer_Namespace {
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
         ChunkKey chunkKey_;
 
-        BufferList::iterator &segIt_;
-        mapd_addr_t mem_;           /// pointer to beginning of datum's memory
+        BufferList::iterator segIt_;
+        mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
         BufferMgr * bm_;
         //mapd_size_t numBytes_;
-        mapd_size_t pageSize_;      /// the size of each page in the datum buffer
+        mapd_size_t pageSize_;      /// the size of each page in the buffer
         mapd_size_t numPages_;
-        int epoch_;                 /// indicates when the datum was last flushed
+        int epoch_;                 /// indicates when the buffer was last flushed
         bool dirty_;                /// true if buffer has been modified
         //std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
         std::vector<bool> pageDirtyFlags_;
