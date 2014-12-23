@@ -1,7 +1,10 @@
 #include "gtest/gtest.h"
 #include "../BufferMgr.h"
 
+#include <iostream>
+
 using namespace Buffer_Namespace;
+using namespace std;
 
 #define BUFFERMGR_UNIT_TESTING
 
@@ -31,25 +34,27 @@ TEST_F(BufferMgrTest, Constructor)
     ASSERT_EQ(bm->size(), memSize);
 }
 
-/*
 TEST_F(BufferMgrTest, createChunk)
 {
-    mapd_size_t pageSize = 4096;
+    mapd_size_t pageSize = 512;
     
     ChunkKey key;
+
     for (int i = 0; i < 3; ++i)
         key.push_back(i);
-    
-    bm->createChunk(key, pageSize);
+    bm->printSegs(); 
+    bm->createChunk(key, pageSize,4096);
+    bm->printSegs(); 
     
     // should not be able to call createChunk with the same key again
     EXPECT_THROW(bm->createChunk(key, pageSize), std::runtime_error);
     
     // should be able to delete the Chunk and then create it again
     EXPECT_NO_THROW(bm->deleteChunk(key));
+    bm->printSegs(); 
     EXPECT_NO_THROW(bm->createChunk(key, pageSize));
+    bm->printSegs(); 
     
     
     
 }
-*/

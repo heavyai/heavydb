@@ -15,6 +15,8 @@
 namespace Buffer_Namespace {
 
     Buffer::Buffer(BufferMgr *bm, const ChunkKey &chunkKey, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): bm_(bm), chunkKey_(chunkKey), segIt_(segIt), pageSize_(pageSize), dirty_(false), mem_(0) {
+        // so that the pointer value of this Buffer is stored
+        segIt_ -> buffer = this;
         if (numBytes > 0) {
             numPages_ = (numBytes + pageSize_ -1 ) / pageSize_;
             pageDirtyFlags_.resize(numPages_);

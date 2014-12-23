@@ -8,6 +8,7 @@
 #include <cassert>
 #include <limits>
 
+
 namespace Buffer_Namespace {
 
     /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
@@ -30,9 +31,10 @@ namespace Buffer_Namespace {
         if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists");
         }
-
         bufferSegments_.push_back(BufferSeg(-1,0,USED));
-        bufferSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); 
+        //bufferSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); 
+        new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
+
         chunkIndex_[chunkKey] = std::prev(bufferSegments_.end(),1);
         /*
         if (initialSize > 0) {
@@ -77,6 +79,7 @@ namespace Buffer_Namespace {
 
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
         size_t numPagesExtraNeeded = numPagesRequested -  segIt -> numPages;
+       
         if (numPagesExtraNeeded < segIt -> numPages) { // We already have enough pages in existing segment
             return segIt;
         }
@@ -98,14 +101,17 @@ namespace Buffer_Namespace {
         
         segIt -> pinCount++; // so we don't evict this while trying to find a new segment for it 
         auto newSegIt = findFreeBuffer(numBytes);
-        mapd_addr_t oldMem_ = segIt -> buffer ->  mem_;
         newSegIt -> buffer = segIt -> buffer;
+
+        //std::cout << "Buffer pool: " << bufferPool_ << std::endl;
+        mapd_addr_t newMem = bufferPool_ + (newSegIt->startPage) * pageSize_;
+        //std::cout << "New Mem: " << newMem << std::endl;
         newSegIt -> buffer -> mem_ = bufferPool_ + newSegIt -> startPage * pageSize_;
         // now need to copy over memory
         // only do this if the old segment is valid (i.e. not new w/
         // unallocated buffer
-        if (segIt -> startPage >= 0)  {
-            memcpy(newSegIt -> buffer -> mem_, oldMem_, newSegIt->buffer->size());
+        if (segIt -> startPage >= 0 && segIt -> buffer -> mem_ != 0)  {
+            memcpy(newSegIt -> buffer -> mem_, segIt -> buffer -> mem_, newSegIt->buffer->size());
         }
         // Deincrement pin count to reverse effect above above
         bufferSegments_.erase(segIt);
@@ -193,6 +199,23 @@ namespace Buffer_Namespace {
         return bestEvictionStart;
     }
 
+    void BufferMgr::printSegs() {
+        int segNum = 1;
+        std::cout << std::endl << std::endl;
+        for (auto segIt = bufferSegments_.begin(); segIt != bufferSegments_.end(); ++segIt,++segNum) {
+            std::cout << "Segment: " << segNum << std::endl;
+            std::cout << "Start page: " << segIt -> startPage << std::endl;
+            std::cout << "Num Pages: " << segIt -> numPages << std::endl;
+            std::cout << "Last touched: " << segIt -> lastTouched << std::endl;
+            std::cout << "Pin count: " << segIt -> pinCount << std::endl;
+            if (segIt -> memStatus == FREE)
+                std::cout << "FREE" << std::endl;
+            else
+                std::cout << "USED" << std::endl;
+            std::cout << "_________________________" << std::endl;
+        }
+    }
+
     
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
     void BufferMgr::deleteChunk(const ChunkKey &key) {
@@ -223,6 +246,7 @@ namespace Buffer_Namespace {
         segIt -> memStatus = FREE;
         segIt -> pinCount = 0;
         segIt -> buffer = 0;
+        chunkIndex_.erase(chunkIt);
 
         /*Below is the other, more complicted algorithm originally chosen*/
 
@@ -278,7 +302,7 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
-
+        throw std::runtime_error("Not implemented");
     }
     
     AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes) {

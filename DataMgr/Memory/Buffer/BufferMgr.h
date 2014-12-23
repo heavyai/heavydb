@@ -37,6 +37,7 @@ namespace Buffer_Namespace {
         
         /// Destructor
         virtual ~BufferMgr();
+        void printSegs();
         
         /// Creates a chunk with the specified key and page size.
         virtual AbstractBuffer * createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes = 0);
