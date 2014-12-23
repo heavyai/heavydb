@@ -11,6 +11,7 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #include <cstdint>
@@ -448,6 +449,7 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   // honor the always inline attribute for the runtime functions and the filter
   llvm::legacy::PassManager pass_manager;
   pass_manager.add(llvm::createAlwaysInlinerPass());
+  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.run(*module);
 
   query_native_code_ = execution_engine_->getPointerToFunction(query_func);
