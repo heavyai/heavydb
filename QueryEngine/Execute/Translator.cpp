@@ -295,11 +295,18 @@ namespace {
 
 std::vector<llvm::Value*> generate_column_heads_load(
     std::shared_ptr<AstNode> filter,
-    llvm::Function* query_func) {
+    llvm::Function* query_func,
+    const int agg_col_id) {
   std::unordered_set<int> columns_used;
   filter->collectUsedColumns(columns_used);
   auto max_col_used = *(std::max_element(columns_used.begin(), columns_used.end()));
   CHECK_EQ(max_col_used + 1, columns_used.size());
+  if (agg_col_id > max_col_used) {
+    CHECK_EQ(agg_col_id, max_col_used + 1);
+    ++max_col_used;
+  } else {
+    CHECK_LE(agg_col_id, max_col_used);
+  }
   auto& fetch_bb = query_func->front();
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(fetch_bb.begin());
@@ -357,7 +364,7 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   auto query_func = module->getFunction(query_template_name);
   CHECK(query_func);
 
-  auto col_heads = generate_column_heads_load(filter, query_func);
+  auto col_heads = generate_column_heads_load(filter, query_func, agg_col_id);
 
   std::vector<llvm::Type*> filter_arg_types { llvm::Type::getInt32Ty(context) };
   for (size_t i = 0; i < col_heads.size(); ++i) {
@@ -449,7 +456,6 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.run(*module);
-  query_func->dump();
 
   query_native_code_ = execution_engine_->getPointerToFunction(query_func);
 }
