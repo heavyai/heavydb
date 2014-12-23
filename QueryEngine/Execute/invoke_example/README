@@ -6,4 +6,4 @@ with a few very minor changes (`i64 0` becomes simply 0, `!tbaa` annotations mus
 Also, `pos_start_impl` and `pos_step_impl` are copied from `cuda_rt.ll`. Obviously, libNVVM is a perfect candidate to completely
 automate this process.
 
-Ignoring data transfer over PCIe, I got the simple count + filter query in main.cpp to finish in 12-20 us on GTX 750m for 1B rows.
+Ignoring data transfer over PCIe, I got the simple count + filter query in main.cpp to finish in 0.1s on GTX 750m for 1B rows.

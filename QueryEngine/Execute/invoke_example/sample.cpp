@@ -86,9 +86,8 @@ int main(int argc, char **argv) {
     checkCudaErrors(cuLaunchKernel(function, gridSizeX, gridSizeY, gridSizeZ,
                                    blockSizeX, blockSizeY, blockSizeZ,
                                    0, NULL, KernelParams, NULL));
+    checkCudaErrors(cuMemcpyDtoH(result_vec, devBufferB, blockSizeX * gridSizeX * sizeof(int32_t)));
   });
-
-  checkCudaErrors(cuMemcpyDtoH(result_vec, devBufferB, blockSizeX * gridSizeX * sizeof(int32_t)));
 
   int32_t result = 0;
   for (size_t i = 0; i < blockSizeX * gridSizeX; ++i) {
