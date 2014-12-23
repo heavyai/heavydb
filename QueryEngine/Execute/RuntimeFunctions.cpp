@@ -64,9 +64,10 @@ extern "C" int64_t agg_placeholder(int64_t* agg, const int32_t pos, const int8_t
 extern "C"
 void filter_and_agg_template(const int8_t** byte_stream,
                              const int32_t* row_count_ptr,
+                             const int64_t* agg_init_val,
                              int32_t* out) {
   auto row_count = *row_count_ptr;
-  int64_t result = 0;
+  auto result = *agg_init_val;
   const int32_t start = pos_start();
   int32_t step = pos_step();
   for (int32_t pos = start; pos < row_count; pos += step) {

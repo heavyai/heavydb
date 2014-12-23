@@ -311,7 +311,7 @@ std::vector<llvm::Value*> generate_column_heads_load(
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(fetch_bb.begin());
   auto& in_arg_list = query_func->getArgumentList();
-  CHECK_EQ(in_arg_list.size(), 3);
+  CHECK_EQ(in_arg_list.size(), 4);
   auto& byte_stream_arg = in_arg_list.front();
   auto& context = llvm::getGlobalContext();
   std::vector<llvm::Value*> col_heads;
