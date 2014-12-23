@@ -8,6 +8,8 @@
 #include <cassert>
 #include <limits>
 
+using namespace std;
+
 
 namespace Buffer_Namespace {
 
@@ -32,16 +34,10 @@ namespace Buffer_Namespace {
             throw std::runtime_error("Chunk already exists");
         }
         bufferSegments_.push_back(BufferSeg(-1,0,USED));
+        chunkIndex_[chunkKey] = std::prev(bufferSegments_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
         //bufferSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); 
         new Buffer(this, chunkKey, std::prev(bufferSegments_.end(),1), chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
 
-        chunkIndex_[chunkKey] = std::prev(bufferSegments_.end(),1);
-        /*
-        if (initialSize > 0) {
-            size_t chunkNumPages = (initialSize + pageSize_ - 1) / pageSize_;
-            buffer -> reserve(chunkNumPages);
-        }
-        */
         return bufferSegments_.back().buffer;
     }
 
@@ -116,6 +112,16 @@ namespace Buffer_Namespace {
         // Deincrement pin count to reverse effect above above
         bufferSegments_.erase(segIt);
         chunkIndex_[newSegIt -> buffer -> chunkKey_] = newSegIt; 
+        newSegIt -> pinCount = 0;
+        cout << "New seg It: " << endl;
+        printSeg(newSegIt);
+
+        auto checkSeg = chunkIndex_[newSegIt -> buffer -> chunkKey_];
+
+        cout << "Check segIt: " << newSegIt -> buffer -> chunkKey_[0] << "," << newSegIt -> buffer -> chunkKey_[1] << "," << newSegIt -> buffer -> chunkKey_[2] << endl;
+        printSeg(checkSeg);
+        printMap();
+
         return newSegIt;
     }
 
@@ -137,6 +143,8 @@ namespace Buffer_Namespace {
                     tempIt++;
                     bufferSegments_.insert(tempIt,freeSeg);
                 }
+                std::cout << "Find free bufferIt: " << std::endl;
+                printSeg(bufferIt);
                 return bufferIt;
             }
         }
@@ -199,11 +207,7 @@ namespace Buffer_Namespace {
         return bestEvictionStart;
     }
 
-    void BufferMgr::printSegs() {
-        int segNum = 1;
-        std::cout << std::endl << std::endl;
-        for (auto segIt = bufferSegments_.begin(); segIt != bufferSegments_.end(); ++segIt,++segNum) {
-            std::cout << "Segment: " << segNum << std::endl;
+    void BufferMgr::printSeg(BufferList::iterator &segIt) {
             std::cout << "Start page: " << segIt -> startPage << std::endl;
             std::cout << "Num Pages: " << segIt -> numPages << std::endl;
             std::cout << "Last touched: " << segIt -> lastTouched << std::endl;
@@ -212,9 +216,36 @@ namespace Buffer_Namespace {
                 std::cout << "FREE" << std::endl;
             else
                 std::cout << "USED" << std::endl;
-            std::cout << "_________________________" << std::endl;
-        }
     }
+
+
+
+
+    void BufferMgr::printSegs() {
+        int segNum = 1;
+        std::cout << std::endl << std::endl;
+        for (auto segIt = bufferSegments_.begin(); segIt != bufferSegments_.end(); ++segIt,++segNum) {
+            std::cout << "Segment: " << segNum << std::endl;
+            printSeg(segIt);
+            std::cout << std::endl;
+        }
+            std::cout << "--------------------" << std::endl;
+    }
+
+    void BufferMgr::printMap() {
+        int segNum = 1;
+        std::cout << std::endl << "Map Contents: " <<  std::endl;
+        for (auto segIt = chunkIndex_.begin(); segIt != chunkIndex_.end(); ++segIt,++segNum) {
+            std::cout << "Chunk " << segNum << ": ";
+            for (auto vecIt = segIt -> first.begin(); vecIt != segIt -> first.end(); ++vecIt) {
+                std::cout << *vecIt << ",";
+            }
+            std::cout << std::endl;
+            printSeg(segIt -> second);
+        }
+        std::cout << "--------------------" << std::endl;
+    }
+
 
     
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
@@ -228,8 +259,12 @@ namespace Buffer_Namespace {
         }
         auto  segIt = chunkIt->second;
         delete segIt->buffer; // Delete Buffer for segment
+        std::cout << "SegIt: " << std::endl;
+        printSeg(segIt);
         if (segIt != bufferSegments_.begin()) {
             auto prevIt = std::prev(segIt);
+            std::cout << "PrevIt: " << std::endl;
+            printSeg(prevIt);
             if (prevIt -> memStatus == FREE) { 
                 segIt -> startPage = prevIt -> startPage;
                 segIt -> numPages += prevIt -> numPages; 
@@ -238,6 +273,7 @@ namespace Buffer_Namespace {
         }
         auto nextIt = std::next(segIt);
         if (nextIt != bufferSegments_.end()) {
+            printSeg(nextIt);
             if (nextIt -> memStatus == FREE) { 
                 segIt -> numPages += nextIt -> numPages;
                 bufferSegments_.erase(nextIt);

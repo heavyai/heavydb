@@ -44,14 +44,16 @@ TEST_F(BufferMgrTest, createChunk)
         key.push_back(i);
     bm->printSegs(); 
     bm->createChunk(key, pageSize,4096);
-    bm->printSegs(); 
-    
+    //bm->printSegs(); 
+    bm->printMap();
     // should not be able to call createChunk with the same key again
-    EXPECT_THROW(bm->createChunk(key, pageSize), std::runtime_error);
+    //EXPECT_THROW(bm->createChunk(key, pageSize), std::runtime_error);
+    //bm->printSegs(); 
     
     // should be able to delete the Chunk and then create it again
     EXPECT_NO_THROW(bm->deleteChunk(key));
     bm->printSegs(); 
+    bm->printMap();
     EXPECT_NO_THROW(bm->createChunk(key, pageSize));
     bm->printSegs(); 
     
