@@ -72,13 +72,13 @@ int main(int argc, char **argv) {
   unsigned gridSizeZ  = 1;
 
   CUdeviceptr devBufferB;
-  int32_t* result_vec = new int32_t[blockSizeX * gridSizeX * sizeof(int32_t)];
-  checkCudaErrors(cuMemAlloc(&devBufferB, blockSizeX * gridSizeX * sizeof(int32_t)));
+  int64_t* result_vec = new int64_t[blockSizeX * gridSizeX * sizeof(int64_t)];
+  checkCudaErrors(cuMemAlloc(&devBufferB, blockSizeX * gridSizeX * sizeof(int64_t)));
 
   CUdeviceptr devBufferN;
-  int32_t row_count = N;
-  checkCudaErrors(cuMemAlloc(&devBufferN, sizeof(int32_t)));
-  checkCudaErrors(cuMemcpyHtoD(devBufferN, &row_count, sizeof(int32_t)));  
+  int64_t row_count = N;
+  checkCudaErrors(cuMemAlloc(&devBufferN, sizeof(int64_t)));
+  checkCudaErrors(cuMemcpyHtoD(devBufferN, &row_count, sizeof(int64_t)));
 
   CUdeviceptr devBufferI;
   int64_t init_agg_val = 0;
@@ -91,10 +91,10 @@ int main(int argc, char **argv) {
     checkCudaErrors(cuLaunchKernel(function, gridSizeX, gridSizeY, gridSizeZ,
                                    blockSizeX, blockSizeY, blockSizeZ,
                                    0, NULL, KernelParams, NULL));
-    checkCudaErrors(cuMemcpyDtoH(result_vec, devBufferB, blockSizeX * gridSizeX * sizeof(int32_t)));
+    checkCudaErrors(cuMemcpyDtoH(result_vec, devBufferB, blockSizeX * gridSizeX * sizeof(int64_t)));
   });
 
-  int32_t result = 0;
+  int64_t result = 0;
   for (size_t i = 0; i < blockSizeX * gridSizeX; ++i) {
     result += result_vec[i];
   }

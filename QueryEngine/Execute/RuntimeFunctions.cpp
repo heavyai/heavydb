@@ -7,7 +7,7 @@ extern "C" __attribute__((always_inline))
 int64_t fixed_width_int64_decode(
     const int8_t* byte_stream,
     const int32_t byte_width,
-    const int32_t pos) {
+    const int64_t pos) {
   switch (byte_width) {
   case 1:
     return static_cast<int64_t>(byte_stream[pos * byte_width]);
@@ -25,7 +25,7 @@ int64_t fixed_width_int64_decode(
 // query templates
 
 extern "C"
-int64_t filter_placeholder(const int32_t pos, const int8_t** byte_stream);
+int64_t filter_placeholder(const int64_t pos, const int8_t** byte_stream);
 extern "C" int32_t pos_start();
 extern "C" int32_t pos_step();
 
@@ -59,18 +59,18 @@ void agg_min(int64_t* agg, const int64_t val) {
   *agg = std::min(*agg, val);
 }
 
-extern "C" int64_t agg_placeholder(int64_t* agg, const int32_t pos, const int8_t* byte_stream);
+extern "C" int64_t agg_placeholder(int64_t* agg, const int64_t pos, const int8_t* byte_stream);
 
 extern "C"
 void filter_and_agg_template(const int8_t** byte_stream,
-                             const int32_t* row_count_ptr,
+                             const int64_t* row_count_ptr,
                              const int64_t* agg_init_val,
-                             int32_t* out) {
+                             int64_t* out) {
   auto row_count = *row_count_ptr;
   auto result = *agg_init_val;
   const int32_t start = pos_start();
   int32_t step = pos_step();
-  for (int32_t pos = start; pos < row_count; pos += step) {
+  for (int64_t pos = start; pos < row_count; pos += step) {
     if (filter_placeholder(pos, byte_stream)) {
       agg_placeholder(&result, pos, nullptr);
     }
