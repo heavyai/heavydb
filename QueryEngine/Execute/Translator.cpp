@@ -37,13 +37,15 @@ llvm::Value* FetchInt64Col::codegen(
   size_t arg_idx = 0;
   for (auto& arg : in_arg_list) {
     if (arg_idx == col_id_ + 1) {
+      auto dec_val = decoder_->codegenDecode(
+        &arg,
+        &pos_arg,
+        ir_builder,
+        module);
+      ir_builder.Insert(dec_val);
       auto it_ok = fetch_cache_.insert(std::make_pair(
         col_id_,
-        decoder_->codegenDecode(
-          &arg,
-          &pos_arg,
-          ir_builder,
-          module)));
+        dec_val));
       CHECK(it_ok.second);
       return it_ok.first->second;
     }
@@ -419,21 +421,13 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
       auto byte_stream_arg = col_heads[agg_col_id];
       auto pos_arg = agg_call.getArgOperand(1);
       auto agg_func = module->getFunction("agg_" + agg_name);
-      {
-      // XXX(alex): de-hardcode the column type, use the actual decoder parameter
-      std::vector<llvm::Value*> dec_args {
-        byte_stream_arg,
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), 1),
-        pos_arg
-      };
-      auto decoded_val = llvm::CallInst::Create(module->getFunction("fixed_width_int64_decode"), dec_args);
-      agg_call.getParent()->getInstList().insert(&agg_call, decoded_val);
+      auto decode_call = agg_col_decoder->codegenDecode(byte_stream_arg, pos_arg, ir_builder, module);
+      agg_call.getParent()->getInstList().insert(&agg_call, decode_call);
       std::vector<llvm::Value*> args {
         agg_call.getArgOperand(0),
-        decoded_val
+        decode_call
       };
       llvm::ReplaceInstWithInst(&agg_call, llvm::CallInst::Create(agg_func, args, ""));
-      }
       break;
     }
   }

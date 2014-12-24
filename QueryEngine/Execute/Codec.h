@@ -8,7 +8,7 @@
 
 class Decoder {
 public:
-  virtual llvm::Value* codegenDecode(
+  virtual llvm::Instruction* codegenDecode(
       llvm::Value* byte_stream,
       llvm::Value* pos,
       llvm::IRBuilder<>&,
@@ -18,7 +18,7 @@ public:
 class FixedWidthInt64 : public Decoder {
 public:
   FixedWidthInt64(const size_t byte_width);
-  llvm::Value* codegenDecode(
+  llvm::Instruction* codegenDecode(
       llvm::Value* byte_stream,
       llvm::Value* pos,
       llvm::IRBuilder<>& ir_builder,
