@@ -1,0 +1,9 @@
+llc -mcpu=sm_20 kernel.ll -o kernel.ptx
+clang++ -std=c++11 sample.cpp -o sample -O2 -g -I/usr/local/cuda-6.5/include -lcuda -lglog
+
+The `kernel` function in `kernel.ll` is a nearly-verbatim copy of `query_func->dump();` (you can add it to Translator.cpp:416)
+with a few very minor changes (`i64 0` becomes simply 0, `!tbaa` annotations must be removed or copied as well from `module->dump();`).
+Also, `pos_start_impl` and `pos_step_impl` are copied from `cuda_rt.ll`. Obviously, libNVVM is a perfect candidate to completely
+automate this process.
+
+Ignoring data transfer over PCIe, I got the simple count + filter query in main.cpp to finish in 0.1s on GTX 750m for 1B rows.
