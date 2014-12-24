@@ -320,8 +320,7 @@ std::vector<llvm::Value*> generate_column_heads_load(
   for (int col_id = 0; col_id <= max_col_used; ++col_id) {
     col_heads.emplace_back(fetch_ir_builder.CreateLoad(fetch_ir_builder.CreateGEP(
       &byte_stream_arg,
-      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context),
-      col_id))));
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), col_id))));
   }
   return col_heads;
 }
