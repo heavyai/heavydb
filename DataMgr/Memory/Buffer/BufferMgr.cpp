@@ -23,7 +23,18 @@ namespace Buffer_Namespace {
 
     /// Frees the heap-allocated buffer pool memory
     BufferMgr::~BufferMgr() {
+        clear();
         delete[] bufferPool_;
+    }
+
+    void BufferMgr::clear() {
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            delete chunkIt -> second -> buffer;
+        }
+        chunkIndex_.clear();
+        bufferSegments_.clear();
+        bufferSegments_.push_back(BufferSeg(0,numPages_));
+        bufferEpoch_ = 0;
     }
     
     /// Throws a runtime_error if the Chunk already exists
@@ -106,6 +117,7 @@ namespace Buffer_Namespace {
         /* Below should be in copy constructor for BufferSeg?*/
 
         newSegIt -> buffer = segIt -> buffer;
+        //newSegIt -> buffer -> segIt_ = newSegIt;
         newSegIt -> chunkKey = segIt -> chunkKey;
 
         //std::cout << "Buffer pool: " << bufferPool_ << std::endl;

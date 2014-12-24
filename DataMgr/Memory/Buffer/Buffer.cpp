@@ -14,17 +14,11 @@
 
 namespace Buffer_Namespace {
 
-    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): bm_(bm), segIt_(segIt), pageSize_(pageSize), dirty_(false), mem_(0) {
+    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): bm_(bm), segIt_(segIt), pageSize_(pageSize), dirty_(false), mem_(0), numPages_(0) {
         // so that the pointer value of this Buffer is stored
         segIt_ -> buffer = this;
         if (numBytes > 0) {
-            numPages_ = (numBytes + pageSize_ -1 ) / pageSize_;
-            pageDirtyFlags_.resize(numPages_);
-            //numBytes_ = numPages_ * pageSize_;
-            bm_ -> reserveBuffer(segIt_,size());
-        }
-        else {
-            numPages_ = 0;
+            reserve(numBytes);
         }
     }
 
@@ -48,9 +42,9 @@ namespace Buffer_Namespace {
     void Buffer::reserve(const mapd_size_t numBytes) {
         mapd_size_t numPages = (numBytes + pageSize_ -1 ) / pageSize_;
         if (numPages > numPages_) {
-            pageDirtyFlags_.resize(numPages_);
+            pageDirtyFlags_.resize(numPages);
             numPages_ = numPages;
-            bm_ -> reserveBuffer(segIt_,size());
+            segIt_ = bm_ -> reserveBuffer(segIt_,size());
         }
     }
     
@@ -65,7 +59,8 @@ namespace Buffer_Namespace {
     void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset) {
         assert(numBytes > 0); // cannot write 0 bytes
         if (numBytes + offset > size()) {
-            bm_ -> reserveBuffer(segIt_,numBytes + offset);
+            reserve(numBytes+offset);
+            //bm_ -> reserveBuffer(segIt_,numBytes + offset);
         }
         // write source contents to buffer
         assert(mem_ && src);

@@ -37,6 +37,9 @@ namespace Buffer_Namespace {
         
         /// Destructor
         virtual ~BufferMgr();
+
+        void clear();
+
         void printMap();
         void printSegs();
         void printSeg(BufferList::iterator &segIt);
