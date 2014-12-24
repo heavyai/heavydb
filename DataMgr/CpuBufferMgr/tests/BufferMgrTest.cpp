@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 #include "../BufferMgr.h"
-#include "../../File/FileMgr.h"
+#include "../../FileMgr/FileMgr.h"
 
 #include <boost/timer/timer.hpp>
 #include <boost/filesystem.hpp>

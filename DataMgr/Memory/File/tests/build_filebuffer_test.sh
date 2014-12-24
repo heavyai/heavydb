@@ -1,1 +1,0 @@
-g++  --std=c++0x -o FileBufferTest -g FileBufferTest.cpp ../FileMgr.cpp ../File.cpp ../FileBuffer.cpp ../FileInfo.cpp ../../../PgConnector/PgConnector.cpp  -I/usr/local/include -L/usr/local/lib -lgtest -lpqxx -lboost_filesystem -lboost_system

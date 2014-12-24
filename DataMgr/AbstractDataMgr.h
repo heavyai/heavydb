@@ -6,7 +6,7 @@
 #ifndef DATAMGR_MEMORY_ABSTRACTDATAMGR_H
 #define DATAMGR_MEMORY_ABSTRACTDATAMGR_H
 
-#include "../../Shared/types.h"
+#include "../Shared/types.h"
 #include "AbstractBuffer.h"
 
 enum MgrType {FILE_MGR, CPU_MGR, GPU_MGR};   

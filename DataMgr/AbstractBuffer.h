@@ -6,7 +6,7 @@
 #ifndef DATAMGR_MEMORY_ABSTRACTBUFFER_H
 #define DATAMGR_MEMORY_ABSTRACTBUFFER_H
 
-#include "../../Shared/types.h"
+#include "../Shared/types.h"
 
 namespace Memory_Namespace {
     

@@ -11,8 +11,8 @@
 
 #include <iostream>
 #include <string>
-#include "../../../Shared/errors.h"
-#include "../../../Shared/types.h"
+#include "../../Shared/errors.h"
+#include "../../Shared/types.h"
 
 namespace File_Namespace {
     
