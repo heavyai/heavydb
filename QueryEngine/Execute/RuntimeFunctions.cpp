@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <string.h>
 
 
 extern "C" __attribute__((always_inline))
@@ -76,4 +77,70 @@ void filter_and_agg_template(const int8_t** byte_stream,
     }
   }
   out[start] = result;
+}
+
+extern "C" __attribute__((always_inline))
+int32_t key_hash(const int64_t* key, const int32_t key_qw_count, const int32_t groups_buffer_entry_count) {
+  int32_t hash = 0;
+  for (int32_t i = 0; i < key_qw_count; ++i) {
+    hash = ((hash << 5) - hash + key[i]) % groups_buffer_entry_count;
+  }
+  return hash;
+}
+
+extern "C" __attribute__((always_inline))
+int64_t* get_matching_group_value(int64_t* groups_buffer,
+                                  const int32_t h,
+                                  const int64_t* key,
+                                  const int32_t key_qw_count) {
+  auto off = h * (key_qw_count + 1);
+  if (memcmp(groups_buffer + off, key, key_qw_count * sizeof(*key)) == 0) {
+    return groups_buffer + off + key_qw_count;
+  }
+  return nullptr;
+}
+
+#define EMPTY_KEY std::numeric_limits<int64_t>::min()
+
+void init_groups(int64_t* groups_buffer,
+                 const int32_t groups_buffer_entry_count,
+                 const int32_t key_qw_count) {
+  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + 1);
+  for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
+    groups_buffer[i] = EMPTY_KEY;
+  }
+}
+
+int64_t* get_group_value(int64_t* groups_buffer,
+                         const int32_t groups_buffer_entry_count,
+                         const int64_t* key,
+                         const int32_t key_qw_count) {
+  auto h = key_hash(key, key_qw_count, groups_buffer_entry_count);
+  auto matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count);
+  if (matching_group) {
+    return matching_group;
+  }
+  auto h_probe = h + 1;
+  while (h_probe != h) {
+    ++h_probe;
+    matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count);
+    if (matching_group) {
+      return matching_group;
+    }
+  }
+  // TODO(alex): handle error by resizing?
+  return nullptr;
+}
+
+extern "C" __attribute__((always_inline))
+int64_t* set_group_value(int64_t* groups_buffer,
+                         const int32_t groups_buffer_entry_count,
+                         const int64_t* key,
+                         const int32_t key_qw_count,
+                         const int64_t value) {
+  auto gv = get_group_value(groups_buffer, groups_buffer_entry_count, key, key_qw_count);
+  if (gv) {
+    *gv = value;
+  }
+  return gv;
 }
