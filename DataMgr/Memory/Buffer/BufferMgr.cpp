@@ -361,7 +361,8 @@ namespace Buffer_Namespace {
             return chunkIt -> second -> buffer; 
         }
         else { // If wasn't in pool then we need to fetch it
-            Buffer *buffer;
+            AbstractBuffer * buffer = createChunk(key,pageSize_,numBytes);
+            cout << "About to fetchChunk" << endl;
             fileMgr_ -> fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
             return buffer;
         }

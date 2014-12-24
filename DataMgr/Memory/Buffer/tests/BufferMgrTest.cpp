@@ -133,9 +133,19 @@ TEST_F(BufferMgrTest, readAndWrite) {
         EXPECT_EQ(data1[i],data2[i]);
     }
     bm -> checkpoint();
+    bm -> clear();
+    cout << "Before get data" << endl;
+    AbstractBuffer * diskChunk = bm -> getChunk(chunkKey1,numInts*sizeof(int));
+    cout << "Got data" << endl;
+    int *diskData = new int [numInts];
+    diskChunk -> read((mapd_addr_t)diskData,numInts*sizeof(int),0);
+    for (size_t i = 0; i < numInts; ++i) {
+        EXPECT_EQ(data1[i],diskData[i]);
+    }
 
     delete [] data1;
     delete [] data2;
+    delete [] diskData;
 }
 
 

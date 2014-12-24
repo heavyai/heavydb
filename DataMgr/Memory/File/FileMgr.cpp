@@ -238,6 +238,7 @@ namespace File_Namespace {
         // just look at pageSize * numPages in FileBuffer
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
         destBuffer->reserve(chunkSize);
+        std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         chunk->read(destBuffer->getMemoryPtr(),chunkSize,0);
     }
 
