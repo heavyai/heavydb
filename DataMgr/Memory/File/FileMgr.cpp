@@ -38,7 +38,7 @@ namespace File_Namespace {
     }
 
 
-    FileMgr::FileMgr(std::string basePath) : basePath_(basePath), nextFileId_(0), epoch_(0) {
+    FileMgr::FileMgr(std::string basePath,const mapd_size_t defaultPageSize) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(0) {
         init();
     }
 
@@ -246,14 +246,15 @@ namespace File_Namespace {
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer *chunk;
         if (chunkIt == chunkIndex_.end()) {
-            chunk = createChunk(key,MAPD_DEFAULT_PAGE_SIZE);
+            chunk = createChunk(key,defaultPageSize_);
         }
         else {
             chunk = chunkIt->second;
         }
         // write the buffer's data to the Chunk
-        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
-        chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), 0,chunkSize);
+        mapd_size_t chunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        std::cout << "Chunk size: " << chunkSize << std::endl;
+        chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), chunkSize,0);
         return chunk;
     }
 

@@ -41,6 +41,7 @@ namespace Buffer_Namespace {
 
     void Buffer::reserve(const mapd_size_t numBytes) {
         mapd_size_t numPages = (numBytes + pageSize_ -1 ) / pageSize_;
+        std::cout << "NumPages reserved: " << numPages << std::endl;
         if (numPages > numPages_) {
             pageDirtyFlags_.resize(numPages);
             numPages_ = numPages;

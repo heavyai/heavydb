@@ -43,7 +43,7 @@ namespace Buffer_Namespace {
         Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch);
         */
 
-        Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes);
+        Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize = 512, const mapd_size_t numBytes = 0);
         
         /// Destructor
         virtual ~Buffer();
@@ -81,6 +81,8 @@ namespace Buffer_Namespace {
         
         /// Returns the total number of bytes allocated for the buffer.
         inline virtual mapd_size_t size() const {
+            std::cout << "Page size: " << pageSize_ << std::endl;
+            std::cout << "Num pages: " << numPages_ << std::endl;
             return pageSize_ * numPages_;
         }
         /// Returns the number of pages in the buffer.

@@ -1,7 +1,9 @@
 #include "gtest/gtest.h"
 #include "../BufferMgr.h"
+#include "../../File/FileMgr.h"
 
 #include <boost/timer/timer.hpp>
+#include <boost/filesystem.hpp>
 
 #include <iostream>
 
@@ -19,17 +21,26 @@ class BufferMgrTest : public ::testing::Test {
     
 protected:
     virtual void SetUp() {
-        bm = new BufferMgr(memSize);
+        const mapd_size_t pageSize = 512;
+        deleteData("data");
+        fm = new File_Namespace::FileMgr("data");
+        bm = new BufferMgr(memSize,pageSize,fm);
     }
     
     virtual void TearDown() {
         delete bm;
     }
+
+    void deleteData(const std::string &dirName) {
+        boost::filesystem::remove_all(dirName);
+    }
     
-    mapd_size_t memSize = 4096*20000; 
+    mapd_size_t memSize = 1 << 28; 
     BufferMgr *bm;
+    File_Namespace::FileMgr *fm;
 
 };
+
 
 TEST_F(BufferMgrTest, Constructor)
 {
@@ -121,6 +132,7 @@ TEST_F(BufferMgrTest, readAndWrite) {
     for (size_t i = 0; i < numInts; ++i) {
         EXPECT_EQ(data1[i],data2[i]);
     }
+    bm -> checkpoint();
 
     delete [] data1;
     delete [] data2;

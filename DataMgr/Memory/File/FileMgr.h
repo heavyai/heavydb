@@ -67,7 +67,7 @@ namespace File_Namespace {
         
     public:
         /// Constructor
-        FileMgr(std::string basePath = ".");
+        FileMgr(std::string basePath = ".", const mapd_size_t defaultPageSize=1048576);
         
         /// Destructor
         virtual ~FileMgr();
@@ -144,6 +144,7 @@ namespace File_Namespace {
         int epoch_;                         /// the current epoch (time of last checkpoint)
         FILE *epochFile_;
         bool isDirty_;                      /// true if metadata changed since last writeState()
+        mapd_size_t defaultPageSize_;
         
 
         ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks

@@ -61,6 +61,7 @@ namespace Buffer_Namespace {
          */
         virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes = 0);
         virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes = 0);
+        void checkpoint();
 
         // Buffer API
         virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t numBytes = 0);

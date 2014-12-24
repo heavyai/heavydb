@@ -337,6 +337,19 @@ namespace Buffer_Namespace {
         //}
     }
 
+    void BufferMgr::checkpoint() {
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            if (chunkIt -> second -> buffer -> dirty_) {
+                cout << "Flushing: ";
+                for (auto vecIt = chunkIt -> second -> chunkKey.begin(); vecIt != chunkIt -> second -> chunkKey.end(); ++vecIt) {
+                    std::cout << *vecIt << ",";
+                }
+                std::cout << std::endl;
+                fileMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
+            }
+            fileMgr_ -> checkpoint();
+        }
+    }
     
     /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
     /// throws a runtime_error.

@@ -100,7 +100,6 @@ namespace File_Namespace {
     size_t write(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf) {
         //assert(f);
         //assert(buf);
-        
         // write size bytes from the buffer to the offset location in the file
         fseek(f, offset, SEEK_SET);
         size_t bytesWritten = fwrite(buf, sizeof(mapd_byte_t), size, f);
