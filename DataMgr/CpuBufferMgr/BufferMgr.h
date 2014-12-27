@@ -20,12 +20,15 @@ using namespace Memory_Namespace;
 
 namespace Buffer_Namespace {
 
+
     /**
      * @class   BufferMgr
      * @brief
      *
      * Note(s): Forbid Copying Idiom 4.1
      */
+
+
     class BufferMgr : public AbstractDataMgr { // implements
         
     public:
@@ -33,7 +36,7 @@ namespace Buffer_Namespace {
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t
         //explicit BufferMgr(const size_t bufferSize, const mapd_size_t pageSize);
-        BufferMgr(const size_t bufferSize, const size_t pageSize = 512, File_Namespace::FileMgr *fileMgr = 0);
+        BufferMgr(const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, File_Namespace::FileMgr *fileMgr = 0);
         
         /// Destructor
         virtual ~BufferMgr();
@@ -73,31 +76,36 @@ namespace Buffer_Namespace {
 
         inline MgrType getMgrType () {return CPU_MGR;};
 
-        BufferList::iterator reserveBuffer(BufferList::iterator & segIt, size_t numBytes);
+        BufferList::iterator reserveBuffer(BufferList::iterator & segIt, const size_t numBytes);
         
     private:
         BufferMgr(const BufferMgr&); // private copy constructor
         BufferMgr& operator=(const BufferMgr&); // private assignment
+         void removeSegment(BufferList::iterator &segIt);
+        BufferList::iterator findFreeBufferInSlab(const size_t slabNum, const size_t numPagesRequested);
+        void addSlab(const size_t slabSize);
         
 
 
         //std::map<ChunkKey, Buffer*> chunkIndex_;
         std::map<ChunkKey, BufferList::iterator> chunkIndex_;
-        size_t bufferSize_;   /// number of bytes allocated for the buffer pool
+        size_t maxBufferSize_;   /// max number of bytes allocated for the buffer poo
+        size_t slabSize_;   /// size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_)
+        size_t maxNumSlabs_;
         size_t pageSize_;
-        size_t numPages_;
+        size_t numPagesPerSlab_;
         unsigned int bufferEpoch_;
-        mapd_addr_t bufferPool_;       /// beginning memory address of the buffer pool
+        std::vector <mapd_addr_t> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
         File_Namespace::FileMgr *fileMgr_;
-
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap
         //std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
-        BufferList bufferSegments_;
+        std::vector<BufferList> slabSegments_; // last list is for unsized segments
+        BufferList unsizedSegs_;
         //std::map<mapd_size_t, mapd_addr_t> freeMem_;
 
-        BufferList::iterator evict(BufferList::iterator &evictStart, const size_t numPagesRequested);
+        BufferList::iterator evict(BufferList::iterator &evictStart, const size_t numPagesRequested, const int slabNum);
         BufferList::iterator findFreeBuffer(size_t numBytes);
 
         /**

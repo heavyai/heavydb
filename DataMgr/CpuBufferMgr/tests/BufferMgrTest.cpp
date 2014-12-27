@@ -24,7 +24,7 @@ protected:
         const mapd_size_t pageSize = 512;
         deleteData("data");
         fm = new File_Namespace::FileMgr("data");
-        bm = new BufferMgr(memSize,pageSize,fm);
+        bm = new BufferMgr(memSize,slabSize,pageSize,fm);
     }
     
     virtual void TearDown() {
@@ -35,7 +35,8 @@ protected:
         boost::filesystem::remove_all(dirName);
     }
     
-    mapd_size_t memSize = 1 << 28; 
+    mapd_size_t memSize = 1 << 31; 
+    mapd_size_t slabSize = 1 << 29; 
     BufferMgr *bm;
     File_Namespace::FileMgr *fm;
 
@@ -44,7 +45,7 @@ protected:
 
 TEST_F(BufferMgrTest, Constructor)
 {
-    ASSERT_EQ(bm->size(), memSize);
+    ASSERT_EQ(bm->size(), slabSize);
 }
 
 TEST_F(BufferMgrTest, createChunk)
