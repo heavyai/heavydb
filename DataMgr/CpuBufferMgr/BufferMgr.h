@@ -1,6 +1,7 @@
 /**
  * @file	BufferMgr.h
  * @author	Steven Stewart <steve@map-d.com>
+ * @author	Todd Mostak <todd@map-d.com>
  *
  * This file includes the class specification for the buffer manager (BufferMgr), and related
  * data structures and types.
@@ -15,6 +16,7 @@
 #include "../AbstractDataMgr.h"
 #include "../FileMgr/FileMgr.h"
 #include "BufferSeg.h"
+#include <gtest/gtest_prod.h>
 
 using namespace Memory_Namespace;
 
@@ -32,6 +34,8 @@ namespace Buffer_Namespace {
     class BufferMgr : public AbstractDataMgr { // implements
         
     public:
+        //FRIEND_TEST(BufferMgrTest, slabTest);
+        //friend class BufferMgrTest_slabTest_Test;
         
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t

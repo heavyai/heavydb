@@ -1,6 +1,7 @@
 /**
  * @file    BufferMgr.cpp
  * @author  Steven Stewart <steve@map-d.com>
+ * @author  Todd Mostak <todd@map-d.com>
  */
 #include "BufferMgr.h"
 #include "Buffer.h"
@@ -18,9 +19,7 @@ namespace Buffer_Namespace {
         assert(maxBufferSize_ > 0 && slabSize_ > 0 && pageSize_ > 0 && slabSize_ % pageSize_ == 0);
         numPagesPerSlab_ = slabSize_ / pageSize_; 
         maxNumSlabs_ = (maxBufferSize_/slabSize_);
-        slabs_.push_back((mapd_addr_t) new mapd_byte_t[slabSize_]);
-        slabSegments_.resize(1);
-        slabSegments_[0].push_back(BufferSeg(0,numPagesPerSlab_));
+        addSlab(slabSize_);
         unsizedSegs_.clear();
     }
 
@@ -38,13 +37,12 @@ namespace Buffer_Namespace {
         }
         chunkIndex_.clear();
         size_t numBufferSlabs = slabSegments_.size();
-        for (size_t slabNum = 1; slabNum < numBufferSlabs; ++slabNum) {
+        for (size_t slabNum = 0; slabNum < numBufferSlabs; ++slabNum) {
             delete [] slabs_[slabNum];
         }
-        slabs_.resize(1);
+        slabs_.clear();
         slabSegments_.clear();
-        slabSegments_.resize(1);
-        slabSegments_[0].push_back(BufferSeg(0,numPagesPerSlab_));
+        addSlab(slabSize_);
         unsizedSegs_.clear();
         bufferEpoch_ = 0;
     }
@@ -102,11 +100,14 @@ namespace Buffer_Namespace {
 
     BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator &segIt, const size_t numBytes) {
         // doesn't resize to be smaller - like std::reserve
-
+        cout << "Reserve number bytes: " << numBytes << endl;
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
+        cout << "Reserve actual number bytes: " << numPagesRequested * pageSize_ << endl;
         size_t numPagesExtraNeeded = numPagesRequested -  segIt -> numPages;
        
-        if (numPagesExtraNeeded < segIt -> numPages) { // We already have enough pages in existing segment
+        cout << "Num extra pages needed: " << numPagesExtraNeeded << endl;
+
+        if (numPagesRequested < segIt -> numPages) { // We already have enough pages in existing segment
             return segIt;
         }
         // First check for freeSeg after segIt 
@@ -115,8 +116,9 @@ namespace Buffer_Namespace {
             BufferList::iterator nextIt = std::next(segIt);
             if (nextIt != slabSegments_[slabNum].end() && nextIt -> memStatus == FREE && nextIt -> numPages >= numPagesExtraNeeded) { // Then we can just use the next BufferSeg which happens to be free
                 size_t leftoverPages = nextIt -> numPages - numPagesExtraNeeded;
-                nextIt -> numPages = leftoverPages;
                 segIt -> numPages = numPagesRequested;
+                nextIt -> numPages = leftoverPages;
+                nextIt -> startPage = segIt -> startPage + segIt -> numPages;
                 return segIt;
             }
         }
@@ -190,6 +192,12 @@ namespace Buffer_Namespace {
         slabs_.push_back((mapd_addr_t) new mapd_byte_t[slabSize]);
         slabSegments_.resize(slabSegments_.size()+1);
         slabSegments_[slabSegments_.size()-1].push_back(BufferSeg(0,numPagesPerSlab_));
+        /*
+        if (slabs_.size() > 1) {
+            cout << "Num slabs: " << slabs_.size() << endl;
+            cin.get();
+        }
+        */
     }
 
     BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
