@@ -88,20 +88,25 @@ int32_t key_hash(const int64_t* key, const int32_t key_qw_count, const int32_t g
   return hash;
 }
 
+#define EMPTY_KEY std::numeric_limits<int64_t>::min()
+
 extern "C" __attribute__((always_inline))
 int64_t* get_matching_group_value(int64_t* groups_buffer,
                                   const int32_t h,
                                   const int64_t* key,
                                   const int32_t key_qw_count) {
   auto off = h * (key_qw_count + 1);
+  if (groups_buffer[off] == EMPTY_KEY) {
+    memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
+    return groups_buffer + off + key_qw_count;
+  }
   if (memcmp(groups_buffer + off, key, key_qw_count * sizeof(*key)) == 0) {
     return groups_buffer + off + key_qw_count;
   }
   return nullptr;
 }
 
-#define EMPTY_KEY std::numeric_limits<int64_t>::min()
-
+extern "C"
 void init_groups(int64_t* groups_buffer,
                  const int32_t groups_buffer_entry_count,
                  const int32_t key_qw_count) {
@@ -111,6 +116,7 @@ void init_groups(int64_t* groups_buffer,
   }
 }
 
+extern "C"
 int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t groups_buffer_entry_count,
                          const int64_t* key,
@@ -122,25 +128,12 @@ int64_t* get_group_value(int64_t* groups_buffer,
   }
   auto h_probe = h + 1;
   while (h_probe != h) {
-    ++h_probe;
-    matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count);
+    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count);
     if (matching_group) {
       return matching_group;
     }
+    h_probe = (h_probe + 1) % groups_buffer_entry_count;
   }
   // TODO(alex): handle error by resizing?
   return nullptr;
-}
-
-extern "C" __attribute__((always_inline))
-int64_t* set_group_value(int64_t* groups_buffer,
-                         const int32_t groups_buffer_entry_count,
-                         const int64_t* key,
-                         const int32_t key_qw_count,
-                         const int64_t value) {
-  auto gv = get_group_value(groups_buffer, groups_buffer_entry_count, key, key_qw_count);
-  if (gv) {
-    *gv = value;
-  }
-  return gv;
 }
