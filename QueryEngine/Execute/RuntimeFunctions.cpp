@@ -69,12 +69,26 @@ void query_template(const int8_t** byte_stream,
                     int64_t* out) {
   auto row_count = *row_count_ptr;
   auto result = *agg_init_val;
-  const int32_t start = pos_start();
-  int32_t step = pos_step();
+  const auto start = pos_start();
+  const auto step = pos_step();
   for (int64_t pos = start; pos < row_count; pos += step) {
     row_process(&result, pos);
   }
   out[start] = result;
+}
+
+extern "C"
+void query_group_by_template(const int8_t** byte_stream,
+                    const int64_t* row_count_ptr,
+                    const int64_t* agg_init_val,
+                    int64_t** group_by_buffers) {
+  auto row_count = *row_count_ptr;
+  const auto start = pos_start();
+  const auto step = pos_step();
+  auto group_by_buffer = group_by_buffers[start];
+  for (int64_t pos = start; pos < row_count; pos += step) {
+    row_process(group_by_buffer, pos);
+  }
 }
 
 extern "C" __attribute__((always_inline))

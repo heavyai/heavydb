@@ -35,6 +35,8 @@ int main() {
       std::make_shared<ImmInt64>(41)
     ),
     nullptr,
+    {},
+    0,
     "agg_count",
     "query_template",
     "row_process",
@@ -53,5 +55,6 @@ int main() {
     reinterpret_cast<agg_query>(cgen.getNativeCode())(byte_stream, &N, &init_agg_value, &out);
     LOG(INFO) << out;
   });
+
   return 0;
 }

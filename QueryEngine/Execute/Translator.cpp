@@ -302,11 +302,15 @@ namespace {
 std::vector<llvm::Value*> generate_column_heads_load(
     std::shared_ptr<AstNode> filter,
     std::shared_ptr<AstNode> aggr_col,
+    const std::vector<std::shared_ptr<AstNode>>& group_by_cols,
     llvm::Function* query_func) {
   std::unordered_set<int> columns_used;
   filter->collectUsedColumns(columns_used);
   if (aggr_col) {
     aggr_col->collectUsedColumns(columns_used);
+  }
+  for (auto group_by_col : group_by_cols) {
+    group_by_col->collectUsedColumns(columns_used);
   }
   auto max_col_used = *(std::max_element(columns_used.begin(), columns_used.end()));
   CHECK_EQ(max_col_used + 1, columns_used.size());
@@ -343,6 +347,8 @@ void call_aggregator(
     std::shared_ptr<AstNode> aggr_col,
     const std::string& agg_name,
     llvm::Value* filter_result,
+    const std::vector<std::shared_ptr<AstNode>>& group_by_cols,
+    const int32_t groups_buffer_entry_count,
     llvm::Function* row_func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
@@ -353,10 +359,37 @@ void call_aggregator(
 
   ir_builder.CreateCondBr(filter_result, filter_true, filter_false);
   ir_builder.SetInsertPoint(filter_true);
+
+  llvm::Value* agg_out_ptr { nullptr };
+
+  if (!group_by_cols.empty()) {
+    auto group_keys_buffer = ir_builder.CreateAlloca(
+      llvm::Type::getInt64Ty(context),
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size()));
+    for (size_t i = 0; i < group_by_cols.size(); ++i) {
+      auto group_key = group_by_cols[i]->codegen(row_func, ir_builder, module);
+      auto group_key_ptr = ir_builder.CreateGEP(group_keys_buffer,
+          llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
+      ir_builder.CreateStore(group_key, group_key_ptr);
+    }
+    auto get_group_value_func = module->getFunction("get_group_value");
+    CHECK(get_group_value_func);
+    auto& groups_buffer = row_func->getArgumentList().front();
+    std::vector<llvm::Value*> get_group_value_args {
+      &groups_buffer,
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), groups_buffer_entry_count),
+      group_keys_buffer,
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size())
+    };
+    agg_out_ptr = ir_builder.CreateCall(get_group_value_func, get_group_value_args);
+  } else {
+    auto& agg_out = row_func->getArgumentList().front();
+    agg_out_ptr = &agg_out;
+  }
+
   auto agg_func = module->getFunction(agg_name);
   CHECK(agg_func);
-  auto& agg_out = row_func->getArgumentList().front();
-  std::vector<llvm::Value*> agg_args { &agg_out, aggr_col
+  std::vector<llvm::Value*> agg_args { agg_out_ptr, aggr_col
     ? aggr_col->codegen(row_func, ir_builder, module)
     : llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0) };
   ir_builder.CreateCall(agg_func, agg_args);
@@ -370,6 +403,8 @@ void call_aggregator(
 AggQueryCodeGenerator::AggQueryCodeGenerator(
     std::shared_ptr<AstNode> filter,
     std::shared_ptr<AstNode> aggr_col,
+    const std::vector<std::shared_ptr<AstNode>>& group_by_cols,
+    const int32_t groups_buffer_entry_count,
     const std::string& agg_name,
     const std::string& query_template_name,
     const std::string& row_process_name,
@@ -392,7 +427,7 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   bind_pos_placeholders(pos_start_name, query_func, module);
   bind_pos_placeholders(pos_step_name, query_func, module);
 
-  auto col_heads = generate_column_heads_load(filter, aggr_col, query_func);
+  auto col_heads = generate_column_heads_load(filter, aggr_col, group_by_cols, query_func);
 
   std::vector<llvm::Type*> row_process_arg_types {
     llvm::Type::getInt64PtrTy(context),
@@ -418,7 +453,8 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   auto filter_result = filter->codegen(row_func, ir_builder, module);
   CHECK(filter_result->getType()->isIntegerTy(1));
 
-  call_aggregator(aggr_col, agg_name, filter_result, row_func, ir_builder, module);
+  call_aggregator(aggr_col, agg_name, filter_result, group_by_cols, groups_buffer_entry_count,
+      row_func, ir_builder, module);
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter

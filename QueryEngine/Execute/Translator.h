@@ -265,6 +265,8 @@ public:
   AggQueryCodeGenerator(
       std::shared_ptr<AstNode> filter,
       std::shared_ptr<AstNode> aggr_col,
+      const std::vector<std::shared_ptr<AstNode>>& group_by_cols,
+      const int32_t groups_buffer_entry_count,
       const std::string& agg_name,
       const std::string& query_template_name,
       const std::string& row_process_name,
