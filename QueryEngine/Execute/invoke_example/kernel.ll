@@ -23,7 +23,7 @@ define i32 @pos_step_impl() {
 }
 
 ; Function Attrs: uwtable
-define void @kernel(i8** %byte_stream, i64* nocapture readonly %row_count_ptr, i64* nocapture readonly %agg_init_val, i64* nocapture %out) #3 {
+define void @kernel(i8** nocapture readnone %byte_stream, i64* nocapture readonly %row_count_ptr, i64* nocapture readonly %agg_init_val, i64* nocapture %out) #3 {
   %1 = getelementptr i8** %byte_stream, i32 0
   %2 = load i8** %1
   %3 = load i64* %row_count_ptr, align 8
@@ -32,39 +32,38 @@ define void @kernel(i8** %byte_stream, i64* nocapture readonly %row_count_ptr, i
   %6 = call i32 @pos_step_impl()
   %7 = sext i32 %5 to i64
   %8 = icmp slt i64 %7, %3
-  br i1 %8, label %.lr.ph, label %21
+  br i1 %8, label %.lr.ph, label %18
 
 .lr.ph:                                           ; preds = %0
   %9 = sext i32 %6 to i64
   br label %10
 
-; <label>:10                                      ; preds = %18, %.lr.ph
-  %result.0 = phi i64 [ %4, %.lr.ph ], [ %result.1, %18 ]
-  %pos.01 = phi i64 [ %7, %.lr.ph ], [ %19, %18 ]
+; <label>:10                                      ; preds = %row_func.exit, %.lr.ph
+  %result.0 = phi i64 [ %4, %.lr.ph ], [ %result.1, %row_func.exit ]
+  %pos.01 = phi i64 [ %7, %.lr.ph ], [ %16, %row_func.exit ]
   %11 = getelementptr inbounds i8* %2, i64 %pos.01
   %12 = load i8* %11, align 1
   %13 = sext i8 %12 to i64
   %14 = icmp sgt i64 %13, 41
-  %15 = icmp eq i1 %14, 0
-  br i1 %15, label %18, label %16
+  br i1 %14, label %filter_true.i, label %row_func.exit
 
-; <label>:16                                      ; preds = %10
-  %17 = add nsw i64 %result.0, 1
+filter_true.i:                                    ; preds = %10
+  %15 = add nsw i64 %result.0, 1
+  br label %row_func.exit
+
+row_func.exit:                                    ; preds = %10, %filter_true.i
+  %result.1 = phi i64 [ %15, %filter_true.i ], [ %result.0, %10 ]
+  %16 = add nsw i64 %pos.01, %9
+  %17 = icmp slt i64 %16, %3
+  br i1 %17, label %10, label %._crit_edge
+
+._crit_edge:                                      ; preds = %row_func.exit
   br label %18
 
-; <label>:18                                      ; preds = %16, %10
-  %result.1 = phi i64 [ %result.0, %10 ], [ %17, %16 ]
-  %19 = add nsw i64 %pos.01, %9
-  %20 = icmp slt i64 %19, %3
-  br i1 %20, label %10, label %._crit_edge
-
-._crit_edge:                                      ; preds = %18
-  br label %21
-
-; <label>:21                                      ; preds = %._crit_edge, %0
-  %22 = phi i64 [ %result.1, %._crit_edge ], [ %4, %0 ]
-  %23 = getelementptr inbounds i64* %out, i64 %7
-  store i64 %22, i64* %23, align 8
+; <label>:18                                      ; preds = %._crit_edge, %0
+  %19 = phi i64 [ %result.1, %._crit_edge ], [ %4, %0 ]
+  %20 = getelementptr inbounds i64* %out, i64 %7
+  store i64 %19, i64* %20, align 8
   ret void
 }
 

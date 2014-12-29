@@ -34,14 +34,12 @@ int main() {
       std::make_shared<FetchInt64Col>(0, std::make_shared<FixedWidthInt64>(1)),
       std::make_shared<ImmInt64>(41)
     ),
-    "filter_and_agg_template",
-    "filter_placeholder",
-    "agg_placeholder",
+    nullptr,
+    "agg_count",
+    "query_template",
+    "row_process",
     "pos_start",
-    "pos_step",
-    0,
-    std::make_shared<FixedWidthInt64>(1),
-    "count"
+    "pos_step"
   );
 
   int64_t N = 3000 * 1000 * 1000L;

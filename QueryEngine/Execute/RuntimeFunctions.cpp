@@ -60,21 +60,19 @@ void agg_min(int64_t* agg, const int64_t val) {
   *agg = std::min(*agg, val);
 }
 
-extern "C" int64_t agg_placeholder(int64_t* agg, const int64_t pos, const int8_t* byte_stream);
+extern "C" void row_process(int64_t* out, const int64_t pos);
 
 extern "C"
-void filter_and_agg_template(const int8_t** byte_stream,
-                             const int64_t* row_count_ptr,
-                             const int64_t* agg_init_val,
-                             int64_t* out) {
+void query_template(const int8_t** byte_stream,
+                    const int64_t* row_count_ptr,
+                    const int64_t* agg_init_val,
+                    int64_t* out) {
   auto row_count = *row_count_ptr;
   auto result = *agg_init_val;
   const int32_t start = pos_start();
   int32_t step = pos_step();
   for (int64_t pos = start; pos < row_count; pos += step) {
-    if (filter_placeholder(pos, byte_stream)) {
-      agg_placeholder(&result, pos, nullptr);
-    }
+    row_process(&result, pos);
   }
   out[start] = result;
 }
