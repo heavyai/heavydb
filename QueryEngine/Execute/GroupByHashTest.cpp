@@ -11,14 +11,8 @@ extern "C" int32_t pos_step() {
   return -1;
 }
 
-extern "C"
-int64_t filter_placeholder(const int64_t pos, const int8_t** byte_stream) {
-  return -1;
-}
-
-extern "C"
-int64_t agg_placeholder(int64_t* agg, const int64_t pos, const int8_t* byte_stream) {
-  return -1;
+extern "C" void row_process(int64_t* out, const int64_t pos) {
+  return;
 }
 
 extern "C"
