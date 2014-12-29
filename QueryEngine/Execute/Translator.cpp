@@ -358,7 +358,7 @@ void call_aggregator(
   auto& agg_out = row_func->getArgumentList().front();
   std::vector<llvm::Value*> agg_args { &agg_out, aggr_col
     ? aggr_col->codegen(row_func, ir_builder, module)
-    : llvm::ConstantPointerNull::get(llvm::Type::getInt64PtrTy(context)) };
+    : llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0) };
   ir_builder.CreateCall(agg_func, agg_args);
   ir_builder.CreateBr(filter_false);
   ir_builder.SetInsertPoint(filter_false);
