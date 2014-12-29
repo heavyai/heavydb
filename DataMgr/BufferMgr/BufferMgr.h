@@ -14,7 +14,6 @@
 #include <list>
 #include "../AbstractBuffer.h"
 #include "../AbstractDataMgr.h"
-#include "../FileMgr/FileMgr.h"
 #include "BufferSeg.h"
 #include <gtest/gtest_prod.h>
 
@@ -40,7 +39,7 @@ namespace Buffer_Namespace {
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t
         //explicit BufferMgr(const size_t bufferSize, const mapd_size_t pageSize);
-        BufferMgr(const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, File_Namespace::FileMgr *fileMgr = 0);
+        BufferMgr(const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractDataMgr *parentMgr = 0);
         
         /// Destructor
         virtual ~BufferMgr();
@@ -52,7 +51,7 @@ namespace Buffer_Namespace {
         void printSeg(BufferList::iterator &segIt);
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t initialSize = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
@@ -105,7 +104,8 @@ namespace Buffer_Namespace {
         size_t maxNumSlabs_;
         size_t pageSize_;
         unsigned int bufferEpoch_;
-        File_Namespace::FileMgr *fileMgr_;
+        AbstractDataMgr *parentMgr_;
+        //File_Namespace::FileMgr *fileMgr_;
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap

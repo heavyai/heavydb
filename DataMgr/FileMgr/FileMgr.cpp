@@ -227,6 +227,7 @@ namespace File_Namespace {
         return chunkIt->second;
     }
 
+
     void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
@@ -238,6 +239,7 @@ namespace File_Namespace {
         // just look at pageSize * numPages in FileBuffer
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
         destBuffer->reserve(chunkSize);
+        destBuffer->setSize(chunkSize);
         std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         chunk->read(destBuffer->getMemoryPtr(),chunkSize,0);
     }

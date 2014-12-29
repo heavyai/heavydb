@@ -16,7 +16,7 @@
 
 namespace Buffer_Namespace {
 
-    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): bm_(bm), segIt_(segIt), pageSize_(pageSize), dirty_(false), mem_(0), numPages_(0) {
+    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): AbstractBuffer(), bm_(bm), segIt_(segIt), pageSize_(pageSize), mem_(0), numPages_(0) {
         // so that the pointer value of this Buffer is stored
         segIt_ -> buffer = this;
         if (numBytes > 0) {
@@ -47,13 +47,15 @@ namespace Buffer_Namespace {
         if (numPages > numPages_) {
             pageDirtyFlags_.resize(numPages);
             numPages_ = numPages;
-            segIt_ = bm_ -> reserveBuffer(segIt_,size());
+            segIt_ = bm_ -> reserveBuffer(segIt_,reservedSize());
         }
     }
     
     void Buffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
         assert(dst && mem_);
-        if (numBytes + offset > size()) {
+        std::cout << "Buffer size: " << size_ << std::endl;
+        std::cout << "Bytes to read: " << numBytes << std::endl;
+        if (numBytes + offset > size_) {
             throw std::runtime_error("Buffer: Out of bounds read error");
         }
         readData(dst,numBytes,offset);
@@ -62,25 +64,42 @@ namespace Buffer_Namespace {
     
     void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset) {
         assert(numBytes > 0); // cannot write 0 bytes
-        if (numBytes + offset > size()) {
+        if (numBytes + offset > reservedSize()) {
             reserve(numBytes+offset);
             //bm_ -> reserveBuffer(segIt_,numBytes + offset);
         }
+        std::cout << "Size at beginning of write: " << size_ << std::endl;
         // write source contents to buffer
         //assert(mem_ && src);
         writeData(src,numBytes,offset);
         //memcpy(mem_ + offset, src, numBytes);
         
         // update dirty flags for buffer and each affected page
-        dirty_ = true;
+        isDirty_ = true;
+        if (offset < size_) {
+            isUpdated_ = true;
+        }
+        if (offset + numBytes > size_) {
+            isAppended_ = true;
+            size_ = offset+numBytes;
+        }
+        std::cout << "Size after write: " << size_ << std::endl;
+
         mapd_size_t firstDirtyPage = offset / pageSize_;
         mapd_size_t lastDirtyPage = (offset + numBytes - 1) / pageSize_;
         for (mapd_size_t i = firstDirtyPage; i <= lastDirtyPage; ++i) {
             pageDirtyFlags_[i] = true;
         }
     }
-    
-    
+
+    void Buffer::append(mapd_addr_t src, const mapd_size_t numBytes) {
+        isDirty_ = true;
+        isAppended_ = true;
+        size_ = size_ + numBytes;
+        writeData(src,numBytes,size_);
+        // Do we worry about dirty flags here or does append avoid themj
+    }
+
     mapd_byte_t* Buffer::getMemoryPtr() {
         return mem_;
     }

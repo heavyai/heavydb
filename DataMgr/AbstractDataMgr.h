@@ -37,6 +37,7 @@ namespace Memory_Namespace {
         virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0) = 0;
         virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes = 0) = 0;
         virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes = 0) = 0;
+        virtual void checkpoint() = 0;
 
         // Buffer API
         virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t numBytes) = 0;

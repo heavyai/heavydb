@@ -46,6 +46,7 @@ protected:
 TEST_F(CpuBufferMgrTest, Constructor)
 {
     ASSERT_EQ(bm->size(), 0);
+    ASSERT_EQ(bm->size(), 0);
 }
 
 TEST_F(CpuBufferMgrTest, createChunk)

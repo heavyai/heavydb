@@ -4,7 +4,7 @@
 
 namespace Buffer_Namespace {
 
-    CpuBufferMgr::CpuBufferMgr(const size_t maxBufferSize, const CpuBufferMgrMemType cpuBufferMgrMemType, const size_t bufferAllocIncrement,  const size_t pageSize, File_Namespace::FileMgr *fileMgr) : BufferMgr(maxBufferSize, bufferAllocIncrement, pageSize, fileMgr), cpuBufferMgrMemType_(cpuBufferMgrMemType) {}
+    CpuBufferMgr::CpuBufferMgr(const size_t maxBufferSize, const CpuBufferMgrMemType cpuBufferMgrMemType, const size_t bufferAllocIncrement,  const size_t pageSize, AbstractDataMgr *parentMgr) : BufferMgr(maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cpuBufferMgrMemType_(cpuBufferMgrMemType) {}
 
     CpuBufferMgr::~CpuBufferMgr() {
         freeAllMem();

@@ -15,7 +15,7 @@ using namespace std;
 namespace Buffer_Namespace {
 
     /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
-    BufferMgr::BufferMgr(const size_t maxBufferSize, const size_t slabSize, const size_t pageSize, File_Namespace::FileMgr *fileMgr): maxBufferSize_(maxBufferSize), slabSize_(slabSize), pageSize_(pageSize), fileMgr_(fileMgr), bufferEpoch_(0) {
+    BufferMgr::BufferMgr(const size_t maxBufferSize, const size_t slabSize, const size_t pageSize, AbstractDataMgr *parentMgr): maxBufferSize_(maxBufferSize), slabSize_(slabSize), pageSize_(pageSize), parentMgr_(parentMgr), bufferEpoch_(0) {
         assert(maxBufferSize_ > 0 && slabSize_ > 0 && pageSize_ > 0 && slabSize_ % pageSize_ == 0);
         numPagesPerSlab_ = slabSize_ / pageSize_; 
         maxNumSlabs_ = (maxBufferSize_/slabSize_);
@@ -41,7 +41,7 @@ namespace Buffer_Namespace {
     }
     
     /// Throws a runtime_error if the Chunk already exists
-    AbstractBuffer * BufferMgr::createChunk(const ChunkKey &chunkKey, const mapd_size_t chunkPageSize, const size_t initialSize) {
+    AbstractBuffer * BufferMgr::createChunk(const ChunkKey &chunkKey, const mapd_size_t chunkPageSize, const mapd_size_t initialSize) {
         assert (chunkPageSize == pageSize_);
         // ChunkPageSize here is just for recording dirty pages
         if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
@@ -179,18 +179,6 @@ namespace Buffer_Namespace {
             // sufficient size in
             // this slab, return the end iterator
             return slabSegments_[slabNum].end();
-    }
-
-    void BufferMgr::addSlab(const size_t slabSize) {
-        slabs_.push_back((mapd_addr_t) new mapd_byte_t[slabSize]);
-        slabSegments_.resize(slabSegments_.size()+1);
-        slabSegments_[slabSegments_.size()-1].push_back(BufferSeg(0,numPagesPerSlab_));
-        /*
-        if (slabs_.size() > 1) {
-            cout << "Num slabs: " << slabs_.size() << endl;
-            cin.get();
-        }
-        */
     }
 
     BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
@@ -413,15 +401,15 @@ namespace Buffer_Namespace {
 
     void BufferMgr::checkpoint() {
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            if (chunkIt -> second -> buffer -> dirty_) {
+            if (chunkIt -> second -> buffer -> isDirty_) {
                 cout << "Flushing: ";
                 for (auto vecIt = chunkIt -> second -> chunkKey.begin(); vecIt != chunkIt -> second -> chunkKey.end(); ++vecIt) {
                     std::cout << *vecIt << ",";
                 }
                 std::cout << std::endl;
-                fileMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
+                parentMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
             }
-            fileMgr_ -> checkpoint();
+            parentMgr_ -> checkpoint();
         }
     }
     
@@ -437,7 +425,7 @@ namespace Buffer_Namespace {
         else { // If wasn't in pool then we need to fetch it
             AbstractBuffer * buffer = createChunk(key,pageSize_,numBytes);
             cout << "About to fetchChunk" << endl;
-            fileMgr_ -> fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
+            parentMgr_ -> fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
             return buffer;
         }
     }
