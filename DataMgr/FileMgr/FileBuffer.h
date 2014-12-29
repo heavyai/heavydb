@@ -11,6 +11,7 @@
 #include "Page.h"
 
 #include <iostream>
+#include <stdexcept>
 
 using namespace Memory_Namespace;
 

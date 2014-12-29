@@ -19,16 +19,12 @@ namespace Buffer_Namespace {
         assert(maxBufferSize_ > 0 && slabSize_ > 0 && pageSize_ > 0 && slabSize_ % pageSize_ == 0);
         numPagesPerSlab_ = slabSize_ / pageSize_; 
         maxNumSlabs_ = (maxBufferSize_/slabSize_);
-        addSlab(slabSize_);
-        unsizedSegs_.clear();
+        //addSlab(slabSize_);
     }
 
     /// Frees the heap-allocated buffer pool memory
     BufferMgr::~BufferMgr() {
         clear();
-        for (auto bufIt = slabs_.begin(); bufIt != slabs_.end(); ++bufIt) { 
-            delete [] *bufIt;
-        }
     }
 
     void BufferMgr::clear() {
@@ -37,12 +33,9 @@ namespace Buffer_Namespace {
         }
         chunkIndex_.clear();
         size_t numBufferSlabs = slabSegments_.size();
-        for (size_t slabNum = 0; slabNum < numBufferSlabs; ++slabNum) {
-            delete [] slabs_[slabNum];
-        }
         slabs_.clear();
         slabSegments_.clear();
-        addSlab(slabSize_);
+        //addSlab(slabSize_);
         unsizedSegs_.clear();
         bufferEpoch_ = 0;
     }
@@ -58,9 +51,9 @@ namespace Buffer_Namespace {
         bufferSeg.chunkKey = chunkKey;
         unsizedSegs_.push_back(bufferSeg);
         chunkIndex_[chunkKey] = std::prev(unsizedSegs_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
-    
+        createBuffer(chunkIndex_[chunkKey],chunkPageSize,initialSize); 
         //slabSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(slabSegments_.end(),1), chunkPageSize, initialSize); 
-        new Buffer(this, chunkIndex_[chunkKey], chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
+        //new Buffer(this, chunkIndex_[chunkKey], chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
 
         return chunkIndex_[chunkKey] -> buffer;
     }
@@ -448,6 +441,8 @@ namespace Buffer_Namespace {
             return buffer;
         }
     }
+
+    //void BufferMgr::getChunks(
 
     void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
         throw std::runtime_error("Not implemented");

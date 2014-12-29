@@ -10,6 +10,7 @@
 #include <cassert>
 #include <deque>
 #include <vector>
+#include <stdexcept>
 #include "../../Shared/types.h"
 
 namespace File_Namespace {

@@ -81,13 +81,20 @@ namespace Buffer_Namespace {
         inline MgrType getMgrType () {return CPU_MGR;};
 
         BufferList::iterator reserveBuffer(BufferList::iterator & segIt, const size_t numBytes);
-        
+       
+    protected: 
+        std::vector <mapd_addr_t> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
+        std::vector<BufferList> slabSegments_; // last list is for unsized segments
+        size_t numPagesPerSlab_;
+
     private:
         BufferMgr(const BufferMgr&); // private copy constructor
         BufferMgr& operator=(const BufferMgr&); // private assignment
          void removeSegment(BufferList::iterator &segIt);
         BufferList::iterator findFreeBufferInSlab(const size_t slabNum, const size_t numPagesRequested);
-        void addSlab(const size_t slabSize);
+        virtual void addSlab(const size_t slabSize) = 0;
+        virtual void freeAllMem() = 0;
+        virtual void createBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
         
 
 
@@ -97,15 +104,12 @@ namespace Buffer_Namespace {
         size_t slabSize_;   /// size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_)
         size_t maxNumSlabs_;
         size_t pageSize_;
-        size_t numPagesPerSlab_;
         unsigned int bufferEpoch_;
-        std::vector <mapd_addr_t> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
         File_Namespace::FileMgr *fileMgr_;
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap
         //std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
-        std::vector<BufferList> slabSegments_; // last list is for unsized segments
         BufferList unsizedSegs_;
         //std::map<mapd_size_t, mapd_addr_t> freeMem_;
 

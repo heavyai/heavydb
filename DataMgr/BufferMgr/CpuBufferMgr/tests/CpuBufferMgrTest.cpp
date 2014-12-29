@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
-#include "../BufferMgr.h"
-#include "../../FileMgr/FileMgr.h"
+#include "../CpuBufferMgr.h"
+#include "../../../FileMgr/FileMgr.h"
 
 #include <boost/timer/timer.hpp>
 #include <boost/filesystem.hpp>
@@ -17,13 +17,13 @@ GTEST_API_ int main(int argc, char **argv) {
     return RUN_ALL_TESTS();
 }
 
-class BufferMgrTest : public ::testing::Test {
+class CpuBufferMgrTest : public ::testing::Test {
     
 protected:
     virtual void SetUp() {
         deleteData("data");
         fm = new File_Namespace::FileMgr("data");
-        bm = new BufferMgr(memSize,slabSize,pageSize,fm);
+        bm = new CpuBufferMgr(memSize,CPU_HOST,slabSize,pageSize,fm);
     }
     
     virtual void TearDown() {
@@ -37,18 +37,18 @@ protected:
     mapd_size_t memSize = 1 << 31; 
     mapd_size_t slabSize = 1 << 28; 
     mapd_size_t pageSize = 512;
-    BufferMgr *bm;
+    CpuBufferMgr *bm;
     File_Namespace::FileMgr *fm;
 
 };
 
 
-TEST_F(BufferMgrTest, Constructor)
+TEST_F(CpuBufferMgrTest, Constructor)
 {
-    ASSERT_EQ(bm->size(), slabSize);
+    ASSERT_EQ(bm->size(), 0);
 }
 
-TEST_F(BufferMgrTest, createChunk)
+TEST_F(CpuBufferMgrTest, createChunk)
 {
     bm->clear();
     
@@ -73,7 +73,7 @@ TEST_F(BufferMgrTest, createChunk)
     
 }
 
-TEST_F(BufferMgrTest, createChunks)
+TEST_F(CpuBufferMgrTest, createChunks)
 {
     bm->clear();
     
@@ -96,7 +96,7 @@ TEST_F(BufferMgrTest, createChunks)
     bm->printMap();
 }
 
-TEST_F(BufferMgrTest, readAndWrite) {
+TEST_F(CpuBufferMgrTest, readAndWrite) {
     bm->clear();
     ChunkKey chunkKey1 = {1,2,3,4};
     //ChunkKey chunkKey2 = {2,3,4,5};
@@ -146,10 +146,10 @@ TEST_F(BufferMgrTest, readAndWrite) {
     delete [] diskData;
 }
 
-TEST_F(BufferMgrTest, slabAllocationTest) {
+TEST_F(CpuBufferMgrTest, slabAllocationTest) {
     bm->clear();
     //EXPECT_EQ(bm->slabs_.size(),1);
-    EXPECT_EQ(bm->size(), slabSize);
+    EXPECT_EQ(bm->size(), 0);
     ChunkKey chunkKey1 = {1,2,3,4};
     ChunkKey chunkKey2 = {2,3,4,5};
     ChunkKey chunkKey3 = {3,4,5,6};
@@ -175,7 +175,7 @@ TEST_F(BufferMgrTest, slabAllocationTest) {
 
     //Migrate to new slab
     bm->clear();
-    EXPECT_EQ(bm->size(), slabSize);
+    EXPECT_EQ(bm->size(), 0);
     bm -> createChunk(chunkKey1, pageSize, chunkSize);
     EXPECT_EQ(slabSize, bm->size());
     bm -> createChunk(chunkKey3, pageSize, 2048);

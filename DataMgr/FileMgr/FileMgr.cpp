@@ -6,7 +6,7 @@
 
 #include "FileMgr.h"
 #include "File.h"
-#include "../../../Shared/global.h"
+#include "../../Shared/global.h"
 #include <string>
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>

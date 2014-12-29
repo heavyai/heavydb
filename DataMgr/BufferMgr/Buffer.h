@@ -101,15 +101,17 @@ namespace Buffer_Namespace {
         inline bool isDirty() const {
             return dirty_;
         }
+    protected:
+        mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
         
     private:
 
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
-        //ChunkKey chunkKey_;
+        virtual void readData(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) = 0;
+        virtual void writeData(mapd_addr_t const src, const mapd_size_t numBytes, const mapd_size_t offset) = 0;
 
         BufferList::iterator segIt_;
-        mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
         BufferMgr * bm_;
         //mapd_size_t numBytes_;
         mapd_size_t pageSize_;      /// the size of each page in the buffer

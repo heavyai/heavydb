@@ -2,7 +2,9 @@
 //  Buffer.cpp
 //  mapd2
 //
-//  Created by Steven Stewart on 8/27/14.
+//  @author Steven Stewart <steve@map-d.com>
+//  @author Todd Mostak <todd@map-d.com>
+//
 //  Copyright (c) 2014 MapD Technologies, Inc. All rights reserved.
 //
 #include <cassert>
@@ -54,7 +56,8 @@ namespace Buffer_Namespace {
         if (numBytes + offset > size()) {
             throw std::runtime_error("Buffer: Out of bounds read error");
         }
-        memcpy(dst, mem_ + offset, numBytes);
+        readData(dst,numBytes,offset);
+        //memcpy(dst, mem_ + offset, numBytes);
     }
     
     void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset) {
@@ -64,8 +67,9 @@ namespace Buffer_Namespace {
             //bm_ -> reserveBuffer(segIt_,numBytes + offset);
         }
         // write source contents to buffer
-        assert(mem_ && src);
-        memcpy(mem_ + offset, src, numBytes);
+        //assert(mem_ && src);
+        writeData(src,numBytes,offset);
+        //memcpy(mem_ + offset, src, numBytes);
         
         // update dirty flags for buffer and each affected page
         dirty_ = true;
