@@ -1,31 +1,9 @@
+#include "RuntimeFunctions.h"
+
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <numeric>
 
-
-extern "C" int32_t pos_start() {
-  return -1;
-}
-
-extern "C" int32_t pos_step() {
-  return -1;
-}
-
-extern "C" void row_process(int64_t* out, const int64_t pos) {
-  return;
-}
-
-extern "C"
-void init_groups(int64_t* groups_buffer,
-                 const int32_t groups_buffer_entry_count,
-                 const int32_t key_qw_count,
-                 const int64_t init_val);
-
-extern "C"
-int64_t* get_group_value(int64_t* groups_buffer,
-                         const int32_t groups_buffer_entry_count,
-                         const int64_t* key,
-                         const int32_t key_qw_count);
 
 class GroupsBuffer {
 public:

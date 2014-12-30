@@ -1,7 +1,7 @@
-main: Codec.cpp Translator.cpp main.cpp Codec.h Translator.h runtime_ll.o
-	clang++ -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -rdynamic -std=c++11 -I`llvm-config --includedir` -Wall -O3 -o main runtime_ll.o main.cpp Codec.cpp Translator.cpp `llvm-config --ldflags --libs` -ldl -lglog -lpthread -ltinfo -lz
+main: Codec.cpp RuntimeFunctions.cpp RuntimeStubs.cpp Translator.cpp main.cpp Codec.h Translator.h runtime_ll.o
+	clang++ -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -rdynamic -std=c++11 -I`llvm-config --includedir` -Wall -O3 -o main runtime_ll.o main.cpp Codec.cpp RuntimeFunctions.cpp RuntimeStubs.cpp Translator.cpp `llvm-config --ldflags --libs` -ldl -lglog -lpthread -ltinfo -lz
 
-group_by_hash_test: GroupByHashTest.cpp RuntimeFunctions.cpp
+group_by_hash_test: GroupByHashTest.cpp RuntimeFunctions.cpp RuntimeStubs.cpp
 	clang++ -std=c++11 -Wall -O3 -o group_by_hash_test $^ -lgtest -lpthread
 
 RuntimeFunctions.ll: RuntimeFunctions.cpp
