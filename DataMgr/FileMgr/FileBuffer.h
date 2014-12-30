@@ -11,6 +11,7 @@
 #include "Page.h"
 
 #include <iostream>
+#include <stdexcept>
 
 using namespace Memory_Namespace;
 
@@ -39,7 +40,7 @@ namespace File_Namespace {
             /**
              * @brief Constructs a FileBuffer object.
              */
-            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes = 0);
+            FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t initialSize = 0);
 
             FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt);
             
@@ -48,7 +49,7 @@ namespace File_Namespace {
 
             Page addNewMultiPage(const int epoch);
 
-            void reserve(const size_t numBytes);
+            void reserve(const mapd_size_t numBytes);
 
             void freePages();
             
@@ -63,7 +64,7 @@ namespace File_Namespace {
              */
             virtual void write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
-            //virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
+            virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
             void copyPage(Page &srcPage, Page &destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
 
             /// Not implemented for FileMgr -- throws a runtime_error
@@ -80,9 +81,13 @@ namespace File_Namespace {
             inline virtual mapd_size_t pageSize() const {
                 return pageSize_;
             }
+
+            inline virtual mapd_size_t size() const {
+                return size_; 
+            }
             
             /// Returns the total number of bytes allocated for the FileBuffer.
-            inline virtual mapd_size_t size() const {
+            inline virtual mapd_size_t reservedSize() const {
                 return multiPages_.size() * pageSize_;
             }
             
@@ -100,7 +105,7 @@ namespace File_Namespace {
             
             /// Write header writes header at top of page in format
             // headerSize(numBytes), ChunkKey, pageId, version epoch
-            void writeHeader(Page &page, const int pageId, const int epoch);
+            void writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize = false);
             void calcHeaderBuffer();
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
@@ -110,7 +115,6 @@ namespace File_Namespace {
             mapd_size_t pageSize_;
             mapd_size_t pageDataSize_;
             mapd_size_t reservedHeaderSize_; // lets make this a constant now for simplicity - 128 bytes
-            bool isDirty_;
     };
     
 } // File_Namespace

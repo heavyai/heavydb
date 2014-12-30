@@ -17,19 +17,39 @@ namespace Memory_Namespace {
     class AbstractBuffer {
         
     public:
+
+        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false) {}
         virtual ~AbstractBuffer() {}
         
         virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset = 0) = 0;
         virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset = 0) = 0;
         virtual void reserve(mapd_size_t numBytes) = 0;
-        //virtual void append(mapd_addr_t src, const mapd_size_t nbytes) = 0;
+        virtual void append(mapd_addr_t src, const mapd_size_t numBytes) = 0;
         virtual mapd_byte_t* getMemoryPtr() = 0;
         
         virtual mapd_size_t pageCount() const = 0;
         virtual mapd_size_t pageSize() const = 0;
         virtual mapd_size_t size() const = 0;
+        virtual mapd_size_t reservedSize() const = 0;
         //virtual mapd_size_t used() const = 0;
-        virtual bool isDirty() const = 0;
+        virtual inline bool isDirty() const {return isDirty_;}
+        virtual inline bool isAppended() const {return isAppended_;}
+        virtual inline bool isUpdated() const {return isUpdated_;}
+
+        void setSize(const mapd_size_t size) {
+            size_ = size;
+        }
+        void clearDirtyBits() {
+            isAppended_ = false;
+            isUpdated_ = false;
+            isDirty_ = false;
+        }
+
+    protected:
+        mapd_size_t size_;
+        bool isDirty_;
+        bool isAppended_;
+        bool isUpdated_;
 
     };
     

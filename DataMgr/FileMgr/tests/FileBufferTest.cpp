@@ -75,7 +75,9 @@ TEST(FileBuffer, interleaved_read_and_write)
         cout << "Num inserts left: " << numInsertsLeft << endl;
         int curNumInserts = min(numInsertsLeft,numInsertsPerCycle);
         fb1.write(data1InPtr+cycle*numInsertsPerCycle*sizeof(int),curNumInserts*sizeof(int),cycle*numInsertsPerCycle*sizeof(int));
+        ASSERT_EQ((cycle+1)*numInsertsPerCycle*sizeof(int),fb1.size());
         fb2.write(data2InPtr+cycle*numInsertsPerCycle*sizeof(int),curNumInserts*sizeof(int),cycle*numInsertsPerCycle*sizeof(int));
+        ASSERT_EQ((cycle+1)*numInsertsPerCycle*sizeof(int),fb2.size());
         numInsertsLeft -= numInsertsPerCycle;
         cycle++;
     }

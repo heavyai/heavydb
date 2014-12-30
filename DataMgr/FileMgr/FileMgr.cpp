@@ -6,7 +6,7 @@
 
 #include "FileMgr.h"
 #include "File.h"
-#include "../../../Shared/global.h"
+#include "../../Shared/global.h"
 #include <string>
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
@@ -195,6 +195,10 @@ namespace File_Namespace {
             if (status != 0)
                 throw std::runtime_error("Could not sync file to disk");
         }
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            chunkIt -> second -> clearDirtyBits();
+        }
+
         writeAndSyncEpochToDisk();
     }
 
@@ -227,22 +231,32 @@ namespace File_Namespace {
         return chunkIt->second;
     }
 
+
     void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end()) 
             throw std::runtime_error("Chunk does not exist");
+        if (destBuffer -> isDirty()) {
+            throw std::runtime_error("Chunk inconsitency - fetchChunk");
+        }
         AbstractBuffer *chunk = chunkIt -> second;
         // ChunkSize is either specified in function call with numBytes or we
         // just look at pageSize * numPages in FileBuffer
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
         destBuffer->reserve(chunkSize);
         std::cout << "After reserve chunksize: " << chunkSize << std::endl;
-        chunk->read(destBuffer->getMemoryPtr(),chunkSize,0);
+        if (chunk->isUpdated()) {
+            chunk->read(destBuffer->getMemoryPtr(),chunkSize,0);
+        }
+        else {
+            chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->size());
+        }
+        destBuffer->setSize(chunkSize);
     }
 
-    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes) {
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer *chunk;
@@ -252,10 +266,29 @@ namespace File_Namespace {
         else {
             chunk = chunkIt->second;
         }
+        mapd_size_t oldChunkSize = chunk->size();
         // write the buffer's data to the Chunk
-        mapd_size_t chunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
-        std::cout << "Chunk size: " << chunkSize << std::endl;
-        chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), chunkSize,0);
+        //mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        //mapd_size_t newChunkSize = srcBuffer->size();
+        std::cout << "Old Chunk size: " << oldChunkSize << std::endl;
+        std::cout << "New Chunk size: " << newChunkSize << std::endl;
+        if (chunk->isDirty()) {
+            throw std::runtime_error("Chunk inconsistency");
+        }
+        std::cout << "Old chunk size: " << oldChunkSize << std::endl;
+        std::cout << "New chunk size: " << newChunkSize << std::endl;
+        if (srcBuffer->isUpdated()) {
+            //@todo use dirty flags to only flush pages of chunk that need to
+            //be flushed
+            chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), newChunkSize,0);
+        }
+        else if (srcBuffer->isAppended()) {
+            assert(oldChunkSize < newChunkSize);
+            chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize);
+        }
+        chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
+        srcBuffer->clearDirtyBits();
         return chunk;
     }
 

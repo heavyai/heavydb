@@ -24,6 +24,7 @@ namespace Buffer_Namespace {
      */
     class Buffer : public AbstractBuffer {
         friend class BufferMgr;
+        friend class FileMgr;
         
     public:
         
@@ -57,7 +58,7 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer from where reading (copying) begins.
          * @param nbytes    The number of bytes being read (copied) into the destination (dst).
          */
-        virtual void read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes = 0);
+        virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset = 0);
         
         virtual void reserve(const mapd_size_t numBytes);
         /**
@@ -69,7 +70,9 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer to where writing begins.
          * @param nbytes    The number of bytes being written (copied) into the buffer.
          */
-        virtual void write(mapd_addr_t src, const mapd_size_t offset, const mapd_size_t nbytes);
+        virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset = 0);
+
+        virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
         
         
         /**
@@ -78,11 +81,12 @@ namespace Buffer_Namespace {
          */
         virtual mapd_byte_t* getMemoryPtr();
         
+        inline virtual mapd_size_t size() const {
+            return size_;
+        }
         
         /// Returns the total number of bytes allocated for the buffer.
-        inline virtual mapd_size_t size() const {
-            std::cout << "Page size: " << pageSize_ << std::endl;
-            std::cout << "Num pages: " << numPages_ << std::endl;
+        inline virtual mapd_size_t reservedSize() const {
             return pageSize_ * numPages_;
         }
         /// Returns the number of pages in the buffer.
@@ -99,23 +103,24 @@ namespace Buffer_Namespace {
 
         /// Returns whether or not the buffer has been modified since the last flush/checkpoint.
         inline bool isDirty() const {
-            return dirty_;
+            return isDirty_;
         }
+    protected:
+        mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
         
     private:
 
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
-        //ChunkKey chunkKey_;
+        virtual void readData(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) = 0;
+        virtual void writeData(mapd_addr_t const src, const mapd_size_t numBytes, const mapd_size_t offset) = 0;
 
         BufferList::iterator segIt_;
-        mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
         BufferMgr * bm_;
         //mapd_size_t numBytes_;
         mapd_size_t pageSize_;      /// the size of each page in the buffer
         mapd_size_t numPages_;
         int epoch_;                 /// indicates when the buffer was last flushed
-        bool dirty_;                /// true if buffer has been modified
         //std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
         std::vector<bool> pageDirtyFlags_;
     };

@@ -14,22 +14,26 @@ using namespace std;
 namespace File_Namespace {
     mapd_size_t FileBuffer::headerBufferOffset_ = 32;
 
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t numBytes) : fm_(fm), pageSize_(pageSize), chunkKey_(chunkKey), isDirty_(false) {
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t initialSize) : AbstractBuffer(), fm_(fm), pageSize_(pageSize), chunkKey_(chunkKey) {
         // Create a new FileBuffer
         assert(fm_);
         calcHeaderBuffer();
-        if (numBytes > 0) {
-            // should expand to numBytes bytes
-            size_t initialNumPages = (numBytes + pageSize_ -1) / pageSize_;
+        //@todo reintroduce initialSize - need to develop easy way of
+        //differentiating these pre-allocated pages from "written-to" pages
+        /*
+        if (initalSize > 0) {
+            // should expand to initialSize bytes
+            size_t initialNumPages = (initalSize + pageSize_ -1) / pageSize_;
             int epoch = fm_-> epoch();
             for (size_t pageNum = 0; pageNum < initialNumPages; ++pageNum) {
                 Page page = addNewMultiPage(epoch);
                 writeHeader(page,pageNum,epoch);
             }
         }
+        */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey),isDirty_(false) {
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey){
         // We are being assigned an existing FileBuffer on disk
 
         assert(fm_);
@@ -49,7 +53,10 @@ namespace File_Namespace {
             }
             multiPages_.back().epochs.push_back(vecIt -> versionEpoch);
             multiPages_.back().pageVersions.push_back(vecIt -> page);
+
         }
+        auto lastHeaderIt = std::prev(headerEndIt);
+        size_ = lastHeaderIt -> chunkSize; 
     }
 
     FileBuffer::~FileBuffer() {
@@ -57,7 +64,7 @@ namespace File_Namespace {
         // NOP
     }
 
-    void FileBuffer::reserve(const size_t numBytes) {
+    void FileBuffer::reserve(const mapd_size_t numBytes) {
         size_t numPagesRequested = (numBytes + pageSize_ -1) / pageSize_;
         size_t numCurrentPages = multiPages_.size();
         int epoch = fm_-> epoch();
@@ -69,12 +76,12 @@ namespace File_Namespace {
     }
 
     void FileBuffer::calcHeaderBuffer() {
-        // 3 is for headerSize, for pageId and versionEpoch
-        mapd_size_t headerSize = chunkKey_.size() * sizeof(int) + 3 * sizeof(int);
-        reservedHeaderSize_ = headerSize;
-        mapd_size_t headerMod = headerSize % headerBufferOffset_;
+        // 3 * sizeof(int) is for headerSize, for pageId and versionEpoch
+        // sizeof(mapd_size_t) is for chunkSize
+        reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int) + sizeof(mapd_size_t);
+        mapd_size_t headerMod = reservedHeaderSize_ % headerBufferOffset_;
         if (headerMod > 0) {
-            reservedHeaderSize_ += headerBufferOffset_ - reservedHeaderSize_;
+            reservedHeaderSize_ += headerBufferOffset_ - headerMod;
         }
         pageDataSize_ = pageSize_-reservedHeaderSize_;
     }
@@ -153,20 +160,86 @@ namespace File_Namespace {
         return page;
     }
 
-    void FileBuffer::writeHeader(Page &page, const int pageId, const int epoch) {
-        int headerSize = chunkKey_.size() + 3;
-        vector <int> header (headerSize);
+    void FileBuffer::writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize) {
+        int intHeaderSize = chunkKey_.size() + 3; // does not include chunkSize
+        vector <int> header (intHeaderSize);
         // in addition to chunkkey we need size of header, pageId, version
-        header[0] = (headerSize - 1) * sizeof(int); // don't need to include size of headerSize value
+        header[0] = (intHeaderSize - 1) * sizeof(int) + sizeof(mapd_size_t); // don't need to include size of headerSize value - sizeof(mapd_size_t) is for chunkSize
         std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
-        header[headerSize-2] = pageId;
-        header[headerSize-1] = epoch;
+        header[intHeaderSize-2] = pageId;
+        header[intHeaderSize-1] = epoch;
         FILE *f = fm_ -> getFileForFileId(page.fileId);
-        File_Namespace::write(f, page.pageNum*pageSize_,headerSize * sizeof(int),(mapd_addr_t)&header[0]);
+        File_Namespace::write(f, page.pageNum*pageSize_,(intHeaderSize) * sizeof(int),(mapd_addr_t)&header[0]);
+        if (writeSize) {
+            File_Namespace::write(f, page.pageNum*pageSize_ + intHeaderSize*sizeof(int),sizeof(mapd_size_t),(mapd_addr_t)&size_);
+        }
+    }
+
+    /*
+    void FileBuffer::checkpoint() {
+        if (isAppended_) {
+            Page page = multiPages_[multiPages.size()-1].current();
+            writeHeader(page,0,multiPages_[0].epochs.back());
+        }
+        isDirty_ = false;
+        isUpdated_ = false;
+        isAppended_ = false;
+    }
+    */
+
+    void FileBuffer::append(mapd_addr_t src, const mapd_size_t numBytes) {
+        isDirty_ = true;
+        isAppended_ = true;
+        mapd_size_t startPage = size_ / pageDataSize_;
+        mapd_size_t startPageOffset = size_ % pageDataSize_;
+        mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
+        mapd_size_t bytesLeft = numBytes;
+        mapd_addr_t curPtr = src;    // a pointer to the current location in dst being written to
+        mapd_size_t initialNumPages = multiPages_.size();
+        size_ = size_ + numBytes;
+        int epoch = fm_-> epoch();
+        for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
+            Page page;
+            if (pageNum >= initialNumPages) {
+                page = addNewMultiPage(epoch);
+                writeHeader(page,pageNum,epoch,true);
+            }
+            else {
+                // we already have a new page at current
+                // epoch for this page - just grab this page
+                page = multiPages_[pageNum].current();
+            }
+            assert(page.fileId >= 0); // make sure page was initialized
+            FILE *f = fm_ -> getFileForFileId(page.fileId);
+            size_t bytesWritten;
+            if (pageNum == startPage) {
+                bytesWritten = File_Namespace::write(f,page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_, min (pageDataSize_ - startPageOffset,bytesLeft),curPtr);
+            }
+            else {
+                bytesWritten = File_Namespace::write(f, page.pageNum * pageSize_+reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
+            }
+            curPtr += bytesWritten;
+            bytesLeft -= bytesWritten;
+            if (pageNum == startPage + numPagesToWrite - 1) { // if last page
+                writeHeader(page,0,multiPages_[0].epochs.back());
+            }
+        }
+        assert (bytesLeft == 0);
     }
 
     void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset) {
         isDirty_ = true;
+        if (offset < size_) {
+            isUpdated_ = true;
+        }
+        bool tempIsAppended = false;
+
+        if (offset + numBytes > size_) {
+            tempIsAppended = true; // because isAppended_ could have already been true - to avoid rewriting header
+            isAppended_ = true;
+            size_ = offset + numBytes;
+        }
+
         mapd_size_t startPage = offset / pageDataSize_;
         mapd_size_t startPageOffset = offset % pageDataSize_;
         mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
@@ -220,6 +293,10 @@ namespace File_Namespace {
             }
             curPtr += bytesWritten;
             bytesLeft -= bytesWritten;
+            if (tempIsAppended && pageNum == startPage + numPagesToWrite - 1) { // if last page
+                writeHeader(page,0,multiPages_[0].epochs.back(),true);
+                size_ = offset + numBytes;
+            }
         }
         assert (bytesLeft == 0);
     }

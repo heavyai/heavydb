@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
-#include "../BufferMgr.h"
-#include "../../FileMgr/FileMgr.h"
+#include "../CpuBufferMgr.h"
+#include "../../../FileMgr/FileMgr.h"
 
 #include <boost/timer/timer.hpp>
 #include <boost/filesystem.hpp>
@@ -17,14 +17,13 @@ GTEST_API_ int main(int argc, char **argv) {
     return RUN_ALL_TESTS();
 }
 
-class BufferMgrTest : public ::testing::Test {
+class CpuBufferMgrTest : public ::testing::Test {
     
 protected:
     virtual void SetUp() {
-        const mapd_size_t pageSize = 512;
         deleteData("data");
         fm = new File_Namespace::FileMgr("data");
-        bm = new BufferMgr(memSize,pageSize,fm);
+        bm = new CpuBufferMgr(memSize,CPU_HOST,slabSize,pageSize,fm);
     }
     
     virtual void TearDown() {
@@ -35,22 +34,24 @@ protected:
         boost::filesystem::remove_all(dirName);
     }
     
-    mapd_size_t memSize = 1 << 28; 
-    BufferMgr *bm;
+    mapd_size_t memSize = 1 << 31; 
+    mapd_size_t slabSize = 1 << 28; 
+    mapd_size_t pageSize = 512;
+    CpuBufferMgr *bm;
     File_Namespace::FileMgr *fm;
 
 };
 
 
-TEST_F(BufferMgrTest, Constructor)
+TEST_F(CpuBufferMgrTest, Constructor)
 {
-    ASSERT_EQ(bm->size(), memSize);
+    ASSERT_EQ(bm->size(), 0);
+    ASSERT_EQ(bm->size(), 0);
 }
 
-TEST_F(BufferMgrTest, createChunk)
+TEST_F(CpuBufferMgrTest, createChunk)
 {
     bm->clear();
-    mapd_size_t pageSize = 512;
     
     ChunkKey key;
 
@@ -73,10 +74,9 @@ TEST_F(BufferMgrTest, createChunk)
     
 }
 
-TEST_F(BufferMgrTest, createChunks)
+TEST_F(CpuBufferMgrTest, createChunks)
 {
     bm->clear();
-    mapd_size_t pageSize = 512;
     
     for (int c = 0; c < 1000; c++) {
         ChunkKey key;
@@ -97,15 +97,14 @@ TEST_F(BufferMgrTest, createChunks)
     bm->printMap();
 }
 
-TEST_F(BufferMgrTest, readAndWrite) {
+TEST_F(CpuBufferMgrTest, readAndWrite) {
     bm->clear();
-    mapd_size_t pageSize = 512;
     ChunkKey chunkKey1 = {1,2,3,4};
     //ChunkKey chunkKey2 = {2,3,4,5};
     bm -> createChunk(chunkKey1,pageSize);
     //bm -> createChunk(chunkKey2,pageSize,4096*100);
     cout << "After create" << endl;
-    const size_t numInts = 1000000;
+    const size_t numInts = 12500000;
     int * data1 = new int [numInts];
     for (size_t i = 0; i < numInts; ++i) {
         data1[i] = i;
@@ -146,6 +145,45 @@ TEST_F(BufferMgrTest, readAndWrite) {
     delete [] data1;
     delete [] data2;
     delete [] diskData;
+}
+
+TEST_F(CpuBufferMgrTest, slabAllocationTest) {
+    bm->clear();
+    //EXPECT_EQ(bm->slabs_.size(),1);
+    EXPECT_EQ(bm->size(), 0);
+    ChunkKey chunkKey1 = {1,2,3,4};
+    ChunkKey chunkKey2 = {2,3,4,5};
+    ChunkKey chunkKey3 = {3,4,5,6};
+    ChunkKey chunkKey4 = {4,5,6,7};
+    ChunkKey chunkKey5 = {5,6,7,8};
+    size_t chunkSize = slabSize - 2048;
+    bm -> createChunk(chunkKey1, pageSize, chunkSize);
+    EXPECT_EQ(slabSize, bm->size());
+    AbstractBuffer *chunk1 = bm -> getChunk(chunkKey1);
+    chunk1 -> reserve(chunkSize+1024); // Should use existing allocation and extend it
+    EXPECT_EQ(slabSize, bm->size());
+    bm -> createChunk(chunkKey2, pageSize, chunkSize);
+    EXPECT_EQ(slabSize*2, bm->size());
+    bm -> createChunk(chunkKey3, pageSize, 2048);
+    EXPECT_EQ(slabSize*2, bm->size());
+    bm -> deleteChunk(chunkKey1);
+    EXPECT_EQ(slabSize*2, bm->size());
+    bm -> createChunk(chunkKey4, pageSize, slabSize);
+    EXPECT_EQ(slabSize*2, bm->size());
+    bm -> createChunk(chunkKey5, pageSize, slabSize);
+    EXPECT_EQ(slabSize*3, bm->size());
+    
+
+    //Migrate to new slab
+    bm->clear();
+    EXPECT_EQ(bm->size(), 0);
+    bm -> createChunk(chunkKey1, pageSize, chunkSize);
+    EXPECT_EQ(slabSize, bm->size());
+    bm -> createChunk(chunkKey3, pageSize, 2048);
+    EXPECT_EQ(slabSize*1, bm->size());
+    chunk1 = bm -> getChunk(chunkKey1);
+    chunk1 -> reserve(chunkSize+1024); // Should use existing allocation and extend it
+    EXPECT_EQ(slabSize*2, bm->size());
 }
 
 
