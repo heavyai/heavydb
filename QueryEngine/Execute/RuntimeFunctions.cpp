@@ -91,15 +91,6 @@ void query_group_by_template(const int8_t** byte_stream,
   }
 }
 
-extern "C" __attribute__((always_inline))
-int32_t key_hash(const int64_t* key, const int32_t key_qw_count, const int32_t groups_buffer_entry_count) {
-  int32_t hash = 0;
-  for (int32_t i = 0; i < key_qw_count; ++i) {
-    hash = ((hash << 5) - hash + key[i]) % groups_buffer_entry_count;
-  }
-  return hash;
-}
-
 #define EMPTY_KEY std::numeric_limits<int64_t>::min()
 
 extern "C"
@@ -127,6 +118,15 @@ int64_t* get_matching_group_value(int64_t* groups_buffer,
     return groups_buffer + off + key_qw_count;
   }
   return nullptr;
+}
+
+extern "C" __attribute__((always_inline))
+int32_t key_hash(const int64_t* key, const int32_t key_qw_count, const int32_t groups_buffer_entry_count) {
+  int32_t hash = 0;
+  for (int32_t i = 0; i < key_qw_count; ++i) {
+    hash = ((hash << 5) - hash + key[i]) % groups_buffer_entry_count;
+  }
+  return hash;
 }
 
 extern "C" __attribute__((always_inline))
