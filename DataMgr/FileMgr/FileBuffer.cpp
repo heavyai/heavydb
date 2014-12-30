@@ -190,13 +190,13 @@ namespace File_Namespace {
     void FileBuffer::append(mapd_addr_t src, const mapd_size_t numBytes) {
         isDirty_ = true;
         isAppended_ = true;
-        size_ = size_ + numBytes;
         mapd_size_t startPage = size_ / pageDataSize_;
         mapd_size_t startPageOffset = size_ % pageDataSize_;
         mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
         mapd_size_t bytesLeft = numBytes;
         mapd_addr_t curPtr = src;    // a pointer to the current location in dst being written to
         mapd_size_t initialNumPages = multiPages_.size();
+        size_ = size_ + numBytes;
         int epoch = fm_-> epoch();
         for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
             Page page;

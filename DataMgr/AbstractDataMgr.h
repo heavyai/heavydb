@@ -36,6 +36,7 @@ namespace Memory_Namespace {
         virtual void deleteChunk(const ChunkKey &key) = 0;
         virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0) = 0;
         virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes = 0) = 0;
+        //virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes = 0) = 0;
         virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes = 0) = 0;
         virtual void checkpoint() = 0;
 

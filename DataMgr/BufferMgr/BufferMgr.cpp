@@ -93,12 +93,12 @@ namespace Buffer_Namespace {
 
     BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator &segIt, const size_t numBytes) {
         // doesn't resize to be smaller - like std::reserve
-        cout << "Reserve number bytes: " << numBytes << endl;
+        //cout << "Reserve number bytes: " << numBytes << endl;
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
-        cout << "Reserve actual number bytes: " << numPagesRequested * pageSize_ << endl;
+        //cout << "Reserve actual number bytes: " << numPagesRequested * pageSize_ << endl;
         size_t numPagesExtraNeeded = numPagesRequested -  segIt -> numPages;
        
-        cout << "Num extra pages needed: " << numPagesExtraNeeded << endl;
+        //cout << "Num extra pages needed: " << numPagesExtraNeeded << endl;
 
         if (numPagesRequested < segIt -> numPages) { // We already have enough pages in existing segment
             return segIt;
@@ -408,6 +408,7 @@ namespace Buffer_Namespace {
                 }
                 std::cout << std::endl;
                 parentMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
+                chunkIt -> second -> buffer -> clearDirtyBits();
             }
             parentMgr_ -> checkpoint();
         }

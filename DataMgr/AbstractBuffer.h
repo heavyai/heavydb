@@ -32,9 +32,17 @@ namespace Memory_Namespace {
         virtual mapd_size_t size() const = 0;
         virtual mapd_size_t reservedSize() const = 0;
         //virtual mapd_size_t used() const = 0;
-        virtual bool isDirty() const = 0;
+        virtual inline bool isDirty() const {return isDirty_;}
+        virtual inline bool isAppended() const {return isAppended_;}
+        virtual inline bool isUpdated() const {return isUpdated_;}
+
         void setSize(const mapd_size_t size) {
             size_ = size;
+        }
+        void clearDirtyBits() {
+            isAppended_ = false;
+            isUpdated_ = false;
+            isDirty_ = false;
         }
 
     protected:
