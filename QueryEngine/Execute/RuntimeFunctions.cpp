@@ -121,10 +121,11 @@ int64_t* get_matching_group_value(int64_t* groups_buffer,
 extern "C"
 void init_groups(int64_t* groups_buffer,
                  const int32_t groups_buffer_entry_count,
-                 const int32_t key_qw_count) {
+                 const int32_t key_qw_count,
+                 const int64_t init_val) {
   int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + 1);
   for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
-    groups_buffer[i] = EMPTY_KEY;
+    groups_buffer[i] = (i + 1) % (key_qw_count + 1) ? EMPTY_KEY : init_val;
   }
 }
 
