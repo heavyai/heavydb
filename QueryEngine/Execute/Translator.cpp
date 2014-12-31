@@ -17,9 +17,35 @@
 #include <cstdint>
 
 
+namespace {
+
+llvm::Type* get_int_type(const int width) {
+  auto& context = llvm::getGlobalContext();
+  switch (width) {
+  case 64:
+    return llvm::Type::getInt64Ty(context);
+  case 32:
+    return llvm::Type::getInt32Ty(context);
+    break;
+  case 16:
+    return llvm::Type::getInt16Ty(context);
+    break;
+  case 8:
+    return llvm::Type::getInt8Ty(context);
+    break;
+  case 1:
+    return llvm::Type::getInt1Ty(context);
+    break;
+  default:
+    LOG(FATAL) << "Unsupported integer width: " << width;
+  }
+}
+
+}
 FetchIntCol::FetchIntCol(const int col_id,
-                             const std::shared_ptr<Decoder> decoder)
-  : col_id_{col_id}, decoder_{decoder} {}
+                         const int width,
+                         const std::shared_ptr<Decoder> decoder)
+  : col_id_{col_id}, width_{width}, decoder_{decoder} {}
 
 llvm::Value* FetchIntCol::codegen(
     llvm::Function* func,
@@ -47,9 +73,13 @@ llvm::Value* FetchIntCol::codegen(
         ir_builder,
         module);
       ir_builder.Insert(dec_val);
+      auto dec_val_cast = ir_builder.CreateCast(
+        llvm::Instruction::CastOps::SExt,
+        dec_val,
+        get_int_type(width_));
       auto it_ok = fetch_cache_.insert(std::make_pair(
         col_id_,
-        dec_val));
+        dec_val_cast));
       CHECK(it_ok.second);
       return it_ok.first->second;
     }

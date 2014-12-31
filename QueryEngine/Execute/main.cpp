@@ -31,7 +31,7 @@ struct measure
 int main() {
   AggQueryCodeGenerator cgen(
     std::make_shared<OpGt>(
-      std::make_shared<FetchIntCol>(0, std::make_shared<FixedWidthInt>(1)),
+      std::make_shared<FetchIntCol>(0, 64, std::make_shared<FixedWidthInt>(1)),
       std::make_shared<ImmInt>(41, 64)
     ),
     nullptr,

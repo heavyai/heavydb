@@ -23,7 +23,7 @@ public:
 
 class FetchIntCol : public AstNode {
 public:
-  FetchIntCol(const int col_id, const std::shared_ptr<Decoder> decoder);
+  FetchIntCol(const int col_id, const int width, const std::shared_ptr<Decoder> decoder);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
@@ -34,6 +34,7 @@ public:
 
 private:
   const int col_id_;
+  const int width_;
   const std::shared_ptr<Decoder> decoder_;
   static std::unordered_map<int, llvm::Value*> fetch_cache_;
 };
