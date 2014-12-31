@@ -24,23 +24,17 @@ int64_t fixed_width_int_decode(
   }
 }
 
-
-// query templates
-
-extern "C"
-int64_t filter_placeholder(const int64_t pos, const int8_t** byte_stream);
-extern "C" int32_t pos_start();
-extern "C" int32_t pos_step();
-
-extern "C" __attribute__((noinline))
-int32_t pos_start_impl() {
-  return 0;
+extern "C" __attribute__((always_inline))
+int64_t diff_fixed_width_int_decode(
+    const int8_t* byte_stream,
+    const int32_t byte_width,
+    const int64_t baseline,
+    const int64_t pos) {
+  return fixed_width_int_decode(byte_stream, byte_width, pos) + baseline;
 }
 
-extern "C" __attribute__((noinline))
-int32_t pos_step_impl() {
-  return 1;
-}
+
+// aggregator implementations
 
 extern "C" __attribute__((always_inline))
 void agg_count(int64_t* agg, const int64_t val) {
@@ -60,6 +54,21 @@ void agg_max(int64_t* agg, const int64_t val) {
 extern "C" __attribute__((always_inline))
 void agg_min(int64_t* agg, const int64_t val) {
   *agg = std::min(*agg, val);
+}
+
+// query templates
+
+extern "C" int32_t pos_start();
+extern "C" int32_t pos_step();
+
+extern "C" __attribute__((noinline))
+int32_t pos_start_impl() {
+  return 0;
+}
+
+extern "C" __attribute__((noinline))
+int32_t pos_step_impl() {
+  return 1;
 }
 
 extern "C" void row_process(int64_t* out, const int64_t pos);

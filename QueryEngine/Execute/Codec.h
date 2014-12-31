@@ -27,4 +27,17 @@ private:
   const size_t byte_width_;
 };
 
+class DiffFixedWidthInt : public Decoder {
+public:
+  DiffFixedWidthInt(const size_t byte_width, const int64_t baseline);
+  llvm::Instruction* codegenDecode(
+      llvm::Value* byte_stream,
+      llvm::Value* pos,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+private:
+  const size_t byte_width_;
+  const int64_t baseline_;
+};
+
 #endif  // QUERYENGINE_EXECUTE_CODEC_H
