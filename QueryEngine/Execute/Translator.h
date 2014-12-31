@@ -39,6 +39,20 @@ private:
   static std::unordered_map<int, llvm::Value*> fetch_cache_;
 };
 
+class CastToReal : public AstNode {
+public:
+  CastToReal(std::shared_ptr<AstNode> from, const bool double_precision);
+
+  virtual llvm::Value* codegen(
+      llvm::Function* func,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+
+private:
+  std::shared_ptr<AstNode> from_;
+  const bool double_precision_;
+};
+
 class ImmInt : public AstNode {
 public:
   ImmInt(const int64_t val, const int width);

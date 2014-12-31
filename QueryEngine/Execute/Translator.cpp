@@ -97,6 +97,22 @@ void FetchIntCol::collectUsedColumns(std::unordered_set<int>& columns) {
 
 std::unordered_map<int, llvm::Value*> FetchIntCol::fetch_cache_;
 
+CastToReal::CastToReal(std::shared_ptr<AstNode> from, const bool double_precision)
+  : from_{from}, double_precision_{double_precision} {}
+
+llvm::Value* CastToReal::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto& context = llvm::getGlobalContext();
+  auto real = ir_builder.CreateSIToFP(
+    from_->codegen(func, ir_builder, module),
+    llvm::Type::getFloatTy(context));
+  return double_precision_
+    ? ir_builder.CreateCast(llvm::Instruction::CastOps::FPExt, real, llvm::Type::getDoubleTy(context))
+    : real;
+}
+
 ImmInt::ImmInt(const int64_t val, const int width) : val_{val}, width_{width} {}
 
 void ImmInt::collectUsedColumns(std::unordered_set<int>& columns) {}
