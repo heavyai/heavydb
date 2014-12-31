@@ -73,8 +73,11 @@ llvm::Value* FetchIntCol::codegen(
         ir_builder,
         module);
       ir_builder.Insert(dec_val);
+      auto dec_type = dec_val->getType();
+      CHECK(dec_type->isIntegerTy());
+      auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
       auto dec_val_cast = ir_builder.CreateCast(
-        llvm::Instruction::CastOps::SExt,
+        width_ > dec_width ? llvm::Instruction::CastOps::SExt : llvm::Instruction::CastOps::Trunc,
         dec_val,
         get_int_type(width_));
       auto it_ok = fetch_cache_.insert(std::make_pair(
@@ -541,6 +544,7 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   llvm::legacy::PassManager pass_manager;
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
+  pass_manager.add(llvm::createInstructionSimplifierPass());
   pass_manager.run(*module);
 
   query_native_code_ = execution_engine_->getPointerToFunction(query_func);
