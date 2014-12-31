@@ -15,9 +15,9 @@ public:
       llvm::Module* module) = 0;
 };
 
-class FixedWidthInt64 : public Decoder {
+class FixedWidthInt : public Decoder {
 public:
-  FixedWidthInt64(const size_t byte_width);
+  FixedWidthInt(const size_t byte_width);
   llvm::Instruction* codegenDecode(
       llvm::Value* byte_stream,
       llvm::Value* pos,

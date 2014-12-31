@@ -21,9 +21,9 @@ public:
   virtual void collectUsedColumns(std::unordered_set<int>& columns) = 0;
 };
 
-class FetchInt64Col : public AstNode {
+class FetchIntCol : public AstNode {
 public:
-  FetchInt64Col(const int col_id, const std::shared_ptr<Decoder> decoder);
+  FetchIntCol(const int col_id, const std::shared_ptr<Decoder> decoder);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
@@ -35,12 +35,12 @@ public:
 private:
   const int col_id_;
   const std::shared_ptr<Decoder> decoder_;
-  static std::unordered_map<int64_t, llvm::Value*> fetch_cache_;
+  static std::unordered_map<int, llvm::Value*> fetch_cache_;
 };
 
-class ImmInt64 : public AstNode {
+class ImmInt : public AstNode {
 public:
-  ImmInt64(const int64_t val);
+  ImmInt(const int64_t val, const int width);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
@@ -51,6 +51,7 @@ public:
 
 private:
   const int64_t val_;
+  const int width_;
 };
 
 class OpGt : public AstNode {

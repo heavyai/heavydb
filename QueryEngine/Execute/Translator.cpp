@@ -17,11 +17,11 @@
 #include <cstdint>
 
 
-FetchInt64Col::FetchInt64Col(const int col_id,
+FetchIntCol::FetchIntCol(const int col_id,
                              const std::shared_ptr<Decoder> decoder)
   : col_id_{col_id}, decoder_{decoder} {}
 
-llvm::Value* FetchInt64Col::codegen(
+llvm::Value* FetchIntCol::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
@@ -58,23 +58,43 @@ llvm::Value* FetchInt64Col::codegen(
   CHECK(false);
 }
 
-void FetchInt64Col::collectUsedColumns(std::unordered_set<int>& columns) {
+void FetchIntCol::collectUsedColumns(std::unordered_set<int>& columns) {
   columns.insert(col_id_);
 }
 
-std::unordered_map<int64_t, llvm::Value*> FetchInt64Col::fetch_cache_;
+std::unordered_map<int, llvm::Value*> FetchIntCol::fetch_cache_;
 
-ImmInt64::ImmInt64(const int64_t val) : val_{val} {}
+ImmInt::ImmInt(const int64_t val, const int width) : val_{val}, width_{width} {}
 
-llvm::Value* ImmInt64::codegen(
+void ImmInt::collectUsedColumns(std::unordered_set<int>& columns) {}
+
+llvm::Value* ImmInt::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
+  llvm::Type* type { nullptr };
   auto& context = llvm::getGlobalContext();
-  return llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), val_);
+  switch (width_) {
+  case 64:
+    type = llvm::Type::getInt64Ty(context);
+    break;
+  case 32:
+    type = llvm::Type::getInt32Ty(context);
+    break;
+  case 16:
+    type = llvm::Type::getInt16Ty(context);
+    break;
+  case 8:
+    type = llvm::Type::getInt8Ty(context);
+    break;
+  case 1:
+    type = llvm::Type::getInt1Ty(context);
+    break;
+  default:
+    LOG(FATAL) << "Unsupported integer width: " << width_;
+  }
+  return llvm::ConstantInt::get(type, val_);
 }
-
-void ImmInt64::collectUsedColumns(std::unordered_set<int>& columns) {}
 
 OpGt::OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}

@@ -7,7 +7,7 @@
 
 
 extern "C" __attribute__((always_inline))
-int64_t fixed_width_int64_decode(
+int64_t fixed_width_int_decode(
     const int8_t* byte_stream,
     const int32_t byte_width,
     const int64_t pos) {
