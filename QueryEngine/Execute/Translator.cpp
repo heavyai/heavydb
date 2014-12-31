@@ -97,20 +97,35 @@ void FetchIntCol::collectUsedColumns(std::unordered_set<int>& columns) {
 
 std::unordered_map<int, llvm::Value*> FetchIntCol::fetch_cache_;
 
-CastToReal::CastToReal(std::shared_ptr<AstNode> from, const bool double_precision)
+PromoteToReal::PromoteToReal(std::shared_ptr<AstNode> from, const bool double_precision)
   : from_{from}, double_precision_{double_precision} {}
 
-llvm::Value* CastToReal::codegen(
+llvm::Value* PromoteToReal::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
   auto& context = llvm::getGlobalContext();
+  auto from_val = from_->codegen(func, ir_builder, module);
+  CHECK(from_val->getType()->isIntegerTy());
   auto real = ir_builder.CreateSIToFP(
-    from_->codegen(func, ir_builder, module),
+    from_val,
     llvm::Type::getFloatTy(context));
   return double_precision_
     ? ir_builder.CreateCast(llvm::Instruction::CastOps::FPExt, real, llvm::Type::getDoubleTy(context))
     : real;
+}
+
+PromoteToWiderInt::PromoteToWiderInt(std::shared_ptr<AstNode> from, const int target_width)
+  : from_{from}, target_width_{target_width} {}
+
+llvm::Value* PromoteToWiderInt::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto from_val = from_->codegen(func, ir_builder, module);
+  CHECK(from_val->getType()->isIntegerTy());
+  CHECK_LE(static_cast<llvm::IntegerType*>(from_val->getType())->getBitWidth(), target_width_);
+  return ir_builder.CreateCast(llvm::Instruction::CastOps::SExt, from_val, get_int_type(target_width_));
 }
 
 ImmInt::ImmInt(const int64_t val, const int width) : val_{val}, width_{width} {}
