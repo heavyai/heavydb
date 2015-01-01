@@ -44,8 +44,7 @@ void SystemProfiler::addNumaNodes(SystemNode *parentNode) {
 void SystemProfiler::profileSystem(const std::string &dataDir) {
     rootNode_ = new SystemNode;
     rootNode_ -> nodeType = STORAGE_NODE; 
-    boost::filesystem::path path(dataDir);
-    boost::filesystem::space_info spaceInfo = boost::filesystem::space(path);
+    boost::filesystem::space_info spaceInfo = boost::filesystem::space(dataDir);
     rootNode_ -> memCapacity = spaceInfo.capacity;
     rootNode_ -> memFree = spaceInfo.available;
     addNumaNodes(rootNode_);

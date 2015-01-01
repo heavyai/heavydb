@@ -93,7 +93,7 @@ namespace Buffer_Namespace {
         BufferList::iterator findFreeBufferInSlab(const size_t slabNum, const size_t numPagesRequested);
         virtual void addSlab(const size_t slabSize) = 0;
         virtual void freeAllMem() = 0;
-        virtual void createBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
+        virtual void allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
         
 
 

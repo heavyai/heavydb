@@ -33,17 +33,20 @@ namespace Buffer_Namespace {
             }
         }
     }
-    /*
     void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
-        if (chunkIt == chunkIndex_.end()) 
+        if (chunkIt == chunkIndex_.end()) {
+            if (parentMgr_ != 0) {
+                
+
+
             throw std::runtime_error("Chunk does not exist");
      */       
 
 
 
 
-    void CpuBufferMgr::createBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
+    void CpuBufferMgr::allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
         new CpuBuffer(this, segIt, pageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
     }
 

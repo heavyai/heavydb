@@ -51,7 +51,7 @@ namespace Buffer_Namespace {
         bufferSeg.chunkKey = chunkKey;
         unsizedSegs_.push_back(bufferSeg);
         chunkIndex_[chunkKey] = std::prev(unsizedSegs_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
-        createBuffer(chunkIndex_[chunkKey],chunkPageSize,initialSize); 
+        allocateBuffer(chunkIndex_[chunkKey],chunkPageSize,initialSize); 
         //slabSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(slabSegments_.end(),1), chunkPageSize, initialSize); 
         //new Buffer(this, chunkIndex_[chunkKey], chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
 
@@ -410,7 +410,7 @@ namespace Buffer_Namespace {
                 parentMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
                 chunkIt -> second -> buffer -> clearDirtyBits();
             }
-            parentMgr_ -> checkpoint();
+            //parentMgr_ -> checkpoint();
         }
     }
     
