@@ -181,23 +181,62 @@ void OpICmp::collectUsedColumns(std::unordered_set<int>& columns) {
   rhs_->collectUsedColumns(columns);
 }
 
-OpGt::OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+OpIGt::OpIGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SGT) {}
 
-OpLt::OpLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+OpILt::OpILt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SLT) {}
 
-OpGte::OpGte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+OpIGe::OpIGe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SGE) {}
 
-OpLte::OpLte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+OpILe::OpILe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SLE) {}
 
-OpNeq::OpNeq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+OpINe::OpINe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_NE) {}
 
-OpEq::OpEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+OpIEq::OpIEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_EQ) {}
+
+OpFCmp::OpFCmp(std::shared_ptr<AstNode> lhs,
+               std::shared_ptr<AstNode> rhs,
+               llvm::ICmpInst::Predicate op)
+  : lhs_{lhs}
+  , rhs_{rhs}
+  , op_{op} {}
+
+llvm::Value* OpFCmp::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFCmp(op_, lhs, rhs);
+}
+
+void OpFCmp::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
+OpFGt::OpFGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OGT) {}
+
+OpFLt::OpFLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OLT) {}
+
+OpFGe::OpFGe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OGE) {}
+
+OpFLe::OpFLe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OLE) {}
+
+OpFNe::OpFNe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_ONE) {}
+
+OpFEq::OpFEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OEQ) {}
 
 OpAdd::OpAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}

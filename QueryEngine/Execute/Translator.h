@@ -102,33 +102,81 @@ private:
   llvm::ICmpInst::Predicate op_;
 };
 
-class OpGt : public OpICmp {
+class OpIGt : public OpICmp {
 public:
-  OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpIGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpLt : public OpICmp {
+class OpILt : public OpICmp {
 public:
-  OpLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpILt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpGte : public OpICmp {
-  OpGte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+class OpIGe : public OpICmp {
+  OpIGe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpLte : public OpICmp {
+class OpILe : public OpICmp {
 public:
-  OpLte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpILe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpNeq : public OpICmp {
+class OpINe : public OpICmp {
 public:
-  OpNeq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpINe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpEq : public OpICmp {
+class OpIEq : public OpICmp {
 public:
-  OpEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpIEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+};
+
+class OpFCmp : public AstNode {
+public:
+  OpFCmp(std::shared_ptr<AstNode> lhs,
+         std::shared_ptr<AstNode> rhs,
+         llvm::FCmpInst::Predicate op);
+
+  virtual llvm::Value* codegen(
+      llvm::Function* func,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
+private:
+  std::shared_ptr<AstNode> lhs_;
+  std::shared_ptr<AstNode> rhs_;
+  llvm::FCmpInst::Predicate op_;
+};
+
+class OpFGt : public OpFCmp {
+public:
+  OpFGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+};
+
+class OpFLt : public OpFCmp {
+public:
+  OpFLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+};
+
+class OpFGe : public OpFCmp {
+  OpFGe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+};
+
+class OpFLe : public OpFCmp {
+public:
+  OpFLe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+};
+
+class OpFNe : public OpFCmp {
+public:
+  OpFNe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+};
+
+class OpFEq : public OpFCmp {
+public:
+  OpFEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
 class OpAdd : public AstNode {
