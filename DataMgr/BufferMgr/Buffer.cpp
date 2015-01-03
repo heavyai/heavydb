@@ -95,9 +95,16 @@ namespace Buffer_Namespace {
     void Buffer::append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType) {
         isDirty_ = true;
         isAppended_ = true;
-        size_ = size_ + numBytes;
+
+
+        if (numBytes + size_ > reservedSize()) {
+            std::cout << "Reserving" << std::endl;
+            reserve(numBytes+size_);
+        }
+
         writeData(src,numBytes,srcBufferType,size_);
-        // Do we worry about dirty flags here or does append avoid themj
+        size_ += numBytes;
+        // Do we worry about dirty flags here or does append avoid them
     }
 
     mapd_byte_t* Buffer::getMemoryPtr() {

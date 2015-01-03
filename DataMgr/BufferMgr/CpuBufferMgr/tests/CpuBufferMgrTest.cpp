@@ -186,6 +186,74 @@ TEST_F(CpuBufferMgrTest, slabAllocationTest) {
     EXPECT_EQ(slabSize*2, bm->size());
 }
 
+TEST_F(CpuBufferMgrTest, appendTest) {
+    bm->clear();
+    ChunkKey chunkKey1 = {1,2,3,4};
+    int numInts = 2000;
+    size_t chunk1Size = numInts*sizeof(int);
+    int * data1 = new int [numInts * 2];
+    int * data2 = new int [numInts * 2];
+    for (int i = 0; i < numInts * 2; ++i) {
+        data1[i] = i;
+    }
+    bm -> createChunk(chunkKey1, pageSize, chunk1Size);
+    AbstractBuffer *chunk1 = bm -> getChunk(chunkKey1);
+    chunk1 -> append((mapd_addr_t)data1,chunk1Size,Memory_Namespace::CPU_BUFFER);
+    chunk1 -> read((mapd_addr_t)data2,chunk1Size, Memory_Namespace::CPU_BUFFER,0);
+    for (int i = 0; i < numInts; ++i) {
+        EXPECT_EQ(data2[i],data1[i]);
+    }
+
+    chunk1 -> append((mapd_addr_t)data1+numInts*sizeof(int),chunk1Size,Memory_Namespace::CPU_BUFFER);
+    chunk1 -> read((mapd_addr_t)data2,chunk1Size*2, Memory_Namespace::CPU_BUFFER,0);
+    for (int i = 0; i < numInts * 2; ++i) {
+        EXPECT_EQ(data1[i],data2[i]);
+    }
+
+
+
+}
+
+TEST_F(CpuBufferMgrTest, bufferMoveTest) {
+    bm->clear();
+    ChunkKey chunkKey1 = {1,2,3,4};
+    ChunkKey chunkKey2 = {5,6,7,8};
+    size_t chunk1Size = 1000*sizeof(int);
+    size_t chunk2Size = 500*sizeof(int);
+    bm -> createChunk(chunkKey1, pageSize, chunk1Size);
+    AbstractBuffer *chunk1 = bm -> getChunk(chunkKey1);
+    const size_t numInts = 2000;
+    int * data1 = new int [numInts];
+    int * data2 = new int [numInts];
+    int * data3 = new int [numInts];
+    for (size_t i = 0; i < numInts; ++i) {
+        data1[i] = i;
+    }
+    chunk1 -> append((mapd_addr_t)data1,chunk1Size,Memory_Namespace::CPU_BUFFER);
+    chunk1 -> read((mapd_addr_t)data2,chunk1Size, Memory_Namespace::CPU_BUFFER,0);
+    for (int i = 0; i < 1000; ++i) {
+        EXPECT_EQ(data1[i],data2[i]);
+    }
+
+    // Now create chunk right after it
+    AbstractBuffer *chunk2 = bm -> createChunk(chunkKey2, pageSize, chunk2Size);
+    chunk2 -> append((mapd_addr_t)data1,chunk2Size,Memory_Namespace::CPU_BUFFER);
+
+    // now add to chunk 1 - should be 2 X chunk1 now 
+    chunk1 -> append((mapd_addr_t)(data1)+chunk1Size,chunk1Size,Memory_Namespace::CPU_BUFFER);
+    chunk1 -> read((mapd_addr_t)data3,chunk1Size*2, Memory_Namespace::CPU_BUFFER,0);
+
+    for (int i = 0; i < 1000; ++i) {
+        EXPECT_EQ(data1[i],data3[i]);
+    }
+}
+
+
+
+
+
+
+
 
 
 

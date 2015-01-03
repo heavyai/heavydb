@@ -124,20 +124,17 @@ namespace Buffer_Namespace {
         segIt -> pinCount++; // so we don't evict this while trying to find a new segment for it - @todo - maybe should go up top?
         auto newSegIt = findFreeBuffer(numBytes);
         /* Below should be in copy constructor for BufferSeg?*/
-
-        //mapd_addr_t oldMem = segIt -> buffer -> mem_;
         newSegIt -> buffer = segIt -> buffer;
         //newSegIt -> buffer -> segIt_ = newSegIt;
         newSegIt -> chunkKey = segIt -> chunkKey;
-
+        mapd_addr_t oldMem = newSegIt -> buffer -> mem_;
         newSegIt -> buffer -> mem_ = slabs_[newSegIt->slabNum] + newSegIt -> startPage * pageSize_;
         // now need to copy over memory
         // only do this if the old segment is valid (i.e. not new w/
         // unallocated buffer
         if (segIt -> startPage >= 0 && segIt -> buffer -> mem_ != 0)  {
-            memcpy(newSegIt -> buffer -> mem_, segIt -> buffer -> mem_, newSegIt->buffer->size());
-            //@todo replace with write api - this is wrong anyway
-            //newSegIt -> buffer -> write(oldMem,   
+            newSegIt -> buffer -> writeData(oldMem, newSegIt->buffer->size(),newSegIt -> buffer -> getType());
+            //memcpy(newSegIt -> buffer -> mem_, segIt -> buffer -> mem_, newSegIt->buffer->size());
         }
         // Deincrement pin count to reverse effect above
         removeSegment(segIt);
