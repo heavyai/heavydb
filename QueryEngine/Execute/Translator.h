@@ -83,7 +83,18 @@ private:
   const int width_;
 };
 
-class OpICmp : public AstNode {
+class OpBinary : public AstNode {
+public:
+  OpBinary(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
+protected:
+  std::shared_ptr<AstNode> lhs_;
+  std::shared_ptr<AstNode> rhs_;
+};
+
+class OpICmp : public OpBinary {
 public:
   OpICmp(std::shared_ptr<AstNode> lhs,
          std::shared_ptr<AstNode> rhs,
@@ -94,11 +105,7 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
 private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
   llvm::ICmpInst::Predicate op_;
 };
 
@@ -131,7 +138,7 @@ public:
   OpIEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpFCmp : public AstNode {
+class OpFCmp : public OpBinary {
 public:
   OpFCmp(std::shared_ptr<AstNode> lhs,
          std::shared_ptr<AstNode> rhs,
@@ -142,11 +149,7 @@ public:
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
 
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
 private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
   llvm::FCmpInst::Predicate op_;
 };
 
@@ -179,7 +182,7 @@ public:
   OpFEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpIAdd : public AstNode {
+class OpIAdd : public OpBinary {
 public:
   OpIAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
@@ -187,15 +190,9 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpISub : public AstNode {
+class OpISub : public OpBinary {
 public:
   OpISub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
@@ -203,15 +200,9 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpIMul : public AstNode {
+class OpIMul : public OpBinary {
 public:
   OpIMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
@@ -219,15 +210,9 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpIDiv : public AstNode {
+class OpIDiv : public OpBinary {
 public:
   OpIDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
@@ -235,15 +220,9 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpAnd : public AstNode {
+class OpAnd : public OpBinary {
 public:
   OpAnd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
@@ -251,15 +230,9 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpOr : public AstNode {
+class OpOr : public OpBinary {
 public:
   OpOr(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
@@ -267,12 +240,6 @@ public:
       llvm::Function* func,
       llvm::IRBuilder<>& ir_builder,
       llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
 class OpNot : public AstNode {
