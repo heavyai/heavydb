@@ -125,6 +125,7 @@ namespace Buffer_Namespace {
         auto newSegIt = findFreeBuffer(numBytes);
         /* Below should be in copy constructor for BufferSeg?*/
 
+        //mapd_addr_t oldMem = segIt -> buffer -> mem_;
         newSegIt -> buffer = segIt -> buffer;
         //newSegIt -> buffer -> segIt_ = newSegIt;
         newSegIt -> chunkKey = segIt -> chunkKey;
@@ -135,8 +136,10 @@ namespace Buffer_Namespace {
         // unallocated buffer
         if (segIt -> startPage >= 0 && segIt -> buffer -> mem_ != 0)  {
             memcpy(newSegIt -> buffer -> mem_, segIt -> buffer -> mem_, newSegIt->buffer->size());
+            //@todo replace with write api - this is wrong anyway
+            //newSegIt -> buffer -> write(oldMem,   
         }
-        // Deincrement pin count to reverse effect above above
+        // Deincrement pin count to reverse effect above
         removeSegment(segIt);
         /*
         if (segIt -> slabNum < 0) {
@@ -434,7 +437,28 @@ namespace Buffer_Namespace {
     //void BufferMgr::getChunks(
 
     void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
-        throw std::runtime_error("Not implemented");
+        auto chunkIt = chunkIndex_.find(key);
+        AbstractBuffer * buffer;
+        if (chunkIt == chunkIndex_.end()) {
+            if (parentMgr_ == 0) {
+                throw std::runtime_error("Chunk does not exist");
+            }
+            buffer = createChunk(key,pageSize_,numBytes);
+            parentMgr_ -> fetchChunk(key, buffer, numBytes);
+        }
+        else {
+            buffer = chunkIt -> second -> buffer;
+        }
+        mapd_size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
+        destBuffer->reserve(chunkSize);
+        std::cout << "After reserve chunksize: " << chunkSize << std::endl;
+        if (buffer->isUpdated()) {
+            buffer->read(destBuffer->getMemoryPtr(),chunkSize,destBuffer->getType(),0);
+        }
+        else {
+            buffer->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
+        }
+        destBuffer->setSize(chunkSize);
     }
     
     AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes) {

@@ -12,12 +12,22 @@ namespace CudaUtils {
     cudaHostAlloc((void**)&hostMem, numElems * elemSize, cudaHostAllocPortable);
 }
 
-    template <typename T> void copyToGpu(const T* hostMem, T* devMem, const size_t numElems, const size_t elemSize, const int gpuNum) {
+    template <typename T> void copyToGpu(T* devMem, const T* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum) {
         cudaSetDevice(gpuNum);
         cudaMemcpy(devMem,hostMem,numElems * elemSize, cudaMemcpyHostToDevice); 
     }
 
-    template <typename T> void copyToHost (T* hostMem, T* devMem, const size_t numElems, const size_t elemSize, const int gpuNum) {
+    template <typename T>  void copyGpuToGpu (T* dstMem, const T* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum) {
+        cudaSetDevice(dstGpuNum);
+        cudaMemcpy(dstMem,srcMem,numElems * elemSize, cudaMemcpyDefault); 
+    }
+    
+
+
+
+
+
+    template <typename T> void copyToHost (T* hostMem, const T* devMem, const size_t numElems, const size_t elemSize, const int gpuNum) {
         cudaSetDevice(gpuNum);
         cudaMemcpy(hostMem,devMem,numElems * elemSize, cudaMemcpyDeviceToHost); 
     }
@@ -51,28 +61,39 @@ namespace CudaUtils {
     template void allocPinnedHostMem <unsigned int>(unsigned int * &hostMem, const size_t numElems, const size_t elemSize);
     template void allocPinnedHostMem <void>(void * &hostMem, const size_t numElems, const size_t elemSize);
 
-    template void copyToGpu <bool> (const bool* hostMem, bool* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <char> (const char* hostMem, char* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <unsigned char> (const unsigned char* hostMem, unsigned char* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <int> (const int* hostMem, int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <unsigned int> (const unsigned int* hostMem, unsigned int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <unsigned long> (const unsigned long* hostMem, unsigned long* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <unsigned long long int> (const unsigned long long int* hostMem, unsigned long long int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <float> (const float* hostMem, float* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToGpu <double> (const double* hostMem, double* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <bool> (bool* devMem, const bool* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <char> (char* devMem, const char* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <unsigned char> (unsigned char* devMem, const unsigned char* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <int> (int* devMem, const int* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <unsigned int> (unsigned int* devMem, const unsigned int* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <unsigned long> (unsigned long* devMem, const unsigned long* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <unsigned long long int> (unsigned long long int* devMem, const unsigned long long int* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <float> (float* devMem, const float* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <double> (double* devMem, const double* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+
+
+    template  void copyGpuToGpu <bool> (bool* dstMem, const bool* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <char> (char* dstMem, const char* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <unsigned char> (unsigned char* dstMem, const unsigned char* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <int> (int* dstMem, const int* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <unsigned int> (unsigned int* dstMem, const unsigned int* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <unsigned long long int> (unsigned long long int* dstMem, const unsigned long long int* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <float> (float* dstMem, const float* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <double> (double* dstMem, const double* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+
 
     //template void copyToHost <__nv_bool> (__nv_bool * hostMem, __nv_bool * devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
 
-    template void copyToHost <bool> (bool* hostMem, bool* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <char> (char* hostMem, char* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <unsigned char> (unsigned char* hostMem, unsigned char* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <unsigned short> (unsigned short* hostMem, unsigned short* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <int> (int* hostMem, int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <unsigned int> (unsigned int* hostMem, unsigned int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <unsigned long long int> (unsigned long long int* hostMem, unsigned long long int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <float> (float* hostMem, float* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <double> (double* hostMem, double* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
-    template void copyToHost <void> (void* hostMem, void* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <bool> (bool* hostMem, const bool* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <char> (char* hostMem, const char* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <unsigned char> (unsigned char* hostMem, const unsigned char* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <unsigned short> (unsigned short* hostMem, const unsigned short* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <int> (int* hostMem, const int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <unsigned int> (unsigned int* hostMem, const unsigned int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <unsigned long long int> (unsigned long long int* hostMem, const unsigned long long int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <float> (float* hostMem, const float* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <double> (double* hostMem, const double* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <void> (void* hostMem, const void* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
 
     template void gpuFree <bool> (bool * &devMem);
     template void gpuFree <char> (char * &devMem);

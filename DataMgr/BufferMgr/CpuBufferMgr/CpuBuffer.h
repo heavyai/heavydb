@@ -9,9 +9,12 @@ namespace Buffer_Namespace {
         public:
             CpuBuffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize = 512, const mapd_size_t numBytes = 0);
 
+            virtual inline Memory_Namespace::BufferType getType() const {return CPU_BUFFER;}
+
+
         private:
-            void readData(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset);
-            void writeData(mapd_addr_t const src, const mapd_size_t numBytes, const mapd_size_t offset);
+            void readData(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset = 0);
+            void writeData(mapd_addr_t const src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset = 0);
 
     };
 } // Buffer_Namespace

@@ -51,18 +51,18 @@ namespace Buffer_Namespace {
         }
     }
     
-    void Buffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
+    void Buffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset) {
         assert(dst && mem_);
         std::cout << "Buffer size: " << size_ << std::endl;
         std::cout << "Bytes to read: " << numBytes << std::endl;
         if (numBytes + offset > size_) {
             throw std::runtime_error("Buffer: Out of bounds read error");
         }
-        readData(dst,numBytes,offset);
+        readData(dst,numBytes, dstBufferType,offset);
         //memcpy(dst, mem_ + offset, numBytes);
     }
     
-    void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset) {
+    void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset) {
         assert(numBytes > 0); // cannot write 0 bytes
         if (numBytes + offset > reservedSize()) {
             reserve(numBytes+offset);
@@ -71,7 +71,7 @@ namespace Buffer_Namespace {
         std::cout << "Size at beginning of write: " << size_ << std::endl;
         // write source contents to buffer
         //assert(mem_ && src);
-        writeData(src,numBytes,offset);
+        writeData(src,numBytes,srcBufferType,offset);
         //memcpy(mem_ + offset, src, numBytes);
         
         // update dirty flags for buffer and each affected page
@@ -92,11 +92,11 @@ namespace Buffer_Namespace {
         }
     }
 
-    void Buffer::append(mapd_addr_t src, const mapd_size_t numBytes) {
+    void Buffer::append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType) {
         isDirty_ = true;
         isAppended_ = true;
         size_ = size_ + numBytes;
-        writeData(src,numBytes,size_);
+        writeData(src,numBytes,srcBufferType,size_);
         // Do we worry about dirty flags here or does append avoid themj
     }
 

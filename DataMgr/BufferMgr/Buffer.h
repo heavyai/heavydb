@@ -58,7 +58,7 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer from where reading (copying) begins.
          * @param nbytes    The number of bytes being read (copied) into the destination (dst).
          */
-        virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset = 0);
+        virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const mapd_size_t offset = 0);
         
         virtual void reserve(const mapd_size_t numBytes);
         /**
@@ -70,9 +70,9 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer to where writing begins.
          * @param nbytes    The number of bytes being written (copied) into the buffer.
          */
-        virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const mapd_size_t offset = 0);
+        virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const mapd_size_t offset = 0);
 
-        virtual void append(mapd_addr_t src, const mapd_size_t numBytes);
+        virtual void append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER);
         
         
         /**
@@ -112,8 +112,8 @@ namespace Buffer_Namespace {
 
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
-        virtual void readData(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) = 0;
-        virtual void writeData(mapd_addr_t const src, const mapd_size_t numBytes, const mapd_size_t offset) = 0;
+        virtual void readData(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset = 0 ) = 0;
+        virtual void writeData(mapd_addr_t const src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset = 0) = 0;
 
         BufferList::iterator segIt_;
         BufferMgr * bm_;

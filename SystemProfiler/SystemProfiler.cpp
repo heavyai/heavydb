@@ -30,25 +30,50 @@ void SystemProfiler::addNumaNodes(SystemNode *parentNode) {
      hwloc_topology_t topology;
      hwloc_topology_init(&topology);
      hwloc_topology_load(topology);
-    int socketDepth = hwloc_get_type_depth(topology, HWLOC_OBJ_SOCKET);
+    int socketDepth = hwloc_get_type_depth(topology, HWLOC_OBJ_NODE);
      hwloc_topology_init(&topology);
      hwloc_topology_load(topology);
     if (socketDepth == HWLOC_TYPE_DEPTH_UNKNOWN) {
-
+        cout << "Depth unknown" << endl;
     }
     else {
-        hwloc_get_nbobjs_by_depth(topology, socketDepth);
+        int numSockets = hwloc_get_nbobjs_by_depth(topology, socketDepth);
+        cout << "Num sockets: " << numSockets << endl;
+        for (int socketNum = 0; socketNum != numSockets; ++socketNum) {
+            SystemNode * socketNode = new SystemNode;
+            hwloc_obj_t socket = hwloc_get_obj_by_depth(topology,socketDepth,socketNum);
+            socketNode -> nodeType = CPU_NODE;
+            socketNode -> memCapacity = socket-> memory.total_memory;
+            socketNode -> memFree = socket-> memory.local_memory;
+            hwloc_obj_t lastChild = socket -> last_child;
+            int coreCount = 0;
+            while (socket -> children[coreCount] != lastChild) {
+                coreCount++;
+            }
+            coreCount++;
+            cout << "Core count: " << coreCount << endl;
+
+
+            parentNode -> childNodes.push_back(socketNode);
+            nodeLevelMap_[CPU_NODE].push_back(socketNode);
+        }
     }
 }
 
-void SystemProfiler::profileSystem(const std::string &dataDir) {
+void SystemProfiler::addStorage(const std::string &dataDir) {
     rootNode_ = new SystemNode;
     rootNode_ -> nodeType = STORAGE_NODE; 
     boost::filesystem::space_info spaceInfo = boost::filesystem::space(dataDir);
     rootNode_ -> memCapacity = spaceInfo.capacity;
     rootNode_ -> memFree = spaceInfo.available;
-    addNumaNodes(rootNode_);
 
+    nodeLevelMap_[STORAGE_NODE].push_back(rootNode_);
+}
+
+
+void SystemProfiler::profileSystem(const std::string &dataDir) {
+    addStorage(dataDir);
+    addNumaNodes(rootNode_);
 }
 
 void SystemProfiler::printNode(const SystemNode *node) {
@@ -71,15 +96,21 @@ void SystemProfiler::printNode(const SystemNode *node) {
 
 
 void SystemProfiler::printTree(const SystemNode *startNode) {
-    printNode(startNode);
-    for (vector<SystemNode *>::const_iterator childNodeIt = startNode -> childNodes.begin(); childNodeIt != startNode -> childNodes.end(); ++childNodeIt) {
-        printTree(*childNodeIt);
+    if (startNode == 0) {
+        printTree(rootNode_);
+    }
+    else {
+        printNode(startNode);
+        for (vector<SystemNode *>::const_iterator childNodeIt = startNode -> childNodes.begin(); childNodeIt != startNode -> childNodes.end(); ++childNodeIt) {
+            printTree(*childNodeIt);
+        }
     }
 }
 
 
 int main() {
-    SystemProfiler("data");
+    SystemProfiler systemProfiler ("data");
+    systemProfiler.printTree();
 
 }
 

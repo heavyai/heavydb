@@ -115,7 +115,7 @@ TEST_F(CpuBufferMgrTest, readAndWrite) {
     const boost::timer::nanosecond_type oneSecond(1000000000LL);
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),0);
+        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),Memory_Namespace::CPU_BUFFER,0);
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
         cout << "Write Bandwidth: " << bandwidth << " GB/sec" << endl;
@@ -123,7 +123,7 @@ TEST_F(CpuBufferMgrTest, readAndWrite) {
     int * data2 = new int [numInts];
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> read((mapd_addr_t)data2,numInts*sizeof(int),0);
+        chunk1 -> read((mapd_addr_t)data2,numInts*sizeof(int),Memory_Namespace::CPU_BUFFER,0);
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
         cout << "Read Bandwidth: " << bandwidth << " GB/sec" << endl;
@@ -137,7 +137,7 @@ TEST_F(CpuBufferMgrTest, readAndWrite) {
     AbstractBuffer * diskChunk = bm -> getChunk(chunkKey1,numInts*sizeof(int));
     cout << "Got data" << endl;
     int *diskData = new int [numInts];
-    diskChunk -> read((mapd_addr_t)diskData,numInts*sizeof(int),0);
+    diskChunk -> read((mapd_addr_t)diskData,numInts*sizeof(int),Memory_Namespace::CPU_BUFFER,0);
     for (size_t i = 0; i < numInts; ++i) {
         EXPECT_EQ(data1[i],diskData[i]);
     }

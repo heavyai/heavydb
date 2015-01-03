@@ -24,11 +24,12 @@ class SystemProfiler {
     public:
         SystemProfiler(const std::string &dataDir);
         ~SystemProfiler();
-        void printTree(const SystemNode *startNode);
+        void printTree(const SystemNode *startNode = 0);
 
     private:
         void profileSystem(const std::string &dataDir);
         void deleteNodes(SystemNode *startNode);
+        void addStorage(const std::string &dataDir);
         void addNumaNodes(SystemNode *parentNode);
         void printNode(const SystemNode *node);
         SystemNode *rootNode_;
