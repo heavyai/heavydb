@@ -222,6 +222,46 @@ public:
       llvm::Module* module);
 };
 
+class OpFAdd : public OpBinary {
+public:
+  OpFAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+
+  virtual llvm::Value* codegen(
+      llvm::Function* func,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+};
+
+class OpFSub : public OpBinary {
+public:
+  OpFSub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+
+  virtual llvm::Value* codegen(
+      llvm::Function* func,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+};
+
+class OpFMul : public OpBinary {
+public:
+  OpFMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+
+  virtual llvm::Value* codegen(
+      llvm::Function* func,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+};
+
+class OpFDiv : public OpBinary {
+public:
+  OpFDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+
+  virtual llvm::Value* codegen(
+      llvm::Function* func,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+};
+
 class OpAnd : public OpBinary {
 public:
   OpAnd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);

@@ -282,6 +282,54 @@ llvm::Value* OpIDiv::codegen(
   return ir_builder.CreateSDiv(lhs, rhs);
 }
 
+OpFAdd::OpFAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFAdd::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFAdd(lhs, rhs);
+}
+
+OpFSub::OpFSub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFSub::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFSub(lhs, rhs);
+}
+
+OpFMul::OpFMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFMul::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFMul(lhs, rhs);
+}
+
+OpFDiv::OpFDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFDiv::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFDiv(lhs, rhs);
+}
+
 OpAnd::OpAnd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : OpBinary(lhs, rhs) {}
 
