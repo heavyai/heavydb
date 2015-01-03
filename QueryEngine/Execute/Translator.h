@@ -179,9 +179,9 @@ public:
   OpFEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 };
 
-class OpAdd : public AstNode {
+class OpIAdd : public AstNode {
 public:
-  OpAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpIAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
@@ -195,9 +195,9 @@ private:
   std::shared_ptr<AstNode> rhs_;
 };
 
-class OpSub : public AstNode {
+class OpISub : public AstNode {
 public:
-  OpSub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpISub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
@@ -211,9 +211,9 @@ private:
   std::shared_ptr<AstNode> rhs_;
 };
 
-class OpMul : public AstNode {
+class OpIMul : public AstNode {
 public:
-  OpMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpIMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
@@ -227,9 +227,9 @@ private:
   std::shared_ptr<AstNode> rhs_;
 };
 
-class OpDiv : public AstNode {
+class OpIDiv : public AstNode {
 public:
-  OpDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
+  OpIDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
 
   virtual llvm::Value* codegen(
       llvm::Function* func,
