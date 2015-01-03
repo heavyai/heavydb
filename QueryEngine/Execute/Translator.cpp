@@ -160,107 +160,44 @@ llvm::Value* ImmInt::codegen(
   return llvm::ConstantInt::get(type, val_);
 }
 
-OpGt::OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
+OpICmp::OpICmp(std::shared_ptr<AstNode> lhs,
+               std::shared_ptr<AstNode> rhs,
+               llvm::ICmpInst::Predicate op)
+  : lhs_{lhs}
+  , rhs_{rhs}
+  , op_{op} {}
 
-llvm::Value* OpGt::codegen(
+llvm::Value* OpICmp::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSGT(lhs, rhs);
+  return ir_builder.CreateICmp(op_, lhs, rhs);
 }
 
-void OpGt::collectUsedColumns(std::unordered_set<int>& columns) {
+void OpICmp::collectUsedColumns(std::unordered_set<int>& columns) {
   lhs_->collectUsedColumns(columns);
   rhs_->collectUsedColumns(columns);
 }
+
+OpGt::OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SGT) {}
 
 OpLt::OpLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpLt::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSLT(lhs, rhs);
-}
-
-void OpLt::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SLT) {}
 
 OpGte::OpGte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpGte::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSGE(lhs, rhs);
-}
-
-void OpGte::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SGE) {}
 
 OpLte::OpLte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpLte::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSLE(lhs, rhs);
-}
-
-void OpLte::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SLE) {}
 
 OpNeq::OpNeq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpNeq::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpNE(lhs, rhs);
-}
-
-void OpNeq::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_NE) {}
 
 OpEq::OpEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpEq::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpEQ(lhs, rhs);
-}
-
-void OpEq::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_EQ) {}
 
 OpAdd::OpAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
   : lhs_{lhs}, rhs_{rhs} {}

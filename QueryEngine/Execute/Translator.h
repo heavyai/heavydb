@@ -83,100 +83,52 @@ private:
   const int width_;
 };
 
-class OpGt : public AstNode {
+class OpICmp : public AstNode {
+public:
+  OpICmp(std::shared_ptr<AstNode> lhs,
+         std::shared_ptr<AstNode> rhs,
+         llvm::ICmpInst::Predicate op);
+
+  virtual llvm::Value* codegen(
+      llvm::Function* func,
+      llvm::IRBuilder<>& ir_builder,
+      llvm::Module* module);
+
+  void collectUsedColumns(std::unordered_set<int>& columns);
+
+private:
+  std::shared_ptr<AstNode> lhs_;
+  std::shared_ptr<AstNode> rhs_;
+  llvm::ICmpInst::Predicate op_;
+};
+
+class OpGt : public OpICmp {
 public:
   OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
-
-  virtual llvm::Value* codegen(
-      llvm::Function* func,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpLt : public AstNode {
+class OpLt : public OpICmp {
 public:
   OpLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
-
-  virtual llvm::Value* codegen(
-      llvm::Function* func,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpGte : public AstNode {
-public:
+class OpGte : public OpICmp {
   OpGte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
-
-  virtual llvm::Value* codegen(
-      llvm::Function* func,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpLte : public AstNode {
+class OpLte : public OpICmp {
 public:
   OpLte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
-
-  virtual llvm::Value* codegen(
-      llvm::Function* func,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpNeq : public AstNode {
+class OpNeq : public OpICmp {
 public:
   OpNeq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
-
-  llvm::Value* codegen(
-      llvm::Function* func,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
-class OpEq : public AstNode {
+class OpEq : public OpICmp {
 public:
   OpEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs);
-
-  virtual llvm::Value* codegen(
-      llvm::Function* func,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
-
-  void collectUsedColumns(std::unordered_set<int>& columns);
-
-private:
-  std::shared_ptr<AstNode> lhs_;
-  std::shared_ptr<AstNode> rhs_;
 };
 
 class OpAdd : public AstNode {
