@@ -160,112 +160,84 @@ llvm::Value* ImmInt::codegen(
   return llvm::ConstantInt::get(type, val_);
 }
 
-OpGt::OpGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
+OpBinary::OpBinary(std::shared_ptr<AstNode> lhs,
+                       std::shared_ptr<AstNode> rhs)
+  : lhs_{lhs}
+  , rhs_{rhs} {}
 
-llvm::Value* OpGt::codegen(
+void OpBinary::collectUsedColumns(std::unordered_set<int>& columns) {
+  lhs_->collectUsedColumns(columns);
+  rhs_->collectUsedColumns(columns);
+}
+
+OpICmp::OpICmp(std::shared_ptr<AstNode> lhs,
+               std::shared_ptr<AstNode> rhs,
+               llvm::ICmpInst::Predicate op)
+  : OpBinary(lhs, rhs), op_{op} {}
+
+llvm::Value* OpICmp::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSGT(lhs, rhs);
+  return ir_builder.CreateICmp(op_, lhs, rhs);
 }
 
-void OpGt::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+OpIGt::OpIGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SGT) {}
 
-OpLt::OpLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
+OpILt::OpILt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SLT) {}
 
-llvm::Value* OpLt::codegen(
+OpIGe::OpIGe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SGE) {}
+
+OpILe::OpILe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_SLE) {}
+
+OpINe::OpINe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_NE) {}
+
+OpIEq::OpIEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpICmp(lhs, rhs, llvm::ICmpInst::ICMP_EQ) {}
+
+OpFCmp::OpFCmp(std::shared_ptr<AstNode> lhs,
+               std::shared_ptr<AstNode> rhs,
+               llvm::ICmpInst::Predicate op)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFCmp::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSLT(lhs, rhs);
+  return ir_builder.CreateFCmp(op_, lhs, rhs);
 }
 
-void OpLt::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+OpFGt::OpFGt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OGT) {}
 
-OpGte::OpGte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
+OpFLt::OpFLt(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OLT) {}
 
-llvm::Value* OpGte::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSGE(lhs, rhs);
-}
+OpFGe::OpFGe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OGE) {}
 
-void OpGte::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+OpFLe::OpFLe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OLE) {}
 
-OpLte::OpLte(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
+OpFNe::OpFNe(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_ONE) {}
 
-llvm::Value* OpLte::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpSLE(lhs, rhs);
-}
+OpFEq::OpFEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpFCmp(lhs, rhs, llvm::CmpInst::FCMP_OEQ) {}
 
-void OpLte::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+OpIAdd::OpIAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
 
-OpNeq::OpNeq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpNeq::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpNE(lhs, rhs);
-}
-
-void OpNeq::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
-
-OpEq::OpEq(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpEq::codegen(
-    llvm::Function* func,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
-  auto lhs = lhs_->codegen(func, ir_builder, module);
-  auto rhs = rhs_->codegen(func, ir_builder, module);
-  return ir_builder.CreateICmpEQ(lhs, rhs);
-}
-
-void OpEq::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
-
-OpAdd::OpAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpAdd::codegen(
+llvm::Value* OpIAdd::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
@@ -274,15 +246,10 @@ llvm::Value* OpAdd::codegen(
   return ir_builder.CreateAdd(lhs, rhs);
 }
 
-void OpAdd::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+OpISub::OpISub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
 
-OpSub::OpSub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpSub::codegen(
+llvm::Value* OpISub::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
@@ -291,15 +258,10 @@ llvm::Value* OpSub::codegen(
   return ir_builder.CreateSub(lhs, rhs);
 }
 
-void OpSub::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+OpIMul::OpIMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
 
-OpMul::OpMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpMul::codegen(
+llvm::Value* OpIMul::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
@@ -308,15 +270,10 @@ llvm::Value* OpMul::codegen(
   return ir_builder.CreateMul(lhs, rhs);
 }
 
-void OpMul::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
+OpIDiv::OpIDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
 
-OpDiv::OpDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
-
-llvm::Value* OpDiv::codegen(
+llvm::Value* OpIDiv::codegen(
     llvm::Function* func,
     llvm::IRBuilder<>& ir_builder,
     llvm::Module* module) {
@@ -325,13 +282,56 @@ llvm::Value* OpDiv::codegen(
   return ir_builder.CreateSDiv(lhs, rhs);
 }
 
-void OpDiv::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
+OpFAdd::OpFAdd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFAdd::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFAdd(lhs, rhs);
+}
+
+OpFSub::OpFSub(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFSub::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFSub(lhs, rhs);
+}
+
+OpFMul::OpFMul(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFMul::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFMul(lhs, rhs);
+}
+
+OpFDiv::OpFDiv(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
+  : OpBinary(lhs, rhs) {}
+
+llvm::Value* OpFDiv::codegen(
+    llvm::Function* func,
+    llvm::IRBuilder<>& ir_builder,
+    llvm::Module* module) {
+  auto lhs = lhs_->codegen(func, ir_builder, module);
+  auto rhs = rhs_->codegen(func, ir_builder, module);
+  return ir_builder.CreateFDiv(lhs, rhs);
 }
 
 OpAnd::OpAnd(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
+  : OpBinary(lhs, rhs) {}
 
 llvm::Value* OpAnd::codegen(
     llvm::Function* func,
@@ -342,13 +342,8 @@ llvm::Value* OpAnd::codegen(
   return ir_builder.CreateAnd(lhs, rhs);
 }
 
-void OpAnd::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
-}
-
 OpOr::OpOr(std::shared_ptr<AstNode> lhs, std::shared_ptr<AstNode> rhs)
-  : lhs_{lhs}, rhs_{rhs} {}
+  : OpBinary(lhs, rhs) {}
 
 llvm::Value* OpOr::codegen(
     llvm::Function* func,
@@ -357,11 +352,6 @@ llvm::Value* OpOr::codegen(
   auto lhs = lhs_->codegen(func, ir_builder, module);
   auto rhs = rhs_->codegen(func, ir_builder, module);
   return ir_builder.CreateOr(lhs, rhs);
-}
-
-void OpOr::collectUsedColumns(std::unordered_set<int>& columns) {
-  lhs_->collectUsedColumns(columns);
-  rhs_->collectUsedColumns(columns);
 }
 
 OpNot::OpNot(std::shared_ptr<AstNode> op) : op_{op} {}
