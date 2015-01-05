@@ -1,5 +1,5 @@
 %option c++
-%option noyywrap case-insensitive
+%option noyywrap case-insensitive yylineno
 
 %{
 #undef yyFlexLexer
@@ -7,17 +7,19 @@
 #include <../Shared/sqldefs.h>
 #include "parser.h"
 
+extern YY_Parser_STYPE yylval;
+
 	/* macro to save the text and return a token */
-#define TOK(name) { return Parser::name; }
+#define TOK(name) { return SQLParser::name; }
 %}
 
 %%
 
 	/* literal keyword tokens */
 
-ALL		{ yylval.opval = kALL; TOK(ALL) }
+ALL		{ yylval.qualval = kALL; TOK(ALL) }
 AND		TOK(AND)
-ANY		{ yylval.opval = kANY; TOK(ANY) }
+ANY		{ yylval.qualval = kANY; TOK(ANY) }
 AS			TOK(AS)
 ASC		TOK(ASC)
 AUTHORIZATION	TOK(AUTHORIZATION)
@@ -43,6 +45,7 @@ DOUBLE		TOK(DOUBLE)
 ESCAPE		TOK(ESCAPE)
 EXISTS		TOK(EXISTS)
 FETCH		TOK(FETCH)
+FIRST		TOK(FIRST)
 FLOAT		TOK(FLOAT)
 FOR		TOK(FOR)
 FOREIGN		TOK(FOREIGN)
@@ -58,6 +61,7 @@ INTO		TOK(INTO)
 IS			TOK(IS)
 KEY		TOK(KEY)
 LANGUAGE		TOK(LANGUAGE)
+LAST	TOK(LAST)
 LIKE		TOK(LIKE)
 NOT		TOK(NOT)
 NULL		TOK(NULLX)
@@ -80,7 +84,7 @@ SCHEMA		TOK(SCHEMA)
 SELECT		TOK(SELECT)
 SET		TOK(SET)
 SMALLINT		TOK(SMALLINT)
-SOME		{ yylval.opval = kANY; TOK(SOME) } /* SOME = ANY */
+SOME		{ yylval.qualval = kANY; TOK(SOME) } /* SOME = ANY */
 TABLE		TOK(TABLE)
 TIME		TOK(TIME)
 TIMESTAMP	TOK(TIMESTAMP)
@@ -105,42 +109,54 @@ WORK		TOK(WORK)
 "<=" { yylval.opval = kLE; TOK(COMPARISON); }
 ">=" { yylval.opval = kGE; TOK(COMPARISON); }
 
-[-+*/(),.;]	TOK(yytext[0])
+[-+*/(),.;]	{ return yytext[0]; }
 
 
 	/* names */
-[A-Za-z][A-Za-z0-9_]*	TOK(NAME)
+[A-Za-z][A-Za-z0-9_]*	{ yylval.stringval = new std::string(yytext); TOK(NAME) }
 
 	/* parameters */
 ":"[A-Za-z][A-Za-z0-9_]*	TOK(PARAMETER)
 
 	/* numbers */
 
-/* TODO: handle BIGINT literals */
-[0-9]+ { yylval.intval = atoi(yytext); TOK(INTNUM) }
+[0-9]+ { yylval.intval = atoll(yytext); TOK(INTNUM) }
 [0-9]+"."[0-9]* |
-"."[0-9]*		{ yylval.strval = yytext; TOK(FIXEDNUM) }
+"."[0-9]*		{ 
+		yylval.stringval = new std::string(yytext); 
+		// numeric and decimal precisions cannot exceed 19
+		if (yylval.stringval->length() < 20)
+			return SQLParser::FIXEDNUM;
+		// otherwise return as double
+		yylval.doubleval = std::stod(*yylval.stringval);
+		return SQLParser::DOUBLE;
+	}
 
-/* TODO: handle FLOAT v.s. DOUBLE */
+	/* TODO: handle FLOAT v.s. DOUBLE */
 [0-9]+[eE][+-]?[0-9]+	|
 [0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
-"."[0-9]*[eE][+-]?[0-9]+	{ yylval.floatval = atof(yytext); TOK(FLOAT) }
+"."[0-9]*[eE][+-]?[0-9]+	{ yylval.doubleval = atof(yytext); TOK(DOUBLE) }
 
 	/* strings */
 
 '[^'\n]*'	{
-		int c = input();
+		int c = yyFlexLexer::yyinput();
 
 		unput(c);	/* just peeking */
-		if(c != '\'')
-			TOK(STRING);
+		if(c != '\'') {
+			/* remove quotes */
+			yylval.stringval = new std::string(yytext+1, strlen(yytext)-2);
+			return SQLParser::STRING;
+		}
 		else
 			yymore();
 	}
 		
-'[^'\n]*$	{	yyerror("Unterminated string"); }
+'[^'\n]*$	{	YY_FATAL_ERROR("Unterminated string"); }
 
+	/*
 \n		{ lineno++; }
+	*/
 
 [ \t\r]+	;	/* white space */
 
@@ -166,5 +182,5 @@ int main()
 	else
 		fprintf(stderr, "Embedded SQL parse failed\n");
 	return 0;
-} /* main */
+}
 */

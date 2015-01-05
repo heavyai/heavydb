@@ -10,7 +10,7 @@
 
 enum SQLOps {
 	kEQ,
-	kNEQ,
+	kNE,
 	kLT,
 	kGT,
 	kLE,
@@ -24,14 +24,19 @@ enum SQLOps {
 	kDIVIDE,
 	kUMINUS,
 	kISNULL,
-	kEXISTS
-}
+	kEXISTS,
+	kCAST
+};
 
-enum SQLQualifer {
+#define IS_COMPARISON(X) ((X) == kEQ || (X) == kNE || (X) == kLT || (X) == kGT || (X) == kLE || (X) == kGE)
+#define IS_LOGIC(X) ((X) == kAND || (X) == kOR)
+#define IS_ARITHMETIC(X) ((X) == kMINUS || (X) == kPLUS || (X) == kMULTIPLY || (X) == kDIVIDE)
+
+enum SQLQualifier {
 	kONE,
 	kANY,
 	kALL
-}
+};
 
 enum SQLAgg {
 	kAVG,
@@ -39,7 +44,7 @@ enum SQLAgg {
 	kMAX,
 	kSUM,
 	kCOUNT
-}
+};
 
 enum SQLStmtType {
 	kSELECT,
@@ -47,6 +52,6 @@ enum SQLStmtType {
 	kINSERT,
 	kDELETE,
 	kCREATE_TABLE
-}
+};
 
 #endif // SQLDEFS_H
