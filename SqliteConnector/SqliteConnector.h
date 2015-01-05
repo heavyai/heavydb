@@ -19,6 +19,7 @@ class SqliteConnector {
 
     public:
         SqliteConnector (const std::string &dbName, const std::string &dir = ".");
+				~SqliteConnector();
         void query(const std::string &queryString);
         void queryWithCallback(const std::string &queryString);
 

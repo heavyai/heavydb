@@ -33,6 +33,10 @@ SqliteConnector::SqliteConnector (const string &dbName, const string &dir) {
     }
 }
 
+SqliteConnector::~SqliteConnector() {
+	sqlite3_close(db_);
+}
+
 void SqliteConnector::throwError() {
     string errorMsg (sqlite3_errmsg(db_));
     throw runtime_error("Sqlite3 Error: " + errorMsg);
