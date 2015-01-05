@@ -2,20 +2,23 @@
 #define TABLE_DESCRIPTOR_H
 
 #include <string>
+#include <cstdint>
 
 /**
  * @type TableDescriptor
  * @brief specifies the content in-memory of a row in the table metadata table
  * 
- * A TableDescriptor type currently includes only the table name and the tableId (zero-based) that it maps to. Other metadata could be added in the future.
  */
 
 struct TableDescriptor {
+    int32_t tableId; /**< tableId starts at 0 for valid tables. */
     std::string tableName; /**< tableName is the name of the table table -must be unique */
-    int tableId; /**< tableId starts at 0 for valid tables. */
-
-    TableDescriptor(const std::string &tableName, const int tableId): tableName(tableName), tableId(tableId) {}
-    TableDescriptor() {}
+		int32_t nColumns;
+		bool isView;
+		bool isGPU;
+		std::string viewSQL;
+		std::string fragments;
+		std::string partitions;
 };
 
 
