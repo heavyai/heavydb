@@ -271,46 +271,39 @@ namespace Analyzer {
 	}
 
 	void
-	RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, int rte_no, std::vector<TargetEntry*> &tlist)
+	RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, int table_id, std::vector<TargetEntry*> &tlist)
 	{
 		column_descs = catalog.getAllColumnMetadataForTable(table_id);
-		int col_no = 0;
 		int resno = tlist.size() + 1;
 		for (auto col_desc : column_descs) {
-			ColumnVar *cv = new ColumnVar(col_desc->columnType, rte_no, col_no);
+			ColumnVar *cv = new ColumnVar(col_desc->columnType, table_id, col_desc->columnId);
 			TargetEntry *tle = new TargetEntry(resno, col_desc->columnName, cv);
 			tlist.push_back(tle);
 			resno++;
-			col_no++;
 		}
 	}
 
-	int
-	RangeTblEntry::get_column_no(const Catalog_Namespace::Catalog &catalog, const std::string &name)
+	const ColumnDescriptor *
+	RangeTblEntry::get_column_desc(const Catalog_Namespace::Catalog &catalog, const std::string &name)
 	{
-		int col_no = 0;
-		for (auto td : column_descs) {
-			if (td->columnName == name)
-				return col_no;
-			col_no++;
+		for (auto cd : column_descs) {
+			if (cd->columnName == name)
+				return cd;
 		}
-		const ColumnDescriptor *td = catalog.getMetadataForColumn(table_id, name);
-		if (td == nullptr)
-			return -1;
-		column_descs.push_back(td);
-		return column_descs.size() - 1;
+		const ColumnDescriptor *cd = catalog.getMetadataForColumn(table_id, name);
+		if (cd != nullptr)
+			column_descs.push_back(cd);
+		return cd;
 	}
 
-	int
-	Query::get_rte_no(const std::string &name)
+	RangeTblEntry *
+	Query::get_rte(const std::string &name)
 	{
-		int rte_no = 0;
 		for (auto rte : *rangetable) {
 			if (rte->get_rangevar() == name)
-				return rte_no;
-			rte_no++;
+				return rte;
 		}
-		return -1;
+		return nullptr;
 	}
 
 	void
@@ -319,7 +312,7 @@ namespace Analyzer {
 		if (groupby != nullptr) {
 			for (auto e : *groupby) {
 				ColumnVar *c = dynamic_cast<ColumnVar*>(e);
-				if (rte_no == c->get_rte_no() && col_no == c->get_col_no())
+				if (table_id == c->get_table_id() && column_id == c->get_column_id())
 					return;
 			}
 		}

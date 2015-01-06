@@ -44,13 +44,13 @@ namespace Analyzer {
 	 */
 	class ColumnVar : public Expr {
 		public:
-			ColumnVar(const SQLTypeInfo &ti, int r, int c) : Expr(ti), rte_no(r), col_no(c) {}
-			int get_rte_no() { return rte_no; }
-			int get_col_no() { return col_no; }
+			ColumnVar(const SQLTypeInfo &ti, int r, int c) : Expr(ti), table_id(r), column_id(c) {}
+			int get_table_id() const { return table_id; }
+			int get_column_id() const { return column_id; }
 			virtual void check_group_by(const std::list<Expr*> *groupby) const;
 		private:
-			int rte_no; // index of the range table entry. 0 based
-			int col_no; // index into the vector of columns. 0 based
+			int table_id; // index of the range table entry. 0 based
+			int column_id; // index into the vector of columns. 0 based
 	};
 
 	/*
@@ -235,8 +235,8 @@ namespace Analyzer {
 			 * return the index.  return -1 if not found
 			 * @param name name of column to look up
 			 */
-			int get_column_no(const Catalog_Namespace::Catalog &catalog, const std::string &name);
 			const ColumnDescriptor *get_column_desc(int col_no) { return column_descs[col_no]; }
+			const ColumnDescriptor *get_column_desc(const Catalog_Namespace::Catalog &catalog, const std::string &name);
 			const std::vector<const ColumnDescriptor *> &get_column_descs() { return column_descs; }
 			const std::string &get_rangevar() { return rangevar; }
 			int32_t get_table_id() { return table_id; }
@@ -288,9 +288,7 @@ namespace Analyzer {
 			void set_order_by(std::list<OrderEntry> *o) { order_by = o; }
 			void set_next_query(Query *q) { next_query = q; }
 			void set_is_unionall(bool u) { is_unionall = u; }
-			RangeTblEntry *get_rte(int rte_no) { return (*rangetable)[rte_no]; };
-			int get_rte_no(const std::string &range_var_name);
-			const ColumnDescriptor *get_column(int rte_no, int col_no) { return get_rte(rte_no)->get_column_desc(col_no); }
+			RangeTblEntry *get_rte(const std::string &range_var_name);
 		private:
 			bool is_distinct; // true only if SELECT DISTINCT
 			std::vector<TargetEntry*> *targetlist; // represents the SELECT clause
