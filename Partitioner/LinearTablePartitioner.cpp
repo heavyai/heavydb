@@ -63,9 +63,10 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
             
             // append the data (size of data is colBytesize * numRowsToInsert)
             Buffer *insertBuffer = colMapIt->second.insertBuffer;
-            insertBuffer->append(colByteSize * numRowsToInsert, static_cast<mapd_addr_t>(insertDataStruct.data[i]));
+            //insertBuffer->append(colByteSize * numRowsToInsert, static_cast<mapd_addr_t>(insertDataStruct.data[i]));
+            insertBuffer->append(static_cast<mapd_addr_t>(insertDataStruct.data[i]),colByteSize*numRowsToInsert);
             //insertBuffer->print();
-            insertBuffer->print(colMapIt->second.columnType);
+            //insertBuffer->print(colMapIt->second.columnType);
         }
 
         partitionInfoVec_.back().numTuples += numRowsToInsert;

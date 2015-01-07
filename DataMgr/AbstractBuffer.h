@@ -8,6 +8,11 @@
 
 #include "../Shared/types.h"
 
+#ifdef BUFFER_MUTEX
+#include <boost/thread/locks.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#endif
+
 namespace Memory_Namespace {
     
     /**
@@ -50,11 +55,17 @@ namespace Memory_Namespace {
             isDirty_ = false;
         }
 
+
     protected:
         mapd_size_t size_;
         bool isDirty_;
         bool isAppended_;
         bool isUpdated_;
+
+#ifdef BUFFER_MUTEX
+        boost::shared_mutex readWriteMutex_;
+        boost::shared_mutex appendMutex_;
+#endif
 
     };
     

@@ -42,6 +42,9 @@ namespace Buffer_Namespace {
     }
 
     void Buffer::reserve(const mapd_size_t numBytes) {
+#ifdef BUFFER_MUTEX
+        boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
+#endif
         mapd_size_t numPages = (numBytes + pageSize_ -1 ) / pageSize_;
         std::cout << "NumPages reserved: " << numPages << std::endl;
         if (numPages > numPages_) {
@@ -53,6 +56,10 @@ namespace Buffer_Namespace {
     
     void Buffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset) {
         assert(dst && mem_);
+#ifdef BUFFER_MUTEX
+        boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_);
+#endif
+
         std::cout << "Buffer size: " << size_ << std::endl;
         std::cout << "Bytes to read: " << numBytes << std::endl;
         if (numBytes + offset > size_) {
@@ -64,6 +71,9 @@ namespace Buffer_Namespace {
     
     void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset) {
         assert(numBytes > 0); // cannot write 0 bytes
+#ifdef BUFFER_MUTEX
+        boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
+#endif
         if (numBytes + offset > reservedSize()) {
             reserve(numBytes+offset);
             //bm_ -> reserveBuffer(segIt_,numBytes + offset);
@@ -93,6 +103,12 @@ namespace Buffer_Namespace {
     }
 
     void Buffer::append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType) {
+#ifdef BUFFER_MUTEX
+        boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_); // keep another thread from getting a write lock
+        boost::unique_lock < boost::shared_mutex > appendLock (appendMutex_); // keep another thread from getting an append lock
+#endif
+
+
         isDirty_ = true;
         isAppended_ = true;
 
