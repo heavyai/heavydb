@@ -34,12 +34,10 @@ namespace Analyzer {
 	}
 
 	Query::~Query() {
-		for (auto p : *targetlist)
+		for (auto p : targetlist)
 			delete p;
-		delete targetlist;
-		for (auto p : *rangetable)
+		for (auto p : rangetable)
 			delete p;
-		delete rangetable;
 		if (where_predicate != nullptr)
 			delete where_predicate;
 		if (group_by != nullptr) {
@@ -271,15 +269,19 @@ namespace Analyzer {
 	}
 
 	void
-	RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, int table_id, std::vector<TargetEntry*> &tlist)
+	RangeTblEntry::add_all_column_descs(const Catalog_Namespace::Catalog &catalog)
 	{
-		column_descs = catalog.getAllColumnMetadataForTable(table_id);
-		int resno = tlist.size() + 1;
+		column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
+	}
+
+	void
+	RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, std::list<TargetEntry*> &tlist)
+	{
+		column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
 		for (auto col_desc : column_descs) {
-			ColumnVar *cv = new ColumnVar(col_desc->columnType, table_id, col_desc->columnId);
-			TargetEntry *tle = new TargetEntry(resno, col_desc->columnName, cv);
+			ColumnVar *cv = new ColumnVar(col_desc->columnType, table_desc->tableId, col_desc->columnId);
+			TargetEntry *tle = new TargetEntry(col_desc->columnName, cv);
 			tlist.push_back(tle);
-			resno++;
 		}
 	}
 
@@ -290,7 +292,7 @@ namespace Analyzer {
 			if (cd->columnName == name)
 				return cd;
 		}
-		const ColumnDescriptor *cd = catalog.getMetadataForColumn(table_id, name);
+		const ColumnDescriptor *cd = catalog.getMetadataForColumn(table_desc->tableId, name);
 		if (cd != nullptr)
 			column_descs.push_back(cd);
 		return cd;
@@ -299,11 +301,17 @@ namespace Analyzer {
 	RangeTblEntry *
 	Query::get_rte(const std::string &name)
 	{
-		for (auto rte : *rangetable) {
+		for (auto rte : rangetable) {
 			if (rte->get_rangevar() == name)
 				return rte;
 		}
 		return nullptr;
+	}
+
+	void
+	Query::add_rte(RangeTblEntry *rte)
+	{
+		rangetable.push_back(rte);
 	}
 
 	void

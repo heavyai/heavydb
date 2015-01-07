@@ -49,8 +49,8 @@ namespace Analyzer {
 			int get_column_id() const { return column_id; }
 			virtual void check_group_by(const std::list<Expr*> *groupby) const;
 		private:
-			int table_id; // index of the range table entry. 0 based
-			int column_id; // index into the vector of columns. 0 based
+			int table_id; // the global table id
+			int column_id; // the column id
 	};
 
 	/*
@@ -210,13 +210,11 @@ namespace Analyzer {
 	 */
 	class TargetEntry {
 		public:
-			TargetEntry(int r, const std::string &n, Expr *e) : resno(r), resname(n), expr(e) {}
+			TargetEntry(const std::string &n, Expr *e) : resname(n), expr(e) {}
 			virtual ~TargetEntry() { delete expr; }
-			int get_resno() { return resno; }
 			const std::string &get_resname() { return resname; }
 			Expr *get_expr() { return expr; }
 		private:
-			int resno; // position in TargetList for SELECT, attribute number for UPDATE
 			std::string resname; // alias name, e.g., SELECT salary + bonus AS compensation, 
 			Expr *expr; // expression to evaluate for the value
 	};
@@ -224,29 +222,30 @@ namespace Analyzer {
 	/*
 	 * @type RangeTblEntry 
 	 * @brief Range table contains all the information about the tables/views
-	 * and columns referenced in a query.  It is a vector of RangeTblEntry's.
+	 * and columns referenced in a query.  It is a list of RangeTblEntry's.
 	 */
 	class RangeTblEntry {
 		public:
-			RangeTblEntry(const std::string &r, int32_t id, const std::string &t, Query *v) : rangevar(r), table_id(id), table_name(t), view_query(v) {}
+			RangeTblEntry(const std::string &r, const TableDescriptor *t, Query *v) : rangevar(r), table_desc(t), view_query(v) {}
 			virtual ~RangeTblEntry();
-			/* @brief get_column_no tries to find the column in column_descs and returns the index into the column_desc if found.
+			/* @brief get_column_desc tries to find the column in column_descs and returns the column descriptor if found.
 			 * otherwise, look up the column from Catalog, add the descriptor to column_descs and
-			 * return the index.  return -1 if not found
+			 * return the descriptor.  return nullptr if not found
+			 * @param catalog the catalog for the current database
 			 * @param name name of column to look up
 			 */
-			const ColumnDescriptor *get_column_desc(int col_no) { return column_descs[col_no]; }
 			const ColumnDescriptor *get_column_desc(const Catalog_Namespace::Catalog &catalog, const std::string &name);
-			const std::vector<const ColumnDescriptor *> &get_column_descs() { return column_descs; }
-			const std::string &get_rangevar() { return rangevar; }
-			int32_t get_table_id() { return table_id; }
-			const std::string &get_table_name() { return table_name; }
-			const Query *get_view_query() { return view_query; }
-			void expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, int rte_no, std::vector<TargetEntry*> &tlist);
+			const std::vector<const ColumnDescriptor *> &get_column_descs() const { return column_descs; }
+			const std::string &get_rangevar() const { return rangevar; }
+			int32_t get_table_id() const { return table_desc->tableId; }
+			const std::string &get_table_name() const { return table_desc->tableName; }
+			const TableDescriptor *get_table_desc() const { return table_desc; }
+			const Query *get_view_query() const { return view_query; }
+			void expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, std::list<TargetEntry*> &tlist);
+			void add_all_column_descs(const Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string rangevar; // range variable name, e.g., FROM emp e, dept d
-			int32_t table_id; // table id
-			std::string table_name; // table name
+			const TableDescriptor *table_desc;
 			std::vector<const ColumnDescriptor *> column_descs; // column descriptors for all columns referenced in this query
 			Query *view_query; // parse tree for the view query
 	};
@@ -258,7 +257,7 @@ namespace Analyzer {
 	struct OrderEntry {
 		OrderEntry(int t, bool d, bool nf) : tle_no(t), is_desc(d), nulls_first(nf) {};
 		~OrderEntry() {}
-		int tle_no; /* targetlist entry number */
+		int tle_no; /* targetlist entry number: 1-based */
 		bool is_desc; /* true if order is DESC */
 		bool nulls_first; /* true if nulls are ordered first.  otherwise last. */
 	};
@@ -269,36 +268,40 @@ namespace Analyzer {
 	 */
 	class Query {
 		public:
-			Query() : is_distinct(false), targetlist(nullptr), rangetable(nullptr), where_predicate(nullptr), group_by(nullptr), having_predicate(nullptr), order_by(nullptr), next_query(nullptr), is_unionall(false) {}
-			Query(bool d, std::vector<TargetEntry*> *tl, std::vector<RangeTblEntry*> *rt, Expr *w, std::list<Expr*> *g, Expr *h, std::list<OrderEntry> *ord) : is_distinct(d), targetlist(tl), rangetable(rt), where_predicate(w), group_by(g), having_predicate(h), order_by(ord) {}
+			Query() : is_distinct(false), where_predicate(nullptr), group_by(nullptr), having_predicate(nullptr), order_by(nullptr), next_query(nullptr), is_unionall(false), stmt_type(kSELECT) {}
 			virtual ~Query();
-			bool get_is_distinct() { return is_distinct; }
-			const std::vector<TargetEntry*> *get_targetlist() { return targetlist; }
-			const std::vector<RangeTblEntry*> *get_rangetable() { return rangetable; }
-			const Expr *get_where_predicate() { return where_predicate; }
-			const std::list<Expr*> *get_group_by() { return group_by; };
-			const Expr *get_having_predicate() { return having_predicate; }
-			const std::list<OrderEntry> *get_order_by() { return order_by; }
+			bool get_is_distinct() const { return is_distinct; }
+			const std::list<TargetEntry*> &get_targetlist() const { return targetlist; }
+			std::list<TargetEntry*> &get_targetlist_nonconst() { return targetlist; }
+			const std::list<RangeTblEntry*> &get_rangetable() const { return rangetable; }
+			const Expr *get_where_predicate() const { return where_predicate; }
+			const std::list<Expr*> *get_group_by() const { return group_by; };
+			const Expr *get_having_predicate() const { return having_predicate; }
+			const std::list<OrderEntry> *get_order_by() const { return order_by; }
+			const Query *get_next_query() const { return next_query; }
+			bool get_is_unionall() const { return is_unionall; }
 			void set_is_distinct(bool d) { is_distinct = d; }
-			void set_rangetable(std::vector<RangeTblEntry*> *rtbl) { rangetable = rtbl; }
-			void set_targetlist(std::vector<TargetEntry*> *tlist) { targetlist = tlist; }
 			void set_where_predicate(Expr *p) { where_predicate = p; }
 			void set_group_by(std::list<Expr*> *g) { group_by = g; }
 			void set_having_predicate(Expr *p) { having_predicate = p; }
 			void set_order_by(std::list<OrderEntry> *o) { order_by = o; }
 			void set_next_query(Query *q) { next_query = q; }
 			void set_is_unionall(bool u) { is_unionall = u; }
+			void set_stmt_type(SQLStmtType t) { stmt_type = t; }
 			RangeTblEntry *get_rte(const std::string &range_var_name);
+			void add_rte(RangeTblEntry *rte);
+			void add_tle(TargetEntry *tle) { targetlist.push_back(tle); }
 		private:
 			bool is_distinct; // true only if SELECT DISTINCT
-			std::vector<TargetEntry*> *targetlist; // represents the SELECT clause
-			std::vector<RangeTblEntry*> *rangetable; // represents the FROM clause
+			std::list<TargetEntry*> targetlist; // represents the SELECT clause
+			std::list<RangeTblEntry*> rangetable; // represents the FROM clause for SELECT.  For INSERT, DELETE, UPDATE the result table is always the first entry in rangetable.
 			Expr *where_predicate; // represents the WHERE clause
 			std::list<Expr*> *group_by; // represents the GROUP BY clause
 			Expr *having_predicate; // represents the HAVING clause
 			std::list<OrderEntry> *order_by; // represents the ORDER BY clause
 			Query *next_query; // the next query to UNION
 			bool is_unionall; // true only if it is UNION ALL
+			SQLStmtType stmt_type;
 	};
 }
 
