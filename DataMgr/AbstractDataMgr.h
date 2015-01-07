@@ -28,7 +28,6 @@ namespace Memory_Namespace {
     class AbstractDataMgr {
 
     public:
-        
         virtual ~AbstractDataMgr() {}
         
         // Chunk API
@@ -45,6 +44,9 @@ namespace Memory_Namespace {
         virtual void deleteBuffer(AbstractBuffer *d) = 0;
         virtual AbstractBuffer* putBuffer(AbstractBuffer *d) = 0;
         virtual MgrType getMgrType() = 0;
+
+    protected:
+        AbstractDataMgr * parentMgr_;
 
 
     };

@@ -99,7 +99,11 @@ namespace File_Namespace {
     }
 
 
-    void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const mapd_size_t offset) {
+    void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset) {
+        if (dstBufferType != CPU_BUFFER) {
+            throw std::runtime_error("Unsupported Buffer type");
+        }
+
         // variable declarations
         mapd_addr_t curPtr = dst;    // a pointer to the current location in dst being written to
         mapd_size_t startPage = offset / pageDataSize_;
@@ -187,7 +191,7 @@ namespace File_Namespace {
     }
     */
 
-    void FileBuffer::append(mapd_addr_t src, const mapd_size_t numBytes) {
+    void FileBuffer::append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType) {
         isDirty_ = true;
         isAppended_ = true;
         mapd_size_t startPage = size_ / pageDataSize_;
@@ -227,7 +231,10 @@ namespace File_Namespace {
         assert (bytesLeft == 0);
     }
 
-    void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const mapd_size_t offset) {
+    void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset) {
+        if (srcBufferType != CPU_BUFFER) {
+            throw std::runtime_error("Unsupported Buffer type");
+        }
         isDirty_ = true;
         if (offset < size_) {
             isUpdated_ = true;

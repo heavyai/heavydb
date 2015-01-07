@@ -248,10 +248,10 @@ namespace File_Namespace {
         destBuffer->reserve(chunkSize);
         std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (chunk->isUpdated()) {
-            chunk->read(destBuffer->getMemoryPtr(),chunkSize,0);
+            chunk->read(destBuffer->getMemoryPtr(),chunkSize,destBuffer->getType(),0);
         }
         else {
-            chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->size());
+            chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
         }
         destBuffer->setSize(chunkSize);
     }
@@ -281,7 +281,7 @@ namespace File_Namespace {
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
-            chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), newChunkSize,0);
+            chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
         }
         else if (srcBuffer->isAppended()) {
             assert(oldChunkSize < newChunkSize);
