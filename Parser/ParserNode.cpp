@@ -24,10 +24,12 @@ namespace Parser {
 		delete query;
 	}
 
-	InValues::~InValues() 
+	InValues::~InValues()
 	{
+		InExpr::~InExpr();
 		for (auto p : *value_list)
 			delete p;
+		delete value_list;
 	}
 
 	BetweenExpr::~BetweenExpr() 
@@ -51,6 +53,13 @@ namespace Parser {
 			delete table;
 		if (column != nullptr)
 			delete column;
+	}
+
+	FunctionRef::~FunctionRef() 
+	{
+		delete name;
+		if (arg != nullptr)
+			delete arg;
 	}
 	
 	TableRef::~TableRef() 
@@ -84,29 +93,46 @@ namespace Parser {
 	{
 		for (auto p : *column_list)
 			delete p;
+		delete column_list;
 	}
 
 	ForeignKeyDef::~ForeignKeyDef() 
 	{
 		for (auto p : *column_list)
 			delete p;
+		delete column_list;
 		delete foreign_table;
 		if (foreign_column_list != nullptr) {
 			for (auto p : *foreign_column_list)
 				delete p;
+			delete foreign_column_list;
 		}
 	}
 
-	FunctionRef::~FunctionRef() 
+	CreateTableStmt::~CreateTableStmt() 
 	{
-		delete name;
-		if (arg != nullptr)
-			delete arg;
+		delete table;
+		for (auto p : *table_element_list)
+			delete p;
+		delete table_element_list;
+	}
+
+	SelectEntry::~SelectEntry()
+	{
+		delete select_expr;
+		if (alias != nullptr)
+			delete alias;
 	}
 
 	QuerySpec::~QuerySpec() 
 	{
-		delete select_clause;
+		if (select_clause != nullptr) {
+			for (auto p : *select_clause)
+				delete p;
+			delete select_clause;
+		}
+		for (auto p : *from_clause)
+			delete p;
 		delete from_clause;
 		if (where_clause != nullptr)
 			delete where_clause;
@@ -116,6 +142,62 @@ namespace Parser {
 			delete having_clause;
 	}
 
+	SelectStmt::~SelectStmt()
+	{
+		delete query_expr;
+		if (orderby_clause != nullptr) {
+			for (auto p : *orderby_clause)
+				delete p;
+			delete orderby_clause;
+		}
+	}
+
+	CreateViewStmt::~CreateViewStmt() 
+	{
+		delete view_name;
+		if (column_list != nullptr) {
+			for (auto p : *column_list)
+				delete p;
+			delete column_list;
+		}
+		delete query;
+	}
+
+	InsertStmt::~InsertStmt()
+	{
+		delete table;
+		if (column_list != nullptr) {
+			for (auto p : *column_list)
+				delete p;
+			delete column_list;
+		}
+	}
+
+	InsertValuesStmt::~InsertValuesStmt()
+	{
+		InsertStmt::~InsertStmt();
+		for (auto p : *value_list)
+			delete p;
+		delete value_list;
+	}
+
+	UpdateStmt::~UpdateStmt()
+	{
+		delete table;
+		for (auto p : *assignment_list)
+			delete p;
+		delete assignment_list;
+		if (where_clause != nullptr)
+			delete where_clause;
+	}
+
+	DeleteStmt::~DeleteStmt()
+	{
+		delete table;
+		if (where_clause != nullptr)
+			delete where_clause;
+	}
+	
 	Analyzer::Expr *
 	NullLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const 
 	{
@@ -328,7 +410,7 @@ namespace Parser {
 			table_id = rte->get_table_id();
 		} else {
 			bool found = false;
-			for (auto rte : *query.get_rangetable()) {
+			for (auto rte : query.get_rangetable()) {
 				cd = rte->get_column_desc(catalog, *column);
 				if (cd != nullptr && !found) {
 					found = true;
@@ -419,7 +501,7 @@ namespace Parser {
 			Analyzer::Expr *e = c->analyze(catalog, query);
 			groupby->push_back(e);
 		}
-		for (auto t : *query.get_targetlist()) {
+		for (auto t : query.get_targetlist()) {
 			Analyzer::Expr *e = t->get_expr();
 			if (typeid(*e) != typeid(Analyzer::AggExpr))
 				e->check_group_by(groupby);
@@ -443,11 +525,11 @@ namespace Parser {
 	void
 	QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
-		std::vector<Analyzer::TargetEntry*> *tlist = new std::vector<Analyzer::TargetEntry*>();
+		std::list<Analyzer::TargetEntry*> &tlist = query.get_targetlist_nonconst();
 		if (select_clause == nullptr) {
 			// this means SELECT *
-			for (auto rte : *query.get_rangetable()) {
-				rte->expand_star_in_targetlist(catalog, rte->get_table_id(), *tlist);
+			for (auto rte : query.get_rangetable()) {
+				rte->expand_star_in_targetlist(catalog, tlist);
 			}
 		}
 		else {
@@ -461,7 +543,7 @@ namespace Parser {
 						Analyzer::RangeTblEntry *rte = query.get_rte(*range_var_name);
 						if (rte == nullptr)
 							throw std::runtime_error("invalid range variable name: " + *range_var_name);
-						rte->expand_star_in_targetlist(catalog, rte->get_table_id(), *tlist);
+						rte->expand_star_in_targetlist(catalog, tlist);
 				}
 				else {
 					Analyzer::Expr *e = select_expr->analyze(catalog, query);
@@ -473,19 +555,17 @@ namespace Parser {
 						const ColumnDescriptor *col_desc = catalog.getMetadataForColumn(colvar->get_table_id(), colvar->get_column_id());
 						resname = col_desc->columnName;
 					}
-					Analyzer::TargetEntry *tle = new Analyzer::TargetEntry(tlist->size() + 1, resname, e);
-					tlist->push_back(tle);
+					Analyzer::TargetEntry *tle = new Analyzer::TargetEntry(resname, e);
+					tlist.push_back(tle);
 				}
 			}
 		}
-		query.set_targetlist(tlist);
 	}
 
 	void
 	QuerySpec::analyze_from_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
 		Analyzer::RangeTblEntry *rte;
-		std::vector<Analyzer::RangeTblEntry*> *rt = new std::vector<Analyzer::RangeTblEntry*>();
 		for (auto p : *from_clause) {
 			const TableDescriptor *table_desc;
 			table_desc = catalog.getMetadataForTable(*p->get_table_name());
@@ -496,10 +576,9 @@ namespace Parser {
 				range_var = *p->get_table_name();
 			else
 				range_var = *p->get_range_var();
-			rte = new Analyzer::RangeTblEntry(range_var, table_desc->tableId, *p->get_table_name(), nullptr);
-			rt->push_back(rte);
+			rte = new Analyzer::RangeTblEntry(range_var, table_desc, nullptr);
+			query.add_rte(rte);
 		}
-		query.set_rangetable(rt);
 	}
 
 	void
@@ -516,13 +595,13 @@ namespace Parser {
 	void
 	SelectStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
+		query.set_stmt_type(kSELECT);
 		query_expr->analyze(catalog, query);
 		if (orderby_clause == nullptr) {
 			query.set_order_by(nullptr);
 			return;
 		}
-		const std::vector<Analyzer::TargetEntry*> *tlist;
-		tlist = query.get_targetlist();
+		const std::list<Analyzer::TargetEntry*> &tlist = query.get_targetlist();
 		std::list<Analyzer::OrderEntry> *order_by = new std::list<Analyzer::OrderEntry>();
 		for (auto p : *orderby_clause) {
 			int tle_no = p->get_colno();
@@ -530,18 +609,61 @@ namespace Parser {
 				// use column name
 				// search through targetlist for matching name
 				const std::string *name = p->get_column()->get_column();
-				for (auto tle : *tlist) {
+				tle_no = 1;
+				bool found = false;
+				for (auto tle : tlist) {
 					if (tle->get_resname() == *name) {
-						tle_no = tle->get_resno();
+						found = true;
 						break;
 					}
+					tle_no++;
 				}
-				if (tle_no == 0)
+				if (!found)
 					throw std::runtime_error("invalid name in order by: " + *name);
 			}
 			order_by->push_back(Analyzer::OrderEntry(tle_no, p->get_is_desc(), p->get_nulls_first()));
 		}
 		query.set_order_by(order_by);
+	}
+
+	void
+	InsertStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
+	{
+		query.set_stmt_type(kINSERT);
+		const TableDescriptor *td = catalog.getMetadataForTable(*table);
+		if (td == nullptr)
+			throw std::runtime_error("Table " + *table + " does not exist.");
+		if (td->isView)
+			throw std::runtime_error("Insert to views is not supported yet.");
+		Analyzer::RangeTblEntry *rte = new Analyzer::RangeTblEntry(*table, td, nullptr);
+		if (column_list == nullptr)
+			rte->add_all_column_descs(catalog);
+		else {
+			for (auto c : *column_list) {
+				const ColumnDescriptor *cd = rte->get_column_desc(catalog, *c);
+				if (cd == nullptr)
+					throw std::runtime_error("Column " + *c + " does not exist.");
+				
+			}
+		}
+	}
+
+	void
+	InsertValuesStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
+	{
+		InsertStmt::analyze(catalog, query);
+		std::list<Analyzer::TargetEntry*> &tlist = query.get_targetlist_nonconst();
+		for (auto v : *value_list) {
+			Analyzer::Expr *e = v->analyze(catalog, query);
+			tlist.push_back(new Analyzer::TargetEntry("", e));
+		}
+	}
+
+	void
+	InsertQueryStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &insert_query) const
+	{
+		InsertStmt::analyze(catalog, insert_query);
+		query->analyze(catalog, insert_query);
 	}
 
 	void
