@@ -33,17 +33,35 @@ namespace Buffer_Namespace {
             }
         }
     }
-    /*
-    void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
-        auto chunkIt = chunkIndex_.find(key);
-        if (chunkIt == chunkIndex_.end()) 
-            throw std::runtime_error("Chunk does not exist");
-     */       
+    
+    //void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
+    //    auto chunkIt = chunkIndex_.find(key);
+    //    AbstractBuffer * buffer;
+    //    if (chunkIt == chunkIndex_.end()) {
+    //        if (parentMgr_ == 0) {
+    //            throw std::runtime_error("Chunk does not exist");
+    //        }
+    //        buffer = createChunk(key,pageSize_,numBytes);
+    //        parentMgr -> fetchChunk(key, buffer, numBytes);
+    //    }
+    //    else {
+    //        buffer = chunkIt -> second -> buffer;
+    //    }
+    //    mapd_size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
+    //    destBuffer->reserve(chunkSize);
+    //    std::cout << "After reserve chunksize: " << chunkSize << std::endl;
+    //    if (chunk->isUpdated()) {
+    //        chunk->read(destBuffer->getMemoryPtr(),chunkSize,0);
+    //    }
+    //    else {
+    //        chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->size());
+    //    }
+    //    destBuffer->setSize(chunkSize);
+    //}
 
 
 
-
-    void CpuBufferMgr::createBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
+    void CpuBufferMgr::allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
         new CpuBuffer(this, segIt, pageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
     }
 

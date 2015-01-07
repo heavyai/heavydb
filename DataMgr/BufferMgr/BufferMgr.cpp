@@ -51,7 +51,7 @@ namespace Buffer_Namespace {
         bufferSeg.chunkKey = chunkKey;
         unsizedSegs_.push_back(bufferSeg);
         chunkIndex_[chunkKey] = std::prev(unsizedSegs_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
-        createBuffer(chunkIndex_[chunkKey],chunkPageSize,initialSize); 
+        allocateBuffer(chunkIndex_[chunkKey],chunkPageSize,initialSize); 
         //slabSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(slabSegments_.end(),1), chunkPageSize, initialSize); 
         //new Buffer(this, chunkIndex_[chunkKey], chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
 
@@ -124,19 +124,19 @@ namespace Buffer_Namespace {
         segIt -> pinCount++; // so we don't evict this while trying to find a new segment for it - @todo - maybe should go up top?
         auto newSegIt = findFreeBuffer(numBytes);
         /* Below should be in copy constructor for BufferSeg?*/
-
         newSegIt -> buffer = segIt -> buffer;
         //newSegIt -> buffer -> segIt_ = newSegIt;
         newSegIt -> chunkKey = segIt -> chunkKey;
-
+        mapd_addr_t oldMem = newSegIt -> buffer -> mem_;
         newSegIt -> buffer -> mem_ = slabs_[newSegIt->slabNum] + newSegIt -> startPage * pageSize_;
         // now need to copy over memory
         // only do this if the old segment is valid (i.e. not new w/
         // unallocated buffer
         if (segIt -> startPage >= 0 && segIt -> buffer -> mem_ != 0)  {
-            memcpy(newSegIt -> buffer -> mem_, segIt -> buffer -> mem_, newSegIt->buffer->size());
+            newSegIt -> buffer -> writeData(oldMem, newSegIt->buffer->size(),newSegIt -> buffer -> getType());
+            //memcpy(newSegIt -> buffer -> mem_, segIt -> buffer -> mem_, newSegIt->buffer->size());
         }
-        // Deincrement pin count to reverse effect above above
+        // Deincrement pin count to reverse effect above
         removeSegment(segIt);
         /*
         if (segIt -> slabNum < 0) {
@@ -410,7 +410,7 @@ namespace Buffer_Namespace {
                 parentMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
                 chunkIt -> second -> buffer -> clearDirtyBits();
             }
-            parentMgr_ -> checkpoint();
+            //parentMgr_ -> checkpoint();
         }
     }
     
@@ -434,7 +434,28 @@ namespace Buffer_Namespace {
     //void BufferMgr::getChunks(
 
     void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
-        throw std::runtime_error("Not implemented");
+        auto chunkIt = chunkIndex_.find(key);
+        AbstractBuffer * buffer;
+        if (chunkIt == chunkIndex_.end()) {
+            if (parentMgr_ == 0) {
+                throw std::runtime_error("Chunk does not exist");
+            }
+            buffer = createChunk(key,pageSize_,numBytes);
+            parentMgr_ -> fetchChunk(key, buffer, numBytes);
+        }
+        else {
+            buffer = chunkIt -> second -> buffer;
+        }
+        mapd_size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
+        destBuffer->reserve(chunkSize);
+        std::cout << "After reserve chunksize: " << chunkSize << std::endl;
+        if (buffer->isUpdated()) {
+            buffer->read(destBuffer->getMemoryPtr(),chunkSize,destBuffer->getType(),0);
+        }
+        else {
+            buffer->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
+        }
+        destBuffer->setSize(chunkSize);
     }
     
     AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes) {

@@ -14,7 +14,7 @@ SET (partitioner_source_files
 )
 
 set (partitioner_include_dirs
-    ${CMAKE_CURRENT_SOURCE_DIR}/../Buffer
+    ${CMAKE_CURRENT_SOURCE_DIR}/../DataMgr/BufferMgr
     ${CMAKE_CURRENT_SOURCE_DIR}/../Metadata
     ${CMAKE_CURRENT_SOURCE_DIR}/../PgConnector
     "/usr/local/include"

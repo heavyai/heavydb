@@ -4,7 +4,7 @@
 
 namespace Buffer_Namespace {
 
-    GpuCudaBufferMgr::GpuCudaBufferMgr(const size_t maxBufferSize, const int gpuNum, const size_t bufferAllocIncrement,  const size_t pageSize, File_Namespace::FileMgr *fileMgr) : BufferMgr(maxBufferSize, bufferAllocIncrement, pageSize, fileMgr), gpuNum_(gpuNum) {}
+    GpuCudaBufferMgr::GpuCudaBufferMgr(const size_t maxBufferSize, const int gpuNum, const size_t bufferAllocIncrement,  const size_t pageSize, AbstractDataMgr *parentMgr) : BufferMgr(maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), gpuNum_(gpuNum) {}
 
     GpuCudaBufferMgr::~GpuCudaBufferMgr() {
         freeAllMem();
@@ -23,7 +23,7 @@ namespace Buffer_Namespace {
         }
     }
 
-    void GpuCudaBufferMgr::createBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
+    void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
         new GpuCudaBuffer(this, segIt, gpuNum_, pageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
     }
 

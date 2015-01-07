@@ -18,21 +18,23 @@ struct SystemNode {
     int numCores;
     float coreSpeed;
     std::vector<SystemNode *> childNodes;
-}
-
-
+};
 
 class SystemProfiler {
     public:
         SystemProfiler(const std::string &dataDir);
         ~SystemProfiler();
+        void printTree(const SystemNode *startNode = 0);
 
     private:
-        void profileSystem();
+        void profileSystem(const std::string &dataDir);
         void deleteNodes(SystemNode *startNode);
+        void addStorage(const std::string &dataDir);
+        void addNumaNodes(SystemNode *parentNode);
+        void printNode(const SystemNode *node);
         SystemNode *rootNode_;
-        std::map<NodeType,std::vector<SystemNode *> nodeLevelMap_;
-}
+        std::map<NodeType,std::vector<SystemNode *> > nodeLevelMap_;
+};
 
 
 #endif // SYSTEM_PROFILER_H
