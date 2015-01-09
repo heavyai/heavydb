@@ -397,32 +397,37 @@ namespace Parser {
 	ColumnRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const 
 	{
 		int table_id;
+		int rte_idx;
 		const ColumnDescriptor *cd;
 		if (column == nullptr)
 			throw std::runtime_error("invalid column name *.");
 		if (table != nullptr) {
-			Analyzer::RangeTblEntry *rte = query.get_rte(*table);
-			if (rte == nullptr)
+			rte_idx = query.get_rte_idx(*table);
+			if (rte_idx < 0)
 				throw std::runtime_error("range variable or table name " + *table + " does not exist.");
+			Analyzer::RangeTblEntry *rte = query.get_rte(rte_idx);
 			cd = rte->get_column_desc(catalog, *column);
 			if (cd == nullptr)
 				throw std::runtime_error("Column name " + *column + " does not exist.");
 			table_id = rte->get_table_id();
 		} else {
 			bool found = false;
+			int rte_idx, i = 0;
 			for (auto rte : query.get_rangetable()) {
 				cd = rte->get_column_desc(catalog, *column);
 				if (cd != nullptr && !found) {
 					found = true;
+					rte_idx = i;
 					table_id = rte->get_table_id();
 				}
 				if (cd != nullptr && found)
 					throw std::runtime_error("Column name " + *column + " is ambiguous.");
+				i++;
 			}
 			if (cd == nullptr)
 				throw std::runtime_error("Column name " + *column + " does not exist.");
 		}
-		return new Analyzer::ColumnVar(cd->columnType, table_id, cd->columnId);
+		return new Analyzer::ColumnVar(cd->columnType, table_id, cd->columnId, rte_idx);
 	}
 
 	Analyzer::Expr *
@@ -462,7 +467,9 @@ namespace Parser {
 		}
 		else
 			throw std::runtime_error("invalid function name: " + *name);
-		return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct);
+		int naggs = query.get_num_aggs();
+		query.set_num_aggs(naggs+1);
+		return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct, naggs);
 	}
 
 	void
@@ -528,8 +535,9 @@ namespace Parser {
 		std::list<Analyzer::TargetEntry*> &tlist = query.get_targetlist_nonconst();
 		if (select_clause == nullptr) {
 			// this means SELECT *
+			int rte_idx = 0;
 			for (auto rte : query.get_rangetable()) {
-				rte->expand_star_in_targetlist(catalog, tlist);
+				rte->expand_star_in_targetlist(catalog, tlist, rte_idx++);
 			}
 		}
 		else {
@@ -540,10 +548,11 @@ namespace Parser {
 				if (typeid(*select_expr) == typeid(ColumnRef) &&
 						dynamic_cast<const ColumnRef*>(select_expr)->get_column() == nullptr) {
 						const std::string *range_var_name = dynamic_cast<const ColumnRef*>(select_expr)->get_table();
-						Analyzer::RangeTblEntry *rte = query.get_rte(*range_var_name);
-						if (rte == nullptr)
+						int rte_idx = query.get_rte_idx(*range_var_name);
+						if (rte_idx < 0)
 							throw std::runtime_error("invalid range variable name: " + *range_var_name);
-						rte->expand_star_in_targetlist(catalog, tlist);
+						Analyzer::RangeTblEntry *rte = query.get_rte(rte_idx);
+						rte->expand_star_in_targetlist(catalog, tlist, rte_idx);
 				}
 				else {
 					Analyzer::Expr *e = select_expr->analyze(catalog, query);

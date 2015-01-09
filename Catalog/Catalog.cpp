@@ -248,7 +248,6 @@ const ColumnDescriptor * Catalog::getMetadataForColumn (int tableId, int columnI
     return colDescIt -> second;
 }
 
-// must return vector of ColumnDescriptor's in the order of column id
 vector <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId) const {
     vector <const ColumnDescriptor *> columnDescriptors;
 		const TableDescriptor *td = getMetadataForTable(tableId);

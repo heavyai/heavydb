@@ -150,7 +150,6 @@ class Catalog {
          * @return vector of pointers to const ColumnDescriptor structs - one
          * for each and every column in the table
          *
-         * Called internally by getAllColumnMetadataForTable(const string tableName)
          */
 
          std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
