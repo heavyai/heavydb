@@ -6,9 +6,14 @@
 #ifndef DATAMGR_MEMORY_BUFFER_BUFFER_H
 #define DATAMGR_MEMORY_BUFFER_BUFFER_H
 
-#include <iostream>
 #include "../AbstractBuffer.h"
 #include "BufferSeg.h"
+
+#include <iostream>
+#include <mutex>
+//#include <boost/thread/locks.hpp>
+//#include <boost/thread/mutex.hpp>
+
 
 using namespace Memory_Namespace;
 
@@ -105,6 +110,22 @@ namespace Buffer_Namespace {
         inline bool isDirty() const {
             return isDirty_;
         }
+
+        inline int pin() {
+            std::lock_guard<std::mutex> pinLock (pinMutex_);
+            return (++pinCount_);
+        }
+
+        inline int unPin() {
+            std::lock_guard<std::mutex> pinLock (pinMutex_);
+            return (--pinCount_);
+        }
+        inline int getPinCount() {
+            std::lock_guard<std::mutex> pinLock (pinMutex_);
+            return (pinCount_);
+        }
+
+
     protected:
         mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
         
@@ -123,6 +144,8 @@ namespace Buffer_Namespace {
         int epoch_;                 /// indicates when the buffer was last flushed
         //std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
         std::vector<bool> pageDirtyFlags_;
+        int pinCount_;
+        std::mutex pinMutex_;
     };
     
 } // Buffer_Namespace

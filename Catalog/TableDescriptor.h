@@ -10,6 +10,8 @@
  * 
  */
 
+namespace Catalog_Namespace {
+
 struct TableDescriptor {
     int32_t tableId; /**< tableId starts at 0 for valid tables. */
     std::string tableName; /**< tableName is the name of the table table -must be unique */
@@ -20,6 +22,8 @@ struct TableDescriptor {
 		std::string fragments;
 		std::string partitions;
 };
+
+}
 
 
 

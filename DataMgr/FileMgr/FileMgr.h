@@ -13,13 +13,14 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <mutex>
 
 #include "../../Shared/global.h"
 #include "Page.h"
 #include "FileBuffer.h"
 #include "FileInfo.h"
 #include "../AbstractBuffer.h"
-#include "../AbstractDataMgr.h"
+#include "../AbstractBufferMgr.h"
 
 using namespace Memory_Namespace;
 
@@ -63,7 +64,7 @@ namespace File_Namespace {
      * @class   FileMgr
      * @brief
      */
-    class FileMgr : public AbstractDataMgr { // implements
+    class FileMgr : public AbstractBufferMgr { // implements
         
     public:
         /// Constructor
@@ -73,7 +74,7 @@ namespace File_Namespace {
         virtual ~FileMgr();
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, mapd_size_t pageSize, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, mapd_size_t pageSize = 0, const mapd_size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
@@ -97,7 +98,10 @@ namespace File_Namespace {
         virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         Page requestFreePage(mapd_size_t pagesize);
 
-        inline MgrType getMgrType() { return FILE_MGR;};
+        virtual inline MgrType getMgrType() { return FILE_MGR;};
+        inline FileInfo * getFileInfoForFileId(const int fileId) {
+            return files_[fileId];
+        }
 
         void init();
 
@@ -145,6 +149,7 @@ namespace File_Namespace {
         FILE *epochFile_;
         bool isDirty_;                      /// true if metadata changed since last writeState()
         mapd_size_t defaultPageSize_;
+        std::mutex getPageMutex_;  
         
 
         ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks

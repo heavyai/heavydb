@@ -9,7 +9,7 @@ namespace Buffer_Namespace {
     class CpuBufferMgr :  public BufferMgr {
 
         public:
-            CpuBufferMgr(const size_t maxBufferSize,CpuBufferMgrMemType cpuBufferMgrMemType, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractDataMgr *parentMgr = 0);
+            CpuBufferMgr(const size_t maxBufferSize,CpuBufferMgrMemType cpuBufferMgrMemType, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
             ~CpuBufferMgr();
         private:
             virtual void addSlab(const size_t slabSize);

@@ -6,7 +6,7 @@
 #ifndef _ABSTRACT_TABLE_PARTITIONER_H
 #define _ABSTRACT_TABLE_PARTITIONER_H
 
-#include "../../Shared/types.h"
+#include "../../Shared/SQLTypes.h"
 #include "Partitioner.h"
 #include <vector>
 #include <string>
@@ -14,9 +14,9 @@
 // Should the ColumnInfo and PartitionInfo structs be in
 // AbstractTablePartitioner?
 
-namespace Buffer_Namespace {
-    class Buffer;
-    class BufferMgr;
+namespace Memory_Namespace {
+    class AbstractBuffer;
+    class AbstractDataMgr;
 };
 
 namespace Partitioner_Namespace {
@@ -30,9 +30,9 @@ namespace Partitioner_Namespace {
 
 struct ColumnInfo {
     int columnId; // for when we iterate over all structs of ColumnInfo instead of using a map
-    mapd_data_t columnType; 
+    SQLTypeInfo columnType; 
     mapd_size_t bitSize;
-    Buffer_Namespace::Buffer * insertBuffer; // a pointer so can be null
+    Memory_Namespace::AbstractBuffer * insertBuffer; // a pointer so can be null
     //@todo get the constructor for ColumnInfo compiling
     //ColumnInfo(const int columnId, const mapd_data_t columnType, const int bitSize): columnId(columnId), columnType(columnType), bitSize(bitSize), insertBuffer(NULL) {}
 	//ColumnInfo& operator=(const ColumnInfo&);

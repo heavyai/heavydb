@@ -8,7 +8,7 @@ namespace Buffer_Namespace {
     class GpuCudaBufferMgr :  public BufferMgr {
 
         public:
-            GpuCudaBufferMgr(const size_t maxBufferSize, const int gpuNum, const size_t bufferAllocIncrement = 1073741824,  const size_t pageSize = 512, AbstractDataMgr *parentMgr = 0);
+            GpuCudaBufferMgr(const size_t maxBufferSize, const int gpuNum, const size_t bufferAllocIncrement = 1073741824,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
             ~GpuCudaBufferMgr();
         private:
             virtual void addSlab(const size_t slabSize);

@@ -42,6 +42,12 @@ namespace Memory_Namespace {
         //virtual mapd_size_t used() const = 0;
         virtual int getDeviceId() const {return -1;}
         virtual BufferType getType() const = 0;
+
+        // Next three methods are dummy methods so FileBuffer does not implement these
+        virtual inline int pin() {return 0;}
+        virtual inline int unPin() {return 0;}
+        virtual inline int getPinCount() {return 0;}
+
         virtual inline bool isDirty() const {return isDirty_;}
         virtual inline bool isAppended() const {return isAppended_;}
         virtual inline bool isUpdated() const {return isUpdated_;}

@@ -61,7 +61,7 @@ namespace File_Namespace {
         if (boost::filesystem::exists(path)) {
             if (!boost::filesystem::is_directory(path))
                 throw std::runtime_error("Specified path is not a directory.");
-            std::cout << basePath_ << " exists." << std::endl;
+            //std::cout << basePath_ << " exists." << std::endl;
             openEpochFile(EPOCH_FILENAME);
 
             boost::filesystem::directory_iterator endItr; // default construction yields past-the-end
@@ -116,12 +116,14 @@ namespace File_Namespace {
                 auto startIt = headerVec.begin();
 
                 for (auto headerIt = headerVec.begin() + 1 ; headerIt != headerVec.end(); ++headerIt) {
+                    /*
                     for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
                         std::cout << *chunkIt << " ";
                     }
-                    std::cout << " -> " << headerIt -> pageId << "," << headerIt -> versionEpoch << std::endl;
+                    */
+                    //std::cout << " -> " << headerIt -> pageId << "," << headerIt -> versionEpoch << std::endl;
                     if (headerIt -> chunkKey != lastChunkKey) {
-                        std::cout << "New chunkkey" << std::endl;
+                        //std::cout << "New chunkkey" << std::endl;
                         
                         mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
                         chunkIndex_[lastChunkKey] = new Chunk (this,pageSize,lastChunkKey,startIt,headerIt);
@@ -204,12 +206,16 @@ namespace File_Namespace {
 
 
     AbstractBuffer* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) {
+        mapd_size_t actualPageSize = pageSize;
+        if (actualPageSize == 0) {
+            actualPageSize = defaultPageSize_; 
+        }
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists.");
         }
-        chunkIndex_[key] = new Chunk (this,pageSize,key,numBytes);
+        chunkIndex_[key] = new Chunk (this,actualPageSize,key,numBytes);
         return (chunkIndex_[key]);
     }
 
@@ -246,7 +252,7 @@ namespace File_Namespace {
         // just look at pageSize * numPages in FileBuffer
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
         destBuffer->reserve(chunkSize);
-        std::cout << "After reserve chunksize: " << chunkSize << std::endl;
+        //std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (chunk->isUpdated()) {
             chunk->read(destBuffer->getMemoryPtr(),chunkSize,destBuffer->getType(),0);
         }
@@ -271,13 +277,13 @@ namespace File_Namespace {
         //mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
         mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
         //mapd_size_t newChunkSize = srcBuffer->size();
-        std::cout << "Old Chunk size: " << oldChunkSize << std::endl;
-        std::cout << "New Chunk size: " << newChunkSize << std::endl;
+        //std::cout << "Old Chunk size: " << oldChunkSize << std::endl;
+        //std::cout << "New Chunk size: " << newChunkSize << std::endl;
         if (chunk->isDirty()) {
             throw std::runtime_error("Chunk inconsistency");
         }
-        std::cout << "Old chunk size: " << oldChunkSize << std::endl;
-        std::cout << "New chunk size: " << newChunkSize << std::endl;
+        //std::cout << "Old chunk size: " << oldChunkSize << std::endl;
+        //std::cout << "New chunk size: " << newChunkSize << std::endl;
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
@@ -307,61 +313,57 @@ namespace File_Namespace {
     }
 
     Page FileMgr::requestFreePage(mapd_size_t pageSize) {
+        std::lock_guard < std::mutex > lock (getPageMutex_);
+
         auto candidateFiles = fileIndex_.equal_range(pageSize);
-        FileInfo * freeFile = 0;
+        int pageNum = -1;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-            mapd_size_t fileFreePages = files_[fileIt->second]->numFreePages();
-            if (fileFreePages > 0) {
-                freeFile = files_[fileIt->second];
-                break;
+            FileInfo *fileInfo = files_[fileIt -> second]; 
+            pageNum = fileInfo ->getFreePage();
+            if (pageNum != -1) {
+                return (Page (fileInfo->fileId,pageNum));
             }
         }
-        if (freeFile == nullptr) { // didn't find free file and need to create one
-            freeFile = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
-        }
-        assert (freeFile != nullptr); // should have file by now
-        auto pageNumIt = freeFile -> freePages.begin();
-        mapd_size_t pageNum = *pageNumIt;
-        freeFile -> freePages.erase(pageNum);
-        Page page (freeFile->fileId,pageNum);
-        return page;
+        // if here then we need to add a file
+        FileInfo *fileInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
+        pageNum = fileInfo -> getFreePage();
+        assert(pageNum != -1);
+        return (Page (fileInfo->fileId,pageNum));
     }
 
     void FileMgr::requestFreePages(mapd_size_t numPagesRequested, mapd_size_t pageSize, std::vector<Page> &pages) {
-        mapd_size_t numFreePagesAvailable = 0;
-        std::vector<FileInfo*> fileList;
-        
-        // determine if there are enough free pages available
+        // @todo add method to FileInfo to get more than one page
+        std::lock_guard < std::mutex > lock (getPageMutex_);
         auto candidateFiles = fileIndex_.equal_range(pageSize);
+        mapd_size_t numPagesNeeded = numPagesRequested;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-            mapd_size_t fileFreePages = files_[fileIt->second]->numFreePages();
-            if (fileFreePages > 0) {
-                fileList.push_back(files_[fileIt->second]);
-                numFreePagesAvailable += fileFreePages;
+            FileInfo *fileInfo = files_[fileIt -> second]; 
+            int pageNum;
+            do {
+                pageNum = fileInfo -> getFreePage();
+                if (pageNum != -1) {
+                    pages.push_back(Page(fileInfo->fileId,pageNum));
+                    numPagesNeeded--;
+                }
+            }
+            while  (pageNum != -1 && numPagesNeeded > 0);
+            if (numPagesNeeded == 0) {
+                break;
             }
         }
-        // create new file(s) if there are not enough free pages
-        mapd_size_t numPagesToCreate = numPagesRequested - numFreePagesAvailable;
-        mapd_size_t numFilesToCreate = (numPagesToCreate + MAPD_DEFAULT_N_PAGES - 1) / MAPD_DEFAULT_N_PAGES;
-        for (; numFilesToCreate > 0; --numFilesToCreate) {
-            FileInfo *fInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
-            if (fInfo == nullptr)
-                throw std::runtime_error("Unable to create file for free pages.");
-            fileList.push_back(fInfo);
-        }
-
-        mapd_size_t numPagesRemaining = numPagesRequested;
-        for (size_t i = 0; i < fileList.size() && numPagesRemaining > 0; ++i) {
-            FileInfo *fInfo = fileList[i];
-            //assert(fInfo->freePages.size() == MAPD_DEFAULT_N_PAGES); // error?? this will only be true if the file is newly created
-
-            for (auto pageNumIt = fInfo->freePages.begin(); pageNumIt != fInfo->freePages.end() &&
-                numPagesRemaining > 0; --numPagesRemaining) {
-
-                mapd_size_t pageNum = *pageNumIt;
-                fInfo->freePages.erase(pageNumIt++);
-                pages.push_back(Page(fInfo->fileId, pageNum));
-                //changed from Steve's code - make sure pasts test
+        while (numPagesNeeded > 0) {
+            FileInfo *fileInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
+            int pageNum;
+            do {
+                pageNum = fileInfo -> getFreePage();
+                if (pageNum != -1) {
+                    pages.push_back(Page(fileInfo->fileId,pageNum));
+                    numPagesNeeded--;
+                }
+            }
+            while  (pageNum != -1 && numPagesNeeded > 0);
+            if (numPagesNeeded == 0) {
+                break;
             }
         }
         assert(pages.size() == numPagesRequested);
@@ -403,6 +405,7 @@ namespace File_Namespace {
         assert(files_.back() == fInfo); // postcondition
         return fInfo;
     }
+
 
     FILE * FileMgr::getFileForFileId(const int fileId) {
         assert (fileId >= 0 && fileId < nextFileId_);

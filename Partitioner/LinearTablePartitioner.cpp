@@ -1,20 +1,20 @@
 #include "LinearTablePartitioner.h"
-#include "BufferMgr.h"
-#include "Buffer.h"
+#include "AbstractDataMgr.h"
+#include "AbstractBuffer.h"
 #include <math.h>
 #include <iostream>
 
 #include <assert.h>
 #include <boost/lexical_cast.hpp>
 
-using Buffer_Namespace::Buffer;
-using Buffer_Namespace::BufferMgr;
+using Memory_Namespace::AbstractBuffer;
+using Memory_Namespace::AbstractDataMgr;
 
 using namespace std;
 
 namespace Partitioner_Namespace {
 
-LinearTablePartitioner::LinearTablePartitioner(const int partitionerId,  vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
+LinearTablePartitioner::LinearTablePartitioner(const int partitionerId,  vector <ColumnInfo> &columnInfoVec, Memory_Namespace::AbstractDataMgr &bufferManager, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
 		partitionerId_(partitionerId), bufferManager_(bufferManager), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), pgConnector_("mapd","mapd"), partitionerType_("linear"), isDirty_(false)/*, currentInsertBufferSize_(0) */ {
     // @todo Actually get user's name to feed to pgConnector_
     // populate map with ColumnInfo structs
@@ -62,7 +62,7 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
             mapd_size_t colByteSize = colMapIt->second.bitSize / 8;
             
             // append the data (size of data is colBytesize * numRowsToInsert)
-            Buffer *insertBuffer = colMapIt->second.insertBuffer;
+            AbstractBuffer *insertBuffer = colMapIt->second.insertBuffer;
             //insertBuffer->append(colByteSize * numRowsToInsert, static_cast<mapd_addr_t>(insertDataStruct.data[i]));
             insertBuffer->append(static_cast<mapd_addr_t>(insertDataStruct.data[i]),colByteSize*numRowsToInsert);
             //insertBuffer->print();
@@ -83,8 +83,9 @@ void LinearTablePartitioner::createNewPartition() {
     // create new insert buffer
     maxPartitionId_++;
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
-        if (colMapIt -> second.insertBuffer != 0)
-            colMapIt -> second.insertBuffer -> unpin();
+        if (colMapIt -> second.insertBuffer != 0) {
+            //colMapIt -> second.insertBuffer -> unPin();
+        }
         ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnId};
         // We will allocate enough pages to hold the maximum number of rows of
         // this type
@@ -121,7 +122,7 @@ void LinearTablePartitioner::createStateTableIfDne() {
         int columnId = colMapIt -> first;
         string baseStatsColumnName = "col_" + boost::lexical_cast <string> (columnId);
         string typeName;
-        switch(colMapIt -> second.columnType) {
+        switch(colMapIt -> second.columnType.type) {
             case INT_TYPE:
                 typeName = " INT, ";
                 break;
@@ -170,10 +171,11 @@ void LinearTablePartitioner::readState() {
 
 void LinearTablePartitioner::getInsertBufferChunks() {
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
-        if (colMapIt -> second.insertBuffer != NULL)
-            colMapIt -> second.insertBuffer -> unpin();
+        if (colMapIt -> second.insertBuffer != NULL) {
+            //colMapIt -> second.insertBuffer -> unPin();
+        }
         ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnId};
-        colMapIt -> second.insertBuffer = bufferManager_.getChunkBuffer(chunkKey);
+        colMapIt -> second.insertBuffer = bufferManager_.getChunk(chunkKey);
         assert (colMapIt -> second.insertBuffer != NULL);
         //@todo change assert into throwing an exception
     }

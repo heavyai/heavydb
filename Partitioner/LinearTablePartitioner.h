@@ -25,7 +25,7 @@ class LinearTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    LinearTablePartitioner(const int partitionerId,  std::vector <ColumnInfo> &columnInfoVec, Buffer_Namespace::BufferMgr &bufferManager, const mapd_size_t maxPartitionRows =1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
+    LinearTablePartitioner(const int partitionerId,  std::vector <ColumnInfo> &columnInfoVec, Memory_Namespace::AbstractDataMgr &bufferManager, const mapd_size_t maxPartitionRows =1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
     virtual ~LinearTablePartitioner();
     /**
@@ -70,7 +70,7 @@ private:
     std::map <int, ColumnInfo> columnMap_; /**< stores a map of column id to metadata about that column */ 
     std::vector<PartitionInfo> partitionInfoVec_; /**< data about each partition stored - id and number of rows */  
     //int currentInsertBufferPartitionId_;
-    Buffer_Namespace::BufferMgr &bufferManager_;
+    Memory_Namespace::AbstractDataMgr &bufferManager_;
     PgConnector pgConnector_;
     bool isDirty_;  /**< Specifies if the LinearTablePartitioner has been modified in memory since the last flush to file - no need to rewrite file if this is false. */
    
