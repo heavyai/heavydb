@@ -10,6 +10,7 @@
 #include <set>
 #include <iostream>
 #include <exception>
+#include <cassert>
 #include "Catalog.h"
 
 using std::runtime_error;
@@ -126,6 +127,8 @@ Catalog::~Catalog() {
     for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin(); tableDescIt != tableDescriptorMap_.end(); ++tableDescIt)
         delete tableDescIt -> second;
 
+		// TableDescriptorMapById points to the same descriptors.  No need to delete
+		
     for (ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.begin(); columnDescIt != columnDescriptorMap_.end(); ++columnDescIt)
         delete columnDescIt -> second;
 
@@ -151,6 +154,7 @@ void Catalog::buildMaps() {
 					throw runtime_error("Views are not supported yet.");
 				}
         tableDescriptorMap_[td->tableName] = td;
+        tableDescriptorMapById_[td->tableId] = td;
     }
     string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, notnull, compression, chunks from mapd_columns");
     sqliteConnector_.query(columnQuery);
@@ -177,45 +181,50 @@ void
 Catalog::addTableToMap(TableDescriptor *td, const vector<ColumnDescriptor *> &columns)
 {
 	tableDescriptorMap_[td->tableName] = td;
+	tableDescriptorMapById_[td->tableId] = td;
 	for (auto cd : columns) {
 			ColumnKey columnKey(cd->tableId, cd->columnName);
 			columnDescriptorMap_[columnKey] = cd;
-				ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
-        columnDescriptorMapById_[columnIdKey] = cd;
+			ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
+			columnDescriptorMapById_[columnIdKey] = cd;
 	}
 }
 
 void 
 Catalog::removeTableFromMap(const string &tableName, int tableId) 
 {
-	TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.find(tableName);
-	if (tableDescIt == tableDescriptorMap_.end()) {
+	TableDescriptorMapById::iterator tableDescIt = tableDescriptorMapById_.find(tableId);
+	if (tableDescIt == tableDescriptorMapById_.end())
 			throw runtime_error ("Table " + tableName + " does not exist.");
-	}
+	TableDescriptor *td = tableDescIt->second;
+	int ncolumns = td->nColumns;
+	tableDescriptorMapById_.erase(tableDescIt);
+	tableDescriptorMap_.erase(tableName);
+	delete td;
 
-	// if here then table does exist so we can remove it and its associated columns
-	tableDescriptorMap_.erase(tableDescIt);
-
-	// can be multiple columns for the same table, so must iterate and delete each column that belongs to the table
-	ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.begin();    
-	while (columnDescIt != columnDescriptorMap_.end()) {
-			if (std::get<0>(columnDescIt -> first) == tableId)
-					columnDescriptorMap_.erase(columnDescIt++);
-			else
-					++columnDescIt;
-	}
-	ColumnDescriptorMapById::iterator columnDescByIdIt = columnDescriptorMapById_.begin();    
-	while (columnDescByIdIt != columnDescriptorMapById_.end()) {
-			if (std::get<0>(columnDescByIdIt -> first) == tableId)
-					columnDescriptorMapById_.erase(columnDescByIdIt++);
-			else
-					++columnDescByIdIt;
+	// delete all column descriptors for the table
+	for (int i = 1; i <= ncolumns; i++) {
+		ColumnIdKey cidKey(tableId, i);
+		ColumnDescriptorMapById::iterator colDescIt = columnDescriptorMapById_.find(cidKey);
+		ColumnDescriptor *cd = colDescIt->second;
+		columnDescriptorMapById_.erase(colDescIt);
+		ColumnKey cnameKey(tableId, cd->columnName);
+		columnDescriptorMap_.erase(cnameKey);
+		delete cd;
 	}
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {
     auto tableDescIt = tableDescriptorMap_.find(tableName);
     if (tableDescIt == tableDescriptorMap_.end()) { // check to make sure table exists
+        return nullptr;
+    }
+    return tableDescIt -> second; // returns pointer to table descriptor
+}
+
+const TableDescriptor * Catalog::getMetadataForTable (int tableId) const  {
+    auto tableDescIt = tableDescriptorMapById_.find(tableId);
+    if (tableDescIt == tableDescriptorMapById_.end()) { // check to make sure table exists
         return nullptr;
     }
     return tableDescIt -> second; // returns pointer to table descriptor
@@ -241,11 +250,12 @@ const ColumnDescriptor * Catalog::getMetadataForColumn (int tableId, int columnI
 
 vector <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId) const {
     vector <const ColumnDescriptor *> columnDescriptors;
-    for (auto colDescIt = columnDescriptorMap_.begin(); colDescIt != columnDescriptorMap_.end(); ++colDescIt) {
-        if (colDescIt -> second -> tableId == tableId) {
-            columnDescriptors.push_back(colDescIt -> second);
-        }
-    }
+		const TableDescriptor *td = getMetadataForTable(tableId);
+		for (int i = 1; i <= td->nColumns; i++) {
+			const ColumnDescriptor *cd = getMetadataForColumn(tableId, i);
+			assert(cd != nullptr);
+			columnDescriptors.push_back(cd);
+		}
     return columnDescriptors;
 }
 

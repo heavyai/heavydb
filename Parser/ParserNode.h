@@ -184,6 +184,7 @@ namespace Parser {
 	class IsNullExpr : public Expr {
 		public:
 			IsNullExpr(bool n, Expr *a) : is_not(n), arg(a) {}
+			virtual ~IsNullExpr() { delete arg; }
 			bool get_is_not() { return is_not; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 		private:
@@ -214,7 +215,7 @@ namespace Parser {
 	class InSubquery : public InExpr {
 		public:
 			InSubquery(bool n, Expr *a, SubqueryExpr *q) : InExpr(n, a), subquery(q) {}
-			virtual ~InSubquery() { delete subquery; }
+			virtual ~InSubquery() { InExpr::~InExpr(); delete subquery; }
 			const SubqueryExpr *get_subquery() { return subquery; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 		private:
@@ -487,7 +488,7 @@ namespace Parser {
 	class CheckDef : public TableConstraintDef {
 		public:
 			CheckDef(Expr *c): check_condition(c) {}
-			virtual ~CheckDef() { delete check_condition; }
+			virtual ~CheckDef() { TableConstraintDef::~TableConstraintDef(); delete check_condition; }
 			const Expr *get_check_condition() { return check_condition; }
 		private:
 			Expr *check_condition;
@@ -584,7 +585,7 @@ namespace Parser {
 	class OrderSpec : public Node {
 		public:
 			OrderSpec(int n, ColumnRef *c, bool d, bool f) : colno(n), column(c), is_desc(d), nulls_first(f) {}
-			virtual ~OrderSpec();
+			virtual ~OrderSpec() { if (column != nullptr) delete column; }
 			int get_colno() { return colno; }
 			const ColumnRef *get_column() { return column; }
 			bool get_is_desc() { return is_desc; }
@@ -669,7 +670,7 @@ namespace Parser {
 	class InsertQueryStmt : public InsertStmt {
 		public:
 			InsertQueryStmt(std::string *t, std::list<std::string*> *c, QuerySpec *q) : InsertStmt(t, c), query(q) {}
-			virtual ~InsertQueryStmt();
+			virtual ~InsertQueryStmt() { InsertStmt::~InsertStmt(); delete query; }
 			const QuerySpec *get_query() { return query; }
 			virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 		private:

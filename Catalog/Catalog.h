@@ -36,6 +36,8 @@ namespace Catalog_Namespace {
 
 typedef std::map<std::string, TableDescriptor *> TableDescriptorMap;
 
+typedef std::map<int, TableDescriptor *> TableDescriptorMapById;
+
 /**
  * @type ColumnKey
  * @brief ColumnKey is composed of the integer tableId and the string name of the column
@@ -136,6 +138,7 @@ class Catalog {
          */
 
         const TableDescriptor * getMetadataForTable (const std::string &tableName) const;
+        const TableDescriptor * getMetadataForTable (int tableId) const;
 
         const ColumnDescriptor * getMetadataForColumn(int tableId, const std::string &colName) const;
         const ColumnDescriptor * getMetadataForColumn(int tableId, int columnId) const;
@@ -147,7 +150,6 @@ class Catalog {
          * @return vector of pointers to const ColumnDescriptor structs - one
          * for each and every column in the table
          *
-         * Called internally by getAllColumnMetadataForTable(const string tableName)
          */
 
          std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
@@ -162,6 +164,7 @@ class Catalog {
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableDescriptorMap tableDescriptorMap_;
+        TableDescriptorMapById tableDescriptorMapById_;
         ColumnDescriptorMap columnDescriptorMap_;
         ColumnDescriptorMapById columnDescriptorMapById_;
         SqliteConnector sqliteConnector_;

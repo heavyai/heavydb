@@ -21,17 +21,21 @@ namespace Planner {
 	 */
 	class Plan {
 		public:
-			Plan(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p) : targetlist(t), quals(q), cost(c), child_plan(p) {}
-			const std::vector<Analyzer::TargetEntry*> *get_targetlist() { return targetlist; }
-			const std::list<Analyzer::Expr*> *get_quals() { return quals; }
-			double get_cost() { return cost; }
-			const Plan *get_child_plan() { return child_plan; }
-		private:
-			std::vector<Analyzer::TargetEntry*> *targetlist; // projection of this plan node
-			std::list<Analyzer::Expr*> *quals; // list of boolean expressions, implicitly conjunctive
+			Plan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p) : targetlist(t), quals(q), cost(c), child_plan(p) {}
+			Plan() {}
+			virtual ~Plan();
+			const std::list<Analyzer::TargetEntry*> &get_targetlist() const { return targetlist; }
+			const std::list<Analyzer::Expr*> &get_quals() const { return quals; }
+			double get_cost() const { return cost; }
+			const Plan *get_child_plan() const { return child_plan; }
+			void add_tle(Analyzer::TargetEntry *tle) { targetlist.push_back(tle); }
+			void set_targetlist(const std::list<Analyzer::TargetEntry*> &t) { targetlist = t; }
+		protected:
+			std::list<Analyzer::TargetEntry*> targetlist; // projection of this plan node
+			std::list<Analyzer::Expr*> quals; // list of boolean expressions, implicitly conjunctive
 			double cost; // Planner assigned cost for optimization purpose
 			Plan *child_plan; // most plan nodes have at least one child, therefore keep it in super class
-	}
+	};
 
 	/*
 	 * @type Result
@@ -42,12 +46,12 @@ namespace Planner {
 	 */
 	class Result : public Plan {
 		public:
-			Result(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, std::list<Analyzer::Expr*> *cq) : Plan(t, q, c, p), const_quals(cq) {}
-			~Result();
-			const std::list<Analyzer::Expr*> *get_constquals() { return const_quals; }
+			Result(std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::Expr*> &cq) : Plan(t, q, c, p), const_quals(cq) {}
+			virtual ~Result();
+			const std::list<Analyzer::Expr*> &get_constquals() const { return const_quals; }
 		private:
-			std::list<Analyzer::Expr*> *const_quals; // constant quals to evaluate only once
-	}
+			std::list<Analyzer::Expr*> const_quals; // constant quals to evaluate only once
+	};
 
 	/*
 	 * @type Scan
@@ -55,18 +59,21 @@ namespace Planner {
 	 */
 	class Scan : public Plan {
 		public:
-			Scan(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, std::list<Analyzer::Expr*> *sq, int r, std::list<int> *cl) : Plan(t, q, c, p), simple_quals(sq), rte_no(r), col_list(cl) {}
-			~Scan();
-			const std::list<Analyzer::Expr*> *get_simple_quals() { return simple_quals; };
-			int get_rte_no() { return rte_no; }
-			const std::list<int> *get_col_list() { return col_list; }
+			Scan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::Expr*> &sq, int r, const std::list<int> &cl) : Plan(t, q, c, p), simple_quals(sq), table_id(r), col_list(cl) {}
+			Scan(const Analyzer::RangeTblEntry &rte);
+			virtual ~Scan();
+			const std::list<Analyzer::Expr*> &get_simple_quals() const { return simple_quals; };
+			int get_table_id() const { return table_id; }
+			const std::list<int> &get_col_list() const { return col_list; }
+			void add_predicate(Analyzer::Expr *pred) { quals.push_back(pred); }
+			void add_simple_predicate(Analyzer::Expr *pred) { simple_quals.push_back(pred); }
 		private:
 			// simple_quals consists of predicates of the form 'ColumnVar BinOper Constant'
 			// it can be used for eliminating fragments and/or partitions from the scan.
-			std::list<Analyzer::Expr*> *simple_quals;
-			int rte_no; // rangetable entry index for the table to scan
-			std::list<int> *col_list; // list of column indexes if we only scan subset of columns. nullptr if we can all
-	}
+			std::list<Analyzer::Expr*> simple_quals;
+			int table_id; // rangetable entry index for the table to scan
+			std::list<int> col_list; // list of column ids to scan
+	};
 
 	/*
 	 * @type ValuesScan
@@ -75,12 +82,12 @@ namespace Planner {
 	 */
 	class ValuesScan : public Plan {
 		public:
-			ValuesScan(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, std::list<Analyzer::Expr*> *vl) : Plan(t, q, c, p), value_list(vl) {}
-			~ValuesScan();
-			const std::list<Analyzer::Expr*> *get_value_list() { return value_list; }
+			ValuesScan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::Expr*> &vl) : Plan(t, q, c, p), value_list(vl) {}
+			virtual ~ValuesScan();
+			const std::list<Analyzer::Expr*> &get_value_list() const { return value_list; }
 		private:
-			std::list<Analyzer::Expr*> *value_list; // values list, should be Constant or Parameter nodes
-	}
+			std::list<Analyzer::Expr*> value_list; // values list, should be Constant or Parameter nodes
+	};
 
 	/*
 	 * @type Join
@@ -88,13 +95,13 @@ namespace Planner {
 	 */
 	class Join : public Plan {
 		public:
-			Join(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, Plan *cp2) : Plan(t, q, c, p), child_plan2(cp2) {}
-			~Join();
-			const plan *get_outerplan() { return child_plan; }
-			const plan *get_innerplan() { return child_plan2; }
+			Join(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, Plan *cp2) : Plan(t, q, c, p), child_plan2(cp2) {}
+			virtual ~Join();
+			const Plan *get_outerplan() const { return child_plan; }
+			const Plan *get_innerplan() const { return child_plan2; }
 		private:
 			Plan *child_plan2;
-	}
+	};
 
 	/*
 	 * @type AggPlan
@@ -103,12 +110,12 @@ namespace Planner {
 	 */
 	class AggPlan : public Plan {
 		public:
-			AggPlan(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, std::list<int> *gl) : Plan(t, q, c, p), groupby_list(gl) {}
-			~AggPlan();
-			const std::list<int> *get_groupby_list() { return groupby_list; }
+			AggPlan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<int> &gl) : Plan(t, q, c, p), groupby_list(gl) {}
+			virtual ~AggPlan();
+			const std::list<int> &get_groupby_list() const { return groupby_list; }
 		private:
-			std::list<int> *groupby_list; // list of indexes into the targetlist for group by columns
-	}
+			std::list<int> groupby_list; // list of indexes into the targetlist for group by columns
+	};
 
 	/*
 	 * @type Append
@@ -117,12 +124,12 @@ namespace Planner {
 	 */
 	class Append : public Plan {
 		public:
-			Append(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, std::list<Plan*> *pl) : Plan(t, q, c, p), plan_list(pl) {}
-			~Append();
-			const std::list<Plan*> *get_plan_list() { return plan_list; }
+			Append(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Plan*> &pl) : Plan(t, q, c, p), plan_list(pl) {}
+			virtual ~Append();
+			const std::list<Plan*> &get_plan_list() const { return plan_list; }
 		private:
-			std::list<Plan*> *plan_list; // list of plans to union all
-	}
+			std::list<Plan*> plan_list; // list of plans to union all
+	};
 
 	/*
 	 * @type MergeAppend
@@ -131,14 +138,14 @@ namespace Planner {
 	 */
 	class MergeAppend : public Plan {
 		public:
-			MergeAppend(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, std::list<Plan*> *pl, std::list<Analyzer::OrderEntry> *oe) : Plan(t, q, c, p), mergeplan_list(pl), order_entries(oe) {}
-			~MergeAppend();
-			const std::list<Plan*> *get_mergeplan_list() { return mergeplan_list; }
-			const std::list<Analyzer::OrderEntry> *get_order_entries() { return order_entries; }
+			MergeAppend(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Plan*> &pl, const std::list<Analyzer::OrderEntry> &oe) : Plan(t, q, c, p), mergeplan_list(pl), order_entries(oe) {}
+			virtual ~MergeAppend();
+			const std::list<Plan*> &get_mergeplan_list() const { return mergeplan_list; }
+			const std::list<Analyzer::OrderEntry> &get_order_entries() const { return order_entries; }
 		private:
-			std::list<Plan*> *mergeplan_list; // list of plans to merge
-			std::list<OrderEntry> *order_entries; // defines how the mergeplans are sorted
-	}
+			std::list<Plan*> mergeplan_list; // list of plans to merge
+			std::list<Analyzer::OrderEntry> order_entries; // defines how the mergeplans are sorted
+	};
 
 	/*
 	 * @type Sort
@@ -147,33 +154,68 @@ namespace Planner {
 	 */
 	class Sort : public Plan {
 		public:
-			Sort(std::vector<Analyzer::TargetEntry*> *t, std::list<Analyzer::Expr*> *q, double c, Plan *p, std::list<Analyzer::OrderEntry> *oe) : Plan(t, q, c, p), order_entries(oe) {}
-			~Sort();
-			const std::list<Analyzer::OrderEntry> *get_order_entries() { return order_entries; }
+			Sort(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::OrderEntry> &oe) : Plan(t, q, c, p), order_entries(oe) {}
+			virtual ~Sort();
+			const std::list<Analyzer::OrderEntry> &get_order_entries() const { return order_entries; }
 		private:
-			std::list<Analyzer::OrderEntry> *order_entries; // defines columns to sort on and in what order
-	}
+			std::list<Analyzer::OrderEntry> order_entries; // defines columns to sort on and in what order
+	};
 
 	/*
-	 * @type PlannedStmt
-	 * @brief PlannedStmt is the end result produced by the Planner for the Executor to execute.
-	 * It captures all the information required for executing the query.
+	 * @type RootPlan
+	 * @brief RootPlan is the end result produced by the Planner for the Executor to execute.
 	 * @TODO add support for parametrized queries.
 	 */
-	class PlannedStmt {
+	class RootPlan {
 		public:
-			PlannedStmt(Plan *p, SQLStmtType t, int r, std::vector<Analyzer::RangeTblEntry*> *rt) : plan(p), stmt_type(t), result_rte(r), rangetable(rt) {}
-			~PlannedStmt();
-			const Plan *get_plan() { return plan; }
-			SQLStmtType get_stmt_type() { return stmt_type; }
-			int get_result_rte() { return result_rte; }
-			const std::vector<Analyzer::RangeTblEntry*> *get_rangetable() { return rangetable; }
+			RootPlan(Plan *p, SQLStmtType t, int r, const std::list<int> &c) : plan(p), stmt_type(t), result_table_id(r), result_col_list(c) {}
+			~RootPlan();
+			const Plan *get_plan() const { return plan; }
+			SQLStmtType get_stmt_type() const { return stmt_type; }
+			int get_result_table_id() const { return result_table_id; }
+			const std::list<int> &get_result_col_list() const { return result_col_list; }
 		private:
 			Plan *plan; // query plan
 			SQLStmtType stmt_type; // SELECT, UPDATE, DELETE or INSERT
-			int result_rte; // rangetable entry index for the result table.  For UPDATE, DELETE or INSERT only.
-			std::vector<Analyzer::RangeTblEntry*> *rangetable; // rangetable
-	}
+			int result_table_id; // For UPDATE, DELETE or INSERT only: table id for the result table
+			std::list<int> result_col_list; // For UPDATE and INSERT only: list of result column ids.
+	};
+
+	/*
+	 * @type Optimizer
+	 * @brief This is the class for performing query optimizations.
+	 */
+	class Optimizer {
+		public:
+			Optimizer(const Analyzer::Query &q) : query(q), cur_query(nullptr) {}
+			~Optimizer() {}
+			/*
+			 * @brief optimize optimize an entire SQL DML statement
+			 */
+			RootPlan *optimize();
+		private:
+			/*
+			 * @brief optimize_query optimize the query portion of the statement.  can be a union
+			 * query
+			 */
+			Plan *optimize_query();
+			/*
+			 * @brief optimize_current_query optimize cur_query and output plan to cur_plan.  
+			 * must be a non-union query.
+			 */
+			void optimize_current_query();
+			void optimize_scans();
+			void optimize_joins();
+			void optimize_aggs();
+			void optimize_orderby();
+			void process_targetlist();
+			std::vector<Scan*> base_scans;
+			std::list<const Analyzer::Expr*> join_predicates;
+			std::list<const Analyzer::Expr*> const_predicates;
+			const Analyzer::Query *cur_query;
+			Plan *cur_plan;
+			const Analyzer::Query &query;
+	};
 }
 
 #endif // PLANNER_H
