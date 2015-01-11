@@ -433,7 +433,7 @@ namespace Buffer_Namespace {
     
     /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
     /// throws a runtime_error.
-    AbstractBuffer* BufferMgr::getChunk(ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer* BufferMgr::getChunk(const ChunkKey &key, const mapd_size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt != chunkIndex_.end()) {
@@ -447,13 +447,19 @@ namespace Buffer_Namespace {
         else { // If wasn't in pool then we need to fetch it
             AbstractBuffer * buffer = createChunk(key,pageSize_,numBytes);
             buffer -> pin();
-            parentMgr_ -> fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
-
+            try {
+                parentMgr_ -> fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
+            }
+            catch (std::runtime_error &error) {
+                // if here, fetch chunk was unsuccessful - delete chunk we just
+                // created
+                deleteChunk(key);
+                throw std::runtime_error("Get chunk - Could not find chunk in buffer pool or parent buffer pools");
+            }
             return buffer;
         }
     }
 
-    //void BufferMgr::getChunks(
 
     void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
@@ -464,7 +470,13 @@ namespace Buffer_Namespace {
                 throw std::runtime_error("Chunk does not exist");
             }
             buffer = createChunk(key,pageSize_,numBytes);
-            parentMgr_ -> fetchChunk(key, buffer, numBytes);
+            try {
+                parentMgr_ -> fetchChunk(key, buffer, numBytes);
+            }
+            catch (std::runtime_error &error) {
+                deleteChunk(key);
+                throw std::runtime_error("Fetch chunk - Could not find chunk in buffer pool or parent buffer pools");
+            }
         }
         else {
             buffer = chunkIt -> second -> buffer;

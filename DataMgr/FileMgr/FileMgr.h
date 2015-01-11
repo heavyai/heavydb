@@ -80,7 +80,7 @@ namespace File_Namespace {
         virtual void deleteChunk(const ChunkKey &key);
 
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* getChunk(const ChunkKey &key, const mapd_size_t numBytes = 0);
 
         virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes);
 

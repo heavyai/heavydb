@@ -19,9 +19,9 @@ namespace Memory_Namespace {
 
         public:
             MemoryMgr(const int partitionKeyIndex, const std::string &dataDir);
-            AbstractBuffer * createChunk(const MemoryLevel memoryLevel, ChunkKey &key);
-            AbstractBuffer * getChunk(const MemoryLevel memoryLevel, ChunkKey &key, const mapd_size_t numBytes = 0);
-
+            AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
+            AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes = 0);
+            void deleteChunk(const ChunkKey &key);
             void checkpoint();
 
             // database_id, table_id, partitioner_id, column_id, fragment_id

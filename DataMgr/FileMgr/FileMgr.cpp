@@ -220,6 +220,7 @@ namespace File_Namespace {
     }
 
     void FileMgr::deleteChunk(const ChunkKey &key) {
+        std::cout << "Deleting file chunk" << std::endl;
         auto chunkIt = chunkIndex_.find(key);
         // ensure the Chunk exists
         if (chunkIt == chunkIndex_.end()) {
@@ -230,7 +231,7 @@ namespace File_Namespace {
         chunkIndex_.erase(chunkIt);
     }
 
-    AbstractBuffer* FileMgr::getChunk(ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::getChunk(const ChunkKey &key, const mapd_size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
@@ -241,12 +242,16 @@ namespace File_Namespace {
     void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
+        
+        std::cout << "File fetch chunk - before error" << std::endl;
         auto chunkIt = chunkIndex_.find(key);
-        if (chunkIt == chunkIndex_.end()) 
+        if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist");
+        }
         if (destBuffer -> isDirty()) {
             throw std::runtime_error("Chunk inconsitency - fetchChunk");
         }
+        std::cout << "File fetch chunk - no error" << std::endl;
         AbstractBuffer *chunk = chunkIt -> second;
         // ChunkSize is either specified in function call with numBytes or we
         // just look at pageSize * numPages in FileBuffer

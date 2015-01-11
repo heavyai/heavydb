@@ -31,18 +31,37 @@ namespace Memory_Namespace {
         levelSizes_.push_back(1);
     }
 
-    AbstractBuffer * MemoryMgr::createChunk(const MemoryLevel memoryLevel, ChunkKey &key) {
+    AbstractBuffer * MemoryMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][device] -> createChunk(key);
     }
 
 
-    AbstractBuffer * MemoryMgr::getChunk(const MemoryLevel memoryLevel, ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer * MemoryMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][device] -> getChunk(key, numBytes);
     }
+
+    void MemoryMgr::deleteChunk(const ChunkKey &key) {
+        // We don't know whether a given manager (of
+        // correct partition key) actually has a chunk at
+        // a given point. So try-except block a delete to
+        // all of them.  Will change if we have MemoryMgr
+        // keep track of this state
+        int numLevels = bufferMgrs_.size();
+        for (int level = numLevels - 1; level >= 0; --level) {
+            int device = key[partitionKeyIndex_] % levelSizes_[level];
+            try {
+                bufferMgrs_[level][device] -> deleteChunk(key);
+            }
+            catch (std::runtime_error &error) {
+                std::cout << "Chunk did not exist at level " <<level <<  std::endl;
+            }
+        }
+    }
+
 
     void MemoryMgr::checkpoint() {
 
