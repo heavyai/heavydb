@@ -51,6 +51,15 @@ namespace Memory_Namespace {
         virtual inline bool isDirty() const {return isDirty_;}
         virtual inline bool isAppended() const {return isAppended_;}
         virtual inline bool isUpdated() const {return isUpdated_;}
+        virtual inline void setUpdated() {
+            isUpdated_ = true;
+            isDirty_ = true;
+        }
+
+        virtual inline void setAppended() {
+            isAppended_ = true;
+            isDirty_ = true;
+        }
 
         void setSize(const mapd_size_t size) {
             size_ = size;

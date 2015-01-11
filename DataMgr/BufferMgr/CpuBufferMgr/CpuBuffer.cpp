@@ -22,9 +22,11 @@ namespace Buffer_Namespace {
 
     void CpuBuffer::writeData(mapd_addr_t const src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset) {
         if (srcBufferType == CPU_BUFFER) {
+            std::cout << "At Cpu_Buffer Writedata" << std::endl;
             memcpy(mem_+offset, src, numBytes);
         }
         else if (srcBufferType == GPU_BUFFER) {
+            std::cout << "At Gpu_Buffer Writedata" << std::endl;
             //CudaUtils::copyToHost(mem_+offset, src, numBytes,1,src->getDeviceId());
             //@todo: use actual device id in next call
             CudaUtils::copyToHost(mem_+offset, src, numBytes,1,0);

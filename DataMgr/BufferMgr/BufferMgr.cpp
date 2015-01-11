@@ -481,63 +481,37 @@ namespace Buffer_Namespace {
         destBuffer->setSize(chunkSize);
     }
     
-    AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes) {
+    AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        //assert(d->size() > 0);
-        //mapd_size_t nbytes = d->size();
-        //// create Chunk if it doesn't exist
-        //auto chunkPageSizeIt = chunkPageSize_.find(key);
-        //if (chunkPageSizeIt == chunkPageSize_.end())
-        //    createChunk(key, d->pageSize());
-        //
-        //// check if Chunk's Buffer exists
-        //Buffer *b = nullptr;
-        //auto chunkIt = chunkIndex_.find(key);
-        //if (chunkIndex_.find(key) == chunkIndex_.end()) {
-        //    b = new Buffer(nullptr, d->pageCount(), d->pageSize(), -1);
-        //    chunkIndex_.insert(std::pair<ChunkKey, Buffer*>(key, b));
-        //}
-        //else {
-        //    b = chunkIt->second;
-        //}
-        //
-        //// should be a consistent page size for a given ChunkKey
-        //assert(b->pageSize() == d->pageSize());
-        //
-        //// if necessary, reserve memory for b
-        //if (b->mem_ == nullptr) {
+        auto chunkIt = chunkIndex_.find(key);
+        AbstractBuffer *chunk;
+        if (chunkIt == chunkIndex_.end()) {
+            chunk = createChunk(key,pageSize_);
+        }
+        else {
+            chunk = chunkIt->second->buffer;
+        }
+        mapd_size_t oldChunkSize = chunk->size();
+        mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
 
-        //    // Find n bytes of free memory in the buffer pool
-        //    auto freeMemIt = freeMem_.lower_bound(nbytes);
-        //    if (freeMemIt == freeMem_.end()) {
-        //        delete b;
-        //        chunkIndex_.erase(chunkIt);
-        //        throw std::runtime_error("Out of memory");
-        //        // @todo eviction strategies
-        //    }
-        //    
-        //    // Save free memory information
-        //    mapd_size_t freeMemSize = freeMemIt->first;
-        //    mapd_addr_t bufAddr = freeMemIt->second;
-        //    
-        //    // update Buffer's pointer
-        //    b->mem_ = bufAddr;
-        //    
-        //    // Remove entry from map, and insert new entry
-        //    freeMem_.erase(freeMemIt);
-        //    if (freeMemSize - nbytes > 0)
-        //        freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(freeMemSize - nbytes, bufAddr + nbytes));
-        //}
-        //
-        //// b and d should be the same size
-        //if (b->size() != d->size())
-        //    throw std::runtime_error("Size mismatch between source and destination buffers.");
+        if (chunk->isDirty()) {
+            throw std::runtime_error("Chunk inconsistency");
+        }
 
-        //// read the contents of d into b
-        //d->read(b->mem_, 0);
-        //
-        //return b;
+        if (srcBuffer->isUpdated()) {
+            //@todo use dirty flags to only flush pages of chunk that need to
+            //be flushed
+            chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
+        }
+        else if (srcBuffer->isAppended()) {
+            assert(oldChunkSize < newChunkSize);
+            chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
+        }
+        //chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
+        srcBuffer->clearDirtyBits();
+        return chunk;
     }
+
     
     /// client is responsible for deleting memory allocated for b->mem_
     AbstractBuffer* BufferMgr::createBuffer(mapd_size_t pageSize, mapd_size_t nbytes) {

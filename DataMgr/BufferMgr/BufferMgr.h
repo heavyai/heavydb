@@ -78,7 +78,6 @@ namespace Buffer_Namespace {
         /// Returns the total number of bytes allocated.
         mapd_size_t size();
 
-        inline MgrType getMgrType () {return CPU_MGR;};
 
         BufferList::iterator reserveBuffer(BufferList::iterator & segIt, const size_t numBytes);
        

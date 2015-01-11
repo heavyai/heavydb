@@ -291,7 +291,7 @@ namespace File_Namespace {
         }
         else if (srcBuffer->isAppended()) {
             assert(oldChunkSize < newChunkSize);
-            chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize);
+            chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
         }
         chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
         srcBuffer->clearDirtyBits();
