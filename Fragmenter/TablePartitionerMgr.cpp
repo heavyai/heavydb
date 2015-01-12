@@ -18,7 +18,7 @@ namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr::TablePartitionMgr(Catalog_Namespace::Catalog &catalog, Memory_Namespace::AbstractDataMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), pgConnector_("mapd","mapd"), isDirty_(false) {
+TablePartitionMgr::TablePartitionMgr(Catalog_Namespace::Catalog &catalog, Memory_Namespace::AbstractDataMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), sqliteConnector_("mapd","mapd"), isDirty_(false) {
     createStateTableIfDne();
     readState();
 }
@@ -58,8 +58,6 @@ void TablePartitionMgr::getQueryPartitionInfo(const int tableId, QueryInfo &quer
 void TablePartitionMgr::createPartitionerForTable(const string &tableName, const PartitionerType partitionerType, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize) {
     const Catalog_Namespace::TableDescriptor *tableDescriptor = catalog_.getMetadataForTable(tableName);
     int32_t tableId = tableDescriptor -> tableId;
-
-
 
     // need to query catalog for needed metadata
     vector <const Catalog_Namespace::ColumnDescriptor * > columnDescriptors = catalog_.getAllColumnMetadataForTable(tableId);

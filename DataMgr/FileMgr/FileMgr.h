@@ -93,9 +93,9 @@ namespace File_Namespace {
         virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes = 0);
         
         // Buffer API
-        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t nbytes);
-        virtual void deleteBuffer(AbstractBuffer *d);
-        virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
+        virtual AbstractBuffer* createBuffer(const mapd_size_t nbytes);
+        virtual void deleteBuffer(AbstractBuffer *buffer);
+        //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         Page requestFreePage(mapd_size_t pagesize);
 
         virtual inline MgrType getMgrType() { return FILE_MGR;};
@@ -140,6 +140,12 @@ namespace File_Namespace {
 
         FILE * getFileForFileId(const int fileId);
 
+        inline size_t getNumChunks() {
+            // @todo should be locked - but this is more for testing now
+            return chunkIndex_.size();
+        }
+
+
     private:
         std::string basePath_; 				/// The OS file system path containing the files.
         std::vector<FileInfo*> files_;		/// A vector of files accessible via a file identifier.
@@ -150,6 +156,7 @@ namespace File_Namespace {
         bool isDirty_;                      /// true if metadata changed since last writeState()
         mapd_size_t defaultPageSize_;
         std::mutex getPageMutex_;  
+        std::mutex chunkIndexMutex_;  
         
 
         ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks

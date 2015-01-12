@@ -15,7 +15,7 @@ using namespace std;
 namespace Buffer_Namespace {
 
     /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
-    BufferMgr::BufferMgr(const size_t maxBufferSize, const size_t slabSize, const size_t pageSize, AbstractBufferMgr *parentMgr): maxBufferSize_(maxBufferSize), slabSize_(slabSize), pageSize_(pageSize), parentMgr_(parentMgr), bufferEpoch_(0) {
+    BufferMgr::BufferMgr(const size_t maxBufferSize, const size_t slabSize, const size_t pageSize, AbstractBufferMgr *parentMgr): maxBufferSize_(maxBufferSize), slabSize_(slabSize), pageSize_(pageSize), parentMgr_(parentMgr), maxBufferId_(0), bufferEpoch_(0) {
         assert(maxBufferSize_ > 0 && slabSize_ > 0 && pageSize_ > 0 && slabSize_ % pageSize_ == 0);
         numPagesPerSlab_ = slabSize_ / pageSize_; 
         maxNumSlabs_ = (maxBufferSize_/slabSize_);
@@ -344,6 +344,7 @@ namespace Buffer_Namespace {
         }
         auto  segIt = chunkIt->second;
         delete segIt->buffer; // Delete Buffer for segment
+        segIt->buffer = 0;
         removeSegment(segIt);
         chunkIndex_.erase(chunkIt);
     }
@@ -379,55 +380,20 @@ namespace Buffer_Namespace {
             segIt -> buffer = 0;
         }
 
-        /*Below is the other, more complicted algorithm originally chosen*/
-
-        //size_t numPageInSeg = segIt -> numPages;
-        //bool prevFree = false; 
-        //bool nextFree = false; 
-        //if (segIt != slabSegments_.begin()) {
-        //    auto prevIt = std::prev(segIt);
-        //    if (prevIt -> memStatus == FREE) { 
-        //        prevFree = true;
-        //        prevIt -> numPages += numPagesInSeg;
-        //        segIt = prevIt;
-        //    }
-        //}
-        //auto nextIt = std::next(segIt);
-        //if (nextIt != slabSegments_.end()) {
-        //    if (nextIt -> memStatus == FREE) {
-        //        nextFree = true;
-        //        if (prevFree) {
-        //            prevIt -> numPages += nextIt -> numPages; 
-        //            slabSegments_.erase(nextIt);
-        //        }
-        //        else {
-        //            nextIt -> numPages += numPagesInSeg;
-        //        }
-        //    }
-        //}
-        //if (!prevFree && !nextFree) {
-        //    segIt -> memStatus = FREE;
-        //    segIt -> pinCount = 0;
-        //    segIt -> buffer = 0;
-        //}
-        //else {
-        //    slabSegments_.erase(segIt);
-        //}
     }
 
     void BufferMgr::checkpoint() {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            if (chunkIt -> second -> buffer -> isDirty_) {
-                cout << "Flushing: ";
-                for (auto vecIt = chunkIt -> second -> chunkKey.begin(); vecIt != chunkIt -> second -> chunkKey.end(); ++vecIt) {
-                    std::cout << *vecIt << ",";
-                }
-                std::cout << std::endl;
+            if (chunkIt -> second -> chunkKey[0] != -1 && chunkIt -> second -> buffer -> isDirty_) { // checks that buffer is actual chunk (not just buffer) and is dirty
+                //cout << "Flushing: ";
+                //for (auto vecIt = chunkIt -> second -> chunkKey.begin(); vecIt != chunkIt -> second -> chunkKey.end(); ++vecIt) {
+                //    std::cout << *vecIt << ",";
+                //}
+                //std::cout << std::endl;
                 parentMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
                 chunkIt -> second -> buffer -> clearDirtyBits();
             }
-            //parentMgr_ -> checkpoint();
         }
     }
     
@@ -524,52 +490,31 @@ namespace Buffer_Namespace {
         return chunk;
     }
 
+    int BufferMgr::getBufferId() {
+        std::lock_guard < std::mutex > lock (bufferIdMutex_);
+        return maxBufferId_++;
+    }
     
     /// client is responsible for deleting memory allocated for b->mem_
-    AbstractBuffer* BufferMgr::createBuffer(mapd_size_t pageSize, mapd_size_t nbytes) {
-        //assert(pageSize > 0 && nbytes > 0);
-        //mapd_size_t numPages = (pageSize + nbytes - 1) / pageSize;
-        //Buffer *b = new Buffer(nullptr, numPages, pageSize, -1);
-        //
-        //// Find nbytes of free memory in the buffer pool
-        //auto freeMemIt = freeMem_.lower_bound(nbytes);
-        //if (freeMemIt == freeMem_.end()) {
-        //    delete b;
-        //    throw std::runtime_error("Out of memory");
-        //    // @todo eviction strategies
-        //}
-        //
-        //// Save free memory information
-        //mapd_size_t freeMemSize = freeMemIt->first;
-        //mapd_addr_t bufAddr = freeMemIt->second;
+    AbstractBuffer* BufferMgr::createBuffer(const mapd_size_t numBytes) {
+        ChunkKey chunkKey = {-1,getBufferId()};
+        return createChunk(chunkKey, pageSize_, numBytes); 
+    }
 
-        //// update Buffer's pointer
-        //b->mem_ = bufAddr;
-        //
-        //// Remove entry from map, and insert new entry
-        //freeMem_.erase(freeMemIt);
-        //if (freeMemSize - nbytes > 0)
-        //    freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(freeMemSize - nbytes, bufAddr + nbytes));
-        //
-        //return b;
+    void BufferMgr::deleteBuffer(AbstractBuffer *buffer) {
+        Buffer * castedBuffer = dynamic_cast <Buffer *> (buffer); 
+        if (castedBuffer == 0) {
+            throw std::runtime_error ("Wrong buffer type - expects base class pointer to Buffer type");
+        }
+        deleteChunk(castedBuffer -> segIt_ -> chunkKey);
     }
     
-    void BufferMgr::deleteBuffer(AbstractBuffer *d) {
-        //assert(d);
-        //Buffer *b = (Buffer*)d;
-        //
-        //// return the free memory used by the Chunk back to the free memory pool
-        //freeMem_.insert(std::pair<mapd_size_t, mapd_addr_t>(b->size(), b->mem_));
-        //delete[] b->mem_;
-        //delete b;
+    size_t BufferMgr::getNumChunks() {
+        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
+        return chunkIndex_.size();
     }
     
-    AbstractBuffer* BufferMgr::putBuffer(AbstractBuffer *d) {
-        // @todo write this putBuffer() method
-        return nullptr;
-    }
-    
-    mapd_size_t BufferMgr::size() {
+    size_t BufferMgr::size() {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         return slabs_.size()*pageSize_*numPagesPerSlab_;
     }

@@ -62,6 +62,18 @@ namespace Memory_Namespace {
         }
     }
 
+    AbstractBuffer * MemoryMgr::createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes) {
+        int level = static_cast <int> (memoryLevel);
+        assert(deviceId < levelSizes_[level]);
+        return bufferMgrs_[level][deviceId] -> createBuffer(numBytes);
+    }
+
+    void MemoryMgr::deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer) {
+        int level = static_cast <int> (memoryLevel);
+        assert(deviceId < levelSizes_[level]);
+        bufferMgrs_[level][deviceId] -> deleteBuffer(buffer);
+    }
+
 
     void MemoryMgr::checkpoint() {
 

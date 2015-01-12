@@ -71,15 +71,16 @@ namespace Buffer_Namespace {
         void checkpoint();
 
         // Buffer API
-        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t numBytes = 0);
-        virtual void deleteBuffer(AbstractBuffer *d);
-        virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
+        virtual AbstractBuffer* createBuffer(const mapd_size_t numBytes = 0);
+        virtual void deleteBuffer(AbstractBuffer *buffer);
+        //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         
         /// Returns the total number of bytes allocated.
-        mapd_size_t size();
-
+        size_t size();
+        size_t getNumChunks();
 
         BufferList::iterator reserveBuffer(BufferList::iterator & segIt, const size_t numBytes);
+
        
     protected: 
         std::vector <mapd_addr_t> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
@@ -91,13 +92,13 @@ namespace Buffer_Namespace {
         BufferMgr& operator=(const BufferMgr&); // private assignment
          void removeSegment(BufferList::iterator &segIt);
         BufferList::iterator findFreeBufferInSlab(const size_t slabNum, const size_t numPagesRequested);
+        int getBufferId();
         virtual void addSlab(const size_t slabSize) = 0;
         virtual void freeAllMem() = 0;
         virtual void allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
         std::recursive_mutex globalMutex_;  // hack for now - lets profile this to see impact on performance - may not matter given the workload
+        std::mutex bufferIdMutex_;  
         
-
-
         //std::map<ChunkKey, Buffer*> chunkIndex_;
         std::map<ChunkKey, BufferList::iterator> chunkIndex_;
         size_t maxBufferSize_;   /// max number of bytes allocated for the buffer poo
@@ -106,6 +107,7 @@ namespace Buffer_Namespace {
         size_t pageSize_;
         unsigned int bufferEpoch_;
         AbstractBufferMgr *parentMgr_;
+        int maxBufferId_;
         //File_Namespace::FileMgr *fileMgr_;
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses

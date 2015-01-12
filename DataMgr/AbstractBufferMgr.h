@@ -40,10 +40,11 @@ namespace Memory_Namespace {
         virtual void checkpoint() = 0;
 
         // Buffer API
-        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t numBytes) = 0;
-        virtual void deleteBuffer(AbstractBuffer *d) = 0;
-        virtual AbstractBuffer* putBuffer(AbstractBuffer *d) = 0;
+        virtual AbstractBuffer* createBuffer(const mapd_size_t numBytes = 0) = 0;
+        virtual void deleteBuffer(AbstractBuffer *buffer) = 0;
+        //virtual AbstractBuffer* putBuffer(AbstractBuffer *d) = 0;
         virtual MgrType getMgrType() = 0;
+        virtual size_t getNumChunks() = 0;
 
     protected:
         AbstractBufferMgr * parentMgr_;

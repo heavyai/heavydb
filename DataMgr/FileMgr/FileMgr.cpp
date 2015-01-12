@@ -210,6 +210,7 @@ namespace File_Namespace {
         if (actualPageSize == 0) {
             actualPageSize = defaultPageSize_; 
         }
+        /// @todo Make all accesses to chunkIndex_ thread-safe
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
@@ -304,18 +305,18 @@ namespace File_Namespace {
     }
 
 
-    AbstractBuffer* FileMgr::createBuffer(mapd_size_t pageSize, mapd_size_t nbytes) {
+    AbstractBuffer* FileMgr::createBuffer(const mapd_size_t numBytes = 0) {
         throw std::runtime_error("Operation not supported");
     }
     
-    void FileMgr::deleteBuffer(AbstractBuffer *d) {
+    void FileMgr::deleteBuffer(AbstractBuffer *buffer) {
         throw std::runtime_error("Operation not supported");
 
     }
     
-    AbstractBuffer* FileMgr::putBuffer(AbstractBuffer *d) {
-        throw std::runtime_error("Operation not supported");
-    }
+    //AbstractBuffer* FileMgr::putBuffer(AbstractBuffer *d) {
+    //    throw std::runtime_error("Operation not supported");
+    //}
 
     Page FileMgr::requestFreePage(mapd_size_t pageSize) {
         std::lock_guard < std::mutex > lock (getPageMutex_);

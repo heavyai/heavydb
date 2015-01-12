@@ -1,15 +1,15 @@
 /**
- * @file	TablePartitionMgr.h
+ * @file	TablePartitionerMgr.h
  * @author	Steven Stewart <steve@map-d.com>
  * @author	Todd Mostak <todd@map-d.com>
  */
-#ifndef _TABLE_PARTITION_MGR_H
-#define _TABLE_PARTITION_MGR_H
+#ifndef PARTITIONER_TABLE_FRAGMENT_MGR_H
+#define PARTITIONER_TABLE_FRAGMENT_MGR_H
 
 #include "Partitioner.h"
 #include "AbstractTablePartitioner.h"
 #include "../../Shared/types.h"
-#include "../PgConnector/PgConnector.h"
+#include "../SqliteConnector/SqliteConnector.h"
 
 #include <map>
 #include <vector>
@@ -20,25 +20,26 @@ namespace Buffer_Namespace {
 };
 
 namespace Catalog_Namespace {
-    class Catalog;
+    //class Catalog;
+    struct TableDescriptor;
     struct ColumnDescriptor;
 }
 
 namespace Partitioner_Namespace {
     
     /**
-     * @class TablePartitionMgr
+     * @class TablePartitionerMgr
      * @brief A partition manager for tables in the relational data model.
      *
      */
     
-    class TablePartitionMgr {
+    class TablePartitionerMgr {
         
         friend class TablePartitionerTest;
         
     public:
         /**
-         * @brief Constructor - TablePartitionMgr requires
+         * @brief Constructor - TablePartitionerMgr requires
          * references to already instanciated catalog
          * and buffer manager objects
          *
@@ -48,14 +49,14 @@ namespace Partitioner_Namespace {
          * Buffer_Namespace::BufferMgr object
          */
         
-        TablePartitionMgr(Catalog_Namespace::Catalog &catalog, Memory_Namespace::AbstractDataMgr &bufferMgr);
+        TablePartitionerMgr(Catalog_Namespace::Catalog &catalog, Memory_Namespace::AbstractDataMgr &bufferMgr);
         
         /**
          * @brief Destructor - writes metadata to storage and
          * deletes partitioners allocated on heap
          */
         
-        ~TablePartitionMgr();
+        ~TablePartitionerMgr();
         
         /**
          * @brief Called by executor with an optional predicate
@@ -78,7 +79,7 @@ namespace Partitioner_Namespace {
          * @brief creates a partitioner for a table specified by
          * name
          *
-         * Table does not have to exist in TablePartitionMgr
+         * Table does not have to exist in TablePartitionerMgr
          * Queries catalog to get metadata about table (including
          * its tableId and types and ids of its columns
          *
@@ -181,7 +182,7 @@ namespace Partitioner_Namespace {
          * @type tableToPartitionerMMap_
          * @brief Maps table ids to TablePartitioner objects.
          *
-         * The TablePartitionMgr uses this multimap in order to map a table id to multiple
+         * The TablePartitionerMgr uses this multimap in order to map a table id to multiple
          * possible TablePartitioner objects. (Note that a multimap permits the mapping of
          * a key to multiple values.)
          */
@@ -190,9 +191,9 @@ namespace Partitioner_Namespace {
         Catalog_Namespace::Catalog &catalog_; /**< reference to Catalog object - must be queried to get metadata for tables and columns before partitioner creation */
         
         Memory_Namespace::AbstractDataMgr & bufferMgr_;									/**< reference to the buffer manager object*/
-        PgConnector pgConnector_; /**<object that connects to postgres to allow metadata storage */
+        SqliteConnector sqliteConnector_; /**<object that connects to sqlite to allow metadata storage */
         
-        bool isDirty_;  /**< Specifies if the TablePartitionMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */
+        bool isDirty_;  /**< Specifies if the TablePartitionerMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */
     };
     
 } // Partitioner_Namespace

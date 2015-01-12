@@ -5,11 +5,13 @@
 #ifndef DATAMGR_MEMORY_MEMORYMGR_H
 #define DATAMGR_MEMORY_MEMORYMGR_H
 
+#include "AbstractBufferMgr.h"
+#include "AbstractBuffer.h"
+
 #include <map>
 #include <vector>
 #include <string>
-#include "AbstractBufferMgr.h"
-#include "AbstractBuffer.h"
+#include <gtest/gtest_prod.h>
 
 namespace Memory_Namespace {
 
@@ -22,11 +24,18 @@ namespace Memory_Namespace {
             AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
             AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);
+
+            AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes);
+            void deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer);
+            AbstractBuffer * copyBuffer(const MemoryLevel memoryLevel, const int deviceId, const AbstractBuffer * srcBuffer);
+
+
             void checkpoint();
 
             // database_id, table_id, partitioner_id, column_id, fragment_id
 
         private:
+            FRIEND_TEST(MemoryMgrTest,buffer);
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
             std::vector <int> levelSizes_;
