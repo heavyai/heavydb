@@ -19,6 +19,7 @@
 	/* literal keyword tokens */
 
 ALL		{ yylval.qualval = kALL; TOK(ALL) }
+ALTER TOK(ALTER)
 AND		TOK(AND)
 ANY		{ yylval.qualval = kANY; TOK(ANY) }
 AS			TOK(AS)

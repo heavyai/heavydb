@@ -661,16 +661,32 @@ namespace Parser {
 	};
 
 	/*
+	 * @type NameValueAssign
+	 * @brief Assignment of a string value to a named attribute
+	 */
+	class NameValueAssign : public Node {
+		public:
+			NameValueAssign(std::string *n, std::string *v) : name(n), value(v) {}
+			virtual ~NameValueAssign() { delete name; delete value; }
+			const std::string *get_name() const { return name; }
+			const std::string *get_value() const { return value; }
+		private:
+			std::string *name;
+			std::string *value;
+	};
+
+	/*
 	 * @type CreateDBStmt
 	 * @brief CREATE DATABASE statement
 	 */
 	class CreateDBStmt : public DDLStmt {
 		public:
-			CreateDBStmt(std::string *n) : db_name(n) {}
-			virtual ~CreateDBStmt() { delete db_name; }
+			CreateDBStmt(std::string *n, std::list<NameValueAssign*> *l) : db_name(n), name_value_list(l) {}
+			virtual ~CreateDBStmt(); 
 			virtual void execute(Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string *db_name;
+			std::list<NameValueAssign*> *name_value_list;
 	};
 
 	/*
@@ -692,14 +708,12 @@ namespace Parser {
 	 */
 	class CreateUserStmt : public DDLStmt {
 		public:
-			CreateUserStmt(std::string *n, std::string *o1, std::string *p, std::string *o2) : user_name(n), option1(o1), passwd(p), option2(o2) {}
+			CreateUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
 			virtual ~CreateUserStmt();
 			virtual void execute(Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string *user_name;
-			std::string *option1;
-			std::string *passwd;
-			std::string *option2;
+			std::list<NameValueAssign*> *name_value_list;
 	};
 
 	/*
@@ -708,14 +722,12 @@ namespace Parser {
 	 */
 	class AlterUserStmt : public DDLStmt {
 		public:
-			AlterUserStmt(std::string *n, std::string *o1, std::string *p, std::string *o2) : user_name(n), option1(o1), passwd(p), option2(o2) {}
+			AlterUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
 			virtual ~AlterUserStmt();
 			virtual void execute(Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string *user_name;
-			std::string *option1;
-			std::string *passwd;
-			std::string *option2;
+			std::list<NameValueAssign*> *name_value_list;
 	};
 
 	/*

@@ -98,6 +98,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_user_statement { $<nodeval>$ = $<nodeval>1; }
+	| alter_user_statement { $<nodeval>$ = $<nodeval>1; }
 	;
 	
 /* NOT SUPPORTED
@@ -125,7 +126,11 @@ NOT SUPPORTED */
 create_database_statement:
 		CREATE DATABASE NAME
 		{
-			$<nodeval>$ = new CreateDBStmt($<stringval>3);
+			$<nodeval>$ = new CreateDBStmt($<stringval>3, nullptr);
+		}
+		| CREATE DATABASE NAME '(' name_eq_value_list ')'
+		{
+			$<nodeval>$ = new CreateDBStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
 		}
 		;
 drop_database_statement:
@@ -135,13 +140,9 @@ drop_database_statement:
 		}
 		;
 create_user_statement:
-		CREATE USER NAME '(' NAME EQUAL STRING ')'
+		CREATE USER NAME '(' name_eq_value_list ')'
 		{
-			$<nodeval>$ = new CreateUserStmt($<stringval>3, $<stringval>5, $<stringval>7, nullptr);
-		}
-		| CREATE USER NAME '(' NAME EQUAL STRING ',' NAME ')'
-		{
-			$<nodeval>$ = new CreateUserStmt($<stringval>3, $<stringval>5, $<stringval>7, $<stringval>9);
+			$<nodeval>$ = new CreateUserStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
 		}
 		;
 drop_user_statement:
@@ -151,19 +152,25 @@ drop_user_statement:
 		}
 		;
 alter_user_statement:
-		ALTER USER NAME '(' NAME EQUAL STRING ')'
+		ALTER USER NAME '(' name_eq_value_list ')'
 		{
-			$<nodeval>$ = new AlterUserStmt($<stringval>3, $<stringval>5, $<stringval>7, nullptr);
-		}
-		| ALTER USER NAME '(' NAME EQUAL STRING ',' NAME ')'
-		{
-			$<nodeval>$ = new AlterUserStmt($<stringval>3, $<stringval>5, $<stringval>7, $<stringval>9);
-		}
-		| ALTER USER NAME '(' NAME ')'
-		{
-			$<nodeval>$ = new AlterUserStmt($<stringval>3, nullptr, nullptr, $<stringval>9);
+			$<nodeval>$ = new AlterUserStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
 		}
 		;
+name_eq_value_list:
+		name_eq_value
+		{
+			$<listval>$ = new std::list<Node*>(1, $<nodeval>1);
+		}
+		| name_eq_value_list ',' name_eq_value
+		{
+			$<listval>$ = $<listval>1;
+			$<listval>$->push_back($<nodeval>3);
+		}
+		;
+name_eq_value: NAME EQUAL STRING { $<nodeval>$ = new NameValueAssign($<stringval>1, $<stringval>3); }
+		;
+
 create_table_statement:
 		CREATE TABLE table '(' base_table_element_commalist ')'
 		{

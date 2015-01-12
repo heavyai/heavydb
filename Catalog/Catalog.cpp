@@ -32,7 +32,7 @@ SysCatalog::initDB()
 	sqliteConnector_.query("CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd text, issuper boolean)");
 	sqliteConnector_.query(string("INSERT INTO mapd_users VALUES (") + MAPD_ROOT_USER_ID_STR + ", '" + MAPD_ROOT_USER + "', '" + MAPD_ROOT_PASSWD_DEFAULT + "', 1)");
 	sqliteConnector_.query("CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
-	createDatabase("mapd");
+	createDatabase("mapd", MAPD_ROOT_USER_ID);
 };
 
 void
@@ -58,28 +58,28 @@ SysCatalog::dropUser(const string &name)
 }
 
 void
-SysCatalog::alterUser(const string &name, const string *passwd, bool changeToSuper)
+SysCatalog::alterUser(const string &name, const string *passwd, bool *is_superp)
 {
 	UserMetadata user;
 	if (!getMetadataForUser(name, user))
 		throw runtime_error("User " + name + " does not exist.");
 	if (!currentUser_.isSuper && currentUser_.userId != user.userId)
 		throw runtime_error("Only user super can change another user's password.");
-	if (passwd != nullptr && changeToSuper)
-		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "', issuper = 1 WHERE userid = " + boost::lexical_cast<string>(user.userId));
+	if (passwd != nullptr && is_superp != nullptr)
+		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "', issuper = " + boost::lexical_cast<std::string>(*is_superp) + " WHERE userid = " + boost::lexical_cast<string>(user.userId));
 	else if (passwd != nullptr)
 		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "' WHERE userid = " + boost::lexical_cast<string>(user.userId));
-	else if (changeToSuper)
-		sqliteConnector_.query("UPDATE mapd_users SET issuper = 1 WHERE userid = " + boost::lexical_cast<string>(user.userId));
+	else if (is_superp != nullptr)
+		sqliteConnector_.query("UPDATE mapd_users SET issuper = " + boost::lexical_cast<std::string>(*is_superp) + " WHERE userid = " + boost::lexical_cast<string>(user.userId));
 }
 
 void
-SysCatalog::createDatabase(const string &name)
+SysCatalog::createDatabase(const string &name, int owner)
 {
 	DBMetadata db;
 	if (getMetadataForDB(name, db))
 		throw runtime_error("Database " + name + " already exists.");
-	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(currentUser_.userId) + ")");
+	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(owner) + ")");
 	SqliteConnector dbConn(name, basePath_);
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
 	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");

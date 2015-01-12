@@ -728,10 +728,21 @@ namespace Parser {
 	CreateUserStmt::~CreateUserStmt()
 	{
 		delete user_name;
-		delete option1;
-		delete passwd;
-		if (option2 != nullptr)
-			delete option2;
+		if (name_value_list != nullptr) {
+			for (auto p : *name_value_list)
+				delete p;
+			delete name_value_list;
+		}
+	}
+
+	CreateDBStmt::~CreateDBStmt()
+	{
+		delete db_name;
+		if (name_value_list != nullptr) {
+			for (auto p : *name_value_list)
+				delete p;
+			delete name_value_list;
+		}
 	}
 
 	void
@@ -740,7 +751,20 @@ namespace Parser {
 		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
 			throw std::runtime_error("Must be in the system database to create databases.");
 		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-		syscat.createDatabase(*db_name);
+		int ownerId = catalog.get_currentUser().userId;
+		if (name_value_list != nullptr) {
+			for (auto p : *name_value_list) {
+				if (boost::iequals(*p->get_name(), "owner")) {
+					Catalog_Namespace::UserMetadata user;
+					if (!syscat.getMetadataForUser(*p->get_value(), user))
+						throw std::runtime_error("User " + *p->get_value() + " does not exist.");
+					ownerId = user.userId;
+				}
+				else
+					throw std::runtime_error("Invalid CREATE DATABASE option " + *p->get_name() + ". Only OWNER supported.");
+			}
+		}
+		syscat.createDatabase(*db_name, ownerId);
 	}
 
 	void
@@ -755,38 +779,62 @@ namespace Parser {
 	void
 	CreateUserStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		if (!boost::iequals(*option1, "password"))
-			throw std::runtime_error("Invalid CREATE USER option " + *option1 + ".  Should be PASSWORD.");
-		if (option2 != nullptr && !boost::iequals(*option2, "super"))
-			throw std::runtime_error("Invalid CREATE USER option " + *option2 + ".  Should be SUPER.");
+		std::string passwd;
+		bool is_super = false;
+		for (auto p : *name_value_list) {
+			if (boost::iequals(*p->get_name(), "password"))
+				passwd = *p->get_value();
+			else if (boost::iequals(*p->get_name(), "is_super")) {
+				if (boost::iequals(*p->get_value(), "true"))
+					is_super = true;
+				else if (boost::iequals(*p->get_value(), "false"))
+					is_super = false;
+				else
+					throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
+			} else
+				throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() + ".  Should be PASSWORD or IS_SUPER.");
+		}
+		if (passwd.empty())
+			throw std::runtime_error("Must have a password for CREATE USER.");
 		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
 			throw std::runtime_error("Must be in the system database to create users.");
 		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-		syscat.createUser(*user_name, *passwd, option2 != nullptr);
+		syscat.createUser(*user_name, passwd, is_super);
 	}
 
 	AlterUserStmt::~AlterUserStmt()
 	{
 		delete user_name;
-		if (option1 != nullptr) {
-			delete option1;
-			delete passwd;
+		if (name_value_list != nullptr) {
+			for (auto p : *name_value_list)
+				delete p;
+			delete name_value_list;
 		}
-		if (option2 != nullptr)
-			delete option2;
 	}
 
 	void
 	AlterUserStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		if (!boost::iequals(*option1, "password"))
-			throw std::runtime_error("Invalid CREATE USER option " + *option1 + ".  Should be PASSWORD.");
-		if (option2 != nullptr && !boost::iequals(*option2, "super"))
-			throw std::runtime_error("Invalid CREATE USER option " + *option2 + ".  Should be SUPER.");
-		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
-			throw std::runtime_error("Must be in the system database to alter users.");
+		const std::string *passwd = nullptr;
+		bool is_super = false;
+		bool *is_superp = nullptr;
+		for (auto p : *name_value_list) {
+			if (boost::iequals(*p->get_name(), "password"))
+				passwd = p->get_value();
+			else if (boost::iequals(*p->get_name(), "is_super")) {
+				if (boost::iequals(*p->get_value(), "true")) {
+					is_super = true;
+					is_superp = &is_super;
+				} else if (boost::iequals(*p->get_value(), "false")) {
+					is_super = false;
+					is_superp = &is_super;
+				} else
+					throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
+			} else
+				throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() + ".  Should be PASSWORD or IS_SUPER.");
+		}
 		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-		syscat.alterUser(*user_name, passwd, option2 != nullptr);
+		syscat.alterUser(*user_name, passwd, is_superp);
 	}
 
 	void
