@@ -1,6 +1,8 @@
 #include "CpuBuffer.h"
 #include "../CudaUtils.h"
 
+#include <cstring>
+
 namespace Buffer_Namespace {
 
     CpuBuffer::CpuBuffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): Buffer(bm, segIt, pageSize, numBytes) {}
