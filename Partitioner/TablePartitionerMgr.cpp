@@ -4,7 +4,7 @@
  * @author	Todd Mostak <todd@map-d.com>
  */
 #include "TablePartitionMgr.h"
-#include "Catalog.h"
+//#include "Catalog.h"
 #include "AbstractDataMgr.h"
 #include "LinearTablePartitioner.h"
 
@@ -18,7 +18,7 @@ namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr::TablePartitionMgr(Catalog_Namespace::Catalog &catalog, Memory_Namespace::AbstractDataMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), sqliteConnector_("mapd","mapd"), isDirty_(false) {
+TablePartitionMgr::TablePartitionMgr(Memory_Namespace::MemoryMgr &memoryMgr, const std::string &dbName, const std::string &basePath) memoryMgr_(memoryMgr), maxPartitionerId_(-1), sqliteConnector_(dbName,basePath), isDirty_(false) {
     createStateTableIfDne();
     readState();
 }

@@ -10,7 +10,7 @@
  * 
  */
 
-namespace Catalog_Namespace {
+//namespace Catalog_Namespace {
 
 struct TableDescriptor {
     int32_t tableId; /**< tableId starts at 0 for valid tables. */
@@ -23,7 +23,7 @@ struct TableDescriptor {
 		std::string partitions;
 };
 
-}
+//}
 
 
 

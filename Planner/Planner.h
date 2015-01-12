@@ -22,7 +22,8 @@ namespace Planner {
 	class Plan {
 		public:
 			Plan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p) : targetlist(t), quals(q), cost(c), child_plan(p) {}
-			Plan() {}
+			Plan() : cost(0.0), child_plan(nullptr) {}
+			Plan(const std::list<Analyzer::TargetEntry*> &t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
 			virtual ~Plan();
 			const std::list<Analyzer::TargetEntry*> &get_targetlist() const { return targetlist; }
 			const std::list<Analyzer::Expr*> &get_quals() const { return quals; }
@@ -82,11 +83,8 @@ namespace Planner {
 	 */
 	class ValuesScan : public Plan {
 		public:
-			ValuesScan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::Expr*> &vl) : Plan(t, q, c, p), value_list(vl) {}
-			virtual ~ValuesScan();
-			const std::list<Analyzer::Expr*> &get_value_list() const { return value_list; }
-		private:
-			std::list<Analyzer::Expr*> value_list; // values list, should be Constant or Parameter nodes
+			ValuesScan(const std::list<Analyzer::TargetEntry*> &t) : Plan(t) {}
+			virtual ~ValuesScan() {};
 	};
 
 	/*

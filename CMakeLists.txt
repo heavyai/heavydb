@@ -1,30 +1,23 @@
 cmake_minimum_required(VERSION 2.8)
 
-PROJECT			(MapD_exe)
+PROJECT			(mapd_exe)
 
-set( CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}" )
-include_directories(${Boost_INCLUDE_DIR} "/usr/local/include")
+set( CMAKE_CXX_FLAGS "-g -std=c++0x ${CMAKE_CXX_FLAGS}" )
+FIND_PACKAGE( Boost COMPONENTS filesystem-mt program_options system-mt REQUIRED )
+#set( Boost_SYSTEM_LIBRARY "-lboost_filesystem-mt -lboost_system-mt")
+include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_CURRENT_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR})
 ADD_SUBDIRECTORY    (SqliteConnector)
-ADD_SUBDIRECTORY    (Partitioner)
 ADD_SUBDIRECTORY    (Catalog/)
-ADD_SUBDIRECTORY    (DataMgr/)
-#ADD_SUBDIRECTORY    (QueryEngine/Parse/SQL)
-ADD_SUBDIRECTORY	(Server)
-ADD_SUBDIRECTORY	(Database)
+ADD_SUBDIRECTORY    (Parser)
+ADD_SUBDIRECTORY    (Analyzer)
+ADD_SUBDIRECTORY    (Planner)
 
 set(mapd_source_files main.cpp)
-add_executable(MapD ${mapd_source_files})
+add_executable(mapd ${mapd_source_files})
 
-target_link_libraries (MapD Database Catalog Partitioner TcpServer Output  ${Boost_SYSTEM_LIBRARY} )
+set(initdb_source_files initdb.cpp)
+add_executable(initdb ${initdb_source_files})
 
-# add a target to generate API documentation with Doxygen
-find_package(Doxygen)
-if(DOXYGEN_FOUND)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
-add_custom_target(doc
-${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-COMMENT "Generating API documentation with Doxygen" VERBATIM
-)
-endif(DOXYGEN_FOUND)
-
+MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
+target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner ${Boost_LIBRARIES} )
+target_link_libraries (initdb Catalog SqliteConnector ${Boost_LIBRARIES} )

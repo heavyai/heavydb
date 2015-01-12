@@ -28,9 +28,11 @@ namespace Catalog_Namespace {
 void
 SysCatalog::initDB()
 {
-	sqliteConnector_.query("CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd text, boolean issuper)");
-	sqliteConnector_.query("INSERT INTO mapd_users VALUES (0,'mapd', 'HyperInteractive', 1)");
+	sqliteConnector_.query("CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd text, issuper boolean)");
+	sqliteConnector_.query(string("INSERT INTO mapd_users VALUES (") + MAPD_ROOT_USER_ID_STR + ", '" + MAPD_ROOT_USER + "', '" + MAPD_ROOT_PASSWD_DEFAULT + "', 1)");
 	sqliteConnector_.query("CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
+	UserMetadata root(MAPD_ROOT_USER_ID, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT, true);
+	createDatabase("mapd", root);
 };
 
 void
@@ -74,9 +76,11 @@ SysCatalog::createDatabase(const string &name, const UserMetadata &curUser)
 		throw runtime_error("Database " + name + " already exists.");
 	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(curUser.userId) + ")");
 	SqliteConnector dbConn(name, basePath_);
-	dbConn.query("CREATE TABLE mapd_tables (tableid integer primgary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
-	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, notnull boolean, compression integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
+	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
+	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, isGPU boolean)");
+
+
 }
 
 void
@@ -115,6 +119,12 @@ SysCatalog::getMetadataForDB(const string &name, DBMetadata &db)
 	db.dbName = sqliteConnector_.getData<string>(0, 1);
 	db.dbOwner = sqliteConnector_.getData<int>(0, 2);
 	return true;
+}
+
+Catalog::Catalog(const string &basePath, const string &dbname, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname,basePath)
+{
+		if (!is_initdb)
+			buildMaps();
 }
 
 Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMetadata &curDB): basePath_(basePath), sqliteConnector_(curDB.dbName,basePath), currentUser_(curUser), currentDB_(curDB) 
@@ -156,7 +166,7 @@ void Catalog::buildMaps() {
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
     }
-    string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, notnull, compression, chunks from mapd_columns");
+    string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, chunks from mapd_columns");
     sqliteConnector_.query(columnQuery);
     numRows = sqliteConnector_.getNumRows();
     for (int r = 0; r < numRows; ++r) {
@@ -268,7 +278,7 @@ Catalog::createTable(const string &tableName, const vector<ColumnDescriptor *> &
 	int32_t tableId = sqliteConnector_.getData<int>(0, 0);
 	int colId = 1;
 	for (auto cd : columns) {
-		sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, notnull, compression, chunks) VALUES (" + boost::lexical_cast<string>(tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd->columnName + "', " + boost::lexical_cast<string>(cd->columnType.type) + ", " + boost::lexical_cast<string>(cd->columnType.dimension) + ", " + boost::lexical_cast<string>(cd->columnType.scale) + ", " + boost::lexical_cast<string>(cd->columnType.notnull) + ", 0, '')");
+		sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, chunks) VALUES (" + boost::lexical_cast<string>(tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd->columnName + "', " + boost::lexical_cast<string>(cd->columnType.type) + ", " + boost::lexical_cast<string>(cd->columnType.dimension) + ", " + boost::lexical_cast<string>(cd->columnType.scale) + ", " + boost::lexical_cast<string>(cd->columnType.notnull) + ", 0, '')");
 		cd->tableId = tableId;
 		cd->columnId = colId++;
 	}

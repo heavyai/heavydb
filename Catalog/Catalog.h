@@ -60,6 +60,8 @@ typedef std::map < ColumnIdKey, ColumnDescriptor *> ColumnDescriptorMapById;
  * @brief metadata for a mapd user
  */
 struct UserMetadata {
+	UserMetadata(int32_t u, const std::string &n, const std::string &p, bool s) : userId(u), userName(n), passwd(p), isSuper(s) {}
+	UserMetadata() {}
 	int32_t userId;
 	std::string userName;
 	std::string passwd;
@@ -78,27 +80,11 @@ struct DBMetadata {
 
 /* database name for the system database */
 #define MAPD_SYSTEM_DB "mapd"
-
-/*
- * @type SysCatalog
- * @brief class for the system-wide catalog, currently containing user and database metadata
- */
-class SysCatalog {
-	public:
-		SysCatalog(const std::string &basePath) : basePath_(basePath), sqliteConnector_(MAPD_SYSTEM_DB, basePath) {}
-		~SysCatalog() {};
-		void initDB();
-		void createUser(const std::string &name, const std::string &passwd, bool issuper, const UserMetadata &curUser);
-		void dropUser(const std::string &name, const UserMetadata &curUser);
-		void changeUserPasswd(const std::string &name, const std::string &passwd, const UserMetadata &curUser);
-		void createDatabase(const std::string &dbname, const UserMetadata &curUser);
-		void dropDatabase(const std::string &dbname, const UserMetadata &curUser);
-		bool getMetadataForUser(const std::string &name, UserMetadata &user);
-		bool getMetadataForDB(const std::string &name, DBMetadata &db);
-	private:
-		std::string basePath_; /**< The OS file system path containing database directories. */
-		SqliteConnector sqliteConnector_;
-};
+/* the mapd root user */
+#define MAPD_ROOT_USER "mapd"
+#define MAPD_ROOT_USER_ID 0
+#define MAPD_ROOT_USER_ID_STR "0"
+#define MAPD_ROOT_PASSWD_DEFAULT "HyperInteractive"
 
 /**
  * @type Catalog
@@ -109,6 +95,8 @@ class SysCatalog {
 class Catalog {
 
     public:
+				Catalog(const std::string &basePath, const std::string &dbname, bool is_initdb);
+
         /**
          * @brief Constructor - takes basePath to already extant
          * data directory for writing
@@ -155,9 +143,11 @@ class Catalog {
          std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
          const UserMetadata &get_currentUser() { return currentUser_; }
+         void set_currentUser(const UserMetadata &user) { currentUser_ = user; }
          const DBMetadata &get_currentDB() { return currentDB_; }
+         void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 
-    private:
+    protected:
         void buildMaps();
         void addTableToMap(TableDescriptor *td, const std::vector<ColumnDescriptor *> &columns);
         void removeTableFromMap(const std::string &tableName, int tableId);
@@ -171,6 +161,25 @@ class Catalog {
         UserMetadata currentUser_;
         DBMetadata currentDB_;
 };
+
+/*
+ * @type SysCatalog
+ * @brief class for the system-wide catalog, currently containing user and database metadata
+ */
+class SysCatalog : public Catalog {
+	public:
+		SysCatalog(const std::string &basePath, bool is_initdb = false) : Catalog(basePath, MAPD_SYSTEM_DB, is_initdb) {}
+		~SysCatalog() {};
+		void initDB();
+		void createUser(const std::string &name, const std::string &passwd, bool issuper, const UserMetadata &curUser);
+		void dropUser(const std::string &name, const UserMetadata &curUser);
+		void changeUserPasswd(const std::string &name, const std::string &passwd, const UserMetadata &curUser);
+		void createDatabase(const std::string &dbname, const UserMetadata &curUser);
+		void dropDatabase(const std::string &dbname, const UserMetadata &curUser);
+		bool getMetadataForUser(const std::string &name, UserMetadata &user);
+		bool getMetadataForDB(const std::string &name, DBMetadata &db);
+};
+
 
 } // Catalog_Namespace
 

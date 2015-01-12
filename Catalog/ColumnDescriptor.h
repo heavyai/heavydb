@@ -9,7 +9,7 @@
  * 
  */
 
-namespace Catalog_Namespace {
+//namespace Catalog_Namespace {
     struct ColumnDescriptor {
         int tableId; 
         int columnId;
@@ -18,6 +18,6 @@ namespace Catalog_Namespace {
         int compression;
         std::string chunks;
     };
-} 
+//} 
 
 #endif // COLUMN_DESCRIPTOR

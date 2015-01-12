@@ -1,0 +1,67 @@
+#include <iostream>
+#include <string>
+#include <exception>
+#include "boost/program_options.hpp"
+#include <boost/filesystem.hpp>
+#include "Catalog/Catalog.h"
+
+int
+main(int argc, char* argv[])
+{
+	std::string base_path;
+	bool force = false;
+	namespace po = boost::program_options;
+
+	po::options_description desc("Options");
+	desc.add_options()
+		("help,h", "Print help messages ")
+		("path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")
+		("force,f", "Force overwriting of existing MapD instance");
+
+	po::positional_options_description positionalOptions;
+	positionalOptions.add("path", 1);
+
+	po::variables_map vm;
+
+	try {
+		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
+		if (vm.count("help")) {
+			std::cout << "Usage: initdb [-f] <catalog path>\n";
+			return 0;
+		}
+		if (vm.count("force"))
+			force = true;
+		po::notify(vm);
+	}
+	catch (boost::program_options::error &e)
+	{
+		std::cerr << "Usage Error: " << e.what() << std::endl;
+		return 1;
+	}
+
+	if (!boost::filesystem::exists(base_path)) {
+		std::cerr << "Catalog basepath " + base_path + " does not exist.\n";
+		return 1;
+	}
+	if (base_path.size() > 0 && base_path[base_path.size() - 1] != '/')
+		base_path.push_back('/');
+	std::string system_db_file = base_path + "mapd";
+	if (boost::filesystem::exists(system_db_file)) {
+		if (force)
+			boost::filesystem::remove(system_db_file);
+		else {
+			std::cerr << "MapD already initialized at " + base_path + ". Use -f to force.\n";
+			return 1;
+		}
+	}
+
+	try {
+		Catalog_Namespace::SysCatalog sys_cat(base_path, true);
+		sys_cat.initDB();
+	}
+	catch (std::exception &e)
+	{
+		std::cerr << "Exception: " << e.what() << "\n";
+	}
+	return 0;
+}

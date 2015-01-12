@@ -15,15 +15,16 @@
 #include <vector>
 
 // forward declaration(s)
-namespace Buffer_Namespace {
-    class BufferMgr;
+namespace Memory_Namespace {
+    class MemoryMgr;
 };
-
+/*
 namespace Catalog_Namespace {
     //class Catalog;
     struct TableDescriptor;
     struct ColumnDescriptor;
 }
+*/
 
 namespace Partitioner_Namespace {
     
@@ -49,7 +50,7 @@ namespace Partitioner_Namespace {
          * Buffer_Namespace::BufferMgr object
          */
         
-        TablePartitionerMgr(Catalog_Namespace::Catalog &catalog, Memory_Namespace::AbstractDataMgr &bufferMgr);
+        TablePartitionerMgr(Memory_Namespace::MemoryMgr &memoryMgr);
         
         /**
          * @brief Destructor - writes metadata to storage and
@@ -96,7 +97,7 @@ namespace Partitioner_Namespace {
          * @see Catalog
          */
         
-        void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = LINEAR, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
+        void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
         
         /**
          * @brief Insert data (insertDataStruct) into the table
@@ -170,7 +171,7 @@ namespace Partitioner_Namespace {
          */
         
         // columnInfoVec needed  by partitioner
-        void translateColumnDescriptorsToColumnInfoVec (std::vector <const Catalog_Namespace::ColumnDescriptor *> &columnDescriptors, std::vector<ColumnInfo> &columnInfoVec);
+        void translateColumnDescriptorsToColumnInfoVec (std::vector <const ColumnDescriptor *> &columnDescriptors, std::vector<ColumnInfo> &columnInfoVec);
         
         
         int maxPartitionerId_; /**< Since each new partitioner is
@@ -188,7 +189,7 @@ namespace Partitioner_Namespace {
          */
         std::multimap<int, AbstractTablePartitioner*> tableToPartitionerMMap_;
         
-        Catalog_Namespace::Catalog &catalog_; /**< reference to Catalog object - must be queried to get metadata for tables and columns before partitioner creation */
+        //Catalog_Namespace::Catalog &catalog_; /**< reference to Catalog object - must be queried to get metadata for tables and columns before partitioner creation */
         
         Memory_Namespace::AbstractDataMgr & bufferMgr_;									/**< reference to the buffer manager object*/
         SqliteConnector sqliteConnector_; /**<object that connects to sqlite to allow metadata storage */
