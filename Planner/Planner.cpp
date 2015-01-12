@@ -7,6 +7,7 @@
  **/
 
 #include <cassert>
+#include <iostream>
 #include <stdexcept>
 #include "../Analyzer/Analyzer.h"
 #include "Planner.h"
@@ -24,53 +25,39 @@ namespace Planner {
 
 	Result::~Result()
 	{
-		Plan::~Plan();
 		for (auto p : const_quals)
 			delete p;
 	}
 
 	Scan::~Scan()
 	{
-		Plan::~Plan();
 		for (auto p : simple_quals)
 			delete p;
 	}
 
-	ValuesScan::~ValuesScan()
-	{
-		Plan::~Plan();
-		for (auto p : value_list)
-			delete p;
-	}
-	
 	Join::~Join()
 	{
-		Plan::~Plan();
 		delete child_plan2;
 	}
 
 	AggPlan::~AggPlan()
 	{
-		Plan::~Plan();
 	}
 
 	Append::~Append()
 	{
-		Plan::~Plan();
 		for (auto p : plan_list)
 			delete p;
 	}
 
 	MergeAppend::~MergeAppend()
 	{
-		Plan::~Plan();
 		for (auto p : mergeplan_list)
 			delete p;
 	}
 
 	Sort::~Sort()
 	{
-		Plan::~Plan();
 	}
 
 	RootPlan::~RootPlan()
@@ -141,8 +128,15 @@ namespace Planner {
 	Optimizer::optimize_scans()
 	{
 		const std::vector<Analyzer::RangeTblEntry*> &rt = cur_query->get_rangetable();
-		for (auto rte : rt)
+		bool first = true;
+		for (auto rte : rt) {
+			if (first && cur_query->get_stmt_type() == kINSERT) {
+				// skip the first entry in INSERT statements which is the result table
+				first = false;
+				continue;
+			}
 			base_scans.push_back(new Scan(*rte));
+		}
 		const Analyzer::Expr *where_pred = query.get_where_predicate();
 		std::list<const Analyzer::Expr*> scan_predicates;
 		if (where_pred != nullptr)
@@ -152,8 +146,15 @@ namespace Planner {
 			Analyzer::Expr *simple_pred = p->normalize_simple_predicate(rte_idx);
 			if (simple_pred != nullptr)
 				base_scans[rte_idx]->add_simple_predicate(simple_pred);
-			else
+			else {
+				std::set<int> rte_idx_set;
+				p->collect_rte_idx(rte_idx_set);
+				for (auto x : rte_idx_set) {
+					rte_idx = x;
+					break; // grab rte_idx out of the singleton set
+				}
 				base_scans[rte_idx]->add_predicate(p->deep_copy());
+			}
 		}
 		const std::list<Analyzer::TargetEntry*> &tlist = cur_query->get_targetlist();
 		bool(*fn_pt)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*) = Analyzer::ColumnVar::colvar_comp;
@@ -171,7 +172,9 @@ namespace Planner {
 	void
 	Optimizer::optimize_joins()
 	{
-		if (base_scans.size() == 1)
+		if (base_scans.size() == 0)
+			cur_plan = nullptr;
+		else if (base_scans.size() == 1)
 			cur_plan = base_scans[0];
 		else
 			throw std::runtime_error("joins are not supported yet.");
@@ -196,12 +199,20 @@ namespace Planner {
 	{
 		std::list<Analyzer::TargetEntry*> final_tlist;
 		for (auto tle : query.get_targetlist()) {
-			Analyzer::TargetEntry *new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_with_targetlist(cur_plan->get_targetlist()));
+			Analyzer::TargetEntry *new_tle;
+			if (cur_plan == nullptr)
+				new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->deep_copy());
+			else
+				new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_with_targetlist(cur_plan->get_targetlist()));
 			final_tlist.push_back(new_tle);
 		}
-		//delete the old TargetEntry's
-		for (auto tle : cur_plan->get_targetlist())
-			delete tle;
-		cur_plan->set_targetlist(final_tlist);
+		if (cur_plan == nullptr)
+			cur_plan = new ValuesScan(final_tlist);
+		else {
+			//delete the old TargetEntry's
+			for (auto tle : cur_plan->get_targetlist())
+				delete tle;
+			cur_plan->set_targetlist(final_tlist);
+		}
 	}
 }

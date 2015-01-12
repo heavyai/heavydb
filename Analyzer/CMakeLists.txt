@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-SET(CMAKE_CXX_FLAGS "-std=c++0x")
+SET(CMAKE_CXX_FLAGS "-std=c++0x -g")
 SET (analyzer_source_files
     Analyzer.cpp
     Analyzer.h

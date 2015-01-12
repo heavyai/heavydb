@@ -26,7 +26,6 @@ namespace Parser {
 
 	InValues::~InValues()
 	{
-		InExpr::~InExpr();
 		for (auto p : *value_list)
 			delete p;
 		delete value_list;
@@ -175,7 +174,6 @@ namespace Parser {
 
 	InsertValuesStmt::~InsertValuesStmt()
 	{
-		InsertStmt::~InsertStmt();
 		for (auto p : *value_list)
 			delete p;
 		delete value_list;
@@ -215,13 +213,11 @@ namespace Parser {
 		ti.type = kVARCHAR;
 		ti.dimension = stringval->length();
 		ti.scale = 0;
-		Analyzer::Constant *c = new Analyzer::Constant(ti, false);
 		char *s = new char[stringval->length() + 1];
 		strcpy(s, stringval->c_str());
 		Datum d;
 		d.pointerval = (void*)s;
-		c->set_constval(d);
-		return c;
+		return new Analyzer::Constant(ti, false, d);
 	}
 
 	Analyzer::Expr *
@@ -239,8 +235,7 @@ namespace Parser {
 			t = kBIGINT;
 			d.bigintval = intval;
 		}
-		Analyzer::Constant *c = new Analyzer::Constant(t, false);
-		c->set_constval(d);
+		Analyzer::Constant *c = new Analyzer::Constant(t, false, d);
 		return c;
 	}
 
@@ -263,8 +258,6 @@ namespace Parser {
 		for (int i = 0; i < ti.scale; i++)
 			d.bigintval *= 10;
 		d.bigintval += fraction;
-		if (ti.dimension < 11)
-			d.intval = (int)d.bigintval;
 		return new Analyzer::Constant(ti, false, d);
 	}
 
@@ -412,15 +405,14 @@ namespace Parser {
 			table_id = rte->get_table_id();
 		} else {
 			bool found = false;
-			int rte_idx, i = 0;
+			int i = 0;
 			for (auto rte : query.get_rangetable()) {
 				cd = rte->get_column_desc(catalog, *column);
 				if (cd != nullptr && !found) {
 					found = true;
 					rte_idx = i;
 					table_id = rte->get_table_id();
-				}
-				if (cd != nullptr && found)
+				} else if (cd != nullptr && found)
 					throw std::runtime_error("Column name " + *column + " is ambiguous.");
 				i++;
 			}
@@ -579,7 +571,7 @@ namespace Parser {
 			const TableDescriptor *table_desc;
 			table_desc = catalog.getMetadataForTable(*p->get_table_name());
 			if (table_desc == nullptr)
-				throw std::runtime_error("table does not exist." + *p->get_table_name());
+				throw std::runtime_error("Table " + *p->get_table_name() + " does not exist." );
 			std::string range_var;
 			if (p->get_range_var() == nullptr)
 				range_var = *p->get_table_name();
@@ -655,6 +647,7 @@ namespace Parser {
 				
 			}
 		}
+		query.add_rte(rte);
 	}
 
 	void

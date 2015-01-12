@@ -1,13 +1,14 @@
 %name Parser
 %define CLASS SQLParser
-%define LSP_NEEDED
+%define LVAL yylval
+%define CONSTRUCTOR_INIT : lexer(yylval)
 %define MEMBERS                 \
 		virtual ~SQLParser() {} \
-    int parse(const std::string & inputStr, std::list<Stmt*>*& parseTrees, std::string &lastParsed) { std::istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseTrees); lastParsed = lexer.YYText(); return yynerrs; } \
+    int parse(const std::string & inputStr, std::list<Stmt*>& parseTrees, std::string &lastParsed) { std::istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseTrees); lastParsed = lexer.YYText(); return yynerrs; } \
     private:                   \
-       yyFlexLexer lexer;
+       SQLLexer lexer;
 %define LEX_BODY {return lexer.yylex();}
-%define ERROR_BODY { std::cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed: " << lexer.YYText() << std::endl; }
+%define ERROR_BODY {} /*{ std::cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed: " << lexer.YYText() << std::endl; } */
 
 %header{
 #include <cstdlib>
@@ -20,7 +21,7 @@
 #include "ParserNode.h"
 
 using namespace Parser;
-#define YY_Parser_PARSE_PARAM std::list<Stmt*>*& parseTrees
+#define YY_Parser_PARSE_PARAM std::list<Stmt*>& parseTrees
 %}
 
 %union {
@@ -35,6 +36,14 @@ using namespace Parser;
 	std::list<std::string*> *slistval;
 	Node *nodeval;
 }
+
+%header{
+	class SQLLexer : public yyFlexLexer {
+		public:
+			SQLLexer(YY_Parser_STYPE &lval) : yylval(lval) {};
+			YY_Parser_STYPE &yylval;
+	};
+%}
 
 	/* symbolic tokens */
 
@@ -55,14 +64,14 @@ using namespace Parser;
 	/* literal keyword tokens */
 
 %token ALL AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
-%token CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
-%token CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE
+%token CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
+%token DATABASE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IN INSERT INTEGER INTO
 %token IS KEY LANGUAGE LAST LIKE NULLX NUMERIC OF ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
-%token SMALLINT SOME TABLE TIME TIMESTAMP TO UNION
+%token SMALLINT SOME TABLE TEXT TIME TIMESTAMP TO UNION
 %token UNIQUE UPDATE USER VALUES VIEW WHENEVER WHERE WITH WORK
 
 %start sql_list
@@ -70,12 +79,10 @@ using namespace Parser;
 %%
 
 sql_list:
-		sql ';'	{ $<listval>$ = new std::list<Node*>(1, $<nodeval>1); parseTrees = reinterpret_cast<std::list<Stmt*>*>($<listval>$); }
+		sql ';'	{ parseTrees.push_front(dynamic_cast<Stmt*>($<nodeval>1)); }
 	|	sql_list sql ';' 
 	{ 
-		$<listval>$ = $<listval>1;
-	  $<listval>$->push_back($<nodeval>2);
-		parseTrees = reinterpret_cast<std::list<Stmt*>*>($<listval>$); 
+		parseTrees.push_front(dynamic_cast<Stmt*>($<nodeval>2));
 	}
 	;
 
@@ -133,7 +140,7 @@ base_table_element:
 column_def:
 		column data_type 
 		{	$<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), nullptr); }
-		column data_type column_constraint_def
+		| column data_type column_constraint_def
 		{ $<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<ColumnConstraintDef*>($<nodeval>3)); }
 	;
 
@@ -648,6 +655,7 @@ column_ref:
 
 data_type:
 		BIGINT { $<nodeval>$ = new SQLType(kBIGINT); }
+	| TEXT { $<nodeval>$ = new SQLType(kTEXT); }
 	|	BOOLEAN { $<nodeval>$ = new SQLType(kBOOLEAN); }
 	|	CHARACTER { $<nodeval>$ = new SQLType(kCHAR); }
 	|	CHARACTER '(' INTNUM ')' { $<nodeval>$ = new SQLType(kCHAR, $<intval>3); }
@@ -663,6 +671,7 @@ data_type:
 	|	FLOAT '(' INTNUM ')' { $<nodeval>$ = new SQLType(kFLOAT, $<intval>3); }
 	|	REAL { $<nodeval>$ = new SQLType(kFLOAT); }
 	|	DOUBLE PRECISION { $<nodeval>$ = new SQLType(kDOUBLE); }
+	|	DOUBLE { $<nodeval>$ = new SQLType(kDOUBLE); }
 	| TIME { $<nodeval>$ = new SQLType(kTIME); }
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	;

@@ -338,7 +338,6 @@ namespace Parser {
 			virtual ~TableRef();
 			const std::string *get_table_name() { return table_name; }
 			const std::string *get_range_var() { return range_var; }
-			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 		private:
 			std::string *table_name;
 			std::string *range_var;

@@ -122,15 +122,18 @@ namespace Analyzer {
 		public:
 			Constant(SQLTypes t, bool n) : Expr (t), is_null(n) {}
 			Constant(SQLTypes t, bool n, Datum v) : Expr (t), is_null(n), constval(v) {}
-			Constant(const SQLTypeInfo &ti, bool n) : Expr(ti), is_null(n) {}
 			Constant(const SQLTypeInfo &ti, bool n, Datum v) : Expr(ti), is_null(n), constval(v) {}
+			virtual ~Constant();
 			bool get_is_null() { return is_null; }
 			Datum get_constval() { return constval; }
 			void set_constval(Datum d) { constval = d; }
 			virtual Expr *deep_copy() const;
+			virtual Expr *add_cast(const SQLTypeInfo &new_type_info);
 		private:
 			bool is_null; // constant is NULL
 			Datum constval; // the constant value
+			void cast_number(const SQLTypeInfo &new_type_info);
+			void cast_string(const SQLTypeInfo &new_type_info);
 	};
 
 	/*

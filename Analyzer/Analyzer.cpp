@@ -13,6 +13,12 @@
 
 namespace Analyzer {
 
+	Constant::~Constant() 
+	{
+		if (IS_STRING(type_info.type) && !is_null)
+			delete (char*)constval.pointerval;
+	}
+
 	Subquery::~Subquery() {
 		delete parsetree;
 		/*
@@ -69,7 +75,14 @@ namespace Analyzer {
 	Expr *
 	Constant::deep_copy() const
 	{
-		return new Constant(type_info, is_null, constval);
+		Datum d = constval;
+		if (IS_STRING(type_info.type) && !is_null) {
+			char *str = (char*)constval.pointerval;
+			char *new_str = new char[strlen(str) + 1];
+			strcpy(new_str, str);
+			d.pointerval = (void*)new_str;
+		}
+		return new Constant(type_info, is_null, d);
 	}
 
 	Expr *
@@ -153,7 +166,7 @@ namespace Analyzer {
 	}
 
 	SQLTypeInfo
-	common_numeric_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
+	BinOper::common_numeric_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
 	{
 		SQLTypeInfo common_type;
 		assert(IS_NUMBER(type1.type) && IS_NUMBER(type2.type));
@@ -317,13 +330,220 @@ namespace Analyzer {
 	{
 		if (new_type_info == type_info)
 			return this;
+		// @TODO check CASTability between types
 		return new UOper(new_type_info, kCAST, this);
+	}
+
+	void
+	Constant::cast_number(const SQLTypeInfo &new_type_info)
+	{
+		switch (type_info.type) {
+			case kINT:
+				switch (new_type_info.type) {
+					case kINT:
+						break;
+					case kSMALLINT:
+						constval.smallintval = (int16_t)constval.intval;
+						break;
+					case kBIGINT:
+						constval.bigintval = (int64_t)constval.intval;
+						break;
+					case kDOUBLE:
+						constval.doubleval = (double)constval.intval;
+						break;
+					case kFLOAT:
+						constval.floatval = (float)constval.intval;
+						break;
+					case kNUMERIC:
+					case kDECIMAL:
+						constval.bigintval = (int64_t)constval.intval;
+						for (int i = 0; i < new_type_info.scale; i++)
+							constval.bigintval *= 10;
+					default:
+						assert(false);
+				}
+				break;
+			case kSMALLINT:
+				switch (new_type_info.type) {
+					case kINT:
+						constval.intval = (int32_t)constval.smallintval;
+						break;
+					case kSMALLINT:
+						break;
+					case kBIGINT:
+						constval.bigintval = (int64_t)constval.smallintval;
+						break;
+					case kDOUBLE:
+						constval.doubleval = (double)constval.smallintval;
+						break;
+					case kFLOAT:
+						constval.floatval = (float)constval.smallintval;
+						break;
+					case kNUMERIC:
+					case kDECIMAL:
+						constval.bigintval = (int64_t)constval.smallintval;
+						for (int i = 0; i < new_type_info.scale; i++)
+							constval.bigintval *= 10;
+					default:
+						assert(false);
+				}
+				break;
+			case kBIGINT:
+				switch (new_type_info.type) {
+					case kINT:
+						constval.intval = (int32_t)constval.bigintval;
+						break;
+					case kSMALLINT:
+						constval.smallintval = (int16_t)constval.bigintval;
+						break;
+					case kBIGINT:
+						break;
+					case kDOUBLE:
+						constval.doubleval = (double)constval.bigintval;
+						break;
+					case kFLOAT:
+						constval.floatval = (float)constval.bigintval;
+						break;
+					case kNUMERIC:
+					case kDECIMAL:
+						for (int i = 0; i < new_type_info.scale; i++)
+							constval.bigintval *= 10;
+					default:
+						assert(false);
+				}
+				break;
+			case kDOUBLE:
+				switch (new_type_info.type) {
+					case kINT:
+						constval.intval = (int32_t)constval.doubleval;
+						break;
+					case kSMALLINT:
+						constval.smallintval = (int16_t)constval.doubleval;
+						break;
+					case kBIGINT:
+						constval.bigintval = (int64_t)constval.doubleval;
+						break;
+					case kDOUBLE:
+						break;
+					case kFLOAT:
+						constval.floatval = (float)constval.doubleval;
+						break;
+					case kNUMERIC:
+					case kDECIMAL:
+						for (int i = 0; i < new_type_info.scale; i++)
+							constval.doubleval *= 10;
+						constval.bigintval = (int64_t)constval.doubleval;
+					default:
+						assert(false);
+				}
+				break;
+			case kFLOAT:
+				switch (new_type_info.type) {
+					case kINT:
+						constval.intval = (int32_t)constval.floatval;
+						break;
+					case kSMALLINT:
+						constval.smallintval = (int16_t)constval.floatval;
+						break;
+					case kBIGINT:
+						constval.bigintval = (int64_t)constval.floatval;
+						break;
+					case kDOUBLE:
+						constval.doubleval = (double)constval.floatval;
+						break;
+					case kFLOAT:
+						break;
+					case kNUMERIC:
+					case kDECIMAL:
+						for (int i = 0; i < new_type_info.scale; i++)
+							constval.floatval *= 10;
+						constval.bigintval = (int64_t)constval.floatval;
+					default:
+						assert(false);
+				}
+				break;
+			case kNUMERIC:
+			case kDECIMAL:
+				switch (new_type_info.type) {
+					case kINT:
+						for (int i = 0; i < type_info.scale; i++)
+							constval.bigintval /= 10;
+						constval.intval = (int32_t)constval.bigintval;
+						break;
+					case kSMALLINT:
+						for (int i = 0; i < type_info.scale; i++)
+							constval.bigintval /= 10;
+						constval.smallintval = (int16_t)constval.bigintval;
+						break;
+					case kBIGINT:
+						for (int i = 0; i < type_info.scale; i++)
+							constval.bigintval /= 10;
+						break;
+					case kDOUBLE:
+						constval.doubleval = (double)constval.bigintval;
+						for (int i = 0; i < type_info.scale; i++)
+							constval.doubleval /= 10;
+						break;
+					case kFLOAT:
+						constval.floatval = (float)constval.bigintval;
+						for (int i = 0; i < type_info.scale; i++)
+							constval.floatval /= 10;
+						break;
+					case kNUMERIC:
+					case kDECIMAL:
+						if (new_type_info.scale > type_info.scale) {
+							for (int i = 0; i < new_type_info.scale - type_info.scale; i++)
+								constval.bigintval *= 10;
+						} else if (new_type_info.scale < type_info.scale) {
+							for (int i = 0; i < type_info.scale - new_type_info.scale; i++)
+								constval.bigintval /= 10;
+						}
+					default:
+						assert(false);
+				}
+				break;
+			default:
+				assert(false);
+		}
+		type_info = new_type_info;
+	}
+
+	void
+	Constant::cast_string(const SQLTypeInfo &new_type_info)
+	{
+		char *str = (char*)constval.pointerval;
+		if (new_type_info.type != kTEXT && new_type_info.dimension < strlen(str)) {
+			// truncate string
+			char *new_str = new char[new_type_info.dimension + 1];
+			strncpy(new_str, str, new_type_info.dimension);
+			delete str;
+			constval.pointerval = (void*)new_str;
+		}
+		type_info = new_type_info;
+	}
+
+	Expr *
+	Constant::add_cast(const SQLTypeInfo &new_type_info)
+	{
+		if (is_null) {
+			type_info = new_type_info;
+			return this;
+		}
+		if (IS_NUMBER(new_type_info.type) && IS_NUMBER(type_info.type)) {
+			cast_number(new_type_info);
+			return this;
+		} else if (IS_STRING(new_type_info.type) && IS_STRING(type_info.type)) {
+			cast_string(new_type_info);
+			return this;
+		}
+		return Expr::add_cast(new_type_info);
 	}
 
 	Expr *
 	Subquery::add_cast(const SQLTypeInfo &new_type_info)
 	{
 		// not supported yet.
+		assert(false);
 		return nullptr;
 	}
 
@@ -534,4 +754,5 @@ namespace Analyzer {
 		}
 		throw std::runtime_error("Intern error: cannot find AggExpr in targetlist.");
 	}
+
 }

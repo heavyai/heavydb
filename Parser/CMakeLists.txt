@@ -46,7 +46,7 @@ SET_SOURCE_FILES_PROPERTIES(${CMAKE_CURRENT_BINARY_DIR}/parser.h GENERATED)
 ADD_CUSTOM_TARGET(ParserFiles DEPENDS ${BisonppOutput})
 ADD_CUSTOM_TARGET(ScannerFiles DEPENDS ${FlexppOutput})
 
-set(CMAKE_CXX_FLAGS "-Wno-deprecated-register -std=c++0x")
+set(CMAKE_CXX_FLAGS "-Wno-deprecated-register -std=c++0x -g")
 
 SET (parser_source_files
 	ParserNode.cpp
