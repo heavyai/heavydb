@@ -511,6 +511,20 @@ namespace Parser {
 	};
 
 	/*
+	 * @type DropTableStmt
+	 * @brief DROP TABLE statement
+	 */
+	class DropTableStmt : public DDLStmt {
+		public:
+			DropTableStmt(std::string *tab) : table(tab) {}
+			virtual ~DropTableStmt() { delete table; }
+			const std::string *get_table() { return table; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *table;
+	};
+
+	/*
 	 * @type QueryExpr
 	 * @brief query expression
 	 */
@@ -630,6 +644,91 @@ namespace Parser {
 			std::list<std::string*> *column_list;
 			QuerySpec *query;
 			bool checkoption;
+	};
+
+	/*
+	 * @type DropViewStmt
+	 * @brief DROP VIEW statement
+	 */
+	class DropViewStmt : public DDLStmt {
+		public:
+			DropViewStmt(std::string *v) : view_name(v) {}
+			virtual ~DropViewStmt() { delete view_name; };
+			const std::string *get_view_name() { return view_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *view_name;
+	};
+
+	/*
+	 * @type CreateDBStmt
+	 * @brief CREATE DATABASE statement
+	 */
+	class CreateDBStmt : public DDLStmt {
+		public:
+			CreateDBStmt(std::string *n) : db_name(n) {}
+			virtual ~CreateDBStmt() { delete db_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *db_name;
+	};
+
+	/*
+	 * @type DropDBStmt
+	 * @brief DROP DATABASE statement
+	 */
+	class DropDBStmt : public DDLStmt {
+		public:
+			DropDBStmt(std::string *n) : db_name(n) {}
+			virtual ~DropDBStmt() { delete db_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *db_name;
+	};
+
+	/*
+	 * @type CreateUserStmt
+	 * @brief CREATE USER statement
+	 */
+	class CreateUserStmt : public DDLStmt {
+		public:
+			CreateUserStmt(std::string *n, std::string *o1, std::string *p, std::string *o2) : user_name(n), option1(o1), passwd(p), option2(o2) {}
+			virtual ~CreateUserStmt();
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *user_name;
+			std::string *option1;
+			std::string *passwd;
+			std::string *option2;
+	};
+
+	/*
+	 * @type AlterUserStmt
+	 * @brief ALTER USER statement
+	 */
+	class AlterUserStmt : public DDLStmt {
+		public:
+			AlterUserStmt(std::string *n, std::string *o1, std::string *p, std::string *o2) : user_name(n), option1(o1), passwd(p), option2(o2) {}
+			virtual ~AlterUserStmt();
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *user_name;
+			std::string *option1;
+			std::string *passwd;
+			std::string *option2;
+	};
+
+	/*
+	 * @type DropUserStmt
+	 * @brief DROP USER statement
+	 */
+	class DropUserStmt : public DDLStmt {
+		public:
+			DropUserStmt(std::string *n) : user_name(n) {}
+			virtual ~DropUserStmt() { delete user_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *user_name;
 	};
 
 	/*

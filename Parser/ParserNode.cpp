@@ -708,9 +708,94 @@ namespace Parser {
 	}
 
 	void
+	DropTableStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		catalog.dropTable(*table);
+	}
+
+	void
 	CreateViewStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
 		throw std::runtime_error("CREATE VIEW not supported yet.");
+	}
+
+	void
+	DropViewStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		throw std::runtime_error("DROP VIEW not supported yet.");
+	}
+
+	CreateUserStmt::~CreateUserStmt()
+	{
+		delete user_name;
+		delete option1;
+		delete passwd;
+		if (option2 != nullptr)
+			delete option2;
+	}
+
+	void
+	CreateDBStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
+			throw std::runtime_error("Must be in the system database to create databases.");
+		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+		syscat.createDatabase(*db_name);
+	}
+
+	void
+	DropDBStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
+			throw std::runtime_error("Must be in the system database to drop databases.");
+		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+		syscat.dropDatabase(*db_name);
+	}
+
+	void
+	CreateUserStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		if (!boost::iequals(*option1, "password"))
+			throw std::runtime_error("Invalid CREATE USER option " + *option1 + ".  Should be PASSWORD.");
+		if (option2 != nullptr && !boost::iequals(*option2, "super"))
+			throw std::runtime_error("Invalid CREATE USER option " + *option2 + ".  Should be SUPER.");
+		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
+			throw std::runtime_error("Must be in the system database to create users.");
+		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+		syscat.createUser(*user_name, *passwd, option2 != nullptr);
+	}
+
+	AlterUserStmt::~AlterUserStmt()
+	{
+		delete user_name;
+		if (option1 != nullptr) {
+			delete option1;
+			delete passwd;
+		}
+		if (option2 != nullptr)
+			delete option2;
+	}
+
+	void
+	AlterUserStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		if (!boost::iequals(*option1, "password"))
+			throw std::runtime_error("Invalid CREATE USER option " + *option1 + ".  Should be PASSWORD.");
+		if (option2 != nullptr && !boost::iequals(*option2, "super"))
+			throw std::runtime_error("Invalid CREATE USER option " + *option2 + ".  Should be SUPER.");
+		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
+			throw std::runtime_error("Must be in the system database to alter users.");
+		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+		syscat.alterUser(*user_name, passwd, option2 != nullptr);
+	}
+
+	void
+	DropUserStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
+			throw std::runtime_error("Must be in the system database to drop users.");
+		Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
+		syscat.dropUser(*user_name);
 	}
 
 }

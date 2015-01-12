@@ -107,7 +107,7 @@ WORK		TOK(WORK)
 
 	/* punctuation */
 
-"="	{ yylval.opval = kEQ; TOK(COMPARISON); }
+"="	{ yylval.opval = kEQ; TOK(EQUAL); }
 "<>" { yylval.opval = kNE; TOK(COMPARISON); }
 "<"	 { yylval.opval = kLT; TOK(COMPARISON); }
 ">"	 { yylval.opval = kGT; TOK(COMPARISON); }
@@ -150,7 +150,7 @@ WORK		TOK(WORK)
 		unput(c);	/* just peeking */
 		if(c != '\'') {
 			/* remove quotes */
-			yylval.stringval = new std::string(yytext+1, strlen(yytext)-2);
+			yylval.stringval = new std::string(yytext+1, strlen(yytext)-3);
 			return SQLParser::STRING;
 		}
 		else

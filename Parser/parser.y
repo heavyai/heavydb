@@ -56,14 +56,14 @@ using namespace Parser;
 %left OR
 %left AND
 %left NOT
-%left COMPARISON /* = <> < > <= >= */
+%left EQUAL COMPARISON /* = <> < > <= >= */
 %left '+' '-'
 %left '*' '/'
 %nonassoc UMINUS
 
 	/* literal keyword tokens */
 
-%token ALL AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
+%token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
 %token DATABASE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
@@ -89,9 +89,15 @@ sql_list:
 
 	/* schema definition language */
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
-	 base_table_def { $<nodeval>$ = $<nodeval>1; }
-	| view_def { $<nodeval>$ = $<nodeval>1; }
+	 create_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| create_view_statement { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
+	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
+	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
+	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
+	| create_user_statement { $<nodeval>$ = $<nodeval>1; }
+	| drop_user_statement { $<nodeval>$ = $<nodeval>1; }
 	;
 	
 /* NOT SUPPORTED
@@ -110,18 +116,67 @@ schema_element_list:
 	;
 
 schema_element:
-		base_table_def {	$$ = $1; }
-	|	view_def {	$$ = $1; }
+		create_table_statement {	$$ = $1; }
+	|	create_view_statement {	$$ = $1; }
 	|	privilege_def {	$$ = $1; }
 	;
 NOT SUPPORTED */
 
-base_table_def:
+create_database_statement:
+		CREATE DATABASE NAME
+		{
+			$<nodeval>$ = new CreateDBStmt($<stringval>3);
+		}
+		;
+drop_database_statement:
+		DROP DATABASE NAME
+		{
+			$<nodeval>$ = new DropDBStmt($<stringval>3);
+		}
+		;
+create_user_statement:
+		CREATE USER NAME '(' NAME EQUAL STRING ')'
+		{
+			$<nodeval>$ = new CreateUserStmt($<stringval>3, $<stringval>5, $<stringval>7, nullptr);
+		}
+		| CREATE USER NAME '(' NAME EQUAL STRING ',' NAME ')'
+		{
+			$<nodeval>$ = new CreateUserStmt($<stringval>3, $<stringval>5, $<stringval>7, $<stringval>9);
+		}
+		;
+drop_user_statement:
+		DROP USER NAME
+		{
+			$<nodeval>$ = new DropUserStmt($<stringval>3);
+		}
+		;
+alter_user_statement:
+		ALTER USER NAME '(' NAME EQUAL STRING ')'
+		{
+			$<nodeval>$ = new AlterUserStmt($<stringval>3, $<stringval>5, $<stringval>7, nullptr);
+		}
+		| ALTER USER NAME '(' NAME EQUAL STRING ',' NAME ')'
+		{
+			$<nodeval>$ = new AlterUserStmt($<stringval>3, $<stringval>5, $<stringval>7, $<stringval>9);
+		}
+		| ALTER USER NAME '(' NAME ')'
+		{
+			$<nodeval>$ = new AlterUserStmt($<stringval>3, nullptr, nullptr, $<stringval>9);
+		}
+		;
+create_table_statement:
 		CREATE TABLE table '(' base_table_element_commalist ')'
 		{
 			$<nodeval>$ = new CreateTableStmt($<stringval>3, reinterpret_cast<std::list<TableElement*>*>($<listval>5));
 		}
 	;
+
+drop_table_statement:
+		DROP TABLE table
+		{
+			$<nodeval>$ = new DropTableStmt($<stringval>3);
+		}
+		;
 
 base_table_element_commalist:
 		base_table_element { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
@@ -180,13 +235,20 @@ column_commalist:
 	}
 	;
 
-view_def:
+create_view_statement:
 		CREATE VIEW table opt_column_commalist
 		AS query_spec opt_with_check_option
 		{
 			$<nodeval>$ = new CreateViewStmt($<stringval>3, $<slistval>4, dynamic_cast<QuerySpec*>($<nodeval>6), $<boolval>7);
 		}
 	;
+
+drop_view_statement:
+		DROP VIEW table
+		{
+			$<nodeval>$ = new DropViewStmt($<stringval>3);
+		}
+		;
 	
 opt_with_check_option:
 		/* empty */	{	$<boolval>$ = false; }
@@ -376,7 +438,7 @@ assignment_commalist:
 	;
 
 assignment:
-		column '=' scalar_exp 
+		column EQUAL scalar_exp 
 		{ $<nodeval>$ = new Assignment($<stringval>1, dynamic_cast<Expr*>($<nodeval>3)); }
 	;
 
@@ -502,9 +564,9 @@ predicate:
 	;
 
 comparison_predicate:
-		scalar_exp COMPARISON scalar_exp
+		scalar_exp comparison scalar_exp
 		{ $<nodeval>$ = new OperExpr($<opval>2, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
-	|	scalar_exp COMPARISON subquery
+	|	scalar_exp comparison subquery
 		{ 
 			$<nodeval>$ = new OperExpr($<opval>2, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); 
 			/* subquery can only return a single result */
@@ -557,11 +619,16 @@ atom_commalist:
 	;
 
 all_or_any_predicate:
-		scalar_exp COMPARISON any_all_some subquery
+		scalar_exp comparison any_all_some subquery
 		{
 			$<nodeval>$ = new OperExpr($<opval>2, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4));
 			dynamic_cast<SubqueryExpr*>($<nodeval>4)->set_qualifier($<qualval>3);
 		}
+	;
+
+comparison:
+	EQUAL { $<opval>$ = $<opval>1; }
+	| COMPARISON { $<opval>$ = $<opval>1; }
 	;
 			
 any_all_some:
