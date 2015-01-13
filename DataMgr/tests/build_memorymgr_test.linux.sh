@@ -1,0 +1,2 @@
+nvcc -O3 -c ../BufferMgr/CudaUtils.cu
+g++ --std=c++0x -O3 -I/usr/local/include -o MemoryMgrTest MemoryMgrTest.cpp ../MemoryMgr.cpp CudaUtils.o ../BufferMgr/BufferMgr.cpp ../BufferMgr/Buffer.cpp ../BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp ../BufferMgr/CpuBufferMgr/CpuBuffer.cpp ../BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp ../BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp  ../FileMgr/FileMgr.cpp ../FileMgr/FileInfo.cpp ../FileMgr/File.cpp ../FileMgr/FileBuffer.cpp -lboost_filesystem -lboost_timer -lpthread -lboost_system -lgtest -L/usr/local/cuda/lib64 -lcudart

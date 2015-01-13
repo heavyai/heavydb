@@ -22,7 +22,7 @@ void writeToBuffer(AbstractBuffer *buffer, const size_t numInts) {
     for (size_t i = 0; i < numInts; ++i) {
         data[i] = i;
     }
-    buffer -> write((mapd_addr_t)data,numInts*sizeof(int),0);
+    buffer -> write((mapd_addr_t)data,numInts*sizeof(int),CPU_BUFFER,0);
     delete [] data;
 }
 
@@ -156,7 +156,7 @@ TEST(FileMgr, writeReadChunk) {
     AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),0);
+        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER,0);
         fm.checkpoint();
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
@@ -165,7 +165,7 @@ TEST(FileMgr, writeReadChunk) {
     AbstractBuffer *chunk2 = fm.getChunk(chunkKey2);
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),0);
+        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER,0);
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
         cout << "Write Bandwidth without checkpoint: " << bandwidth << " GB/sec" << endl;
@@ -174,7 +174,7 @@ TEST(FileMgr, writeReadChunk) {
     int * data2 = new int [numInts];
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> read((mapd_addr_t)data2,numInts*sizeof(int),0);
+        chunk1 -> read((mapd_addr_t)data2,numInts*sizeof(int),CPU_BUFFER,0);
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
         cout << "Read Bandwidth: " << bandwidth << " GB/sec" << endl;
@@ -187,15 +187,3 @@ TEST(FileMgr, writeReadChunk) {
     delete [] data1;
     delete [] data2;
 }
-
-
-
-
-
-    
-
-
-
-
-
-

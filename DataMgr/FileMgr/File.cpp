@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstdio>
 #include <string>
+#include <stdexcept>
 #include <unistd.h>
 #include "File.h"
 

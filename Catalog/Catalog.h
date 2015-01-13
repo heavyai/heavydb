@@ -128,8 +128,8 @@ class Catalog {
         const TableDescriptor * getMetadataForTable (const std::string &tableName) const;
         const TableDescriptor * getMetadataForTable (int tableId) const;
 
-				const ColumnDescriptor * getMetadataForColumn(int tableId, const std::string &colName) const;
-				const ColumnDescriptor * getMetadataForColumn(int tableId, int columnId) const;
+        const ColumnDescriptor * getMetadataForColumn(int tableId, const std::string &colName) const;
+        const ColumnDescriptor * getMetadataForColumn(int tableId, int columnId) const;
 
         /**
          * @brief Returns a vector of pointers to constant ColumnDescriptor structs for all the columns from a particular table 
@@ -142,14 +142,14 @@ class Catalog {
 
          std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
-				 const UserMetadata &get_currentUser() { return currentUser_; }
-				 void set_currentUser(const UserMetadata &user) { currentUser_ = user; }
-				 const DBMetadata &get_currentDB() { return currentDB_; }
-				 void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
+         const UserMetadata &get_currentUser() { return currentUser_; }
+         void set_currentUser(const UserMetadata &user) { currentUser_ = user; }
+         const DBMetadata &get_currentDB() { return currentDB_; }
+         void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 
     protected:
         void buildMaps();
-				void addTableToMap(TableDescriptor *td, const std::vector<ColumnDescriptor *> &columns);
+        void addTableToMap(TableDescriptor *td, const std::vector<ColumnDescriptor *> &columns);
         void removeTableFromMap(const std::string &tableName, int tableId);
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
@@ -158,8 +158,8 @@ class Catalog {
         ColumnDescriptorMap columnDescriptorMap_;
         ColumnDescriptorMapById columnDescriptorMapById_;
         SqliteConnector sqliteConnector_;
-				UserMetadata currentUser_;
-				DBMetadata currentDB_;
+        UserMetadata currentUser_;
+        DBMetadata currentDB_;
 };
 
 /*

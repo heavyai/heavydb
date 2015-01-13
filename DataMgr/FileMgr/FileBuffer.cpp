@@ -88,12 +88,15 @@ namespace File_Namespace {
 
     void FileBuffer::freePages() {
         // Need to zero headers (actually just first four bytes of header)
-        int zeroVal = 0;
-        mapd_addr_t zeroAddr = mapd_addr_t (&zeroVal);
         for (auto multiPageIt = multiPages_.begin(); multiPageIt != multiPages_.end(); ++multiPageIt) {
             for (auto pageIt = multiPageIt -> pageVersions.begin(); pageIt != multiPageIt -> pageVersions.end(); ++pageIt) { 
-                FILE *f = fm_ -> getFileForFileId(pageIt -> fileId);
-                File_Namespace::write(f,pageIt -> pageNum * pageSize_,sizeof(int),zeroAddr);
+                FileInfo *fileInfo = fm_ -> getFileInfoForFileId(pageIt -> fileId);
+                fileInfo -> freePage(pageIt -> pageNum);
+                //File_Namespace::write(fileInfo -> f,pageIt -> pageNum * pageSize_,sizeof(int),zeroAddr);
+
+                //FILE *f = fm_ -> getFileForFileId(pageIt -> fileId);
+                //@todo - need to insert back into freePages set
+
             }
         }
     }

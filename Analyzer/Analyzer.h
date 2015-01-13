@@ -279,7 +279,11 @@ namespace Analyzer {
 			virtual Expr *deep_copy() const;
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
-			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set) const { arg->collect_column_var(colvar_set); }
+			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set) const {
+				if (arg) {
+					arg->collect_column_var(colvar_set);
+				}
+			}
 			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const;
 		private:
 			SQLAgg aggtype; // aggregate type: kAVG, kMIN, kMAX, kSUM, kCOUNT
