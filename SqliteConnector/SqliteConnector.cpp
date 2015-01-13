@@ -21,7 +21,7 @@ int resultCallback(void *connObj, int argc, char ** argv, char **colNames) {
     return 0;
 }
 
-SqliteConnector::SqliteConnector (const string &dbName, const string &dir) {
+SqliteConnector::SqliteConnector (const string &dbName, const string &dir) : dbName_(dbName) {
     string connectString(dir);
     if (connectString.size() > 0 && connectString[connectString.size()-1] != '/') {
         connectString.push_back('/');

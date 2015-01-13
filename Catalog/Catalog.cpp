@@ -11,6 +11,7 @@
 #include <iostream>
 #include <exception>
 #include <cassert>
+#include "boost/filesystem.hpp"
 #include "Catalog.h"
 
 using std::runtime_error;
@@ -31,14 +32,13 @@ SysCatalog::initDB()
 	sqliteConnector_.query("CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd text, issuper boolean)");
 	sqliteConnector_.query(string("INSERT INTO mapd_users VALUES (") + MAPD_ROOT_USER_ID_STR + ", '" + MAPD_ROOT_USER + "', '" + MAPD_ROOT_PASSWD_DEFAULT + "', 1)");
 	sqliteConnector_.query("CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
-	UserMetadata root(MAPD_ROOT_USER_ID, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT, true);
-	createDatabase("mapd", root);
+	createDatabase("mapd", MAPD_ROOT_USER_ID);
 };
 
 void
-SysCatalog::createUser(const string &name, const string &passwd, bool issuper, const UserMetadata &curUser)
+SysCatalog::createUser(const string &name, const string &passwd, bool issuper)
 {
-	if (!curUser.isSuper)
+	if (!currentUser_.isSuper)
 		throw runtime_error("Only super user can create new users.");
 	UserMetadata user;
 	if (getMetadataForUser(name, user))
@@ -47,9 +47,9 @@ SysCatalog::createUser(const string &name, const string &passwd, bool issuper, c
 }
 
 void
-SysCatalog::dropUser(const string &name, const UserMetadata &curUser)
+SysCatalog::dropUser(const string &name)
 {
-	if (!curUser.isSuper)
+	if (!currentUser_.isSuper)
 		throw runtime_error("Only super user can drop users.");
 	UserMetadata user;
 	if (!getMetadataForUser(name, user))
@@ -58,23 +58,28 @@ SysCatalog::dropUser(const string &name, const UserMetadata &curUser)
 }
 
 void
-SysCatalog::changeUserPasswd(const string &name, const string &passwd, const UserMetadata &curUser)
+SysCatalog::alterUser(const string &name, const string *passwd, bool *is_superp)
 {
 	UserMetadata user;
 	if (!getMetadataForUser(name, user))
 		throw runtime_error("User " + name + " does not exist.");
-	if (!curUser.isSuper && curUser.userId != user.userId)
+	if (!currentUser_.isSuper && currentUser_.userId != user.userId)
 		throw runtime_error("Only user super can change another user's password.");
-	sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + passwd + "' WHERE userid = " + boost::lexical_cast<string>(user.userId));
+	if (passwd != nullptr && is_superp != nullptr)
+		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "', issuper = " + boost::lexical_cast<std::string>(*is_superp) + " WHERE userid = " + boost::lexical_cast<string>(user.userId));
+	else if (passwd != nullptr)
+		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "' WHERE userid = " + boost::lexical_cast<string>(user.userId));
+	else if (is_superp != nullptr)
+		sqliteConnector_.query("UPDATE mapd_users SET issuper = " + boost::lexical_cast<std::string>(*is_superp) + " WHERE userid = " + boost::lexical_cast<string>(user.userId));
 }
 
 void
-SysCatalog::createDatabase(const string &name, const UserMetadata &curUser)
+SysCatalog::createDatabase(const string &name, int owner)
 {
 	DBMetadata db;
 	if (getMetadataForDB(name, db))
 		throw runtime_error("Database " + name + " already exists.");
-	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(curUser.userId) + ")");
+	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(owner) + ")");
 	SqliteConnector dbConn(name, basePath_);
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
 	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
@@ -84,14 +89,15 @@ SysCatalog::createDatabase(const string &name, const UserMetadata &curUser)
 }
 
 void
-SysCatalog::dropDatabase(const string &name, const UserMetadata &curUser)
+SysCatalog::dropDatabase(const string &name)
 {
 	DBMetadata db;
 	if (!getMetadataForDB(name, db))
 		throw runtime_error("Database " + name + " does not exist.");
-	if (!curUser.isSuper && curUser.userId != db.dbOwner)
+	if (!currentUser_.isSuper && currentUser_.userId != db.dbOwner)
 		throw runtime_error("Only the super user or the owner can drop database.");
-	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(curUser.userId) + ")");
+	sqliteConnector_.query("DELETE FROM mapd_databases WHERE name = '" + name + "'");
+	boost::filesystem::remove(basePath_+name);
 }
 
 bool
@@ -125,11 +131,18 @@ Catalog::Catalog(const string &basePath, const string &dbname, bool is_initdb): 
 {
 		if (!is_initdb)
 			buildMaps();
+		else {
+			currentUser_ = UserMetadata(MAPD_ROOT_USER_ID, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT, true);
+		}
+		if (basePath_.size() > 0 && basePath_[basePath_.size() - 1] != '/')
+			basePath_.push_back('/');
 }
 
 Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMetadata &curDB): basePath_(basePath), sqliteConnector_(curDB.dbName,basePath), currentUser_(curUser), currentDB_(curDB) 
 {
     buildMaps();
+		if (basePath_.size() > 0 && basePath_[basePath_.size() - 1] != '/')
+			basePath_.push_back('/');
 }
 
 Catalog::~Catalog() {
@@ -297,6 +310,8 @@ Catalog::dropTable(const string &tableName)
 	if (td == nullptr)
 		throw runtime_error("Table " + tableName + " does not exist.");
 	removeTableFromMap(tableName, td->tableId);
+	sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+	sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
 }
 
 } // Catalog_Namespace

@@ -87,12 +87,7 @@ main(int argc, char* argv[])
 		cerr << "User " << user_name << " is not authorized to access database " << db_name << std::endl;
 		return 1;
 	}
-	Catalog &cat = sys_cat;
-	if (db.dbName == MAPD_SYSTEM_DB) {
-		cat.set_currentUser(user);
-		cat.set_currentDB(db);
-	} else
-		cat = Catalog(base_path, user, db);
+	Catalog cat(base_path, user, db);
 	while (true) {
 		try {
 			cout << "MapD > ";

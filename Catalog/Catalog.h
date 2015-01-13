@@ -113,7 +113,7 @@ class Catalog {
          * which were allocated on the heap and writes
          * Catalog to Sqlite
          */
-        ~Catalog();
+        virtual ~Catalog();
 
 				void createTable(const std::string &tableName, const std::vector<ColumnDescriptor *> &columns);
 				void dropTable(const std::string &tableName);
@@ -169,13 +169,13 @@ class Catalog {
 class SysCatalog : public Catalog {
 	public:
 		SysCatalog(const std::string &basePath, bool is_initdb = false) : Catalog(basePath, MAPD_SYSTEM_DB, is_initdb) {}
-		~SysCatalog() {};
+		virtual ~SysCatalog() {};
 		void initDB();
-		void createUser(const std::string &name, const std::string &passwd, bool issuper, const UserMetadata &curUser);
-		void dropUser(const std::string &name, const UserMetadata &curUser);
-		void changeUserPasswd(const std::string &name, const std::string &passwd, const UserMetadata &curUser);
-		void createDatabase(const std::string &dbname, const UserMetadata &curUser);
-		void dropDatabase(const std::string &dbname, const UserMetadata &curUser);
+		void createUser(const std::string &name, const std::string &passwd, bool issuper);
+		void dropUser(const std::string &name);
+		void alterUser(const std::string &name, const std::string *passwd, bool *is_superp);
+		void createDatabase(const std::string &dbname, int owner);
+		void dropDatabase(const std::string &dbname);
 		bool getMetadataForUser(const std::string &name, UserMetadata &user);
 		bool getMetadataForDB(const std::string &name, DBMetadata &db);
 };

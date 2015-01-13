@@ -215,7 +215,7 @@ namespace Parser {
 	class InSubquery : public InExpr {
 		public:
 			InSubquery(bool n, Expr *a, SubqueryExpr *q) : InExpr(n, a), subquery(q) {}
-			virtual ~InSubquery() { InExpr::~InExpr(); delete subquery; }
+			virtual ~InSubquery() { delete subquery; }
 			const SubqueryExpr *get_subquery() { return subquery; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 		private:
@@ -487,7 +487,7 @@ namespace Parser {
 	class CheckDef : public TableConstraintDef {
 		public:
 			CheckDef(Expr *c): check_condition(c) {}
-			virtual ~CheckDef() { TableConstraintDef::~TableConstraintDef(); delete check_condition; }
+			virtual ~CheckDef() { delete check_condition; }
 			const Expr *get_check_condition() { return check_condition; }
 		private:
 			Expr *check_condition;
@@ -508,6 +508,20 @@ namespace Parser {
 		private:
 			std::string *table;
 			std::list<TableElement*> *table_element_list;
+	};
+
+	/*
+	 * @type DropTableStmt
+	 * @brief DROP TABLE statement
+	 */
+	class DropTableStmt : public DDLStmt {
+		public:
+			DropTableStmt(std::string *tab) : table(tab) {}
+			virtual ~DropTableStmt() { delete table; }
+			const std::string *get_table() { return table; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *table;
 	};
 
 	/*
@@ -633,6 +647,103 @@ namespace Parser {
 	};
 
 	/*
+	 * @type DropViewStmt
+	 * @brief DROP VIEW statement
+	 */
+	class DropViewStmt : public DDLStmt {
+		public:
+			DropViewStmt(std::string *v) : view_name(v) {}
+			virtual ~DropViewStmt() { delete view_name; };
+			const std::string *get_view_name() { return view_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *view_name;
+	};
+
+	/*
+	 * @type NameValueAssign
+	 * @brief Assignment of a string value to a named attribute
+	 */
+	class NameValueAssign : public Node {
+		public:
+			NameValueAssign(std::string *n, std::string *v) : name(n), value(v) {}
+			virtual ~NameValueAssign() { delete name; delete value; }
+			const std::string *get_name() const { return name; }
+			const std::string *get_value() const { return value; }
+		private:
+			std::string *name;
+			std::string *value;
+	};
+
+	/*
+	 * @type CreateDBStmt
+	 * @brief CREATE DATABASE statement
+	 */
+	class CreateDBStmt : public DDLStmt {
+		public:
+			CreateDBStmt(std::string *n, std::list<NameValueAssign*> *l) : db_name(n), name_value_list(l) {}
+			virtual ~CreateDBStmt(); 
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *db_name;
+			std::list<NameValueAssign*> *name_value_list;
+	};
+
+	/*
+	 * @type DropDBStmt
+	 * @brief DROP DATABASE statement
+	 */
+	class DropDBStmt : public DDLStmt {
+		public:
+			DropDBStmt(std::string *n) : db_name(n) {}
+			virtual ~DropDBStmt() { delete db_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *db_name;
+	};
+
+	/*
+	 * @type CreateUserStmt
+	 * @brief CREATE USER statement
+	 */
+	class CreateUserStmt : public DDLStmt {
+		public:
+			CreateUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
+			virtual ~CreateUserStmt();
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *user_name;
+			std::list<NameValueAssign*> *name_value_list;
+	};
+
+	/*
+	 * @type AlterUserStmt
+	 * @brief ALTER USER statement
+	 */
+	class AlterUserStmt : public DDLStmt {
+		public:
+			AlterUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
+			virtual ~AlterUserStmt();
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *user_name;
+			std::list<NameValueAssign*> *name_value_list;
+	};
+
+	/*
+	 * @type DropUserStmt
+	 * @brief DROP USER statement
+	 */
+	class DropUserStmt : public DDLStmt {
+		public:
+			DropUserStmt(std::string *n) : user_name(n) {}
+			virtual ~DropUserStmt() { delete user_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *user_name;
+	};
+
+	/*
 	 * @type InsertStmt
 	 * @brief super class for INSERT statements
 	 */
@@ -669,7 +780,7 @@ namespace Parser {
 	class InsertQueryStmt : public InsertStmt {
 		public:
 			InsertQueryStmt(std::string *t, std::list<std::string*> *c, QuerySpec *q) : InsertStmt(t, c), query(q) {}
-			virtual ~InsertQueryStmt() { InsertStmt::~InsertStmt(); delete query; }
+			virtual ~InsertQueryStmt() { delete query; }
 			const QuerySpec *get_query() { return query; }
 			virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 		private:
