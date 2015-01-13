@@ -20,6 +20,7 @@
 #include <FlexLexer.h>
 #include "ParserNode.h"
 
+using namespace std;
 using namespace Parser;
 #define YY_Parser_PARSE_PARAM std::list<Stmt*>& parseTrees
 %}
