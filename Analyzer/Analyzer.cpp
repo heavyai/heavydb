@@ -63,13 +63,13 @@ namespace Analyzer {
 	Expr *
 	ColumnVar::deep_copy() const
 	{
-		return new ColumnVar(type_info, table_id, column_id, rte_idx);
+		return new ColumnVar(type_info, table_id, column_id, rte_idx, compression, comp_param);
 	}
 
 	Expr *
 	Var::deep_copy() const
 	{
-		return new Var(type_info, table_id, column_id, is_inner, varno);
+		return new Var(type_info, table_id, column_id, compression, comp_param, is_inner, varno);
 	}
 
 	Expr *
@@ -558,7 +558,7 @@ namespace Analyzer {
 	{
 		column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
 		for (auto col_desc : column_descs) {
-			ColumnVar *cv = new ColumnVar(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
+			ColumnVar *cv = new ColumnVar(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx, col_desc->compression, col_desc->comp_param);
 			TargetEntry *tle = new TargetEntry(col_desc->columnName, cv);
 			tlist.push_back(tle);
 		}

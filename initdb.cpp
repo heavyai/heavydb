@@ -43,16 +43,17 @@ main(int argc, char* argv[])
 		std::cerr << "Catalog basepath " + base_path + " does not exist.\n";
 		return 1;
 	}
-	if (base_path.size() > 0 && base_path[base_path.size() - 1] != '/')
-		base_path.push_back('/');
-	std::string system_db_file = base_path + "mapd";
-	if (boost::filesystem::exists(system_db_file)) {
+	std::string catalogs_path = base_path + "/mapd_catalogs";
+	if (boost::filesystem::exists(catalogs_path)) {
 		if (force)
-			boost::filesystem::remove(system_db_file);
+			boost::filesystem::remove_all(catalogs_path);
 		else {
-			std::cerr << "MapD already initialized at " + base_path + ". Use -f to force.\n";
+			std::cerr << "MapD catalogs already initialized at " + base_path + ". Use -f to force reinitialization.\n";
 			return 1;
 		}
+	}
+	if (!boost::filesystem::create_directory(catalogs_path)) {
+		std::cerr << "Cannot create mapd_catalogs subdirectory under " << base_path << std::endl;
 	}
 
 	try {

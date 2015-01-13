@@ -84,6 +84,8 @@ namespace Parser {
 	{
 		delete column_name;
 		delete column_type;
+		if (compression != nullptr)
+			delete compression;
 		if (column_constraint != nullptr)
 			delete column_constraint;
 	}
@@ -419,7 +421,7 @@ namespace Parser {
 			if (cd == nullptr)
 				throw std::runtime_error("Column name " + *column + " does not exist.");
 		}
-		return new Analyzer::ColumnVar(cd->columnType, table_id, cd->columnId, rte_idx);
+		return new Analyzer::ColumnVar(cd->columnType, table_id, cd->columnId, rte_idx, cd->compression, cd->comp_param);
 	}
 
 	Analyzer::Expr *
@@ -701,6 +703,41 @@ namespace Parser {
 				cd->columnType.notnull = false;
 			else {
 				cd->columnType.notnull = cc->get_notnull();
+			}
+			const CompressDef *compression = coldef->get_compression();
+			if (compression == nullptr) {
+				cd->compression = kENCODING_NONE;
+				cd->comp_param = 0;
+			} else {
+				const std::string &comp = *compression->get_encoding_name();
+				if (boost::iequals(comp, "fixed")) {
+					// fixed-bits encoding
+					if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 || compression->get_encoding_param() > 48)
+						throw std::runtime_error("Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to fixed-bits encoding.");
+					cd->compression = kENCODING_FIXED;
+					cd->comp_param = compression->get_encoding_param();
+				} else if (boost::iequals(comp, "rl")) {
+					// run length encoding
+					cd->compression = kENCODING_RL;
+					cd->comp_param = 0;
+				} else if (boost::iequals(comp, "diff")) {
+					// differential encoding
+					cd->compression = kENCODING_DIFF;
+					cd->comp_param = 0;
+				} else if (boost::iequals(comp, "dict")) {
+					// diciontary encoding
+					cd->compression = kENCODING_DICT;
+					cd->comp_param = 0;
+				} else if (boost::iequals(comp, "sparse")) {
+					// sparse column encoding with mostly NULL values
+					if (cd->columnType.notnull)
+						throw std::runtime_error("Cannot do sparse column encoding on a NOT NULL column.");
+					if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 || compression->get_encoding_param() > 48)
+						throw std::runtime_error("Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to sparse-column encoding.");
+					cd->compression = kENCODING_SPARSE;
+					cd->comp_param = compression->get_encoding_param();
+				} else
+					throw std::runtime_error("Invalid column compression scheme " + comp);
 			}
 			columns.push_back(cd);
 		}

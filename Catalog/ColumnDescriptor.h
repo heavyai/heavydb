@@ -9,15 +9,14 @@
  * 
  */
 
-//namespace Catalog_Namespace {
-    struct ColumnDescriptor {
-        int tableId; 
-        int columnId;
-        std::string columnName;
-        SQLTypeInfo columnType;
-        int compression;
-        std::string chunks;
-    };
-//} 
+struct ColumnDescriptor {
+    int tableId; 
+		int columnId;
+    std::string columnName;
+    SQLTypeInfo columnType;
+		EncodingType compression; // compression scheme 
+		int comp_param; // compression parameter for certain encoding types
+		std::string chunks;
+};
 
 #endif // COLUMN_DESCRIPTOR

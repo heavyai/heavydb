@@ -80,9 +80,9 @@ SysCatalog::createDatabase(const string &name, int owner)
 	if (getMetadataForDB(name, db))
 		throw runtime_error("Database " + name + " already exists.");
 	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(owner) + ")");
-	SqliteConnector dbConn(name, basePath_);
+	SqliteConnector dbConn(name, basePath_+"/mapd_catalogs/");
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
-	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
+	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, isGPU boolean)");
 
 
@@ -97,7 +97,8 @@ SysCatalog::dropDatabase(const string &name)
 	if (!currentUser_.isSuper && currentUser_.userId != db.dbOwner)
 		throw runtime_error("Only the super user or the owner can drop database.");
 	sqliteConnector_.query("DELETE FROM mapd_databases WHERE name = '" + name + "'");
-	boost::filesystem::remove(basePath_+name);
+	boost::filesystem::remove(basePath_+"/mapd_catalogs/" + name);
+	// @TODO delete all the fragments/chunks of this database
 }
 
 bool
@@ -127,22 +128,18 @@ SysCatalog::getMetadataForDB(const string &name, DBMetadata &db)
 	return true;
 }
 
-Catalog::Catalog(const string &basePath, const string &dbname, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname,basePath)
+Catalog::Catalog(const string &basePath, const string &dbname, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname, basePath + "/mapd_catalogs/")
 {
 		if (!is_initdb)
 			buildMaps();
 		else {
 			currentUser_ = UserMetadata(MAPD_ROOT_USER_ID, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT, true);
 		}
-		if (basePath_.size() > 0 && basePath_[basePath_.size() - 1] != '/')
-			basePath_.push_back('/');
 }
 
-Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMetadata &curDB): basePath_(basePath), sqliteConnector_(curDB.dbName,basePath), currentUser_(curUser), currentDB_(curDB) 
+Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMetadata &curDB): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentUser_(curUser), currentDB_(curDB) 
 {
     buildMaps();
-		if (basePath_.size() > 0 && basePath_[basePath_.size() - 1] != '/')
-			basePath_.push_back('/');
 }
 
 Catalog::~Catalog() {
@@ -179,7 +176,7 @@ void Catalog::buildMaps() {
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
     }
-    string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, chunks from mapd_columns");
+    string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks from mapd_columns");
     sqliteConnector_.query(columnQuery);
     numRows = sqliteConnector_.getNumRows();
     for (int r = 0; r < numRows; ++r) {
@@ -191,8 +188,9 @@ void Catalog::buildMaps() {
 				cd->columnType.dimension = sqliteConnector_.getData<int>(r,4);
 				cd->columnType.scale = sqliteConnector_.getData<int>(r,5);
 				cd->columnType.notnull = sqliteConnector_.getData<bool>(r,6);
-				cd->compression = sqliteConnector_.getData<int>(r,7);
-				cd->chunks = sqliteConnector_.getData<string>(r,8);
+				cd->compression = (EncodingType)sqliteConnector_.getData<int>(r,7);
+				cd->comp_param = sqliteConnector_.getData<int>(r,8);
+				cd->chunks = sqliteConnector_.getData<string>(r,9);
         ColumnKey columnKey(cd->tableId, cd->columnName);
         columnDescriptorMap_[columnKey] = cd;
 				ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -291,7 +289,7 @@ Catalog::createTable(const string &tableName, const vector<ColumnDescriptor *> &
 	int32_t tableId = sqliteConnector_.getData<int>(0, 0);
 	int colId = 1;
 	for (auto cd : columns) {
-		sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, chunks) VALUES (" + boost::lexical_cast<string>(tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd->columnName + "', " + boost::lexical_cast<string>(cd->columnType.type) + ", " + boost::lexical_cast<string>(cd->columnType.dimension) + ", " + boost::lexical_cast<string>(cd->columnType.scale) + ", " + boost::lexical_cast<string>(cd->columnType.notnull) + ", 0, '')");
+		sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd->columnName + "', " + boost::lexical_cast<string>(cd->columnType.type) + ", " + boost::lexical_cast<string>(cd->columnType.dimension) + ", " + boost::lexical_cast<string>(cd->columnType.scale) + ", " + boost::lexical_cast<string>(cd->columnType.notnull) + ", " + boost::lexical_cast<string>(cd->compression) + ", " + boost::lexical_cast<string>(cd->comp_param) + ", '')");
 		cd->tableId = tableId;
 		cd->columnId = colId++;
 	}
@@ -309,9 +307,10 @@ Catalog::dropTable(const string &tableName)
 	const TableDescriptor *td = getMetadataForTable(tableName);
 	if (td == nullptr)
 		throw runtime_error("Table " + tableName + " does not exist.");
-	removeTableFromMap(tableName, td->tableId);
 	sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
 	sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+	removeTableFromMap(tableName, td->tableId);
+	// @TODO delete all the fragments/chunks of this table
 }
 
 } // Catalog_Namespace

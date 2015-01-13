@@ -424,19 +424,36 @@ namespace Parser {
 	};
 
 	/*
+	 * @type CompressDef
+	 * @brief Node for compression scheme definition
+	 */
+	class CompressDef : public Node {
+		public:
+			CompressDef(std::string *n, int p) : encoding_name(n), encoding_param(p) {}
+			virtual ~CompressDef() { delete encoding_name; }
+			const std::string *get_encoding_name() const { return encoding_name; }
+			int get_encoding_param() const { return encoding_param; }
+		private:
+			std::string *encoding_name;
+			int encoding_param;
+	};
+
+	/*
 	 * @type ColumnDef
 	 * @brief Column definition
 	 */
 	class ColumnDef : public TableElement {
 		public:
-			ColumnDef(std::string *c, SQLType *t, ColumnConstraintDef *cc) : column_name(c), column_type(t), column_constraint(cc) {}
+			ColumnDef(std::string *c, SQLType *t, CompressDef *cp, ColumnConstraintDef *cc) : column_name(c), column_type(t), compression(cp), column_constraint(cc) {}
 			virtual ~ColumnDef();
-			const std::string *get_column_name() { return column_name; }
-			const SQLType *get_column_type() { return column_type; }
-			const ColumnConstraintDef *get_column_constraint() { return column_constraint; }
+			const std::string *get_column_name() const { return column_name; }
+			const SQLType *get_column_type() const { return column_type; }
+			const CompressDef *get_compression() const { return compression; }
+			const ColumnConstraintDef *get_column_constraint() const { return column_constraint; }
 		private:
 			std::string *column_name;
 			SQLType *column_type;
+			CompressDef *compression;
 			ColumnConstraintDef *column_constraint;
 	};
 

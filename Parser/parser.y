@@ -17,6 +17,8 @@
 #include <sstream>
 #include <list>
 #include <string>
+#include <stdexcept>
+#include <boost/algorithm/string/predicate.hpp>
 #include <FlexLexer.h>
 #include "ParserNode.h"
 
@@ -201,11 +203,28 @@ base_table_element:
 	;
 
 column_def:
-		column data_type 
-		{	$<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), nullptr); }
-		| column data_type column_constraint_def
-		{ $<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<ColumnConstraintDef*>($<nodeval>3)); }
+		column data_type opt_compression
+		{	$<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<CompressDef*>($<nodeval>3), nullptr); }
+		| column data_type column_constraint_def opt_compression 
+		{ $<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<CompressDef*>($<nodeval>4), dynamic_cast<ColumnConstraintDef*>($<nodeval>3)); }
+		| 
 	;
+
+opt_compression:
+		 NAME NAME
+		{
+			if (!boost::iequals(*$<stringval>1, "encoding"))
+				throw std::runtime_error("Invalid identifier " + *$<stringval>1 + " in column definition.");
+			$<nodeval>$ = new CompressDef($<stringval>2, 0);
+		}
+		| NAME NAME '(' INTNUM ')'
+		{
+			if (!boost::iequals(*$<stringval>1, "encoding"))
+				throw std::runtime_error("Invalid identifier " + *$<stringval>1 + " in column definition.");
+			$<nodeval>$ = new CompressDef($<stringval>2, (int)$<intval>4);
+		}
+		| /* empty */ { $<nodeval>$ = nullptr; }
+		;
 
 column_constraint_def:
 		NOT NULLX { $<nodeval>$ = new ColumnConstraintDef(true, false, false, nullptr); }

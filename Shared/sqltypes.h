@@ -10,6 +10,7 @@
 
 #include <cstdint>
 
+// must not change because these values persist in catalogs.
 enum SQLTypes {
 	kNULLT = 0, // type for null values
 	kBOOLEAN = 1,
@@ -39,6 +40,16 @@ typedef union {
 	double doubleval;
 	void *pointerval; // by reference values
 } Datum;
+
+// must not change because these values persist in catalogs.
+enum EncodingType {
+	kENCODING_NONE = 0, // no encoding
+	kENCODING_FIXED = 1, // Fixed-bit encoding
+	kENCODING_RL = 2, // Run Length encoding
+	kENCODING_DIFF = 3, // Differential encoding
+	kENCODING_DICT = 4, // Dictionary encoding
+	kENCODING_SPARSE = 5 // Null encoding for sparse columns
+};
 
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
