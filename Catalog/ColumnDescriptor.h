@@ -14,7 +14,8 @@ struct ColumnDescriptor {
 		int columnId;
     std::string columnName;
     SQLTypeInfo columnType;
-		int compression;
+		EncodingType compression; // compression scheme 
+		int comp_param; // compression parameter for certain encoding types
 		std::string chunks;
 };
 

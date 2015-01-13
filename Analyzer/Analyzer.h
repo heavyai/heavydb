@@ -77,10 +77,12 @@ namespace Analyzer {
 	 */
 	class ColumnVar : public Expr {
 		public:
-			ColumnVar(const SQLTypeInfo &ti, int r, int c, int i) : Expr(ti), table_id(r), column_id(c), rte_idx(i) {}
+			ColumnVar(const SQLTypeInfo &ti, int r, int c, int i, EncodingType e, int p) : Expr(ti), table_id(r), column_id(c), rte_idx(i), compression(e), comp_param(p) {}
 			int get_table_id() const { return table_id; }
 			int get_column_id() const { return column_id; }
 			int get_rte_idx() const { return rte_idx; }
+			EncodingType get_compression() const { return compression; }
+			int get_comp_param() const { return comp_param; }
 			virtual void check_group_by(const std::list<Expr*> *groupby) const;
 			virtual Expr *deep_copy() const;
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
@@ -92,6 +94,8 @@ namespace Analyzer {
 			int table_id; // the global table id
 			int column_id; // the column id
 			int rte_idx; // 0-based range table index. only used by the analyzer and planner.
+			EncodingType compression; // compression scheme
+			int comp_param; // parameter to compression scheme
 	};
 
 	/*
@@ -104,8 +108,8 @@ namespace Analyzer {
 	 */
 	class Var : public ColumnVar {
 		public:
-			Var(const SQLTypeInfo &ti, int r, int c, bool o, int v) : ColumnVar(ti, r, c, -1), is_inner(o), varno(v) {}
-			Var(const SQLTypeInfo &ti, bool o, int v) : ColumnVar(ti, 0, 0, -1), is_inner(o), varno(v) {}
+			Var(const SQLTypeInfo &ti, int r, int c, EncodingType e, int p, bool o, int v) : ColumnVar(ti, r, c, -1, e, p), is_inner(o), varno(v) {}
+			Var(const SQLTypeInfo &ti, bool o, int v) : ColumnVar(ti, 0, 0, -1, kENCODING_NONE, 0), is_inner(o), varno(v) {}
 			bool get_is_inner() const { return is_inner; }
 			int get_varno() const { return varno; }
 			virtual Expr *deep_copy() const;

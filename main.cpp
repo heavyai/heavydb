@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <cstdlib>
 #include <exception>
 #include <memory>
 #include "boost/program_options.hpp"
@@ -15,6 +16,22 @@ using namespace std;
 using namespace Catalog_Namespace;
 using namespace Analyzer;
 using namespace Planner;
+
+void
+process_backslash_commands(const string &command, const Catalog &catalog)
+{
+	switch (command[1]) {
+		/*
+		case 'd':
+			if (
+		case 'l':
+		*/
+		case 'q':
+			exit(0);
+		default:
+			throw runtime_error("Invalid backslash command.");
+	}
+}
 
 int
 main(int argc, char* argv[])
@@ -60,9 +77,7 @@ main(int argc, char* argv[])
 		cerr << "Catalog path " + base_path + " does not exist.\n";
 		return 1;
 	}
-	if (base_path.size() > 0 && base_path[base_path.size() - 1] != '/')
-		base_path.push_back('/');
-	std::string system_db_file = base_path + "mapd";
+	std::string system_db_file = base_path + "/mapd_catalogs/mapd";
 	if (!boost::filesystem::exists(system_db_file)) {
 		cerr << "MapD not initialized at " + base_path + "\nPlease run initdb first.\n";
 		return 1;
@@ -96,6 +111,10 @@ main(int argc, char* argv[])
 			if (cin.eof()) {
 				cout << std::endl;
 				break;
+			}
+			if (input_str[0] == '\\') {
+				process_backslash_commands(input_str, cat);
+				continue;
 			}
 			SQLParser parser;
 			list<Parser::Stmt*> parse_trees;
