@@ -13,13 +13,14 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <mutex>
 
 #include "../../Shared/global.h"
 #include "Page.h"
 #include "FileBuffer.h"
 #include "FileInfo.h"
 #include "../AbstractBuffer.h"
-#include "../AbstractDataMgr.h"
+#include "../AbstractBufferMgr.h"
 
 using namespace Memory_Namespace;
 
@@ -63,7 +64,7 @@ namespace File_Namespace {
      * @class   FileMgr
      * @brief
      */
-    class FileMgr : public AbstractDataMgr { // implements
+    class FileMgr : public AbstractBufferMgr { // implements
         
     public:
         /// Constructor
@@ -73,13 +74,13 @@ namespace File_Namespace {
         virtual ~FileMgr();
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, mapd_size_t pageSize, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, mapd_size_t pageSize = 0, const mapd_size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
 
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* getChunk(const ChunkKey &key, const mapd_size_t numBytes = 0);
 
         virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes);
 
@@ -92,12 +93,15 @@ namespace File_Namespace {
         virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes = 0);
         
         // Buffer API
-        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t nbytes);
-        virtual void deleteBuffer(AbstractBuffer *d);
-        virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
+        virtual AbstractBuffer* createBuffer(const mapd_size_t nbytes);
+        virtual void deleteBuffer(AbstractBuffer *buffer);
+        //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         Page requestFreePage(mapd_size_t pagesize);
 
-        inline MgrType getMgrType() { return FILE_MGR;};
+        virtual inline MgrType getMgrType() { return FILE_MGR;};
+        inline FileInfo * getFileInfoForFileId(const int fileId) {
+            return files_[fileId];
+        }
 
         void init();
 
@@ -136,6 +140,12 @@ namespace File_Namespace {
 
         FILE * getFileForFileId(const int fileId);
 
+        inline size_t getNumChunks() {
+            // @todo should be locked - but this is more for testing now
+            return chunkIndex_.size();
+        }
+
+
     private:
         std::string basePath_; 				/// The OS file system path containing the files.
         std::vector<FileInfo*> files_;		/// A vector of files accessible via a file identifier.
@@ -145,6 +155,8 @@ namespace File_Namespace {
         FILE *epochFile_;
         bool isDirty_;                      /// true if metadata changed since last writeState()
         mapd_size_t defaultPageSize_;
+        std::mutex getPageMutex_;  
+        std::mutex chunkIndexMutex_;  
         
 
         ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks

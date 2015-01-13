@@ -1,5 +1,5 @@
-#ifndef DATAMGR_PARTITIONER_PARTITIONER_H
-#define DATAMGR_PARTITIONER_PARTITIONER_H
+#ifndef PARTITIONER_PARTITIONER_H
+#define PARTITIONER_PARTITIONER_H
 
 #include "../../Shared/types.h"
 #include <vector>

@@ -74,9 +74,9 @@ TEST(FileBuffer, interleaved_read_and_write)
     while (numInsertsLeft > 0) {
         cout << "Num inserts left: " << numInsertsLeft << endl;
         int curNumInserts = min(numInsertsLeft,numInsertsPerCycle);
-        fb1.write(data1InPtr+cycle*numInsertsPerCycle*sizeof(int),curNumInserts*sizeof(int),cycle*numInsertsPerCycle*sizeof(int));
+        fb1.write(data1InPtr+cycle*numInsertsPerCycle*sizeof(int),curNumInserts*sizeof(int),CPU_BUFFER,cycle*numInsertsPerCycle*sizeof(int));
         ASSERT_EQ((cycle+1)*numInsertsPerCycle*sizeof(int),fb1.size());
-        fb2.write(data2InPtr+cycle*numInsertsPerCycle*sizeof(int),curNumInserts*sizeof(int),cycle*numInsertsPerCycle*sizeof(int));
+        fb2.write(data2InPtr+cycle*numInsertsPerCycle*sizeof(int),curNumInserts*sizeof(int),CPU_BUFFER,cycle*numInsertsPerCycle*sizeof(int));
         ASSERT_EQ((cycle+1)*numInsertsPerCycle*sizeof(int),fb2.size());
         numInsertsLeft -= numInsertsPerCycle;
         cycle++;
@@ -89,8 +89,8 @@ TEST(FileBuffer, interleaved_read_and_write)
     int data2Out[numInserts];
     mapd_addr_t data1OutPtr = (mapd_addr_t)data1Out;
     mapd_addr_t data2OutPtr = (mapd_addr_t)data2Out;
-    fb1.read(data1OutPtr, numPages * pageSize,0);
-    fb2.read(data2OutPtr, numPages * pageSize,0);
+    fb1.read(data1OutPtr, numPages * pageSize,CPU_BUFFER,0);
+    fb2.read(data2OutPtr, numPages * pageSize,CPU_BUFFER,0);
     
     // verify
     for (int i = 0; i < numInserts; ++i) {

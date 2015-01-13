@@ -4,8 +4,8 @@
  * @author	Todd Mostak <todd@map-d.com>
  */
 #include "TablePartitionMgr.h"
-#include "Catalog.h"
-#include "BufferMgr.h"
+//#include "Catalog.h"
+#include "AbstractDataMgr.h"
 #include "LinearTablePartitioner.h"
 
 #include <limits>
@@ -18,7 +18,7 @@ namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr::TablePartitionMgr(Metadata_Namespace::Catalog &catalog, Buffer_Namespace::BufferMgr &bufferMgr): catalog_(catalog), bufferMgr_(bufferMgr), maxPartitionerId_(-1), pgConnector_("mapd","mapd"), isDirty_(false) {
+TablePartitionMgr::TablePartitionMgr(Memory_Namespace::MemoryMgr &memoryMgr, const std::string &dbName, const std::string &basePath) memoryMgr_(memoryMgr), maxPartitionerId_(-1), sqliteConnector_(dbName,basePath), isDirty_(false) {
     createStateTableIfDne();
     readState();
 }
@@ -56,17 +56,14 @@ void TablePartitionMgr::getQueryPartitionInfo(const int tableId, QueryInfo &quer
 }
 
 void TablePartitionMgr::createPartitionerForTable(const string &tableName, const PartitionerType partitionerType, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize) {
+    const Catalog_Namespace::TableDescriptor *tableDescriptor = catalog_.getMetadataForTable(tableName);
+    int32_t tableId = tableDescriptor -> tableId;
 
     // need to query catalog for needed metadata
-    vector <Metadata_Namespace::ColumnRow> columnRows;
-    mapd_err_t status = catalog_.getAllColumnMetadataForTable(tableName, columnRows);
-    assert(status == MAPD_SUCCESS);
+    vector <const Catalog_Namespace::ColumnDescriptor * > columnDescriptors = catalog_.getAllColumnMetadataForTable(tableId);
     vector<ColumnInfo> columnInfoVec;
-    int tableId = columnRows[0].tableId;
-    translateColumnRowsToColumnInfoVec(columnRows, columnInfoVec);
-
+    translateColumnDescriptorsToColumnInfoVec(columnDescriptors, columnInfoVec);
     maxPartitionerId_++; // id for the new partitioner
-    
     AbstractTablePartitioner *partitioner = nullptr;
     if (partitionerType == LINEAR) {
         partitioner = new LinearTablePartitioner(maxPartitionerId_, columnInfoVec, bufferMgr_);
@@ -122,10 +119,9 @@ void TablePartitionMgr::readState() {
         maxPartitionerId_ = std::max(maxPartitionerId_, partitionerId);
 
         // obtain metadata for the columns of the table
-        vector<Metadata_Namespace::ColumnRow> columnRows;
-        catalog_.getAllColumnMetadataForTable(tableId, columnRows);
+        vector<const Catalog_Namespace::ColumnDescriptor *> columnDescriptors = catalog_.getAllColumnMetadataForTable(tableId);
         columnInfoVec.clear();
-        translateColumnRowsToColumnInfoVec(columnRows, columnInfoVec);
+        translateColumnDescriptorsToColumnInfoVec(columnDescriptors, columnInfoVec);
         
         // instantitate the table partitioner object for the given tableId and partitionerType
         AbstractTablePartitioner *partitioner;
@@ -166,16 +162,16 @@ void TablePartitionMgr::writeState() {
     }
 }
 
-void TablePartitionMgr::translateColumnRowsToColumnInfoVec (vector <Metadata_Namespace::ColumnRow> &columnRows, vector<ColumnInfo> &columnInfoVec) {
+void TablePartitionMgr::translateColumnDescriptorsToColumnInfoVec (vector <const Catalog_Namespace::ColumnDescriptor *> &columnDescriptors, vector<ColumnInfo> &columnInfoVec) {
     // Iterate over all entries in columnRows and translate to 
     // columnInfoVec needed  by partitioner
-    for (auto colRowIt = columnRows.begin(); colRowIt != columnRows.end(); ++colRowIt) {
+    for (auto colDescIt = columnDescriptors.begin(); colDescIt != columnDescriptors.end(); ++colDescIt) {
         ColumnInfo columnInfo;
-        columnInfo.columnId = colRowIt -> columnId;
-        columnInfo.columnType = colRowIt -> columnType;
+        columnInfo.columnId = (*colDescIt) -> columnId;
+        columnInfo.columnType = (*colDescIt) -> columnType;
         columnInfo.bitSize = getBitSizeForType(columnInfo.columnType);  
         columnInfo.insertBuffer = NULL; // set as NULL
-        //ColumnInfo columnInfo (colRowIt -> columnId, colRowIt -> columnType, getBitSizeForType(columnInfo.columnType));
+        //ColumnInfo columnInfo (colDescIt -> columnId, colDescIt -> columnType, getBitSizeForType(columnInfo.columnType));
         columnInfoVec.push_back(columnInfo);
     }
 }

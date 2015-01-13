@@ -13,9 +13,10 @@
 #include <map>
 #include <list>
 #include "../AbstractBuffer.h"
-#include "../AbstractDataMgr.h"
+#include "../AbstractBufferMgr.h"
 #include "BufferSeg.h"
 #include <gtest/gtest_prod.h>
+#include <mutex>
 
 using namespace Memory_Namespace;
 
@@ -30,7 +31,7 @@ namespace Buffer_Namespace {
      */
 
 
-    class BufferMgr : public AbstractDataMgr { // implements
+    class BufferMgr : public AbstractBufferMgr { // implements
         
     public:
         //FRIEND_TEST(BufferMgrTest, slabTest);
@@ -39,7 +40,7 @@ namespace Buffer_Namespace {
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t
         //explicit BufferMgr(const size_t bufferSize, const mapd_size_t pageSize);
-        BufferMgr(const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractDataMgr *parentMgr = 0);
+        BufferMgr(const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
         
         /// Destructor
         virtual ~BufferMgr();
@@ -51,13 +52,13 @@ namespace Buffer_Namespace {
         void printSeg(BufferList::iterator &segIt);
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t initialSize = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, const mapd_size_t pageSize = 0, const mapd_size_t initialSize = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
         
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractBuffer* getChunk(ChunkKey &key, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* getChunk(const ChunkKey &key, const mapd_size_t numBytes = 0);
         
         /**
          * @brief Puts the contents of d into the Buffer with ChunkKey key.
@@ -70,16 +71,16 @@ namespace Buffer_Namespace {
         void checkpoint();
 
         // Buffer API
-        virtual AbstractBuffer* createBuffer(mapd_size_t pageSize, mapd_size_t numBytes = 0);
-        virtual void deleteBuffer(AbstractBuffer *d);
-        virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
+        virtual AbstractBuffer* createBuffer(const mapd_size_t numBytes = 0);
+        virtual void deleteBuffer(AbstractBuffer *buffer);
+        //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         
         /// Returns the total number of bytes allocated.
-        mapd_size_t size();
-
-        inline MgrType getMgrType () {return CPU_MGR;};
+        size_t size();
+        size_t getNumChunks();
 
         BufferList::iterator reserveBuffer(BufferList::iterator & segIt, const size_t numBytes);
+
        
     protected: 
         std::vector <mapd_addr_t> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
@@ -91,12 +92,13 @@ namespace Buffer_Namespace {
         BufferMgr& operator=(const BufferMgr&); // private assignment
          void removeSegment(BufferList::iterator &segIt);
         BufferList::iterator findFreeBufferInSlab(const size_t slabNum, const size_t numPagesRequested);
+        int getBufferId();
         virtual void addSlab(const size_t slabSize) = 0;
         virtual void freeAllMem() = 0;
         virtual void allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
+        std::recursive_mutex globalMutex_;  // hack for now - lets profile this to see impact on performance - may not matter given the workload
+        std::mutex bufferIdMutex_;  
         
-
-
         //std::map<ChunkKey, Buffer*> chunkIndex_;
         std::map<ChunkKey, BufferList::iterator> chunkIndex_;
         size_t maxBufferSize_;   /// max number of bytes allocated for the buffer poo
@@ -104,7 +106,8 @@ namespace Buffer_Namespace {
         size_t maxNumSlabs_;
         size_t pageSize_;
         unsigned int bufferEpoch_;
-        AbstractDataMgr *parentMgr_;
+        AbstractBufferMgr *parentMgr_;
+        int maxBufferId_;
         //File_Namespace::FileMgr *fileMgr_;
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses

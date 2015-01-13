@@ -16,7 +16,7 @@
 
 namespace Buffer_Namespace {
 
-    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): AbstractBuffer(), bm_(bm), segIt_(segIt), pageSize_(pageSize), mem_(0), numPages_(0) {
+    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): AbstractBuffer(), bm_(bm), segIt_(segIt), pageSize_(pageSize), mem_(0), numPages_(0), pinCount_(0) {
         // so that the pointer value of this Buffer is stored
         segIt_ -> buffer = this;
         if (numBytes > 0) {
@@ -41,18 +41,23 @@ namespace Buffer_Namespace {
         
     }
 
+
+
+
+
     void Buffer::reserve(const mapd_size_t numBytes) {
 #ifdef BUFFER_MUTEX
         boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
 #endif
         mapd_size_t numPages = (numBytes + pageSize_ -1 ) / pageSize_;
-        std::cout << "NumPages reserved: " << numPages << std::endl;
+        //std::cout << "NumPages reserved: " << numPages << std::endl;
         if (numPages > numPages_) {
             pageDirtyFlags_.resize(numPages);
             numPages_ = numPages;
             segIt_ = bm_ -> reserveBuffer(segIt_,reservedSize());
         }
     }
+
     
     void Buffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset) {
         assert(dst && mem_);
@@ -60,8 +65,8 @@ namespace Buffer_Namespace {
         boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_);
 #endif
 
-        std::cout << "Buffer size: " << size_ << std::endl;
-        std::cout << "Bytes to read: " << numBytes << std::endl;
+        //std::cout << "Buffer size: " << size_ << std::endl;
+        //std::cout << "Bytes to read: " << numBytes << std::endl;
         if (numBytes + offset > size_) {
             throw std::runtime_error("Buffer: Out of bounds read error");
         }
@@ -78,7 +83,7 @@ namespace Buffer_Namespace {
             reserve(numBytes+offset);
             //bm_ -> reserveBuffer(segIt_,numBytes + offset);
         }
-        std::cout << "Size at beginning of write: " << size_ << std::endl;
+        //std::cout << "Size at beginning of write: " << size_ << std::endl;
         // write source contents to buffer
         //assert(mem_ && src);
         writeData(src,numBytes,srcBufferType,offset);
@@ -93,7 +98,7 @@ namespace Buffer_Namespace {
             isAppended_ = true;
             size_ = offset+numBytes;
         }
-        std::cout << "Size after write: " << size_ << std::endl;
+        //std::cout << "Size after write: " << size_ << std::endl;
 
         mapd_size_t firstDirtyPage = offset / pageSize_;
         mapd_size_t lastDirtyPage = (offset + numBytes - 1) / pageSize_;
@@ -114,7 +119,7 @@ namespace Buffer_Namespace {
 
 
         if (numBytes + size_ > reservedSize()) {
-            std::cout << "Reserving" << std::endl;
+            //std::cout << "Reserving" << std::endl;
             reserve(numBytes+size_);
         }
 

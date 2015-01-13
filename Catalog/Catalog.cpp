@@ -84,6 +84,8 @@ SysCatalog::createDatabase(const string &name, int owner)
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
 	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, isGPU boolean)");
+
+
 }
 
 void
