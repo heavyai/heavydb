@@ -1,1 +1,0 @@
-g++ --std=c++11 -O3 -o bufferMgrTest BufferMgrTest.cpp ../BufferMgr.cpp ../Buffer.cpp ../../FileMgr/FileMgr.cpp ../../FileMgr/FileInfo.cpp ../../FileMgr/File.cpp ../../FileMgr/FileBuffer.cpp -L/usr/local/lib -lboost_filesystem-mt -lboost_timer-mt -lboost_system-mt -lgtest
