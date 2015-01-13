@@ -104,6 +104,9 @@ namespace File_Namespace {
         int versionEpoch; 
         Page page;
         mapd_size_t chunkSize;
+        //mapd_size_t chunkNumElems;
+        
+        
 
         HeaderInfo(const ChunkKey &chunkKey, const int pageId, const int versionEpoch, const Page &page, const mapd_size_t chunkSize): chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page), chunkSize(chunkSize) {}
     };

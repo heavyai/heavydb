@@ -177,10 +177,17 @@ namespace File_Namespace {
         header[intHeaderSize-1] = epoch;
         FILE *f = fm_ -> getFileForFileId(page.fileId);
         File_Namespace::write(f, page.pageNum*pageSize_,(intHeaderSize) * sizeof(int),(mapd_addr_t)&header[0]);
+        /*
         if (writeSize) {
             File_Namespace::write(f, page.pageNum*pageSize_ + intHeaderSize*sizeof(int),sizeof(mapd_size_t),(mapd_addr_t)&size_);
         }
+        */
     }
+
+    void FileBuffer::writeStats(const int epoch) {
+
+    }
+
 
     /*
     void FileBuffer::checkpoint() {
@@ -228,6 +235,7 @@ namespace File_Namespace {
             curPtr += bytesWritten;
             bytesLeft -= bytesWritten;
             if (pageNum == startPage + numPagesToWrite - 1) { // if last page
+                //@todo make sure we stay consistent on append cases
                 writeHeader(page,0,multiPages_[0].epochs.back());
             }
         }
@@ -304,8 +312,10 @@ namespace File_Namespace {
             curPtr += bytesWritten;
             bytesLeft -= bytesWritten;
             if (tempIsAppended && pageNum == startPage + numPagesToWrite - 1) { // if last page
+                //@todo below can lead to undefined - we're overwriting num
+                //bytes valid at checkpoint
                 writeHeader(page,0,multiPages_[0].epochs.back(),true);
-                size_ = offset + numBytes;
+                //size_ = offset + numBytes;
             }
         }
         assert (bytesLeft == 0);

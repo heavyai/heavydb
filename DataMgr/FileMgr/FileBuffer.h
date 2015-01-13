@@ -108,6 +108,7 @@ namespace File_Namespace {
             /// Write header writes header at top of page in format
             // headerSize(numBytes), ChunkKey, pageId, version epoch
             void writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize = false);
+            void writeStats(const int epoch);
             void calcHeaderBuffer();
 
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
