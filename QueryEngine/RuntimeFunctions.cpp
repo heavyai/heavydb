@@ -140,7 +140,7 @@ int32_t key_hash(const int64_t* key, const int32_t key_qw_count, const int32_t g
   return hash;
 }
 
-extern "C" __attribute__((always_inline))
+extern "C"
 int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t groups_buffer_entry_count,
                          const int64_t* key,

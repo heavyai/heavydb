@@ -1,5 +1,5 @@
-#ifndef QUERYENGINE_EXECUTE_RUNTIMEFUNCTIONS_H
-#define QUERYENGINE_EXECUTE_RUNTIMEFUNCTIONS_H
+#ifndef QUERYENGINE_RUNTIMEFUNCTIONS_H
+#define QUERYENGINE_RUNTIMEFUNCTIONS_H
 
 #include <cstdint>
 
@@ -9,10 +9,10 @@ void init_groups(int64_t* groups_buffer,
                  const int32_t key_qw_count,
                  const int64_t init_val);
 
-extern "C" __attribute__((always_inline))
+extern "C"
 int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t groups_buffer_entry_count,
                          const int64_t* key,
                          const int32_t key_qw_count);
 
-#endif  // QUERYENGINE_EXECUTE_RUNTIMEFUNCTIONS_H
+#endif  // QUERYENGINE_RUNTIMEFUNCTIONS_H

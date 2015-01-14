@@ -8,9 +8,10 @@
 #include "boost/filesystem.hpp"
 #include "Catalog/Catalog.h"
 #include "Parser/parser.h"
-#include "Parser/ParserNode.h"
 #include "Analyzer/Analyzer.h"
+#include "Parser/ParserNode.h"
 #include "Planner/Planner.h"
+#include "QueryEngine/Execute.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -129,6 +130,7 @@ main(int argc, char* argv[])
 	string user_name;
 	string passwd;
 	bool debug = false;
+	bool execute = false;
 	namespace po = boost::program_options;
 
 	po::options_description desc("Options");
@@ -138,7 +140,8 @@ main(int argc, char* argv[])
 		("db", po::value<string>(&db_name), "Database name")
 		("user,u", po::value<string>(&user_name)->required(), "User name")
 		("passwd,p", po::value<string>(&passwd)->required(), "Password")
-		("debug,d", "Verbose debug mode");
+		("debug,d", "Verbose debug mode")
+		("execute,e", "Execute queries");
 
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("path", 1);
@@ -154,6 +157,8 @@ main(int argc, char* argv[])
 		}
 		if (vm.count("debug"))
 			debug = true;
+		if (vm.count("execute"))
+			execute = true;
 		po::notify(vm);
 	}
 	catch (boost::program_options::error &e)
@@ -227,7 +232,10 @@ main(int argc, char* argv[])
 					RootPlan *plan = optimizer.optimize();
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
 					if (debug) plan->print();
-					// @TODO execute plan
+					if (execute) {
+						Executor executor(plan);
+						cout << executor.execute() << endl;
+					}
 				}
 			}
 		}
