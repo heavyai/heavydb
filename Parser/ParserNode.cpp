@@ -433,6 +433,7 @@ namespace Parser {
 		bool is_distinct = false;
 		if (boost::iequals(*name, "count")) {
 			result_type.type = kINT;
+			agg_type = kCOUNT;
 			if (arg == nullptr)
 				arg_expr = nullptr;
 			else

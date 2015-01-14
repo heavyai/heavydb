@@ -42,6 +42,8 @@ namespace Planner {
 
 	AggPlan::~AggPlan()
 	{
+		for (auto e : groupby_list)
+			delete e;
 	}
 
 	Append::~Append()
@@ -137,7 +139,7 @@ namespace Planner {
 			}
 			base_scans.push_back(new Scan(*rte));
 		}
-		const Analyzer::Expr *where_pred = query.get_where_predicate();
+		const Analyzer::Expr *where_pred = cur_query->get_where_predicate();
 		std::list<const Analyzer::Expr*> scan_predicates;
 		if (where_pred != nullptr)
 			where_pred->group_predicates(scan_predicates, join_predicates, const_predicates);
@@ -163,6 +165,13 @@ namespace Planner {
 			tle->get_expr()->collect_column_var(colvar_set);
 		for (auto p : join_predicates)
 			p->collect_column_var(colvar_set);
+		const std::list<Analyzer::Expr*> *group_by = cur_query->get_group_by();
+		if (group_by != nullptr)
+			for (auto e : *group_by)
+				e->collect_column_var(colvar_set);
+		const Analyzer::Expr *having_pred = cur_query->get_having_predicate();
+		if (having_pred != nullptr)
+			having_pred->collect_column_var(colvar_set);
 		for (auto colvar : colvar_set) {
 			Analyzer::TargetEntry *tle = new Analyzer::TargetEntry("", colvar->deep_copy());
 			base_scans[colvar->get_rte_idx()]->add_tle(tle);
@@ -183,8 +192,31 @@ namespace Planner {
 	void
 	Optimizer::optimize_aggs()
 	{
-		if (cur_query->get_num_aggs() > 0 || cur_query->get_having_predicate() != nullptr)
-			throw std::runtime_error("aggregates not supported yet.");
+		if (cur_query->get_num_aggs() == 0 && cur_query->get_having_predicate() == nullptr)
+			return;
+		std::list<Analyzer::TargetEntry*> agg_tlist;
+		for (auto tle : cur_query->get_targetlist()) {
+			Analyzer::TargetEntry *new_tle;
+			new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
+			agg_tlist.push_back(new_tle);
+		}
+		std::list<Analyzer::Expr*> groupby_list;
+		if (cur_query->get_group_by() != nullptr) {
+			for (auto e : *cur_query->get_group_by()) {
+				groupby_list.push_back(e->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
+			}
+		}
+		const Analyzer::Expr *having_pred = cur_query->get_having_predicate();
+		std::list<Analyzer::Expr*> having_quals;
+		if (having_pred != nullptr) {
+			std::list<const Analyzer::Expr*> preds, others;
+			having_pred->group_predicates(preds, others, others);
+			assert(others.empty());
+			for (auto p : preds) {
+				having_quals.push_back(p->rewrite_having_clause(agg_tlist));
+			}
+		}
+		cur_plan = new AggPlan(agg_tlist, having_quals, 0.0, cur_plan, groupby_list);
 	}
 	
 	void
@@ -214,5 +246,143 @@ namespace Planner {
 				delete tle;
 			cur_plan->set_targetlist(final_tlist);
 		}
+	}
+
+	void
+	Plan::print() const
+	{
+		std::cout << "targetlist: ";
+		for (auto t : targetlist)
+			t->print();
+		std::cout << std::endl;
+		std::cout << "quals: ";
+		for (auto p : quals)
+			p->print();
+		std::cout << std::endl;
+	}
+
+	void
+	Result::print() const
+	{
+		std::cout << "(Result" << std::endl;
+		Plan::print();
+		child_plan->print();
+		std::cout << "const_quals: ";
+		for (auto p : const_quals)
+			p->print();
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	Scan::print() const
+	{
+		std::cout << "(Scan" << std::endl;
+		Plan::print();
+		std::cout << "simple_quals: ";
+		for (auto p : simple_quals)
+			p->print();
+		std::cout << std::endl << "table: " << table_id;
+		std::cout << " columns: ";
+		for (auto i : col_list) {
+			std::cout << i;
+			std::cout << " ";
+		}
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	ValuesScan::print() const
+	{
+		std::cout << "(ValuesScan" << std::endl;
+		Plan::print();
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	Join::print() const
+	{
+		std::cout << "(Join" << std::endl;
+		Plan::print();
+		std::cout << "Outer Plan: ";
+		get_outerplan()->print();
+		std::cout << "Inner Plan: ";
+		get_innerplan()->print();
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	AggPlan::print() const
+	{
+		std::cout << "(Agg" << std::endl;
+		Plan::print();
+		child_plan->print();
+		std::cout << "Group By: ";
+		for (auto e : groupby_list)
+			e->print();
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	Append::print() const
+	{
+		std::cout << "(Append" << std::endl;
+		for (auto p : plan_list)
+			p->print();
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	MergeAppend::print() const
+	{
+		std::cout << "(MergeAppend" << std::endl;
+		for (auto p : mergeplan_list)
+			p->print();
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	Sort::print() const
+	{
+		std::cout << "(Sort" << std::endl;
+		Plan::print();
+		child_plan->print();
+		std::cout << "Order By: ";
+		for (auto o : order_entries)
+			o.print();
+		std::cout << ")" << std::endl;
+	}
+
+	void
+	RootPlan::print() const
+	{
+		std::cout << "(RootPlan ";
+		switch (stmt_type) {
+			case kSELECT:
+				std::cout << "SELECT" << std::endl;
+				break;
+			case kUPDATE:
+				std::cout << "UPDATE " << "result table: " << result_table_id << " columns: ";
+				for (auto i : result_col_list) {
+					std::cout << i;
+					std::cout << " ";
+				}
+				std::cout << std::endl;
+				break;
+			case kINSERT:
+				std::cout << "INSERT " << "result table: " << result_table_id << " columns: ";
+				for (auto i : result_col_list) {
+					std::cout << i;
+					std::cout << " ";
+				}
+				std::cout << std::endl;
+				break;
+			case kDELETE:
+				std::cout << "DELETE " << "result table: " << result_table_id << std::endl;
+				break;
+			default:
+				break;
+		}
+		plan->print();
+		std::cout << ")" << std::endl;
 	}
 }

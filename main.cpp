@@ -40,6 +40,7 @@ main(int argc, char* argv[])
 	string db_name;
 	string user_name;
 	string passwd;
+	bool debug = false;
 	namespace po = boost::program_options;
 
 	po::options_description desc("Options");
@@ -48,7 +49,8 @@ main(int argc, char* argv[])
 		("path", po::value<string>(&base_path)->required(), "Directory path to Mapd catalogs")
 		("db", po::value<string>(&db_name), "Database name")
 		("user,u", po::value<string>(&user_name)->required(), "User name")
-		("passwd,p", po::value<string>(&passwd)->required(), "Password");
+		("passwd,p", po::value<string>(&passwd)->required(), "Password")
+		("debug,d", "Verbose debug mode");
 
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("path", 1);
@@ -62,6 +64,8 @@ main(int argc, char* argv[])
 			cout << "Usage: mapd -u <user name> -p <password> <catalog path> [<database name>]\n";
 			return 0;
 		}
+		if (vm.count("debug"))
+			debug = true;
 		po::notify(vm);
 	}
 	catch (boost::program_options::error &e)
@@ -134,6 +138,7 @@ main(int argc, char* argv[])
 					Optimizer optimizer(query);
 					RootPlan *plan = optimizer.optimize();
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
+					if (debug) plan->print();
 					// @TODO execute plan
 				}
 			}

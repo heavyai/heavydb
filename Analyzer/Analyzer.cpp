@@ -6,8 +6,10 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <iostream>
 #include <algorithm>
 #include <stdexcept>
+#include <cstring>
 #include "../Catalog/Catalog.h"
 #include "Analyzer.h"
 
@@ -69,7 +71,7 @@ namespace Analyzer {
 	Expr *
 	Var::deep_copy() const
 	{
-		return new Var(type_info, table_id, column_id, compression, comp_param, is_inner, varno);
+		return new Var(type_info, table_id, column_id, rte_idx, compression, comp_param, is_inner, varno);
 	}
 
 	Expr *
@@ -123,7 +125,7 @@ namespace Analyzer {
 	Expr *
 	AggExpr::deep_copy() const
 	{
-		return new AggExpr(type_info, aggtype, arg->deep_copy(), is_distinct, agg_idx);
+		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->deep_copy(), is_distinct, agg_idx);
 	}
 
 	SQLTypeInfo
@@ -725,9 +727,45 @@ namespace Analyzer {
 			const Expr *e = tle->get_expr();
 			if (typeid(*e) != typeid(AggExpr)) {
 				const ColumnVar *colvar = dynamic_cast<const ColumnVar*>(e);
+				if (colvar == nullptr)
+					throw std::runtime_error("Internal Error: targetlist in rewrite_with_targetlist is not all columns or aggregates.");
 				if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
 					return colvar->deep_copy();
 			}
+		}
+		throw std::runtime_error("Intern error: cannot find ColumnVar in targetlist.");
+	}
+
+	Expr *
+	ColumnVar::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	{
+		int varno = 1;
+		for (auto tle : tlist) {
+			const Expr *e = tle->get_expr();
+			const ColumnVar *colvar = dynamic_cast<const ColumnVar*>(e);
+			if (colvar == nullptr)
+				throw std::runtime_error("Internal Error: targetlist in rewrite_with_child_targetlist is not all columns.");
+			if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
+				return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), false, varno);
+			varno++;
+		}
+		throw std::runtime_error("Intern error: cannot find ColumnVar in child targetlist.");
+	}
+
+	Expr *
+	ColumnVar::rewrite_having_clause(std::list<TargetEntry*> &tlist) const
+	{
+		int varno = 1;
+		for (auto tle : tlist) {
+			const Expr *e = tle->get_expr();
+			if (typeid(*e) != typeid(AggExpr)) {
+				const ColumnVar *colvar = dynamic_cast<const ColumnVar*>(e);
+				if (colvar == nullptr)
+					throw std::runtime_error("Internal Error: targetlist in rewrite_having_clause is not all columns and aggregates.");
+				if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
+					return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), false, varno);
+			}
+			varno++;
 		}
 		throw std::runtime_error("Intern error: cannot find ColumnVar in targetlist.");
 	}
@@ -739,6 +777,23 @@ namespace Analyzer {
 		for (auto v : *value_list)
 			new_value_list->push_back(v->deep_copy());
 		return new InValues(arg->rewrite_with_targetlist(tlist), new_value_list);
+	}
+
+	Expr *
+	InValues::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	{
+		std::list<Expr*> *new_value_list = new std::list<Expr*>();
+		for (auto v : *value_list)
+			new_value_list->push_back(v->deep_copy());
+		return new InValues(arg->rewrite_with_child_targetlist(tlist), new_value_list);
+	}
+
+	Expr *
+	InValues::rewrite_having_clause(std::list<TargetEntry*> &tlist) const
+	{
+		// should never be called
+		assert(false);
+		return nullptr;
 	}
 
 	Expr *
@@ -755,4 +810,329 @@ namespace Analyzer {
 		throw std::runtime_error("Intern error: cannot find AggExpr in targetlist.");
 	}
 
+	Expr *
+	AggExpr::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	{
+		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->rewrite_with_child_targetlist(tlist), is_distinct, agg_idx);
+	}
+
+	Expr *
+	AggExpr::rewrite_having_clause(std::list<TargetEntry*> &tlist) const
+	{
+		int varno = 1;
+		for (auto tle : tlist) {
+			const Expr *e = tle->get_expr();
+			if (typeid(*e) == typeid(AggExpr)) {
+				const AggExpr *agg_expr = dynamic_cast<const AggExpr*>(e);
+				if (*this == *agg_expr)
+					return new Var(agg_expr->get_type_info(), false, varno);
+			}
+			varno++;
+		}
+		// add the aggregate to the target list but mark discard=true since
+		// it is not in the final select list.
+		tlist.push_back(new TargetEntry("", deep_copy(), true));
+		return new Var(type_info, false, varno);
+	}
+
+	bool
+	ColumnVar::operator==(const Expr &rhs) const
+	{
+		if (typeid(rhs) != typeid(ColumnVar))
+			return false;
+		const ColumnVar &rhs_cv = dynamic_cast<const ColumnVar&>(rhs);
+		return (table_id == rhs_cv.get_table_id()) && (column_id == rhs_cv.get_column_id()) && (rte_idx == rhs_cv.get_rte_idx());
+	}
+
+	bool
+	Datum_equal(const SQLTypeInfo &ti, Datum val1, Datum val2)
+	{
+		switch (ti.type) {
+			case kBOOLEAN:
+				return val1.boolval == val2.boolval;
+			case kCHAR:
+			case kVARCHAR:
+			case kTEXT:
+				return strcmp((char*)val1.pointerval, (char*)val2.pointerval) == 0;
+			case kNUMERIC:
+			case kDECIMAL:
+			case kBIGINT:
+				return val1.bigintval == val2.bigintval;
+			case kINT:
+				return val1.intval == val2.intval;
+			case kSMALLINT:
+				return val1.smallintval == val2.smallintval;
+			case kFLOAT:
+				return val1.floatval == val2.floatval;
+			case kDOUBLE:
+				return val1.doubleval == val2.doubleval;
+			case kTIME:
+			case kTIMESTAMP:
+				assert(false); // not supported yet
+			default:
+				assert(false); 
+		}
+		assert(false);
+		return false;
+	}
+
+	bool
+	Constant::operator==(const Expr &rhs) const
+	{
+		if (typeid(rhs) != typeid(Constant))
+			return false;
+		const Constant &rhs_c = dynamic_cast<const Constant&>(rhs);
+		if (type_info != rhs_c.get_type_info() || is_null != rhs_c.get_is_null())
+			return false;
+		return Datum_equal(type_info, constval, rhs_c.get_constval());
+	}
+
+	bool
+	UOper::operator==(const Expr &rhs) const
+	{
+		if (typeid(rhs) != typeid(UOper))
+			return false;
+		const UOper &rhs_uo = dynamic_cast<const UOper&>(rhs);
+		return optype == rhs_uo.get_optype() && *operand == *rhs_uo.get_operand();
+	}
+
+	bool
+	BinOper::operator==(const Expr &rhs) const
+	{
+		if (typeid(rhs) != typeid(BinOper))
+			return false;
+		const BinOper &rhs_bo = dynamic_cast<const BinOper&>(rhs);
+		return optype == rhs_bo.get_optype() && *left_operand == *rhs_bo.get_left_operand() && *right_operand == *rhs_bo.get_right_operand();
+	}
+
+	bool
+	AggExpr::operator==(const Expr &rhs) const
+	{
+		if (typeid(rhs) != typeid(AggExpr))
+			return false;
+		const AggExpr &rhs_ae = dynamic_cast<const AggExpr&>(rhs);
+		if (agg_idx == rhs_ae.get_agg_idx())
+			return true;
+		if (aggtype != rhs_ae.get_aggtype() || is_distinct != rhs_ae.get_is_distinct())
+			return false;
+		if (arg == rhs_ae.get_arg())
+			return true;
+		if (arg == nullptr || rhs_ae.get_arg() == nullptr)
+			return false;
+		return *arg == *rhs_ae.get_arg();
+	}
+
+	void
+	ColumnVar::print() const
+	{
+		std::cout << "(ColumnVar table: " << table_id << " column: " << column_id << " rte: " << rte_idx << ") ";
+	}
+
+	void
+	Var::print() const
+	{
+		std::cout << "(Var table: " << table_id << " column: " << column_id << " rte: " << rte_idx << " inner: " << is_inner << " varno: " << varno << ") ";
+	}
+
+	void
+	Constant::print() const
+	{
+		std::cout << "(Const ";
+		if (is_null)
+			std::cout << "NULL) ";
+		else {
+			switch (type_info.type) {
+				case kBOOLEAN:
+					if (constval.boolval)
+						std::cout << "true) ";
+					else
+						std::cout << "false) ";
+					return;
+				case kCHAR:
+				case kVARCHAR:
+				case kTEXT:
+					std::cout << "'" << (char*)constval.pointerval << "') ";
+					return;
+				case kNUMERIC:
+				case kDECIMAL:
+				case kBIGINT:
+					std::cout << constval.bigintval << ") ";
+					return;
+				case kINT:
+					std::cout << constval.intval << ") ";
+					return;
+				case kSMALLINT:
+					std::cout << constval.smallintval << ") ";
+					return;
+				case kFLOAT:
+					std::cout << constval.floatval << ") ";
+					return;
+				case kDOUBLE:
+					std::cout << constval.doubleval << ") ";
+					return;
+				case kTIME:
+				case kTIMESTAMP:
+					std::cout << "time) ";
+				default:
+					std::cout << ") ";
+			}
+		}
+	}
+
+	void
+	UOper::print() const
+	{
+		std::string op;
+		switch (optype) {
+			case kNOT:
+				op = "NOT ";
+				break;
+			case kUMINUS:
+				op = "- ";
+				break;
+			case kISNULL:
+				op = "IS NULL ";
+				break;
+			case kEXISTS:
+				op = "EXISTS ";
+				break;
+			case kCAST:
+				op = "CAST ";
+				break;
+			default:
+				break;
+		}
+		std::cout << "(" << op;
+		operand->print();
+		std::cout << ") ";
+	}
+
+	void
+	BinOper::print() const
+	{
+		std::string op;
+		switch (optype) {
+			case kEQ:
+				op = "= ";
+				break;
+			case kNE:
+				op = "<> ";
+				break;
+			case kLT:
+				op = "< ";
+				break;
+			case kLE:
+				op = "<= ";
+				break;
+			case kGT:
+				op = "> ";
+				break;
+			case kGE:
+				op = ">= ";
+				break;
+			case kAND:
+				op = "AND ";
+				break;
+			case kOR:
+				op = "OR ";
+				break;
+			case kMINUS:
+				op = "- ";
+				break;
+			case kPLUS:
+				op = "+ ";
+				break;
+			case kMULTIPLY:
+				op = "* ";
+				break;
+			case kDIVIDE:
+				op = "/ ";
+				break;
+			default:
+				break;
+		}
+		std::cout << "(" << op;
+		left_operand->print();
+		right_operand->print();
+		std::cout << ") ";
+	}
+
+	void
+	Subquery::print() const
+	{
+		std::cout << "(Subquery ) ";
+	}
+
+	void
+	InValues::print() const
+	{
+		std::cout << "(IN ";
+		arg->print();
+		std::cout << "(";
+		for (auto e : *value_list)
+			e->print();
+		std::cout << ") ";
+	}
+
+	void
+	LikeExpr::print() const
+	{
+		std::cout << "(LIKE ";
+		arg->print();
+		like_expr->print();
+		if (escape_expr != nullptr)
+			escape_expr->print();
+		std::cout << ") ";
+	}
+
+	void
+	AggExpr::print() const
+	{
+		std::string agg;
+		switch (aggtype) {
+			case kAVG:
+				agg = "AVG ";
+				break;
+			case kMIN:
+				agg = "MIN ";
+				break;
+			case kMAX:
+				agg = "MAX ";
+				break;
+			case kSUM:
+				agg = "SUM ";
+			case kCOUNT:
+				agg = "COUNT ";
+				break;
+		}
+		std::cout << "(" << agg;
+		if (is_distinct)
+			std::cout << "DISTINCT ";
+		if (arg == nullptr)
+			std::cout << "*";
+		else
+			arg->print();
+		std::cout << ") ";
+	}
+
+	void
+	TargetEntry::print() const
+	{
+		std::cout << "(" << resname << " ";;
+		expr->print();
+		if (discard)
+			std::cout << " discard";
+		std::cout << ") ";
+	}
+
+	void
+	OrderEntry::print() const
+	{
+		std::cout << tle_no;
+		if (is_desc)
+			std::cout << " desc";
+		if (nulls_first)
+			std::cout << " nulls first";
+		std::cout << " ";
+	}
 }
