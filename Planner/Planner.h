@@ -200,7 +200,7 @@ namespace Planner {
 	 */
 	class Optimizer {
 		public:
-			Optimizer(const Analyzer::Query &q) : query(q), cur_query(nullptr) {}
+			Optimizer(const Analyzer::Query &q) : cur_query(nullptr), query(q) {}
 			~Optimizer() {}
 			/*
 			 * @brief optimize optimize an entire SQL DML statement

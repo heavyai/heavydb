@@ -142,8 +142,6 @@ namespace Analyzer {
 			int varno; // the column number in the row.  1-based
 	};
 
-	static bool Datum_equal(const SQLTypeInfo &ti, Datum val1, Datum val2);
-
 	/*
 	 * @type Constant
 	 * @brief expression for a constant value
@@ -251,7 +249,7 @@ namespace Analyzer {
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set) const { assert(false); }
 			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const { assert(false); }
 			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const { assert(false); }
-			virtual Expr *rewrite_having_clause(const std::list<TargetEntry*> &tlist) const { assert(false); }
+			virtual Expr *rewrite_having_clause(std::list<TargetEntry*> &tlist) const { assert(false); }
 			virtual bool operator==(const Expr &rhs) const { assert(false); return false;}
 			virtual void print() const;
 		private:
