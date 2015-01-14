@@ -59,6 +59,7 @@ namespace File_Namespace {
         if (basePath_.size() > 0 && basePath_[basePath_.size()-1] != '/')
             basePath_.push_back('/');
         if (boost::filesystem::exists(path)) {
+            std::cout << "Path exists" << std::endl;
             if (!boost::filesystem::is_directory(path))
                 throw std::runtime_error("Specified path is not a directory.");
             //std::cout << basePath_ << " exists." << std::endl;
@@ -72,7 +73,7 @@ namespace File_Namespace {
                     //note that boost::filesystem leaves preceding dot on
                     //extension - hence MAPD_FILE_EXT is ".mapd"
                     std::string extension (fileIt ->path().extension().string());
-                    
+            
                     if (extension == MAPD_FILE_EXT) { 
                         std::string fileStem(fileIt -> path().stem().string());
                         // remove trailing dot if any
@@ -137,6 +138,7 @@ namespace File_Namespace {
 
             }
             nextFileId_ = maxFileId + 1;
+            std::cout << "next file id: " << nextFileId_ << std::endl;
         }
         else { // data directory does not exist
             std::cout << basePath_ << " does not exist. Creating" << std::endl;
@@ -192,13 +194,16 @@ namespace File_Namespace {
 
     void FileMgr::checkpoint() {
         std::cout << "Checkpointing " << epoch_ <<  std::endl;
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            if (chunkIt -> second -> isDirty_) {
+                chunkIt -> second -> writeStats(epoch_);
+                chunkIt -> second -> clearDirtyBits();
+            }
+        }
         for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
             int status = (*fileIt) -> syncToDisk();
             if (status != 0)
                 throw std::runtime_error("Could not sync file to disk");
-        }
-        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            chunkIt -> second -> clearDirtyBits();
         }
 
         writeAndSyncEpochToDisk();
@@ -414,7 +419,9 @@ namespace File_Namespace {
 
 
     FILE * FileMgr::getFileForFileId(const int fileId) {
-        assert (fileId >= 0 && fileId < nextFileId_);
+        std::cout << "Fileid: " << fileId << std::endl;
+        assert (fileId >= 0);
+        //assert(fileId < nextFileId_);
         return files_[fileId] -> f;
     }
 

@@ -66,7 +66,6 @@ namespace File_Namespace {
 
             virtual void append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER);
             void copyPage(Page &srcPage, Page &destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
-
             virtual inline Memory_Namespace::BufferType getType() const {return FILE_BUFFER;}
 
             /// Not implemented for FileMgr -- throws a runtime_error
@@ -107,7 +106,8 @@ namespace File_Namespace {
             
             /// Write header writes header at top of page in format
             // headerSize(numBytes), ChunkKey, pageId, version epoch
-            void writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize = false);
+            //void writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize = false);
+            void writeHeader(Page &page, const int pageId, const int epoch, const bool writeStats = false);
             void writeStats(const int epoch);
             void calcHeaderBuffer();
 

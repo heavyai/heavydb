@@ -143,6 +143,7 @@ TEST(FileMgr, writeReadChunk) {
     ChunkKey chunkKey1 = {1,2,3,4};
     ChunkKey chunkKey2 = {2,3,4,5};
     mapd_size_t pageSize = 1024796;
+    //mapd_size_t pageSize = 8192;
     //mapd_size_t pageSize = 4096000;
     FileMgr fm("data");
     fm.createChunk(chunkKey1,pageSize);
@@ -157,6 +158,7 @@ TEST(FileMgr, writeReadChunk) {
     {
         boost::timer::cpu_timer cpuTimer;
         chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER,0);
+        cout << "Checkpoint 1" << endl;
         fm.checkpoint();
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
@@ -187,3 +189,32 @@ TEST(FileMgr, writeReadChunk) {
     delete [] data1;
     delete [] data2;
 }
+
+TEST(FileMgr, persistence) {
+    deleteData("data");
+    ChunkKey chunkKey1 = {1,2,3,4};
+    mapd_size_t pageSize = 1024796;
+    size_t numInts = 1000000;
+    int * data1 = new int [numInts];
+    for (size_t i = 0; i < numInts; ++i) {
+        data1[i] = i;
+    }
+    {
+        FileMgr fm("data");
+        fm.createChunk(chunkKey1,pageSize);
+        AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
+        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER,0);
+        fm.checkpoint();
+        // should checkpoint here 
+    }
+    FileMgr fm("data");
+    AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+    EXPECT_EQ(chunk1 -> size(),numInts * sizeof(int));
+    delete [] data1;
+}
+
+
+
+
+
+

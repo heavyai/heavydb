@@ -9,6 +9,8 @@
 #include "FileMgr.h"
 #include <map>
 
+#define STATS_PAGE_SIZE 4096
+
 using namespace std;
 
 namespace File_Namespace {
@@ -40,23 +42,35 @@ namespace File_Namespace {
         calcHeaderBuffer();
         MultiPage multiPage(pageSize_);
         multiPages_.push_back(multiPage);
+        int checkpointEpoch = fm_-> epoch();
         //vector <int> pageAndVersionId = {-1,-1};
         int lastPageId = -1;
         //for (auto vecIt = headerVec.begin(); vecIt != headerVec.end(); ++vecIt) {
         for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
             int curPageId = vecIt -> pageId;
-            if (curPageId != lastPageId) {
-                assert (curPageId == lastPageId + 1);
-                MultiPage multiPage(pageSize_);
-                multiPages_.push_back(multiPage);
-                lastPageId = curPageId;
+            if (curPageId == -1) { //stats page
+                Page page = vecIt -> page;
+                if (vecIt -> versionEpoch <= checkpointEpoch) {
+                    FILE *f = fm_ -> getFileForFileId(page.fileId); 
+                    File_Namespace::read(f, page.pageNum * STATS_PAGE_SIZE + reservedHeaderSize_, sizeof(mapd_size_t), (mapd_addr_t)&size_);               
+                }
             }
-            multiPages_.back().epochs.push_back(vecIt -> versionEpoch);
-            multiPages_.back().pageVersions.push_back(vecIt -> page);
+            else {
+
+                if (curPageId != lastPageId) {
+                    assert (curPageId == lastPageId + 1);
+                    MultiPage multiPage(pageSize_);
+                    multiPages_.push_back(multiPage);
+                    lastPageId = curPageId;
+                }
+                multiPages_.back().epochs.push_back(vecIt -> versionEpoch);
+                multiPages_.back().pageVersions.push_back(vecIt -> page);
+            }
 
         }
-        auto lastHeaderIt = std::prev(headerEndIt);
-        size_ = lastHeaderIt -> chunkSize; 
+        //auto lastHeaderIt = std::prev(headerEndIt);
+        //size_ = lastHeaderIt -> chunkSize; 
+        cout << "Chunk size: " << size_ << endl;
     }
 
     FileBuffer::~FileBuffer() {
@@ -112,7 +126,7 @@ namespace File_Namespace {
         mapd_size_t startPage = offset / pageDataSize_;
         mapd_size_t startPageOffset = offset % pageDataSize_;
         mapd_size_t numPagesToRead = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_;
-        //cout << "Start Page: " << startPage << endl;
+        //cout <vekkkk< "Start Page: " << startPage << endl;
         //cout << "Num pages To Read: " << numPagesToRead << endl;
         //cout << "Num pages existing: " << multiPages_.size() << endl;
         assert (startPage + numPagesToRead <= multiPages_.size());
@@ -167,7 +181,7 @@ namespace File_Namespace {
         return page;
     }
 
-    void FileBuffer::writeHeader(Page &page, const int pageId, const int epoch, const bool writeSize) {
+    void FileBuffer::writeHeader(Page &page, const int pageId, const int epoch, const bool writeStats) {
         int intHeaderSize = chunkKey_.size() + 3; // does not include chunkSize
         vector <int> header (intHeaderSize);
         // in addition to chunkkey we need size of header, pageId, version
@@ -176,7 +190,8 @@ namespace File_Namespace {
         header[intHeaderSize-2] = pageId;
         header[intHeaderSize-1] = epoch;
         FILE *f = fm_ -> getFileForFileId(page.fileId);
-        File_Namespace::write(f, page.pageNum*pageSize_,(intHeaderSize) * sizeof(int),(mapd_addr_t)&header[0]);
+        mapd_size_t pageSize = writeStats ? STATS_PAGE_SIZE : pageSize_;
+        File_Namespace::write(f, page.pageNum*pageSize,(intHeaderSize) * sizeof(int),(mapd_addr_t)&header[0]);
         /*
         if (writeSize) {
             File_Namespace::write(f, page.pageNum*pageSize_ + intHeaderSize*sizeof(int),sizeof(mapd_size_t),(mapd_addr_t)&size_);
@@ -185,8 +200,15 @@ namespace File_Namespace {
     }
 
     void FileBuffer::writeStats(const int epoch) {
+        cout << "Write stats: " << epoch << endl;
+        Page page = fm_ -> requestFreePage(STATS_PAGE_SIZE);
+        writeHeader(page,-1,epoch,true);
+        FILE *f = fm_ -> getFileForFileId(page.fileId);
 
+        File_Namespace::write(f, page.pageNum*STATS_PAGE_SIZE + reservedHeaderSize_,sizeof(mapd_size_t),(mapd_addr_t)&size_);
     }
+        //File_Namespace::write(f, page.pageNum*STATS_PAGE_SIZE + reservedHeaderSize_,sizeof(mapd_size_t),(mapd_addr_t)&size_);
+
 
 
     /*
