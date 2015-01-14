@@ -42,18 +42,18 @@ namespace File_Namespace {
         calcHeaderBuffer();
         MultiPage multiPage(pageSize_);
         multiPages_.push_back(multiPage);
-        int checkpointEpoch = fm_-> epoch();
+        //int checkpointEpoch = fm_-> epoch();
         //vector <int> pageAndVersionId = {-1,-1};
         int lastPageId = -1;
-        //for (auto vecIt = headerVec.begin(); vecIt != headerVec.end(); ++vecIt) {
         for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
             int curPageId = vecIt -> pageId;
             if (curPageId == -1) { //stats page
                 Page page = vecIt -> page;
-                if (vecIt -> versionEpoch <= checkpointEpoch) {
-                    FILE *f = fm_ -> getFileForFileId(page.fileId); 
-                    File_Namespace::read(f, page.pageNum * STATS_PAGE_SIZE + reservedHeaderSize_, sizeof(mapd_size_t), (mapd_addr_t)&size_);               
-                }
+                //if (vecIt -> versionEpoch <= checkpointEpoch) { - should be
+                //done by FileInfo
+                FILE *f = fm_ -> getFileForFileId(page.fileId); 
+                File_Namespace::read(f, page.pageNum * STATS_PAGE_SIZE + reservedHeaderSize_, sizeof(mapd_size_t), (mapd_addr_t)&size_);               
+                //}
             }
             else {
 
@@ -92,7 +92,8 @@ namespace File_Namespace {
     void FileBuffer::calcHeaderBuffer() {
         // 3 * sizeof(int) is for headerSize, for pageId and versionEpoch
         // sizeof(mapd_size_t) is for chunkSize
-        reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int) + sizeof(mapd_size_t);
+        //reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int) + sizeof(mapd_size_t);
+        reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int);
         mapd_size_t headerMod = reservedHeaderSize_ % headerBufferOffset_;
         if (headerMod > 0) {
             reservedHeaderSize_ += headerBufferOffset_ - headerMod;
@@ -256,10 +257,10 @@ namespace File_Namespace {
             }
             curPtr += bytesWritten;
             bytesLeft -= bytesWritten;
-            if (pageNum == startPage + numPagesToWrite - 1) { // if last page
-                //@todo make sure we stay consistent on append cases
-                writeHeader(page,0,multiPages_[0].epochs.back());
-            }
+            //if (pageNum == startPage + numPagesToWrite - 1) { // if last page
+            //    //@todo make sure we stay consistent on append cases
+            //    writeHeader(page,0,multiPages_[0].epochs.back());
+            //}
         }
         assert (bytesLeft == 0);
     }

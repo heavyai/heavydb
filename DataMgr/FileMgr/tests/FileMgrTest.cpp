@@ -213,6 +213,55 @@ TEST(FileMgr, persistence) {
     delete [] data1;
 }
 
+TEST(FileMgr, epochPersistence) {
+    deleteData("data");
+    ChunkKey chunkKey1 = {1,2,3,4};
+    mapd_size_t pageSize = 1024796;
+    size_t numInts = 100000;
+    int * data1 = new int [numInts];
+    for (size_t i = 0; i < numInts; ++i) {
+        data1[i] = i;
+    }
+    {
+        FileMgr fm("data");
+        fm.createChunk(chunkKey1,pageSize);
+        AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
+        chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 1
+        chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 2
+        chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 3
+        chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 4
+    }
+    {
+        cout << "Test 1" << endl;
+        FileMgr fm("data");
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),4*numInts * sizeof(int));
+    }
+    {
+        cout << "Test 2" << endl;
+        FileMgr fm("data", 1024796, 3);
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),3*numInts * sizeof(int));
+    }
+    {
+        FileMgr fm("data", 1024796, 2);
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),2*numInts * sizeof(int));
+    }
+    {
+        FileMgr fm("data", 1024796, 1);
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),1*numInts * sizeof(int));
+    }
+}
+
+
+
+
 
 
 

@@ -38,7 +38,7 @@ namespace File_Namespace {
     }
 
 
-    FileMgr::FileMgr(std::string basePath,const mapd_size_t defaultPageSize) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(0) {
+    FileMgr::FileMgr(std::string basePath, const mapd_size_t defaultPageSize, const int epoch) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(epoch) {
         init();
     }
 
@@ -55,6 +55,7 @@ namespace File_Namespace {
 
 
     void FileMgr::init() {
+        //if epoch = -1 this means open from epoch file
         boost::filesystem::path path (basePath_);
         if (basePath_.size() > 0 && basePath_[basePath_.size()-1] != '/')
             basePath_.push_back('/');
@@ -63,7 +64,15 @@ namespace File_Namespace {
             if (!boost::filesystem::is_directory(path))
                 throw std::runtime_error("Specified path is not a directory.");
             //std::cout << basePath_ << " exists." << std::endl;
-            openEpochFile(EPOCH_FILENAME);
+            if (epoch_ != -1) { // if opening at previous epoch
+                int epochCopy = epoch_;
+                openEpochFile(EPOCH_FILENAME);
+                epoch_ = epochCopy;
+            }
+            else {
+                openEpochFile(EPOCH_FILENAME);
+            }
+
 
             boost::filesystem::directory_iterator endItr; // default construction yields past-the-end
             int maxFileId = -1;

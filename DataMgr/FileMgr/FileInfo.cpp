@@ -56,7 +56,7 @@ namespace File_Namespace {
                 read(f,pageNum*pageSize+sizeof(int),headerSize-2*sizeof(int)-sizeof(mapd_size_t),(mapd_addr_t)(&chunkKey[0]));
                 read(f,pageNum*pageSize+sizeof(int) + headerSize - 2*sizeof(int) -sizeof(mapd_size_t),sizeof(int),(mapd_addr_t)(&pageId));
                 read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(int) - sizeof(mapd_size_t),sizeof(int),(mapd_addr_t)(&versionEpoch));
-                read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(mapd_size_t),sizeof(mapd_size_t),(mapd_addr_t)(&chunkSize));
+                //read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(mapd_size_t),sizeof(mapd_size_t),(mapd_addr_t)(&chunkSize));
 
                 /* Check if version epoch is equal to 
                  * or greater (note: should never be greater)
