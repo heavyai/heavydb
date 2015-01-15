@@ -22,6 +22,7 @@ namespace Planner {
 	class Plan {
 		public:
 			Plan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p) : targetlist(t), quals(q), cost(c), child_plan(p) {}
+			Plan(const std::list<Analyzer::TargetEntry*> &t, double c, Plan *p) : targetlist(t), cost(c), child_plan(p) {}
 			Plan() : cost(0.0), child_plan(nullptr) {}
 			Plan(const std::list<Analyzer::TargetEntry*> &t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
 			virtual ~Plan();
@@ -42,9 +43,13 @@ namespace Planner {
 	/*
 	 * @type Result
 	 * @brief Result node is for evaluating constant predicates, e.g., 1 < 2 or $1 = 'foo'
-	 * It is also used to perform further projections from the child_plan to eliminate
-	 * columns that are required by the child_plan but not in the final targetlist, e.g.,
-	 * group by columns that are not selected.
+	 * It is also used to perform further projections and qualifications 
+	 * from the child_plan.  One use case is  to eliminate columns that 
+	 * are required by the child_plan but not in the final targetlist
+	 * , e.g., group by columns that are not selected.  Another use case is
+	 * to evaluate expressions over group by columns and aggregates in the targetlist.
+	 * A 3rd use case is to process the HAVING clause for filtering 
+	 * rows produced by AggPlan.
 	 */
 	class Result : public Plan {
 		public:
@@ -109,16 +114,10 @@ namespace Planner {
 	/*
 	 * @type AggPlan
 	 * @brief AggPlan handles aggregate functions and group by.
-	 * Having clause is in the inherited quals.  
-	 * Please NOTE that
-	 * the having clause must be evaluate against the post-projection row
-	 * of the AggPlan instead of the pre-projection one.
-	 * All the aggregate functions in having clause will be replaced by
-	 * Var nodes
 	 */
 	class AggPlan : public Plan {
 		public:
-			AggPlan(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::Expr*> &gl) : Plan(t, q, c, p), groupby_list(gl) {}
+			AggPlan(const std::list<Analyzer::TargetEntry*> &t, double c, Plan *p, const std::list<Analyzer::Expr*> &gl) : Plan(t, c, p), groupby_list(gl) {}
 			virtual ~AggPlan();
 			const std::list<Analyzer::Expr*> &get_groupby_list() const { return groupby_list; }
 			virtual void print() const;

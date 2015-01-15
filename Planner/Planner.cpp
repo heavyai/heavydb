@@ -122,8 +122,23 @@ namespace Planner {
 	{
 		optimize_scans();
 		optimize_joins();
-		optimize_aggs();
-		process_targetlist();
+		if (cur_query->get_num_aggs() > 0 || cur_query->get_having_predicate() != nullptr)
+			optimize_aggs();
+		else {
+			process_targetlist();
+			if (!const_predicates.empty()) {
+				// add result node to evaluate constant predicates
+				std::list<Analyzer::TargetEntry*> tlist;
+				int i = 1;
+				for (auto tle : cur_query->get_targetlist()) {
+					tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), new Analyzer::Var(tle->get_expr()->get_type_info(), false, i++)));
+				}
+				std::list<Analyzer::Expr*> const_quals;
+				for (auto p : const_predicates)
+					const_quals.push_back(p->deep_copy());
+				cur_plan = new Result(tlist, std::list<Analyzer::Expr*>(), 0.0, cur_plan, const_quals);
+			}
+		}
 	}
 
 	void
@@ -162,16 +177,16 @@ namespace Planner {
 		bool(*fn_pt)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*) = Analyzer::ColumnVar::colvar_comp;
 		std::set<const Analyzer::ColumnVar*, bool(*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)> colvar_set(fn_pt);
 		for (auto tle : tlist)
-			tle->get_expr()->collect_column_var(colvar_set);
+			tle->get_expr()->collect_column_var(colvar_set, true);
 		for (auto p : join_predicates)
-			p->collect_column_var(colvar_set);
+			p->collect_column_var(colvar_set, true);
 		const std::list<Analyzer::Expr*> *group_by = cur_query->get_group_by();
 		if (group_by != nullptr)
 			for (auto e : *group_by)
-				e->collect_column_var(colvar_set);
+				e->collect_column_var(colvar_set, true);
 		const Analyzer::Expr *having_pred = cur_query->get_having_predicate();
 		if (having_pred != nullptr)
-			having_pred->collect_column_var(colvar_set);
+			having_pred->collect_column_var(colvar_set, true);
 		for (auto colvar : colvar_set) {
 			Analyzer::TargetEntry *tle = new Analyzer::TargetEntry("", colvar->deep_copy());
 			base_scans[colvar->get_rte_idx()]->add_tle(tle);
@@ -192,12 +207,39 @@ namespace Planner {
 	void
 	Optimizer::optimize_aggs()
 	{
-		if (cur_query->get_num_aggs() == 0 && cur_query->get_having_predicate() == nullptr)
-			return;
 		std::list<Analyzer::TargetEntry*> agg_tlist;
+		const Analyzer::Expr *having_pred = cur_query->get_having_predicate();
+		bool(*fn_pt)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*) = Analyzer::ColumnVar::colvar_comp;
+		std::set<const Analyzer::ColumnVar*, bool(*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)> colvar_set(fn_pt);
+		auto is_agg = [](const Analyzer::Expr *e) -> bool { return typeid(*e) == typeid(Analyzer::AggExpr); };
+		std::list<const Analyzer::Expr *> aggexpr_list;
+		// need to determine if the final targetlist involves expressions over
+		// the group by columns and/or aggregates, e.g., sum(x) + sum(y).
+		// see no_expression to false if an expression is found.
+		bool no_expression = true;
 		for (auto tle : cur_query->get_targetlist()) {
+			// collect all the group by columns from targetlist
+			tle->get_expr()->collect_column_var(colvar_set, false);
+			// collect all the aggregate functions from targetlist
+			tle->get_expr()->find_expr(is_agg, aggexpr_list);
+			if (typeid(*tle->get_expr()) != typeid(Analyzer::ColumnVar) && 
+					typeid(*tle->get_expr()) != typeid(Analyzer::AggExpr))
+				no_expression = false;
+		}
+		// collect all the group by columns in having clause
+		if (having_pred != nullptr) {
+			having_pred->collect_column_var(colvar_set, false);
+			having_pred->find_expr(is_agg, aggexpr_list);
+		}
+		// form the AggPlan targetlist with only the group by columns and aggregates
+		for (auto colvar : colvar_set) {
 			Analyzer::TargetEntry *new_tle;
-			new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
+			new_tle = new Analyzer::TargetEntry("", colvar->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
+			agg_tlist.push_back(new_tle);
+		}
+		for (auto e : aggexpr_list) {
+			Analyzer::TargetEntry *new_tle;
+			new_tle = new Analyzer::TargetEntry("", e->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
 			agg_tlist.push_back(new_tle);
 		}
 		std::list<Analyzer::Expr*> groupby_list;
@@ -206,17 +248,29 @@ namespace Planner {
 				groupby_list.push_back(e->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
 			}
 		}
-		const Analyzer::Expr *having_pred = cur_query->get_having_predicate();
 		std::list<Analyzer::Expr*> having_quals;
 		if (having_pred != nullptr) {
 			std::list<const Analyzer::Expr*> preds, others;
 			having_pred->group_predicates(preds, others, others);
 			assert(others.empty());
 			for (auto p : preds) {
-				having_quals.push_back(p->rewrite_having_clause(agg_tlist));
+				having_quals.push_back(p->rewrite_agg_to_var(agg_tlist));
 			}
 		}
-		cur_plan = new AggPlan(agg_tlist, having_quals, 0.0, cur_plan, groupby_list);
+		cur_plan = new AggPlan(agg_tlist, 0.0, cur_plan, groupby_list);
+		if (no_expression && having_pred == nullptr)
+			// in this case, no need to add a Result node on top
+			process_targetlist();
+		else {
+			std::list<Analyzer::TargetEntry*> result_tlist;
+			for (auto tle : cur_query->get_targetlist()) {
+				result_tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_agg_to_var(agg_tlist)));
+			}
+			std::list<Analyzer::Expr*> const_quals;
+			for (auto p : const_predicates)
+				const_quals.push_back(p->deep_copy());
+			cur_plan = new Result(result_tlist, having_quals, 0.0, cur_plan, const_quals);
+		}
 	}
 	
 	void

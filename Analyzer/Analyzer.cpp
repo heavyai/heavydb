@@ -125,7 +125,7 @@ namespace Analyzer {
 	Expr *
 	AggExpr::deep_copy() const
 	{
-		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->deep_copy(), is_distinct, agg_idx);
+		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->deep_copy(), is_distinct);
 	}
 
 	SQLTypeInfo
@@ -753,7 +753,7 @@ namespace Analyzer {
 	}
 
 	Expr *
-	ColumnVar::rewrite_having_clause(std::list<TargetEntry*> &tlist) const
+	ColumnVar::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
 	{
 		int varno = 1;
 		for (auto tle : tlist) {
@@ -761,13 +761,13 @@ namespace Analyzer {
 			if (typeid(*e) != typeid(AggExpr)) {
 				const ColumnVar *colvar = dynamic_cast<const ColumnVar*>(e);
 				if (colvar == nullptr)
-					throw std::runtime_error("Internal Error: targetlist in rewrite_having_clause is not all columns and aggregates.");
+					throw std::runtime_error("Internal Error: targetlist in rewrite_agg_to_var is not all columns and aggregates.");
 				if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
 					return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), false, varno);
 			}
 			varno++;
 		}
-		throw std::runtime_error("Intern error: cannot find ColumnVar in targetlist.");
+		throw std::runtime_error("Intern error: cannot find ColumnVar from having clause in targetlist.");
 	}
 
 	Expr *
@@ -789,7 +789,7 @@ namespace Analyzer {
 	}
 
 	Expr *
-	InValues::rewrite_having_clause(std::list<TargetEntry*> &tlist) const
+	InValues::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
 	{
 		// should never be called
 		assert(false);
@@ -803,7 +803,7 @@ namespace Analyzer {
 			const Expr *e = tle->get_expr();
 			if (typeid(*e) == typeid(AggExpr)) {
 				const AggExpr *agg = dynamic_cast<const AggExpr*>(e);
-				if (agg_idx == agg->get_agg_idx())
+				if (*this == *agg)
 					return agg->deep_copy();
 			}
 		}
@@ -813,11 +813,11 @@ namespace Analyzer {
 	Expr *
 	AggExpr::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
 	{
-		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->rewrite_with_child_targetlist(tlist), is_distinct, agg_idx);
+		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->rewrite_with_child_targetlist(tlist), is_distinct);
 	}
 
 	Expr *
-	AggExpr::rewrite_having_clause(std::list<TargetEntry*> &tlist) const
+	AggExpr::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
 	{
 		int varno = 1;
 		for (auto tle : tlist) {
@@ -829,16 +829,13 @@ namespace Analyzer {
 			}
 			varno++;
 		}
-		// add the aggregate to the target list but mark discard=true since
-		// it is not in the final select list.
-		tlist.push_back(new TargetEntry("", deep_copy(), true));
-		return new Var(type_info, false, varno);
+		throw std::runtime_error("Intern error: cannot find AggExpr from having clause in targetlist.");
 	}
 
 	bool
 	ColumnVar::operator==(const Expr &rhs) const
 	{
-		if (typeid(rhs) != typeid(ColumnVar))
+		if (typeid(rhs) != typeid(ColumnVar) && typeid(rhs) != typeid(Var))
 			return false;
 		const ColumnVar &rhs_cv = dynamic_cast<const ColumnVar&>(rhs);
 		return (table_id == rhs_cv.get_table_id()) && (column_id == rhs_cv.get_column_id()) && (rte_idx == rhs_cv.get_rte_idx());
@@ -911,8 +908,6 @@ namespace Analyzer {
 		if (typeid(rhs) != typeid(AggExpr))
 			return false;
 		const AggExpr &rhs_ae = dynamic_cast<const AggExpr&>(rhs);
-		if (agg_idx == rhs_ae.get_agg_idx())
-			return true;
 		if (aggtype != rhs_ae.get_aggtype() || is_distinct != rhs_ae.get_is_distinct())
 			return false;
 		if (arg == rhs_ae.get_arg())
@@ -1101,6 +1096,7 @@ namespace Analyzer {
 				break;
 			case kSUM:
 				agg = "SUM ";
+				break;
 			case kCOUNT:
 				agg = "COUNT ";
 				break;
@@ -1120,8 +1116,6 @@ namespace Analyzer {
 	{
 		std::cout << "(" << resname << " ";;
 		expr->print();
-		if (discard)
-			std::cout << " discard";
 		std::cout << ") ";
 	}
 
@@ -1134,5 +1128,72 @@ namespace Analyzer {
 		if (nulls_first)
 			std::cout << " nulls first";
 		std::cout << " ";
+	}
+
+	void
+	Expr::add_unique(std::list<const Expr*> &expr_list) const
+	{
+		// only add unique instances to the list
+		for (auto e : expr_list)
+			if (*e == *this)
+				return;
+		expr_list.push_back(this);
+	}
+
+	void
+	BinOper::find_expr(bool (*f)(const Expr*), std::list<const Expr*> &expr_list) const
+	{
+		if (f(this)) {
+			add_unique(expr_list);
+			return;
+		}
+		left_operand->find_expr(f, expr_list);
+		right_operand->find_expr(f, expr_list);
+	}
+
+	void
+	UOper::find_expr(bool (*f)(const Expr*), std::list<const Expr*> &expr_list) const
+	{
+		if (f(this)) {
+			add_unique(expr_list);
+			return;
+		}
+		operand->find_expr(f, expr_list);
+	}
+
+	void
+	InValues::find_expr(bool (*f)(const Expr*), std::list<const Expr*> &expr_list) const
+	{
+		if (f(this)) {
+			add_unique(expr_list);
+			return;
+		}
+		arg->find_expr(f, expr_list);
+		for (auto e : *value_list)
+			e->find_expr(f, expr_list);
+	}
+
+	void
+	LikeExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*> &expr_list) const
+	{
+		if (f(this)) {
+			add_unique(expr_list);
+			return;
+		}
+		arg->find_expr(f, expr_list);
+		like_expr->find_expr(f, expr_list);
+		if (escape_expr != nullptr)
+			escape_expr->find_expr(f, expr_list);
+	}
+
+	void
+	AggExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*> &expr_list) const
+	{
+		if (f(this)) {
+			add_unique(expr_list);
+			return;
+		}
+		if (arg != nullptr)
+			arg->find_expr(f, expr_list);
 	}
 }

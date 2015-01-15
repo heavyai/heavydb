@@ -464,7 +464,7 @@ namespace Parser {
 			throw std::runtime_error("invalid function name: " + *name);
 		int naggs = query.get_num_aggs();
 		query.set_num_aggs(naggs+1);
-		return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct, naggs);
+		return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct);
 	}
 
 	void
