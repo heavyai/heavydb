@@ -307,6 +307,7 @@ Catalog::createTable(const string &tableName, const vector<ColumnDescriptor *> &
 	td->tableName = tableName;
 	td->isView = false;
 	td->isGPU = false;
+	td->nColumns = columns.size();
 	addTableToMap(td, columns);
 }
 
