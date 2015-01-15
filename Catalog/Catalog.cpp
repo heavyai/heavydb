@@ -283,16 +283,25 @@ vector <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const in
 void
 Catalog::createTable(const string &tableName, const vector<ColumnDescriptor *> &columns)
 {
-	sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, partitions) VALUES ('" + tableName + "', " + boost::lexical_cast<string>(columns.size()) + ", 0, '', '')");
-	// now get the auto generated tableid
-	sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + tableName + "'");
-	int32_t tableId = sqliteConnector_.getData<int>(0, 0);
-	int colId = 1;
-	for (auto cd : columns) {
-		sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd->columnName + "', " + boost::lexical_cast<string>(cd->columnType.type) + ", " + boost::lexical_cast<string>(cd->columnType.dimension) + ", " + boost::lexical_cast<string>(cd->columnType.scale) + ", " + boost::lexical_cast<string>(cd->columnType.notnull) + ", " + boost::lexical_cast<string>(cd->compression) + ", " + boost::lexical_cast<string>(cd->comp_param) + ", '')");
-		cd->tableId = tableId;
-		cd->columnId = colId++;
+	sqliteConnector_.query("BEGIN TRANSACTION");
+	int32_t tableId;
+	try {
+		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, partitions) VALUES ('" + tableName + "', " + boost::lexical_cast<string>(columns.size()) + ", 0, '', '')");
+		// now get the auto generated tableid
+		sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + tableName + "'");
+		tableId = sqliteConnector_.getData<int>(0, 0);
+		int colId = 1;
+		for (auto cd : columns) {
+			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd->columnName + "', " + boost::lexical_cast<string>(cd->columnType.type) + ", " + boost::lexical_cast<string>(cd->columnType.dimension) + ", " + boost::lexical_cast<string>(cd->columnType.scale) + ", " + boost::lexical_cast<string>(cd->columnType.notnull) + ", " + boost::lexical_cast<string>(cd->compression) + ", " + boost::lexical_cast<string>(cd->comp_param) + ", '')");
+			cd->tableId = tableId;
+			cd->columnId = colId++;
+		}
 	}
+	catch (std::exception &e) {
+		sqliteConnector_.query("ROLLBACK TRANSACTION");
+		throw;
+	}
+	sqliteConnector_.query("END TRANSACTION");
 	TableDescriptor *td = new TableDescriptor();
 	td->tableId = tableId;
 	td->tableName = tableName;
@@ -307,8 +316,16 @@ Catalog::dropTable(const string &tableName)
 	const TableDescriptor *td = getMetadataForTable(tableName);
 	if (td == nullptr)
 		throw runtime_error("Table " + tableName + " does not exist.");
-	sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
-	sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+	sqliteConnector_.query("BEGIN TRANSACTION");
+	try {
+		sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+		sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+	}
+	catch (std::exception &e) {
+		sqliteConnector_.query("ROLLBACK TRANSACTION");
+		throw;
+	}
+	sqliteConnector_.query("END TRANSACTION");
 	removeTableFromMap(tableName, td->tableId);
 	// @TODO delete all the fragments/chunks of this table
 }
