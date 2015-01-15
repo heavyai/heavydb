@@ -7,6 +7,9 @@
 #define DATAMGR_MEMORY_ABSTRACTBUFFER_H
 
 #include "../Shared/types.h"
+#include "../Shared/sqltypes.h"
+#include "Encoder.h"
+
 
 #ifdef BUFFER_MUTEX
 #include <boost/thread/locks.hpp>
@@ -26,7 +29,8 @@ namespace Memory_Namespace {
         
     public:
 
-        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false) {}
+        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), encoder(0) {}
+        //AbstractBuffer (const SqlTypes bufferType, const CompressionTypes compressionType, const ): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), encoder(0) {}
         virtual ~AbstractBuffer() {}
         
         virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const mapd_size_t offset = 0) = 0;
@@ -70,8 +74,16 @@ namespace Memory_Namespace {
             isDirty_ = false;
         }
 
+        Encoder * encoder;
+        SQLTypes bufferType;
+        EncodingType encodingType;
+        EncodedDataType encodedDataType;
 
     protected:
+        void initEncoder() {
+            encoder = Encoder::Create(this,bufferType,encodingType,encodedDataType);
+        }
+
         mapd_size_t size_;
         bool isDirty_;
         bool isAppended_;

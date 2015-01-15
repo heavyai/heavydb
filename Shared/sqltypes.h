@@ -28,6 +28,9 @@ enum SQLTypes {
 	kTEXT = 13
 };
 
+
+
+
 #define IS_NUMBER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 
@@ -49,6 +52,17 @@ enum EncodingType {
 	kENCODING_DIFF = 3, // Differential encoding
 	kENCODING_DICT = 4, // Dictionary encoding
 	kENCODING_SPARSE = 5 // Null encoding for sparse columns
+};
+
+enum EncodedDataType {
+    kINT8 = 0,
+    kINT16 = 1,
+    kINT32 = 2,
+    kINT64 = 3,
+    kUINT8 = 4,
+    kUINT16 = 5,
+    kUINT32 = 6,
+    kUINT64 = 7
 };
 
 // @type SQLTypeInfo
