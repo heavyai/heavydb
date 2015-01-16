@@ -135,7 +135,7 @@ main(int argc, char* argv[])
 					Parser::DMLStmt *dml = dynamic_cast<Parser::DMLStmt*>(stmt);
 					Query query;
 					dml->analyze(cat, query);
-					Optimizer optimizer(query);
+					Optimizer optimizer(query, cat);
 					RootPlan *plan = optimizer.optimize();
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
 					if (debug) plan->print();

@@ -421,7 +421,7 @@ namespace Analyzer {
 	 */
 	class Query {
 		public:
-			Query() : is_distinct(false), where_predicate(nullptr), group_by(nullptr), having_predicate(nullptr), order_by(nullptr), next_query(nullptr), is_unionall(false), stmt_type(kSELECT), num_aggs(0) {}
+			Query() : is_distinct(false), where_predicate(nullptr), group_by(nullptr), having_predicate(nullptr), order_by(nullptr), next_query(nullptr), is_unionall(false), stmt_type(kSELECT), num_aggs(0), result_table_id(0) {}
 			virtual ~Query();
 			bool get_is_distinct() const { return is_distinct; }
 			int get_num_aggs() const { return num_aggs; }
@@ -435,6 +435,10 @@ namespace Analyzer {
 			const Query *get_next_query() const { return next_query; }
 			SQLStmtType get_stmt_type() const { return stmt_type; }
 			bool get_is_unionall() const { return is_unionall; }
+			int get_result_table_id() const { return result_table_id; }
+			const std::list<int> &get_result_col_list() const { return result_col_list; }
+			void set_result_col_list(const std::list<int> &col_list) { result_col_list = col_list; }
+			void set_result_table_id(int id) { result_table_id = id; }
 			void set_is_distinct(bool d) { is_distinct = d; }
 			void set_where_predicate(Expr *p) { where_predicate = p; }
 			void set_group_by(std::list<Expr*> *g) { group_by = g; }
@@ -460,6 +464,8 @@ namespace Analyzer {
 			bool is_unionall; // true only if it is UNION ALL
 			SQLStmtType stmt_type;
 			int num_aggs; // number of aggregate functions in query
+			int result_table_id; // for INSERT statements only
+			std::list<int> result_col_list; // for INSERT statement only
 	};
 }
 

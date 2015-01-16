@@ -640,17 +640,21 @@ namespace Parser {
 		if (td->isView)
 			throw std::runtime_error("Insert to views is not supported yet.");
 		Analyzer::RangeTblEntry *rte = new Analyzer::RangeTblEntry(*table, td, nullptr);
-		if (column_list == nullptr)
-			rte->add_all_column_descs(catalog);
-		else {
+		query.set_result_table_id(td->tableId);
+		std::list<int> result_col_list;
+		if (column_list == nullptr) {
+			const std::vector<const ColumnDescriptor *> all_cols = catalog.getAllColumnMetadataForTable(td->tableId);
+			for (auto cd : all_cols)
+				result_col_list.push_back(cd->columnId);
+		} else {
 			for (auto c : *column_list) {
-				const ColumnDescriptor *cd = rte->get_column_desc(catalog, *c);
+				const ColumnDescriptor *cd = catalog.getMetadataForColumn(td->tableId, *c);
 				if (cd == nullptr)
 					throw std::runtime_error("Column " + *c + " does not exist.");
-				
+				result_col_list.push_back(cd->columnId);
 			}
 		}
-		query.add_rte(rte);
+		query.set_result_col_list(result_col_list);
 	}
 
 	void

@@ -179,18 +179,20 @@ namespace Planner {
 	 */
 	class RootPlan {
 		public:
-			RootPlan(Plan *p, SQLStmtType t, int r, const std::list<int> &c) : plan(p), stmt_type(t), result_table_id(r), result_col_list(c) {}
+			RootPlan(Plan *p, SQLStmtType t, int r, const std::list<int> &c, const Catalog_Namespace::Catalog &cat) : plan(p), stmt_type(t), result_table_id(r), result_col_list(c), catalog(cat) {}
 			~RootPlan();
 			const Plan *get_plan() const { return plan; }
 			SQLStmtType get_stmt_type() const { return stmt_type; }
 			int get_result_table_id() const { return result_table_id; }
 			const std::list<int> &get_result_col_list() const { return result_col_list; }
+			const Catalog_Namespace::Catalog &get_catalog() const { return catalog; }
 			virtual void print() const;
 		private:
 			Plan *plan; // query plan
 			SQLStmtType stmt_type; // SELECT, UPDATE, DELETE or INSERT
 			int result_table_id; // For UPDATE, DELETE or INSERT only: table id for the result table
 			std::list<int> result_col_list; // For UPDATE and INSERT only: list of result column ids.
+			const Catalog_Namespace::Catalog &catalog; // include the current catalog here for the executor
 	};
 
 	/*
@@ -199,7 +201,7 @@ namespace Planner {
 	 */
 	class Optimizer {
 		public:
-			Optimizer(const Analyzer::Query &q) : cur_query(nullptr), query(q) {}
+			Optimizer(const Analyzer::Query &q, const Catalog_Namespace::Catalog &c) : cur_query(nullptr), query(q), catalog(c) {}
 			~Optimizer() {}
 			/*
 			 * @brief optimize optimize an entire SQL DML statement
@@ -227,6 +229,7 @@ namespace Planner {
 			const Analyzer::Query *cur_query;
 			Plan *cur_plan;
 			const Analyzer::Query &query;
+			const Catalog_Namespace::Catalog &catalog;
 	};
 }
 

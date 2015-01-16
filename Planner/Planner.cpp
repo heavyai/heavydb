@@ -87,10 +87,8 @@ namespace Planner {
 				// nothing to do for SELECT for now
 				break;
 			case kINSERT:
-				result_rte = query.get_rangetable().front(); // the first entry is the result table
-				result_table_id = result_rte->get_table_id();
-				for (auto cd : result_rte->get_column_descs())
-					result_col_list.push_back(cd->columnId);
+				result_table_id = query.get_result_table_id();
+				result_col_list = query.get_result_col_list();
 				break;
 			case kUPDATE:
 			case kDELETE:
@@ -101,7 +99,7 @@ namespace Planner {
 				assert(false);
 		}
 		plan = optimize_query();
-		return new RootPlan(plan, stmt_type, result_table_id, result_col_list);
+		return new RootPlan(plan, stmt_type, result_table_id, result_col_list, catalog);
 	}
 
 	Plan *
@@ -145,13 +143,7 @@ namespace Planner {
 	Optimizer::optimize_scans()
 	{
 		const std::vector<Analyzer::RangeTblEntry*> &rt = cur_query->get_rangetable();
-		bool first = true;
 		for (auto rte : rt) {
-			if (first && cur_query->get_stmt_type() == kINSERT) {
-				// skip the first entry in INSERT statements which is the result table
-				first = false;
-				continue;
-			}
 			base_scans.push_back(new Scan(*rte));
 		}
 		const Analyzer::Expr *where_pred = cur_query->get_where_predicate();
