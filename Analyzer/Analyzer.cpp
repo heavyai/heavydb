@@ -500,6 +500,7 @@ namespace Analyzer {
 							for (int i = 0; i < type_info.scale - new_type_info.scale; i++)
 								constval.bigintval /= 10;
 						}
+						break;
 					default:
 						assert(false);
 				}

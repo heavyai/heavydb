@@ -356,7 +356,7 @@ namespace Parser {
 		(void)Analyzer::BinOper::analyze_type_info(kGE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
 		Analyzer::BinOper *lower_pred = new Analyzer::BinOper(kBOOLEAN, kGE, kONE, arg_expr->add_cast(new_left_type), lower_expr->add_cast(new_right_type));
 		(void)Analyzer::BinOper::analyze_type_info(kLE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-		Analyzer::BinOper *upper_pred = new Analyzer::BinOper(kBOOLEAN, kLE, kONE, arg_expr->add_cast(new_left_type), upper_expr->add_cast(new_right_type));
+		Analyzer::BinOper *upper_pred = new Analyzer::BinOper(kBOOLEAN, kLE, kONE, arg_expr->deep_copy()->add_cast(new_left_type), upper_expr->add_cast(new_right_type));
 		Analyzer::Expr *result = new Analyzer::BinOper(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
 		if (is_not)
 			result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
@@ -536,7 +536,6 @@ namespace Parser {
 			}
 		}
 		else {
-			std::string resname;
 			for (auto p : *select_clause) {
 				const Parser::Expr *select_expr = p->get_select_expr();
 				// look for the case of range_var.*
@@ -551,6 +550,7 @@ namespace Parser {
 				}
 				else {
 					Analyzer::Expr *e = select_expr->analyze(catalog, query);
+					std::string resname;
 
 					if (p->get_alias() != nullptr)
 						resname = *p->get_alias();
