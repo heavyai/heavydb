@@ -480,28 +480,26 @@ namespace Parser {
 	void
 	QuerySpec::analyze_having_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
-		if (having_clause == nullptr) {
-			query.set_having_predicate(nullptr);
-			return;
-		}
-		Analyzer::Expr *p = having_clause->analyze(catalog, query);
-		if (p->get_type_info().type != kBOOLEAN)
-			throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
-		p->check_group_by(query.get_group_by());
+		Analyzer::Expr *p = nullptr;
+		if (having_clause != nullptr) {
+			p = having_clause->analyze(catalog, query);
+			if (p->get_type_info().type != kBOOLEAN)
+				throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
+			p->check_group_by(query.get_group_by());
+	  }
 		query.set_having_predicate(p);
 	}
 
 	void
 	QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
-		if (groupby_clause == nullptr) {
-			query.set_group_by(nullptr);
-			return;
-		}
-		std::list<Analyzer::Expr*> *groupby = new std::list<Analyzer::Expr*>();
-		for (auto c : *groupby_clause) {
-			Analyzer::Expr *e = c->analyze(catalog, query);
-			groupby->push_back(e);
+		std::list<Analyzer::Expr*> *groupby = nullptr;
+		if (groupby_clause != nullptr) {
+			groupby = new std::list<Analyzer::Expr*>();
+			for (auto c : *groupby_clause) {
+				Analyzer::Expr *e = c->analyze(catalog, query);
+				groupby->push_back(e);
+			}
 		}
 		for (auto t : query.get_targetlist()) {
 			Analyzer::Expr *e = t->get_expr();
