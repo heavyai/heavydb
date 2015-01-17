@@ -9,7 +9,7 @@
 #include "FileMgr.h"
 #include <map>
 
-#define STATS_PAGE_SIZE 4096
+#define METADATA_PAGE_SIZE 4096
 
 using namespace std;
 
@@ -35,7 +35,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey){
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
         assert(fm_);
@@ -45,19 +45,20 @@ namespace File_Namespace {
         //int checkpointEpoch = fm_-> epoch();
         //vector <int> pageAndVersionId = {-1,-1};
         int lastPageId = -1;
+        Page lastMetadataPage;
         for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
             int curPageId = vecIt -> pageId;
+            // We only want to read last metadata page
             if (curPageId == -1) { //stats page
-                Page page = vecIt -> page;
-                //if (vecIt -> versionEpoch <= checkpointEpoch) { - should be
-                //done by FileInfo
-                FILE *f = fm_ -> getFileForFileId(page.fileId); 
-                File_Namespace::read(f, page.pageNum * STATS_PAGE_SIZE + reservedHeaderSize_, sizeof(mapd_size_t), (mapd_addr_t)&size_);               
-                //}
+                lastMetadataPage = vecIt -> page;
             }
             else {
-
                 if (curPageId != lastPageId) {
+                    if (lastPageId == -1) {
+                        // If we are on first real page
+                        assert(lastMetadataPage.fileId != -1); // was initialized
+                        readMetadata(lastMetadataPage);
+                    }
                     assert (curPageId == lastPageId + 1);
                     MultiPage multiPage(pageSize_);
                     multiPages_.push_back(multiPage);
@@ -65,6 +66,7 @@ namespace File_Namespace {
                 }
                 multiPages_.back().epochs.push_back(vecIt -> versionEpoch);
                 multiPages_.back().pageVersions.push_back(vecIt -> page);
+                cout << "After pushing back page: " << curPageId << endl;
             }
 
         }
@@ -182,7 +184,7 @@ namespace File_Namespace {
         return page;
     }
 
-    void FileBuffer::writeHeader(Page &page, const int pageId, const int epoch, const bool writeStats) {
+    void FileBuffer::writeHeader(Page &page, const int pageId, const int epoch, const bool writeMetadata) {
         int intHeaderSize = chunkKey_.size() + 3; // does not include chunkSize
         vector <int> header (intHeaderSize);
         // in addition to chunkkey we need size of header, pageId, version
@@ -191,7 +193,7 @@ namespace File_Namespace {
         header[intHeaderSize-2] = pageId;
         header[intHeaderSize-1] = epoch;
         FILE *f = fm_ -> getFileForFileId(page.fileId);
-        mapd_size_t pageSize = writeStats ? STATS_PAGE_SIZE : pageSize_;
+        mapd_size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
         File_Namespace::write(f, page.pageNum*pageSize,(intHeaderSize) * sizeof(int),(mapd_addr_t)&header[0]);
         /*
         if (writeSize) {
@@ -200,16 +202,47 @@ namespace File_Namespace {
         */
     }
 
-    void FileBuffer::writeStats(const int epoch) {
-        cout << "Write stats: " << epoch << endl;
-        Page page = fm_ -> requestFreePage(STATS_PAGE_SIZE);
+    void FileBuffer::readMetadata(const Page &page) { 
+        FILE *f = fm_ -> getFileForFileId(page.fileId); 
+        fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
+        fread((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
+        cout << "Read size: " << size_ << endl;
+        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodedDataType all as int
+        fread((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
+        hasEncoder = static_cast <bool> (typeData[0]);
+        cout << "Read has encoder: " << hasEncoder << endl;
+        if (hasEncoder) {
+            sqlType = static_cast<SQLTypes> (typeData[1]);
+            encodingType = static_cast<EncodingType> (typeData[2]);
+            encodedDataType = static_cast<EncodedDataType> (typeData[3]);
+            initEncoder();
+            encoder -> readMetadata(f);
+        }
+    }
+
+
+    void FileBuffer::writeMetadata(const int epoch) {
+        cout << "Write metadata: " << epoch << endl;
+        // Right now stats page is size_ (in bytes), bufferType, encodingType,
+        // encodingDataType, numElements
+        Page page = fm_ -> requestFreePage(METADATA_PAGE_SIZE);
         writeHeader(page,-1,epoch,true);
         FILE *f = fm_ -> getFileForFileId(page.fileId);
-
-        File_Namespace::write(f, page.pageNum*STATS_PAGE_SIZE + reservedHeaderSize_,sizeof(mapd_size_t),(mapd_addr_t)&size_);
+        fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
+        fwrite((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
+        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodedDataType all as int
+        typeData[0] = static_cast<int>(hasEncoder); 
+        cout << "Write has encoder: " << hasEncoder << endl;
+        if (hasEncoder) {
+            typeData[1] = static_cast<int>(sqlType); 
+            typeData[2] = static_cast<int>(encodingType); 
+            typeData[3] = static_cast<int>(encodedDataType); 
+        }
+        fwrite((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
+        if (hasEncoder) { // redundant
+            encoder -> writeMetadata(f);
+         }
     }
-        //File_Namespace::write(f, page.pageNum*STATS_PAGE_SIZE + reservedHeaderSize_,sizeof(mapd_size_t),(mapd_addr_t)&size_);
-
 
 
     /*

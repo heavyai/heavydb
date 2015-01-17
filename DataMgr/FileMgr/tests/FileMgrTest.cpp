@@ -227,6 +227,7 @@ TEST(FileMgr, epochPersistence) {
         fm.createChunk(chunkKey1,pageSize);
         AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
         chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
+        cout << "After checkpoint 1 for epoch Persistence" << endl;
         fm.checkpoint(); // checkpoint 1
         chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
         fm.checkpoint(); // checkpoint 2
@@ -235,6 +236,10 @@ TEST(FileMgr, epochPersistence) {
         chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
         fm.checkpoint(); // checkpoint 4
     }
+    cout << "After checkpoints for epoch Persistence" << endl;
+
+
+
     {
         cout << "Test 1" << endl;
         FileMgr fm("data");

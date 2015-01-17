@@ -65,5 +65,6 @@ Encoder * Encoder::Create(Memory_Namespace::AbstractBuffer *buffer, const SQLTyp
             return 0;
             break;
     } // switch (compressionType)
+
 }
 

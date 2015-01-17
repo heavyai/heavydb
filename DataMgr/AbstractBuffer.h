@@ -29,7 +29,7 @@ namespace Memory_Namespace {
         
     public:
 
-        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), encoder(0) {}
+        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), hasEncoder(0), encoder(0) {}
         //AbstractBuffer (const SqlTypes bufferType, const CompressionTypes compressionType, const ): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), encoder(0) {}
         virtual ~AbstractBuffer() {}
         
@@ -75,13 +75,14 @@ namespace Memory_Namespace {
         }
 
         Encoder * encoder;
-        SQLTypes bufferType;
+        bool hasEncoder;
+        SQLTypes sqlType;
         EncodingType encodingType;
         EncodedDataType encodedDataType;
 
     protected:
         void initEncoder() {
-            encoder = Encoder::Create(this,bufferType,encodingType,encodedDataType);
+            encoder = Encoder::Create(this,sqlType,encodingType,encodedDataType);
         }
 
         mapd_size_t size_;

@@ -205,7 +205,7 @@ namespace File_Namespace {
         std::cout << "Checkpointing " << epoch_ <<  std::endl;
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
             if (chunkIt -> second -> isDirty_) {
-                chunkIt -> second -> writeStats(epoch_);
+                chunkIt -> second -> writeMetadata(epoch_);
                 chunkIt -> second -> clearDirtyBits();
             }
         }
