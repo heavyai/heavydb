@@ -6,9 +6,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <fstream>
-#include <set>
-#include <iostream>
+#include <list>
 #include <exception>
 #include <cassert>
 #include "boost/filesystem.hpp"
@@ -17,11 +15,7 @@
 using std::runtime_error;
 using std::string;
 using std::map;
-using std::tuple;
-using std::vector;
-using std::set;
-using std::ifstream;
-using std::ofstream;
+using std::list;
 using std::pair;
 
 namespace Catalog_Namespace {
@@ -115,6 +109,38 @@ SysCatalog::getMetadataForUser(const string &name, UserMetadata &user)
 	return true;
 }
 
+list<DBMetadata>
+SysCatalog::getAllDBMetadata()
+{
+	sqliteConnector_.query("SELECT dbid, name, owner FROM mapd_databases");
+	int numRows = sqliteConnector_.getNumRows();
+	list<DBMetadata> db_list;
+	for (int r = 0; r < numRows; ++r) {
+		DBMetadata db;
+		db.dbId = sqliteConnector_.getData<int>(r, 0);
+		db.dbName = sqliteConnector_.getData<string>(r, 1);
+		db.dbOwner = sqliteConnector_.getData<int>(r, 2);
+		db_list.push_back(db);
+	}
+	return db_list;
+}
+
+list<UserMetadata>
+SysCatalog::getAllUserMetadata() 
+{
+	sqliteConnector_.query("SELECT userid, name, issuper FROM mapd_users");
+	int numRows = sqliteConnector_.getNumRows();
+	list<UserMetadata> user_list;
+	for (int r = 0; r < numRows; ++r) {
+		UserMetadata user;
+		user.userId = sqliteConnector_.getData<int>(r, 0);
+		user.userName = sqliteConnector_.getData<string>(r, 1);
+		user.isSuper = sqliteConnector_.getData<bool>(r, 2);
+		user_list.push_back(user);
+	}
+	return user_list;
+}
+
 bool
 SysCatalog::getMetadataForDB(const string &name, DBMetadata &db)
 {
@@ -199,7 +225,7 @@ void Catalog::buildMaps() {
 }
 
 void
-Catalog::addTableToMap(TableDescriptor *td, const vector<ColumnDescriptor *> &columns)
+Catalog::addTableToMap(TableDescriptor *td, const list<ColumnDescriptor *> &columns)
 {
 	tableDescriptorMap_[td->tableName] = td;
 	tableDescriptorMapById_[td->tableId] = td;
@@ -269,8 +295,8 @@ const ColumnDescriptor * Catalog::getMetadataForColumn (int tableId, int columnI
     return colDescIt -> second;
 }
 
-vector <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId) const {
-    vector <const ColumnDescriptor *> columnDescriptors;
+list <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId) const {
+    list <const ColumnDescriptor *> columnDescriptors;
 		const TableDescriptor *td = getMetadataForTable(tableId);
 		for (int i = 1; i <= td->nColumns; i++) {
 			const ColumnDescriptor *cd = getMetadataForColumn(tableId, i);
@@ -280,8 +306,17 @@ vector <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const in
     return columnDescriptors;
 }
 
+list<const TableDescriptor*>
+Catalog::getAllTableMetadata() const
+{
+	list<const TableDescriptor*> table_list;
+	for (auto p : tableDescriptorMapById_)
+		table_list.push_back(p.second);
+	return table_list;
+}
+
 void
-Catalog::createTable(const string &tableName, const vector<ColumnDescriptor *> &columns)
+Catalog::createTable(const string &tableName, const list<ColumnDescriptor *> &columns)
 {
 	sqliteConnector_.query("BEGIN TRANSACTION");
 	int32_t tableId;

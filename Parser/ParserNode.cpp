@@ -641,7 +641,7 @@ namespace Parser {
 		query.set_result_table_id(td->tableId);
 		std::list<int> result_col_list;
 		if (column_list == nullptr) {
-			const std::vector<const ColumnDescriptor *> all_cols = catalog.getAllColumnMetadataForTable(td->tableId);
+			const std::list<const ColumnDescriptor *> all_cols = catalog.getAllColumnMetadataForTable(td->tableId);
 			for (auto cd : all_cols)
 				result_col_list.push_back(cd->columnId);
 		} else {
@@ -690,7 +690,7 @@ namespace Parser {
 	{
 		if (catalog.getMetadataForTable(*table) != nullptr)
 			throw std::runtime_error("Table " + *table + " already exits.");
-		std::vector<ColumnDescriptor *> columns;
+		std::list<ColumnDescriptor *> columns;
 		for (auto e : *table_element_list) {
 			if (typeid(*e) != typeid(ColumnDef))
 				throw std::runtime_error("Table constraints are not supported yet.");

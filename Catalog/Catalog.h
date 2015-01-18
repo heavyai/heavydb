@@ -14,9 +14,8 @@
 #define CATALOG_H
 
 #include <string>
-#include <tuple>
 #include <map>
-#include <vector>
+#include <list>
 #include <utility>
 #include <boost/lexical_cast.hpp>
 #include <cstdint>
@@ -115,7 +114,7 @@ class Catalog {
          */
         virtual ~Catalog();
 
-				void createTable(const std::string &tableName, const std::vector<ColumnDescriptor *> &columns);
+				void createTable(const std::string &tableName, const std::list<ColumnDescriptor *> &columns);
 				void dropTable(const std::string &tableName);
 
         /**
@@ -132,16 +131,17 @@ class Catalog {
         const ColumnDescriptor * getMetadataForColumn(int tableId, int columnId) const;
 
         /**
-         * @brief Returns a vector of pointers to constant ColumnDescriptor structs for all the columns from a particular table 
+         * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the columns from a particular table 
          * specified by table id
          * @param tableId table id we want the column metadata for
-         * @return vector of pointers to const ColumnDescriptor structs - one
+         * @return list of pointers to const ColumnDescriptor structs - one
          * for each and every column in the table
          *
          */
 
-         std::vector <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
+         std::list <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
+				 std::list<const TableDescriptor *> getAllTableMetadata() const;
          const UserMetadata &get_currentUser() { return currentUser_; }
          void set_currentUser(const UserMetadata &user) { currentUser_ = user; }
          const DBMetadata &get_currentDB() { return currentDB_; }
@@ -149,7 +149,7 @@ class Catalog {
 
     protected:
         void buildMaps();
-        void addTableToMap(TableDescriptor *td, const std::vector<ColumnDescriptor *> &columns);
+        void addTableToMap(TableDescriptor *td, const std::list<ColumnDescriptor *> &columns);
         void removeTableFromMap(const std::string &tableName, int tableId);
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
@@ -178,6 +178,8 @@ class SysCatalog : public Catalog {
 		void dropDatabase(const std::string &dbname);
 		bool getMetadataForUser(const std::string &name, UserMetadata &user);
 		bool getMetadataForDB(const std::string &name, DBMetadata &db);
+		std::list<DBMetadata> getAllDBMetadata();
+		std::list<UserMetadata> getAllUserMetadata();
 };
 
 

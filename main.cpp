@@ -18,18 +18,98 @@ using namespace Analyzer;
 using namespace Planner;
 
 void
-process_backslash_commands(const string &command, const Catalog &catalog)
+process_backslash_commands(const string &command, const Catalog &cat, SysCatalog &syscat)
 {
 	switch (command[1]) {
-		/*
+		case 'h':
+			cout << "\\d <table> List all columns of table.\n";
+			cout << "\\t List all tables.\n";
+			cout << "\\u List all users. \n";
+			cout << "\\l List all databases.\n";
+			cout << "\\q Quit.\n";
+			return;
 		case 'd':
-			if (
+			{
+				if (command[2] != ' ')
+					throw runtime_error("Correct use is \\d <table>.");
+				string table_name = command.substr(3);
+				const TableDescriptor *td = cat.getMetadataForTable(table_name);
+				if (td == nullptr)
+					throw runtime_error("Table " + table_name + " does not exist.");
+				list <const ColumnDescriptor *> col_list = cat.getAllColumnMetadataForTable(td->tableId);
+				cout << "TalbeId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
+				std::string SQLTypeName[] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT" };
+				std::string compression[] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE" };
+
+				for (auto cd : col_list) {
+					cout << cd->tableId << "|";
+					cout << cd->columnId << "|";
+					cout << cd->columnName << "|";
+					cout << SQLTypeName[cd->columnType.type] << "|";
+					cout << cd->columnType.dimension << "|";
+					cout << cd->columnType.scale << "|";
+					if (cd->columnType.notnull)
+						cout << "true|";
+					else
+						cout << "false|";
+					cout << compression[cd->compression] << "|";
+					cout << cd->comp_param << "|";
+					cout << cd->chunks << "\n";
+				}
+			}
+			break;
+		case 't':
+			{
+				cout << "TableId|TableName|NColumns|IsView|IsGPU|ViewSQL|Fragments|Partitions\n";
+				list<const TableDescriptor *> table_list = cat.getAllTableMetadata();
+				for (auto td : table_list) {
+					cout << td->tableId << "|";
+					cout << td->tableName << "|";
+					cout << td->nColumns << "|";
+					if (td->isView)
+						cout << "true|";
+					else
+						cout << "false|";
+					if (td->isGPU)
+						cout << "true|";
+					else
+						cout << "false|";
+					cout << td->viewSQL << "|";
+					cout << td->fragments << "|";
+					cout << td->partitions << "\n";
+				}
+			}
+			break;
 		case 'l':
-		*/
+			{
+				cout << "DatabaseId|DatabaseName|OwnerId\n";
+				list<DBMetadata> db_list = syscat.getAllDBMetadata();
+				for (auto d : db_list) {
+					cout << d.dbId << "|";
+					cout << d.dbName << "|";
+					cout << d.dbOwner << "\n";
+				}
+			}
+			break;
+		case 'u':
+			{
+				cout << "UserId|UserName|IsSuper\n";
+				list<UserMetadata> user_list = syscat.getAllUserMetadata();
+				for (auto u : user_list) {
+					cout << u.userId << "|";
+					cout << u.userName << "|";
+					if (u.isSuper)
+						cout << "true\n";
+					else
+						cout << "false\n";
+				}
+			}
+			break;
 		case 'q':
 			exit(0);
+			break;
 		default:
-			throw runtime_error("Invalid backslash command.");
+			throw runtime_error("Invalid backslash command.  See \\h");
 	}
 }
 
@@ -117,7 +197,7 @@ main(int argc, char* argv[])
 				break;
 			}
 			if (input_str[0] == '\\') {
-				process_backslash_commands(input_str, cat);
+				process_backslash_commands(input_str, cat, sys_cat);
 				continue;
 			}
 			SQLParser parser;

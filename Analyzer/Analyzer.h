@@ -387,7 +387,7 @@ namespace Analyzer {
 			 * @param name name of column to look up
 			 */
 			const ColumnDescriptor *get_column_desc(const Catalog_Namespace::Catalog &catalog, const std::string &name);
-			const std::vector<const ColumnDescriptor *> &get_column_descs() const { return column_descs; }
+			const std::list<const ColumnDescriptor *> &get_column_descs() const { return column_descs; }
 			const std::string &get_rangevar() const { return rangevar; }
 			int32_t get_table_id() const { return table_desc->tableId; }
 			const std::string &get_table_name() const { return table_desc->tableName; }
@@ -398,7 +398,7 @@ namespace Analyzer {
 		private:
 			std::string rangevar; // range variable name, e.g., FROM emp e, dept d
 			const TableDescriptor *table_desc;
-			std::vector<const ColumnDescriptor *> column_descs; // column descriptors for all columns referenced in this query
+			std::list<const ColumnDescriptor *> column_descs; // column descriptors for all columns referenced in this query
 			Query *view_query; // parse tree for the view query
 	};
 
