@@ -136,14 +136,14 @@ namespace File_Namespace {
                         //std::cout << "New chunkkey" << std::endl;
                         
                         mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
-                        chunkIndex_[lastChunkKey] = new Chunk (this,pageSize,lastChunkKey,startIt,headerIt);
+                        chunkIndex_[lastChunkKey] = new FileBuffer (this,pageSize,lastChunkKey,startIt,headerIt);
                         lastChunkKey = headerIt -> chunkKey;
                         startIt = headerIt;
                     }
                 }
                 // now need to insert last Chunk
                 mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
-                chunkIndex_[lastChunkKey] = new Chunk (this,pageSize,lastChunkKey,startIt,headerVec.end());
+                chunkIndex_[lastChunkKey] = new FileBuffer (this,pageSize,lastChunkKey,startIt,headerVec.end());
 
             }
             nextFileId_ = maxFileId + 1;
@@ -230,7 +230,7 @@ namespace File_Namespace {
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists.");
         }
-        chunkIndex_[key] = new Chunk (this,actualPageSize,key,numBytes);
+        chunkIndex_[key] = new FileBuffer (this,actualPageSize,key,numBytes);
         return (chunkIndex_[key]);
     }
 

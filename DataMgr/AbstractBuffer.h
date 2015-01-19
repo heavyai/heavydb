@@ -30,7 +30,9 @@ namespace Memory_Namespace {
     public:
 
         AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), hasEncoder(0), encoder(0) {}
-        //AbstractBuffer (const SqlTypes bufferType, const CompressionTypes compressionType, const ): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), encoder(0) {}
+        AbstractBuffer (const SQLTypes sqlType, const EncodingType encodingType=kENCODING_NONE, const EncodedDataType encodedDataType=kNONE): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
+        initEncoder(sqlType, encodingType, encodedDataType);
+        }
         virtual ~AbstractBuffer() {}
         
         virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const mapd_size_t offset = 0) = 0;
@@ -73,6 +75,13 @@ namespace Memory_Namespace {
             isUpdated_ = false;
             isDirty_ = false;
         }
+        void initEncoder(const SQLTypes tmpSqlType, const EncodingType tmpEncodingType = kENCODING_NONE, const EncodedDataType tmpEncodedDataType = kNONE) {
+            hasEncoder = true;
+            sqlType = tmpSqlType;
+            encodingType = tmpEncodingType;
+            encodedDataType = tmpEncodedDataType;
+            encoder = Encoder::Create(this,sqlType,encodingType,encodedDataType);
+        }
 
         Encoder * encoder;
         bool hasEncoder;
@@ -81,9 +90,6 @@ namespace Memory_Namespace {
         EncodedDataType encodedDataType;
 
     protected:
-        void initEncoder() {
-            encoder = Encoder::Create(this,sqlType,encodingType,encodedDataType);
-        }
 
         mapd_size_t size_;
         bool isDirty_;

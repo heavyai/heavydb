@@ -15,13 +15,19 @@ class FixedLengthEncoder : public Encoder {
             T * unencodedData = reinterpret_cast<T *> (srcData); 
             V * encodedData = new V [numAppendElems];  
             for (mapd_size_t i = 0; i < numAppendElems; ++i) {
+                //std::cout << "Unencoded: " << unencodedData[i] << std::endl;
+                //std::cout << "Min: " << min_ << " Max: " <<  max_ << std::endl;
                 encodedData[i] = static_cast <V>(unencodedData[i]);
-                min_ = std::min(min_,unencodedData[i]);
-                max_ = std::max(min_,unencodedData[i]);
                 if (unencodedData[i] != encodedData[i]) {
+                    std::cout << "Unencoded: " << unencodedData[i] << " Encoded: " << encodedData[i] << std::endl;
                     delete [] encodedData;
                     throw std::runtime_error ("Encoding failed");
                 }
+                else {
+                    min_ = std::min(min_,unencodedData[i]);
+                    max_ = std::max(max_,unencodedData[i]);
+                }
+
             }
             numElems += numAppendElems;
             std::cout << "Min: " << min_ << " Max: " << max_ << std::endl;

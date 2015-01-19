@@ -35,6 +35,14 @@ namespace File_Namespace {
         */
     }
 
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const EncodedDataType encodedDataType, const mapd_size_t initialSize): AbstractBuffer(sqlType,encodingType,encodedDataType) {
+        assert(fm_);
+        calcHeaderBuffer();
+    }
+
+
+
+
     FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm), pageSize_(pageSize),chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
@@ -68,7 +76,6 @@ namespace File_Namespace {
                 multiPages_.back().pageVersions.push_back(vecIt -> page);
                 cout << "After pushing back page: " << curPageId << endl;
             }
-
         }
         //auto lastHeaderIt = std::prev(headerEndIt);
         //size_ = lastHeaderIt -> chunkSize; 
@@ -215,7 +222,7 @@ namespace File_Namespace {
             sqlType = static_cast<SQLTypes> (typeData[1]);
             encodingType = static_cast<EncodingType> (typeData[2]);
             encodedDataType = static_cast<EncodedDataType> (typeData[3]);
-            initEncoder();
+            initEncoder(sqlType,encodingType,encodedDataType);
             encoder -> readMetadata(f);
         }
     }

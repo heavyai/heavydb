@@ -264,6 +264,45 @@ TEST(FileMgr, epochPersistence) {
     }
 }
 
+TEST(FileMgr, fixedLengthEncoding) {
+    deleteData("data");
+    ChunkKey chunkKey1 = {1,2,3,4};
+    int numInts = 1000000;
+    int * data1 = new int [numInts];
+    for (size_t i = 0; i < numInts; ++i) {
+        data1[i] = i % 128; // so fits in one byte
+    }
+    {
+        FileMgr fm("data");
+        mapd_size_t pageSize = 1024796;
+        //mapd_size_t pageSize = 4096;
+        AbstractBuffer * chunk1 =  fm.createChunk(chunkKey1,pageSize);
+        chunk1 -> initEncoder(kINT,kENCODING_FIXED,kINT8);
+        chunk1 -> encoder -> appendData((mapd_addr_t)data1,numInts);
+        EXPECT_EQ(numInts,chunk1 -> size());
+        EXPECT_EQ(numInts,chunk1 -> encoder -> numElems);
+        fm.checkpoint();
+    }
+
+    {
+        FileMgr fm("data");
+        AbstractBuffer * chunk1 =  fm.getChunk(chunkKey1);
+        EXPECT_EQ(numInts,chunk1 -> size());
+        EXPECT_EQ(numInts,chunk1 -> encoder -> numElems);
+    }
+
+
+
+}
+
+
+    
+
+
+
+    
+
+
 
 
 

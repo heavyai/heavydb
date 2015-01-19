@@ -55,14 +55,15 @@ enum EncodingType {
 };
 
 enum EncodedDataType {
-    kINT8 = 0,
-    kINT16 = 1,
-    kINT32 = 2,
-    kINT64 = 3,
-    kUINT8 = 4,
-    kUINT16 = 5,
-    kUINT32 = 6,
-    kUINT64 = 7
+    kNONE = 0,
+    kINT8 = 1,
+    kINT16 = 2,
+    kINT32 = 3,
+    kINT64 = 4,
+    kUINT8 = 5,
+    kUINT16 = 6,
+    kUINT32 = 7,
+    kUINT64 = 8
 };
 
 // @type SQLTypeInfo
