@@ -12,6 +12,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
+#include "../Planner/Planner.h"
+#include "parser.h"
 
 namespace Parser {
 	SubqueryExpr::~SubqueryExpr() 
@@ -839,7 +841,7 @@ namespace Parser {
 		const TableDescriptor *td = catalog.getMetadataForTable(*table);
 		if (td == nullptr)
 			throw std::runtime_error("Table " + *table + " does not exist.");
-		if (td->isView)
+		if (td->isView && !td->isMaterialized)
 			throw std::runtime_error("Insert to views is not supported yet.");
 		Analyzer::RangeTblEntry *rte = new Analyzer::RangeTblEntry(*table, td, nullptr);
 		query.set_result_table_id(td->tableId);
@@ -1042,7 +1044,29 @@ namespace Parser {
 	void
 	RefreshViewStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		throw std::runtime_error("REFRESH VIEW not supported yet.");
+		const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
+		if (td == nullptr)
+			throw std::runtime_error("Materialied view " + *view_name + " does not exist.");
+		if (!td->isView)
+			throw std::runtime_error(*view_name + " is a table not a materialized view.");
+		if (!td->isMaterialized)
+			throw std::runtime_error(*view_name + " is not a materialized view.");
+		SQLParser parser;
+		std::list<Stmt*> parse_trees;
+		std::string last_parsed;
+		std::string query_str = "INSERT INTO " + *view_name + " " + td->viewSQL;
+		int numErrors = parser.parse(query_str, parse_trees, last_parsed);
+		if (numErrors > 0)
+			throw std::runtime_error("Internal Error: syntax error at: " + last_parsed);
+		DMLStmt *view_stmt = dynamic_cast<DMLStmt*>(parse_trees.front());
+		unique_ptr<Stmt> stmt_ptr(view_stmt); // make sure it's deleted
+		Analyzer::Query query;
+		view_stmt->analyze(catalog, query);
+		Planner::Optimizer optimizer(query, catalog);
+		Planner::RootPlan *plan = optimizer.optimize();
+		unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
+		// @TODO execute plan
+		// plan->print();
 	}
 
 	void
