@@ -60,8 +60,10 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
 			break;
 		case 't':
 			{
-				cout << "TableId|TableName|NColumns|IsView|IsGPU|ViewSQL|Fragments|Partitions\n";
+				cout << "TableId|TableName|NColumns|IsView|IsMaterialized|ViewSQL|Fragments|Partitions|Storage|Refresh|Ready\n";
 				list<const TableDescriptor *> table_list = cat.getAllTableMetadata();
+				std::string storage_name[] = { "DISK", "GPU", "CPU" };
+				std::string refresh_name[] = { "MANUAL", "AUTO", "IMMEDIATE" };
 				for (auto td : table_list) {
 					cout << td->tableId << "|";
 					cout << td->tableName << "|";
@@ -70,13 +72,19 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
 						cout << "true|";
 					else
 						cout << "false|";
-					if (td->isGPU)
+					if (td->isMaterialized)
 						cout << "true|";
 					else
 						cout << "false|";
 					cout << td->viewSQL << "|";
 					cout << td->fragments << "|";
-					cout << td->partitions << "\n";
+					cout << td->partitions << "|";
+					cout << storage_name[td->storageOption] << "|";
+					cout << refresh_name[td->refreshOption] << "|";
+					if (td->isReady)
+						cout  << "true\n";
+					else
+						cout << "false\n";
 				}
 			}
 			break;

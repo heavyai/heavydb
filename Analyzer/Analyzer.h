@@ -364,6 +364,7 @@ namespace Analyzer {
 			TargetEntry(const std::string &n, Expr *e, bool d) : resname(n), expr(e) {}
 			virtual ~TargetEntry() { delete expr; }
 			const std::string &get_resname() { return resname; }
+			void set_resname( const std::string &name) { resname = name; }
 			Expr *get_expr() { return expr; }
 			virtual void print() const;
 		private:

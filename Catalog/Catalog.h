@@ -114,8 +114,8 @@ class Catalog {
          */
         virtual ~Catalog();
 
-				void createTable(const std::string &tableName, const std::list<ColumnDescriptor *> &columns);
-				void dropTable(const std::string &tableName);
+				void createTable(TableDescriptor &td, const std::list<ColumnDescriptor> &columns);
+				void dropTable(const TableDescriptor *td);
 
         /**
          * @brief Returns a pointer to a const TableDescriptor struct matching
@@ -149,7 +149,7 @@ class Catalog {
 
     protected:
         void buildMaps();
-        void addTableToMap(TableDescriptor *td, const std::list<ColumnDescriptor *> &columns);
+        void addTableToMap(TableDescriptor &td, const std::list<ColumnDescriptor> &columns);
         void removeTableFromMap(const std::string &tableName, int tableId);
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */

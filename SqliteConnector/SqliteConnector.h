@@ -21,6 +21,7 @@ class SqliteConnector {
         SqliteConnector (const std::string &dbName, const std::string &dir = ".");
 				~SqliteConnector();
         void query(const std::string &queryString);
+        void query_with_text_param(const std::string &queryString, const std::string &text_param);
         void queryWithCallback(const std::string &queryString);
 
         inline size_t getNumRows() {return numRows_;}

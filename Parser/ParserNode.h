@@ -27,10 +27,6 @@ namespace Parser {
 	class Node {
 	public:
 		virtual ~Node() {}
-		// for debugging only
-		virtual std::string to_string() {
-			return "NOT IMPLEMENTED!";
-		}
 	};
 
 	/*
@@ -45,6 +41,7 @@ namespace Parser {
 			 * @return An Analyzer::Expr object for the expression post semantic analysis
 			 */
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const = 0;
+			virtual std::string to_string() const = 0;
 	};
 
 	/*
@@ -54,6 +51,7 @@ namespace Parser {
 	class Literal : public Expr {
 		public:
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const = 0;
+			virtual std::string to_string() const = 0;
 	};
 
 	/*
@@ -64,6 +62,7 @@ namespace Parser {
 		public:
 			NullLiteral() {}
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "NULL"; }
 	};
 
 	/*
@@ -76,6 +75,7 @@ namespace Parser {
 			virtual ~StringLiteral() { delete stringval; }
 			const std::string *get_stringval() { return stringval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "'" + *stringval + "'"; }
 		private:
 			std::string *stringval;
 	};
@@ -89,6 +89,7 @@ namespace Parser {
 			IntLiteral(int64_t i) : intval(i) {}
 			int64_t get_intval() { return intval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return boost::lexical_cast<std::string>(intval); }
 		private:
 			int64_t intval;
 	};
@@ -103,6 +104,7 @@ namespace Parser {
 			virtual ~FixedPtLiteral() { delete fixedptval; }
 			const std::string *get_fixedptval() { return fixedptval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return *fixedptval; }
 		private:
 			std::string *fixedptval;
 	};
@@ -116,6 +118,7 @@ namespace Parser {
 			FloatLiteral(float f) : floatval(f) {}
 			float get_floatval() { return floatval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return boost::lexical_cast<std::string>(floatval); }
 		private:
 			float floatval;
 	};
@@ -129,6 +132,7 @@ namespace Parser {
 			DoubleLiteral(double d) : doubleval(d) {}
 			double get_doubleval() { return doubleval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return boost::lexical_cast<std::string>(doubleval); }
 		private:
 			double doubleval;
 	};
@@ -141,6 +145,7 @@ namespace Parser {
 		public:
 			UserLiteral() {}
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "USER"; }
 	};
 			
 	/*
@@ -155,6 +160,7 @@ namespace Parser {
 			const Expr *get_left() { return left; }
 			const Expr *get_right() { return right; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			SQLOps	optype;
 			Expr *left;
@@ -176,6 +182,7 @@ namespace Parser {
 			SQLQualifier get_qualifier() { return qualifier; }
 			void set_qualifier(SQLQualifier ql) { qualifier = ql; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			SQLQualifier qualifier;
 			QuerySpec *query;
@@ -187,6 +194,7 @@ namespace Parser {
 			virtual ~IsNullExpr() { delete arg; }
 			bool get_is_not() { return is_not; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			bool is_not;
 			Expr *arg;
@@ -203,6 +211,7 @@ namespace Parser {
 			bool get_is_not() { return is_not; }
 			const Expr *get_arg() { return arg; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const = 0;
+			virtual std::string to_string() const;
 		protected:
 			bool is_not;
 			Expr *arg;
@@ -218,6 +227,7 @@ namespace Parser {
 			virtual ~InSubquery() { delete subquery; }
 			const SubqueryExpr *get_subquery() { return subquery; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			SubqueryExpr *subquery;
 	};
@@ -232,6 +242,7 @@ namespace Parser {
 			virtual ~InValues();
 			const std::list<Expr*> *get_value_list() { return value_list; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			std::list<Expr*> *value_list;
 	};
@@ -249,6 +260,7 @@ namespace Parser {
 			const Expr *get_lower() { return lower; }
 			const Expr *get_upper() { return upper; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			bool is_not;
 			Expr *arg;
@@ -269,6 +281,7 @@ namespace Parser {
 			const Expr *get_like_string() { return like_string; }
 			const Expr *get_escape_string() { return escape_string; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			bool is_not;
 			Expr *arg;
@@ -286,6 +299,7 @@ namespace Parser {
 			virtual ~ExistsExpr();
 			const QuerySpec *get_query() { return query; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			QuerySpec *query;
 	};
@@ -302,6 +316,7 @@ namespace Parser {
 			const std::string *get_table() const { return table; }
 			const std::string *get_column() const { return column; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			std::string *table;
 			std::string *column; // can be nullptr in the t.* case
@@ -321,6 +336,7 @@ namespace Parser {
 			bool get_distinct() { return distinct; }
 			Expr *get_arg() { return arg; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			std::string *name;
 			bool distinct; // only true for COUNT(DISTINCT x)
@@ -338,6 +354,7 @@ namespace Parser {
 			virtual ~TableRef();
 			const std::string *get_table_name() { return table_name; }
 			const std::string *get_range_var() { return range_var; }
+			std::string to_string() const;
 		private:
 			std::string *table_name;
 			std::string *range_var;
@@ -572,8 +589,9 @@ namespace Parser {
 		public:
 			SelectEntry(Expr *e, std::string *r) : select_expr(e), alias(r) {}
 			virtual ~SelectEntry();
-			const Expr *get_select_expr() { return select_expr; }
-			const std::string *get_alias() { return alias; }
+			const Expr *get_select_expr() const { return select_expr; }
+			const std::string *get_alias() const { return alias; }
+			std::string to_string() const;
 		private:
 			Expr *select_expr;
 			std::string *alias;
@@ -594,6 +612,7 @@ namespace Parser {
 			const std::list<ColumnRef*> *get_groupby_clause() { return groupby_clause; }
 			const Expr *get_having_clause() { return having_clause; }
 			virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			std::string to_string() const;
 		private:
 			bool is_distinct;
 			std::list<SelectEntry*> *select_clause; /* nullptr means SELECT * */
@@ -628,6 +647,21 @@ namespace Parser {
 	};
 
 	/*
+	 * @type NameValueAssign
+	 * @brief Assignment of a string value to a named attribute
+	 */
+	class NameValueAssign : public Node {
+		public:
+			NameValueAssign(std::string *n, std::string *v) : name(n), value(v) {}
+			virtual ~NameValueAssign() { delete name; delete value; }
+			const std::string *get_name() const { return name; }
+			const std::string *get_value() const { return value; }
+		private:
+			std::string *name;
+			std::string *value;
+	};
+
+	/*
 	 * @type SelectStmt
 	 * @brief SELECT statement
 	 */
@@ -649,7 +683,7 @@ namespace Parser {
 	 */
 	class CreateViewStmt : public DDLStmt {
 		public:
-			CreateViewStmt(std::string *v, std::list<std::string*> *c, QuerySpec *q, bool ck) : view_name(v), column_list(c), query(q), checkoption(ck) {}
+			CreateViewStmt(std::string *v, std::list<std::string*> *c, QuerySpec *q, bool ck, bool m, std::list<NameValueAssign*> *o) : view_name(v), column_list(c), query(q), checkoption(ck), is_materialized(m), matview_options(o) {}
 			virtual ~CreateViewStmt();
 			const std::string *get_view_name() { return view_name; }
 			const std::list<std::string*> *get_column_list() { return column_list; }
@@ -661,6 +695,17 @@ namespace Parser {
 			std::list<std::string*> *column_list;
 			QuerySpec *query;
 			bool checkoption;
+			bool is_materialized;
+			std::list<NameValueAssign*> *matview_options;
+	};
+
+	class RefreshViewStmt : public DDLStmt {
+		public:
+			RefreshViewStmt(std::string *v) : view_name(v) {}
+			virtual ~RefreshViewStmt() { delete view_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *view_name;
 	};
 
 	/*
@@ -675,21 +720,6 @@ namespace Parser {
 			virtual void execute(Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string *view_name;
-	};
-
-	/*
-	 * @type NameValueAssign
-	 * @brief Assignment of a string value to a named attribute
-	 */
-	class NameValueAssign : public Node {
-		public:
-			NameValueAssign(std::string *n, std::string *v) : name(n), value(v) {}
-			virtual ~NameValueAssign() { delete name; delete value; }
-			const std::string *get_name() const { return name; }
-			const std::string *get_value() const { return value; }
-		private:
-			std::string *name;
-			std::string *value;
 	};
 
 	/*

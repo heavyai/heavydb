@@ -96,6 +96,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| create_view_statement { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
+	| refresh_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -262,13 +263,38 @@ column_commalist:
 	}
 	;
 
+opt_with_option_list:
+		WITH '(' name_eq_value_list ')'
+		{ $<listval>$ = $<listval>3; }
+		| /* empty */
+		{ $<listval>$ = nullptr; }
+		;
+
 create_view_statement:
 		CREATE VIEW table opt_column_commalist
 		AS query_spec opt_with_check_option
 		{
-			$<nodeval>$ = new CreateViewStmt($<stringval>3, $<slistval>4, dynamic_cast<QuerySpec*>($<nodeval>6), $<boolval>7);
+			$<nodeval>$ = new CreateViewStmt($<stringval>3, $<slistval>4, dynamic_cast<QuerySpec*>($<nodeval>6), $<boolval>7, false, nullptr);
+		}
+		| CREATE NAME VIEW table opt_column_commalist opt_with_option_list
+		AS query_spec
+		{
+			if (!boost::iequals(*$<stringval>2, "materialized"))
+				throw std::runtime_error("Invalid word " + *$<stringval>2);
+			$<nodeval>$ = new CreateViewStmt($<stringval>4, $<slistval>5, dynamic_cast<QuerySpec*>($<nodeval>8), false, true, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>6));
 		}
 	;
+
+refresh_view_statement:
+		NAME NAME VIEW table
+		{
+			if (!boost::iequals(*$<stringval>1, "refresh"))
+				throw std::runtime_error("Invalid word " + *$<stringval>1);
+			if (!boost::iequals(*$<stringval>2, "materialized"))
+				throw std::runtime_error("Invalid word " + *$<stringval>2);
+			$<nodeval>$ = new RefreshViewStmt($<stringval>4);
+		}
+		;
 
 drop_view_statement:
 		DROP VIEW table

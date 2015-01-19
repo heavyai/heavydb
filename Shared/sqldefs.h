@@ -8,8 +8,10 @@
 #ifndef SQLDEFS_H
 #define SQLDEFS_H
 
+// must not change the order without keeping the array in OperExpr::to_string
+// in sync.
 enum SQLOps {
-	kEQ,
+	kEQ = 0,
 	kNE,
 	kLT,
 	kGT,
@@ -55,4 +57,15 @@ enum SQLStmtType {
 	kCREATE_TABLE
 };
 
+enum ViewStorageOption {
+	kDISK = 0,
+	kGPU = 1,
+	kCPU = 2
+};
+
+enum ViewRefreshOption {
+	kMANUAL = 0,
+	kAUTO = 1,
+	kIMMEDIATE = 2
+};
 #endif // SQLDEFS_H

@@ -77,9 +77,7 @@ SysCatalog::createDatabase(const string &name, int owner)
 	SqliteConnector dbConn(name, basePath_+"/mapd_catalogs/");
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
 	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
-	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, isGPU boolean)");
-
-
+	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, refresh int)");
 }
 
 void
@@ -191,14 +189,16 @@ void Catalog::buildMaps() {
         td->tableName = sqliteConnector_.getData<string>(r,1);
 				td->nColumns = sqliteConnector_.getData<int>(r,2);
         td->isView = sqliteConnector_.getData<bool>(r, 3);
+				td->fragments = sqliteConnector_.getData<string>(r, 4);
+				td->partitions = sqliteConnector_.getData<string>(r, 5);
 				if (!td->isView) {
-					td->fragments = sqliteConnector_.getData<string>(r, 4);
-					td->partitions = sqliteConnector_.getData<string>(r, 5);
-					td->isGPU = false;
+					// initialize view fields even though irrelevant
+					td->isMaterialized = false;
+					td->storageOption = kDISK;
+					td->refreshOption = kMANUAL;
+					td->checkOption = false;
+					td->isReady = true;
 				} 
-				else {
-					throw runtime_error("Views are not supported yet.");
-				}
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
     }
@@ -222,18 +222,34 @@ void Catalog::buildMaps() {
 				ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
         columnDescriptorMapById_[columnIdKey] = cd;
     }
+		string viewQuery("SELECT tableid, sql, materialized, storage, refresh FROM mapd_views");
+		sqliteConnector_.query(viewQuery);
+    numRows = sqliteConnector_.getNumRows();
+    for (int r = 0; r < numRows; ++r) {
+				int32_t tableId = sqliteConnector_.getData<int>(r,0);
+				TableDescriptor *td = tableDescriptorMapById_[tableId];
+				td->viewSQL = sqliteConnector_.getData<string>(r,1);
+				td->isMaterialized = sqliteConnector_.getData<bool>(r,2);
+				td->storageOption = (ViewStorageOption)sqliteConnector_.getData<int>(r,3);
+				td->refreshOption = (ViewRefreshOption)sqliteConnector_.getData<int>(r,4);
+				td->isReady = !td->isMaterialized;
+    }
 }
 
 void
-Catalog::addTableToMap(TableDescriptor *td, const list<ColumnDescriptor *> &columns)
+Catalog::addTableToMap(TableDescriptor &td, const list<ColumnDescriptor> &columns)
 {
-	tableDescriptorMap_[td->tableName] = td;
-	tableDescriptorMapById_[td->tableId] = td;
+	TableDescriptor *new_td = new TableDescriptor();
+	*new_td = td;
+	tableDescriptorMap_[td.tableName] = new_td;
+	tableDescriptorMapById_[td.tableId] = new_td;
 	for (auto cd : columns) {
-			ColumnKey columnKey(cd->tableId, cd->columnName);
-			columnDescriptorMap_[columnKey] = cd;
-			ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
-			columnDescriptorMapById_[columnIdKey] = cd;
+			ColumnDescriptor *new_cd = new ColumnDescriptor();
+			*new_cd = cd;
+			ColumnKey columnKey(new_cd->tableId, new_cd->columnName);
+			columnDescriptorMap_[columnKey] = new_cd;
+			ColumnIdKey columnIdKey(new_cd->tableId, new_cd->columnId);
+			columnDescriptorMapById_[columnIdKey] = new_cd;
 	}
 }
 
@@ -316,20 +332,24 @@ Catalog::getAllTableMetadata() const
 }
 
 void
-Catalog::createTable(const string &tableName, const list<ColumnDescriptor *> &columns)
+Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
 {
+	list<ColumnDescriptor> cds;
 	sqliteConnector_.query("BEGIN TRANSACTION");
-	int32_t tableId;
 	try {
-		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, partitions) VALUES ('" + tableName + "', " + boost::lexical_cast<string>(columns.size()) + ", 0, '', '')");
+		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, partitions) VALUES ('" + td.tableName + "', " + boost::lexical_cast<string>(columns.size()) + ", " + boost::lexical_cast<string>(td.isView) + ", '', '')");
 		// now get the auto generated tableid
-		sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + tableName + "'");
-		tableId = sqliteConnector_.getData<int>(0, 0);
+		sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + td.tableName + "'");
+		td.tableId = sqliteConnector_.getData<int>(0, 0);
 		int colId = 1;
 		for (auto cd : columns) {
-			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd->columnName + "', " + boost::lexical_cast<string>(cd->columnType.type) + ", " + boost::lexical_cast<string>(cd->columnType.dimension) + ", " + boost::lexical_cast<string>(cd->columnType.scale) + ", " + boost::lexical_cast<string>(cd->columnType.notnull) + ", " + boost::lexical_cast<string>(cd->compression) + ", " + boost::lexical_cast<string>(cd->comp_param) + ", '')");
-			cd->tableId = tableId;
-			cd->columnId = colId++;
+			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(td.tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd.columnName + "', " + boost::lexical_cast<string>(cd.columnType.type) + ", " + boost::lexical_cast<string>(cd.columnType.dimension) + ", " + boost::lexical_cast<string>(cd.columnType.scale) + ", " + boost::lexical_cast<string>(cd.columnType.notnull) + ", " + boost::lexical_cast<string>(cd.compression) + ", " + boost::lexical_cast<string>(cd.comp_param) + ", '')");
+			cd.tableId = td.tableId;
+			cd.columnId = colId++;
+			cds.push_back(cd);
+		}
+		if (td.isView) {
+			sqliteConnector_.query_with_text_param("INSERT INTO mapd_views (tableid, sql, materialized, storage, refresh) VALUES (" + boost::lexical_cast<string>(td.tableId) + ", ?, " + boost::lexical_cast<string>(td.isMaterialized) + ", " + boost::lexical_cast<string>(td.storageOption) + ", " + boost::lexical_cast<string>(td.refreshOption) + ")", td.viewSQL);
 		}
 	}
 	catch (std::exception &e) {
@@ -337,32 +357,25 @@ Catalog::createTable(const string &tableName, const list<ColumnDescriptor *> &co
 		throw;
 	}
 	sqliteConnector_.query("END TRANSACTION");
-	TableDescriptor *td = new TableDescriptor();
-	td->tableId = tableId;
-	td->tableName = tableName;
-	td->isView = false;
-	td->isGPU = false;
-	td->nColumns = columns.size();
-	addTableToMap(td, columns);
+	addTableToMap(td, cds);
 }
 
 void
-Catalog::dropTable(const string &tableName)
+Catalog::dropTable(const TableDescriptor *td)
 {
-	const TableDescriptor *td = getMetadataForTable(tableName);
-	if (td == nullptr)
-		throw runtime_error("Table " + tableName + " does not exist.");
 	sqliteConnector_.query("BEGIN TRANSACTION");
 	try {
 		sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
 		sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+		if (td->isView)
+			sqliteConnector_.query("DELETE FROM mapd_views WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
 	}
 	catch (std::exception &e) {
 		sqliteConnector_.query("ROLLBACK TRANSACTION");
 		throw;
 	}
 	sqliteConnector_.query("END TRANSACTION");
-	removeTableFromMap(tableName, td->tableId);
+	removeTableFromMap(td->tableName, td->tableId);
 	// @TODO delete all the fragments/chunks of this table
 }
 
