@@ -1,5 +1,5 @@
-#ifndef QUERYENGINE_EXECUTE_CODEC_H
-#define QUERYENGINE_EXECUTE_CODEC_H
+#ifndef QUERYENGINE_CODEC_H
+#define QUERYENGINE_CODEC_H
 
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
@@ -11,8 +11,7 @@ public:
   virtual llvm::Instruction* codegenDecode(
       llvm::Value* byte_stream,
       llvm::Value* pos,
-      llvm::IRBuilder<>&,
-      llvm::Module* module) = 0;
+      llvm::Module* module) const = 0;
 };
 
 class FixedWidthInt : public Decoder {
@@ -21,8 +20,7 @@ public:
   llvm::Instruction* codegenDecode(
       llvm::Value* byte_stream,
       llvm::Value* pos,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
+      llvm::Module* module) const;
 private:
   const size_t byte_width_;
 };
@@ -33,11 +31,10 @@ public:
   llvm::Instruction* codegenDecode(
       llvm::Value* byte_stream,
       llvm::Value* pos,
-      llvm::IRBuilder<>& ir_builder,
-      llvm::Module* module);
+      llvm::Module* module) const;
 private:
   const size_t byte_width_;
   const int64_t baseline_;
 };
 
-#endif  // QUERYENGINE_EXECUTE_CODEC_H
+#endif  // QUERYENGINE_CODEC_H

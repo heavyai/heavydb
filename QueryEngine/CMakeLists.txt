@@ -1,0 +1,40 @@
+cmake_minimum_required(VERSION 2.8)
+set(CMAKE_CXX_FLAGS "-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -std=c++11 -Wall -Wno-attributes -O3")
+set(query_engine_source_files
+    Codec.cpp
+    Execute.cpp
+    Translator.cpp
+    Codec.h
+    Execute.h
+    Translator.h
+    RuntimeFunctions.ll)
+set(group_by_hash_test_files
+    GroupByHashTest.cpp
+    RuntimeFunctions.cpp
+    RuntimeStubs.cpp)
+
+set(llvm_config_cmd "llvm-config")
+set(llvm_config_inc_arg "--includedir")
+set(llvm_config_ld_arg "--ldflags")
+set(llvm_config_lib_arg "--libs")
+execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
+    OUTPUT_VARIABLE LLVM_INC_FLAGS)
+execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
+    OUTPUT_VARIABLE LLVM_LIB_FLAGS)
+include_directories(.. ${LLVM_INC_FLAGS})
+
+add_custom_command(
+    DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h
+    OUTPUT RuntimeFunctions.ll
+    COMMAND clang++
+    ARGS -std=c++11 -O3 -c -S -emit-llvm RuntimeFunctions.cpp)
+
+string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+
+add_library(QueryEngine ${query_engine_source_files})
+
+add_executable(benchmark_x64 main.cpp)
+target_link_libraries(benchmark_x64 QueryEngine "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
+
+add_executable(group_by_hash_test ${group_by_hash_test_files})
+target_link_libraries(group_by_hash_test "-lgtest -pthread")

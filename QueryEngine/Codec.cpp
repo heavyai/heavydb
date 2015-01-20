@@ -2,7 +2,10 @@
 #include "Translator.h"
 
 #include <glog/logging.h>
-#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/Value.h>
+#include <llvm/IR/Module.h>
 
 
 FixedWidthInt::FixedWidthInt(const size_t byte_width) : byte_width_{byte_width} {}
@@ -10,8 +13,7 @@ FixedWidthInt::FixedWidthInt(const size_t byte_width) : byte_width_{byte_width} 
 llvm::Instruction* FixedWidthInt::codegenDecode(
     llvm::Value* byte_stream,
     llvm::Value* pos,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
+    llvm::Module* module) const {
   auto& context = llvm::getGlobalContext();
   auto f = module->getFunction("fixed_width_int_decode");
   CHECK(f);
@@ -29,8 +31,7 @@ DiffFixedWidthInt::DiffFixedWidthInt(const size_t byte_width, const int64_t base
 llvm::Instruction* DiffFixedWidthInt::codegenDecode(
     llvm::Value* byte_stream,
     llvm::Value* pos,
-    llvm::IRBuilder<>& ir_builder,
-    llvm::Module* module) {
+    llvm::Module* module) const {
   auto& context = llvm::getGlobalContext();
   auto f = module->getFunction("diff_fixed_width_int_decode");
   CHECK(f);
