@@ -31,6 +31,6 @@ add_executable(ExecuteTest ExecuteTest.cpp)
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lz -ltinfo -ldl -pthread")
+target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (initdb Catalog SqliteConnector ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
-target_link_libraries (ExecuteTest Catalog SqliteConnector Parser Analyzer Planner QueryEngine ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lgtest -lz -ltinfo -ldl -pthread")
+target_link_libraries (ExecuteTest Catalog SqliteConnector Parser Analyzer Planner QueryEngine ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lgtest -lz -lncurses -ldl -pthread")
