@@ -185,9 +185,9 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
   const auto& type_info = constant->get_type_info();
   switch (type_info.type) {
   case kBOOLEAN:
-    return llvm::ConstantInt::get(get_int_type(1, context_), constant->get_constval().intval);
+    return llvm::ConstantInt::get(get_int_type(1, context_), constant->get_constval().boolval);
   case kSMALLINT:
-    return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().intval);
+    return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().smallintval);
   case kINT:
     return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().intval);
   case kBIGINT:
