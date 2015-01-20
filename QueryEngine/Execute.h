@@ -1,8 +1,8 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
-#include "Analyzer/Analyzer.h"
-#include "Planner/Planner.h"
+#include "../Analyzer/Analyzer.h"
+#include "../Planner/Planner.h"
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/IRBuilder.h>
