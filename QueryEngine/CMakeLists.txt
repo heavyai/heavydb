@@ -7,7 +7,7 @@ set(query_engine_source_files
     Codec.h
     Execute.h
     Translator.h
-    runtime_ll.o)
+    RuntimeFunctions.ll)
 set(group_by_hash_test_files
     GroupByHashTest.cpp
     RuntimeFunctions.cpp
@@ -29,27 +29,12 @@ add_custom_command(
     COMMAND clang++
     ARGS -std=c++11 -O3 -c -S -emit-llvm RuntimeFunctions.cpp)
 
-add_custom_target(
-    runtime_ll
-    DEPENDS RuntimeFunctions.ll)
-
-add_custom_command(
-    DEPENDS runtime_ll
-    OUTPUT runtime_ll.o
-    COMMAND ld
-    ARGS -r -b binary -o runtime_ll.o RuntimeFunctions.ll)
-
-add_custom_target(
-    runtime_ll_o
-    DEPENDS runtime_ll.o)
-
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
 add_library(QueryEngine ${query_engine_source_files})
-add_dependencies(QueryEngine runtime_ll_o)
 
 add_executable(benchmark_x64 main.cpp)
-target_link_libraries(benchmark_x64 QueryEngine "${LLVM_LINKER_FLAGS} -lglog -lz -ltinfo -ldl -pthread")
+target_link_libraries(benchmark_x64 QueryEngine "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test "-lgtest -pthread")
