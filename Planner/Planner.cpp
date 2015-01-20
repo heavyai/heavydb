@@ -99,7 +99,7 @@ namespace Planner {
 				assert(false);
 		}
 		plan = optimize_query();
-		return new RootPlan(plan, stmt_type, result_table_id, result_col_list, catalog);
+		return new RootPlan(plan, stmt_type, result_table_id, result_col_list, catalog, query.get_limit(), query.get_offset());
 	}
 
 	Plan *
@@ -436,6 +436,7 @@ namespace Planner {
 				break;
 		}
 		plan->print();
-		std::cout << ")" << std::endl;
+		std::cout << "limit: " << limit;
+		std::cout << " offset: " << offset << ")" << std::endl;
 	}
 }

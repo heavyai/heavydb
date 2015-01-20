@@ -636,6 +636,8 @@ namespace Parser {
 			order_by->push_back(Analyzer::OrderEntry(tle_no, p->get_is_desc(), p->get_nulls_first()));
 		}
 		query.set_order_by(order_by);
+		query.set_limit(limit);
+		query.set_offset(offset);
 	}
 
 	std::string

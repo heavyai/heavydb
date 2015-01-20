@@ -667,7 +667,7 @@ namespace Parser {
 	 */
 	class SelectStmt : public DMLStmt {
 		public:
-			SelectStmt(QueryExpr *q, std::list<OrderSpec*> *o) : query_expr(q), orderby_clause(o) {}
+			SelectStmt(QueryExpr *q, std::list<OrderSpec*> *o, int64_t l, int64_t f) : query_expr(q), orderby_clause(o), limit(l), offset(f) {}
 			virtual ~SelectStmt();
 			const QueryExpr *get_query_expr() { return query_expr; }
 			const std::list<OrderSpec*> *get_orderby_clause() { return orderby_clause; }
@@ -675,6 +675,8 @@ namespace Parser {
 		private:
 			QueryExpr *query_expr;
 			std::list<OrderSpec*> *orderby_clause;
+			int64_t limit;
+			int64_t offset;
 	};
 
 	/*

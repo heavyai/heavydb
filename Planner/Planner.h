@@ -179,7 +179,7 @@ namespace Planner {
 	 */
 	class RootPlan {
 		public:
-			RootPlan(Plan *p, SQLStmtType t, int r, const std::list<int> &c, const Catalog_Namespace::Catalog &cat) : plan(p), stmt_type(t), result_table_id(r), result_col_list(c), catalog(cat) {}
+			RootPlan(Plan *p, SQLStmtType t, int r, const std::list<int> &c, const Catalog_Namespace::Catalog &cat, int64_t l, int64_t o) : plan(p), stmt_type(t), result_table_id(r), result_col_list(c), catalog(cat), limit(l), offset(o) {}
 			~RootPlan();
 			const Plan *get_plan() const { return plan; }
 			SQLStmtType get_stmt_type() const { return stmt_type; }
@@ -187,12 +187,16 @@ namespace Planner {
 			const std::list<int> &get_result_col_list() const { return result_col_list; }
 			const Catalog_Namespace::Catalog &get_catalog() const { return catalog; }
 			virtual void print() const;
+			int64_t get_limit() const { return limit; }
+			int64_t get_offset() const { return offset; }
 		private:
 			Plan *plan; // query plan
 			SQLStmtType stmt_type; // SELECT, UPDATE, DELETE or INSERT
 			int result_table_id; // For UPDATE, DELETE or INSERT only: table id for the result table
 			std::list<int> result_col_list; // For UPDATE and INSERT only: list of result column ids.
 			const Catalog_Namespace::Catalog &catalog; // include the current catalog here for the executor
+			int64_t limit; // limit from LIMIT clause.  0 means ALL
+			int64_t offset; // offset from OFFSET clause.  0 means no offset.
 	};
 
 	/*

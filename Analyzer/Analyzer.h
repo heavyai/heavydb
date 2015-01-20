@@ -453,6 +453,10 @@ namespace Analyzer {
 			RangeTblEntry *get_rte(int rte_idx) const { return rangetable[rte_idx]; }
 			void add_rte(RangeTblEntry *rte);
 			void add_tle(TargetEntry *tle) { targetlist.push_back(tle); }
+			int64_t get_limit() const { return limit; }
+			void set_limit(int64_t l) { limit = l; }
+			int64_t get_offset() const { return offset; }
+			void set_offset(int64_t o) { offset = o; }
 		private:
 			bool is_distinct; // true only if SELECT DISTINCT
 			std::list<TargetEntry*> targetlist; // represents the SELECT clause
@@ -467,6 +471,8 @@ namespace Analyzer {
 			int num_aggs; // number of aggregate functions in query
 			int result_table_id; // for INSERT statements only
 			std::list<int> result_col_list; // for INSERT statement only
+			int64_t limit; // row count for LIMIT clause.  0 means ALL
+			int64_t offset; // offset in OFFSET clause.  0 means no offset.
 	};
 }
 

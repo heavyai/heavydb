@@ -71,7 +71,7 @@ using namespace Parser;
 %token DATABASE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IN INSERT INTEGER INTO
-%token IS KEY LANGUAGE LAST LIKE NULLX NUMERIC OF ON OPEN OPTION
+%token IS KEY LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
 %token SMALLINT SOME TABLE TEXT TIME TIMESTAMP TO UNION
@@ -516,9 +516,28 @@ opt_where_clause:
 	|	where_clause { $<nodeval>$ = $<nodeval>1; }
 	;
 
+opt_limit_clause:
+		LIMIT INTNUM { $<intval>$ = $<intval>2; }
+	| LIMIT ALL { $<intval>$ = 0; /* 0 means ALL */ }
+	| /* empty */ { $<intval>$ = 0; /* 0 means ALL */ }
+	;
+opt_offset_clause:
+		OFFSET INTNUM { $<intval>$ = $<intval>2; }
+	| OFFSET INTNUM NAME
+	{
+		if (!boost::iequals(*$<stringval>3, "row") && !boost::iequals(*$<stringval>3, "rows"))
+			throw std::runtime_error("Invalid word in OFFSET clause " + *$<stringval>3);
+		$<intval>$ = $<intval>2;
+	}
+	| /* empty */ 
+	{
+		$<intval>$ = 0;
+	}
+	;
+
 select_statement:
-		query_exp opt_order_by_clause
-		{ $<nodeval>$ = new SelectStmt(dynamic_cast<QueryExpr*>($<nodeval>1), reinterpret_cast<std::list<OrderSpec*>*>($<listval>2)); }
+		query_exp opt_order_by_clause opt_limit_clause opt_offset_clause
+		{ $<nodeval>$ = new SelectStmt(dynamic_cast<QueryExpr*>($<nodeval>1), reinterpret_cast<std::list<OrderSpec*>*>($<listval>2), $<intval>3, $<intval>4); }
 	;
 
 	/* query expressions */
