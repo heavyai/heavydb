@@ -129,6 +129,19 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   }
 }
 
+size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
+  // TODO(alex)
+  const auto& type_info = col_var->get_type_info();
+  switch (type_info.type) {
+  case kINT:
+    return 32;
+  case kBIGINT:
+    return 64;
+  default:
+    CHECK(false);
+  }
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
@@ -157,9 +170,17 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
       ir_builder_.Insert(dec_val);
       auto dec_type = dec_val->getType();
       CHECK(dec_type->isIntegerTy());
+      auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
+      auto col_width = get_col_bit_width(col_var);
+      auto dec_val_cast = ir_builder_.CreateCast(
+        static_cast<size_t>(col_width) > dec_width
+          ? llvm::Instruction::CastOps::SExt
+          : llvm::Instruction::CastOps::Trunc,
+        dec_val,
+        get_int_type(col_width, context_));
       auto it_ok = fetch_cache_.insert(std::make_pair(
         local_col_id,
-        dec_val));
+        dec_val_cast));
       CHECK(it_ok.second);
       return it_ok.first->second;
     }
@@ -174,9 +195,9 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
   case kBOOLEAN:
     return llvm::ConstantInt::get(get_int_type(1, context_), constant->get_constval().boolval);
   case kSMALLINT:
-    return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().smallintval);
+    return llvm::ConstantInt::get(get_int_type(16, context_), constant->get_constval().smallintval);
   case kINT:
-    return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().intval);
+    return llvm::ConstantInt::get(get_int_type(32, context_), constant->get_constval().intval);
   case kBIGINT:
     return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().bigintval);
   case kFLOAT:
@@ -615,9 +636,20 @@ void Executor::call_aggregator(
 
   auto agg_func = module->getFunction(agg_name);
   CHECK(agg_func);
-  std::vector<llvm::Value*> agg_args { agg_out_ptr, aggr_col
-    ? codegen(aggr_col)
-    : llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0) };
+  llvm::Value* agg_expr_lv = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0);
+  if (aggr_col) {
+    agg_expr_lv = codegen(aggr_col);
+    auto agg_col_type = agg_expr_lv->getType();
+    CHECK(agg_col_type->isIntegerTy());
+    auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();
+    CHECK_LE(agg_col_width, 64);
+    if (agg_col_width < 64) {
+      agg_expr_lv = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+        agg_expr_lv,
+        get_int_type(64, context_));
+    }
+  }
+  std::vector<llvm::Value*> agg_args { agg_out_ptr, agg_expr_lv };
   ir_builder_.CreateCall(agg_func, agg_args);
   ir_builder_.CreateBr(filter_false);
   ir_builder_.SetInsertPoint(filter_false);
