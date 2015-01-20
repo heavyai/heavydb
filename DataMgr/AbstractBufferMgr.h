@@ -3,15 +3,15 @@
  * @author  Steven Stewart <steve@map-d.com>
  * @author  Todd Mostak <todd@map-d.com>
  */
-#ifndef DATAMGR_MEMORY_ABSTRACTDATAMGR_H
-#define DATAMGR_MEMORY_ABSTRACTDATAMGR_H
+#ifndef ABSTRACTDATAMGR_H
+#define ABSTRACTDATAMGR_H
 
 #include "../Shared/types.h"
 #include "AbstractBuffer.h"
 
 enum MgrType {FILE_MGR, CPU_MGR, GPU_MGR};   
 
-namespace Memory_Namespace {
+namespace Data_Namespace {
 
     /**
      * @class   AbstractBufferMgr
@@ -52,6 +52,6 @@ namespace Memory_Namespace {
 
     };
     
-} // Memory_Namespace
+} // Data_Namespace
 
-#endif // DATAMGR_MEMORY_ABSTRACTDATAMGR_H
+#endif // ABSTRACTDATAMGR_H

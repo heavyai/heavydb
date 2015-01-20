@@ -9,7 +9,7 @@ namespace Buffer_Namespace {
         public:
             CpuBuffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize = 512, const mapd_size_t numBytes = 0);
 
-            virtual inline Memory_Namespace::BufferType getType() const {return CPU_BUFFER;}
+            virtual inline Data_Namespace::BufferType getType() const {return CPU_BUFFER;}
 
 
         private:

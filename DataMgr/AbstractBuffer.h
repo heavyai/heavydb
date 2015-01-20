@@ -16,7 +16,7 @@
 #include <boost/thread/shared_mutex.hpp>
 #endif
 
-namespace Memory_Namespace {
+namespace Data_Namespace {
     
     /**
      * @class   AbstractBuffer
@@ -103,6 +103,6 @@ namespace Memory_Namespace {
 
     };
     
-} // Memory_Namespace
+} // Data_Namespace
 
 #endif // DATAMGR_MEMORY_ABSTRACTBUFFER_H

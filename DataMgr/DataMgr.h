@@ -1,9 +1,9 @@
 /**
- * @file    MemoryMgr.h
+ * @file    DataMgr.h
  * @author Todd Mostak <todd@map-d.com>
  */
-#ifndef DATAMGR_MEMORY_MEMORYMGR_H
-#define DATAMGR_MEMORY_MEMORYMGR_H
+#ifndef DATAMGR_H
+#define DATAMGR_H
 
 #include "AbstractBufferMgr.h"
 #include "AbstractBuffer.h"
@@ -13,14 +13,14 @@
 #include <string>
 #include <gtest/gtest_prod.h>
 
-namespace Memory_Namespace {
+namespace Data_Namespace {
 
     enum MemoryLevel {DISK_LEVEL = 0, CPU_LEVEL = 1, GPU_LEVEL = 2};
 
-    class MemoryMgr { 
+    class DataMgr { 
 
         public:
-            MemoryMgr(const int partitionKeyIndex, const std::string &dataDir);
+            DataMgr(const int partitionKeyIndex, const std::string &dataDir);
             AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
             AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);
@@ -35,14 +35,14 @@ namespace Memory_Namespace {
             // database_id, table_id, partitioner_id, column_id, fragment_id
 
         private:
-            FRIEND_TEST(MemoryMgrTest,buffer);
+            FRIEND_TEST(DataMgrTest,buffer);
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
             std::vector <int> levelSizes_;
             std::string dataDir_;
             int partitionKeyIndex_;
     };
-} // Memory_Namespace
+} // Data_Namespace
 
 
 #endif

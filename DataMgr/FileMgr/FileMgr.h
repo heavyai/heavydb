@@ -22,7 +22,7 @@
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
 
-using namespace Memory_Namespace;
+using namespace Data_Namespace;
 
 namespace File_Namespace {
 

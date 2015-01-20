@@ -1,9 +1,9 @@
 /**
- * @file    MemoryMgr.cpp
+ * @file    DataMgr.cpp
  * @author Todd Mostak <todd@map-d.com>
  */
 
-#include "MemoryMgr.h"
+#include "DataMgr.h"
 #include "FileMgr/FileMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
@@ -15,13 +15,13 @@ using namespace std;
 using namespace Buffer_Namespace;
 using namespace File_Namespace;
 
-namespace Memory_Namespace {
+namespace Data_Namespace {
 
-    MemoryMgr::MemoryMgr(const int partitionKeyIndex, const string &dataDir): partitionKeyIndex_(partitionKeyIndex), dataDir_(dataDir) {
+    DataMgr::DataMgr(const int partitionKeyIndex, const string &dataDir): partitionKeyIndex_(partitionKeyIndex), dataDir_(dataDir) {
         populateMgrs();
     }
 
-    void MemoryMgr::populateMgrs() {
+    void DataMgr::populateMgrs() {
         bufferMgrs_.resize(3);
         bufferMgrs_[0].push_back(new FileMgr (dataDir_)); 
         levelSizes_.push_back(1);
@@ -31,24 +31,24 @@ namespace Memory_Namespace {
         levelSizes_.push_back(1);
     }
 
-    AbstractBuffer * MemoryMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
+    AbstractBuffer * DataMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][device] -> createChunk(key);
     }
 
 
-    AbstractBuffer * MemoryMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer * DataMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][device] -> getChunk(key, numBytes);
     }
 
-    void MemoryMgr::deleteChunk(const ChunkKey &key) {
+    void DataMgr::deleteChunk(const ChunkKey &key) {
         // We don't know whether a given manager (of
         // correct partition key) actually has a chunk at
         // a given point. So try-except block a delete to
-        // all of them.  Will change if we have MemoryMgr
+        // all of them.  Will change if we have DataMgr
         // keep track of this state
         int numLevels = bufferMgrs_.size();
         for (int level = numLevels - 1; level >= 0; --level) {
@@ -62,20 +62,20 @@ namespace Memory_Namespace {
         }
     }
 
-    AbstractBuffer * MemoryMgr::createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes) {
+    AbstractBuffer * DataMgr::createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         assert(deviceId < levelSizes_[level]);
         return bufferMgrs_[level][deviceId] -> createBuffer(numBytes);
     }
 
-    void MemoryMgr::deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer) {
+    void DataMgr::deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer) {
         int level = static_cast <int> (memoryLevel);
         assert(deviceId < levelSizes_[level]);
         bufferMgrs_[level][deviceId] -> deleteBuffer(buffer);
     }
 
 
-    void MemoryMgr::checkpoint() {
+    void DataMgr::checkpoint() {
 
         for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
             // use reverse iterator so we start at GPU level, then CPU then DISK
@@ -84,7 +84,7 @@ namespace Memory_Namespace {
             }
         }
     }
-} // Memory_Namespace
+} // Data_Namespace
 
 
 

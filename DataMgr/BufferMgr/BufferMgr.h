@@ -18,7 +18,7 @@
 #include <gtest/gtest_prod.h>
 #include <mutex>
 
-using namespace Memory_Namespace;
+using namespace Data_Namespace;
 
 namespace Buffer_Namespace {
 

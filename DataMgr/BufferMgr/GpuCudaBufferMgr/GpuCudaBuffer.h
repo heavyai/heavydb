@@ -8,7 +8,7 @@ namespace Buffer_Namespace {
 
         public:
             GpuCudaBuffer(BufferMgr *bm, BufferList::iterator segIt, const int gpuNum, const mapd_size_t pageSize = 512, const mapd_size_t numBytes = 0);
-            virtual inline Memory_Namespace::BufferType getType() const {return GPU_BUFFER;}
+            virtual inline Data_Namespace::BufferType getType() const {return GPU_BUFFER;}
             virtual inline int getDeviceId() const { return gpuNum_; }
 
         private:

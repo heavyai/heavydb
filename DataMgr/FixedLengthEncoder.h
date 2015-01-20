@@ -9,7 +9,7 @@ template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {
 
     public:
-        FixedLengthEncoder(Memory_Namespace::AbstractBuffer *buffer): Encoder(buffer), min_(std::numeric_limits<T>::max()),max_(std::numeric_limits<T>::min()) {}
+        FixedLengthEncoder(Data_Namespace::AbstractBuffer *buffer): Encoder(buffer), min_(std::numeric_limits<T>::max()),max_(std::numeric_limits<T>::min()) {}
 
         void appendData(mapd_addr_t srcData, const mapd_size_t numAppendElems) {
             T * unencodedData = reinterpret_cast<T *> (srcData); 

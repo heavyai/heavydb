@@ -3,7 +3,7 @@
 #include "FixedLengthEncoder.h"
 
 
-Encoder * Encoder::Create(Memory_Namespace::AbstractBuffer *buffer, const SQLTypes sqlType, const EncodingType encodingType, const EncodedDataType encodedDataType) {
+Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes sqlType, const EncodingType encodingType, const EncodedDataType encodedDataType) {
     std::cout << "Encoding type: " << encodingType << std::endl;
     std::cout << "Sql type: " << sqlType << std::endl;
     switch (encodingType) {

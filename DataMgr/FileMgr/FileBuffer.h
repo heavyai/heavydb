@@ -13,7 +13,7 @@
 #include <iostream>
 #include <stdexcept>
 
-using namespace Memory_Namespace;
+using namespace Data_Namespace;
 
 namespace File_Namespace {
 
@@ -68,7 +68,7 @@ namespace File_Namespace {
 
             virtual void append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER);
             void copyPage(Page &srcPage, Page &destPage, const mapd_size_t numBytes, const mapd_size_t offset = 0);
-            virtual inline Memory_Namespace::BufferType getType() const {return FILE_BUFFER;}
+            virtual inline Data_Namespace::BufferType getType() const {return FILE_BUFFER;}
 
             /// Not implemented for FileMgr -- throws a runtime_error
             virtual mapd_byte_t* getMemoryPtr() {
