@@ -93,13 +93,12 @@ int main(int argc, char** argv)
   try {
     run_ddl_statement("CREATE TABLE test(x int, y int);");
   } catch (...) {
-    run_ddl_statement("DROP TABLE test;");
+    return -EEXIST;
   }
   int err { 0 };
   try {
     err = RUN_ALL_TESTS();
-  } catch (...) {
-    run_ddl_statement("DROP TABLE test;");
-  }
+  } catch (...) {}
+  run_ddl_statement("DROP TABLE test;");
   return err;
 }
