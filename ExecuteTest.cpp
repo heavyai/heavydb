@@ -93,12 +93,15 @@ int main(int argc, char** argv)
   try {
     run_ddl_statement("CREATE TABLE test(x int, y int);");
   } catch (...) {
+    LOG(ERROR) << "Failed to create table 'test'";
     return -EEXIST;
   }
   int err { 0 };
   try {
     err = RUN_ALL_TESTS();
-  } catch (...) {}
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
   run_ddl_statement("DROP TABLE test;");
   return err;
 }
