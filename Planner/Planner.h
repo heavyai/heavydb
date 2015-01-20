@@ -164,7 +164,7 @@ namespace Planner {
 	 */
 	class Sort : public Plan {
 		public:
-			Sort(const std::list<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::OrderEntry> &oe) : Plan(t, q, c, p), order_entries(oe) {}
+			Sort(const std::list<Analyzer::TargetEntry*> &t, double c, Plan *p, const std::list<Analyzer::OrderEntry> &oe) : Plan(t, c, p), order_entries(oe) {}
 			virtual ~Sort();
 			const std::list<Analyzer::OrderEntry> &get_order_entries() const { return order_entries; }
 			virtual void print() const;

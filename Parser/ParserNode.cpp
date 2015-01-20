@@ -581,6 +581,8 @@ namespace Parser {
 			table_desc = catalog.getMetadataForTable(*p->get_table_name());
 			if (table_desc == nullptr)
 				throw std::runtime_error("Table " + *p->get_table_name() + " does not exist." );
+			if (table_desc->isView && !table_desc->isMaterialized)
+				throw std::runtime_error("Non-materialized view " + *p->get_table_name() + " is not supported yet.");
 			std::string range_var;
 			if (p->get_range_var() == nullptr)
 				range_var = *p->get_table_name();

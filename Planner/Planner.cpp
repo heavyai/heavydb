@@ -268,8 +268,15 @@ namespace Planner {
 	void
 	Optimizer::optimize_orderby()
 	{
-		if (query.get_order_by() != nullptr)
-			throw std::runtime_error("order by not supported yet.");
+		if (query.get_order_by() == nullptr)
+			return;
+		std::list<Analyzer::TargetEntry*> tlist;
+		int varno = 1;
+		for (auto tle : cur_plan->get_targetlist()) {
+			tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), new Analyzer::Var(tle->get_expr()->get_type_info(), false, varno)));
+			varno++;
+		}
+		cur_plan = new Sort(tlist, 0.0, cur_plan, *query.get_order_by());
 	}
 
 	void
