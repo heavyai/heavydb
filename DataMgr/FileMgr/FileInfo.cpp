@@ -36,15 +36,9 @@ namespace File_Namespace {
     void FileInfo::openExistingFile(std::vector<HeaderInfo> &headerVec, const int fileMgrEpoch) {
         //HeaderInfo is defined in Page.h
         for (mapd_size_t pageNum = 0; pageNum < numPages; ++pageNum) {
-            //std::cout << "PageNum: " << pageNum << std::endl;
             int headerSize;
-            mapd_addr_t headerSizePtr = (mapd_addr_t)(&headerSize);
             fseek(f, pageNum*pageSize, SEEK_SET);
             fread((mapd_addr_t)(&headerSize),sizeof(int),1,f);
-
-
-            //read(f,pageNum*pageSize,sizeof(int),headerSizePtr);
-            //std::cout << "Header size: " << headerSize << std::endl;
             if (headerSize != 0) {
                 // headerSize doesn't include headerSize itself
                 // We're tying ourself to headers of ints here
@@ -59,9 +53,9 @@ namespace File_Namespace {
                 // We don't want to read headerSize in our header - so start
                 // reading 4 bytes past it
                 fread((mapd_addr_t)(&chunkKey[0]),headerSize - 2*sizeof(int),1,f);
-                cout << "Chunk key: " << chunkKey[0] << endl;
+                //cout << "Chunk key: " << chunkKey[0] << endl;
                 fread((mapd_addr_t)(&pageId),sizeof(int),1,f);
-                cout << "Page id: " << pageId << endl;
+                //cout << "Page id: " << pageId << endl;
                 fread((mapd_addr_t)(&versionEpoch),sizeof(int),1,f);
                 //read(f,pageNum*pageSize+sizeof(int),headerSize-2*sizeof(int),(mapd_addr_t)(&chunkKey[0]));
                 //read(f,pageNum*pageSize+sizeof(int) + headerSize - 2*sizeof(int),sizeof(int),(mapd_addr_t)(&pageId));
@@ -74,12 +68,11 @@ namespace File_Namespace {
                  * page wasn't checkpointed and thus we should
                  * not use it 
                  */
-                //std::cout << "Version Epoch: " << versionEpoch << " FileMgrEpoch: " << fileMgrEpoch << std::endl;
                 if (versionEpoch >= fileMgrEpoch) {
                     // First write 0 to first four bytes of
                     // header to mark as free
                     headerSize = 0;
-                    write(f,pageNum*pageSize,sizeof(int),(mapd_addr_t)&headerSizePtr);
+                    write(f,pageNum*pageSize,sizeof(int),(mapd_addr_t)&headerSize);
                     // Now add page to free list
                     freePages.insert(pageNum);
                     //std::cout << "Not checkpointed" << std::endl;
@@ -95,7 +88,6 @@ namespace File_Namespace {
                 freePages.insert(pageNum);
             }
         }
-        //std::cout << "Num free pages: " << freePages.size() << std::endl;
     }
 
     void FileInfo::freePage(int pageId) {

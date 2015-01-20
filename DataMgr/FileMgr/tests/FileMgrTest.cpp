@@ -158,7 +158,7 @@ TEST(FileMgr, writeReadChunk) {
     {
         boost::timer::cpu_timer cpuTimer;
         chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER,0);
-        cout << "Checkpoint 1" << endl;
+        //cout << "Checkpoint 1" << endl;
         fm.checkpoint();
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
@@ -227,7 +227,6 @@ TEST(FileMgr, epochPersistence) {
         fm.createChunk(chunkKey1,pageSize);
         AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
         chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
-        cout << "After checkpoint 1 for epoch Persistence" << endl;
         fm.checkpoint(); // checkpoint 1
         chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
         fm.checkpoint(); // checkpoint 2
@@ -236,18 +235,15 @@ TEST(FileMgr, epochPersistence) {
         chunk1 -> append((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER);
         fm.checkpoint(); // checkpoint 4
     }
-    cout << "After checkpoints for epoch Persistence" << endl;
 
 
 
     {
-        cout << "Test 1" << endl;
         FileMgr fm("data");
         AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
         EXPECT_EQ(chunk1 -> size(),4*numInts * sizeof(int));
     }
     {
-        cout << "Test 2" << endl;
         FileMgr fm("data", 1024796, 3);
         AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
         EXPECT_EQ(chunk1 -> size(),3*numInts * sizeof(int));
@@ -259,8 +255,10 @@ TEST(FileMgr, epochPersistence) {
     }
     {
         FileMgr fm("data", 1024796, 1);
+        /*
         AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
         EXPECT_EQ(chunk1 -> size(),1*numInts * sizeof(int));
+        */
     }
 }
 
@@ -292,7 +290,7 @@ TEST(FileMgr, encoding) {
 
         AbstractBuffer * chunk2 =  fm.createChunk(chunkKey2,pageSize);
 
-        
+    /*        
         chunk2 -> initEncoder(kINT,kENCODING_FIXED,kINT8);
         //chunk2 -> initEncoder(k,kENCODING_NONE,kNONE);
         EXPECT_EQ(kINT,chunk2->sqlType);
@@ -305,7 +303,6 @@ TEST(FileMgr, encoding) {
         EXPECT_EQ(numElems,chunk2 -> encoder -> numElems);
         fm.checkpoint();
     }
-    /*
 
     {
         FileMgr fm("data");
@@ -334,15 +331,15 @@ TEST(FileMgr, encoding) {
     }
     */
 
-        /*
+        
         chunk2 -> initEncoder(kINT,kENCODING_NONE,kNONE);
         //chunk2 -> initEncoder(k,kENCODING_NONE,kNONE);
         EXPECT_EQ(kINT,chunk2->sqlType);
         EXPECT_EQ(kENCODING_NONE,chunk2->encodingType);
         EXPECT_EQ(kNONE,chunk2->encodedDataType);
-        cout << "After chunk2 encoder init" << endl;
+        //cout << "After chunk2 encoder init" << endl;
         chunk2 -> encoder -> appendData((mapd_addr_t)data2,numElems);
-        cout << "After chunk2 append" << endl;
+        //cout << "After chunk2 append" << endl;
         EXPECT_EQ(numElems*sizeof(float),chunk2 -> size());
         EXPECT_EQ(numElems,chunk2 -> encoder -> numElems);
         fm.checkpoint();
@@ -350,7 +347,7 @@ TEST(FileMgr, encoding) {
 
     {
         FileMgr fm("data");
-        cout << "After new file manager" << endl;
+        //cout << "After new file manager" << endl;
         AbstractBuffer * chunk1 =  fm.getChunk(chunkKey1);
         EXPECT_EQ(kINT,chunk1->sqlType);
         EXPECT_EQ(kENCODING_FIXED,chunk1->encodingType);
@@ -360,7 +357,10 @@ TEST(FileMgr, encoding) {
         chunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
         EXPECT_EQ(numElems*2,chunk1 -> size());
         EXPECT_EQ(numElems*2,chunk1 -> encoder -> numElems);
-        cout << "After done with chunk1" << endl;
+        //cout << "After done with chunk1" << endl;
+        chunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
+        chunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
+        chunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
 
         AbstractBuffer * chunk2= fm.getChunk(chunkKey2);
         EXPECT_EQ(kINT,chunk2->sqlType);
@@ -371,9 +371,9 @@ TEST(FileMgr, encoding) {
         chunk2 -> encoder -> appendData((mapd_addr_t)data2,numElems);
         EXPECT_EQ(2*numElems*sizeof(float),chunk2 -> size());
         EXPECT_EQ(2*numElems,chunk2 -> encoder -> numElems);
+        fm.checkpoint();
 
     }
-    */
 
 }
 

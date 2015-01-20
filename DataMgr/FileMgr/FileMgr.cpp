@@ -128,12 +128,11 @@ namespace File_Namespace {
                 auto startIt = headerVec.begin();
 
                 for (auto headerIt = headerVec.begin() + 1 ; headerIt != headerVec.end(); ++headerIt) {
+                            
+                    //for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
+                    //    std::cout << *chunkIt << " ";
+                    //}
                     
-                    for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
-                        std::cout << *chunkIt << " ";
-                    }
-                    
-                    //std::cout << " -> " << headerIt -> pageId << "," << headerIt -> versionEpoch << std::endl;
                     if (headerIt -> chunkKey != lastChunkKey) {
                         //std::cout << "New chunkkey" << std::endl;
                         
@@ -145,12 +144,12 @@ namespace File_Namespace {
                 }
                 // now need to insert last Chunk
                 //mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
-                cout << "Inserting last chunk" << endl;
+                //cout << "Inserting last chunk" << endl;
                 chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerVec.end());
 
             }
             nextFileId_ = maxFileId + 1;
-            std::cout << "next file id: " << nextFileId_ << std::endl;
+            //std::cout << "next file id: " << nextFileId_ << std::endl;
         }
         else { // data directory does not exist
             std::cout << basePath_ << " does not exist. Creating" << std::endl;
@@ -403,6 +402,7 @@ namespace File_Namespace {
         }
         files_[fileId] = fInfo;
         fileIndex_.insert(std::pair<mapd_size_t, int>(pageSize, fileId));
+        cout << "At end of openExistingfile" << endl;
         return fInfo;
     }
 
@@ -431,7 +431,6 @@ namespace File_Namespace {
 
 
     FILE * FileMgr::getFileForFileId(const int fileId) {
-        std::cout << "Fileid: " << fileId << std::endl;
         assert (fileId >= 0);
         //assert(fileId < nextFileId_);
         return files_[fileId] -> f;

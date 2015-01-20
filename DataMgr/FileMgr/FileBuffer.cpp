@@ -50,16 +50,14 @@ namespace File_Namespace {
 
         assert(fm_);
         calcHeaderBuffer();
-        cout << "Reading File Buffer for " << chunkKey[0] << " from disk" << endl;
+        //cout << "Reading File Buffer for " << chunkKey[0] << " from disk" << endl;
         MultiPage multiPage(pageSize_);
         multiPages_.push_back(multiPage);
-        //int checkpointEpoch = fm_-> epoch();
-        //vector <int> pageAndVersionId = {-1,-1};
         int lastPageId = -1;
         Page lastMetadataPage;
         for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
             int curPageId = vecIt -> pageId;
-            cout << "Cur page id: " << curPageId << endl;
+            //cout << "Cur page id: " << curPageId << endl;
 
             // We only want to read last metadata page
             if (curPageId == -1) { //stats page
@@ -72,7 +70,7 @@ namespace File_Namespace {
                         assert(lastMetadataPage.fileId != -1); // was initialized
                         readMetadata(lastMetadataPage);
                         pageDataSize_ = pageSize_-reservedHeaderSize_;
-                        cout << "Page size: " << pageSize_ << " reservedHeaderSize_: " << reservedHeaderSize_ << " PageDataSize_ " << pageDataSize_ << endl;
+                        //cout << "Page size: " << pageSize_ << " reservedHeaderSize_: " << reservedHeaderSize_ << " PageDataSize_ " << pageDataSize_ << endl;
                         //pageSize_ = fm_ -> files_[vecIt -> page.fileId] -> pageSize;
 
                     }
@@ -83,12 +81,12 @@ namespace File_Namespace {
                 }
                 multiPages_.back().epochs.push_back(vecIt -> versionEpoch);
                 multiPages_.back().pageVersions.push_back(vecIt -> page);
-                cout << "After pushing back page: " << curPageId << endl;
+                //cout << "After pushing back page: " << curPageId << endl;
             }
         }
         //auto lastHeaderIt = std::prev(headerEndIt);
         //size_ = lastHeaderIt -> chunkSize; 
-        cout << "Chunk size: " << size_ << endl;
+        //cout << "Chunk size: " << size_ << endl;
     }
 
     FileBuffer::~FileBuffer() {
@@ -192,7 +190,7 @@ namespace File_Namespace {
     }
 
     Page FileBuffer::addNewMultiPage(const int epoch) {
-        std::cout << "Getting Page size: " << pageSize_ << std::endl;
+        //std::cout << "Getting Page size: " << pageSize_ << std::endl;
         Page page = fm_ -> requestFreePage(pageSize_);
         MultiPage multiPage(pageSize_);
         multiPage.epochs.push_back(epoch);
@@ -210,9 +208,10 @@ namespace File_Namespace {
         std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
         header[intHeaderSize-2] = pageId;
         header[intHeaderSize-1] = epoch;
-        cout << "Get header" << endl;
+        //cout << "Get header" << endl;
         FILE *f = fm_ -> getFileForFileId(page.fileId);
         mapd_size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
+        //cout << "Writing header at " << page.pageNum*pageSize << endl;
         File_Namespace::write(f, page.pageNum*pageSize,(intHeaderSize) * sizeof(int),(mapd_addr_t)&header[0]);
         /*
         if (writeSize) {
@@ -226,11 +225,11 @@ namespace File_Namespace {
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
         fread((mapd_addr_t)&pageSize_,sizeof(mapd_size_t),1,f);
         fread((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
-        cout << "Read size: " << size_ << endl;
+        //cout << "Read size: " << size_ << endl;
         vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodedDataType all as int
         fread((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
         hasEncoder = static_cast <bool> (typeData[0]);
-        cout << "Read has encoder: " << hasEncoder << endl;
+        //cout << "Read has encoder: " << hasEncoder << endl;
         if (hasEncoder) {
             sqlType = static_cast<SQLTypes> (typeData[1]);
             encodingType = static_cast<EncodingType> (typeData[2]);
@@ -242,7 +241,7 @@ namespace File_Namespace {
 
 
     void FileBuffer::writeMetadata(const int epoch) {
-        cout << "Write metadata: " << epoch << endl;
+        //cout << "Write metadata: " << epoch << endl;
         // Right now stats page is size_ (in bytes), bufferType, encodingType,
         // encodingDataType, numElements
         Page page = fm_ -> requestFreePage(METADATA_PAGE_SIZE);
@@ -253,7 +252,7 @@ namespace File_Namespace {
         fwrite((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
         vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodedDataType all as int
         typeData[0] = static_cast<int>(hasEncoder); 
-        cout << "Write has encoder: " << hasEncoder << endl;
+        //cout << "Write has encoder: " << hasEncoder << endl;
         if (hasEncoder) {
             typeData[1] = static_cast<int>(sqlType); 
             typeData[2] = static_cast<int>(encodingType); 
@@ -282,24 +281,24 @@ namespace File_Namespace {
         isDirty_ = true;
         isAppended_ = true;
 
-        std::cout << "Chunk" << chunkKey_[0] << std::endl; 
+        //std::cout << "Chunk" << chunkKey_[0] << std::endl; 
         mapd_size_t startPage = size_ / pageDataSize_;
-        cout << "Start page: " << startPage << endl;
+        //cout << "Start page: " << startPage << endl;
         mapd_size_t startPageOffset = size_ % pageDataSize_;
-        cout << "Start page offset: " << startPageOffset << endl;
+        //cout << "Start page offset: " << startPageOffset << endl;
         mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
         mapd_size_t bytesLeft = numBytes;
         mapd_addr_t curPtr = src;    // a pointer to the current location in dst being written to
         mapd_size_t initialNumPages = multiPages_.size();
-        cout << "InitialNumPages: " <<  initialNumPages << endl;
+        //cout << "InitialNumPages: " <<  initialNumPages << endl;
         size_ = size_ + numBytes;
         int epoch = fm_-> epoch();
         for (size_t pageNum = startPage; pageNum < startPage  + numPagesToWrite; ++pageNum) {
             Page page;
             if (pageNum >= initialNumPages) {
                 page = addNewMultiPage(epoch);
-                cout << "New page pagenum: " << page.pageNum << endl;
-                writeHeader(page,pageNum,epoch,true);
+                //cout << "New page pagenum: " << page.pageNum << endl;
+                writeHeader(page,pageNum,epoch);
             }
             else {
                 // we already have a new page at current
@@ -307,15 +306,15 @@ namespace File_Namespace {
                 page = multiPages_[pageNum].current();
             }
             assert(page.fileId >= 0); // make sure page was initialized
-            cout << "Append get file id" << endl;
+            //cout << "Append get file id" << endl;
             FILE *f = fm_ -> getFileForFileId(page.fileId);
             size_t bytesWritten;
             if (pageNum == startPage) {
-                cout << "Writing at: " << page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_;
+                //cout << "Writing at: " << page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_ << endl;
                 bytesWritten = File_Namespace::write(f,page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_, min (pageDataSize_ - startPageOffset,bytesLeft),curPtr);
             }
             else {
-                cout << "Writing at: " << page.pageNum*pageSize_ + reservedHeaderSize_;
+                //cout << "Writing at: " << page.pageNum*pageSize_ + reservedHeaderSize_ << endl;
                 bytesWritten = File_Namespace::write(f, page.pageNum * pageSize_+reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
             }
             curPtr += bytesWritten;
@@ -325,7 +324,7 @@ namespace File_Namespace {
             //    writeHeader(page,0,multiPages_[0].epochs.back());
             //}
         }
-        cout << "Bytes left: " << bytesLeft << endl;
+        //cout << "Bytes left: " << bytesLeft << endl;
         assert (bytesLeft == 0);
     }
 
