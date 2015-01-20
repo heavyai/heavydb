@@ -129,19 +129,6 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   }
 }
 
-size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
-  // TODO(alex)
-  const auto& type_info = col_var->get_type_info();
-  switch (type_info.type) {
-  case kINT:
-    return 32;
-  case kBIGINT:
-    return 64;
-  default:
-    CHECK(false);
-  }
-}
-
 }  // namespace
 
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
@@ -185,9 +172,9 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
   const auto& type_info = constant->get_type_info();
   switch (type_info.type) {
   case kBOOLEAN:
-    return llvm::ConstantInt::get(get_int_type(1, context_), constant->get_constval().intval);
+    return llvm::ConstantInt::get(get_int_type(1, context_), constant->get_constval().boolval);
   case kSMALLINT:
-    return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().intval);
+    return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().smallintval);
   case kINT:
     return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().intval);
   case kBIGINT:
