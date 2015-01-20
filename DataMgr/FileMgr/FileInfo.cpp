@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include <utility>
+using namespace std;
 
 namespace File_Namespace {
 
@@ -38,7 +39,11 @@ namespace File_Namespace {
             //std::cout << "PageNum: " << pageNum << std::endl;
             int headerSize;
             mapd_addr_t headerSizePtr = (mapd_addr_t)(&headerSize);
-            read(f,pageNum*pageSize,sizeof(int),headerSizePtr);
+            fseek(f, pageNum*pageSize, SEEK_SET);
+            fread((mapd_addr_t)(&headerSize),sizeof(int),1,f);
+
+
+            //read(f,pageNum*pageSize,sizeof(int),headerSizePtr);
             //std::cout << "Header size: " << headerSize << std::endl;
             if (headerSize != 0) {
                 // headerSize doesn't include headerSize itself
@@ -47,15 +52,20 @@ namespace File_Namespace {
                 assert(numHeaderElems >= 2);
                 // Last two elements of header are always PageId and Version
                 // epoch - these are not in the chunk key so seperate them
-                std::vector<int> chunkKey (numHeaderElems - 3); 
+                std::vector<int> chunkKey (numHeaderElems - 2); 
                 int pageId;
                 int versionEpoch;
                 mapd_size_t chunkSize;
                 // We don't want to read headerSize in our header - so start
                 // reading 4 bytes past it
-                read(f,pageNum*pageSize+sizeof(int),headerSize-2*sizeof(int)-sizeof(mapd_size_t),(mapd_addr_t)(&chunkKey[0]));
-                read(f,pageNum*pageSize+sizeof(int) + headerSize - 2*sizeof(int) -sizeof(mapd_size_t),sizeof(int),(mapd_addr_t)(&pageId));
-                read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(int) - sizeof(mapd_size_t),sizeof(int),(mapd_addr_t)(&versionEpoch));
+                fread((mapd_addr_t)(&chunkKey[0]),headerSize - 2*sizeof(int),1,f);
+                cout << "Chunk key: " << chunkKey[0] << endl;
+                fread((mapd_addr_t)(&pageId),sizeof(int),1,f);
+                cout << "Page id: " << pageId << endl;
+                fread((mapd_addr_t)(&versionEpoch),sizeof(int),1,f);
+                //read(f,pageNum*pageSize+sizeof(int),headerSize-2*sizeof(int),(mapd_addr_t)(&chunkKey[0]));
+                //read(f,pageNum*pageSize+sizeof(int) + headerSize - 2*sizeof(int),sizeof(int),(mapd_addr_t)(&pageId));
+                //read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(int),sizeof(int),(mapd_addr_t)(&versionEpoch));
                 //read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(mapd_size_t),sizeof(mapd_size_t),(mapd_addr_t)(&chunkSize));
 
                 /* Check if version epoch is equal to 
@@ -69,7 +79,7 @@ namespace File_Namespace {
                     // First write 0 to first four bytes of
                     // header to mark as free
                     headerSize = 0;
-                    write(f,pageNum*pageSize,sizeof(int),headerSizePtr);
+                    write(f,pageNum*pageSize,sizeof(int),(mapd_addr_t)&headerSizePtr);
                     // Now add page to free list
                     freePages.insert(pageNum);
                     //std::cout << "Not checkpointed" << std::endl;

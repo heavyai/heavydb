@@ -1,5 +1,5 @@
-#ifndef FIXEDLENGTHENCODER_H
-#define FIXEDLENGTHENCODER_H
+#ifndef FIXED_LENGTH_ENCODER_H
+#define FIXED_LENGTH_ENCODER_H
 #include "Encoder.h"
 #include "AbstractBuffer.h"
 #include <stdexcept>
@@ -37,18 +37,15 @@ class FixedLengthEncoder : public Encoder {
             delete [] encodedData;
         }
 
-        void writeMetadata(FILE *f/*, const mapd_size_t offset*/) {
+        void writeMetadata(FILE *f) {
             // assumes pointer is already in right place
-
-            //fseek(f, offset, SEEK_SET);
             fwrite((mapd_addr_t)&numElems,sizeof(mapd_size_t),1,f); 
             fwrite((mapd_addr_t)&min_,sizeof(T),1,f); 
             fwrite((mapd_addr_t)&max_,sizeof(T),1,f); 
         }
 
-        void readMetadata(FILE *f /*, const mapd_size_t offset*/) {
-
-            //fseek(f, offset, SEEK_SET);
+        void readMetadata(FILE *f) {
+            // assumes pointer is already in right place
             fread((mapd_addr_t)&numElems,sizeof(mapd_size_t),1,f); 
             fread((mapd_addr_t)&min_,1,sizeof(T),f); 
             fread((mapd_addr_t)&max_,1,sizeof(T),f); 
@@ -63,4 +60,4 @@ class FixedLengthEncoder : public Encoder {
         //mapd_size_t encodedElementWidth_;
 }; // FixedLengthEncoder
 
-#endif // FIXEDLENGTHENCODER_H
+#endif // FIXED_LENGTH_ENCODER_H

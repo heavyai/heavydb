@@ -19,6 +19,8 @@
 
 #define EPOCH_FILENAME "epoch"
 
+using namespace std;
+
 namespace File_Namespace {
 
     bool headerCompare(const HeaderInfo &firstElem, const HeaderInfo &secondElem) {
@@ -126,24 +128,25 @@ namespace File_Namespace {
                 auto startIt = headerVec.begin();
 
                 for (auto headerIt = headerVec.begin() + 1 ; headerIt != headerVec.end(); ++headerIt) {
-                    /*
+                    
                     for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
                         std::cout << *chunkIt << " ";
                     }
-                    */
+                    
                     //std::cout << " -> " << headerIt -> pageId << "," << headerIt -> versionEpoch << std::endl;
                     if (headerIt -> chunkKey != lastChunkKey) {
                         //std::cout << "New chunkkey" << std::endl;
                         
-                        mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
-                        chunkIndex_[lastChunkKey] = new FileBuffer (this,pageSize,lastChunkKey,startIt,headerIt);
+                        //mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                        chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerIt);
                         lastChunkKey = headerIt -> chunkKey;
                         startIt = headerIt;
                     }
                 }
                 // now need to insert last Chunk
-                mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
-                chunkIndex_[lastChunkKey] = new FileBuffer (this,pageSize,lastChunkKey,startIt,headerVec.end());
+                //mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                cout << "Inserting last chunk" << endl;
+                chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerVec.end());
 
             }
             nextFileId_ = maxFileId + 1;
