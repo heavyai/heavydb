@@ -70,7 +70,7 @@ using namespace Parser;
 %token CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
 %token DATABASE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
-%token GRANT GROUP HAVING IN INSERT INTEGER INTO
+%token GRANT GROUP HAVING IF IN INSERT INTEGER INTO
 %token IS KEY LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
@@ -175,17 +175,27 @@ name_eq_value_list:
 name_eq_value: NAME EQUAL STRING { $<nodeval>$ = new NameValueAssign($<stringval>1, $<stringval>3); }
 		;
 
+opt_if_not_exists:
+		IF NOT EXISTS { $<boolval>$ = true; }
+		| /* empty */ { $<boolval>$ = false; }
+		;
+
 create_table_statement:
-		CREATE TABLE table '(' base_table_element_commalist ')'
+		CREATE TABLE opt_if_not_exists table '(' base_table_element_commalist ')'
 		{
-			$<nodeval>$ = new CreateTableStmt($<stringval>3, reinterpret_cast<std::list<TableElement*>*>($<listval>5));
+			$<nodeval>$ = new CreateTableStmt($<stringval>4, reinterpret_cast<std::list<TableElement*>*>($<listval>6), $<boolval>3);
 		}
 	;
 
+opt_if_exists:
+		IF EXISTS { $<boolval>$ = true; }
+		| /* empty */ { $<boolval>$ = false; }
+		;
+
 drop_table_statement:
-		DROP TABLE table
+		DROP TABLE opt_if_exists table
 		{
-			$<nodeval>$ = new DropTableStmt($<stringval>3);
+			$<nodeval>$ = new DropTableStmt($<stringval>4, $<boolval>3);
 		}
 		;
 
@@ -271,17 +281,17 @@ opt_with_option_list:
 		;
 
 create_view_statement:
-		CREATE VIEW table opt_column_commalist
+		CREATE VIEW opt_if_not_exists table opt_column_commalist
 		AS query_spec opt_with_check_option
 		{
-			$<nodeval>$ = new CreateViewStmt($<stringval>3, $<slistval>4, dynamic_cast<QuerySpec*>($<nodeval>6), $<boolval>7, false, nullptr);
+			$<nodeval>$ = new CreateViewStmt($<stringval>4, $<slistval>5, dynamic_cast<QuerySpec*>($<nodeval>7), $<boolval>8, false, nullptr, $<boolval>3);
 		}
-		| CREATE NAME VIEW table opt_column_commalist opt_with_option_list
+		| CREATE NAME VIEW opt_if_not_exists table opt_column_commalist opt_with_option_list
 		AS query_spec
 		{
 			if (!boost::iequals(*$<stringval>2, "materialized"))
 				throw std::runtime_error("Invalid word " + *$<stringval>2);
-			$<nodeval>$ = new CreateViewStmt($<stringval>4, $<slistval>5, dynamic_cast<QuerySpec*>($<nodeval>8), false, true, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>6));
+			$<nodeval>$ = new CreateViewStmt($<stringval>5, $<slistval>6, dynamic_cast<QuerySpec*>($<nodeval>9), false, true, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7), $<boolval>4);
 		}
 	;
 
@@ -297,9 +307,9 @@ refresh_view_statement:
 		;
 
 drop_view_statement:
-		DROP VIEW table
+		DROP VIEW opt_if_exists table
 		{
-			$<nodeval>$ = new DropViewStmt($<stringval>3);
+			$<nodeval>$ = new DropViewStmt($<stringval>4, $<boolval>3);
 		}
 		;
 	

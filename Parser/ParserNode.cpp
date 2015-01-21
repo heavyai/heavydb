@@ -898,8 +898,11 @@ namespace Parser {
 	void
 	CreateTableStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		if (catalog.getMetadataForTable(*table) != nullptr)
+		if (catalog.getMetadataForTable(*table) != nullptr) {
+			if (if_not_exists)
+				return;
 			throw std::runtime_error("Table " + *table + " already exits.");
+		}
 		std::list<ColumnDescriptor> columns;
 		for (auto e : *table_element_list) {
 			if (typeid(*e) != typeid(ColumnDef))
@@ -970,8 +973,11 @@ namespace Parser {
 	DropTableStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
 		const TableDescriptor *td = catalog.getMetadataForTable(*table);
-		if (td == nullptr)
+		if (td == nullptr) {
+			if (if_exists)
+				return;
 			throw std::runtime_error("Table " + *table + " does not exist.");
+		}
 		if (td->isView)
 			throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
 		catalog.dropTable(td);
@@ -980,8 +986,11 @@ namespace Parser {
 	void
 	CreateViewStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		if (catalog.getMetadataForTable(*view_name) != nullptr)
+		if (catalog.getMetadataForTable(*view_name) != nullptr) {
+			if (if_not_exists)
+				return;
 			throw std::runtime_error("Table or View " + *view_name + " already exists.");
+		}
 		ViewStorageOption matview_storage = kDISK;
 		ViewRefreshOption matview_refresh = kMANUAL;
 		if (matview_options != nullptr) {
@@ -1077,8 +1086,11 @@ namespace Parser {
 	DropViewStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
 		const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
-		if (td == nullptr)
+		if (td == nullptr) {
+			if (if_exists)
+				return;
 			throw std::runtime_error("View " + *view_name + " does not exist.");
+		}
 		if (!td->isView)
 			throw std::runtime_error(*view_name + " is a table.  Use DROP TABLE.");
 		catalog.dropTable(td);

@@ -533,8 +533,8 @@ namespace Parser {
 	 */
 	class CreateTableStmt : public DDLStmt {
 		public:
-			CreateTableStmt(std::string *tab, std::list<TableElement*> * table_elems) :
-			table(tab), table_element_list(table_elems) {}
+			CreateTableStmt(std::string *tab, std::list<TableElement*> * table_elems, bool i) :
+			table(tab), table_element_list(table_elems), if_not_exists(i) {}
 			virtual ~CreateTableStmt();
 			const std::string *get_table() { return table; }
 			const std::list<TableElement*> *get_table_element_list() { return table_element_list; }
@@ -542,6 +542,7 @@ namespace Parser {
 		private:
 			std::string *table;
 			std::list<TableElement*> *table_element_list;
+			bool if_not_exists;
 	};
 
 	/*
@@ -550,12 +551,13 @@ namespace Parser {
 	 */
 	class DropTableStmt : public DDLStmt {
 		public:
-			DropTableStmt(std::string *tab) : table(tab) {}
+			DropTableStmt(std::string *tab, bool i) : table(tab), if_exists(i) {}
 			virtual ~DropTableStmt() { delete table; }
 			const std::string *get_table() { return table; }
 			virtual void execute(Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string *table;
+			bool if_exists;
 	};
 
 	/*
@@ -685,7 +687,7 @@ namespace Parser {
 	 */
 	class CreateViewStmt : public DDLStmt {
 		public:
-			CreateViewStmt(std::string *v, std::list<std::string*> *c, QuerySpec *q, bool ck, bool m, std::list<NameValueAssign*> *o) : view_name(v), column_list(c), query(q), checkoption(ck), is_materialized(m), matview_options(o) {}
+			CreateViewStmt(std::string *v, std::list<std::string*> *c, QuerySpec *q, bool ck, bool m, std::list<NameValueAssign*> *o, bool i) : view_name(v), column_list(c), query(q), checkoption(ck), is_materialized(m), matview_options(o), if_not_exists(i) {}
 			virtual ~CreateViewStmt();
 			const std::string *get_view_name() { return view_name; }
 			const std::list<std::string*> *get_column_list() { return column_list; }
@@ -699,6 +701,7 @@ namespace Parser {
 			bool checkoption;
 			bool is_materialized;
 			std::list<NameValueAssign*> *matview_options;
+			bool if_not_exists;
 	};
 
 	class RefreshViewStmt : public DDLStmt {
@@ -716,12 +719,13 @@ namespace Parser {
 	 */
 	class DropViewStmt : public DDLStmt {
 		public:
-			DropViewStmt(std::string *v) : view_name(v) {}
+			DropViewStmt(std::string *v, bool i) : view_name(v), if_exists(i) {}
 			virtual ~DropViewStmt() { delete view_name; };
 			const std::string *get_view_name() { return view_name; }
 			virtual void execute(Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string *view_name;
+			bool if_exists;
 	};
 
 	/*
