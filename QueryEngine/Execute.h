@@ -26,7 +26,7 @@ public:
   Executor(const Planner::RootPlan* root_plan);
   ~Executor();
   typedef boost::variant<int64_t, double> AggResult;
-  AggResult execute(const ExecutorOptLevel = ExecutorOptLevel::Default);
+  std::vector<AggResult> execute(const ExecutorOptLevel = ExecutorOptLevel::Default);
 private:
   llvm::Value* codegen(const Analyzer::Expr*) const;
   llvm::Value* codegen(const Analyzer::BinOper*) const;
@@ -37,7 +37,7 @@ private:
   llvm::Value* codegenLogical(const Analyzer::BinOper*) const;
   llvm::Value* codegenArith(const Analyzer::BinOper*) const;
   llvm::Value* codegenLogical(const Analyzer::UOper*) const;
-  AggResult executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
+  std::vector<AggResult> executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
   void executeScanPlan(const Planner::Scan* scan_plan);
   void compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
   void* optimizeAndCodegen(llvm::Function*, const ExecutorOptLevel, llvm::Module*);

@@ -53,7 +53,7 @@ Executor::AggResult run_simple_agg(const std::string& query_str) {
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
   Executor executor(plan);
-  return executor.execute(ExecutorOptLevel::LoopStrengthReduction);
+  return executor.execute(ExecutorOptLevel::LoopStrengthReduction).front();
 }
 
 void run_ddl_statement(const std::string& create_table_stmt) {

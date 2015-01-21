@@ -34,7 +34,7 @@ Executor::~Executor() {
   delete execution_engine_;
 }
 
-Executor::AggResult Executor::execute(const ExecutorOptLevel opt_level) {
+std::vector<Executor::AggResult> Executor::execute(const ExecutorOptLevel opt_level) {
   const auto plan = root_plan_->get_plan();
   CHECK(plan);
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
@@ -336,7 +336,9 @@ Analyzer::AggExpr* get_agg_expr(const Planner::AggPlan* agg_plan) {
 
 }
 
-Executor::AggResult Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel opt_level) {
+std::vector<Executor::AggResult> Executor::executeAggScanPlan(
+    const Planner::AggPlan* agg_plan,
+    const ExecutorOptLevel opt_level) {
   typedef void (*agg_query)(
     const int8_t** col_buffers,
     const int64_t* num_rows,
@@ -368,7 +370,7 @@ Executor::AggResult Executor::executeAggScanPlan(const Planner::AggPlan* agg_pla
       ? Executor::AggResult(static_cast<double>(out) / num_rows)
       : Executor::AggResult(out);
   }
-  return result;
+  return { result };
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
