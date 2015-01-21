@@ -447,9 +447,11 @@ namespace File_Namespace {
     void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
         chunkMetadataVec.reserve(chunkIndex_.size());
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
-            ChunkMetadata chunkMetadata;
-            chunkIt -> second -> encoder -> getMetadata(chunkMetadata);
-            chunkMetadataVec.push_back(std::make_pair(chunkIt -> first, chunkMetadata));
+            if (chunkIt -> second -> hasEncoder) {
+                ChunkMetadata chunkMetadata;
+                chunkIt -> second -> encoder -> getMetadata(chunkMetadata);
+                chunkMetadataVec.push_back(std::make_pair(chunkIt -> first, chunkMetadata));
+            }
         }
     }
 } // File_Namespace

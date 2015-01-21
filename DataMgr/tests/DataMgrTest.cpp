@@ -129,6 +129,22 @@ namespace Data_Namespace {
         EXPECT_EQ(numElems,fileChunk1 -> size());
         EXPECT_EQ(numElems,fileChunk1 -> encoder -> numElems);
         dataMgr -> checkpoint();
+
+        // Now lets test getChunkMetadataVec
+
+        vector <std::pair <ChunkKey,ChunkMetadata> > chunkMetadataVec;
+        dataMgr -> getChunkMetadataVec(chunkMetadataVec);
+        EXPECT_EQ(1,chunkMetadataVec.size());
+        EXPECT_EQ(key1, chunkMetadataVec[0].first);
+        ChunkMetadata chunk1Metadata = chunkMetadataVec[0].second;
+        EXPECT_EQ(kINT, chunk1Metadata.sqlType);
+        EXPECT_EQ(kENCODING_FIXED, chunk1Metadata.encodingType);
+        EXPECT_EQ(8, chunk1Metadata.encodingBits);
+        EXPECT_EQ(numElems*sizeof(int8_t), chunk1Metadata.numBytes);
+        EXPECT_EQ(numElems, chunk1Metadata.numElements);
+        EXPECT_EQ(0, chunk1Metadata.chunkStats.min.smallintval);
+        EXPECT_EQ(99, chunk1Metadata.chunkStats.max.smallintval);
+
         /*
         delete dataMgr;
 
