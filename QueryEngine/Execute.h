@@ -4,13 +4,14 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Planner/Planner.h"
 
+#include <boost/variant.hpp>
+#include <glog/logging.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-#include <glog/logging.h>
 
 #include <unordered_map>
 
@@ -24,7 +25,8 @@ class Executor {
 public:
   Executor(const Planner::RootPlan* root_plan);
   ~Executor();
-  int64_t execute(const ExecutorOptLevel = ExecutorOptLevel::Default);
+  typedef boost::variant<int64_t, double> AggResult;
+  AggResult execute(const ExecutorOptLevel = ExecutorOptLevel::Default);
 private:
   llvm::Value* codegen(const Analyzer::Expr*) const;
   llvm::Value* codegen(const Analyzer::BinOper*) const;
@@ -35,7 +37,7 @@ private:
   llvm::Value* codegenLogical(const Analyzer::BinOper*) const;
   llvm::Value* codegenArith(const Analyzer::BinOper*) const;
   llvm::Value* codegenLogical(const Analyzer::UOper*) const;
-  int64_t executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
+  AggResult executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
   void executeScanPlan(const Planner::Scan* scan_plan);
   void compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
   void* optimizeAndCodegen(llvm::Function*, const ExecutorOptLevel, llvm::Module*);

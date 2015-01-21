@@ -34,7 +34,7 @@ Executor::~Executor() {
   delete execution_engine_;
 }
 
-int64_t Executor::execute(const ExecutorOptLevel opt_level) {
+Executor::AggResult Executor::execute(const ExecutorOptLevel opt_level) {
   const auto plan = root_plan_->get_plan();
   CHECK(plan);
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
@@ -325,22 +325,18 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
 
 namespace {
 
-template<typename TimeT = std::chrono::milliseconds>
-struct measure
-{
-  template<typename F, typename ...Args>
-  static typename TimeT::rep execution(F func, Args&&... args)
-  {
-    auto start = std::chrono::system_clock::now();
-    func(std::forward<Args>(args)...);
-    auto duration = std::chrono::duration_cast<TimeT>(std::chrono::system_clock::now() - start);
-    return duration.count();
-  }
-};
+Analyzer::AggExpr* get_agg_expr(const Planner::AggPlan* agg_plan) {
+  const auto& target_list = agg_plan->get_targetlist();
+  CHECK_EQ(target_list.size(), 1);
+  const auto target_expr = target_list.front()->get_expr();
+  const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+  CHECK(agg_expr);
+  return agg_expr;
+}
 
 }
 
-int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel opt_level) {
+Executor::AggResult Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel opt_level) {
   typedef void (*agg_query)(
     const int8_t** col_buffers,
     const int64_t* num_rows,
@@ -350,7 +346,8 @@ int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const Exe
   const int table_id = 1;
   const auto fragments = get_fragments(table_id);
   std::vector<std::pair<const ChunkKey, const size_t>> chunk_keys;
-  int64_t out = 0;
+  Executor::AggResult result;
+  int64_t out { 0 };
   for (const auto& fragment : fragments) {
     for (size_t local_col_id = 0; local_col_id < local_to_global_col_ids_.size(); ++local_col_id) {
       const int col_id = local_to_global_col_ids_[local_col_id];
@@ -366,8 +363,12 @@ int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const Exe
       CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
     }
     reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_val_, &out);
+    const auto agg_expr = get_agg_expr(agg_plan);
+    result = agg_expr->get_aggtype() == kAVG
+      ? Executor::AggResult(static_cast<double>(out) / num_rows)
+      : Executor::AggResult(out);
   }
-  return out;
+  return result;
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
@@ -476,16 +477,12 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
 std::tuple<std::string, const Analyzer::Expr*, int64_t> get_agg_name_and_expr(
     const Planner::AggPlan* agg_plan) {
-  const auto& target_list = agg_plan->get_targetlist();
-  CHECK_EQ(target_list.size(), 1);
-  const auto target_expr = target_list.front()->get_expr();
-  const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-  CHECK(agg_expr);
+  const auto agg_expr = get_agg_expr(agg_plan);
   // TODO(alex)
   CHECK(!agg_expr->get_is_distinct());
   switch (agg_expr->get_aggtype()) {
   case kAVG:
-    CHECK(false);
+    return std::make_tuple("agg_sum", agg_expr->get_arg(), 0);
   case kMIN:
     return std::make_tuple("agg_min", agg_expr->get_arg(), std::numeric_limits<int64_t>::max());
   case kMAX:
