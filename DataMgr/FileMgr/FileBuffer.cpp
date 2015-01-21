@@ -242,25 +242,30 @@ namespace File_Namespace {
 
 
     void FileBuffer::writeMetadata(const int epoch) {
-        //cout << "Write metadata: " << epoch << endl;
+        cout << "Write metadata: " << epoch << endl;
         // Right now stats page is size_ (in bytes), bufferType, encodingType,
         // encodingDataType, numElements
         Page page = fm_ -> requestFreePage(METADATA_PAGE_SIZE);
         writeHeader(page,-1,epoch,true);
         FILE *f = fm_ -> getFileForFileId(page.fileId);
+        cout << "Seeking to " << page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_ << endl;
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
-        fwrite((mapd_addr_t)&pageSize_,sizeof(mapd_size_t),1,f);
-        fwrite((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
+        size_t numBytesWritten = fwrite((mapd_addr_t)&pageSize_,sizeof(mapd_size_t),1,f);
+        cout << "Num bytes written: " << numBytesWritten << endl;
+        numBytesWritten = fwrite((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
+        cout << "Num bytes written: " << numBytesWritten << endl;
+        cout << "Size_ " << size_ << endl;
         vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         typeData[0] = static_cast<int>(hasEncoder); 
-        //cout << "Write has encoder: " << hasEncoder << endl;
+        cout << "Write has encoder: " << hasEncoder << endl;
         if (hasEncoder) {
             typeData[1] = static_cast<int>(sqlType); 
             typeData[2] = static_cast<int>(encodingType); 
             typeData[3] = encodingBits; 
             //typeData[3] = static_cast<int>(encodedDataType); 
         }
-        fwrite((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
+        numBytesWritten = fwrite((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
+        cout << "Num bytes written: " << numBytesWritten << endl;
         if (hasEncoder) { // redundant
             encoder -> writeMetadata(f);
          }

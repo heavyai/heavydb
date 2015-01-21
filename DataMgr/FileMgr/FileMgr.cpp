@@ -314,7 +314,9 @@ namespace File_Namespace {
             assert(oldChunkSize < newChunkSize);
             chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
         }
-        chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
+        //chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
+        //@todo commenting out line above will make sure this metadata is set
+        // but will trigger error on fetch chunk
         srcBuffer->clearDirtyBits();
         chunk->syncEncoder(srcBuffer);
         return chunk;

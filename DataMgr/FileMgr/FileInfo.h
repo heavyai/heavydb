@@ -9,6 +9,7 @@
 #include <vector> 
 #include <mutex>
 #include <unistd.h> 
+#include <fcntl.h>
 
 namespace File_Namespace {
     
@@ -62,6 +63,8 @@ namespace File_Namespace {
 
         inline int syncToDisk() {
             return fsync(fileno(f));
+            //return fcntl(fileno(f),51);
+
         }
         
         /// Returns the number of free bytes available

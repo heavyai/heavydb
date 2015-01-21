@@ -4,6 +4,7 @@
 #include <boost/filesystem.hpp>
 
 #include <iostream>
+#include <math.h>
 
 using namespace std;
 
@@ -99,6 +100,50 @@ namespace Data_Namespace {
         EXPECT_EQ(dataMgr -> bufferMgrs_[1][0] -> getNumChunks(),1);
         EXPECT_EQ(dataMgr -> bufferMgrs_[0][0] -> getNumChunks(),0);
     }
+
+    TEST_F (DataMgrTest, encoding) {
+        ChunkKey key1 = {1,2,3};
+        ChunkKey key2 = {4,5,6,7};
+
+        AbstractBuffer *gpuChunk1 = dataMgr -> createChunk(GPU_LEVEL,key1);
+        AbstractBuffer *gpuChunk2 = dataMgr -> createChunk(GPU_LEVEL,key2);
+        gpuChunk1 -> initEncoder(kINT,kENCODING_FIXED,8);
+        EXPECT_EQ(kINT,gpuChunk1->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,gpuChunk1->encodingType);
+        EXPECT_EQ(8,gpuChunk1->encodingBits);
+        int numElems = 10000;
+        int * data1 = new int [numElems];
+        float * data2 = new float [numElems];
+        for (size_t i = 0; i < numElems; ++i) {
+            data1[i] = i % 100; // so fits in one byte
+            data2[i] = M_PI * i;
+        }
+        gpuChunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
+        EXPECT_EQ(numElems,gpuChunk1 -> size());
+        EXPECT_EQ(numElems,gpuChunk1 -> encoder -> numElems);
+        dataMgr -> checkpoint();
+        AbstractBuffer *fileChunk1 = dataMgr -> getChunk(DISK_LEVEL,key1);
+        EXPECT_EQ(kINT,fileChunk1->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,fileChunk1->encodingType);
+        EXPECT_EQ(8,fileChunk1->encodingBits);
+        EXPECT_EQ(numElems,fileChunk1 -> size());
+        EXPECT_EQ(numElems,fileChunk1 -> encoder -> numElems);
+        dataMgr -> checkpoint();
+        delete dataMgr;
+
+        dataMgr = new DataMgr(2,"data");
+        AbstractBuffer *cpuChunk1 = dataMgr -> getChunk(DISK_LEVEL,key1);
+        EXPECT_EQ(kINT,cpuChunk1->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,cpuChunk1->encodingType);
+        EXPECT_EQ(8,cpuChunk1->encodingBits);
+        EXPECT_EQ(numElems,cpuChunk1 -> size());
+        EXPECT_EQ(numElems,cpuChunk1 -> encoder -> numElems);
+
+        delete [] data1;
+        delete [] data2;
+
+    }
+
 }
 
 
