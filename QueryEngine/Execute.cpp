@@ -360,14 +360,10 @@ int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const Exe
     }
     const auto buffers = get_chunk_multi<int32_t>(chunk_keys, AddressSpace::CPU);
     const int8_t* col_buffers[buffers.size()];
-    int64_t num_rows { -1 };
+    int64_t num_rows { static_cast<int64_t>(fragment.num_tuples) };
     for (size_t buffer_idx = 0; buffer_idx < buffers.size(); ++buffer_idx) {
       col_buffers[buffer_idx] = buffers[buffer_idx].data;
-      if (num_rows >= 0) {
-        CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
-      } else {
-        num_rows = buffers[buffer_idx].num_rows;
-      }
+      CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
     }
     reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_val_, &out);
   }
