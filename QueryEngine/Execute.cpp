@@ -7,6 +7,7 @@
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
@@ -586,6 +587,10 @@ void* Executor::optimizeAndCodegen(llvm::Function* query_func, llvm::Module* mod
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createInstructionSimplifierPass());
   pass_manager.run(*module);
+
+  if (llvm::verifyFunction(*query_func)) {
+    LOG(FATAL) << "Generated invalid code. ";
+  }
 
   return execution_engine_->getPointerToFunction(query_func);
 }
