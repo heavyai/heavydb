@@ -73,6 +73,10 @@ void run_ddl_statement(const std::string& create_table_stmt) {
 }
 
 TEST(Select, FilterAndAggregation) {
+  ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test;"), 1000000);
+  ASSERT_EQ(run_simple_agg("SELECT MIN(x) FROM test;"), 42);
+  ASSERT_EQ(run_simple_agg("SELECT MAX(x) FROM test;"), 42);
+  ASSERT_EQ(run_simple_agg("SELECT SUM(x + y) FROM test;"), 84000000);
   ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 41 AND x < 43;"), 1000000);
   ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test WHERE x <> 42;"), 0);
   ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y = 84;"), 1000000);
