@@ -36,6 +36,7 @@ namespace Data_Namespace {
             //const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             void checkpoint();
+            void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
 
             // database_id, table_id, partitioner_id, column_id, fragment_id
 

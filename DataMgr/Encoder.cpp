@@ -97,3 +97,17 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes
 
 }
 
+void Encoder::getMetadata(ChunkMetadata &chunkMetadata) {
+    //chunkMetadata = metadataTemplate_; // invoke copy constructor
+    chunkMetadata.sqlType = buffer_ -> sqlType; 
+    chunkMetadata.encodingType = buffer_ -> encodingType; 
+    chunkMetadata.encodingBits = buffer_ -> encodingBits; 
+    chunkMetadata.numBytes = buffer_ -> size();
+    chunkMetadata.numElements = numElems;
+}
+
+
+
+
+
+

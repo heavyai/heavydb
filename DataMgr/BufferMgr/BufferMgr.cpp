@@ -519,5 +519,8 @@ namespace Buffer_Namespace {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         return slabs_.size()*pageSize_*numPagesPerSlab_;
     }
+    void BufferMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
+        throw std::runtime_error ("getChunkMetadataVec not supported for BufferMgr");
     
+    }
 }

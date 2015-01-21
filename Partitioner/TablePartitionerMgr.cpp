@@ -21,14 +21,16 @@ namespace Partitioner_Namespace {
 TablePartitionMgr::TablePartitionMgr(Data_Namespace::DataMgr &dataMgr) dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false) {
     const ChunkKeyToChunkMap & chunkKeyToChunkMap = dataMgr -> getChunkMap();     
     ChunkKey lastChunkKey;
+    vector <int> lastPartitionerKey;
     map <PartitionInfo> partitionInfoMap;
     mapd_size_t numTuples;
 
     for (auto chunkIt = chunkKeyToChunkMap.begin(); chunkIt != chunkKeyToChunkMap.end(); ++chunkIt) {
+        // Guaranteed to be in sorted chunk order
+        ChunkKey partitionerKey = vector <int> (chunkIt -> first -> begin(); chunkIt -> first -> begin() + 2); // tableKey will be database id and tableid
+        if (tableKey != lastTableKey) {
 
-
-
-
+        }
     }
 }
 

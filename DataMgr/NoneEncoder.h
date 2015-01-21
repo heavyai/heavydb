@@ -10,7 +10,7 @@ class NoneEncoder : public Encoder {
     public:
         NoneEncoder(Data_Namespace::AbstractBuffer *buffer): Encoder(buffer), dataMin(std::numeric_limits<T>::max()),dataMax(std::numeric_limits<T>::min()) {}
 
-        void appendData(mapd_addr_t srcData, const mapd_size_t numAppendElems) {
+        ChunkMetadata appendData(mapd_addr_t srcData, const mapd_size_t numAppendElems) {
             T * unencodedData = reinterpret_cast<T *> (srcData); 
             for (mapd_size_t i = 0; i < numAppendElems; ++i) {
                 dataMin = std::min(dataMin,unencodedData[i]);
@@ -20,6 +20,14 @@ class NoneEncoder : public Encoder {
             std::cout << "dataMax " << dataMax << std::endl;
             numElems += numAppendElems;
             buffer_ -> append(srcData,numAppendElems*sizeof(T));
+            ChunkMetadata chunkMetadata;
+            getMetadata(chunkMetadata);
+            return chunkMetadata;
+        }
+
+        void getMetadata(ChunkMetadata &chunkMetadata) {
+            Encoder::getMetadata(chunkMetadata); // call on parent class
+            chunkMetadata.fillChunkStats(dataMin,dataMax);
         }
 
         void writeMetadata(FILE *f) {

@@ -119,6 +119,8 @@ namespace File_Namespace {
          */
         void requestFreePages(mapd_size_t npages, mapd_size_t pagesize, std::vector<Page> &pages);
 
+        virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
+
         /**
          * @brief Fsyncs data files, writes out epoch and
          * fsyncs that

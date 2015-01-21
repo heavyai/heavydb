@@ -36,17 +36,24 @@ namespace Data_Namespace {
         bufferMgrs_[0] -> getAllChunkMetaInfo(metadata);
     }
     */
+    /*
     const std::map<ChunkKey, File_Namespace::FileBuffer *> & DataMgr::getChunkMap()  {
         return reinterpret_cast <File_Namespace::FileMgr *> (bufferMgrs_[0][0]) -> chunkIndex_;
     }
-        
+    */
+    
+    void DataMgr::getChunkMetadataVec(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
+        // Can we always assume this will just be at the disklevel bc we just
+        // started?
+        bufferMgrs_[0][0] -> getChunkMetadataVec(chunkMetadataVec);
+    }
 
+        
     AbstractBuffer * DataMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][device] -> createChunk(key);
     }
-
 
     AbstractBuffer * DataMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
