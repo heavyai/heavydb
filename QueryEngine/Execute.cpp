@@ -586,6 +586,7 @@ void* Executor::optimizeAndCodegen(llvm::Function* query_func, const ExecutorOpt
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createInstructionSimplifierPass());
+  pass_manager.add(llvm::createInstructionCombiningPass());
   if (opt_level == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
