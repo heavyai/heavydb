@@ -260,7 +260,6 @@ namespace File_Namespace {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
         
-        std::cout << "File fetch chunk - before error" << std::endl;
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist");
@@ -268,11 +267,13 @@ namespace File_Namespace {
         if (destBuffer -> isDirty()) {
             throw std::runtime_error("Chunk inconsitency - fetchChunk");
         }
-        std::cout << "File fetch chunk - no error" << std::endl;
         AbstractBuffer *chunk = chunkIt -> second;
         // ChunkSize is either specified in function call with numBytes or we
         // just look at pageSize * numPages in FileBuffer
         mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        if (numBytes > 0 && numBytes > chunk->size()) { 
+            throw std::runtime_error("Chunk is smaller than number of bytes requested");
+        }
         destBuffer->reserve(chunkSize);
         //std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (chunk->isUpdated()) {
@@ -282,6 +283,7 @@ namespace File_Namespace {
             chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
         }
         destBuffer->setSize(chunkSize);
+        destBuffer->syncEncoder(chunk);
     }
 
     AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes) {
@@ -298,9 +300,6 @@ namespace File_Namespace {
         // write the buffer's data to the Chunk
         //mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
         mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
-        //mapd_size_t newChunkSize = srcBuffer->size();
-        //std::cout << "Old Chunk size: " << oldChunkSize << std::endl;
-        //std::cout << "New Chunk size: " << newChunkSize << std::endl;
         if (chunk->isDirty()) {
             throw std::runtime_error("Chunk inconsistency");
         }
@@ -317,9 +316,9 @@ namespace File_Namespace {
         }
         chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
         srcBuffer->clearDirtyBits();
+        chunk->syncEncoder(srcBuffer);
         return chunk;
     }
-
 
     AbstractBuffer* FileMgr::createBuffer(const mapd_size_t numBytes = 0) {
         throw std::runtime_error("Operation not supported");
@@ -435,6 +434,14 @@ namespace File_Namespace {
         //assert(fileId < nextFileId_);
         return files_[fileId] -> f;
     }
+    /*
+    void FileMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey, int64_t> > &metadata) {
+        metadata.reserve(chunkIndex_.size());
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
+            metadata.push_back(std::make_pair(chunkIt -> first, chunkIt -> second -> encoder -> numElems));
+        }
+    }
+    */
 
 
 

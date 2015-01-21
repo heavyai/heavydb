@@ -280,14 +280,13 @@ TEST(FileMgr, encoding) {
         //mapd_size_t pageSize = 1024796;
         mapd_size_t pageSize = 8192;
         AbstractBuffer * chunk1 =  fm.createChunk(chunkKey1,pageSize);
-        chunk1 -> initEncoder(kINT,kENCODING_FIXED,kINT8);
+        chunk1 -> initEncoder(kINT,kENCODING_FIXED,8);
         EXPECT_EQ(kINT,chunk1->sqlType);
         EXPECT_EQ(kENCODING_FIXED,chunk1->encodingType);
-        EXPECT_EQ(kINT8,chunk1->encodedDataType);
+        EXPECT_EQ(8,chunk1->encodingBits);
         chunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
         EXPECT_EQ(numElems,chunk1 -> size());
         EXPECT_EQ(numElems,chunk1 -> encoder -> numElems);
-
         AbstractBuffer * chunk2 =  fm.createChunk(chunkKey2,pageSize);
 
     /*        
@@ -332,11 +331,10 @@ TEST(FileMgr, encoding) {
     */
 
         
-        chunk2 -> initEncoder(kINT,kENCODING_NONE,kNONE);
+        chunk2 -> initEncoder(kINT,kENCODING_NONE);
         //chunk2 -> initEncoder(k,kENCODING_NONE,kNONE);
         EXPECT_EQ(kINT,chunk2->sqlType);
         EXPECT_EQ(kENCODING_NONE,chunk2->encodingType);
-        EXPECT_EQ(kNONE,chunk2->encodedDataType);
         //cout << "After chunk2 encoder init" << endl;
         chunk2 -> encoder -> appendData((mapd_addr_t)data2,numElems);
         //cout << "After chunk2 append" << endl;
@@ -351,7 +349,7 @@ TEST(FileMgr, encoding) {
         AbstractBuffer * chunk1 =  fm.getChunk(chunkKey1);
         EXPECT_EQ(kINT,chunk1->sqlType);
         EXPECT_EQ(kENCODING_FIXED,chunk1->encodingType);
-        EXPECT_EQ(kINT8,chunk1->encodedDataType);
+        EXPECT_EQ(8,chunk1->encodingBits);
         EXPECT_EQ(numElems,chunk1 -> size());
         EXPECT_EQ(numElems,chunk1 -> encoder -> numElems);
         chunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
@@ -365,7 +363,6 @@ TEST(FileMgr, encoding) {
         AbstractBuffer * chunk2= fm.getChunk(chunkKey2);
         EXPECT_EQ(kINT,chunk2->sqlType);
         EXPECT_EQ(kENCODING_NONE,chunk2->encodingType);
-        EXPECT_EQ(kNONE,chunk2->encodedDataType);
         EXPECT_EQ(numElems*sizeof(float),chunk2 -> size());
         EXPECT_EQ(numElems,chunk2 -> encoder -> numElems);
         chunk2 -> encoder -> appendData((mapd_addr_t)data2,numElems);
@@ -376,20 +373,3 @@ TEST(FileMgr, encoding) {
     }
 
 }
-
-
-    
-
-
-
-    
-
-
-
-
-
-
-
-
-
-

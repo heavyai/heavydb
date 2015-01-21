@@ -54,18 +54,6 @@ enum EncodingType {
 	kENCODING_SPARSE = 5 // Null encoding for sparse columns
 };
 
-enum EncodedDataType {
-    kNONE = 0,
-    kINT8 = 1,
-    kINT16 = 2,
-    kINT32 = 3,
-    kINT64 = 4,
-    kUINT8 = 5,
-    kUINT16 = 6,
-    kUINT32 = 7,
-    kUINT64 = 8
-};
-
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
 // length, precision, scale, etc.

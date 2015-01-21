@@ -30,8 +30,8 @@ namespace Data_Namespace {
     public:
 
         AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), hasEncoder(0), encoder(0) {}
-        AbstractBuffer (const SQLTypes sqlType, const EncodingType encodingType=kENCODING_NONE, const EncodedDataType encodedDataType=kNONE): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
-        initEncoder(sqlType, encodingType, encodedDataType);
+        AbstractBuffer (const SQLTypes sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
+        initEncoder(sqlType, encodingType, numEncodingBits);
         }
         virtual ~AbstractBuffer() {}
         
@@ -75,19 +75,32 @@ namespace Data_Namespace {
             isUpdated_ = false;
             isDirty_ = false;
         }
-        void initEncoder(const SQLTypes tmpSqlType, const EncodingType tmpEncodingType = kENCODING_NONE, const EncodedDataType tmpEncodedDataType = kNONE) {
+        void initEncoder(const SQLTypes tmpSqlType, const EncodingType tmpEncodingType = kENCODING_NONE, const int tmpEncodingBits = 0) {
             hasEncoder = true;
             sqlType = tmpSqlType;
             encodingType = tmpEncodingType;
-            encodedDataType = tmpEncodedDataType;
-            encoder = Encoder::Create(this,sqlType,encodingType,encodedDataType);
+            encodingBits = tmpEncodingBits;
+            encoder = Encoder::Create(this,sqlType,encodingType,encodingBits);
         }
+
+        void syncEncoder(const AbstractBuffer *srcBuffer) {
+            hasEncoder = srcBuffer->hasEncoder;
+            if (hasEncoder) {
+                if (encoder == 0) { // Encoder not initialized
+                    initEncoder(srcBuffer->sqlType,srcBuffer->encodingType,srcBuffer->encodingBits);
+                }
+                encoder->copyMetadata(srcBuffer->encoder);
+            }
+        }
+
+
 
         Encoder * encoder;
         bool hasEncoder;
         SQLTypes sqlType;
         EncodingType encodingType;
-        EncodedDataType encodedDataType;
+        int encodingBits;
+        //EncodedDataType encodedDataType;
 
     protected:
 

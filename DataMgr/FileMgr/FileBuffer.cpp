@@ -36,7 +36,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const EncodedDataType encodedDataType, const mapd_size_t initialSize): AbstractBuffer(sqlType,encodingType,encodedDataType) {
+    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits , const mapd_size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits) {
         assert(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
@@ -226,15 +226,16 @@ namespace File_Namespace {
         fread((mapd_addr_t)&pageSize_,sizeof(mapd_size_t),1,f);
         fread((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
         //cout << "Read size: " << size_ << endl;
-        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodedDataType all as int
+        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         fread((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
         hasEncoder = static_cast <bool> (typeData[0]);
         //cout << "Read has encoder: " << hasEncoder << endl;
         if (hasEncoder) {
             sqlType = static_cast<SQLTypes> (typeData[1]);
             encodingType = static_cast<EncodingType> (typeData[2]);
-            encodedDataType = static_cast<EncodedDataType> (typeData[3]);
-            initEncoder(sqlType,encodingType,encodedDataType);
+            encodingBits = typeData[3]; 
+            //encodedDataType = static_cast<EncodedDataType> (typeData[3]);
+            initEncoder(sqlType,encodingType,encodingBits);
             encoder -> readMetadata(f);
         }
     }
@@ -250,13 +251,14 @@ namespace File_Namespace {
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
         fwrite((mapd_addr_t)&pageSize_,sizeof(mapd_size_t),1,f);
         fwrite((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
-        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodedDataType all as int
+        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         typeData[0] = static_cast<int>(hasEncoder); 
         //cout << "Write has encoder: " << hasEncoder << endl;
         if (hasEncoder) {
             typeData[1] = static_cast<int>(sqlType); 
             typeData[2] = static_cast<int>(encodingType); 
-            typeData[3] = static_cast<int>(encodedDataType); 
+            typeData[3] = encodingBits; 
+            //typeData[3] = static_cast<int>(encodedDataType); 
         }
         fwrite((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
         if (hasEncoder) { // redundant

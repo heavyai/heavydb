@@ -9,14 +9,13 @@
 #include "Partitioner.h"
 #include "AbstractTablePartitioner.h"
 #include "../../Shared/types.h"
-#include "../SqliteConnector/SqliteConnector.h"
 
 #include <map>
 #include <vector>
 
 // forward declaration(s)
-namespace Memory_Namespace {
-    class MemoryMgr;
+namespace Data_Namespace {
+    class DataMgr;
 };
 /*
 namespace Catalog_Namespace {
@@ -46,11 +45,11 @@ namespace Partitioner_Namespace {
          *
          * @param catalog reference to instanciated
          * Catalog_Namespace::Catalog object
-         * @param bufferMgr  reference to instanciated
-         * Buffer_Namespace::BufferMgr object
+         * @param datamgr  reference to instanciated
+         * Data_Namespace::DataMgr object
          */
         
-        TablePartitionerMgr(Memory_Namespace::MemoryMgr &memoryMgr);
+        TablePartitionerMgr(Data_Namespace::DataMgr &dataMgr);
         
         /**
          * @brief Destructor - writes metadata to storage and
@@ -74,7 +73,7 @@ namespace Partitioner_Namespace {
          * to be scanned.  Default NULL.
          */
         
-        void getQueryPartitionInfo(const int tableId, QueryInfo &queryInfo, const void *predicate = 0);
+        void getQueryPartitionInfo(const int databaseId, const int tableId, QueryInfo &queryInfo);
         
         /**
          * @brief creates a partitioner for a table specified by
@@ -97,7 +96,8 @@ namespace Partitioner_Namespace {
          * @see Catalog
          */
         
-        void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
+        //void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
+        void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
         
         /**
          * @brief Insert data (insertDataStruct) into the table
@@ -191,7 +191,7 @@ namespace Partitioner_Namespace {
         
         //Catalog_Namespace::Catalog &catalog_; /**< reference to Catalog object - must be queried to get metadata for tables and columns before partitioner creation */
         
-        Memory_Namespace::AbstractDataMgr & bufferMgr_;									/**< reference to the buffer manager object*/
+        Data_Namespace::DataMgr & dataMgr_;									/**< reference to the buffer manager object*/
         SqliteConnector sqliteConnector_; /**<object that connects to sqlite to allow metadata storage */
         
         bool isDirty_;  /**< Specifies if the TablePartitionerMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */

@@ -12,12 +12,17 @@
 #include <vector>
 #include <string>
 #include <gtest/gtest_prod.h>
+namespace File_Namespace {
+    class FileBuffer;
+}
 
 namespace Data_Namespace {
 
     enum MemoryLevel {DISK_LEVEL = 0, CPU_LEVEL = 1, GPU_LEVEL = 2};
 
     class DataMgr { 
+
+        friend class FileMgr; 
 
         public:
             DataMgr(const int partitionKeyIndex, const std::string &dataDir);
@@ -28,8 +33,8 @@ namespace Data_Namespace {
             AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes);
             void deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer);
             AbstractBuffer * copyBuffer(const MemoryLevel memoryLevel, const int deviceId, const AbstractBuffer * srcBuffer);
-
-
+            //const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
+            const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             void checkpoint();
 
             // database_id, table_id, partitioner_id, column_id, fragment_id

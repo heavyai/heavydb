@@ -30,6 +30,16 @@ namespace Data_Namespace {
         bufferMgrs_[2].push_back(new GpuCudaBufferMgr(1 << 30, 0, 1 << 29,512,bufferMgrs_[1][0])); 
         levelSizes_.push_back(1);
     }
+    /*
+    DataMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey,int64_t> > &metadata)  {
+        // needed by TablePartitionerMgr
+        bufferMgrs_[0] -> getAllChunkMetaInfo(metadata);
+    }
+    */
+    const std::map<ChunkKey, File_Namespace::FileBuffer *> & DataMgr::getChunkMap()  {
+        return reinterpret_cast <File_Namespace::FileMgr *> (bufferMgrs_[0][0]) -> chunkIndex_;
+    }
+        
 
     AbstractBuffer * DataMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
         int level = static_cast <int> (memoryLevel);

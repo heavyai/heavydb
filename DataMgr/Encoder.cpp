@@ -3,9 +3,7 @@
 #include "FixedLengthEncoder.h"
 
 
-Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes sqlType, const EncodingType encodingType, const EncodedDataType encodedDataType) {
-    std::cout << "Encoding type: " << encodingType << std::endl;
-    std::cout << "Sql type: " << sqlType << std::endl;
+Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits) {
     switch (encodingType) {
         case kENCODING_NONE: {
             switch (sqlType) {
@@ -26,7 +24,6 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes
                     break;
                 }
                 case kFLOAT: {
-                    std::cout << "Making NoneEncoder float" << std::endl;
                     return new NoneEncoder <float>  (buffer);
                     break;
                 }
@@ -40,11 +37,11 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes
         case kENCODING_FIXED: {
             switch (sqlType) {
                 case kSMALLINT: {
-                    switch(encodedDataType) {
-                        case kINT8:
+                    switch(encodingBits) {
+                        case 8:
                             return new FixedLengthEncoder <int16_t,int8_t>  (buffer);
                             break;
-                        case kINT16:
+                        case 16:
                             return new FixedLengthEncoder <int16_t,int16_t> (buffer);
                             break;
                         default:
@@ -54,14 +51,14 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes
                 break;
                 }
                 case kINT: {
-                    switch(encodedDataType) {
-                        case kINT8:
+                    switch(encodingBits) {
+                        case 8:
                             return new FixedLengthEncoder <int32_t,int8_t> (buffer);
                             break;
-                        case kINT16:
+                        case 16:
                             return new FixedLengthEncoder <int32_t,int16_t> (buffer);
                             break;
-                        case kINT32:
+                        case 32:
                             return new FixedLengthEncoder <int32_t,int32_t> (buffer);
                             break;
                         default:
@@ -71,17 +68,17 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes
                 }
                 break;
                 case kBIGINT: {
-                    switch(encodedDataType) {
-                        case kINT8:
+                    switch(encodingBits) {
+                        case 8:
                             return new FixedLengthEncoder <int64_t,int8_t> (buffer);
                             break;
-                        case kINT16:
+                        case 16:
                             return new FixedLengthEncoder <int64_t,int16_t> (buffer);
                             break;
-                        case kINT32:
+                        case 32:
                             return new FixedLengthEncoder <int64_t,int32_t> (buffer);
                             break;
-                        case kINT64:
+                        case 64:
                             return new FixedLengthEncoder <int64_t,int64_t> (buffer);
                             break;
                         default:

@@ -13,7 +13,7 @@ namespace Partitioner_Namespace {
      */
     
     enum PartitionerType {
-        LINEAR
+        INSERT_ORDER
     };
     
     /**
@@ -43,8 +43,9 @@ namespace Partitioner_Namespace {
      */
     
     struct PartitionInfo {
-        int partitionId;
+        std::vector<int>partitionKeys;
         mapd_size_t numTuples;
+        vector<int> deviceIds;
     };
     
     /**

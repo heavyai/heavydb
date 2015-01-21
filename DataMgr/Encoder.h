@@ -15,9 +15,10 @@ namespace Data_Namespace {
 
 class Encoder {
     public: 
-        static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypes sqlType, const EncodingType encodingType, const EncodedDataType encodedDataType);
+        static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits);
         Encoder(Data_Namespace::AbstractBuffer * buffer): buffer_(buffer), numElems(0) {}
         virtual void appendData(mapd_addr_t srcData, const mapd_size_t numAppendElems) = 0;
+        virtual void copyMetadata (const Encoder * copyFromEncoder) = 0; 
         virtual void writeMetadata(FILE *f/*, const mapd_size_t offset*/) = 0;
         virtual void readMetadata(FILE *f/*, const mapd_size_t offset*/) = 0;
         mapd_size_t numElems;

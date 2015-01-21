@@ -5,7 +5,7 @@
  */
 #include "TablePartitionMgr.h"
 //#include "Catalog.h"
-#include "AbstractDataMgr.h"
+#include "DataMgr.h"
 #include "LinearTablePartitioner.h"
 
 #include <limits>
@@ -18,9 +18,18 @@ namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr::TablePartitionMgr(Memory_Namespace::MemoryMgr &memoryMgr, const std::string &dbName, const std::string &basePath) memoryMgr_(memoryMgr), maxPartitionerId_(-1), sqliteConnector_(dbName,basePath), isDirty_(false) {
-    createStateTableIfDne();
-    readState();
+TablePartitionMgr::TablePartitionMgr(Data_Namespace::DataMgr &dataMgr) dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false) {
+    const ChunkKeyToChunkMap & chunkKeyToChunkMap = dataMgr -> getChunkMap();     
+    ChunkKey lastChunkKey;
+    map <PartitionInfo> partitionInfoMap;
+    mapd_size_t numTuples;
+
+    for (auto chunkIt = chunkKeyToChunkMap.begin(); chunkIt != chunkKeyToChunkMap.end(); ++chunkIt) {
+
+
+
+
+    }
 }
 
 TablePartitionMgr::~TablePartitionMgr() {

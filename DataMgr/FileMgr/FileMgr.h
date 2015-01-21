@@ -58,7 +58,7 @@ namespace File_Namespace {
      * and so ChunkKeyToChunkMap maps chunk keys to Chunk types, which are
      * vectors of MultiPage* pointers (logical pages).
      */
-    typedef std::map<ChunkKey, Chunk *> ChunkKeyToChunkMap;
+    typedef std::map<ChunkKey, FileBuffer *> ChunkKeyToChunkMap;
 
     /**
      * @class   FileMgr
@@ -144,6 +144,8 @@ namespace File_Namespace {
             // @todo should be locked - but this is more for testing now
             return chunkIndex_.size();
         }
+        ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks
+        // #TM Not sure if we need this below
 
 
     private:
@@ -159,8 +161,6 @@ namespace File_Namespace {
         std::mutex chunkIndexMutex_;  
         
 
-        ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks
-        // #TM Not sure if we need this below
 
 
         /**

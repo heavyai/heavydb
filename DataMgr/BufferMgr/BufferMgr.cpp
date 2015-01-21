@@ -457,6 +457,7 @@ namespace Buffer_Namespace {
             buffer->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
         }
         destBuffer->setSize(chunkSize);
+        destBuffer->syncEncoder(buffer);
     }
     
     AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes) {
@@ -485,8 +486,8 @@ namespace Buffer_Namespace {
             assert(oldChunkSize < newChunkSize);
             chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
         }
-        //chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
         srcBuffer->clearDirtyBits();
+        chunk->syncEncoder(srcBuffer);
         return chunk;
     }
 
