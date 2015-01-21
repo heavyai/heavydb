@@ -325,13 +325,16 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
 
 namespace {
 
-Analyzer::AggExpr* get_agg_expr(const Planner::AggPlan* agg_plan) {
+std::vector<Analyzer::AggExpr*> get_agg_exprs(const Planner::AggPlan* agg_plan) {
   const auto& target_list = agg_plan->get_targetlist();
-  CHECK_EQ(target_list.size(), 1);
-  const auto target_expr = target_list.front()->get_expr();
-  const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-  CHECK(agg_expr);
-  return agg_expr;
+  std::vector<Analyzer::AggExpr*> result;
+  for (auto target : target_list) {
+    const auto target_expr = target->get_expr();
+    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+    CHECK(agg_expr);
+    result.push_back(agg_expr);
+  }
+  return result;
 }
 
 }
@@ -365,8 +368,9 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
       CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
     }
     reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_val_, &out);
-    const auto agg_expr = get_agg_expr(agg_plan);
-    result = agg_expr->get_aggtype() == kAVG
+    const auto agg_exprs = get_agg_exprs(agg_plan);
+    CHECK_EQ(agg_exprs.size(), 1);
+    result = agg_exprs.front()->get_aggtype() == kAVG
       ? Executor::AggResult(static_cast<double>(out) / num_rows)
       : Executor::AggResult(out);
   }
@@ -477,25 +481,34 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     col_heads);
 }
 
-std::tuple<std::string, const Analyzer::Expr*, int64_t> get_agg_name_and_expr(
-    const Planner::AggPlan* agg_plan) {
-  const auto agg_expr = get_agg_expr(agg_plan);
+std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>>
+get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
+  std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
+  const auto agg_exprs = get_agg_exprs(agg_plan);
   // TODO(alex)
-  CHECK(!agg_expr->get_is_distinct());
-  switch (agg_expr->get_aggtype()) {
-  case kAVG:
-    return std::make_tuple("agg_sum", agg_expr->get_arg(), 0);
-  case kMIN:
-    return std::make_tuple("agg_min", agg_expr->get_arg(), std::numeric_limits<int64_t>::max());
-  case kMAX:
-    return std::make_tuple("agg_max", agg_expr->get_arg(), std::numeric_limits<int64_t>::min());
-  case kSUM:
-    return std::make_tuple("agg_sum", agg_expr->get_arg(), 0);
-  case kCOUNT:
-    return std::make_tuple("agg_count", agg_expr->get_arg(), 0);
-  default:
-    CHECK(false);
+  for (auto agg_expr : agg_exprs) {
+    CHECK(!agg_expr->get_is_distinct());
+    switch (agg_expr->get_aggtype()) {
+    case kAVG:
+      result.emplace_back("agg_sum", agg_expr->get_arg(), 0);
+      break;
+    case kMIN:
+      result.emplace_back("agg_min", agg_expr->get_arg(), std::numeric_limits<int64_t>::max());
+      break;
+    case kMAX:
+      result.emplace_back("agg_max", agg_expr->get_arg(), std::numeric_limits<int64_t>::min());
+      break;
+    case kSUM:
+      result.emplace_back("agg_sum", agg_expr->get_arg(), 0);
+      break;
+    case kCOUNT:
+      result.emplace_back("agg_count", agg_expr->get_arg(), 0);
+      break;
+    default:
+      CHECK(false);
+    }
   }
+  return result;
 }
 
 }  // namespace
@@ -536,9 +549,14 @@ void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan, const Execut
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   // TODO(alex): heuristic for group by buffer size
-  auto agg_info = get_agg_name_and_expr(agg_plan);
-  init_agg_val_ = std::get<2>(agg_info);
-  call_aggregator(std::get<0>(agg_info), std::get<1>(agg_info), filter_lv, agg_plan->get_groupby_list(), 2048, module_);
+  {
+    auto agg_infos = get_agg_name_and_exprs(agg_plan);
+    // TODO(alex): fix, each aggregate column should have its own init value
+    init_agg_val_ = std::get<2>(agg_infos.front());
+    for (const auto agg_info : agg_infos) {
+      call_aggregator(std::get<0>(agg_info), std::get<1>(agg_info), filter_lv, agg_plan->get_groupby_list(), 2048, module_);
+    }
+  }
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
