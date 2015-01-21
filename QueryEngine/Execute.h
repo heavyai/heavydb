@@ -15,11 +15,16 @@
 #include <unordered_map>
 
 
+enum class ExecutorOptLevel {
+  Default,
+  LoopStrengthReduction
+};
+
 class Executor {
 public:
   Executor(const Planner::RootPlan* root_plan);
   ~Executor();
-  int64_t execute();
+  int64_t execute(const ExecutorOptLevel = ExecutorOptLevel::Default);
 private:
   llvm::Value* codegen(const Analyzer::Expr*) const;
   llvm::Value* codegen(const Analyzer::BinOper*) const;
@@ -30,10 +35,10 @@ private:
   llvm::Value* codegenLogical(const Analyzer::BinOper*) const;
   llvm::Value* codegenArith(const Analyzer::BinOper*) const;
   llvm::Value* codegenLogical(const Analyzer::UOper*) const;
-  int64_t executeAggScanPlan(const Planner::AggPlan* agg_plan);
+  int64_t executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
   void executeScanPlan(const Planner::Scan* scan_plan);
-  void compileAggScanPlan(const Planner::AggPlan* agg_plan);
-  void* optimizeAndCodegen(llvm::Function*, llvm::Module*);
+  void compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
+  void* optimizeAndCodegen(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
   void call_aggregator(
     const std::string& agg_name,
     const Analyzer::Expr* aggr_col,

@@ -34,12 +34,12 @@ Executor::~Executor() {
   delete execution_engine_;
 }
 
-int64_t Executor::execute() {
+int64_t Executor::execute(const ExecutorOptLevel opt_level) {
   const auto plan = root_plan_->get_plan();
   CHECK(plan);
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   if (agg_plan) {
-    return executeAggScanPlan(agg_plan);
+    return executeAggScanPlan(agg_plan, opt_level);
   }
   CHECK(false);
 }
@@ -340,13 +340,13 @@ struct measure
 
 }
 
-int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan) {
+int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel opt_level) {
   typedef void (*agg_query)(
     const int8_t** col_buffers,
     const int64_t* num_rows,
     const int64_t* init_agg_value,
     int64_t* out);
-  compileAggScanPlan(agg_plan);
+  compileAggScanPlan(agg_plan, opt_level);
   const int table_id = 1;
   const auto fragments = get_fragments(table_id);
   std::vector<std::pair<const ChunkKey, const size_t>> chunk_keys;
@@ -505,7 +505,7 @@ std::tuple<std::string, const Analyzer::Expr*, int64_t> get_agg_name_and_expr(
 
 }  // namespace
 
-void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan) {
+void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel opt_level) {
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
@@ -563,11 +563,11 @@ void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan) {
     }
   }
 
-  query_native_code_ = optimizeAndCodegen(query_func, module_);
+  query_native_code_ = optimizeAndCodegen(query_func, opt_level, module_);
   CHECK(query_native_code_);
 }
 
-void* Executor::optimizeAndCodegen(llvm::Function* query_func, llvm::Module* module) {
+void* Executor::optimizeAndCodegen(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
 
@@ -586,6 +586,9 @@ void* Executor::optimizeAndCodegen(llvm::Function* query_func, llvm::Module* mod
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createInstructionSimplifierPass());
+  if (opt_level == ExecutorOptLevel::LoopStrengthReduction) {
+    pass_manager.add(llvm::createLoopStrengthReducePass());
+  }
   pass_manager.run(*module);
 
   if (llvm::verifyFunction(*query_func)) {
