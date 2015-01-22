@@ -29,6 +29,7 @@ namespace Partitioner_Namespace {
     
     
     struct InsertData {
+        int databaseId;						/// identifies the database into which the data is being inserted
         int tableId;						/// identifies the table into which the data is being inserted
         std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
         mapd_size_t numRows;				/// the number of rows being inserted
@@ -43,9 +44,14 @@ namespace Partitioner_Namespace {
      */
     
     struct PartitionInfo {
-        std::vector<int>partitionKeys;
+        //std::vector<int>partitionKeys;
+        int partitionId;
         mapd_size_t numTuples;
+        mapd_size_t shadowNumTuples;
         vector<int> deviceIds;
+        vector<ChunkMetadata> chunkMetadata;
+        map <int, ChunkMetadata> chunkMetadataMap; 
+        map <int, ChunkMetadata> shadowChunkMetadataMap; 
     };
     
     /**
@@ -58,9 +64,9 @@ namespace Partitioner_Namespace {
      */
     
     struct QueryInfo {
-        int partitionerId;
+        vector <int> chunkKeyPrefix; 
         std::vector<PartitionInfo> partitions;
-        mapd_size_t numTuples;
+        //mapd_size_t numTuples;
     };
     
 } // Partitioner_Namespace

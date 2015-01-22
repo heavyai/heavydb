@@ -19,9 +19,33 @@ namespace Partitioner_Namespace {
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
 TablePartitionMgr::TablePartitionMgr(Data_Namespace::DataMgr &dataMgr) dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false) {
-    const ChunkKeyToChunkMap & chunkKeyToChunkMap = dataMgr -> getChunkMap();     
+    vector<pair<ChunkKey,ChunkMetadata> > chunkMetadataVec;
+    dataMgr -> getChunkMetadataVec(chunkMetadataVec);
     ChunkKey lastChunkKey;
     vector <int> lastPartitionerKey;
+    //Chunk key should be database_id, table_id, partitioner_id, column_id, fragment_id (fragment_id could be 2 keys)
+    // first three keys (database_id, table_id, partitioner_id make up
+    // a partitioner
+    vector <int> lastPartitionerKey;
+    vector <ColumnInfo> columnInfoVec;
+    int lastColumnId = -1;
+
+    for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
+        ChunkKey partitionerKey = vector <int> (chunkIt -> first -> begin(); chunkIt -> first -> begin() + 3); // tableKey will be database id and tableid
+        int columnId =   
+        if (partitionerKey != lastPartitionerKey) {
+
+
+        }
+
+
+
+    }
+
+
+
+
+
     map <PartitionInfo> partitionInfoMap;
     mapd_size_t numTuples;
 

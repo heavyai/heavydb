@@ -82,6 +82,4 @@ class Encoder {
 };
 
 
-
-
 #endif // Encoder_h
