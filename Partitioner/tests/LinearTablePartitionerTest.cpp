@@ -5,11 +5,12 @@
 
 #include "gtest/gtest.h"
 #include "../../DataMgr/DataMgr.h"
+#include "../LinearTablePartitioner.h"
 
-#include "LinearTablePartitioner.h"
 #include <iostream>
 #include <vector>
 #include <math.h>
+#include <boost/filesystem.hpp>
 
 using namespace std;
 
@@ -40,7 +41,7 @@ namespace Partitioner_Namespace {
                 colInfo.columnType = kFLOAT; 
                 colInfo.encodingType = kENCODING_NONE; 
                 colInfo.encodingBits = 8;
-                colInfo.insertBuffer_ = 0;
+                colInfo.insertBuffer = 0;
                 columnInfoVec.push_back(colInfo);
                 linearTablePartitioner = new LinearTablePartitioner(chunkKeyPrefix,columnInfoVec,dataMgr);
             }
@@ -54,7 +55,7 @@ namespace Partitioner_Namespace {
                 boost::filesystem::remove_all(dirName);
             }
 
-            DataMgr *dataMgr;
+            Data_Namespace::DataMgr *dataMgr;
             LinearTablePartitioner *linearTablePartitioner;
     };
 
@@ -62,7 +63,7 @@ namespace Partitioner_Namespace {
 
         int numRows = 100;
         int * intData = new int[numRows];
-        int * floatData = new float[numRows];
+        float * floatData = new float[numRows];
         for (int i = 0; i < numRows; ++i) {
             intData[i] = i;
             floatData[i] = M_PI * i;
@@ -76,61 +77,7 @@ namespace Partitioner_Namespace {
         insertData.data.push_back((void*)floatData);
         insertData.numRows = numRows;
         linearTablePartitioner->insertData(insertData); 
+        dataMgr->checkpoint();
     }
 
-
-
-
-
-int main() {
-   
-    File_Namespace::FileMgr * fileMgr = new File_Namespace::FileMgr ("data");
-    Buffer_Namespace::BufferMgr bufferMgr (128*1048576, fileMgr);
-    vector <ColumnInfo> columnInfoVec;
-    ColumnInfo colInfo;
-    colInfo.columnId_ = 0;
-    colInfo.columnType_ = INT_TYPE; 
-    colInfo.bitSize_ = 32;
-    colInfo.insertBuffer_ = 0;
-    columnInfoVec.push_back(colInfo);
-    colInfo.columnId_ = 1;
-    colInfo.columnType_ = FLOAT_TYPE; 
-    colInfo.bitSize_ = 32;
-    colInfo.insertBuffer_ = 0;
-    columnInfoVec.push_back(colInfo);
-    LinearTablePartitioner linearTablePartitioner(0, columnInfoVec, bufferMgr, 1048576 );
-
-    vector <int> columnIds; 
-    vector <void *> data;
-    columnIds.push_back(0);
-    columnIds.push_back(1);
-    int intData = 3;
-    data.push_back(static_cast <void *> (&intData));
-    float floatData = 7.2;
-    data.push_back(static_cast <void *> (&floatData));
-
-    for (int i = 0; i < 40; ++i) {
-        for (int r = 0; r < 100000; ++r) { 
-            linearTablePartitioner.insertData(columnIds,data,1);
-        }
-        vector <PartitionInfo> partitions;
-        linearTablePartitioner.getPartitionsForQuery(partitions);
-        cout << endl << "Query " << i << endl;
-        for (int p = 0; p < partitions.size(); ++p)
-            cout << partitions[p].partitionId_ << " " << partitions[p].numTuples_ << endl;
-    }
-
-
-
-
-    //linearTablePartitioner.insertData
-
-
-
-
-
-
-
-
-}
-
+} // Partitioner_Namespace

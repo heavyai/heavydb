@@ -2,6 +2,8 @@
 #define PARTITIONER_PARTITIONER_H
 
 #include "../../Shared/types.h"
+#include "../../DataMgr/ChunkMetadata.h"
+#include <map>
 #include <vector>
 
 namespace Partitioner_Namespace {
@@ -48,10 +50,10 @@ namespace Partitioner_Namespace {
         int partitionId;
         mapd_size_t numTuples;
         mapd_size_t shadowNumTuples;
-        vector<int> deviceIds;
-        vector<ChunkMetadata> chunkMetadata;
-        map <int, ChunkMetadata> chunkMetadataMap; 
-        map <int, ChunkMetadata> shadowChunkMetadataMap; 
+        std::vector<int> deviceIds;
+        std::vector<ChunkMetadata> chunkMetadata;
+        std::map <int, ChunkMetadata> chunkMetadataMap; 
+        std::map <int, ChunkMetadata> shadowChunkMetadataMap; 
     };
     
     /**
@@ -64,7 +66,7 @@ namespace Partitioner_Namespace {
      */
     
     struct QueryInfo {
-        vector <int> chunkKeyPrefix; 
+        std::vector <int> chunkKeyPrefix; 
         std::vector<PartitionInfo> partitions;
         //mapd_size_t numTuples;
     };

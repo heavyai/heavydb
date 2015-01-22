@@ -3,6 +3,7 @@
 #include "../../DataMgr/AbstractBuffer.h"
 #include <math.h>
 #include <iostream>
+#include <thread>
 
 #include <assert.h>
 #include <boost/lexical_cast.hpp>
@@ -15,8 +16,8 @@ using namespace std;
 namespace Partitioner_Namespace {
 
 LinearTablePartitioner::LinearTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
-		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"),{
-    for (auto & colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
+		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"){
+    for (auto colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
         columnMap_[colIt -> columnId] = *colIt; 
     }
 }
@@ -47,7 +48,7 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
             auto colMapIt = columnMap_.find(columnId);
             assert(colMapIt != columnMap_.end());
             AbstractBuffer *insertBuffer = colMapIt->second.insertBuffer;
-            shadowChunkMetadataMap[columnId] = colMapIt->insertBuffer->encoder->append(static_cast<mapd_addr_t>(insertDataStruct.data[i]),numRowsToInsert);
+            partitionInfoVec_.back().shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(static_cast<mapd_addr_t>(insertDataStruct.data[i]),numRowsToInsert);
         }
 
 
@@ -55,7 +56,7 @@ void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
         numRowsLeft -= numRowsToInsert;
         numRowsInserted += numRowsToInsert;
     }
-    boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_)
+    boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
     for (auto partIt = partitionsToBeUpdated.begin(); partIt != partitionsToBeUpdated.end(); ++partIt) {
         (*partIt)->numTuples = (*partIt)->shadowNumTuples;
         (*partIt)->chunkMetadataMap=(*partIt)->shadowChunkMetadataMap;
@@ -72,17 +73,17 @@ void LinearTablePartitioner::createNewPartition() {
         if (colMapIt -> second.insertBuffer != 0) {
             colMapIt -> second.insertBuffer -> unPin();
         }
-        ChunkKey chunkKey =  chunkKeyPrefix;
-        chunkKey.push_back(maxPartitionId_)
+        ChunkKey chunkKey =  chunkKeyPrefix_;
         chunkKey.push_back(colMapIt->second.columnId);
-        colMapIt->second.insertBuffer = dataMgr_->createChunk(DISK_LEVEL,chunkKey);
+        chunkKey.push_back(maxPartitionId_);
+        colMapIt->second.insertBuffer = dataMgr_->createChunk(Data_Namespace::DISK_LEVEL,chunkKey);
         colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnType,colMapIt->second.encodingType,colMapIt->second.encodingBits);
     }
     PartitionInfo newPartitionInfo;
     newPartitionInfo.partitionId = maxPartitionId_;
     newPartitionInfo.numTuples = 0; 
 
-    boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_)
+    boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
     partitionInfoVec_.push_back(newPartitionInfo);
 }
 
@@ -105,7 +106,7 @@ void LinearTablePartitioner::getInsertBufferChunks() {
             colMapIt -> second.insertBuffer -> unPin();
         }
         ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnId};
-        colMapIt -> second.insertBuffer = dataManager_.getChunk(DISK_LEVEL,chunkKey);
+        colMapIt -> second.insertBuffer = dataMgr_->getChunk(Data_Namespace::DISK_LEVEL,chunkKey);
     }
 }
 /*

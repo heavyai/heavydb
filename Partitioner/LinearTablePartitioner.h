@@ -10,6 +10,13 @@
 
 #include <vector>
 #include <map>
+#include <boost/thread.hpp>
+
+#include <mutex>
+
+namespace Data_Namespace {
+    class DataMgr; 
+}
 
 namespace Partitioner_Namespace {
 
@@ -24,7 +31,7 @@ class LinearTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    LinearTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/) :
+    LinearTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
     virtual ~LinearTablePartitioner();
     /**
@@ -39,7 +46,8 @@ public:
      * data inserted in time order)
      */
 
-    virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0);
+    //virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0);
+    virtual void getPartitionsForQuery(QueryInfo &queryInfo);
 
     /**
      * @brief appends data onto the most recently occuring
@@ -53,7 +61,7 @@ public:
      * @brief get partitioner's id
      */
 
-    inline int getPartitionerId () {return  chunkKeyPrefix_.back()}
+    inline int getPartitionerId () {return  chunkKeyPrefix_.back();}
     /**
      * @brief get partitioner's type (as string
      */
@@ -71,6 +79,8 @@ private:
     std::vector<PartitionInfo> partitionInfoVec_; /**< data about each partition stored - id and number of rows */  
     //int currentInsertBufferPartitionId_;
     Data_Namespace::DataMgr *dataMgr_;
+    boost::shared_mutex readWriteMutex_;  
+    
 
     /**
      * @brief creates new partition, calling createChunk()

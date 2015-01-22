@@ -14,7 +14,7 @@
 // Should the ColumnInfo and PartitionInfo structs be in
 // AbstractTablePartitioner?
 
-namespace Memory_Namespace {
+namespace Data_Namespace {
     class AbstractBuffer;
     class AbstractDataMgr;
 };
@@ -30,7 +30,7 @@ namespace Partitioner_Namespace {
 
 struct ColumnInfo {
     int columnId; // for when we iterate over all structs of ColumnInfo instead of using a map
-    SQLTypeInfo columnType; 
+    SQLTypes columnType; 
     EncodingType encodingType;
     int encodingBits;
     Data_Namespace::AbstractBuffer * insertBuffer; // a pointer so can be null
@@ -64,7 +64,8 @@ class AbstractTablePartitioner {
          * keeps. May also prune the predicate.
          */
 
-        virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
+        //virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
+        virtual void getPartitionsForQuery(QueryInfo &queryInfo) = 0;
 
         /**
          * @brief Given data wrapped in an InsertData struct,
