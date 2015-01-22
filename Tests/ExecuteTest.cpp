@@ -36,7 +36,7 @@ Catalog_Namespace::Catalog get_catalog() {
 
 Catalog_Namespace::Catalog g_cat(get_catalog());
 
-int64_t run_simple_agg(const std::string& query_str) {
+Executor::AggResult run_simple_agg(const std::string& query_str) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -53,7 +53,7 @@ int64_t run_simple_agg(const std::string& query_str) {
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
   Executor executor(plan);
-  return executor.execute(ExecutorOptLevel::LoopStrengthReduction);
+  return executor.execute(ExecutorOptLevel::LoopStrengthReduction).front();
 }
 
 void run_ddl_statement(const std::string& create_table_stmt) {
@@ -70,25 +70,34 @@ void run_ddl_statement(const std::string& create_table_stmt) {
     ddl->execute(g_cat);
 }
 
+template<class T>
+T v(const Executor::AggResult& r) {
+  auto p = boost::get<T>(&r);
+  CHECK(p);
+  return *p;
+}
+
 }
 
 TEST(Select, FilterAndAggregation) {
-  ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test;"), 1000000);
-  ASSERT_EQ(run_simple_agg("SELECT MIN(x) FROM test;"), 42);
-  ASSERT_EQ(run_simple_agg("SELECT MAX(x) FROM test;"), 42);
-  ASSERT_EQ(run_simple_agg("SELECT SUM(x + y) FROM test;"), 84000000);
-  ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 41 AND x < 43;"), 1000000);
-  ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test WHERE x <> 42;"), 0);
-  ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y = 84;"), 1000000);
-  ASSERT_EQ(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x + y = 84;"), 84000000);
-  ASSERT_EQ(run_simple_agg("SELECT COUNT(*) FROM test WHERE x - y = 0;"), 1000000);
-  ASSERT_EQ(run_simple_agg("SELECT SUM(2 * x) FROM test WHERE x = 42;"), 84000000);
-  ASSERT_EQ(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x - y = 0;"), 84000000);
-  ASSERT_EQ(run_simple_agg("SELECT SUM(x * y + 15) FROM test WHERE x + y + 6 = 90;"), 1779000000);
-  ASSERT_EQ(run_simple_agg("SELECT MIN(x * y + 15) FROM test WHERE x + y + 6 = 90;"), 1779);
-  ASSERT_EQ(run_simple_agg("SELECT MAX(x * y + 15) FROM test WHERE x + y + 6 = 90;"), 1779);
-  ASSERT_EQ(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 42;"), std::numeric_limits<int64_t>::max());
-  ASSERT_EQ(run_simple_agg("SELECT MIN(x) FROM test WHERE x = 42;"), 42);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;")), 1000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test;")), 42);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test;")), 42);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test;")), 84000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 41 AND x < 43;")), 1000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x <> 42;")), 0);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y = 84;")), 1000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x + y = 84;")), 84000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x - y = 0;")), 1000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(2 * x) FROM test WHERE x = 42;")), 84000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x - y = 0;")), 84000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x * y + 15) FROM test WHERE x + y + 6 = 90;")), 1779000000);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x * y + 15) FROM test WHERE x + y + 6 = 90;")), 1779);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x * y + 15) FROM test WHERE x + y + 6 = 90;")), 1779);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 42;")), std::numeric_limits<int64_t>::max());
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x = 42;")), 42);
+  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y) FROM test;")), 84.);
+  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 41 AND x < 43;")), 42.);
 }
 
 int main(int argc, char** argv)

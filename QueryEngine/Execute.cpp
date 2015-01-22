@@ -34,7 +34,7 @@ Executor::~Executor() {
   delete execution_engine_;
 }
 
-int64_t Executor::execute(const ExecutorOptLevel opt_level) {
+std::vector<Executor::AggResult> Executor::execute(const ExecutorOptLevel opt_level) {
   const auto plan = root_plan_->get_plan();
   CHECK(plan);
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
@@ -109,7 +109,7 @@ llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   default:
     LOG(FATAL) << "Unsupported integer width: " << width;
   }
-}
+}  // namespace
 
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   // TODO(alex)
@@ -325,22 +325,23 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
 
 namespace {
 
-template<typename TimeT = std::chrono::milliseconds>
-struct measure
-{
-  template<typename F, typename ...Args>
-  static typename TimeT::rep execution(F func, Args&&... args)
-  {
-    auto start = std::chrono::system_clock::now();
-    func(std::forward<Args>(args)...);
-    auto duration = std::chrono::duration_cast<TimeT>(std::chrono::system_clock::now() - start);
-    return duration.count();
+std::vector<Analyzer::AggExpr*> get_agg_exprs(const Planner::AggPlan* agg_plan) {
+  const auto& target_list = agg_plan->get_targetlist();
+  std::vector<Analyzer::AggExpr*> result;
+  for (auto target : target_list) {
+    const auto target_expr = target->get_expr();
+    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+    CHECK(agg_expr);
+    result.push_back(agg_expr);
   }
-};
-
+  return result;
 }
 
-int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel opt_level) {
+}  // namespace
+
+std::vector<Executor::AggResult> Executor::executeAggScanPlan(
+    const Planner::AggPlan* agg_plan,
+    const ExecutorOptLevel opt_level) {
   typedef void (*agg_query)(
     const int8_t** col_buffers,
     const int64_t* num_rows,
@@ -350,7 +351,8 @@ int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const Exe
   const int table_id = 1;
   const auto fragments = get_fragments(table_id);
   std::vector<std::pair<const ChunkKey, const size_t>> chunk_keys;
-  int64_t out = 0;
+  Executor::AggResult result;
+  int64_t out { 0 };
   for (const auto& fragment : fragments) {
     for (size_t local_col_id = 0; local_col_id < local_to_global_col_ids_.size(); ++local_col_id) {
       const int col_id = local_to_global_col_ids_[local_col_id];
@@ -366,8 +368,13 @@ int64_t Executor::executeAggScanPlan(const Planner::AggPlan* agg_plan, const Exe
       CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
     }
     reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_val_, &out);
+    const auto agg_exprs = get_agg_exprs(agg_plan);
+    CHECK_EQ(agg_exprs.size(), 1);
+    result = agg_exprs.front()->get_aggtype() == kAVG
+      ? Executor::AggResult(static_cast<double>(out) / num_rows)
+      : Executor::AggResult(out);
   }
-  return out;
+  return { result };
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
@@ -474,29 +481,34 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     col_heads);
 }
 
-std::tuple<std::string, const Analyzer::Expr*, int64_t> get_agg_name_and_expr(
-    const Planner::AggPlan* agg_plan) {
-  const auto& target_list = agg_plan->get_targetlist();
-  CHECK_EQ(target_list.size(), 1);
-  const auto target_expr = target_list.front()->get_expr();
-  const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-  CHECK(agg_expr);
+std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>>
+get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
+  std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
+  const auto agg_exprs = get_agg_exprs(agg_plan);
   // TODO(alex)
-  CHECK(!agg_expr->get_is_distinct());
-  switch (agg_expr->get_aggtype()) {
-  case kAVG:
-    CHECK(false);
-  case kMIN:
-    return std::make_tuple("agg_min", agg_expr->get_arg(), std::numeric_limits<int64_t>::max());
-  case kMAX:
-    return std::make_tuple("agg_max", agg_expr->get_arg(), std::numeric_limits<int64_t>::min());
-  case kSUM:
-    return std::make_tuple("agg_sum", agg_expr->get_arg(), 0);
-  case kCOUNT:
-    return std::make_tuple("agg_count", agg_expr->get_arg(), 0);
-  default:
-    CHECK(false);
+  for (auto agg_expr : agg_exprs) {
+    CHECK(!agg_expr->get_is_distinct());
+    switch (agg_expr->get_aggtype()) {
+    case kAVG:
+      result.emplace_back("agg_sum", agg_expr->get_arg(), 0);
+      break;
+    case kMIN:
+      result.emplace_back("agg_min", agg_expr->get_arg(), std::numeric_limits<int64_t>::max());
+      break;
+    case kMAX:
+      result.emplace_back("agg_max", agg_expr->get_arg(), std::numeric_limits<int64_t>::min());
+      break;
+    case kSUM:
+      result.emplace_back("agg_sum", agg_expr->get_arg(), 0);
+      break;
+    case kCOUNT:
+      result.emplace_back("agg_count", agg_expr->get_arg(), 0);
+      break;
+    default:
+      CHECK(false);
+    }
   }
+  return result;
 }
 
 }  // namespace
@@ -537,9 +549,14 @@ void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan, const Execut
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   // TODO(alex): heuristic for group by buffer size
-  auto agg_info = get_agg_name_and_expr(agg_plan);
-  init_agg_val_ = std::get<2>(agg_info);
-  call_aggregator(std::get<0>(agg_info), std::get<1>(agg_info), filter_lv, agg_plan->get_groupby_list(), 2048, module_);
+  {
+    auto agg_infos = get_agg_name_and_exprs(agg_plan);
+    // TODO(alex): fix, each aggregate column should have its own init value
+    init_agg_val_ = std::get<2>(agg_infos.front());
+    for (const auto agg_info : agg_infos) {
+      call_aggregator(std::get<0>(agg_info), std::get<1>(agg_info), filter_lv, agg_plan->get_groupby_list(), 2048, module_);
+    }
+  }
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter

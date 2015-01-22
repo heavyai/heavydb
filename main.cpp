@@ -234,7 +234,13 @@ main(int argc, char* argv[])
 					if (debug) plan->print();
 					if (execute) {
 						Executor executor(plan);
-						cout << executor.execute() << endl;
+						const auto results = executor.execute();
+						CHECK(results.size());
+						cout << results[0];
+						for (size_t i = 1; i < results.size(); ++i) {
+							cout << ", " << results[i];
+						}
+						cout << endl;
 					}
 				}
 			}
