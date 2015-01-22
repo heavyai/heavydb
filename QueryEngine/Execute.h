@@ -25,7 +25,10 @@ class Executor {
 public:
   Executor(const Planner::RootPlan* root_plan);
   ~Executor();
+
+  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t> AggInfo;
   typedef boost::variant<int64_t, double> AggResult;
+
   std::vector<AggResult> execute(const ExecutorOptLevel = ExecutorOptLevel::Default);
 private:
   llvm::Value* codegen(const Analyzer::Expr*) const;
@@ -41,9 +44,8 @@ private:
   void executeScanPlan(const Planner::Scan* scan_plan);
   void compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
   void* optimizeAndCodegen(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
-  void call_aggregator(
-    const std::string& agg_name,
-    const Analyzer::Expr* aggr_col,
+  void call_aggregators(
+    const std::vector<AggInfo>& agg_infos,
     llvm::Value* filter_result,
     const std::list<Analyzer::Expr*>& group_by_cols,
     const int32_t groups_buffer_entry_count,
