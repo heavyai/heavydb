@@ -1,9 +1,9 @@
-#include "Analyzer/Analyzer.h"
-#include "Catalog/Catalog.h"
-#include "Parser/parser.h"
-#include "Parser/ParserNode.h"
-#include "Planner/Planner.h"
-#include "QueryEngine/Execute.h"
+#include "../Analyzer/Analyzer.h"
+#include "../Catalog/Catalog.h"
+#include "../Parser/parser.h"
+#include "../Parser/ParserNode.h"
+#include "../Planner/Planner.h"
+#include "../QueryEngine/Execute.h"
 
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
