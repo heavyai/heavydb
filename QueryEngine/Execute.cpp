@@ -109,7 +109,7 @@ llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   default:
     LOG(FATAL) << "Unsupported integer width: " << width;
   }
-}
+}  // namespace
 
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   // TODO(alex)
@@ -337,7 +337,7 @@ std::vector<Analyzer::AggExpr*> get_agg_exprs(const Planner::AggPlan* agg_plan) 
   return result;
 }
 
-}
+}  // namespace
 
 std::vector<Executor::AggResult> Executor::executeAggScanPlan(
     const Planner::AggPlan* agg_plan,
