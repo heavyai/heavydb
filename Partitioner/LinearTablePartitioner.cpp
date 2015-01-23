@@ -26,49 +26,73 @@ LinearTablePartitioner::~LinearTablePartitioner() {
 
 }
 
-void LinearTablePartitioner::insertData (const InsertData &insertDataStruct) {
+void LinearTablePartitioner::insertData (InsertData &insertDataStruct) {
+    boost::lock_guard<boost::mutex> insertLock (insertMutex_); // prevent two threads from trying to insert into the same table simultaneously
+
     mapd_size_t numRowsLeft = insertDataStruct.numRows;
     mapd_size_t numRowsInserted = 0;
-    vector <PartitionInfo *> partitionsToBeUpdated;  
-    if (maxPartitionId_ < 0 && numRowsLeft > 0) { // if no partitions exist for table and there is >= 1 row to insert
-        createNewPartition();
+    //vector <PartitionInfo *> partitionsToBeUpdated;  
+    //std::vector<PartitionInfo>::iterator partIt = partitionInfoVec_.back();
+    if (numRowsLeft <= 0) {
+        return;
     }
+
+    PartitionInfo *currentPartition=0;
+
+    if (partitionInfoVec_.empty()) { // if no partitions exist for table 
+        currentPartition = createNewPartition();
+    }
+    else {
+        currentPartition = &(partitionInfoVec_.back());
+    }
+    size_t startPartition = partitionInfoVec_.size() - 1;
+
     while (numRowsLeft > 0) { // may have to create multiple partitions for bulk insert
+        cout << "Num rows left: " << numRowsLeft << endl;
         // loop until done inserting all rows
-        mapd_size_t rowsLeftInCurrentPartition = maxPartitionRows_ - partitionInfoVec_.back().numTuples;
+        mapd_size_t rowsLeftInCurrentPartition = maxPartitionRows_ - currentPartition->shadowNumTuples;
+        cout << "Num rows left in currentPartition: " << rowsLeftInCurrentPartition << endl;
         if (rowsLeftInCurrentPartition == 0) {
-            createNewPartition();
+            currentPartition = createNewPartition(); 
             rowsLeftInCurrentPartition = maxPartitionRows_;
         }
         mapd_size_t numRowsToInsert = min(rowsLeftInCurrentPartition, numRowsLeft);
         // for each column, append the data in the appropriate insert buffer
-        partitionsToBeUpdated.push_back(&(partitionInfoVec_.back()));
         for (int i = 0; i < insertDataStruct.columnIds.size(); ++i) {
             int columnId = insertDataStruct.columnIds[i];
             auto colMapIt = columnMap_.find(columnId);
             assert(colMapIt != columnMap_.end());
             AbstractBuffer *insertBuffer = colMapIt->second.insertBuffer;
-            partitionInfoVec_.back().shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(static_cast<mapd_addr_t>(insertDataStruct.data[i]),numRowsToInsert);
+            currentPartition->shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(insertDataStruct.data[i],numRowsToInsert);
+            //partitionInfoVec_.back().shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(static_cast<mapd_addr_t>(insertDataStruct.data[i]),numRowsToInsert);
         }
 
-
-        partitionInfoVec_.back().shadowNumTuples = partitionInfoVec_.back().numTuples + numRowsToInsert;
+        currentPartition->shadowNumTuples = partitionInfoVec_.back().numTuples + numRowsToInsert;
+        cout << "Shadow tuples: "  << currentPartition->shadowNumTuples << endl;
+        //partitionInfoVec_.back().shadowNumTuples = partitionInfoVec_.back().numTuples + numRowsToInsert;
+        //cout << "Shadow tuples"  << partitionInfoVec_.back().shadowNumTuples << endl;
+        //partitionsToBeUpdated.push_back(&(partitionInfoVec_.back()));
         numRowsLeft -= numRowsToInsert;
         numRowsInserted += numRowsToInsert;
     }
-    boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
-    for (auto partIt = partitionsToBeUpdated.begin(); partIt != partitionsToBeUpdated.end(); ++partIt) {
-        (*partIt)->numTuples = (*partIt)->shadowNumTuples;
-        (*partIt)->chunkMetadataMap=(*partIt)->shadowChunkMetadataMap;
+    boost::unique_lock < boost::shared_mutex > writeLock (partitionInfoMutex_);
+    cout << "Before update" << endl;
+    //for (auto partIt = partitionsToBeUpdated.begin(); partIt != partitionsToBeUpdated.end(); ++partIt) {
+    for (auto partIt = partitionInfoVec_.begin() + startPartition; partIt != partitionInfoVec_.end(); ++partIt) { 
+        cout << partIt->shadowNumTuples << endl;
+        partIt->numTuples = partIt->shadowNumTuples;
+        partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
     }
+    cout << "After update" << endl;
 }
 
-void LinearTablePartitioner::createNewPartition() { 
+PartitionInfo * LinearTablePartitioner::createNewPartition() { 
     // also sets the new partition as the insertBuffer for each column
 
     // iterate through all ColumnInfo structs in map, unpin previous insert buffer and
     // create new insert buffer
     maxPartitionId_++;
+    cout << "Create new partition: " << maxPartitionId_ << endl;
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
         if (colMapIt -> second.insertBuffer != 0) {
             colMapIt -> second.insertBuffer -> unPin();
@@ -81,17 +105,19 @@ void LinearTablePartitioner::createNewPartition() {
     }
     PartitionInfo newPartitionInfo;
     newPartitionInfo.partitionId = maxPartitionId_;
+    newPartitionInfo.shadowNumTuples = 0; 
     newPartitionInfo.numTuples = 0; 
 
-    boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
+    boost::unique_lock < boost::shared_mutex > writeLock (partitionInfoMutex_);
     partitionInfoVec_.push_back(newPartitionInfo);
+    return &(partitionInfoVec_.back());
 }
 
 void LinearTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo) {
     queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
     // right now we don't test predicate, so just return (copy of) all partitions 
     {
-        boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_);
+        boost::shared_lock < boost::shared_mutex > readLock (partitionInfoMutex_);
         queryInfo.partitions = partitionInfoVec_; //makes a copy
     }
 }

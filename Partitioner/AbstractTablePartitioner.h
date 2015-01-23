@@ -72,7 +72,7 @@ class AbstractTablePartitioner {
          * inserts it into the correct partitions
          */
 
-        virtual void insertData (const InsertData &insertDataStruct) = 0;
+        virtual void insertData (InsertData &insertDataStruct) = 0;
 
         /**
          * @brief Gets the id of the partitioner

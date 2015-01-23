@@ -36,14 +36,8 @@ public:
     virtual ~LinearTablePartitioner();
     /**
      * @brief returns (inside QueryInfo) object all 
-     * ids and row sizes of partitions that could potentially
-     * satisify the given optional predicate.
+     * ids and row sizes of partitions 
      *
-     * Note that just because this partitioner partitions
-     * data only on insert order, doesn't mean that checking
-     * the predicate will not elimate the need to scan certain
-     * partitions (for example - in the case of 
-     * data inserted in time order)
      */
 
     //virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0);
@@ -56,7 +50,7 @@ public:
      * @todo be able to fill up current partition in
      * multi-row insert before creating new partition
      */
-    virtual void insertData (const InsertData &insertDataStruct);
+    virtual void insertData (InsertData &insertDataStruct);
     /**
      * @brief get partitioner's id
      */
@@ -79,7 +73,8 @@ private:
     std::vector<PartitionInfo> partitionInfoVec_; /**< data about each partition stored - id and number of rows */  
     //int currentInsertBufferPartitionId_;
     Data_Namespace::DataMgr *dataMgr_;
-    boost::shared_mutex readWriteMutex_;  
+    boost::shared_mutex partitionInfoMutex_; // to prevent read-write conflicts for partitionInfoVec_
+    boost::mutex insertMutex_; // to prevent race conditions on insert - only one insert statement should be going to a table at a time
     
 
     /**
@@ -90,7 +85,7 @@ private:
      * Also unpins the chunks of the previous insert buffer
      */
 
-    void createNewPartition();
+    PartitionInfo * createNewPartition();
 
     /**
      * @brief Called at readState to associate chunks of 

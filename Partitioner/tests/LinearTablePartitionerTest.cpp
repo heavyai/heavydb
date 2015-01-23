@@ -26,6 +26,7 @@ namespace Partitioner_Namespace {
     class LinearTablePartitionerTest : public ::testing::Test {
         protected:
             virtual void SetUp() {
+                maxPartitionRows = 1000000;
                 deleteData("data");
                 dataMgr = new Data_Namespace::DataMgr(2,"data");
                 ChunkKey chunkKeyPrefix = {0,1,2};
@@ -43,7 +44,7 @@ namespace Partitioner_Namespace {
                 colInfo.encodingBits = 8;
                 colInfo.insertBuffer = 0;
                 columnInfoVec.push_back(colInfo);
-                linearTablePartitioner = new LinearTablePartitioner(chunkKeyPrefix,columnInfoVec,dataMgr);
+                linearTablePartitioner = new LinearTablePartitioner(chunkKeyPrefix,columnInfoVec,dataMgr,maxPartitionRows);
             }
 
             virtual void TearDown() {
@@ -57,15 +58,16 @@ namespace Partitioner_Namespace {
 
             Data_Namespace::DataMgr *dataMgr;
             LinearTablePartitioner *linearTablePartitioner;
+            int64_t maxPartitionRows;
     };
 
     TEST_F (LinearTablePartitionerTest, insert) {
 
-        int numRows = 100;
+        int numRows = 50000000;
         int * intData = new int[numRows];
         float * floatData = new float[numRows];
         for (int i = 0; i < numRows; ++i) {
-            intData[i] = i;
+            intData[i] = i % 100;
             floatData[i] = M_PI * i;
         }
         InsertData insertData;
@@ -73,11 +75,27 @@ namespace Partitioner_Namespace {
         insertData.tableId = 1;
         insertData.columnIds.push_back(0);
         insertData.columnIds.push_back(1);
-        insertData.data.push_back((void*)intData);
-        insertData.data.push_back((void*)floatData);
+        insertData.data.push_back((mapd_addr_t)intData);
+        insertData.data.push_back((mapd_addr_t)floatData);
         insertData.numRows = numRows;
         linearTablePartitioner->insertData(insertData); 
         dataMgr->checkpoint();
+        QueryInfo queryInfo;
+        linearTablePartitioner->getPartitionsForQuery(queryInfo);
+        EXPECT_EQ(0,queryInfo.chunkKeyPrefix[0]);
+        EXPECT_EQ(1,queryInfo.chunkKeyPrefix[1]);
+        EXPECT_EQ(2,queryInfo.chunkKeyPrefix[2]);
+        EXPECT_EQ((numRows-1)/maxPartitionRows+1,queryInfo.partitions.size());
+        size_t numPartitions = queryInfo.partitions.size();
+        for (size_t p = 0; p != numPartitions; ++p) {
+            cout << "Num tuples: " << queryInfo.partitions[p].numTuples << endl;
+            size_t expectedRows = (p == numPartitions - 1 && numRows % maxPartitionRows != 0) ? numRows % maxPartitionRows : maxPartitionRows;
+            EXPECT_EQ(expectedRows,queryInfo.partitions[p].numTuples);
+        }
+
+        delete [] intData;
+        delete [] floatData;
+
     }
 
 } // Partitioner_Namespace

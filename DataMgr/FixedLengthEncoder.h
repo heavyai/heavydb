@@ -11,7 +11,7 @@ class FixedLengthEncoder : public Encoder {
     public:
         FixedLengthEncoder(Data_Namespace::AbstractBuffer *buffer): Encoder(buffer), dataMin(std::numeric_limits<T>::max()),dataMax(std::numeric_limits<T>::min()) {}
 
-        ChunkMetadata appendData(mapd_addr_t srcData, const mapd_size_t numAppendElems) {
+        ChunkMetadata appendData(mapd_addr_t &srcData, const mapd_size_t numAppendElems) {
             T * unencodedData = reinterpret_cast<T *> (srcData); 
             V * encodedData = new V [numAppendElems];  
             for (mapd_size_t i = 0; i < numAppendElems; ++i) {
@@ -37,6 +37,7 @@ class FixedLengthEncoder : public Encoder {
             delete [] encodedData;
             ChunkMetadata chunkMetadata;
             getMetadata(chunkMetadata);
+            srcData += numAppendElems *sizeof(T);
             return chunkMetadata;
         }
 

@@ -35,7 +35,7 @@ namespace Partitioner_Namespace {
         int tableId;						/// identifies the table into which the data is being inserted
         std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
         mapd_size_t numRows;				/// the number of rows being inserted
-        std::vector <void *> data;							/// points to the start of the data for the row(s) being inserted
+        std::vector <mapd_addr_t> data;							/// points to the start of the data for the row(s) being inserted
     };
     
     /**
