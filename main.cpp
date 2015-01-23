@@ -8,9 +8,10 @@
 #include "boost/filesystem.hpp"
 #include "Catalog/Catalog.h"
 #include "Parser/parser.h"
-#include "Parser/ParserNode.h"
 #include "Analyzer/Analyzer.h"
+#include "Parser/ParserNode.h"
 #include "Planner/Planner.h"
+#include "QueryEngine/Execute.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -18,18 +19,106 @@ using namespace Analyzer;
 using namespace Planner;
 
 void
-process_backslash_commands(const string &command, const Catalog &catalog)
+process_backslash_commands(const string &command, const Catalog &cat, SysCatalog &syscat)
 {
 	switch (command[1]) {
-		/*
+		case 'h':
+			cout << "\\d <table> List all columns of table.\n";
+			cout << "\\t List all tables.\n";
+			cout << "\\u List all users. \n";
+			cout << "\\l List all databases.\n";
+			cout << "\\q Quit.\n";
+			return;
 		case 'd':
-			if (
+			{
+				if (command[2] != ' ')
+					throw runtime_error("Correct use is \\d <table>.");
+				string table_name = command.substr(3);
+				const TableDescriptor *td = cat.getMetadataForTable(table_name);
+				if (td == nullptr)
+					throw runtime_error("Table " + table_name + " does not exist.");
+				list <const ColumnDescriptor *> col_list = cat.getAllColumnMetadataForTable(td->tableId);
+				cout << "TalbeId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
+				std::string SQLTypeName[] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT" };
+				std::string compression[] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE" };
+
+				for (auto cd : col_list) {
+					cout << cd->tableId << "|";
+					cout << cd->columnId << "|";
+					cout << cd->columnName << "|";
+					cout << SQLTypeName[cd->columnType.type] << "|";
+					cout << cd->columnType.dimension << "|";
+					cout << cd->columnType.scale << "|";
+					if (cd->columnType.notnull)
+						cout << "true|";
+					else
+						cout << "false|";
+					cout << compression[cd->compression] << "|";
+					cout << cd->comp_param << "|";
+					cout << cd->chunks << "\n";
+				}
+			}
+			break;
+		case 't':
+			{
+				cout << "TableId|TableName|NColumns|IsView|IsMaterialized|ViewSQL|Fragments|Partitions|Storage|Refresh|Ready\n";
+				list<const TableDescriptor *> table_list = cat.getAllTableMetadata();
+				std::string storage_name[] = { "DISK", "GPU", "CPU" };
+				std::string refresh_name[] = { "MANUAL", "AUTO", "IMMEDIATE" };
+				for (auto td : table_list) {
+					cout << td->tableId << "|";
+					cout << td->tableName << "|";
+					cout << td->nColumns << "|";
+					if (td->isView)
+						cout << "true|";
+					else
+						cout << "false|";
+					if (td->isMaterialized)
+						cout << "true|";
+					else
+						cout << "false|";
+					cout << td->viewSQL << "|";
+					cout << td->fragments << "|";
+					cout << td->partitions << "|";
+					cout << storage_name[td->storageOption] << "|";
+					cout << refresh_name[td->refreshOption] << "|";
+					if (td->isReady)
+						cout  << "true\n";
+					else
+						cout << "false\n";
+				}
+			}
+			break;
 		case 'l':
-		*/
+			{
+				cout << "DatabaseId|DatabaseName|OwnerId\n";
+				list<DBMetadata> db_list = syscat.getAllDBMetadata();
+				for (auto d : db_list) {
+					cout << d.dbId << "|";
+					cout << d.dbName << "|";
+					cout << d.dbOwner << "\n";
+				}
+			}
+			break;
+		case 'u':
+			{
+				cout << "UserId|UserName|IsSuper\n";
+				list<UserMetadata> user_list = syscat.getAllUserMetadata();
+				for (auto u : user_list) {
+					cout << u.userId << "|";
+					cout << u.userName << "|";
+					if (u.isSuper)
+						cout << "true\n";
+					else
+						cout << "false\n";
+				}
+			}
+			break;
 		case 'q':
 			exit(0);
+			break;
 		default:
-			throw runtime_error("Invalid backslash command.");
+			throw runtime_error("Invalid backslash command.  See \\h");
 	}
 }
 
@@ -40,6 +129,8 @@ main(int argc, char* argv[])
 	string db_name;
 	string user_name;
 	string passwd;
+	bool debug = false;
+	bool execute = false;
 	namespace po = boost::program_options;
 
 	po::options_description desc("Options");
@@ -48,7 +139,9 @@ main(int argc, char* argv[])
 		("path", po::value<string>(&base_path)->required(), "Directory path to Mapd catalogs")
 		("db", po::value<string>(&db_name), "Database name")
 		("user,u", po::value<string>(&user_name)->required(), "User name")
-		("passwd,p", po::value<string>(&passwd)->required(), "Password");
+		("passwd,p", po::value<string>(&passwd)->required(), "Password")
+		("debug,d", "Verbose debug mode")
+		("execute,e", "Execute queries");
 
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("path", 1);
@@ -62,6 +155,10 @@ main(int argc, char* argv[])
 			cout << "Usage: mapd -u <user name> -p <password> <catalog path> [<database name>]\n";
 			return 0;
 		}
+		if (vm.count("debug"))
+			debug = true;
+		if (vm.count("execute"))
+			execute = true;
 		po::notify(vm);
 	}
 	catch (boost::program_options::error &e)
@@ -113,7 +210,7 @@ main(int argc, char* argv[])
 				break;
 			}
 			if (input_str[0] == '\\') {
-				process_backslash_commands(input_str, cat);
+				process_backslash_commands(input_str, cat, sys_cat);
 				continue;
 			}
 			SQLParser parser;
@@ -131,10 +228,20 @@ main(int argc, char* argv[])
 					Parser::DMLStmt *dml = dynamic_cast<Parser::DMLStmt*>(stmt);
 					Query query;
 					dml->analyze(cat, query);
-					Optimizer optimizer(query);
+					Optimizer optimizer(query, cat);
 					RootPlan *plan = optimizer.optimize();
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
-					// @TODO execute plan
+					if (debug) plan->print();
+					if (execute) {
+						Executor executor(plan);
+						const auto results = executor.execute();
+						CHECK(results.size());
+						cout << results[0];
+						for (size_t i = 1; i < results.size(); ++i) {
+							cout << ", " << results[i];
+						}
+						cout << endl;
+					}
 				}
 			}
 		}

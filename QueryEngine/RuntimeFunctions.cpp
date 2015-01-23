@@ -6,6 +6,8 @@
 #include <string.h>
 
 
+// decoder implementations
+
 extern "C" __attribute__((always_inline))
 int64_t fixed_width_int_decode(
     const int8_t* byte_stream,
@@ -33,7 +35,6 @@ int64_t diff_fixed_width_int_decode(
   return fixed_width_int_decode(byte_stream, byte_width, pos) + baseline;
 }
 
-
 // aggregator implementations
 
 extern "C" __attribute__((always_inline))
@@ -56,10 +57,14 @@ void agg_min(int64_t* agg, const int64_t val) {
   *agg = std::min(*agg, val);
 }
 
-// query templates
+// placeholder functions -- either replaced by platform specific implementation
+// at runtime or auto-generated
 
 extern "C" int32_t pos_start();
 extern "C" int32_t pos_step();
+extern "C" void row_process(int64_t* out, const int64_t pos);
+
+// x64 stride functions
 
 extern "C" __attribute__((noinline))
 int32_t pos_start_impl() {
@@ -71,36 +76,7 @@ int32_t pos_step_impl() {
   return 1;
 }
 
-extern "C" void row_process(int64_t* out, const int64_t pos);
-
-extern "C"
-void query_template(const int8_t** byte_stream,
-                    const int64_t* row_count_ptr,
-                    const int64_t* agg_init_val,
-                    int64_t* out) {
-  auto row_count = *row_count_ptr;
-  auto result = *agg_init_val;
-  const auto start = pos_start();
-  const auto step = pos_step();
-  for (int64_t pos = start; pos < row_count; pos += step) {
-    row_process(&result, pos);
-  }
-  out[start] = result;
-}
-
-extern "C"
-void query_group_by_template(const int8_t** byte_stream,
-                    const int64_t* row_count_ptr,
-                    const int64_t* agg_init_val,
-                    int64_t** group_by_buffers) {
-  auto row_count = *row_count_ptr;
-  const auto start = pos_start();
-  const auto step = pos_step();
-  auto group_by_buffer = group_by_buffers[start];
-  for (int64_t pos = start; pos < row_count; pos += step) {
-    row_process(group_by_buffer, pos);
-  }
-}
+// group by helpers
 
 #define EMPTY_KEY std::numeric_limits<int64_t>::min()
 
@@ -140,7 +116,7 @@ int32_t key_hash(const int64_t* key, const int32_t key_qw_count, const int32_t g
   return hash;
 }
 
-extern "C" __attribute__((always_inline))
+extern "C"
 int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t groups_buffer_entry_count,
                          const int64_t* key,

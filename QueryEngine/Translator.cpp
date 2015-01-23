@@ -1,4 +1,5 @@
 #include "Translator.h"
+#include "QueryTemplateGenerator.h"
 
 #include <glog/logging.h>
 #include <llvm/ExecutionEngine/JIT.h>
@@ -65,19 +66,18 @@ llvm::Value* FetchIntCol::codegen(
     if (arg_idx == 1) {
       pos_arg = &arg;
     }
-    else if (arg_idx == col_id_ + 2) {
+    else if (arg_idx == static_cast<size_t>(col_id_) + 2) {
       CHECK(pos_arg);
       auto dec_val = decoder_->codegenDecode(
         &arg,
         pos_arg,
-        ir_builder,
         module);
       ir_builder.Insert(dec_val);
       auto dec_type = dec_val->getType();
       CHECK(dec_type->isIntegerTy());
       auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
       auto dec_val_cast = ir_builder.CreateCast(
-        width_ > dec_width ? llvm::Instruction::CastOps::SExt : llvm::Instruction::CastOps::Trunc,
+        (static_cast<size_t>(width_) > dec_width) ? llvm::Instruction::CastOps::SExt : llvm::Instruction::CastOps::Trunc,
         dec_val,
         get_int_type(width_));
       auto it_ok = fetch_cache_.insert(std::make_pair(
@@ -486,6 +486,11 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
     const std::string& pos_step_name) {
   auto& context = llvm::getGlobalContext();
   // read the LLIR embedded as ELF binary data
+#ifdef __APPLE__
+  llvm::SMDiagnostic err;
+  auto module = llvm::ParseIRFile("./RuntimeFunctions.ll", err, context);
+  CHECK(module);
+#else
   auto llir_size = reinterpret_cast<size_t>(&_binary_RuntimeFunctions_ll_size);
   auto llir_data_start = reinterpret_cast<const char*>(&_binary_RuntimeFunctions_ll_start);
   auto llir_data_end = reinterpret_cast<const char*>(&_binary_RuntimeFunctions_ll_end);
@@ -495,8 +500,10 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   llvm::SMDiagnostic err;
   auto module = llvm::ParseIR(llir_mb, err, context);
   CHECK(module);
+#endif
 
-  auto query_func = module->getFunction(query_template_name);
+  auto query_func = query_template_name == "query_template"
+    ? query_template(module, 1) : query_group_by_template(module, 1);
   CHECK(query_func);
   bind_pos_placeholders(pos_start_name, query_func, module);
   bind_pos_placeholders(pos_step_name, query_func, module);

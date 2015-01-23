@@ -67,15 +67,15 @@ using namespace Parser;
 	/* literal keyword tokens */
 
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
-%token CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
+%token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
 %token DATABASE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
-%token ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
-%token GRANT GROUP HAVING IN INSERT INTEGER INTO
-%token IS KEY LANGUAGE LAST LIKE NULLX NUMERIC OF ON OPEN OPTION
+%token ELSE END ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
+%token GRANT GROUP HAVING IF IN INSERT INTEGER INTO
+%token IS KEY LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
 %token SMALLINT SOME TABLE TEXT TIME TIMESTAMP TO UNION
-%token UNIQUE UPDATE USER VALUES VIEW WHENEVER WHERE WITH WORK
+%token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
 %start sql_list
 
@@ -96,6 +96,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| create_view_statement { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
+	| refresh_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -174,17 +175,27 @@ name_eq_value_list:
 name_eq_value: NAME EQUAL STRING { $<nodeval>$ = new NameValueAssign($<stringval>1, $<stringval>3); }
 		;
 
+opt_if_not_exists:
+		IF NOT EXISTS { $<boolval>$ = true; }
+		| /* empty */ { $<boolval>$ = false; }
+		;
+
 create_table_statement:
-		CREATE TABLE table '(' base_table_element_commalist ')'
+		CREATE TABLE opt_if_not_exists table '(' base_table_element_commalist ')'
 		{
-			$<nodeval>$ = new CreateTableStmt($<stringval>3, reinterpret_cast<std::list<TableElement*>*>($<listval>5));
+			$<nodeval>$ = new CreateTableStmt($<stringval>4, reinterpret_cast<std::list<TableElement*>*>($<listval>6), $<boolval>3);
 		}
 	;
 
+opt_if_exists:
+		IF EXISTS { $<boolval>$ = true; }
+		| /* empty */ { $<boolval>$ = false; }
+		;
+
 drop_table_statement:
-		DROP TABLE table
+		DROP TABLE opt_if_exists table
 		{
-			$<nodeval>$ = new DropTableStmt($<stringval>3);
+			$<nodeval>$ = new DropTableStmt($<stringval>4, $<boolval>3);
 		}
 		;
 
@@ -262,18 +273,43 @@ column_commalist:
 	}
 	;
 
+opt_with_option_list:
+		WITH '(' name_eq_value_list ')'
+		{ $<listval>$ = $<listval>3; }
+		| /* empty */
+		{ $<listval>$ = nullptr; }
+		;
+
 create_view_statement:
-		CREATE VIEW table opt_column_commalist
+		CREATE VIEW opt_if_not_exists table opt_column_commalist
 		AS query_spec opt_with_check_option
 		{
-			$<nodeval>$ = new CreateViewStmt($<stringval>3, $<slistval>4, dynamic_cast<QuerySpec*>($<nodeval>6), $<boolval>7);
+			$<nodeval>$ = new CreateViewStmt($<stringval>4, $<slistval>5, dynamic_cast<QuerySpec*>($<nodeval>7), $<boolval>8, false, nullptr, $<boolval>3);
+		}
+		| CREATE NAME VIEW opt_if_not_exists table opt_column_commalist opt_with_option_list
+		AS query_spec
+		{
+			if (!boost::iequals(*$<stringval>2, "materialized"))
+				throw std::runtime_error("Invalid word " + *$<stringval>2);
+			$<nodeval>$ = new CreateViewStmt($<stringval>5, $<slistval>6, dynamic_cast<QuerySpec*>($<nodeval>9), false, true, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7), $<boolval>4);
 		}
 	;
 
-drop_view_statement:
-		DROP VIEW table
+refresh_view_statement:
+		NAME NAME VIEW table
 		{
-			$<nodeval>$ = new DropViewStmt($<stringval>3);
+			if (!boost::iequals(*$<stringval>1, "refresh"))
+				throw std::runtime_error("Invalid word " + *$<stringval>1);
+			if (!boost::iequals(*$<stringval>2, "materialized"))
+				throw std::runtime_error("Invalid word " + *$<stringval>2);
+			$<nodeval>$ = new RefreshViewStmt($<stringval>4);
+		}
+		;
+
+drop_view_statement:
+		DROP VIEW opt_if_exists table
+		{
+			$<nodeval>$ = new DropViewStmt($<stringval>4, $<boolval>3);
 		}
 		;
 	
@@ -490,9 +526,28 @@ opt_where_clause:
 	|	where_clause { $<nodeval>$ = $<nodeval>1; }
 	;
 
+opt_limit_clause:
+		LIMIT INTNUM { $<intval>$ = $<intval>2; }
+	| LIMIT ALL { $<intval>$ = 0; /* 0 means ALL */ }
+	| /* empty */ { $<intval>$ = 0; /* 0 means ALL */ }
+	;
+opt_offset_clause:
+		OFFSET INTNUM { $<intval>$ = $<intval>2; }
+	| OFFSET INTNUM NAME
+	{
+		if (!boost::iequals(*$<stringval>3, "row") && !boost::iequals(*$<stringval>3, "rows"))
+			throw std::runtime_error("Invalid word in OFFSET clause " + *$<stringval>3);
+		$<intval>$ = $<intval>2;
+	}
+	| /* empty */ 
+	{
+		$<intval>$ = 0;
+	}
+	;
+
 select_statement:
-		query_exp opt_order_by_clause
-		{ $<nodeval>$ = new SelectStmt(dynamic_cast<QueryExpr*>($<nodeval>1), reinterpret_cast<std::list<OrderSpec*>*>($<listval>2)); }
+		query_exp opt_order_by_clause opt_limit_clause opt_offset_clause
+		{ $<nodeval>$ = new SelectStmt(dynamic_cast<QueryExpr*>($<nodeval>1), reinterpret_cast<std::list<OrderSpec*>*>($<listval>2), $<intval>3, $<intval>4); }
 	;
 
 	/* query expressions */
@@ -685,6 +740,9 @@ scalar_exp:
 	|	column_ref { $<nodeval>$ = $<nodeval>1; }
 	|	function_ref { $<nodeval>$ = $<nodeval>1; }
 	|	'(' scalar_exp ')' { $<nodeval>$ = $<nodeval>2; }
+	| CAST '(' scalar_exp AS data_type ')'
+	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
+	/* | case_exp; */
 	;
 
 select_entry: scalar_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }

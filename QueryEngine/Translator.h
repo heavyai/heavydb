@@ -1,5 +1,5 @@
-#ifndef QUERYENGINE_EXECUTE_TRANSLATOR_H
-#define QUERYENGINE_EXECUTE_TRANSLATOR_H
+#ifndef QUERYENGINE_TRANSLATOR_H
+#define QUERYENGINE_TRANSLATOR_H
 
 #include "Codec.h"
 
@@ -321,4 +321,4 @@ private:
   void* query_native_code_;
 };
 
-#endif  // QUERYENGINE_EXECUTE_TRANSLATOR_H
+#endif  // QUERYENGINE_TRANSLATOR_H

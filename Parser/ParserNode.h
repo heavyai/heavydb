@@ -27,12 +27,27 @@ namespace Parser {
 	class Node {
 	public:
 		virtual ~Node() {}
-		// for debugging only
-		virtual std::string to_string() {
-			return "NOT IMPLEMENTED!";
-		}
 	};
 
+	/*
+	 * @type SQLType
+	 * @brief class that captures type, predication and scale.
+	 */
+	class SQLType : public Node {
+		public:
+			SQLType(SQLTypes t) : type(t), param1(0), param2(0) {}
+			SQLType(SQLTypes t, int p1) : type(t), param1(p1), param2(0) {}
+			SQLType(SQLTypes t, int p1, int p2) : type(t), param1(p1), param2(p2) {}
+			SQLTypes get_type() const { return type; }
+			int get_param1() const { return param1; }
+			int get_param2() const { return param2; }
+			std::string to_string() const;
+		private:
+			SQLTypes	type;
+			int param1; // e.g. for NUMERIC(10).  0 means unspecified.
+			int param2; // e.g. for NUMERIC(10,3). 0 means unspecified.
+	};
+			
 	/*
 	 * @type Expr
 	 * @brief root super class for all expression nodes
@@ -45,6 +60,7 @@ namespace Parser {
 			 * @return An Analyzer::Expr object for the expression post semantic analysis
 			 */
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const = 0;
+			virtual std::string to_string() const = 0;
 	};
 
 	/*
@@ -54,6 +70,7 @@ namespace Parser {
 	class Literal : public Expr {
 		public:
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const = 0;
+			virtual std::string to_string() const = 0;
 	};
 
 	/*
@@ -64,6 +81,7 @@ namespace Parser {
 		public:
 			NullLiteral() {}
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "NULL"; }
 	};
 
 	/*
@@ -76,6 +94,7 @@ namespace Parser {
 			virtual ~StringLiteral() { delete stringval; }
 			const std::string *get_stringval() { return stringval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "'" + *stringval + "'"; }
 		private:
 			std::string *stringval;
 	};
@@ -89,6 +108,7 @@ namespace Parser {
 			IntLiteral(int64_t i) : intval(i) {}
 			int64_t get_intval() { return intval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return boost::lexical_cast<std::string>(intval); }
 		private:
 			int64_t intval;
 	};
@@ -103,6 +123,7 @@ namespace Parser {
 			virtual ~FixedPtLiteral() { delete fixedptval; }
 			const std::string *get_fixedptval() { return fixedptval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return *fixedptval; }
 		private:
 			std::string *fixedptval;
 	};
@@ -116,6 +137,7 @@ namespace Parser {
 			FloatLiteral(float f) : floatval(f) {}
 			float get_floatval() { return floatval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return boost::lexical_cast<std::string>(floatval); }
 		private:
 			float floatval;
 	};
@@ -129,6 +151,7 @@ namespace Parser {
 			DoubleLiteral(double d) : doubleval(d) {}
 			double get_doubleval() { return doubleval; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return boost::lexical_cast<std::string>(doubleval); }
 		private:
 			double doubleval;
 	};
@@ -141,6 +164,7 @@ namespace Parser {
 		public:
 			UserLiteral() {}
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "USER"; }
 	};
 			
 	/*
@@ -155,6 +179,7 @@ namespace Parser {
 			const Expr *get_left() { return left; }
 			const Expr *get_right() { return right; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			SQLOps	optype;
 			Expr *left;
@@ -176,6 +201,7 @@ namespace Parser {
 			SQLQualifier get_qualifier() { return qualifier; }
 			void set_qualifier(SQLQualifier ql) { qualifier = ql; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			SQLQualifier qualifier;
 			QuerySpec *query;
@@ -187,6 +213,7 @@ namespace Parser {
 			virtual ~IsNullExpr() { delete arg; }
 			bool get_is_not() { return is_not; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			bool is_not;
 			Expr *arg;
@@ -203,6 +230,7 @@ namespace Parser {
 			bool get_is_not() { return is_not; }
 			const Expr *get_arg() { return arg; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const = 0;
+			virtual std::string to_string() const;
 		protected:
 			bool is_not;
 			Expr *arg;
@@ -218,6 +246,7 @@ namespace Parser {
 			virtual ~InSubquery() { delete subquery; }
 			const SubqueryExpr *get_subquery() { return subquery; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			SubqueryExpr *subquery;
 	};
@@ -232,6 +261,7 @@ namespace Parser {
 			virtual ~InValues();
 			const std::list<Expr*> *get_value_list() { return value_list; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			std::list<Expr*> *value_list;
 	};
@@ -249,6 +279,7 @@ namespace Parser {
 			const Expr *get_lower() { return lower; }
 			const Expr *get_upper() { return upper; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			bool is_not;
 			Expr *arg;
@@ -269,6 +300,7 @@ namespace Parser {
 			const Expr *get_like_string() { return like_string; }
 			const Expr *get_escape_string() { return escape_string; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			bool is_not;
 			Expr *arg;
@@ -286,6 +318,7 @@ namespace Parser {
 			virtual ~ExistsExpr();
 			const QuerySpec *get_query() { return query; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			QuerySpec *query;
 	};
@@ -302,6 +335,7 @@ namespace Parser {
 			const std::string *get_table() const { return table; }
 			const std::string *get_column() const { return column; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			std::string *table;
 			std::string *column; // can be nullptr in the t.* case
@@ -321,10 +355,21 @@ namespace Parser {
 			bool get_distinct() { return distinct; }
 			Expr *get_arg() { return arg; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
 		private:
 			std::string *name;
 			bool distinct; // only true for COUNT(DISTINCT x)
 			Expr *arg; // for COUNT, nullptr means '*'
+	};
+
+	class CastExpr : public Expr {
+		public:
+			CastExpr(Expr *a, SQLType *t) : arg(a), target_type(t) {}
+			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "CAST(" + arg->to_string() + " AS " + target_type->to_string() + ")"; }
+		private:
+			Expr *arg;
+			SQLType *target_type;
 	};
 
 	/*
@@ -338,6 +383,7 @@ namespace Parser {
 			virtual ~TableRef();
 			const std::string *get_table_name() { return table_name; }
 			const std::string *get_range_var() { return range_var; }
+			std::string to_string() const;
 		private:
 			std::string *table_name;
 			std::string *range_var;
@@ -377,24 +423,6 @@ namespace Parser {
 		// intentionally empty
 	};
 
-	/*
-	 * @type SQLType
-	 * @brief class that captures type, predication and scale.
-	 */
-	class SQLType : public Node {
-		public:
-			SQLType(SQLTypes t) : type(t), param1(0), param2(0) {}
-			SQLType(SQLTypes t, int p1) : type(t), param1(p1), param2(0) {}
-			SQLType(SQLTypes t, int p1, int p2) : type(t), param1(p1), param2(p2) {}
-			SQLTypes get_type() const { return type; }
-			int get_param1() const { return param1; }
-			int get_param2() const { return param2; }
-		private:
-			SQLTypes	type;
-			int param1; // e.g. for NUMERIC(10).  0 means unspecified.
-			int param2; // e.g. for NUMERIC(10,3). 0 means unspecified.
-	};
-			
 	/*
 	 * @type ColumnConstraintDef
 	 * @brief integrity constraint on a column
@@ -516,8 +544,8 @@ namespace Parser {
 	 */
 	class CreateTableStmt : public DDLStmt {
 		public:
-			CreateTableStmt(std::string *tab, std::list<TableElement*> * table_elems) :
-			table(tab), table_element_list(table_elems) {}
+			CreateTableStmt(std::string *tab, std::list<TableElement*> * table_elems, bool i) :
+			table(tab), table_element_list(table_elems), if_not_exists(i) {}
 			virtual ~CreateTableStmt();
 			const std::string *get_table() { return table; }
 			const std::list<TableElement*> *get_table_element_list() { return table_element_list; }
@@ -525,6 +553,7 @@ namespace Parser {
 		private:
 			std::string *table;
 			std::list<TableElement*> *table_element_list;
+			bool if_not_exists;
 	};
 
 	/*
@@ -533,12 +562,13 @@ namespace Parser {
 	 */
 	class DropTableStmt : public DDLStmt {
 		public:
-			DropTableStmt(std::string *tab) : table(tab) {}
+			DropTableStmt(std::string *tab, bool i) : table(tab), if_exists(i) {}
 			virtual ~DropTableStmt() { delete table; }
 			const std::string *get_table() { return table; }
 			virtual void execute(Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string *table;
+			bool if_exists;
 	};
 
 	/*
@@ -572,8 +602,9 @@ namespace Parser {
 		public:
 			SelectEntry(Expr *e, std::string *r) : select_expr(e), alias(r) {}
 			virtual ~SelectEntry();
-			const Expr *get_select_expr() { return select_expr; }
-			const std::string *get_alias() { return alias; }
+			const Expr *get_select_expr() const { return select_expr; }
+			const std::string *get_alias() const { return alias; }
+			std::string to_string() const;
 		private:
 			Expr *select_expr;
 			std::string *alias;
@@ -594,6 +625,7 @@ namespace Parser {
 			const std::list<ColumnRef*> *get_groupby_clause() { return groupby_clause; }
 			const Expr *get_having_clause() { return having_clause; }
 			virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			std::string to_string() const;
 		private:
 			bool is_distinct;
 			std::list<SelectEntry*> *select_clause; /* nullptr means SELECT * */
@@ -628,56 +660,6 @@ namespace Parser {
 	};
 
 	/*
-	 * @type SelectStmt
-	 * @brief SELECT statement
-	 */
-	class SelectStmt : public DMLStmt {
-		public:
-			SelectStmt(QueryExpr *q, std::list<OrderSpec*> *o) : query_expr(q), orderby_clause(o) {}
-			virtual ~SelectStmt();
-			const QueryExpr *get_query_expr() { return query_expr; }
-			const std::list<OrderSpec*> *get_orderby_clause() { return orderby_clause; }
-			virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
-		private:
-			QueryExpr *query_expr;
-			std::list<OrderSpec*> *orderby_clause;
-	};
-
-	/*
-	 * @type CreateViewStmt
-	 * @brief CREATE VIEW statement
-	 */
-	class CreateViewStmt : public DDLStmt {
-		public:
-			CreateViewStmt(std::string *v, std::list<std::string*> *c, QuerySpec *q, bool ck) : view_name(v), column_list(c), query(q), checkoption(ck) {}
-			virtual ~CreateViewStmt();
-			const std::string *get_view_name() { return view_name; }
-			const std::list<std::string*> *get_column_list() { return column_list; }
-			const QuerySpec *get_query() { return query; }
-			bool get_checkoption() { return checkoption; }
-			virtual void execute(Catalog_Namespace::Catalog &catalog);
-		private:
-			std::string *view_name;
-			std::list<std::string*> *column_list;
-			QuerySpec *query;
-			bool checkoption;
-	};
-
-	/*
-	 * @type DropViewStmt
-	 * @brief DROP VIEW statement
-	 */
-	class DropViewStmt : public DDLStmt {
-		public:
-			DropViewStmt(std::string *v) : view_name(v) {}
-			virtual ~DropViewStmt() { delete view_name; };
-			const std::string *get_view_name() { return view_name; }
-			virtual void execute(Catalog_Namespace::Catalog &catalog);
-		private:
-			std::string *view_name;
-	};
-
-	/*
 	 * @type NameValueAssign
 	 * @brief Assignment of a string value to a named attribute
 	 */
@@ -690,6 +672,71 @@ namespace Parser {
 		private:
 			std::string *name;
 			std::string *value;
+	};
+
+	/*
+	 * @type SelectStmt
+	 * @brief SELECT statement
+	 */
+	class SelectStmt : public DMLStmt {
+		public:
+			SelectStmt(QueryExpr *q, std::list<OrderSpec*> *o, int64_t l, int64_t f) : query_expr(q), orderby_clause(o), limit(l), offset(f) {}
+			virtual ~SelectStmt();
+			const QueryExpr *get_query_expr() { return query_expr; }
+			const std::list<OrderSpec*> *get_orderby_clause() { return orderby_clause; }
+			virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+		private:
+			QueryExpr *query_expr;
+			std::list<OrderSpec*> *orderby_clause;
+			int64_t limit;
+			int64_t offset;
+	};
+
+	/*
+	 * @type CreateViewStmt
+	 * @brief CREATE VIEW statement
+	 */
+	class CreateViewStmt : public DDLStmt {
+		public:
+			CreateViewStmt(std::string *v, std::list<std::string*> *c, QuerySpec *q, bool ck, bool m, std::list<NameValueAssign*> *o, bool i) : view_name(v), column_list(c), query(q), checkoption(ck), is_materialized(m), matview_options(o), if_not_exists(i) {}
+			virtual ~CreateViewStmt();
+			const std::string *get_view_name() { return view_name; }
+			const std::list<std::string*> *get_column_list() { return column_list; }
+			const QuerySpec *get_query() { return query; }
+			bool get_checkoption() { return checkoption; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *view_name;
+			std::list<std::string*> *column_list;
+			QuerySpec *query;
+			bool checkoption;
+			bool is_materialized;
+			std::list<NameValueAssign*> *matview_options;
+			bool if_not_exists;
+	};
+
+	class RefreshViewStmt : public DDLStmt {
+		public:
+			RefreshViewStmt(std::string *v) : view_name(v) {}
+			virtual ~RefreshViewStmt() { delete view_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *view_name;
+	};
+
+	/*
+	 * @type DropViewStmt
+	 * @brief DROP VIEW statement
+	 */
+	class DropViewStmt : public DDLStmt {
+		public:
+			DropViewStmt(std::string *v, bool i) : view_name(v), if_exists(i) {}
+			virtual ~DropViewStmt() { delete view_name; };
+			const std::string *get_view_name() { return view_name; }
+			virtual void execute(Catalog_Namespace::Catalog &catalog);
+		private:
+			std::string *view_name;
+			bool if_exists;
 	};
 
 	/*

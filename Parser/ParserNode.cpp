@@ -12,6 +12,8 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
+#include "../Planner/Planner.h"
+#include "parser.h"
 
 namespace Parser {
 	SubqueryExpr::~SubqueryExpr() 
@@ -162,6 +164,11 @@ namespace Parser {
 			delete column_list;
 		}
 		delete query;
+		if (matview_options != nullptr) {
+			for (auto p : *matview_options)
+				delete p;
+			delete matview_options;
+		}
 	}
 
 	InsertStmt::~InsertStmt()
@@ -356,7 +363,7 @@ namespace Parser {
 		(void)Analyzer::BinOper::analyze_type_info(kGE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
 		Analyzer::BinOper *lower_pred = new Analyzer::BinOper(kBOOLEAN, kGE, kONE, arg_expr->add_cast(new_left_type), lower_expr->add_cast(new_right_type));
 		(void)Analyzer::BinOper::analyze_type_info(kLE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-		Analyzer::BinOper *upper_pred = new Analyzer::BinOper(kBOOLEAN, kLE, kONE, arg_expr->add_cast(new_left_type), upper_expr->add_cast(new_right_type));
+		Analyzer::BinOper *upper_pred = new Analyzer::BinOper(kBOOLEAN, kLE, kONE, arg_expr->deep_copy()->add_cast(new_left_type), upper_expr->add_cast(new_right_type));
 		Analyzer::Expr *result = new Analyzer::BinOper(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
 		if (is_not)
 			result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
@@ -432,7 +439,8 @@ namespace Parser {
 		Analyzer::Expr *arg_expr;
 		bool is_distinct = false;
 		if (boost::iequals(*name, "count")) {
-			result_type.type = kINT;
+			result_type.type = kBIGINT;
+			agg_type = kCOUNT;
 			if (arg == nullptr)
 				arg_expr = nullptr;
 			else
@@ -463,7 +471,19 @@ namespace Parser {
 			throw std::runtime_error("invalid function name: " + *name);
 		int naggs = query.get_num_aggs();
 		query.set_num_aggs(naggs+1);
-		return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct, naggs);
+		return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct);
+	}
+
+	Analyzer::Expr *
+	CastExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
+	{
+		Analyzer::Expr *arg_expr = arg->analyze(catalog, query);
+		SQLTypeInfo ti;
+		ti.type = target_type->get_type();
+		ti.dimension = target_type->get_param1();
+		ti.scale = target_type->get_param2();
+		ti.notnull = arg_expr->get_type_info().notnull;
+		return arg_expr->add_cast(ti);
 	}
 
 	void
@@ -479,34 +499,33 @@ namespace Parser {
 	void
 	QuerySpec::analyze_having_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
-		if (having_clause == nullptr) {
-			query.set_having_predicate(nullptr);
-			return;
-		}
-		Analyzer::Expr *p = having_clause->analyze(catalog, query);
-		if (p->get_type_info().type != kBOOLEAN)
-			throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
-		p->check_group_by(query.get_group_by());
+		Analyzer::Expr *p = nullptr;
+		if (having_clause != nullptr) {
+			p = having_clause->analyze(catalog, query);
+			if (p->get_type_info().type != kBOOLEAN)
+				throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
+			p->check_group_by(query.get_group_by());
+	  }
 		query.set_having_predicate(p);
 	}
 
 	void
 	QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
-		if (groupby_clause == nullptr) {
-			query.set_group_by(nullptr);
-			return;
+		std::list<Analyzer::Expr*> *groupby = nullptr;
+		if (groupby_clause != nullptr) {
+			groupby = new std::list<Analyzer::Expr*>();
+			for (auto c : *groupby_clause) {
+				Analyzer::Expr *e = c->analyze(catalog, query);
+				groupby->push_back(e);
+			}
 		}
-		std::list<Analyzer::Expr*> *groupby = new std::list<Analyzer::Expr*>();
-		for (auto c : *groupby_clause) {
-			Analyzer::Expr *e = c->analyze(catalog, query);
-			groupby->push_back(e);
-		}
-		for (auto t : query.get_targetlist()) {
-			Analyzer::Expr *e = t->get_expr();
-			if (typeid(*e) != typeid(Analyzer::AggExpr))
-				e->check_group_by(groupby);
-		}
+		if (query.get_num_aggs() > 0 || groupby != nullptr)
+			for (auto t : query.get_targetlist()) {
+				Analyzer::Expr *e = t->get_expr();
+				if (typeid(*e) != typeid(Analyzer::AggExpr))
+					e->check_group_by(groupby);
+			}
 		query.set_group_by(groupby);
 	}
 
@@ -535,7 +554,6 @@ namespace Parser {
 			}
 		}
 		else {
-			std::string resname;
 			for (auto p : *select_clause) {
 				const Parser::Expr *select_expr = p->get_select_expr();
 				// look for the case of range_var.*
@@ -550,6 +568,7 @@ namespace Parser {
 				}
 				else {
 					Analyzer::Expr *e = select_expr->analyze(catalog, query);
+					std::string resname;
 
 					if (p->get_alias() != nullptr)
 						resname = *p->get_alias();
@@ -574,6 +593,8 @@ namespace Parser {
 			table_desc = catalog.getMetadataForTable(*p->get_table_name());
 			if (table_desc == nullptr)
 				throw std::runtime_error("Table " + *p->get_table_name() + " does not exist." );
+			if (table_desc->isView && !table_desc->isMaterialized)
+				throw std::runtime_error("Non-materialized view " + *p->get_table_name() + " is not supported yet.");
 			std::string range_var;
 			if (p->get_range_var() == nullptr)
 				range_var = *p->get_table_name();
@@ -599,6 +620,8 @@ namespace Parser {
 	SelectStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
 		query.set_stmt_type(kSELECT);
+		query.set_limit(limit);
+		query.set_offset(offset);
 		query_expr->analyze(catalog, query);
 		if (orderby_clause == nullptr) {
 			query.set_order_by(nullptr);
@@ -629,6 +652,261 @@ namespace Parser {
 		query.set_order_by(order_by);
 	}
 
+	std::string
+	SQLType::to_string() const
+	{
+		std::string str;
+		switch (type) {
+			case kBOOLEAN:
+				str = "BOOLEAN";
+				break;
+			case kCHAR:
+				str = "CHAR(" + boost::lexical_cast<std::string>(param1) + ")";
+				break;
+			case kVARCHAR:
+				str = "VARCHAR(" + boost::lexical_cast<std::string>(param1) + ")";
+				break;
+			case kTEXT:
+				str = "TEXT";
+				break;
+			case kNUMERIC:
+				str = "NUMERIC(" + boost::lexical_cast<std::string>(param1);
+				if (param2 > 0)
+					str += ", " + boost::lexical_cast<std::string>(param2);
+				str += ")";
+				break;
+			case kDECIMAL:
+				str = "DECIMAL(" + boost::lexical_cast<std::string>(param1);
+				if (param2 > 0)
+					str += ", " + boost::lexical_cast<std::string>(param2);
+				str += ")";
+				break;
+			case kBIGINT:
+				str = "BIGINT";
+				break;
+			case kINT:
+				str = "INT";
+				break;
+			case kSMALLINT:
+				str = "SMALLINT";
+				break;
+			case kFLOAT:
+				str = "FLOAT";
+				break;
+			case kDOUBLE:
+				str = "DOUBLE";
+				break;
+			case kTIME:
+				str = "TIME";
+				break;
+			case kTIMESTAMP:
+				str = "TIMESTAMP"; // @TODO add precision
+				break;
+			default:
+				assert(false);
+				break;
+		}
+		return str;
+	}
+
+	std::string
+	SelectEntry::to_string() const
+	{
+		std::string str = select_expr->to_string();
+		if (alias != nullptr)
+			str += " AS " + *alias;
+		return str;
+	}
+
+	std::string
+	TableRef::to_string() const
+	{
+		std::string str = *table_name;
+		if (range_var != nullptr)
+			str += " " + *range_var;
+		return str;
+	}
+
+	std::string
+	ColumnRef::to_string() const
+	{
+		std::string str;
+		if (table == nullptr)
+			str = *column;
+		else if (column == nullptr)
+			str = *table + ".*";
+		else
+			str = *table + "." + *column;
+		return str;
+	}
+
+	std::string
+	OperExpr::to_string() const
+	{
+		std::string op_str[] = { "=", "<>", "<", ">", "<=", ">=", " AND ", " OR ", "NOT", "-", "+", "*", "/" };
+		std::string str;
+		if (optype == kUMINUS)
+			str = "-(" + left->to_string() + ")";
+		else if (optype == kNOT)
+			str = "NOT (" + left->to_string() + ")";
+		else
+			str = "(" + left->to_string() + op_str[optype] + right->to_string() + ")";
+		return str;
+	}
+
+	std::string
+	InExpr::to_string() const
+	{
+		std::string str = arg->to_string();
+		if (is_not)
+			str += " NOT IN ";
+		else
+			str += " IN ";
+		return str;
+	}
+
+	std::string
+	ExistsExpr::to_string() const
+	{
+		return "EXISTS (" + query->to_string() + ")";
+	}
+
+	std::string
+	SubqueryExpr::to_string() const
+	{
+		std::string str;
+		if (qualifier == kANY)
+			str = "ANY (";
+		else if (qualifier == kALL)
+			str = "ALL (";
+		else
+			str = "(";
+		str += query->to_string();
+		str += ")";
+		return str;
+	}
+
+	std::string
+	IsNullExpr::to_string() const
+	{
+		std::string str = arg->to_string();
+		if (is_not)
+			str += " IS NOT NULL";
+		else
+			str += " IS NULL";
+		return str;
+	}
+
+	std::string
+	InSubquery::to_string() const
+	{
+		std::string str = InExpr::to_string();
+		str += subquery->to_string();
+		return str;
+	}
+
+	std::string
+	InValues::to_string() const
+	{
+		std::string str = InExpr::to_string() + "(";
+		bool notfirst = false;
+		for (auto p : *value_list) {
+			if (notfirst)
+				str += ", ";
+			else
+				notfirst = true;
+			str += p->to_string();
+		}
+		str += ")";
+		return str;
+	}
+
+	std::string
+	BetweenExpr::to_string() const
+	{
+		std::string str = arg->to_string();
+		if (is_not)
+			str += " NOT BETWEEN ";
+		else
+			str += " BETWEEN ";
+		str += lower->to_string() + " AND " + upper->to_string();
+		return str;
+	}
+
+	std::string
+	LikeExpr::to_string() const
+	{
+		std::string str = arg->to_string();
+		if (is_not)
+			str += " NOT LIKE ";
+		else
+			str += " LIKE ";
+		str += like_string->to_string();
+		if (escape_string != nullptr)
+			str += " ESCAPE " + escape_string->to_string();
+		return str;
+	}
+
+	std::string
+	FunctionRef::to_string() const
+	{
+		std::string str = *name + "(";
+		if (distinct)
+			str += "DISTINCT ";
+		if (arg == nullptr)
+			str += "*)";
+		else
+			str += arg->to_string() + ")";
+		return str;
+	}
+
+	std::string
+	QuerySpec::to_string() const
+	{
+		std::string query_str = "SELECT ";
+		if (is_distinct)
+			query_str += "DISTINCT ";
+		if (select_clause == nullptr)
+			query_str += "* ";
+		else {
+			bool notfirst = false;
+			for (auto p : *select_clause) {
+				if (notfirst)
+					query_str += ", ";
+				else
+					notfirst = true;
+				query_str += p->to_string();
+			}
+		}
+		query_str += " FROM ";
+		bool notfirst = false;
+		for (auto p : *from_clause) {
+			if (notfirst)
+				query_str += ", ";
+			else
+				notfirst = true;
+			query_str += p->to_string();
+		}
+		if (where_clause != nullptr)
+			query_str += " WHERE " + where_clause->to_string();
+		if (groupby_clause != nullptr) {
+			query_str += " GROUP BY ";
+			bool notfirst = false;
+			for (auto p : *groupby_clause) {
+				if (notfirst)
+					query_str += ", ";
+				else
+					notfirst = true;
+				query_str += p->to_string();
+			}
+		}
+		if (having_clause != nullptr) {
+			query_str += " HAVING " + having_clause->to_string();
+		}
+		query_str += ";";
+		return query_str;
+	}
+
 	void
 	InsertStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
@@ -636,20 +914,24 @@ namespace Parser {
 		const TableDescriptor *td = catalog.getMetadataForTable(*table);
 		if (td == nullptr)
 			throw std::runtime_error("Table " + *table + " does not exist.");
-		if (td->isView)
+		if (td->isView && !td->isMaterialized)
 			throw std::runtime_error("Insert to views is not supported yet.");
 		Analyzer::RangeTblEntry *rte = new Analyzer::RangeTblEntry(*table, td, nullptr);
-		if (column_list == nullptr)
-			rte->add_all_column_descs(catalog);
-		else {
+		query.set_result_table_id(td->tableId);
+		std::list<int> result_col_list;
+		if (column_list == nullptr) {
+			const std::list<const ColumnDescriptor *> all_cols = catalog.getAllColumnMetadataForTable(td->tableId);
+			for (auto cd : all_cols)
+				result_col_list.push_back(cd->columnId);
+		} else {
 			for (auto c : *column_list) {
-				const ColumnDescriptor *cd = rte->get_column_desc(catalog, *c);
+				const ColumnDescriptor *cd = catalog.getMetadataForColumn(td->tableId, *c);
 				if (cd == nullptr)
 					throw std::runtime_error("Column " + *c + " does not exist.");
-				
+				result_col_list.push_back(cd->columnId);
 			}
 		}
-		query.add_rte(rte);
+		query.set_result_col_list(result_col_list);
 	}
 
 	void
@@ -685,81 +967,202 @@ namespace Parser {
 	void
 	CreateTableStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		if (catalog.getMetadataForTable(*table) != nullptr)
+		if (catalog.getMetadataForTable(*table) != nullptr) {
+			if (if_not_exists)
+				return;
 			throw std::runtime_error("Table " + *table + " already exits.");
-		std::vector<ColumnDescriptor *> columns;
+		}
+		std::list<ColumnDescriptor> columns;
 		for (auto e : *table_element_list) {
 			if (typeid(*e) != typeid(ColumnDef))
 				throw std::runtime_error("Table constraints are not supported yet.");
 			ColumnDef *coldef = dynamic_cast<ColumnDef*>(e);
-			ColumnDescriptor *cd = new ColumnDescriptor();
-			cd->columnName = *coldef->get_column_name();
+			ColumnDescriptor cd;
+			cd.columnName = *coldef->get_column_name();
 			const SQLType *t = coldef->get_column_type();
-			cd->columnType.type = t->get_type();
-			cd->columnType.dimension = t->get_param1();
-			cd->columnType.scale = t->get_param2();
+			cd.columnType.type = t->get_type();
+			cd.columnType.dimension = t->get_param1();
+			cd.columnType.scale = t->get_param2();
 			const ColumnConstraintDef *cc = coldef->get_column_constraint();
 			if (cc == nullptr)
-				cd->columnType.notnull = false;
+				cd.columnType.notnull = false;
 			else {
-				cd->columnType.notnull = cc->get_notnull();
+				cd.columnType.notnull = cc->get_notnull();
 			}
 			const CompressDef *compression = coldef->get_compression();
 			if (compression == nullptr) {
-				cd->compression = kENCODING_NONE;
-				cd->comp_param = 0;
+				cd.compression = kENCODING_NONE;
+				cd.comp_param = 0;
 			} else {
 				const std::string &comp = *compression->get_encoding_name();
 				if (boost::iequals(comp, "fixed")) {
 					// fixed-bits encoding
 					if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 || compression->get_encoding_param() > 48)
 						throw std::runtime_error("Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to fixed-bits encoding.");
-					cd->compression = kENCODING_FIXED;
-					cd->comp_param = compression->get_encoding_param();
+					cd.compression = kENCODING_FIXED;
+					cd.comp_param = compression->get_encoding_param();
 				} else if (boost::iequals(comp, "rl")) {
 					// run length encoding
-					cd->compression = kENCODING_RL;
-					cd->comp_param = 0;
+					cd.compression = kENCODING_RL;
+					cd.comp_param = 0;
 				} else if (boost::iequals(comp, "diff")) {
 					// differential encoding
-					cd->compression = kENCODING_DIFF;
-					cd->comp_param = 0;
+					cd.compression = kENCODING_DIFF;
+					cd.comp_param = 0;
 				} else if (boost::iequals(comp, "dict")) {
 					// diciontary encoding
-					cd->compression = kENCODING_DICT;
-					cd->comp_param = 0;
+					cd.compression = kENCODING_DICT;
+					cd.comp_param = 0;
 				} else if (boost::iequals(comp, "sparse")) {
 					// sparse column encoding with mostly NULL values
-					if (cd->columnType.notnull)
+					if (cd.columnType.notnull)
 						throw std::runtime_error("Cannot do sparse column encoding on a NOT NULL column.");
 					if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 || compression->get_encoding_param() > 48)
 						throw std::runtime_error("Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to sparse-column encoding.");
-					cd->compression = kENCODING_SPARSE;
-					cd->comp_param = compression->get_encoding_param();
+					cd.compression = kENCODING_SPARSE;
+					cd.comp_param = compression->get_encoding_param();
 				} else
 					throw std::runtime_error("Invalid column compression scheme " + comp);
 			}
 			columns.push_back(cd);
 		}
-		catalog.createTable(*table, columns);
+		TableDescriptor td;
+		td.tableName = *table;
+		td.nColumns = columns.size();
+		td.isView = false;
+		td.isMaterialized = false;
+		td.storageOption = kDISK;
+		td.refreshOption = kMANUAL;
+		td.checkOption = false;
+		td.isReady = true;
+		catalog.createTable(td, columns);
 	}
 
 	void
 	DropTableStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		catalog.dropTable(*table);
+		const TableDescriptor *td = catalog.getMetadataForTable(*table);
+		if (td == nullptr) {
+			if (if_exists)
+				return;
+			throw std::runtime_error("Table " + *table + " does not exist.");
+		}
+		if (td->isView)
+			throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
+		catalog.dropTable(td);
 	}
 
 	void
 	CreateViewStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		throw std::runtime_error("CREATE VIEW not supported yet.");
+		if (catalog.getMetadataForTable(*view_name) != nullptr) {
+			if (if_not_exists)
+				return;
+			throw std::runtime_error("Table or View " + *view_name + " already exists.");
+		}
+		ViewStorageOption matview_storage = kDISK;
+		ViewRefreshOption matview_refresh = kMANUAL;
+		if (matview_options != nullptr) {
+			for (auto p : *matview_options) {
+				if (boost::iequals(*p->get_name(), "storage")) {
+					if (boost::iequals(*p->get_value(), "gpu") || boost::iequals(*p->get_value(), "mic"))
+						matview_storage = kGPU;
+					else if (boost::iequals(*p->get_value(), "cpu"))
+						matview_storage = kCPU;
+					else if (boost::iequals(*p->get_value(), "disk"))
+						matview_storage = kDISK;
+					else
+						throw std::runtime_error("Invalid storage option " + *p->get_value() + ". Should be GPU, MIC, CPU or DISK.");
+				} else if (boost::iequals(*p->get_name(), "refresh")) {
+					if (boost::iequals(*p->get_value(), "auto"))
+						matview_refresh = kAUTO;
+					else if (boost::iequals(*p->get_value(), "manual"))
+						matview_refresh = kMANUAL;
+					else if (boost::iequals(*p->get_value(), "immediate"))
+						matview_refresh = kIMMEDIATE;
+					else
+						throw std::runtime_error("Invalid refresh option " + *p->get_value() + ". Should be AUTO, MANUAL or IMMEDIATE.");
+				} else
+					throw std::runtime_error("Invalid CREATE MATERIALIZED VIEW option " + *p->get_name() + ".  Should be STORAGE or REFRESH.");
+			}
+		}
+		Analyzer::Query analyzed_query;
+		query->analyze(catalog, analyzed_query);
+		const std::list<Analyzer::TargetEntry*> &tlist = analyzed_query.get_targetlist();
+		// @TODO check column name uniqueness.  for now let sqlite enforce.
+		if (column_list != nullptr) {
+			if (column_list->size() != tlist.size())
+				throw std::runtime_error("Number of column names does not match the number of expressions in SELECT clause.");
+			std::list<std::string*>::iterator it = column_list->begin();
+			for (auto tle : tlist) { 
+				tle->set_resname(**it);
+				++it;
+			}
+		}
+		std::list<ColumnDescriptor> columns;
+		for (auto tle : tlist) {
+			ColumnDescriptor cd;
+			if (tle->get_resname().empty())
+				throw std::runtime_error("Must specify a column name for expression.");
+			cd.columnName = tle->get_resname();
+			cd.columnType = tle->get_expr()->get_type_info();
+			cd.compression = kENCODING_NONE;
+			cd.comp_param = 0;
+			columns.push_back(cd);
+		}
+		TableDescriptor td;
+		td.tableName = *view_name;
+		td.nColumns = columns.size();
+		td.isView = true;
+		td.isMaterialized = is_materialized;
+		td.viewSQL = query->to_string();
+		td.checkOption = checkoption;
+		td.storageOption = matview_storage;
+		td.refreshOption = matview_refresh;
+		td.isReady = !is_materialized;
+		catalog.createTable(td, columns);
+	}
+
+	void
+	RefreshViewStmt::execute(Catalog_Namespace::Catalog &catalog)
+	{
+		const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
+		if (td == nullptr)
+			throw std::runtime_error("Materialied view " + *view_name + " does not exist.");
+		if (!td->isView)
+			throw std::runtime_error(*view_name + " is a table not a materialized view.");
+		if (!td->isMaterialized)
+			throw std::runtime_error(*view_name + " is not a materialized view.");
+		SQLParser parser;
+		std::list<Stmt*> parse_trees;
+		std::string last_parsed;
+		std::string query_str = "INSERT INTO " + *view_name + " " + td->viewSQL;
+		int numErrors = parser.parse(query_str, parse_trees, last_parsed);
+		if (numErrors > 0)
+			throw std::runtime_error("Internal Error: syntax error at: " + last_parsed);
+		DMLStmt *view_stmt = dynamic_cast<DMLStmt*>(parse_trees.front());
+		unique_ptr<Stmt> stmt_ptr(view_stmt); // make sure it's deleted
+		Analyzer::Query query;
+		view_stmt->analyze(catalog, query);
+		Planner::Optimizer optimizer(query, catalog);
+		Planner::RootPlan *plan = optimizer.optimize();
+		unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
+		// @TODO execute plan
+		// plan->print();
 	}
 
 	void
 	DropViewStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
-		throw std::runtime_error("DROP VIEW not supported yet.");
+		const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
+		if (td == nullptr) {
+			if (if_exists)
+				return;
+			throw std::runtime_error("View " + *view_name + " does not exist.");
+		}
+		if (!td->isView)
+			throw std::runtime_error(*view_name + " is a table.  Use DROP TABLE.");
+		catalog.dropTable(td);
 	}
 
 	CreateUserStmt::~CreateUserStmt()
