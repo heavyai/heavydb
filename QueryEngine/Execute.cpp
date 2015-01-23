@@ -384,6 +384,9 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
         : Executor::AggResult(out_vec[i][0]);
       results.push_back(result);
     }
+    for (auto out : out_vec) {
+      free(out);
+    }
   }
   return results;
 }
