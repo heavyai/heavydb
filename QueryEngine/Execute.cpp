@@ -1,9 +1,11 @@
 #include "Execute.h"
 #include "Codec.h"
 #include "DataSourceMock.h"
+#include "QueryTemplateGenerator.h"
 
 #include <llvm/ExecutionEngine/JIT.h>
 #include <llvm/IRReader/IRReader.h>
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Value.h>
@@ -24,8 +26,7 @@ Executor::Executor(const Planner::RootPlan* root_plan)
   , module_(nullptr)
   , ir_builder_(context_)
   , execution_engine_(nullptr)
-  , row_func_(nullptr)
-  , init_agg_val_(0) {
+  , row_func_(nullptr) {
   CHECK(root_plan_);
 }
 
@@ -156,12 +157,13 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
   auto& in_arg_list = row_func_->getArgumentList();
   CHECK_GE(in_arg_list.size(), 3);
   size_t arg_idx = 0;
+  size_t pos_idx = 0;
   llvm::Value* pos_arg { nullptr };
   for (auto& arg : in_arg_list) {
-    if (arg_idx == 1) {
+    if (arg.getType()->isIntegerTy()) {
       pos_arg = &arg;
-    } else if (arg_idx == static_cast<size_t>(local_col_id) + 2) {
-      CHECK(pos_arg);
+      pos_idx = arg_idx;
+    } else if (pos_arg && arg_idx == pos_idx + 1 + static_cast<size_t>(local_col_id)) {
       // TODO(alex)
       const auto decoder = get_col_decoder(col_var);
       auto dec_val = decoder->codegenDecode(
@@ -346,13 +348,12 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
     const int8_t** col_buffers,
     const int64_t* num_rows,
     const int64_t* init_agg_value,
-    int64_t* out);
+    int64_t** out);
   compileAggScanPlan(agg_plan, opt_level);
   const int table_id = 1;
   const auto fragments = get_fragments(table_id);
   std::vector<std::pair<const ChunkKey, const size_t>> chunk_keys;
-  Executor::AggResult result;
-  int64_t out { 0 };
+  std::vector<Executor::AggResult> results;
   for (const auto& fragment : fragments) {
     for (size_t local_col_id = 0; local_col_id < local_to_global_col_ids_.size(); ++local_col_id) {
       const int col_id = local_to_global_col_ids_[local_col_id];
@@ -367,14 +368,24 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
       col_buffers[buffer_idx] = buffers[buffer_idx].data;
       CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
     }
-    reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_val_, &out);
+    std::vector<int64_t*> out_vec;
+    const size_t agg_col_count = init_agg_vals_.size();
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      // TODO(alex): multiple devices support
+      auto buff = calloc(1, sizeof(int64_t));
+      out_vec.push_back(static_cast<int64_t*>(buff));
+    }
+    reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_vals_[0], &out_vec[0]);
     const auto agg_exprs = get_agg_exprs(agg_plan);
-    CHECK_EQ(agg_exprs.size(), 1);
-    result = agg_exprs.front()->get_aggtype() == kAVG
-      ? Executor::AggResult(static_cast<double>(out) / num_rows)
-      : Executor::AggResult(out);
+    CHECK_EQ(agg_exprs.size(), agg_col_count);
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      auto result = agg_exprs[i]->get_aggtype() == kAVG
+        ? Executor::AggResult(static_cast<double>(out_vec[i][0]) / num_rows)
+        : Executor::AggResult(out_vec[i][0]);
+      results.push_back(result);
+    }
   }
-  return { result };
+  return results;
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
@@ -431,7 +442,7 @@ std::vector<llvm::Value*> generate_column_heads_load(
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(fetch_bb.begin());
   auto& in_arg_list = query_func->getArgumentList();
-  CHECK_EQ(in_arg_list.size(), 4);
+  CHECK_GE(in_arg_list.size(), 4);
   auto& byte_stream_arg = in_arg_list.front();
   auto& context = llvm::getGlobalContext();
   std::vector<llvm::Value*> col_heads;
@@ -463,10 +474,13 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
   auto col_heads = generate_column_heads_load(col_global_ids.size(), query_func);
 
-  std::vector<llvm::Type*> row_process_arg_types {
-    llvm::Type::getInt64PtrTy(context),
-    llvm::Type::getInt64Ty(context)
-  };
+  std::vector<llvm::Type*> row_process_arg_types;
+  const size_t agg_col_count { agg_plan->get_targetlist().size() };
+  for (size_t i = 0; i < agg_col_count; ++i) {
+    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  }
+  row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+
   for (size_t i = 0; i < col_heads.size(); ++i) {
     row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
   }
@@ -481,8 +495,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     col_heads);
 }
 
-std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>>
-get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
+std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
   std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
   const auto agg_exprs = get_agg_exprs(agg_plan);
   // TODO(alex)
@@ -511,17 +524,25 @@ get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
   return result;
 }
 
+llvm::Function* make_query_template(
+    const Planner::AggPlan* agg_plan,
+    llvm::Module* mod) {
+  const size_t aggr_col_count = agg_plan->get_targetlist().size();
+  return agg_plan->get_groupby_list().empty()
+    ? query_template(mod, aggr_col_count)
+    : query_group_by_template(mod, aggr_col_count);
+}
+
 }  // namespace
 
-void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel opt_level) {
+void Executor::compileAggScanPlan(
+    const Planner::AggPlan* agg_plan,
+    const ExecutorOptLevel opt_level) {
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   module_ = read_template_module(context_);
-  auto query_func = module_->getFunction(agg_plan->get_groupby_list().empty()
-    ? "query_template"
-    : "query_group_by_template");
-  CHECK(query_func);
+  auto query_func = make_query_template(agg_plan, module_);
   bind_pos_placeholders("pos_start", query_func, module_);
   bind_pos_placeholders("pos_step", query_func, module_);
 
@@ -548,14 +569,14 @@ void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan, const Execut
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  // TODO(alex): heuristic for group by buffer size
   {
     auto agg_infos = get_agg_name_and_exprs(agg_plan);
     // TODO(alex): fix, each aggregate column should have its own init value
-    init_agg_val_ = std::get<2>(agg_infos.front());
-    for (const auto agg_info : agg_infos) {
-      call_aggregator(std::get<0>(agg_info), std::get<1>(agg_info), filter_lv, agg_plan->get_groupby_list(), 2048, module_);
+    for (const auto& agg_info : agg_infos) {
+      init_agg_vals_.push_back(std::get<2>(agg_info));
     }
+    // TODO(alex): heuristic for group by buffer size
+    call_aggregators(agg_infos, filter_lv, agg_plan->get_groupby_list(), 2048, module_);
   }
 
   // iterate through all the instruction in the query template function and
@@ -566,10 +587,10 @@ void Executor::compileAggScanPlan(const Planner::AggPlan* agg_plan, const Execut
     }
     auto& filter_call = llvm::cast<llvm::CallInst>(*it);
     if (std::string(filter_call.getCalledFunction()->getName()) == "row_process") {
-      std::vector<llvm::Value*> args {
-        filter_call.getArgOperand(0),
-        filter_call.getArgOperand(1)
-      };
+      std::vector<llvm::Value*> args;
+      for (size_t i = 0; i < filter_call.getNumArgOperands(); ++i) {
+        args.push_back(filter_call.getArgOperand(i));
+      }
       args.insert(args.end(), col_heads.begin(), col_heads.end());
       llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(row_func_, args, ""));
       break;
@@ -594,7 +615,7 @@ void* Executor::optimizeAndCodegen(llvm::Function* query_func, const ExecutorOpt
   execution_engine_ = eb.create();
   CHECK(execution_engine_);
 
-  // honor the always inline attribute for the runtime functions and the filter
+  // run optimizations
   llvm::legacy::PassManager pass_manager;
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
@@ -612,9 +633,8 @@ void* Executor::optimizeAndCodegen(llvm::Function* query_func, const ExecutorOpt
   return execution_engine_->getPointerToFunction(query_func);
 }
 
-void Executor::call_aggregator(
-    const std::string& agg_name,
-    const Analyzer::Expr* aggr_col,
+void Executor::call_aggregators(
+    const std::vector<AggInfo>& agg_infos,
     llvm::Value* filter_result,
     const std::list<Analyzer::Expr*>& group_by_cols,
     const int32_t groups_buffer_entry_count,
@@ -627,7 +647,7 @@ void Executor::call_aggregator(
   ir_builder_.CreateCondBr(filter_result, filter_true, filter_false);
   ir_builder_.SetInsertPoint(filter_true);
 
-  llvm::Value* agg_out_ptr { nullptr };
+  std::vector<llvm::Value*> agg_out_vec;
 
   if (!group_by_cols.empty()) {
     auto group_keys_buffer = ir_builder_.CreateAlloca(
@@ -650,29 +670,35 @@ void Executor::call_aggregator(
       group_keys_buffer,
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size())
     };
-    agg_out_ptr = ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
+    agg_out_vec.push_back(ir_builder_.CreateCall(get_group_value_func, get_group_value_args));
   } else {
-    auto& agg_out = row_func_->getArgumentList().front();
-    agg_out_ptr = &agg_out;
-  }
-
-  auto agg_func = module->getFunction(agg_name);
-  CHECK(agg_func);
-  llvm::Value* agg_expr_lv = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0);
-  if (aggr_col) {
-    agg_expr_lv = codegen(aggr_col);
-    auto agg_col_type = agg_expr_lv->getType();
-    CHECK(agg_col_type->isIntegerTy());
-    auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();
-    CHECK_LE(agg_col_width, 64);
-    if (agg_col_width < 64) {
-      agg_expr_lv = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
-        agg_expr_lv,
-        get_int_type(64, context_));
+    auto args = row_func_->arg_begin();
+    for (size_t i = 0; i < agg_infos.size(); ++i) {
+      agg_out_vec.push_back(args++);
     }
   }
-  std::vector<llvm::Value*> agg_args { agg_out_ptr, agg_expr_lv };
-  ir_builder_.CreateCall(agg_func, agg_args);
+
+  for (size_t i = 0; i < agg_infos.size(); ++i) {
+    const auto& agg_info = agg_infos[i];
+    auto agg_func = module->getFunction(std::get<0>(agg_info));
+    CHECK(agg_func);
+    auto aggr_col = std::get<1>(agg_info);
+    llvm::Value* agg_expr_lv = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0);
+    if (aggr_col) {
+      agg_expr_lv = codegen(aggr_col);
+      auto agg_col_type = agg_expr_lv->getType();
+      CHECK(agg_col_type->isIntegerTy());
+      auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();
+      CHECK_LE(agg_col_width, 64);
+      if (agg_col_width < 64) {
+        agg_expr_lv = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+          agg_expr_lv,
+          get_int_type(64, context_));
+      }
+    }
+    std::vector<llvm::Value*> agg_args { agg_out_vec[i], agg_expr_lv };
+    ir_builder_.CreateCall(agg_func, agg_args);
+  }
   ir_builder_.CreateBr(filter_false);
   ir_builder_.SetInsertPoint(filter_false);
   ir_builder_.CreateRetVoid();

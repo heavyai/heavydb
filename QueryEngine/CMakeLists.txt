@@ -3,9 +3,11 @@ set(CMAKE_CXX_FLAGS "-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -std=c++11 -
 set(query_engine_source_files
     Codec.cpp
     Execute.cpp
+    QueryTemplateGenerator.cpp
     Translator.cpp
     Codec.h
     Execute.h
+    QueryTemplateGenerator.h
     Translator.h
     RuntimeFunctions.ll)
 set(group_by_hash_test_files

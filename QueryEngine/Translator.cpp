@@ -1,4 +1,5 @@
 #include "Translator.h"
+#include "QueryTemplateGenerator.h"
 
 #include <glog/logging.h>
 #include <llvm/ExecutionEngine/JIT.h>
@@ -501,7 +502,8 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
   CHECK(module);
 #endif
 
-  auto query_func = module->getFunction(query_template_name);
+  auto query_func = query_template_name == "query_template"
+    ? query_template(module, 1) : query_group_by_template(module, 1);
   CHECK(query_func);
   bind_pos_placeholders(pos_start_name, query_func, module);
   bind_pos_placeholders(pos_step_name, query_func, module);
