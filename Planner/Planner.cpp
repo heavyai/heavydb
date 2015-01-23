@@ -276,7 +276,7 @@ namespace Planner {
 			tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), new Analyzer::Var(tle->get_expr()->get_type_info(), false, varno)));
 			varno++;
 		}
-		cur_plan = new Sort(tlist, 0.0, cur_plan, *query.get_order_by());
+		cur_plan = new Sort(tlist, 0.0, cur_plan, *query.get_order_by(), query.get_is_distinct());
 	}
 
 	void

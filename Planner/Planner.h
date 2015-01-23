@@ -164,12 +164,14 @@ namespace Planner {
 	 */
 	class Sort : public Plan {
 		public:
-			Sort(const std::list<Analyzer::TargetEntry*> &t, double c, Plan *p, const std::list<Analyzer::OrderEntry> &oe) : Plan(t, c, p), order_entries(oe) {}
+			Sort(const std::list<Analyzer::TargetEntry*> &t, double c, Plan *p, const std::list<Analyzer::OrderEntry> &oe, bool d) : Plan(t, c, p), order_entries(oe), remove_duplicates(d) {}
 			virtual ~Sort();
 			const std::list<Analyzer::OrderEntry> &get_order_entries() const { return order_entries; }
+			bool get_remove_duplicates() const { return remove_duplicates; }
 			virtual void print() const;
 		private:
 			std::list<Analyzer::OrderEntry> order_entries; // defines columns to sort on and in what order
+			bool remove_duplicates;
 	};
 
 	/*
