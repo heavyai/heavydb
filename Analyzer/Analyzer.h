@@ -422,7 +422,7 @@ namespace Analyzer {
 	 */
 	class Query {
 		public:
-			Query() : is_distinct(false), where_predicate(nullptr), group_by(nullptr), having_predicate(nullptr), order_by(nullptr), next_query(nullptr), is_unionall(false), stmt_type(kSELECT), num_aggs(0), result_table_id(0) {}
+			Query() : is_distinct(false), where_predicate(nullptr), group_by(nullptr), having_predicate(nullptr), order_by(nullptr), next_query(nullptr), is_unionall(false), stmt_type(kSELECT), num_aggs(0), result_table_id(0), limit(0), offset(0) {}
 			virtual ~Query();
 			bool get_is_distinct() const { return is_distinct; }
 			int get_num_aggs() const { return num_aggs; }
