@@ -12,8 +12,6 @@ class NoneEncoder : public Encoder {
 
         ChunkMetadata appendData(mapd_addr_t &srcData, const mapd_size_t numAppendElems) {
             T * unencodedData = reinterpret_cast<T *> (srcData); 
-            std::cout << "Unencoded data 0: " << unencodedData[0] << std::endl;
-            std::cout << "Unencoded data last: " << unencodedData[numAppendElems-1] << std::endl;
             for (mapd_size_t i = 0; i < numAppendElems; ++i) {
                 dataMin = std::min(dataMin,unencodedData[i]);
                 dataMax = std::max(dataMax,unencodedData[i]);
@@ -42,7 +40,6 @@ class NoneEncoder : public Encoder {
 
         void readMetadata(FILE *f) {
             // assumes pointer is already in right place
-            std::cout << "Reading metadata for none encoding" << std::endl;
             fread((mapd_addr_t)&numElems,sizeof(mapd_size_t),1,f); 
             fread((mapd_addr_t)&dataMin,1,sizeof(T),f); 
             fread((mapd_addr_t)&dataMax,1,sizeof(T),f); 

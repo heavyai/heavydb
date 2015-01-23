@@ -1,9 +1,9 @@
 /**
- * @file	LinearTablePartitioner.h
+ * @file	InsertOrderTablePartitioner.h
  * @author	Todd Mostak <todd@mapd.com>
  */
-#ifndef _LINEAR_TABLE_PARTITIONER_H
-#define _LINEAR_TABLE_PARTITIONER_H
+#ifndef INSERT_ORDER_TABLE_PARTITIONER_H
+#define INSERT_ORDER_TABLE_PARTITIONER_H
 
 #include "../../Shared/types.h"
 #include "AbstractTablePartitioner.h"
@@ -21,19 +21,19 @@ namespace Data_Namespace {
 namespace Partitioner_Namespace {
 
 /**
- * @type LinearTablePartitioner
- * @brief	The LinearTablePartitioner is a child class of
+ * @type InsertOrderTablePartitioner
+ * @brief	The InsertOrderTablePartitioner is a child class of
  * AbstractTablePartitioner, and partitions data in insert 
  * order. Likely the default partitioner
  */
 
-class LinearTablePartitioner : public AbstractTablePartitioner {
+class InsertOrderTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    LinearTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
+    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
 
-    virtual ~LinearTablePartitioner();
+    virtual ~InsertOrderTablePartitioner();
     /**
      * @brief returns (inside QueryInfo) object all 
      * ids and row sizes of partitions 
@@ -94,12 +94,12 @@ private:
 
     void getInsertBufferChunks(); 
 	
-	LinearTablePartitioner(const LinearTablePartitioner&);
-	LinearTablePartitioner& operator=(const LinearTablePartitioner&);
+	InsertOrderTablePartitioner(const InsertOrderTablePartitioner&);
+	InsertOrderTablePartitioner& operator=(const InsertOrderTablePartitioner&);
 
 };
 
 } // Partitioner_Namespace
 
- #endif // LINEAR_TABLE_PARTITIONER_H
+ #endif // INSERT_ORDER_TABLE_PARTITIONER_H
 

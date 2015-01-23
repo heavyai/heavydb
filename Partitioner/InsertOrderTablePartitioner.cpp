@@ -1,4 +1,4 @@
-#include "LinearTablePartitioner.h"
+#include "InsertOrderTablePartitioner.h"
 #include "../../DataMgr/DataMgr.h"
 #include "../../DataMgr/AbstractBuffer.h"
 #include <math.h>
@@ -15,18 +15,18 @@ using namespace std;
 
 namespace Partitioner_Namespace {
 
-LinearTablePartitioner::LinearTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
+InsertOrderTablePartitioner::InsertOrderTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
 		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"){
     for (auto colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
         columnMap_[colIt -> columnId] = *colIt; 
     }
 }
 
-LinearTablePartitioner::~LinearTablePartitioner() {
+InsertOrderTablePartitioner::~InsertOrderTablePartitioner() {
 
 }
 
-void LinearTablePartitioner::insertData (InsertData &insertDataStruct) {
+void InsertOrderTablePartitioner::insertData (InsertData &insertDataStruct) {
     boost::lock_guard<boost::mutex> insertLock (insertMutex_); // prevent two threads from trying to insert into the same table simultaneously
 
     mapd_size_t numRowsLeft = insertDataStruct.numRows;
@@ -86,7 +86,7 @@ void LinearTablePartitioner::insertData (InsertData &insertDataStruct) {
     cout << "After update" << endl;
 }
 
-PartitionInfo * LinearTablePartitioner::createNewPartition() { 
+PartitionInfo * InsertOrderTablePartitioner::createNewPartition() { 
     // also sets the new partition as the insertBuffer for each column
 
     // iterate through all ColumnInfo structs in map, unpin previous insert buffer and
@@ -113,7 +113,7 @@ PartitionInfo * LinearTablePartitioner::createNewPartition() {
     return &(partitionInfoVec_.back());
 }
 
-void LinearTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo) {
+void InsertOrderTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo) {
     queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
     // right now we don't test predicate, so just return (copy of) all partitions 
     {
@@ -123,7 +123,7 @@ void LinearTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo) {
 }
 
 
-void LinearTablePartitioner::getInsertBufferChunks() {
+void InsertOrderTablePartitioner::getInsertBufferChunks() {
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
         assert (colMapIt -> second.insertBuffer == NULL);
         if (colMapIt -> second.insertBuffer != NULL) {
@@ -136,7 +136,7 @@ void LinearTablePartitioner::getInsertBufferChunks() {
     }
 }
 /*
-void LinearTablePartitioner::readState() {
+void InsertOrderTablePartitioner::readState() {
     string partitionQuery ("select fragment_id, num_rows from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
     partitionQuery += " order by fragment_id";
     mapd_err_t status = pgConnector_.query(partitionQuery);
@@ -162,7 +162,7 @@ void LinearTablePartitioner::readState() {
     assert(status == MAPD_SUCCESS);
     numRows = pgConnector_.getNumRows();
 }
-void LinearTablePartitioner::writeState() {
+void InsertOrderTablePartitioner::writeState() {
     // do we want this to be fully durable or will allow ourselves
     // to delete existing rows for this table
     // out of convenience before adding the

@@ -1,11 +1,11 @@
 /**
- * @file	LinearTablePartitionerTest 
+ * @file	InsertOrderTablePartitionerTest 
  * @author	Todd Mostak <todd@map-d.com>
  */
 
 #include "gtest/gtest.h"
 #include "../../DataMgr/DataMgr.h"
-#include "../LinearTablePartitioner.h"
+#include "../InsertOrderTablePartitioner.h"
 
 #include <iostream>
 #include <vector>
@@ -14,7 +14,7 @@
 
 using namespace std;
 
-#define LINEARTABLEPARTITIONER_UNIT_TESTING
+#define INSERTORDERTABLEPARTITIONER_UNIT_TESTING
 
 GTEST_API_ int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
@@ -23,7 +23,7 @@ GTEST_API_ int main(int argc, char **argv) {
 
 namespace Partitioner_Namespace {
 
-    class LinearTablePartitionerTest : public ::testing::Test {
+    class InsertOrderTablePartitionerTest : public ::testing::Test {
         protected:
             virtual void SetUp() {
                 maxPartitionRows = 1000000;
@@ -44,11 +44,11 @@ namespace Partitioner_Namespace {
                 colInfo.encodingBits = 8;
                 colInfo.insertBuffer = 0;
                 columnInfoVec.push_back(colInfo);
-                linearTablePartitioner = new LinearTablePartitioner(chunkKeyPrefix,columnInfoVec,dataMgr,maxPartitionRows);
+                insertOrderTablePartitioner = new InsertOrderTablePartitioner(chunkKeyPrefix,columnInfoVec,dataMgr,maxPartitionRows);
             }
 
             virtual void TearDown() {
-                delete linearTablePartitioner;
+                delete insertOrderTablePartitioner;
                 delete dataMgr;
             }
 
@@ -57,11 +57,11 @@ namespace Partitioner_Namespace {
             }
 
             Data_Namespace::DataMgr *dataMgr;
-            LinearTablePartitioner *linearTablePartitioner;
+            InsertOrderTablePartitioner *insertOrderTablePartitioner;
             int64_t maxPartitionRows;
     };
 
-    TEST_F (LinearTablePartitionerTest, insert) {
+    TEST_F (InsertOrderTablePartitionerTest, insert) {
 
         int numRows = 50000000;
         int * intData = new int[numRows];
@@ -78,10 +78,10 @@ namespace Partitioner_Namespace {
         insertData.data.push_back((mapd_addr_t)intData);
         insertData.data.push_back((mapd_addr_t)floatData);
         insertData.numRows = numRows;
-        linearTablePartitioner->insertData(insertData); 
+        insertOrderTablePartitioner->insertData(insertData); 
         dataMgr->checkpoint();
         QueryInfo queryInfo;
-        linearTablePartitioner->getPartitionsForQuery(queryInfo);
+        insertOrderTablePartitioner->getPartitionsForQuery(queryInfo);
         EXPECT_EQ(0,queryInfo.chunkKeyPrefix[0]);
         EXPECT_EQ(1,queryInfo.chunkKeyPrefix[1]);
         EXPECT_EQ(2,queryInfo.chunkKeyPrefix[2]);
