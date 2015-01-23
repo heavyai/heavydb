@@ -15,7 +15,7 @@ using namespace std;
 
 namespace Partitioner_Namespace {
 
-InsertOrderTablePartitioner::InsertOrderTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows, const mapd_size_t pageSize /*default 1MB*/) :
+InsertOrderTablePartitioner::InsertOrderTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows, const size_t pageSize /*default 1MB*/) :
 		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"){
     for (auto colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
         columnMap_[colIt -> columnId] = *colIt; 
@@ -29,8 +29,8 @@ InsertOrderTablePartitioner::~InsertOrderTablePartitioner() {
 void InsertOrderTablePartitioner::insertData (InsertData &insertDataStruct) {
     boost::lock_guard<boost::mutex> insertLock (insertMutex_); // prevent two threads from trying to insert into the same table simultaneously
 
-    mapd_size_t numRowsLeft = insertDataStruct.numRows;
-    mapd_size_t numRowsInserted = 0;
+    size_t numRowsLeft = insertDataStruct.numRows;
+    size_t numRowsInserted = 0;
     //vector <PartitionInfo *> partitionsToBeUpdated;  
     //std::vector<PartitionInfo>::iterator partIt = partitionInfoVec_.back();
     if (numRowsLeft <= 0) {
@@ -50,13 +50,13 @@ void InsertOrderTablePartitioner::insertData (InsertData &insertDataStruct) {
     while (numRowsLeft > 0) { // may have to create multiple partitions for bulk insert
         cout << "Num rows left: " << numRowsLeft << endl;
         // loop until done inserting all rows
-        mapd_size_t rowsLeftInCurrentPartition = maxPartitionRows_ - currentPartition->shadowNumTuples;
+        size_t rowsLeftInCurrentPartition = maxPartitionRows_ - currentPartition->shadowNumTuples;
         cout << "Num rows left in currentPartition: " << rowsLeftInCurrentPartition << endl;
         if (rowsLeftInCurrentPartition == 0) {
             currentPartition = createNewPartition(); 
             rowsLeftInCurrentPartition = maxPartitionRows_;
         }
-        mapd_size_t numRowsToInsert = min(rowsLeftInCurrentPartition, numRowsLeft);
+        size_t numRowsToInsert = min(rowsLeftInCurrentPartition, numRowsLeft);
         // for each column, append the data in the appropriate insert buffer
         for (int i = 0; i < insertDataStruct.columnIds.size(); ++i) {
             int columnId = insertDataStruct.columnIds[i];
@@ -64,7 +64,7 @@ void InsertOrderTablePartitioner::insertData (InsertData &insertDataStruct) {
             assert(colMapIt != columnMap_.end());
             AbstractBuffer *insertBuffer = colMapIt->second.insertBuffer;
             currentPartition->shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(insertDataStruct.data[i],numRowsToInsert);
-            //partitionInfoVec_.back().shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(static_cast<mapd_addr_t>(insertDataStruct.data[i]),numRowsToInsert);
+            //partitionInfoVec_.back().shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(static_cast<int8_t *>(insertDataStruct.data[i]),numRowsToInsert);
         }
 
         currentPartition->shadowNumTuples = partitionInfoVec_.back().numTuples + numRowsToInsert;

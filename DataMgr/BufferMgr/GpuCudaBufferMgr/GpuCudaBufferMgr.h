@@ -16,7 +16,7 @@ namespace Buffer_Namespace {
         private:
             virtual void addSlab(const size_t slabSize);
             virtual void freeAllMem();
-            virtual void allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize);
+            virtual void allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t initialSize);
             int gpuNum_;
 
     };

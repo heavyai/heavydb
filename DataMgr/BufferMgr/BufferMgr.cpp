@@ -42,9 +42,9 @@ namespace Buffer_Namespace {
     }
     
     /// Throws a runtime_error if the Chunk already exists
-    AbstractBuffer * BufferMgr::createChunk(const ChunkKey &chunkKey, const mapd_size_t chunkPageSize, const mapd_size_t initialSize) {
+    AbstractBuffer * BufferMgr::createChunk(const ChunkKey &chunkKey, const size_t chunkPageSize, const size_t initialSize) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        mapd_size_t actualChunkPageSize = chunkPageSize;
+        size_t actualChunkPageSize = chunkPageSize;
         if (actualChunkPageSize == 0) {
             actualChunkPageSize = pageSize_;
         }
@@ -136,7 +136,7 @@ namespace Buffer_Namespace {
         newSegIt -> buffer = segIt -> buffer;
         //newSegIt -> buffer -> segIt_ = newSegIt;
         newSegIt -> chunkKey = segIt -> chunkKey;
-        mapd_addr_t oldMem = newSegIt -> buffer -> mem_;
+        int8_t * oldMem = newSegIt -> buffer -> mem_;
         newSegIt -> buffer -> mem_ = slabs_[newSegIt->slabNum] + newSegIt -> startPage * pageSize_;
         // now need to copy over memory
         // only do this if the old segment is valid (i.e. not new w/
@@ -399,7 +399,7 @@ namespace Buffer_Namespace {
     
     /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
     /// throws a runtime_error.
-    AbstractBuffer* BufferMgr::getChunk(const ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer* BufferMgr::getChunk(const ChunkKey &key, const size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt != chunkIndex_.end()) {
@@ -427,7 +427,7 @@ namespace Buffer_Namespace {
     }
 
 
-    void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
+    void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer * buffer;
@@ -447,7 +447,7 @@ namespace Buffer_Namespace {
         else {
             buffer = chunkIt -> second -> buffer;
         }
-        mapd_size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
+        size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
         destBuffer->reserve(chunkSize);
         //std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (buffer->isUpdated()) {
@@ -460,7 +460,7 @@ namespace Buffer_Namespace {
         destBuffer->syncEncoder(buffer);
     }
     
-    AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes) {
+    AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer *chunk;
@@ -470,8 +470,8 @@ namespace Buffer_Namespace {
         else {
             chunk = chunkIt->second->buffer;
         }
-        mapd_size_t oldChunkSize = chunk->size();
-        mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        size_t oldChunkSize = chunk->size();
+        size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
 
         if (chunk->isDirty()) {
             throw std::runtime_error("Chunk inconsistency");
@@ -480,11 +480,11 @@ namespace Buffer_Namespace {
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
-            chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
+            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
         }
         else if (srcBuffer->isAppended()) {
             assert(oldChunkSize < newChunkSize);
-            chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
+            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
         }
         srcBuffer->clearDirtyBits();
         chunk->syncEncoder(srcBuffer);
@@ -497,7 +497,7 @@ namespace Buffer_Namespace {
     }
     
     /// client is responsible for deleting memory allocated for b->mem_
-    AbstractBuffer* BufferMgr::createBuffer(const mapd_size_t numBytes) {
+    AbstractBuffer* BufferMgr::createBuffer(const size_t numBytes) {
         ChunkKey chunkKey = {-1,getBufferId()};
         return createChunk(chunkKey, pageSize_, numBytes); 
     }

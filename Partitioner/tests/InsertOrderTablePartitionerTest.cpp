@@ -75,8 +75,8 @@ namespace Partitioner_Namespace {
         insertData.tableId = 1;
         insertData.columnIds.push_back(0);
         insertData.columnIds.push_back(1);
-        insertData.data.push_back((mapd_addr_t)intData);
-        insertData.data.push_back((mapd_addr_t)floatData);
+        insertData.data.push_back((int8_t *)intData);
+        insertData.data.push_back((int8_t *)floatData);
         insertData.numRows = numRows;
         insertOrderTablePartitioner->insertData(insertData); 
         dataMgr->checkpoint();

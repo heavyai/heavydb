@@ -15,25 +15,25 @@ GTEST_API_ int main(int argc, char **argv) {
 /*
 TEST(FileBuffer, read_and_write)
 {
-    mapd_size_t numPages = 400;
-    mapd_size_t pageSize = 4096;
+    size_t numPages = 400;
+    size_t pageSize = 4096;
     FileMgr fm(".");
     FileBuffer fb(&fm,pageSize);
     
     // create some data
-    mapd_size_t numInserts = numPages * (pageSize / sizeof(int));
+    size_t numInserts = numPages * (pageSize / sizeof(int));
     int data1[numInserts];
     for (int i = 0; i < numInserts; ++i)
         data1[i] = i*2;
     
     // write the data to the buffer
-    mapd_addr_t p_data1 = (mapd_addr_t)data1;
+    int8_t * p_data1 = (int8_t *)data1;
     fb.write(p_data1, numPages * pageSize,0);
     
     // read the data back
-    //fb.read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes = 0);
+    //fb.read(int8_t * const dst, const size_t offset, const size_t nbytes = 0);
     int data2[numInserts];
-    mapd_addr_t p_data2 = (mapd_addr_t)data2;
+    int8_t * p_data2 = (int8_t *)data2;
     fb.read(p_data2, numPages * pageSize,0);
     
     // verify
@@ -47,8 +47,8 @@ TEST(FileBuffer, read_and_write)
 
 TEST(FileBuffer, interleaved_read_and_write)
 {
-    mapd_size_t numPages = 400;
-    mapd_size_t pageSize = 4096;
+    size_t numPages = 400;
+    size_t pageSize = 4096;
     FileMgr fm("data");
     ChunkKey chunkKey1 = {4,2,1,5};
     FileBuffer fb1(&fm,pageSize,chunkKey1);
@@ -56,7 +56,7 @@ TEST(FileBuffer, interleaved_read_and_write)
     FileBuffer fb2(&fm,pageSize,chunkKey2);
     
     // create some data
-    mapd_size_t numInserts = numPages * (pageSize / sizeof(int));
+    size_t numInserts = numPages * (pageSize / sizeof(int));
     int data1In[numInserts];
     int data2In[numInserts];
     for (int i = 0; i < numInserts; ++i) {
@@ -65,8 +65,8 @@ TEST(FileBuffer, interleaved_read_and_write)
     }
     
     // write the data to the buffer
-    mapd_addr_t data1InPtr = (mapd_addr_t)data1In;
-    mapd_addr_t data2InPtr = (mapd_addr_t)data2In;
+    int8_t * data1InPtr = (int8_t *)data1In;
+    int8_t * data2InPtr = (int8_t *)data2In;
     int numCycles = 20;
     int numInsertsPerCycle = numInserts / numCycles;
     int numInsertsLeft = numInserts;
@@ -84,11 +84,11 @@ TEST(FileBuffer, interleaved_read_and_write)
 
     
     // read the data back
-    //fb.read(mapd_addr_t const dst, const mapd_size_t offset, const mapd_size_t nbytes = 0);
+    //fb.read(int8_t * const dst, const size_t offset, const size_t nbytes = 0);
     int data1Out[numInserts];
     int data2Out[numInserts];
-    mapd_addr_t data1OutPtr = (mapd_addr_t)data1Out;
-    mapd_addr_t data2OutPtr = (mapd_addr_t)data2Out;
+    int8_t * data1OutPtr = (int8_t *)data1Out;
+    int8_t * data2OutPtr = (int8_t *)data2Out;
     fb1.read(data1OutPtr, numPages * pageSize,CPU_BUFFER,0);
     fb2.read(data2OutPtr, numPages * pageSize,CPU_BUFFER,0);
     

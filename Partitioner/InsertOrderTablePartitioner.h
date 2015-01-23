@@ -31,7 +31,7 @@ class InsertOrderTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576 /*default 1MB*/);
+    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = 1048576, const size_t pageSize = 1048576 /*default 1MB*/);
 
     virtual ~InsertOrderTablePartitioner();
     /**
@@ -65,9 +65,9 @@ private:
 
 	int partitionerId_; /**< Stores the id of the partitioner - passed to constructor */
     std::string partitionerType_;
-	mapd_size_t maxPartitionRows_;
+	size_t maxPartitionRows_;
     int maxPartitionId_;
-    mapd_size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
+    size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
     std::vector<int> chunkKeyPrefix_;
     std::map <int, ColumnInfo> columnMap_; /**< stores a map of column id to metadata about that column */ 
     std::vector<PartitionInfo> partitionInfoVec_; /**< data about each partition stored - id and number of rows */  

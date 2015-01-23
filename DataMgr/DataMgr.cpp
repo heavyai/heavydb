@@ -55,7 +55,7 @@ namespace Data_Namespace {
         return bufferMgrs_[level][device] -> createChunk(key);
     }
 
-    AbstractBuffer * DataMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer * DataMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][device] -> getChunk(key, numBytes);
@@ -79,7 +79,7 @@ namespace Data_Namespace {
         }
     }
 
-    AbstractBuffer * DataMgr::createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes) {
+    AbstractBuffer * DataMgr::createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         assert(deviceId < levelSizes_[level]);
         return bufferMgrs_[level][deviceId] -> createBuffer(numBytes);

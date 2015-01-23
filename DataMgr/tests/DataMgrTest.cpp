@@ -48,13 +48,13 @@ namespace Data_Namespace {
         for (size_t i = 0; i < numInts; ++i) {
             data1[i] = i;
         }
-        gpuBuffer -> append((mapd_addr_t)data1,numInts*sizeof(int),Data_Namespace::CPU_BUFFER);
+        gpuBuffer -> append((int8_t *)data1,numInts*sizeof(int),Data_Namespace::CPU_BUFFER);
         // will put gpu chunk to cpu chunk, and then cpu chunk to file chunk
         dataMgr -> checkpoint();
         // will read File chunk into Cpu chunk
         AbstractBuffer * cpuBuffer = dataMgr -> getChunk(CPU_LEVEL,key);
         int *data2 = new int [numInts];
-        cpuBuffer -> read((mapd_addr_t)data2,numInts*sizeof(int),Data_Namespace::CPU_BUFFER,0);
+        cpuBuffer -> read((int8_t *)data2,numInts*sizeof(int),Data_Namespace::CPU_BUFFER,0);
         for (size_t i = 0; i < numInts; ++i) {
             EXPECT_EQ(data1[i],data2[i]);
         }
@@ -74,7 +74,7 @@ namespace Data_Namespace {
         for (size_t i = 0; i < numInts; ++i) {
             data1[i] = i;
         }
-        cpuChunk -> append((mapd_addr_t)data1,numInts*sizeof(int),Data_Namespace::CPU_BUFFER);
+        cpuChunk -> append((int8_t *)data1,numInts*sizeof(int),Data_Namespace::CPU_BUFFER);
         dataMgr -> checkpoint();
         EXPECT_NO_THROW(dataMgr -> getChunk(GPU_LEVEL,key));
         EXPECT_NO_THROW(dataMgr -> getChunk(CPU_LEVEL,key));
@@ -93,7 +93,7 @@ namespace Data_Namespace {
         for (size_t i = 0; i < numInts; ++i) {
             data1[i] = i;
         }
-        cpuBuffer -> append((mapd_addr_t)data1,numInts*sizeof(int),Data_Namespace::CPU_BUFFER);
+        cpuBuffer -> append((int8_t *)data1,numInts*sizeof(int),Data_Namespace::CPU_BUFFER);
         //Checkpoint should not flush a buffer - only real chunks 
         dataMgr -> checkpoint();
 
@@ -118,7 +118,8 @@ namespace Data_Namespace {
             data1[i] = i % 100; // so fits in one byte
             data2[i] = M_PI * i;
         }
-        gpuChunk1 -> encoder -> appendData((mapd_addr_t)data1,numElems);
+        int8_t *tmpPtr = reinterpret_cast<int8_t *>(data1);
+        gpuChunk1 -> encoder -> appendData(tmpPtr,numElems);
         EXPECT_EQ(numElems,gpuChunk1 -> size());
         EXPECT_EQ(numElems,gpuChunk1 -> encoder -> numElems);
         dataMgr -> checkpoint();

@@ -27,10 +27,10 @@ namespace Data_Namespace {
         public:
             DataMgr(const int partitionKeyIndex, const std::string &dataDir);
             AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
-            AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes = 0);
+            AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);
 
-            AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes);
+            AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
             void deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer);
             AbstractBuffer * copyBuffer(const MemoryLevel memoryLevel, const int deviceId, const AbstractBuffer * srcBuffer);
             //const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();

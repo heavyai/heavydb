@@ -16,9 +16,9 @@ namespace Buffer_Namespace {
             CudaUtils::allocPinnedHostMem(slabs_.back(),slabSize,1);
         }
         else {
-            slabs_.back() = (mapd_addr_t) new mapd_byte_t[slabSize];
+            slabs_.back() = (int8_t *) new int8_t[slabSize];
         }
-        //slabs_.push_back((mapd_addr_t) malloc(slabSize));
+        //slabs_.push_back((int8_t *) malloc(slabSize));
         slabSegments_.resize(slabSegments_.size()+1);
         slabSegments_[slabSegments_.size()-1].push_back(BufferSeg(0,numPagesPerSlab_));
     }
@@ -34,7 +34,7 @@ namespace Buffer_Namespace {
         }
     }
     
-    //void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
+    //void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
     //    auto chunkIt = chunkIndex_.find(key);
     //    AbstractBuffer * buffer;
     //    if (chunkIt == chunkIndex_.end()) {
@@ -47,7 +47,7 @@ namespace Buffer_Namespace {
     //    else {
     //        buffer = chunkIt -> second -> buffer;
     //    }
-    //    mapd_size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
+    //    size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
     //    destBuffer->reserve(chunkSize);
     //    std::cout << "After reserve chunksize: " << chunkSize << std::endl;
     //    if (chunk->isUpdated()) {
@@ -61,7 +61,7 @@ namespace Buffer_Namespace {
 
 
 
-    void CpuBufferMgr::allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
+    void CpuBufferMgr::allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t initialSize) {
         new CpuBuffer(this, segIt, pageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
     }
 
