@@ -14,9 +14,9 @@
 using namespace std;
 
 namespace File_Namespace {
-    mapd_size_t FileBuffer::headerBufferOffset_ = 32;
+    size_t FileBuffer::headerBufferOffset_ = 32;
 
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const mapd_size_t initialSize) : AbstractBuffer(), fm_(fm), pageSize_(pageSize), chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(), fm_(fm), pageSize_(pageSize), chunkKey_(chunkKey) {
         // Create a new FileBuffer
         assert(fm_);
         calcHeaderBuffer();
@@ -36,7 +36,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const mapd_size_t pageSize, const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits , const mapd_size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits) {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits , const size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits) {
         assert(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
@@ -45,7 +45,7 @@ namespace File_Namespace {
 
 
 
-    FileBuffer::FileBuffer(FileMgr *fm,/* const mapd_size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm),/* pageSize_(pageSize),*/chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm),/* pageSize_(pageSize),*/chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
         assert(fm_);
@@ -94,7 +94,7 @@ namespace File_Namespace {
         // NOP
     }
 
-    void FileBuffer::reserve(const mapd_size_t numBytes) {
+    void FileBuffer::reserve(const size_t numBytes) {
         size_t numPagesRequested = (numBytes + pageSize_ -1) / pageSize_;
         size_t numCurrentPages = multiPages_.size();
         int epoch = fm_-> epoch();
@@ -107,10 +107,10 @@ namespace File_Namespace {
 
     void FileBuffer::calcHeaderBuffer() {
         // 3 * sizeof(int) is for headerSize, for pageId and versionEpoch
-        // sizeof(mapd_size_t) is for chunkSize
-        //reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int) + sizeof(mapd_size_t);
+        // sizeof(size_t) is for chunkSize
+        //reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int) + sizeof(size_t);
         reservedHeaderSize_ = (chunkKey_.size() + 3) * sizeof(int);
-        mapd_size_t headerMod = reservedHeaderSize_ % headerBufferOffset_;
+        size_t headerMod = reservedHeaderSize_ % headerBufferOffset_;
         if (headerMod > 0) {
             reservedHeaderSize_ += headerBufferOffset_ - headerMod;
         }
@@ -133,21 +133,21 @@ namespace File_Namespace {
     }
 
 
-    void FileBuffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset) {
+    void FileBuffer::read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType, const size_t offset) {
         if (dstBufferType != CPU_BUFFER) {
             throw std::runtime_error("Unsupported Buffer type");
         }
 
         // variable declarations
-        mapd_addr_t curPtr = dst;    // a pointer to the current location in dst being written to
-        mapd_size_t startPage = offset / pageDataSize_;
-        mapd_size_t startPageOffset = offset % pageDataSize_;
-        mapd_size_t numPagesToRead = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_;
+        int8_t * curPtr = dst;    // a pointer to the current location in dst being written to
+        size_t startPage = offset / pageDataSize_;
+        size_t startPageOffset = offset % pageDataSize_;
+        size_t numPagesToRead = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_;
         //cout <vekkkk< "Start Page: " << startPage << endl;
         //cout << "Num pages To Read: " << numPagesToRead << endl;
         //cout << "Num pages existing: " << multiPages_.size() << endl;
         assert (startPage + numPagesToRead <= multiPages_.size());
-        mapd_size_t bytesLeft = numBytes;
+        size_t bytesLeft = numBytes;
 
         // Traverse the logical pages
         for (size_t pageNum = startPage; pageNum < startPage  + numPagesToRead; ++pageNum) {
@@ -175,13 +175,13 @@ namespace File_Namespace {
         assert (bytesLeft == 0);
     }
 
-    void FileBuffer::copyPage(Page &srcPage, Page &destPage, const mapd_size_t numBytes, const mapd_size_t offset) { 
+    void FileBuffer::copyPage(Page &srcPage, Page &destPage, const size_t numBytes, const size_t offset) { 
         //FILE *srcFile = fm_ -> files_[srcPage.fileId] -> f;
         //FILE *destFile = fm_ -> files_[destPage.fileId] -> f;
         assert(offset + numBytes < pageDataSize_);
         FILE *srcFile = fm_ -> getFileForFileId(srcPage.fileId); 
         FILE *destFile = fm_ -> getFileForFileId(destPage.fileId); 
-        mapd_addr_t buffer = new mapd_byte_t [numBytes]; 
+        int8_t * buffer = new int8_t [numBytes]; 
         size_t bytesRead = File_Namespace::read(srcFile,srcPage.pageNum * pageSize_ + offset+reservedHeaderSize_, numBytes, buffer);
         assert(bytesRead == numBytes);
         size_t bytesWritten = File_Namespace::write(destFile,destPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
@@ -203,19 +203,19 @@ namespace File_Namespace {
         int intHeaderSize = chunkKey_.size() + 3; // does not include chunkSize
         vector <int> header (intHeaderSize);
         // in addition to chunkkey we need size of header, pageId, version
-        //header[0] = (intHeaderSize - 1) * sizeof(int) + sizeof(mapd_size_t); // don't need to include size of headerSize value - sizeof(mapd_size_t) is for chunkSize
-        header[0] = (intHeaderSize - 1) * sizeof(int); // don't need to include size of headerSize value - sizeof(mapd_size_t) is for chunkSize
+        //header[0] = (intHeaderSize - 1) * sizeof(int) + sizeof(size_t); // don't need to include size of headerSize value - sizeof(size_t) is for chunkSize
+        header[0] = (intHeaderSize - 1) * sizeof(int); // don't need to include size of headerSize value - sizeof(size_t) is for chunkSize
         std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
         header[intHeaderSize-2] = pageId;
         header[intHeaderSize-1] = epoch;
         //cout << "Get header" << endl;
         FILE *f = fm_ -> getFileForFileId(page.fileId);
-        mapd_size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
+        size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
         //cout << "Writing header at " << page.pageNum*pageSize << endl;
-        File_Namespace::write(f, page.pageNum*pageSize,(intHeaderSize) * sizeof(int),(mapd_addr_t)&header[0]);
+        File_Namespace::write(f, page.pageNum*pageSize,(intHeaderSize) * sizeof(int),(int8_t *)&header[0]);
         /*
         if (writeSize) {
-            File_Namespace::write(f, page.pageNum*pageSize_ + intHeaderSize*sizeof(int),sizeof(mapd_size_t),(mapd_addr_t)&size_);
+            File_Namespace::write(f, page.pageNum*pageSize_ + intHeaderSize*sizeof(int),sizeof(size_t),(int8_t *)&size_);
         }
         */
     }
@@ -223,11 +223,11 @@ namespace File_Namespace {
     void FileBuffer::readMetadata(const Page &page) { 
         FILE *f = fm_ -> getFileForFileId(page.fileId); 
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
-        fread((mapd_addr_t)&pageSize_,sizeof(mapd_size_t),1,f);
-        fread((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
+        fread((int8_t *)&pageSize_,sizeof(size_t),1,f);
+        fread((int8_t *)&size_,sizeof(size_t),1,f);
         //cout << "Read size: " << size_ << endl;
         vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
-        fread((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
+        fread((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         hasEncoder = static_cast <bool> (typeData[0]);
         //cout << "Read has encoder: " << hasEncoder << endl;
         if (hasEncoder) {
@@ -250,9 +250,9 @@ namespace File_Namespace {
         FILE *f = fm_ -> getFileForFileId(page.fileId);
         cout << "Seeking to " << page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_ << endl;
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
-        size_t numBytesWritten = fwrite((mapd_addr_t)&pageSize_,sizeof(mapd_size_t),1,f);
+        size_t numBytesWritten = fwrite((int8_t *)&pageSize_,sizeof(size_t),1,f);
         cout << "Num bytes written: " << numBytesWritten << endl;
-        numBytesWritten = fwrite((mapd_addr_t)&size_,sizeof(mapd_size_t),1,f);
+        numBytesWritten = fwrite((int8_t *)&size_,sizeof(size_t),1,f);
         cout << "Num bytes written: " << numBytesWritten << endl;
         cout << "Size_ " << size_ << endl;
         vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
@@ -264,7 +264,7 @@ namespace File_Namespace {
             typeData[3] = encodingBits; 
             //typeData[3] = static_cast<int>(encodedDataType); 
         }
-        numBytesWritten = fwrite((mapd_addr_t)&(typeData[0]),sizeof(int),typeData.size(),f);
+        numBytesWritten = fwrite((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         cout << "Num bytes written: " << numBytesWritten << endl;
         if (hasEncoder) { // redundant
             encoder -> writeMetadata(f);
@@ -284,19 +284,19 @@ namespace File_Namespace {
     }
     */
 
-    void FileBuffer::append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType) {
+    void FileBuffer::append(int8_t * src, const size_t numBytes, const BufferType srcBufferType) {
         isDirty_ = true;
         isAppended_ = true;
 
         //std::cout << "Chunk" << chunkKey_[0] << std::endl; 
-        mapd_size_t startPage = size_ / pageDataSize_;
+        size_t startPage = size_ / pageDataSize_;
         //cout << "Start page: " << startPage << endl;
-        mapd_size_t startPageOffset = size_ % pageDataSize_;
+        size_t startPageOffset = size_ % pageDataSize_;
         //cout << "Start page offset: " << startPageOffset << endl;
-        mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
-        mapd_size_t bytesLeft = numBytes;
-        mapd_addr_t curPtr = src;    // a pointer to the current location in dst being written to
-        mapd_size_t initialNumPages = multiPages_.size();
+        size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
+        size_t bytesLeft = numBytes;
+        int8_t * curPtr = src;    // a pointer to the current location in dst being written to
+        size_t initialNumPages = multiPages_.size();
         //cout << "InitialNumPages: " <<  initialNumPages << endl;
         size_ = size_ + numBytes;
         int epoch = fm_-> epoch();
@@ -335,7 +335,7 @@ namespace File_Namespace {
         assert (bytesLeft == 0);
     }
 
-    void FileBuffer::write(mapd_addr_t src,  const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset) {
+    void FileBuffer::write(int8_t * src,  const size_t numBytes, const BufferType srcBufferType, const size_t offset) {
         if (srcBufferType != CPU_BUFFER) {
             throw std::runtime_error("Unsupported Buffer type");
         }
@@ -351,12 +351,12 @@ namespace File_Namespace {
             size_ = offset + numBytes;
         }
 
-        mapd_size_t startPage = offset / pageDataSize_;
-        mapd_size_t startPageOffset = offset % pageDataSize_;
-        mapd_size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
-        mapd_size_t bytesLeft = numBytes;
-        mapd_addr_t curPtr = src;    // a pointer to the current location in dst being written to
-        mapd_size_t initialNumPages = multiPages_.size();
+        size_t startPage = offset / pageDataSize_;
+        size_t startPageOffset = offset % pageDataSize_;
+        size_t numPagesToWrite = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_; 
+        size_t bytesLeft = numBytes;
+        int8_t * curPtr = src;    // a pointer to the current location in dst being written to
+        size_t initialNumPages = multiPages_.size();
         int epoch = fm_-> epoch();
 
         if (startPage > initialNumPages) { // means there is a gap we need to allocate pages for

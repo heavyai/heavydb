@@ -37,13 +37,7 @@ TablePartitionMgr::TablePartitionMgr(Data_Namespace::DataMgr &dataMgr) dataMgr_(
 
 
         }
-
-
-
     }
-
-
-
 
 
     map <PartitionInfo> partitionInfoMap;

@@ -16,7 +16,7 @@
 
 namespace File_Namespace {
     
-    FILE* create(const std::string &basePath, const int fileId, const mapd_size_t pageSize, const mapd_size_t npages);
+    FILE* create(const std::string &basePath, const int fileId, const size_t pageSize, const size_t npages);
 
     FILE* create(const std::string &fullPath, const size_t requestedFileSize);
     
@@ -56,7 +56,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes read.
      */
-    size_t read(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf);
+    size_t read(FILE *f, const size_t offset, const size_t size, int8_t * buf);
     
     /**
      * @brief Writes the specified number of bytes to the offset position in file f from buf.
@@ -68,7 +68,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes written.
      */
-    size_t write(FILE *f, const mapd_size_t offset, const mapd_size_t size, mapd_addr_t buf);
+    size_t write(FILE *f, const size_t offset, const size_t size, int8_t * buf);
     
     /**
      * @brief Appends the specified number of bytes to the end of the file f from buf.
@@ -79,7 +79,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes written.
      */
-    size_t append(FILE *f, const mapd_size_t size, mapd_addr_t buf);
+    size_t append(FILE *f, const size_t size, int8_t * buf);
     
     /**
      * @brief Reads the specified page from the file f into buf.
@@ -91,7 +91,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes read (should be equal to pageSize).
      */
-    size_t readPage(FILE *f, const mapd_size_t pageSize, const mapd_size_t pageNum, mapd_addr_t buf);
+    size_t readPage(FILE *f, const size_t pageSize, const size_t pageNum, int8_t * buf);
     
     /**
      * @brief Writes a page from buf to the file.
@@ -103,7 +103,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes written (should be equal to pageSize).
      */
-    size_t writePage(FILE *f, const mapd_size_t pageSize, const mapd_size_t pageNum, mapd_addr_t buf);
+    size_t writePage(FILE *f, const size_t pageSize, const size_t pageNum, int8_t * buf);
     
     /**
      * @brief Appends a page from buf to the file.
@@ -114,7 +114,7 @@ namespace File_Namespace {
      * @param err If not NULL, will hold an error code should an error occur.
      * @return size_t The number of bytes appended (should be equal to pageSize).
      */
-    size_t appendPage(FILE *f, const mapd_size_t pageSize, mapd_addr_t buf);
+    size_t appendPage(FILE *f, const size_t pageSize, int8_t * buf);
     
     /**
      * @brief Returns the size of the specified file.

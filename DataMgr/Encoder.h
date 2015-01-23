@@ -25,12 +25,12 @@ class Encoder {
             metadataTemplate_.encodingBits = buffer_ -> encodingBits;
             */
         }
-        virtual ChunkMetadata appendData(mapd_addr_t &srcData, const mapd_size_t numAppendElems) = 0;
+        virtual ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) = 0;
         virtual void getMetadata (ChunkMetadata &chunkMetadata); 
         virtual void copyMetadata (const Encoder * copyFromEncoder) = 0; 
-        virtual void writeMetadata(FILE *f/*, const mapd_size_t offset*/) = 0;
-        virtual void readMetadata(FILE *f/*, const mapd_size_t offset*/) = 0;
-        mapd_size_t numElems;
+        virtual void writeMetadata(FILE *f/*, const size_t offset*/) = 0;
+        virtual void readMetadata(FILE *f/*, const size_t offset*/) = 0;
+        size_t numElems;
 
     protected:
         Data_Namespace::AbstractBuffer * buffer_;

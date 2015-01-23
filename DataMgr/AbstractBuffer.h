@@ -35,17 +35,17 @@ namespace Data_Namespace {
         }
         virtual ~AbstractBuffer() {}
         
-        virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const mapd_size_t offset = 0) = 0;
-        virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const mapd_size_t offset = 0) = 0;
-        virtual void reserve(mapd_size_t numBytes) = 0;
-        virtual void append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER) = 0;
-        virtual mapd_byte_t* getMemoryPtr() = 0;
+        virtual void read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const size_t offset = 0) = 0;
+        virtual void write(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const size_t offset = 0) = 0;
+        virtual void reserve(size_t numBytes) = 0;
+        virtual void append(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER) = 0;
+        virtual int8_t* getMemoryPtr() = 0;
         
-        virtual mapd_size_t pageCount() const = 0;
-        virtual mapd_size_t pageSize() const = 0;
-        virtual mapd_size_t size() const = 0;
-        virtual mapd_size_t reservedSize() const = 0;
-        //virtual mapd_size_t used() const = 0;
+        virtual size_t pageCount() const = 0;
+        virtual size_t pageSize() const = 0;
+        virtual size_t size() const = 0;
+        virtual size_t reservedSize() const = 0;
+        //virtual size_t used() const = 0;
         virtual int getDeviceId() const {return -1;}
         virtual BufferType getType() const = 0;
 
@@ -67,7 +67,7 @@ namespace Data_Namespace {
             isDirty_ = true;
         }
 
-        void setSize(const mapd_size_t size) {
+        void setSize(const size_t size) {
             size_ = size;
         }
         void clearDirtyBits() {
@@ -104,7 +104,7 @@ namespace Data_Namespace {
 
     protected:
 
-        mapd_size_t size_;
+        size_t size_;
         bool isDirty_;
         bool isAppended_;
         bool isUpdated_;

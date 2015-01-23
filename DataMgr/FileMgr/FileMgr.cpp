@@ -40,7 +40,7 @@ namespace File_Namespace {
     }
 
 
-    FileMgr::FileMgr(std::string basePath, const mapd_size_t defaultPageSize, const int epoch) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(epoch) {
+    FileMgr::FileMgr(std::string basePath, const size_t defaultPageSize, const int epoch) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(epoch) {
         init();
     }
 
@@ -99,11 +99,11 @@ namespace File_Namespace {
                         if (fileId > maxFileId) {
                             maxFileId = fileId;
                         }
-                        mapd_size_t pageSize = boost::lexical_cast<mapd_size_t>(fileStem.substr(dotPos+1,fileStem.size()));
+                        size_t pageSize = boost::lexical_cast<size_t>(fileStem.substr(dotPos+1,fileStem.size()));
                         std::string filePath(fileIt ->path().string());
                         size_t fileSize = boost::filesystem::file_size(filePath);
                         assert (fileSize % pageSize == 0); // should be no partial pages
-                        mapd_size_t numPages = fileSize / pageSize;
+                        size_t numPages = fileSize / pageSize;
 
                         //std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
                         openExistingFile(filePath,fileId,pageSize,numPages,headerVec);
@@ -136,14 +136,14 @@ namespace File_Namespace {
                     if (headerIt -> chunkKey != lastChunkKey) {
                         //std::cout << "New chunkkey" << std::endl;
                         
-                        //mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                        //size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
                         chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerIt);
                         lastChunkKey = headerIt -> chunkKey;
                         startIt = headerIt;
                     }
                 }
                 // now need to insert last Chunk
-                //mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                //size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
                 //cout << "Inserting last chunk" << endl;
                 chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerVec.end());
 
@@ -171,7 +171,7 @@ namespace File_Namespace {
         epochFile_ = create(epochFilePath,sizeof(int));
         // Write out current epoch to file - which if this
         // function is being called should be 0
-        write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        write(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
         epoch_++;
     }
 
@@ -187,13 +187,13 @@ namespace File_Namespace {
             throw std::runtime_error("Epoch file is not sized properly");
         }
         epochFile_ = open(epochFilePath);
-        read(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        read(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
         std::cout << "Epoch after open file: " << epoch_ << std::endl;
         epoch_++; // we are in new epoch from last checkpoint
     }
 
     void FileMgr::writeAndSyncEpochToDisk() {
-        write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        write(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
         int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
         //int status = fcntl(fileno(epochFile_),51);
         if (status != 0) {
@@ -221,8 +221,8 @@ namespace File_Namespace {
     }
 
 
-    AbstractBuffer* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) {
-        mapd_size_t actualPageSize = pageSize;
+    AbstractBuffer* FileMgr::createChunk(const ChunkKey &key, const size_t pageSize, const size_t numBytes) {
+        size_t actualPageSize = pageSize;
         if (actualPageSize == 0) {
             actualPageSize = defaultPageSize_; 
         }
@@ -248,7 +248,7 @@ namespace File_Namespace {
         chunkIndex_.erase(chunkIt);
     }
 
-    AbstractBuffer* FileMgr::getChunk(const ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::getChunk(const ChunkKey &key, const size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
@@ -256,7 +256,7 @@ namespace File_Namespace {
     }
 
 
-    void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
+    void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
         
@@ -270,7 +270,7 @@ namespace File_Namespace {
         AbstractBuffer *chunk = chunkIt -> second;
         // ChunkSize is either specified in function call with numBytes or we
         // just look at pageSize * numPages in FileBuffer
-        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
         if (numBytes > 0 && numBytes > chunk->size()) { 
             throw std::runtime_error("Chunk is smaller than number of bytes requested");
         }
@@ -286,7 +286,7 @@ namespace File_Namespace {
         destBuffer->syncEncoder(chunk);
     }
 
-    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer *chunk;
@@ -296,10 +296,10 @@ namespace File_Namespace {
         else {
             chunk = chunkIt->second;
         }
-        mapd_size_t oldChunkSize = chunk->size();
+        size_t oldChunkSize = chunk->size();
         // write the buffer's data to the Chunk
-        //mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
-        mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        //size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
         if (chunk->isDirty()) {
             throw std::runtime_error("Chunk inconsistency");
         }
@@ -308,11 +308,11 @@ namespace File_Namespace {
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
-            chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
+            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
         }
         else if (srcBuffer->isAppended()) {
             assert(oldChunkSize < newChunkSize);
-            chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
+            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
         }
         //chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
         //@todo commenting out line above will make sure this metadata is set
@@ -322,7 +322,7 @@ namespace File_Namespace {
         return chunk;
     }
 
-    AbstractBuffer* FileMgr::createBuffer(const mapd_size_t numBytes = 0) {
+    AbstractBuffer* FileMgr::createBuffer(const size_t numBytes = 0) {
         throw std::runtime_error("Operation not supported");
     }
     
@@ -335,7 +335,7 @@ namespace File_Namespace {
     //    throw std::runtime_error("Operation not supported");
     //}
 
-    Page FileMgr::requestFreePage(mapd_size_t pageSize) {
+    Page FileMgr::requestFreePage(size_t pageSize) {
         std::lock_guard < std::mutex > lock (getPageMutex_);
 
         auto candidateFiles = fileIndex_.equal_range(pageSize);
@@ -354,11 +354,11 @@ namespace File_Namespace {
         return (Page (fileInfo->fileId,pageNum));
     }
 
-    void FileMgr::requestFreePages(mapd_size_t numPagesRequested, mapd_size_t pageSize, std::vector<Page> &pages) {
+    void FileMgr::requestFreePages(size_t numPagesRequested, size_t pageSize, std::vector<Page> &pages) {
         // @todo add method to FileInfo to get more than one page
         std::lock_guard < std::mutex > lock (getPageMutex_);
         auto candidateFiles = fileIndex_.equal_range(pageSize);
-        mapd_size_t numPagesNeeded = numPagesRequested;
+        size_t numPagesNeeded = numPagesRequested;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
             FileInfo *fileInfo = files_[fileIt -> second]; 
             int pageNum;
@@ -392,7 +392,7 @@ namespace File_Namespace {
         assert(pages.size() == numPagesRequested);
     }
 
-    FileInfo* FileMgr::openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages, std::vector<HeaderInfo> &headerVec) {
+    FileInfo* FileMgr::openExistingFile(const std::string &path, const int fileId, const size_t pageSize, const size_t numPages, std::vector<HeaderInfo> &headerVec) {
 
         FILE *f = open(path);
         FileInfo *fInfo = new FileInfo (fileId, f, pageSize, numPages,false); // false means don't init file
@@ -402,12 +402,12 @@ namespace File_Namespace {
             files_.resize(fileId+1);
         }
         files_[fileId] = fInfo;
-        fileIndex_.insert(std::pair<mapd_size_t, int>(pageSize, fileId));
+        fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
         cout << "At end of openExistingfile" << endl;
         return fInfo;
     }
 
-    FileInfo* FileMgr::createFile(const mapd_size_t pageSize, const mapd_size_t numPages) {
+    FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
         // check arguments
         if (pageSize == 0 || numPages == 0)
             throw std::invalid_argument("pageSize and numPages must be greater than 0.");
@@ -424,7 +424,7 @@ namespace File_Namespace {
         
         // update file manager data structures
         files_.push_back(fInfo);
-        fileIndex_.insert(std::pair<mapd_size_t, int>(pageSize, fileId));
+        fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
         
         assert(files_.back() == fInfo); // postcondition
         return fInfo;

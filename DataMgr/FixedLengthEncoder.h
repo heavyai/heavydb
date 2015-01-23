@@ -11,10 +11,10 @@ class FixedLengthEncoder : public Encoder {
     public:
         FixedLengthEncoder(Data_Namespace::AbstractBuffer *buffer): Encoder(buffer), dataMin(std::numeric_limits<T>::max()),dataMax(std::numeric_limits<T>::min()) {}
 
-        ChunkMetadata appendData(mapd_addr_t &srcData, const mapd_size_t numAppendElems) {
+        ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) {
             T * unencodedData = reinterpret_cast<T *> (srcData); 
             V * encodedData = new V [numAppendElems];  
-            for (mapd_size_t i = 0; i < numAppendElems; ++i) {
+            for (size_t i = 0; i < numAppendElems; ++i) {
                 //std::cout << "Unencoded: " << unencodedData[i] << std::endl;
                 //std::cout << "Min: " << dataMin << " Max: " <<  dataMax << std::endl;
                 encodedData[i] = static_cast <V>(unencodedData[i]);
@@ -33,7 +33,7 @@ class FixedLengthEncoder : public Encoder {
             std::cout << "Min: " << dataMin << " Max: " << dataMax << std::endl;
 
             // assume always CPU_BUFFER?
-            buffer_ -> append((mapd_addr_t)(encodedData),numAppendElems*sizeof(V));
+            buffer_ -> append((int8_t *)(encodedData),numAppendElems*sizeof(V));
             delete [] encodedData;
             ChunkMetadata chunkMetadata;
             getMetadata(chunkMetadata);
@@ -60,16 +60,16 @@ class FixedLengthEncoder : public Encoder {
 
         void writeMetadata(FILE *f) {
             // assumes pointer is already in right place
-            fwrite((mapd_addr_t)&numElems,sizeof(mapd_size_t),1,f); 
-            fwrite((mapd_addr_t)&dataMin,sizeof(T),1,f); 
-            fwrite((mapd_addr_t)&dataMax,sizeof(T),1,f); 
+            fwrite((int8_t *)&numElems,sizeof(size_t),1,f); 
+            fwrite((int8_t *)&dataMin,sizeof(T),1,f); 
+            fwrite((int8_t *)&dataMax,sizeof(T),1,f); 
         }
 
         void readMetadata(FILE *f) {
             // assumes pointer is already in right place
-            fread((mapd_addr_t)&numElems,sizeof(mapd_size_t),1,f); 
-            fread((mapd_addr_t)&dataMin,1,sizeof(T),f); 
-            fread((mapd_addr_t)&dataMax,1,sizeof(T),f); 
+            fread((int8_t *)&numElems,sizeof(size_t),1,f); 
+            fread((int8_t *)&dataMin,1,sizeof(T),f); 
+            fread((int8_t *)&dataMax,1,sizeof(T),f); 
         }
         T dataMin;
         T dataMax;
