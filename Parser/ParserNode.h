@@ -30,6 +30,25 @@ namespace Parser {
 	};
 
 	/*
+	 * @type SQLType
+	 * @brief class that captures type, predication and scale.
+	 */
+	class SQLType : public Node {
+		public:
+			SQLType(SQLTypes t) : type(t), param1(0), param2(0) {}
+			SQLType(SQLTypes t, int p1) : type(t), param1(p1), param2(0) {}
+			SQLType(SQLTypes t, int p1, int p2) : type(t), param1(p1), param2(p2) {}
+			SQLTypes get_type() const { return type; }
+			int get_param1() const { return param1; }
+			int get_param2() const { return param2; }
+			std::string to_string() const;
+		private:
+			SQLTypes	type;
+			int param1; // e.g. for NUMERIC(10).  0 means unspecified.
+			int param2; // e.g. for NUMERIC(10,3). 0 means unspecified.
+	};
+			
+	/*
 	 * @type Expr
 	 * @brief root super class for all expression nodes
 	 */
@@ -343,6 +362,16 @@ namespace Parser {
 			Expr *arg; // for COUNT, nullptr means '*'
 	};
 
+	class CastExpr : public Expr {
+		public:
+			CastExpr(Expr *a, SQLType *t) : arg(a), target_type(t) {}
+			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const { return "CAST(" + arg->to_string() + " AS " + target_type->to_string() + ")"; }
+		private:
+			Expr *arg;
+			SQLType *target_type;
+	};
+
 	/*
 	 * @type TableRef
 	 * @brief table reference in FROM clause
@@ -394,24 +423,6 @@ namespace Parser {
 		// intentionally empty
 	};
 
-	/*
-	 * @type SQLType
-	 * @brief class that captures type, predication and scale.
-	 */
-	class SQLType : public Node {
-		public:
-			SQLType(SQLTypes t) : type(t), param1(0), param2(0) {}
-			SQLType(SQLTypes t, int p1) : type(t), param1(p1), param2(0) {}
-			SQLType(SQLTypes t, int p1, int p2) : type(t), param1(p1), param2(p2) {}
-			SQLTypes get_type() const { return type; }
-			int get_param1() const { return param1; }
-			int get_param2() const { return param2; }
-		private:
-			SQLTypes	type;
-			int param1; // e.g. for NUMERIC(10).  0 means unspecified.
-			int param2; // e.g. for NUMERIC(10,3). 0 means unspecified.
-	};
-			
 	/*
 	 * @type ColumnConstraintDef
 	 * @brief integrity constraint on a column

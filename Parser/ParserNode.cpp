@@ -474,6 +474,18 @@ namespace Parser {
 		return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct);
 	}
 
+	Analyzer::Expr *
+	CastExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
+	{
+		Analyzer::Expr *arg_expr = arg->analyze(catalog, query);
+		SQLTypeInfo ti;
+		ti.type = target_type->get_type();
+		ti.dimension = target_type->get_param1();
+		ti.scale = target_type->get_param2();
+		ti.notnull = arg_expr->get_type_info().notnull;
+		return arg_expr->add_cast(ti);
+	}
+
 	void
 	UnionQuery::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
@@ -608,6 +620,8 @@ namespace Parser {
 	SelectStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
 		query.set_stmt_type(kSELECT);
+		query.set_limit(limit);
+		query.set_offset(offset);
 		query_expr->analyze(catalog, query);
 		if (orderby_clause == nullptr) {
 			query.set_order_by(nullptr);
@@ -636,8 +650,63 @@ namespace Parser {
 			order_by->push_back(Analyzer::OrderEntry(tle_no, p->get_is_desc(), p->get_nulls_first()));
 		}
 		query.set_order_by(order_by);
-		query.set_limit(limit);
-		query.set_offset(offset);
+	}
+
+	std::string
+	SQLType::to_string() const
+	{
+		std::string str;
+		switch (type) {
+			case kBOOLEAN:
+				str = "BOOLEAN";
+				break;
+			case kCHAR:
+				str = "CHAR(" + boost::lexical_cast<std::string>(param1) + ")";
+				break;
+			case kVARCHAR:
+				str = "VARCHAR(" + boost::lexical_cast<std::string>(param1) + ")";
+				break;
+			case kTEXT:
+				str = "TEXT";
+				break;
+			case kNUMERIC:
+				str = "NUMERIC(" + boost::lexical_cast<std::string>(param1);
+				if (param2 > 0)
+					str += ", " + boost::lexical_cast<std::string>(param2);
+				str += ")";
+				break;
+			case kDECIMAL:
+				str = "DECIMAL(" + boost::lexical_cast<std::string>(param1);
+				if (param2 > 0)
+					str += ", " + boost::lexical_cast<std::string>(param2);
+				str += ")";
+				break;
+			case kBIGINT:
+				str = "BIGINT";
+				break;
+			case kINT:
+				str = "INT";
+				break;
+			case kSMALLINT:
+				str = "SMALLINT";
+				break;
+			case kFLOAT:
+				str = "FLOAT";
+				break;
+			case kDOUBLE:
+				str = "DOUBLE";
+				break;
+			case kTIME:
+				str = "TIME";
+				break;
+			case kTIMESTAMP:
+				str = "TIMESTAMP"; // @TODO add precision
+				break;
+			default:
+				assert(false);
+				break;
+		}
+		return str;
 	}
 
 	std::string
@@ -645,7 +714,7 @@ namespace Parser {
 	{
 		std::string str = select_expr->to_string();
 		if (alias != nullptr)
-			str += "AS " + *alias;
+			str += " AS " + *alias;
 		return str;
 	}
 

@@ -740,6 +740,9 @@ scalar_exp:
 	|	column_ref { $<nodeval>$ = $<nodeval>1; }
 	|	function_ref { $<nodeval>$ = $<nodeval>1; }
 	|	'(' scalar_exp ')' { $<nodeval>$ = $<nodeval>2; }
+	| CAST '(' scalar_exp AS data_type ')'
+	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
+	/* | case_exp; */
 	;
 
 select_entry: scalar_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }
