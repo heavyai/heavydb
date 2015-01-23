@@ -36,7 +36,7 @@ Catalog_Namespace::Catalog get_catalog() {
 
 Catalog_Namespace::Catalog g_cat(get_catalog());
 
-Executor::AggResult run_simple_agg(const std::string& query_str) {
+std::vector<Executor::AggResult> run_multiple_agg(const std::string& query_str) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -53,7 +53,11 @@ Executor::AggResult run_simple_agg(const std::string& query_str) {
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
   Executor executor(plan);
-  return executor.execute(ExecutorOptLevel::LoopStrengthReduction).front();
+  return executor.execute(ExecutorOptLevel::LoopStrengthReduction);
+}
+
+Executor::AggResult run_simple_agg(const std::string& query_str) {
+  return run_multiple_agg(query_str).front();
 }
 
 void run_ddl_statement(const std::string& create_table_stmt) {
@@ -79,7 +83,7 @@ T v(const Executor::AggResult& r) {
 
 }
 
-TEST(Select, FilterAndAggregation) {
+TEST(Select, FilterAndSimpleAggregation) {
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;")), 1000000);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test;")), 42);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test;")), 42);
@@ -98,6 +102,15 @@ TEST(Select, FilterAndAggregation) {
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x = 42;")), 42);
   ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y) FROM test;")), 84.);
   ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 41 AND x < 43;")), 42.);
+}
+
+TEST(Select, FilterAndMultipleAggregation) {
+  auto agg_results = run_multiple_agg("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 82 AND x + y < 86;");
+  CHECK_EQ(agg_results.size(), 4);
+  ASSERT_EQ(v<int64_t>(agg_results[0]), 42);
+  ASSERT_EQ(v<double>(agg_results[1]), 1764.);
+  ASSERT_EQ(v<int64_t>(agg_results[2]), 49);
+  ASSERT_EQ(v<int64_t>(agg_results[3]), 1000000);
 }
 
 int main(int argc, char** argv)

@@ -61,7 +61,7 @@ private:
   void* query_native_code_;
   mutable std::unordered_map<int, llvm::Value*> fetch_cache_;
   llvm::Function* row_func_;
-  int64_t init_agg_val_;
+  std::vector<int64_t> init_agg_vals_;
   std::unordered_map<int, int> global_to_local_col_ids_;
   std::vector<int> local_to_global_col_ids_;
 };

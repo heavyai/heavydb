@@ -81,13 +81,15 @@ llvm::Function* pos_step(llvm::Module* mod) {
   return func_pos_step;
 }
 
-llvm::Function* row_process(llvm::Module* mod) {
+llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count) {
   using namespace llvm;
 
   std::vector<Type*>FuncTy_5_args;
   PointerType* PointerTy_6 = PointerType::get(IntegerType::get(mod->getContext(), 64), 0);
 
-  FuncTy_5_args.push_back(PointerTy_6);
+  for (size_t i = 0; i < aggr_col_count; ++i) {
+    FuncTy_5_args.push_back(PointerTy_6);
+  }
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
   FunctionType* FuncTy_5 = FunctionType::get(
     /*Result=*/Type::getVoidTy(mod->getContext()),
@@ -129,7 +131,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod);
+  auto func_row_process = row_process(mod, aggr_col_count);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -329,7 +331,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod);
+  auto func_row_process = row_process(mod, aggr_col_count);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);

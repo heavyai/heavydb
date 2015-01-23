@@ -26,8 +26,7 @@ Executor::Executor(const Planner::RootPlan* root_plan)
   , module_(nullptr)
   , ir_builder_(context_)
   , execution_engine_(nullptr)
-  , row_func_(nullptr)
-  , init_agg_val_(0) {
+  , row_func_(nullptr) {
   CHECK(root_plan_);
 }
 
@@ -354,8 +353,7 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
   const int table_id = 1;
   const auto fragments = get_fragments(table_id);
   std::vector<std::pair<const ChunkKey, const size_t>> chunk_keys;
-  Executor::AggResult result;
-  int64_t out { 0 };
+  std::vector<Executor::AggResult> results;
   for (const auto& fragment : fragments) {
     for (size_t local_col_id = 0; local_col_id < local_to_global_col_ids_.size(); ++local_col_id) {
       const int col_id = local_to_global_col_ids_[local_col_id];
@@ -370,15 +368,24 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
       col_buffers[buffer_idx] = buffers[buffer_idx].data;
       CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
     }
-    int64_t* out_vec[] = { &out };
-    reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_val_, out_vec);
+    std::vector<int64_t*> out_vec;
+    const size_t agg_col_count = init_agg_vals_.size();
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      // TODO(alex): multiple devices support
+      auto buff = calloc(1, sizeof(int64_t));
+      out_vec.push_back(static_cast<int64_t*>(buff));
+    }
+    reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_vals_[0], &out_vec[0]);
     const auto agg_exprs = get_agg_exprs(agg_plan);
-    CHECK_EQ(agg_exprs.size(), 1);
-    result = agg_exprs.front()->get_aggtype() == kAVG
-      ? Executor::AggResult(static_cast<double>(out) / num_rows)
-      : Executor::AggResult(out);
+    CHECK_EQ(agg_exprs.size(), agg_col_count);
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      auto result = agg_exprs[i]->get_aggtype() == kAVG
+        ? Executor::AggResult(static_cast<double>(out_vec[i][0]) / num_rows)
+        : Executor::AggResult(out_vec[i][0]);
+      results.push_back(result);
+    }
   }
-  return { result };
+  return results;
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
@@ -565,7 +572,9 @@ void Executor::compileAggScanPlan(
   {
     auto agg_infos = get_agg_name_and_exprs(agg_plan);
     // TODO(alex): fix, each aggregate column should have its own init value
-    init_agg_val_ = std::get<2>(agg_infos.front());
+    for (const auto& agg_info : agg_infos) {
+      init_agg_vals_.push_back(std::get<2>(agg_info));
+    }
     // TODO(alex): heuristic for group by buffer size
     call_aggregators(agg_infos, filter_lv, agg_plan->get_groupby_list(), 2048, module_);
   }
