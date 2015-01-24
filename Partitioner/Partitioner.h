@@ -51,7 +51,6 @@ namespace Partitioner_Namespace {
         size_t numTuples;
         size_t shadowNumTuples;
         std::vector<int> deviceIds;
-        std::vector<ChunkMetadata> chunkMetadata;
         std::map <int, ChunkMetadata> chunkMetadataMap; 
         std::map <int, ChunkMetadata> shadowChunkMetadataMap; 
     };
