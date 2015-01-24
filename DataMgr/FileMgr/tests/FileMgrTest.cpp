@@ -4,11 +4,11 @@
 #include <ctime>
 #include <vector>
 #include <iostream>
-
 #include <boost/filesystem.hpp>
 
 #include "gtest/gtest.h"
 #include <boost/timer/timer.hpp>
+#include <math.h>
 
 using namespace File_Namespace;
 using namespace std;
@@ -22,7 +22,7 @@ void writeToBuffer(AbstractBuffer *buffer, const size_t numInts) {
     for (size_t i = 0; i < numInts; ++i) {
         data[i] = i;
     }
-    buffer -> write((mapd_addr_t)data,numInts*sizeof(int),CPU_BUFFER,0);
+    buffer -> write((int8_t *)data,numInts*sizeof(int),CPU_BUFFER,0);
     delete [] data;
 }
 
@@ -36,8 +36,8 @@ TEST(FileMgr, getFreePages)
     deleteData("data");
     FileMgr fm("data");
     std::vector<Page> freePages;
-    mapd_size_t numPages = 2048;
-    mapd_size_t pageSize = 4096;
+    size_t numPages = 2048;
+    size_t pageSize = 4096;
     
     EXPECT_EQ(freePages.size(), 0);
     fm.requestFreePages(numPages, pageSize, freePages);
@@ -49,7 +49,7 @@ TEST(FileMgr, getFreePage)
 {
     deleteData("data");
     FileMgr fm("data");
-    mapd_size_t pageSize = 1024796;
+    size_t pageSize = 1024796;
     Page page = fm.requestFreePage(pageSize);
     EXPECT_EQ(page.isValid(),true);
 }
@@ -58,7 +58,7 @@ TEST(FileMgr, createChunk) {
     deleteData("data");
     FileMgr fm("data");
     ChunkKey chunkKey = {2,3,4,5};
-    mapd_size_t pageSize = 4096;
+    size_t pageSize = 4096;
     AbstractBuffer * chunk1 = fm.createChunk(chunkKey,pageSize);
     AbstractBuffer * chunk2 = fm.getChunk(chunkKey);
     EXPECT_EQ(chunk1,chunk2);
@@ -79,7 +79,7 @@ TEST(FileMgr, deleteChunk) {
     ChunkKey chunkKey2 = {2,4,4,5};
     {
         FileMgr fm("data");
-        mapd_size_t pageSize = 4096;
+        size_t pageSize = 4096;
         fm.createChunk(chunkKey1,pageSize);
         AbstractBuffer *chunk = fm.getChunk(chunkKey1);
         writeToBuffer(chunk,4096);
@@ -142,8 +142,9 @@ TEST(FileMgr, writeReadChunk) {
     deleteData("data");
     ChunkKey chunkKey1 = {1,2,3,4};
     ChunkKey chunkKey2 = {2,3,4,5};
-    mapd_size_t pageSize = 1024796;
-    //mapd_size_t pageSize = 4096000;
+    size_t pageSize = 1024796;
+    //size_t pageSize = 8192;
+    //size_t pageSize = 4096000;
     FileMgr fm("data");
     fm.createChunk(chunkKey1,pageSize);
     fm.createChunk(chunkKey2,pageSize);
@@ -156,7 +157,8 @@ TEST(FileMgr, writeReadChunk) {
     AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER,0);
+        chunk1 -> write((int8_t *)data1,numInts*sizeof(int),CPU_BUFFER,0);
+        //cout << "Checkpoint 1" << endl;
         fm.checkpoint();
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
@@ -165,7 +167,7 @@ TEST(FileMgr, writeReadChunk) {
     AbstractBuffer *chunk2 = fm.getChunk(chunkKey2);
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> write((mapd_addr_t)data1,numInts*sizeof(int),CPU_BUFFER,0);
+        chunk1 -> write((int8_t *)data1,numInts*sizeof(int),CPU_BUFFER,0);
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
         cout << "Write Bandwidth without checkpoint: " << bandwidth << " GB/sec" << endl;
@@ -174,7 +176,7 @@ TEST(FileMgr, writeReadChunk) {
     int * data2 = new int [numInts];
     {
         boost::timer::cpu_timer cpuTimer;
-        chunk1 -> read((mapd_addr_t)data2,numInts*sizeof(int),CPU_BUFFER,0);
+        chunk1 -> read((int8_t *)data2,numInts*sizeof(int),CPU_BUFFER,0);
         double elapsedTime = double(cpuTimer.elapsed().wall) / oneSecond;
         double bandwidth = numInts * sizeof(int) / elapsedTime / 1000000000.0;
         cout << "Read Bandwidth: " << bandwidth << " GB/sec" << endl;
@@ -186,4 +188,197 @@ TEST(FileMgr, writeReadChunk) {
 
     delete [] data1;
     delete [] data2;
+}
+
+TEST(FileMgr, persistence) {
+    deleteData("data");
+    ChunkKey chunkKey1 = {1,2,3,4};
+    size_t pageSize = 1024796;
+    size_t numInts = 1000000;
+    int * data1 = new int [numInts];
+    for (size_t i = 0; i < numInts; ++i) {
+        data1[i] = i;
+    }
+    {
+        FileMgr fm("data");
+        fm.createChunk(chunkKey1,pageSize);
+        AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
+        chunk1 -> write((int8_t *)data1,numInts*sizeof(int),CPU_BUFFER,0);
+        fm.checkpoint();
+        // should checkpoint here 
+    }
+    FileMgr fm("data");
+    AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+    EXPECT_EQ(chunk1 -> size(),numInts * sizeof(int));
+    delete [] data1;
+}
+
+TEST(FileMgr, epochPersistence) {
+    deleteData("data");
+    ChunkKey chunkKey1 = {1,2,3,4};
+    size_t pageSize = 1024796;
+    size_t numInts = 100000;
+    int * data1 = new int [numInts];
+    for (size_t i = 0; i < numInts; ++i) {
+        data1[i] = i;
+    }
+    {
+        FileMgr fm("data");
+        fm.createChunk(chunkKey1,pageSize);
+        AbstractBuffer *chunk1 = fm.getChunk(chunkKey1);
+        chunk1 -> append((int8_t *)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 1
+        chunk1 -> append((int8_t *)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 2
+        chunk1 -> append((int8_t *)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 3
+        chunk1 -> append((int8_t *)data1,numInts*sizeof(int),CPU_BUFFER);
+        fm.checkpoint(); // checkpoint 4
+    }
+
+
+
+    {
+        FileMgr fm("data");
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),4*numInts * sizeof(int));
+    }
+    {
+        FileMgr fm("data", 1024796, 3);
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),3*numInts * sizeof(int));
+    }
+    {
+        FileMgr fm("data", 1024796, 2);
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),2*numInts * sizeof(int));
+    }
+    {
+        FileMgr fm("data", 1024796, 1);
+        /*
+        AbstractBuffer * chunk1 = fm.getChunk(chunkKey1);
+        EXPECT_EQ(chunk1 -> size(),1*numInts * sizeof(int));
+        */
+    }
+}
+
+TEST(FileMgr, encoding) {
+    deleteData("data");
+    ChunkKey chunkKey1 = {1,2,3,4};
+    ChunkKey chunkKey2 = {5,6,7,8};
+    int numElems = 10000;
+    int * data1 = new int [numElems];
+    int * data2 = new int [numElems];
+    //float * data2 = new float [numElems];
+    for (size_t i = 0; i < numElems; ++i) {
+        data1[i] = i % 100; // so fits in one byte
+        //data2[i] = M_PI * i;
+        data2[i] = i % 100 * -1;
+    }
+    {
+        FileMgr fm("data");
+        //size_t pageSize = 1024796;
+        size_t pageSize = 8192;
+        AbstractBuffer * chunk1 =  fm.createChunk(chunkKey1,pageSize);
+        chunk1 -> initEncoder(kINT,kENCODING_FIXED,8);
+        EXPECT_EQ(kINT,chunk1->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,chunk1->encodingType);
+        EXPECT_EQ(8,chunk1->encodingBits);
+
+
+        int8_t * tmpPtr = reinterpret_cast <int8_t *> (data1);
+        chunk1 -> encoder -> appendData(tmpPtr,numElems);
+        EXPECT_EQ(numElems,chunk1 -> size());
+        EXPECT_EQ(numElems,chunk1 -> encoder -> numElems);
+        AbstractBuffer * chunk2 =  fm.createChunk(chunkKey2,pageSize);
+
+    /*        
+        chunk2 -> initEncoder(kINT,kENCODING_FIXED,kINT8);
+        //chunk2 -> initEncoder(k,kENCODING_NONE,kNONE);
+        EXPECT_EQ(kINT,chunk2->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,chunk2->encodingType);
+        EXPECT_EQ(kINT8,chunk2->encodedDataType);
+        cout << "After chunk2 encoder init" << endl;
+        chunk2 -> encoder -> appendData((int8_t *)data2,numElems);
+        cout << "After chunk2 append" << endl;
+        EXPECT_EQ(numElems,chunk2 -> size());
+        EXPECT_EQ(numElems,chunk2 -> encoder -> numElems);
+        fm.checkpoint();
+    }
+
+    {
+        FileMgr fm("data");
+        cout << "After new file manager" << endl;
+        AbstractBuffer * chunk1 =  fm.getChunk(chunkKey1);
+        EXPECT_EQ(kINT,chunk1->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,chunk1->encodingType);
+        EXPECT_EQ(kINT8,chunk1->encodedDataType);
+        EXPECT_EQ(numElems,chunk1 -> size());
+        EXPECT_EQ(numElems,chunk1 -> encoder -> numElems);
+        chunk1 -> encoder -> appendData((int8_t *)data1,numElems);
+        EXPECT_EQ(numElems*2,chunk1 -> size());
+        EXPECT_EQ(numElems*2,chunk1 -> encoder -> numElems);
+        cout << "After done with chunk1" << endl;
+
+        AbstractBuffer * chunk2= fm.getChunk(chunkKey2);
+        EXPECT_EQ(kINT,chunk2->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,chunk2->encodingType);
+        EXPECT_EQ(kINT8,chunk2->encodedDataType);
+        EXPECT_EQ(numElems,chunk2 -> size());
+        EXPECT_EQ(numElems,chunk2 -> encoder -> numElems);
+        chunk2 -> encoder -> appendData((int8_t *)data2,numElems);
+        EXPECT_EQ(2*numElems,chunk2 -> size());
+        EXPECT_EQ(2*numElems,chunk2 -> encoder -> numElems);
+
+    }
+    */
+
+        
+        chunk2 -> initEncoder(kINT,kENCODING_NONE);
+        //chunk2 -> initEncoder(k,kENCODING_NONE,kNONE);
+        EXPECT_EQ(kINT,chunk2->sqlType);
+        EXPECT_EQ(kENCODING_NONE,chunk2->encodingType);
+        //cout << "After chunk2 encoder init" << endl;
+        tmpPtr = reinterpret_cast <int8_t *> (data2);
+        chunk2 -> encoder -> appendData(tmpPtr,numElems);
+        //cout << "After chunk2 append" << endl;
+        EXPECT_EQ(numElems*sizeof(float),chunk2 -> size());
+        EXPECT_EQ(numElems,chunk2 -> encoder -> numElems);
+        fm.checkpoint();
+    }
+
+    {
+        FileMgr fm("data");
+        //cout << "After new file manager" << endl;
+        AbstractBuffer * chunk1 =  fm.getChunk(chunkKey1);
+        EXPECT_EQ(kINT,chunk1->sqlType);
+        EXPECT_EQ(kENCODING_FIXED,chunk1->encodingType);
+        EXPECT_EQ(8,chunk1->encodingBits);
+        EXPECT_EQ(numElems,chunk1 -> size());
+        EXPECT_EQ(numElems,chunk1 -> encoder -> numElems);
+        int8_t * tmpPtr = reinterpret_cast <int8_t *> (data1);
+        chunk1 -> encoder -> appendData(tmpPtr,numElems);
+        EXPECT_EQ(numElems*2,chunk1 -> size());
+        EXPECT_EQ(numElems*2,chunk1 -> encoder -> numElems);
+        //cout << "After done with chunk1" << endl;
+        tmpPtr = reinterpret_cast <int8_t *> (data1);
+        chunk1 -> encoder -> appendData(tmpPtr,numElems);
+        tmpPtr = reinterpret_cast <int8_t *> (data1);
+        chunk1 -> encoder -> appendData(tmpPtr,numElems);
+        tmpPtr = reinterpret_cast <int8_t *> (data1);
+        chunk1 -> encoder -> appendData(tmpPtr,numElems);
+
+        AbstractBuffer * chunk2= fm.getChunk(chunkKey2);
+        EXPECT_EQ(kINT,chunk2->sqlType);
+        EXPECT_EQ(kENCODING_NONE,chunk2->encodingType);
+        EXPECT_EQ(numElems*sizeof(float),chunk2 -> size());
+        EXPECT_EQ(numElems,chunk2 -> encoder -> numElems);
+        tmpPtr = reinterpret_cast <int8_t *> (data2);
+        chunk2 -> encoder -> appendData(tmpPtr,numElems);
+        EXPECT_EQ(2*numElems*sizeof(float),chunk2 -> size());
+        EXPECT_EQ(2*numElems,chunk2 -> encoder -> numElems);
+        fm.checkpoint();
+
+    }
+
 }

@@ -19,6 +19,8 @@
 
 #define EPOCH_FILENAME "epoch"
 
+using namespace std;
+
 namespace File_Namespace {
 
     bool headerCompare(const HeaderInfo &firstElem, const HeaderInfo &secondElem) {
@@ -38,7 +40,7 @@ namespace File_Namespace {
     }
 
 
-    FileMgr::FileMgr(std::string basePath,const mapd_size_t defaultPageSize) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(0) {
+    FileMgr::FileMgr(std::string basePath, const size_t defaultPageSize, const int epoch) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(epoch) {
         init();
     }
 
@@ -55,14 +57,24 @@ namespace File_Namespace {
 
 
     void FileMgr::init() {
+        //if epoch = -1 this means open from epoch file
         boost::filesystem::path path (basePath_);
         if (basePath_.size() > 0 && basePath_[basePath_.size()-1] != '/')
             basePath_.push_back('/');
         if (boost::filesystem::exists(path)) {
+            std::cout << "Path exists" << std::endl;
             if (!boost::filesystem::is_directory(path))
                 throw std::runtime_error("Specified path is not a directory.");
             //std::cout << basePath_ << " exists." << std::endl;
-            openEpochFile(EPOCH_FILENAME);
+            if (epoch_ != -1) { // if opening at previous epoch
+                int epochCopy = epoch_;
+                openEpochFile(EPOCH_FILENAME);
+                epoch_ = epochCopy;
+            }
+            else {
+                openEpochFile(EPOCH_FILENAME);
+            }
+
 
             boost::filesystem::directory_iterator endItr; // default construction yields past-the-end
             int maxFileId = -1;
@@ -72,7 +84,7 @@ namespace File_Namespace {
                     //note that boost::filesystem leaves preceding dot on
                     //extension - hence MAPD_FILE_EXT is ".mapd"
                     std::string extension (fileIt ->path().extension().string());
-                    
+            
                     if (extension == MAPD_FILE_EXT) { 
                         std::string fileStem(fileIt -> path().stem().string());
                         // remove trailing dot if any
@@ -87,11 +99,11 @@ namespace File_Namespace {
                         if (fileId > maxFileId) {
                             maxFileId = fileId;
                         }
-                        mapd_size_t pageSize = boost::lexical_cast<mapd_size_t>(fileStem.substr(dotPos+1,fileStem.size()));
+                        size_t pageSize = boost::lexical_cast<size_t>(fileStem.substr(dotPos+1,fileStem.size()));
                         std::string filePath(fileIt ->path().string());
                         size_t fileSize = boost::filesystem::file_size(filePath);
                         assert (fileSize % pageSize == 0); // should be no partial pages
-                        mapd_size_t numPages = fileSize / pageSize;
+                        size_t numPages = fileSize / pageSize;
 
                         //std::cout << "File id: " << fileId << " Page size: " << pageSize << " Num pages: " << numPages << std::endl;
                         openExistingFile(filePath,fileId,pageSize,numPages,headerVec);
@@ -116,27 +128,28 @@ namespace File_Namespace {
                 auto startIt = headerVec.begin();
 
                 for (auto headerIt = headerVec.begin() + 1 ; headerIt != headerVec.end(); ++headerIt) {
-                    /*
-                    for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
-                        std::cout << *chunkIt << " ";
-                    }
-                    */
-                    //std::cout << " -> " << headerIt -> pageId << "," << headerIt -> versionEpoch << std::endl;
+                            
+                    //for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
+                    //    std::cout << *chunkIt << " ";
+                    //}
+                    
                     if (headerIt -> chunkKey != lastChunkKey) {
                         //std::cout << "New chunkkey" << std::endl;
                         
-                        mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
-                        chunkIndex_[lastChunkKey] = new Chunk (this,pageSize,lastChunkKey,startIt,headerIt);
+                        //size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                        chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerIt);
                         lastChunkKey = headerIt -> chunkKey;
                         startIt = headerIt;
                     }
                 }
                 // now need to insert last Chunk
-                mapd_size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
-                chunkIndex_[lastChunkKey] = new Chunk (this,pageSize,lastChunkKey,startIt,headerVec.end());
+                //size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                //cout << "Inserting last chunk" << endl;
+                chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerVec.end());
 
             }
             nextFileId_ = maxFileId + 1;
+            //std::cout << "next file id: " << nextFileId_ << std::endl;
         }
         else { // data directory does not exist
             std::cout << basePath_ << " does not exist. Creating" << std::endl;
@@ -158,7 +171,7 @@ namespace File_Namespace {
         epochFile_ = create(epochFilePath,sizeof(int));
         // Write out current epoch to file - which if this
         // function is being called should be 0
-        write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        write(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
         epoch_++;
     }
 
@@ -174,13 +187,13 @@ namespace File_Namespace {
             throw std::runtime_error("Epoch file is not sized properly");
         }
         epochFile_ = open(epochFilePath);
-        read(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        read(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
         std::cout << "Epoch after open file: " << epoch_ << std::endl;
         epoch_++; // we are in new epoch from last checkpoint
     }
 
     void FileMgr::writeAndSyncEpochToDisk() {
-        write(epochFile_,0,sizeof(int),(mapd_addr_t)&epoch_);
+        write(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
         int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
         //int status = fcntl(fileno(epochFile_),51);
         if (status != 0) {
@@ -192,21 +205,24 @@ namespace File_Namespace {
 
     void FileMgr::checkpoint() {
         std::cout << "Checkpointing " << epoch_ <<  std::endl;
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            if (chunkIt -> second -> isDirty_) {
+                chunkIt -> second -> writeMetadata(epoch_);
+                chunkIt -> second -> clearDirtyBits();
+            }
+        }
         for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
             int status = (*fileIt) -> syncToDisk();
             if (status != 0)
                 throw std::runtime_error("Could not sync file to disk");
-        }
-        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            chunkIt -> second -> clearDirtyBits();
         }
 
         writeAndSyncEpochToDisk();
     }
 
 
-    AbstractBuffer* FileMgr::createChunk(const ChunkKey &key, const mapd_size_t pageSize, const mapd_size_t numBytes) {
-        mapd_size_t actualPageSize = pageSize;
+    AbstractBuffer* FileMgr::createChunk(const ChunkKey &key, const size_t pageSize, const size_t numBytes) {
+        size_t actualPageSize = pageSize;
         if (actualPageSize == 0) {
             actualPageSize = defaultPageSize_; 
         }
@@ -216,7 +232,7 @@ namespace File_Namespace {
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists.");
         }
-        chunkIndex_[key] = new Chunk (this,actualPageSize,key,numBytes);
+        chunkIndex_[key] = new FileBuffer (this,actualPageSize,key,numBytes);
         return (chunkIndex_[key]);
     }
 
@@ -232,7 +248,7 @@ namespace File_Namespace {
         chunkIndex_.erase(chunkIt);
     }
 
-    AbstractBuffer* FileMgr::getChunk(const ChunkKey &key, const mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::getChunk(const ChunkKey &key, const size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
@@ -240,11 +256,10 @@ namespace File_Namespace {
     }
 
 
-    void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes) {
+    void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
         
-        std::cout << "File fetch chunk - before error" << std::endl;
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist");
@@ -252,11 +267,13 @@ namespace File_Namespace {
         if (destBuffer -> isDirty()) {
             throw std::runtime_error("Chunk inconsitency - fetchChunk");
         }
-        std::cout << "File fetch chunk - no error" << std::endl;
         AbstractBuffer *chunk = chunkIt -> second;
         // ChunkSize is either specified in function call with numBytes or we
         // just look at pageSize * numPages in FileBuffer
-        mapd_size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
+        if (numBytes > 0 && numBytes > chunk->size()) { 
+            throw std::runtime_error("Chunk is smaller than number of bytes requested");
+        }
         destBuffer->reserve(chunkSize);
         //std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (chunk->isUpdated()) {
@@ -266,9 +283,10 @@ namespace File_Namespace {
             chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
         }
         destBuffer->setSize(chunkSize);
+        destBuffer->syncEncoder(chunk);
     }
 
-    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const mapd_size_t numBytes) {
+    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer *chunk;
@@ -278,13 +296,10 @@ namespace File_Namespace {
         else {
             chunk = chunkIt->second;
         }
-        mapd_size_t oldChunkSize = chunk->size();
+        size_t oldChunkSize = chunk->size();
         // write the buffer's data to the Chunk
-        //mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
-        mapd_size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
-        //mapd_size_t newChunkSize = srcBuffer->size();
-        //std::cout << "Old Chunk size: " << oldChunkSize << std::endl;
-        //std::cout << "New Chunk size: " << newChunkSize << std::endl;
+        //size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
         if (chunk->isDirty()) {
             throw std::runtime_error("Chunk inconsistency");
         }
@@ -293,19 +308,21 @@ namespace File_Namespace {
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
-            chunk->write((mapd_addr_t)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
+            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
         }
         else if (srcBuffer->isAppended()) {
             assert(oldChunkSize < newChunkSize);
-            chunk->append((mapd_addr_t)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
+            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
         }
-        chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
+        //chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
+        //@todo commenting out line above will make sure this metadata is set
+        // but will trigger error on fetch chunk
         srcBuffer->clearDirtyBits();
+        chunk->syncEncoder(srcBuffer);
         return chunk;
     }
 
-
-    AbstractBuffer* FileMgr::createBuffer(const mapd_size_t numBytes = 0) {
+    AbstractBuffer* FileMgr::createBuffer(const size_t numBytes = 0) {
         throw std::runtime_error("Operation not supported");
     }
     
@@ -318,7 +335,7 @@ namespace File_Namespace {
     //    throw std::runtime_error("Operation not supported");
     //}
 
-    Page FileMgr::requestFreePage(mapd_size_t pageSize) {
+    Page FileMgr::requestFreePage(size_t pageSize) {
         std::lock_guard < std::mutex > lock (getPageMutex_);
 
         auto candidateFiles = fileIndex_.equal_range(pageSize);
@@ -337,11 +354,11 @@ namespace File_Namespace {
         return (Page (fileInfo->fileId,pageNum));
     }
 
-    void FileMgr::requestFreePages(mapd_size_t numPagesRequested, mapd_size_t pageSize, std::vector<Page> &pages) {
+    void FileMgr::requestFreePages(size_t numPagesRequested, size_t pageSize, std::vector<Page> &pages) {
         // @todo add method to FileInfo to get more than one page
         std::lock_guard < std::mutex > lock (getPageMutex_);
         auto candidateFiles = fileIndex_.equal_range(pageSize);
-        mapd_size_t numPagesNeeded = numPagesRequested;
+        size_t numPagesNeeded = numPagesRequested;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
             FileInfo *fileInfo = files_[fileIt -> second]; 
             int pageNum;
@@ -375,7 +392,7 @@ namespace File_Namespace {
         assert(pages.size() == numPagesRequested);
     }
 
-    FileInfo* FileMgr::openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages, std::vector<HeaderInfo> &headerVec) {
+    FileInfo* FileMgr::openExistingFile(const std::string &path, const int fileId, const size_t pageSize, const size_t numPages, std::vector<HeaderInfo> &headerVec) {
 
         FILE *f = open(path);
         FileInfo *fInfo = new FileInfo (fileId, f, pageSize, numPages,false); // false means don't init file
@@ -385,11 +402,12 @@ namespace File_Namespace {
             files_.resize(fileId+1);
         }
         files_[fileId] = fInfo;
-        fileIndex_.insert(std::pair<mapd_size_t, int>(pageSize, fileId));
+        fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
+        cout << "At end of openExistingfile" << endl;
         return fInfo;
     }
 
-    FileInfo* FileMgr::createFile(const mapd_size_t pageSize, const mapd_size_t numPages) {
+    FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
         // check arguments
         if (pageSize == 0 || numPages == 0)
             throw std::invalid_argument("pageSize and numPages must be greater than 0.");
@@ -406,7 +424,7 @@ namespace File_Namespace {
         
         // update file manager data structures
         files_.push_back(fInfo);
-        fileIndex_.insert(std::pair<mapd_size_t, int>(pageSize, fileId));
+        fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
         
         assert(files_.back() == fInfo); // postcondition
         return fInfo;
@@ -414,10 +432,26 @@ namespace File_Namespace {
 
 
     FILE * FileMgr::getFileForFileId(const int fileId) {
-        assert (fileId >= 0 && fileId < nextFileId_);
+        assert (fileId >= 0);
+        //assert(fileId < nextFileId_);
         return files_[fileId] -> f;
     }
-
-
-
+    /*
+    void FileMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey, int64_t> > &metadata) {
+        metadata.reserve(chunkIndex_.size());
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
+            metadata.push_back(std::make_pair(chunkIt -> first, chunkIt -> second -> encoder -> numElems));
+        }
+    }
+    */
+    void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
+        chunkMetadataVec.reserve(chunkIndex_.size());
+        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
+            if (chunkIt -> second -> hasEncoder) {
+                ChunkMetadata chunkMetadata;
+                chunkIt -> second -> encoder -> getMetadata(chunkMetadata);
+                chunkMetadataVec.push_back(std::make_pair(chunkIt -> first, chunkMetadata));
+            }
+        }
+    }
 } // File_Namespace

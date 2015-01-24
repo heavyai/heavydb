@@ -1,9 +1,9 @@
 /**
- * @file    MemoryMgr.h
+ * @file    DataMgr.h
  * @author Todd Mostak <todd@map-d.com>
  */
-#ifndef DATAMGR_MEMORY_MEMORYMGR_H
-#define DATAMGR_MEMORY_MEMORYMGR_H
+#ifndef DATAMGR_H
+#define DATAMGR_H
 
 #include "AbstractBufferMgr.h"
 #include "AbstractBuffer.h"
@@ -12,37 +12,43 @@
 #include <vector>
 #include <string>
 #include <gtest/gtest_prod.h>
+namespace File_Namespace {
+    class FileBuffer;
+}
 
-namespace Memory_Namespace {
+namespace Data_Namespace {
 
     enum MemoryLevel {DISK_LEVEL = 0, CPU_LEVEL = 1, GPU_LEVEL = 2};
 
-    class MemoryMgr { 
+    class DataMgr { 
+
+        friend class FileMgr; 
 
         public:
-            MemoryMgr(const int partitionKeyIndex, const std::string &dataDir);
+            DataMgr(const int partitionKeyIndex, const std::string &dataDir);
             AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
-            AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const mapd_size_t numBytes = 0);
+            AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);
 
-            AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const mapd_size_t numBytes);
+            AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
             void deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer);
             AbstractBuffer * copyBuffer(const MemoryLevel memoryLevel, const int deviceId, const AbstractBuffer * srcBuffer);
-
-
+            //const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
+            const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             void checkpoint();
+            void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
 
             // database_id, table_id, partitioner_id, column_id, fragment_id
 
         private:
-            FRIEND_TEST(MemoryMgrTest,buffer);
+            FRIEND_TEST(DataMgrTest,buffer);
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
             std::vector <int> levelSizes_;
             std::string dataDir_;
             int partitionKeyIndex_;
     };
-} // Memory_Namespace
+} // Data_Namespace
 
 
 #endif

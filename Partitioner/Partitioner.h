@@ -2,6 +2,8 @@
 #define PARTITIONER_PARTITIONER_H
 
 #include "../../Shared/types.h"
+#include "../../DataMgr/ChunkMetadata.h"
+#include <map>
 #include <vector>
 
 namespace Partitioner_Namespace {
@@ -13,7 +15,7 @@ namespace Partitioner_Namespace {
      */
     
     enum PartitionerType {
-        LINEAR
+        INSERT_ORDER
     };
     
     /**
@@ -29,10 +31,11 @@ namespace Partitioner_Namespace {
     
     
     struct InsertData {
+        int databaseId;						/// identifies the database into which the data is being inserted
         int tableId;						/// identifies the table into which the data is being inserted
         std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
-        mapd_size_t numRows;				/// the number of rows being inserted
-        std::vector <void *> data;							/// points to the start of the data for the row(s) being inserted
+        size_t numRows;				/// the number of rows being inserted
+        std::vector <int8_t *> data;							/// points to the start of the data for the row(s) being inserted
     };
     
     /**
@@ -43,8 +46,13 @@ namespace Partitioner_Namespace {
      */
     
     struct PartitionInfo {
+        //std::vector<int>partitionKeys;
         int partitionId;
-        mapd_size_t numTuples;
+        size_t numTuples;
+        size_t shadowNumTuples;
+        std::vector<int> deviceIds;
+        std::map <int, ChunkMetadata> chunkMetadataMap; 
+        std::map <int, ChunkMetadata> shadowChunkMetadataMap; 
     };
     
     /**
@@ -57,9 +65,9 @@ namespace Partitioner_Namespace {
      */
     
     struct QueryInfo {
-        int partitionerId;
+        std::vector <int> chunkKeyPrefix; 
         std::vector<PartitionInfo> partitions;
-        mapd_size_t numTuples;
+        //size_t numTuples;
     };
     
 } // Partitioner_Namespace

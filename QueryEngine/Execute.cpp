@@ -84,6 +84,8 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper) const {
   switch (optype) {
   case kNOT:
     return codegenLogical(u_oper);
+  case kCAST:
+    return codegenCast(u_oper);
   default:
     CHECK(false);
   }
@@ -131,17 +133,23 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   }
 }
 
+size_t get_bit_width(const SQLTypes type) {
+  switch (type) {
+    case kSMALLINT:
+      return 16;
+    case kINT:
+      return 32;
+    case kBIGINT:
+      return 64;
+    default:
+      CHECK(false);
+  }
+}
+
 size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
   // TODO(alex)
   const auto& type_info = col_var->get_type_info();
-  switch (type_info.type) {
-  case kINT:
-    return 32;
-  case kBIGINT:
-    return 64;
-  default:
-    CHECK(false);
-  }
+  return get_bit_width(type_info.type);
 }
 
 }  // namespace
@@ -272,6 +280,20 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper) const {
   }
 }
 
+llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) const {
+  CHECK_EQ(uoper->get_optype(), kCAST);
+  const auto operand_lv = codegen(uoper->get_operand());
+  CHECK(operand_lv->getType()->isIntegerTy());
+  const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
+  const auto& ti = uoper->get_type_info();
+  const auto target_width = get_bit_width(ti.type);
+  return ir_builder_.CreateCast(target_width > operand_width
+        ? llvm::Instruction::CastOps::SExt
+        : llvm::Instruction::CastOps::Trunc,
+      operand_lv,
+      get_int_type(target_width, context_));
+}
+
 llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper) const {
   const auto optype = uoper->get_optype();
   CHECK(optype == kNOT || optype == kUMINUS || optype == kISNULL);
@@ -383,6 +405,9 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
         ? Executor::AggResult(static_cast<double>(out_vec[i][0]) / num_rows)
         : Executor::AggResult(out_vec[i][0]);
       results.push_back(result);
+    }
+    for (auto out : out_vec) {
+      free(out);
     }
   }
   return results;

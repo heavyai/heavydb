@@ -22,7 +22,7 @@
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
 
-using namespace Memory_Namespace;
+using namespace Data_Namespace;
 
 namespace File_Namespace {
 
@@ -34,7 +34,7 @@ namespace File_Namespace {
      * A multimap is used to associate the key (page size) with values (file identifiers of files
      * having the matching page size).
      */
-    typedef std::multimap<mapd_size_t, int> PageSizeFileMMap;
+    typedef std::multimap<size_t, int> PageSizeFileMMap;
 
     /**
      * @type Chunk
@@ -58,7 +58,7 @@ namespace File_Namespace {
      * and so ChunkKeyToChunkMap maps chunk keys to Chunk types, which are
      * vectors of MultiPage* pointers (logical pages).
      */
-    typedef std::map<ChunkKey, Chunk *> ChunkKeyToChunkMap;
+    typedef std::map<ChunkKey, FileBuffer *> ChunkKeyToChunkMap;
 
     /**
      * @class   FileMgr
@@ -68,21 +68,21 @@ namespace File_Namespace {
         
     public:
         /// Constructor
-        FileMgr(std::string basePath = ".", const mapd_size_t defaultPageSize=1048576);
+        FileMgr(std::string basePath = ".", const size_t defaultPageSize=1048576, const int epoch = -1);
         
         /// Destructor
         virtual ~FileMgr();
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, mapd_size_t pageSize = 0, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, size_t pageSize = 0, const size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
 
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractBuffer* getChunk(const ChunkKey &key, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0);
 
-        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes);
+        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes);
 
         /**
          * @brief Puts the contents of d into the Chunk with the given key.
@@ -90,13 +90,13 @@ namespace File_Namespace {
          * @param d - An object representing the source data for the Chunk.
          * @return AbstractBuffer*
          */
-        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
         
         // Buffer API
-        virtual AbstractBuffer* createBuffer(const mapd_size_t nbytes);
+        virtual AbstractBuffer* createBuffer(const size_t nbytes);
         virtual void deleteBuffer(AbstractBuffer *buffer);
         //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
-        Page requestFreePage(mapd_size_t pagesize);
+        Page requestFreePage(size_t pagesize);
 
         virtual inline MgrType getMgrType() { return FILE_MGR;};
         inline FileInfo * getFileInfoForFileId(const int fileId) {
@@ -117,7 +117,9 @@ namespace File_Namespace {
          * @param pagesize     The size of each requested page
          * @param pages        A vector containing the free pages obtained by this method
          */
-        void requestFreePages(mapd_size_t npages, mapd_size_t pagesize, std::vector<Page> &pages);
+        void requestFreePages(size_t npages, size_t pagesize, std::vector<Page> &pages);
+
+        virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
 
         /**
          * @brief Fsyncs data files, writes out epoch and
@@ -144,6 +146,8 @@ namespace File_Namespace {
             // @todo should be locked - but this is more for testing now
             return chunkIndex_.size();
         }
+        ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks
+        // #TM Not sure if we need this below
 
 
     private:
@@ -154,13 +158,11 @@ namespace File_Namespace {
         int epoch_;                         /// the current epoch (time of last checkpoint)
         FILE *epochFile_;
         bool isDirty_;                      /// true if metadata changed since last writeState()
-        mapd_size_t defaultPageSize_;
+        size_t defaultPageSize_;
         std::mutex getPageMutex_;  
         std::mutex chunkIndexMutex_;  
         
 
-        ChunkKeyToChunkMap chunkIndex_; 	/// Index for looking up chunks
-        // #TM Not sure if we need this below
 
 
         /**
@@ -178,8 +180,8 @@ namespace File_Namespace {
          * @return FileInfo* A pointer to the FileInfo object of the added file.
          */
 
-        FileInfo* createFile(const mapd_size_t pageSize, const mapd_size_t numPages);
-        FileInfo* openExistingFile(const std::string &path, const int fileId, const mapd_size_t pageSize, const mapd_size_t numPages, std::vector<HeaderInfo> &headerVec);
+        FileInfo* createFile(const size_t pageSize, const size_t numPages);
+        FileInfo* openExistingFile(const std::string &path, const int fileId, const size_t pageSize, const size_t numPages, std::vector<HeaderInfo> &headerVec);
         void createEpochFile(const std::string &epochFileName);
         void openEpochFile(const std::string &epochFileName);
         void writeAndSyncEpochToDisk();

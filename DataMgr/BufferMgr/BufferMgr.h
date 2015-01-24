@@ -18,7 +18,7 @@
 #include <gtest/gtest_prod.h>
 #include <mutex>
 
-using namespace Memory_Namespace;
+using namespace Data_Namespace;
 
 namespace Buffer_Namespace {
 
@@ -39,7 +39,7 @@ namespace Buffer_Namespace {
         
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t
-        //explicit BufferMgr(const size_t bufferSize, const mapd_size_t pageSize);
+        //explicit BufferMgr(const size_t bufferSize, const size_t pageSize);
         BufferMgr(const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
         
         /// Destructor
@@ -52,13 +52,13 @@ namespace Buffer_Namespace {
         void printSeg(BufferList::iterator &segIt);
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, const mapd_size_t pageSize = 0, const mapd_size_t initialSize = 0);
+        virtual AbstractBuffer * createChunk(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0);
         
         /// Deletes the chunk with the specified key
         virtual void deleteChunk(const ChunkKey &key);
         
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractBuffer* getChunk(const ChunkKey &key, const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0);
         
         /**
          * @brief Puts the contents of d into the Buffer with ChunkKey key.
@@ -66,12 +66,12 @@ namespace Buffer_Namespace {
          * @param d - An object representing the source data for the Chunk.
          * @return AbstractBuffer*
          */
-        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const mapd_size_t numBytes = 0);
-        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const mapd_size_t numBytes = 0);
+        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes = 0);
+        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
         void checkpoint();
 
         // Buffer API
-        virtual AbstractBuffer* createBuffer(const mapd_size_t numBytes = 0);
+        virtual AbstractBuffer* createBuffer(const size_t numBytes = 0);
         virtual void deleteBuffer(AbstractBuffer *buffer);
         //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         
@@ -80,10 +80,11 @@ namespace Buffer_Namespace {
         size_t getNumChunks();
 
         BufferList::iterator reserveBuffer(BufferList::iterator & segIt, const size_t numBytes);
+        virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
 
        
     protected: 
-        std::vector <mapd_addr_t> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
+        std::vector <int8_t *> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
         std::vector<BufferList> slabSegments_; // last list is for unsized segments
         size_t numPagesPerSlab_;
 
@@ -95,7 +96,7 @@ namespace Buffer_Namespace {
         int getBufferId();
         virtual void addSlab(const size_t slabSize) = 0;
         virtual void freeAllMem() = 0;
-        virtual void allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t numBytes) = 0;
+        virtual void allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t numBytes) = 0;
         std::recursive_mutex globalMutex_;  // hack for now - lets profile this to see impact on performance - may not matter given the workload
         std::mutex bufferIdMutex_;  
         
@@ -112,9 +113,9 @@ namespace Buffer_Namespace {
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses
         //@todo change this to multimap
-        //std::multimap<mapd_size_t, mapd_addr_t> freeMem_;
+        //std::multimap<size_t, int8_t *> freeMem_;
         BufferList unsizedSegs_;
-        //std::map<mapd_size_t, mapd_addr_t> freeMem_;
+        //std::map<size_t, int8_t *> freeMem_;
 
         BufferList::iterator evict(BufferList::iterator &evictStart, const size_t numPagesRequested, const int slabNum);
         BufferList::iterator findFreeBuffer(size_t numBytes);

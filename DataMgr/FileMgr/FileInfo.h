@@ -9,6 +9,7 @@
 #include <vector> 
 #include <mutex>
 #include <unistd.h> 
+#include <fcntl.h>
 
 namespace File_Namespace {
     
@@ -31,14 +32,14 @@ namespace File_Namespace {
     struct FileInfo {
         int fileId;							/// unique file identifier (i.e., used for a file name)
         FILE *f;							/// file stream object for the represented file
-        mapd_size_t pageSize;				/// the fixed size of each page in the file
-        mapd_size_t numPages;				/// the number of pages in the file
+        size_t pageSize;				/// the fixed size of each page in the file
+        size_t numPages;				/// the number of pages in the file
         //std::vector<Page*> pages;			/// Page pointers for each page (including free pages)
-        std::set<mapd_size_t> freePages; 	/// set of page numbers of free pages
+        std::set<size_t> freePages; 	/// set of page numbers of free pages
         std::mutex freePagesMutex_;  
         
         /// Constructor
-        FileInfo(const int fileId, FILE *f, const mapd_size_t pageSize, const mapd_size_t numPages, const bool init = false);
+        FileInfo(const int fileId, FILE *f, const size_t pageSize, const size_t numPages, const bool init = false);
 
         
         /// Destructor
@@ -56,27 +57,29 @@ namespace File_Namespace {
         void print(bool pagesummary);
         
         /// Returns the number of bytes used by the file
-        inline mapd_size_t size() {
+        inline size_t size() {
             return pageSize * numPages;
         }
 
         inline int syncToDisk() {
             return fsync(fileno(f));
+            //return fcntl(fileno(f),51);
+
         }
         
         /// Returns the number of free bytes available
-        inline mapd_size_t available() {
+        inline size_t available() {
             return freePages.size() * pageSize;
         }
         
         /// Returns the number of free pages available
-        inline mapd_size_t numFreePages() {
+        inline size_t numFreePages() {
             std::lock_guard < std::mutex > lock (freePagesMutex_);
             return freePages.size();
         }
         
         /// Returns the amount of used bytes; size() - available()
-        inline mapd_size_t used() {
+        inline size_t used() {
             return size() - available();
         }
     };

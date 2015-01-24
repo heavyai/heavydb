@@ -16,7 +16,7 @@
 
 namespace Buffer_Namespace {
 
-    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize, const mapd_size_t numBytes): AbstractBuffer(), bm_(bm), segIt_(segIt), pageSize_(pageSize), mem_(0), numPages_(0), pinCount_(0) {
+    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const size_t pageSize, const size_t numBytes): AbstractBuffer(), bm_(bm), segIt_(segIt), pageSize_(pageSize), mem_(0), numPages_(0), pinCount_(0) {
         // so that the pointer value of this Buffer is stored
         segIt_ -> buffer = this;
         if (numBytes > 0) {
@@ -26,12 +26,12 @@ namespace Buffer_Namespace {
 
 
    /* 
-    Buffer::Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch):
+    Buffer::Buffer(const int8_t * mem, const size_t numPages, const size_t pageSize, const int epoch):
      mem_(mem), pageSize_(pageSize), used_(0), epoch_(epoch), dirty_(false)
     {
         assert(pageSize_ > 0);
         pageDirtyFlags_.resize(numPages);
-        for (mapd_size_t i = 0; i < numPages; ++i)
+        for (size_t i = 0; i < numPages; ++i)
             pages_.push_back(Page(mem + (i * pageSize), false));
     
     }
@@ -45,11 +45,11 @@ namespace Buffer_Namespace {
 
 
 
-    void Buffer::reserve(const mapd_size_t numBytes) {
+    void Buffer::reserve(const size_t numBytes) {
 #ifdef BUFFER_MUTEX
         boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
 #endif
-        mapd_size_t numPages = (numBytes + pageSize_ -1 ) / pageSize_;
+        size_t numPages = (numBytes + pageSize_ -1 ) / pageSize_;
         //std::cout << "NumPages reserved: " << numPages << std::endl;
         if (numPages > numPages_) {
             pageDirtyFlags_.resize(numPages);
@@ -59,7 +59,9 @@ namespace Buffer_Namespace {
     }
 
     
-    void Buffer::read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset) {
+    void Buffer::read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType, const size_t offset) {
+        //assert (dst);
+        //assert (mem_);
         assert(dst && mem_);
 #ifdef BUFFER_MUTEX
         boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_);
@@ -74,7 +76,7 @@ namespace Buffer_Namespace {
         //memcpy(dst, mem_ + offset, numBytes);
     }
     
-    void Buffer::write(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset) {
+    void Buffer::write(int8_t * src, const size_t numBytes, const BufferType srcBufferType, const size_t offset) {
         assert(numBytes > 0); // cannot write 0 bytes
 #ifdef BUFFER_MUTEX
         boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
@@ -100,14 +102,14 @@ namespace Buffer_Namespace {
         }
         //std::cout << "Size after write: " << size_ << std::endl;
 
-        mapd_size_t firstDirtyPage = offset / pageSize_;
-        mapd_size_t lastDirtyPage = (offset + numBytes - 1) / pageSize_;
-        for (mapd_size_t i = firstDirtyPage; i <= lastDirtyPage; ++i) {
+        size_t firstDirtyPage = offset / pageSize_;
+        size_t lastDirtyPage = (offset + numBytes - 1) / pageSize_;
+        for (size_t i = firstDirtyPage; i <= lastDirtyPage; ++i) {
             pageDirtyFlags_[i] = true;
         }
     }
 
-    void Buffer::append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType) {
+    void Buffer::append(int8_t * src, const size_t numBytes, const BufferType srcBufferType) {
 #ifdef BUFFER_MUTEX
         boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_); // keep another thread from getting a write lock
         boost::unique_lock < boost::shared_mutex > appendLock (appendMutex_); // keep another thread from getting an append lock
@@ -128,7 +130,7 @@ namespace Buffer_Namespace {
         // Do we worry about dirty flags here or does append avoid them
     }
 
-    mapd_byte_t* Buffer::getMemoryPtr() {
+    int8_t* Buffer::getMemoryPtr() {
         return mem_;
     }
     

@@ -47,6 +47,7 @@ namespace CudaUtils {
     template void allocGpuMem <char>(char * &devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void allocGpuMem <unsigned char>(unsigned char * &devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void allocGpuMem <int>(int * &devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void allocGpuMem <int8_t>(int8_t * &devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void allocGpuMem <unsigned int>(unsigned int * &devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void allocGpuMem <unsigned long>(unsigned long* &devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void allocGpuMem <unsigned long long int>(unsigned long long int * &devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
@@ -55,6 +56,7 @@ namespace CudaUtils {
     //template void allocGpuMem <void>(void * &devMem, const size_t numElems, const size_t elemSize);
 
     template void allocPinnedHostMem <int>(int * &hostMem, const size_t numElems, const size_t elemSize);
+    template void allocPinnedHostMem <int8_t>(int8_t * &hostMem, const size_t numElems, const size_t elemSize);
     template void allocPinnedHostMem <char>(char * &hostMem, const size_t numElems, const size_t elemSize);
     template void allocPinnedHostMem <unsigned char>(unsigned char * &hostMem, const size_t numElems, const size_t elemSize);
     template void allocPinnedHostMem <float>(float * &hostMem, const size_t numElems, const size_t elemSize);
@@ -65,6 +67,7 @@ namespace CudaUtils {
     template void copyToGpu <char> (char* devMem, const char* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToGpu <unsigned char> (unsigned char* devMem, const unsigned char* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToGpu <int> (int* devMem, const int* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToGpu <int8_t> (int8_t* devMem, const int8_t* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToGpu <unsigned int> (unsigned int* devMem, const unsigned int* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToGpu <unsigned long> (unsigned long* devMem, const unsigned long* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToGpu <unsigned long long int> (unsigned long long int* devMem, const unsigned long long int* hostMem, const size_t numElems, const size_t elemSize, const int gpuNum);
@@ -76,6 +79,7 @@ namespace CudaUtils {
     template void copyGpuToGpu <char> (char* dstMem, const char* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
     template void copyGpuToGpu <unsigned char> (unsigned char* dstMem, const unsigned char* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
     template void copyGpuToGpu <int> (int* dstMem, const int* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
+    template void copyGpuToGpu <int8_t> (int8_t* dstMem, const int8_t* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
     template void copyGpuToGpu <unsigned int> (unsigned int* dstMem, const unsigned int* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
     template void copyGpuToGpu <unsigned long long int> (unsigned long long int* dstMem, const unsigned long long int* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
     template void copyGpuToGpu <float> (float* dstMem, const float* srcMem, const std::size_t numElems, const std::size_t elemSize, const int dstGpuNum);
@@ -89,6 +93,7 @@ namespace CudaUtils {
     template void copyToHost <unsigned char> (unsigned char* hostMem, const unsigned char* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToHost <unsigned short> (unsigned short* hostMem, const unsigned short* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToHost <int> (int* hostMem, const int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
+    template void copyToHost <int8_t> (int8_t* hostMem, const int8_t* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToHost <unsigned int> (unsigned int* hostMem, const unsigned int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToHost <unsigned long long int> (unsigned long long int* hostMem, const unsigned long long int* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
     template void copyToHost <float> (float* hostMem, const float* devMem, const size_t numElems, const size_t elemSize, const int gpuNum);
@@ -98,6 +103,7 @@ namespace CudaUtils {
     template void gpuFree <bool> (bool * &devMem);
     template void gpuFree <char> (char * &devMem);
     template void gpuFree <int> (int * &devMem);
+    template void gpuFree <int8_t> (int8_t * &devMem);
     template void gpuFree <unsigned int> (unsigned int * &devMem);
     template void gpuFree <unsigned long> (unsigned long * &devMem);
     template void gpuFree <unsigned long long int> (unsigned long long int * &devMem);
@@ -109,6 +115,7 @@ namespace CudaUtils {
     template void hostFree <bool> (bool * &hostMem);
     template void hostFree <char> (char * &hostMem);
     template void hostFree <int> (int * &hostMem);
+    template void hostFree <int8_t> (int8_t * &hostMem);
     template void hostFree <unsigned int> (unsigned int * &hostMem);
     template void hostFree <unsigned long long int> (unsigned long long int * &hostMem);
     template void hostFree <float> (float * &hostMem);

@@ -3,9 +3,9 @@
 
 namespace Buffer_Namespace {
 
-    GpuCudaBuffer::GpuCudaBuffer(BufferMgr *bm, BufferList::iterator segIt, const int gpuNum,  const mapd_size_t pageSize, const mapd_size_t numBytes): Buffer(bm, segIt, pageSize, numBytes), gpuNum_(gpuNum) {} 
+    GpuCudaBuffer::GpuCudaBuffer(BufferMgr *bm, BufferList::iterator segIt, const int gpuNum,  const size_t pageSize, const size_t numBytes): Buffer(bm, segIt, pageSize, numBytes), gpuNum_(gpuNum) {} 
 
-    void GpuCudaBuffer::readData(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset) {
+    void GpuCudaBuffer::readData(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType, const size_t offset) {
         if (dstBufferType == CPU_BUFFER) {
             CudaUtils::copyToHost(dst, mem_ + offset, numBytes, 1, gpuNum_);
         }
@@ -19,7 +19,7 @@ namespace Buffer_Namespace {
         }
     }
 
-    void GpuCudaBuffer::writeData(mapd_addr_t const src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset) {
+    void GpuCudaBuffer::writeData(int8_t * const src, const size_t numBytes, const BufferType srcBufferType, const size_t offset) {
         if (srcBufferType == CPU_BUFFER) {
             CudaUtils::copyToGpu(mem_ + offset, src, numBytes, 1, gpuNum_);
         }

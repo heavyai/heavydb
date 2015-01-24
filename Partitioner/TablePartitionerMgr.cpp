@@ -5,7 +5,7 @@
  */
 #include "TablePartitionMgr.h"
 //#include "Catalog.h"
-#include "AbstractDataMgr.h"
+#include "DataMgr.h"
 #include "LinearTablePartitioner.h"
 
 #include <limits>
@@ -18,9 +18,38 @@ namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr::TablePartitionMgr(Memory_Namespace::MemoryMgr &memoryMgr, const std::string &dbName, const std::string &basePath) memoryMgr_(memoryMgr), maxPartitionerId_(-1), sqliteConnector_(dbName,basePath), isDirty_(false) {
-    createStateTableIfDne();
-    readState();
+TablePartitionMgr::TablePartitionMgr(Data_Namespace::DataMgr &dataMgr) dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false) {
+    vector<pair<ChunkKey,ChunkMetadata> > chunkMetadataVec;
+    dataMgr -> getChunkMetadataVec(chunkMetadataVec);
+    ChunkKey lastChunkKey;
+    vector <int> lastPartitionerKey;
+    //Chunk key should be database_id, table_id, partitioner_id, column_id, fragment_id (fragment_id could be 2 keys)
+    // first three keys (database_id, table_id, partitioner_id make up
+    // a partitioner
+    vector <int> lastPartitionerKey;
+    vector <ColumnInfo> columnInfoVec;
+    int lastColumnId = -1;
+
+    for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
+        ChunkKey partitionerKey = vector <int> (chunkIt -> first -> begin(); chunkIt -> first -> begin() + 3); // tableKey will be database id and tableid
+        int columnId =   
+        if (partitionerKey != lastPartitionerKey) {
+
+
+        }
+    }
+
+
+    map <PartitionInfo> partitionInfoMap;
+    mapd_size_t numTuples;
+
+    for (auto chunkIt = chunkKeyToChunkMap.begin(); chunkIt != chunkKeyToChunkMap.end(); ++chunkIt) {
+        // Guaranteed to be in sorted chunk order
+        ChunkKey partitionerKey = vector <int> (chunkIt -> first -> begin(); chunkIt -> first -> begin() + 2); // tableKey will be database id and tableid
+        if (tableKey != lastTableKey) {
+
+        }
+    }
 }
 
 TablePartitionMgr::~TablePartitionMgr() {

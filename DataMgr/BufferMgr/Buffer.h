@@ -15,7 +15,7 @@
 //#include <boost/thread/mutex.hpp>
 
 
-using namespace Memory_Namespace;
+using namespace Data_Namespace;
 
 namespace Buffer_Namespace {
 
@@ -46,10 +46,10 @@ namespace Buffer_Namespace {
 
 
         /*
-        Buffer(const mapd_addr_t mem, const mapd_size_t numPages, const mapd_size_t pageSize, const int epoch);
+        Buffer(const int8_t * mem, const size_t numPages, const size_t pageSize, const int epoch);
         */
 
-        Buffer(BufferMgr *bm, BufferList::iterator segIt,  const mapd_size_t pageSize = 512, const mapd_size_t numBytes = 0);
+        Buffer(BufferMgr *bm, BufferList::iterator segIt,  const size_t pageSize = 512, const size_t numBytes = 0);
         
         /// Destructor
         virtual ~Buffer();
@@ -63,9 +63,9 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer from where reading (copying) begins.
          * @param nbytes    The number of bytes being read (copied) into the destination (dst).
          */
-        virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const mapd_size_t offset = 0);
+        virtual void read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const size_t offset = 0);
         
-        virtual void reserve(const mapd_size_t numBytes);
+        virtual void reserve(const size_t numBytes);
         /**
          * @brief Writes (copies) data from src into the buffer.
          * Writes (copies) nbytes of data into the buffer at the specified byte offset, from
@@ -75,34 +75,34 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer to where writing begins.
          * @param nbytes    The number of bytes being written (copied) into the buffer.
          */
-        virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const mapd_size_t offset = 0);
+        virtual void write(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const size_t offset = 0);
 
-        virtual void append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER);
+        virtual void append(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER);
         
         
         /**
          * @brief Returns a raw, constant (read-only) pointer to the underlying buffer.
          * @return A constant memory pointer for read-only access.
          */
-        virtual mapd_byte_t* getMemoryPtr();
+        virtual int8_t* getMemoryPtr();
         
-        inline virtual mapd_size_t size() const {
+        inline virtual size_t size() const {
             return size_;
         }
         
         /// Returns the total number of bytes allocated for the buffer.
-        inline virtual mapd_size_t reservedSize() const {
+        inline virtual size_t reservedSize() const {
             return pageSize_ * numPages_;
         }
         /// Returns the number of pages in the buffer.
 
-        inline mapd_size_t pageCount() const {
+        inline size_t pageCount() const {
             return numPages_;
         }
 
         /// Returns the size in bytes of each page in the buffer.
         
-        inline mapd_size_t pageSize() const {
+        inline size_t pageSize() const {
             return pageSize_;
         }
 
@@ -127,20 +127,20 @@ namespace Buffer_Namespace {
 
 
     protected:
-        mapd_addr_t mem_;           /// pointer to beginning of buffer's memory
+        int8_t * mem_;           /// pointer to beginning of buffer's memory
         
     private:
 
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
-        virtual void readData(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType, const mapd_size_t offset = 0 ) = 0;
-        virtual void writeData(mapd_addr_t const src, const mapd_size_t numBytes, const BufferType srcBufferType, const mapd_size_t offset = 0) = 0;
+        virtual void readData(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType, const size_t offset = 0 ) = 0;
+        virtual void writeData(int8_t * const src, const size_t numBytes, const BufferType srcBufferType, const size_t offset = 0) = 0;
 
         BufferList::iterator segIt_;
         BufferMgr * bm_;
-        //mapd_size_t numBytes_;
-        mapd_size_t pageSize_;      /// the size of each page in the buffer
-        mapd_size_t numPages_;
+        //size_t numBytes_;
+        size_t pageSize_;      /// the size of each page in the buffer
+        size_t numPages_;
         int epoch_;                 /// indicates when the buffer was last flushed
         //std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the buffer
         std::vector<bool> pageDirtyFlags_;

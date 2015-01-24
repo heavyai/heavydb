@@ -23,7 +23,7 @@ namespace Buffer_Namespace {
         }
     }
 
-    void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator segIt, const mapd_size_t pageSize, const mapd_size_t initialSize) {
+    void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t initialSize) {
         new GpuCudaBuffer(this, segIt, gpuNum_, pageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
     }
 

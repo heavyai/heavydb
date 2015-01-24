@@ -27,10 +27,10 @@ namespace File_Namespace {
      */
     struct Page {
         int fileId;				/// unique identifier of the owning file
-        mapd_size_t pageNum;	/// page number
+        size_t pageNum;	/// page number
         
         /// Constructor
-        Page(int fileId, mapd_size_t pageNum) : fileId(fileId), pageNum(pageNum) {}
+        Page(int fileId, size_t pageNum) : fileId(fileId), pageNum(pageNum) {}
         Page(): fileId(-1), pageNum(0) {}
 
         inline bool isValid() {return fileId >= 0;}
@@ -49,12 +49,12 @@ namespace File_Namespace {
      * Note that it should always be the case that version.size() == epoch.size().
      */
     struct MultiPage {
-        mapd_size_t pageSize;
+        size_t pageSize;
         std::deque<Page> pageVersions;
         std::deque<int> epochs;
         
         /// Constructor
-        MultiPage(mapd_size_t pageSizeIn) :
+        MultiPage(size_t pageSizeIn) :
 		pageSize(pageSizeIn) {}
         
         /// Destructor -- purges all pages
@@ -103,9 +103,12 @@ namespace File_Namespace {
         int pageId;
         int versionEpoch; 
         Page page;
-        mapd_size_t chunkSize;
+        size_t chunkSize;
+        //size_t chunkNumElems;
+        
+        
 
-        HeaderInfo(const ChunkKey &chunkKey, const int pageId, const int versionEpoch, const Page &page, const mapd_size_t chunkSize): chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page), chunkSize(chunkSize) {}
+        HeaderInfo(const ChunkKey &chunkKey, const int pageId, const int versionEpoch, const Page &page, const size_t chunkSize): chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page), chunkSize(chunkSize) {}
     };
     
 } // File_Namespace

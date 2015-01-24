@@ -7,13 +7,16 @@
 #define DATAMGR_MEMORY_ABSTRACTBUFFER_H
 
 #include "../Shared/types.h"
+#include "../Shared/sqltypes.h"
+#include "Encoder.h"
+
 
 #ifdef BUFFER_MUTEX
 #include <boost/thread/locks.hpp>
 #include <boost/thread/shared_mutex.hpp>
 #endif
 
-namespace Memory_Namespace {
+namespace Data_Namespace {
     
     /**
      * @class   AbstractBuffer
@@ -26,20 +29,23 @@ namespace Memory_Namespace {
         
     public:
 
-        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false) {}
+        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), hasEncoder(0), encoder(0) {}
+        AbstractBuffer (const SQLTypes sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
+        initEncoder(sqlType, encodingType, numEncodingBits);
+        }
         virtual ~AbstractBuffer() {}
         
-        virtual void read(mapd_addr_t const dst, const mapd_size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const mapd_size_t offset = 0) = 0;
-        virtual void write(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const mapd_size_t offset = 0) = 0;
-        virtual void reserve(mapd_size_t numBytes) = 0;
-        virtual void append(mapd_addr_t src, const mapd_size_t numBytes, const BufferType srcBufferType = CPU_BUFFER) = 0;
-        virtual mapd_byte_t* getMemoryPtr() = 0;
+        virtual void read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const size_t offset = 0) = 0;
+        virtual void write(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const size_t offset = 0) = 0;
+        virtual void reserve(size_t numBytes) = 0;
+        virtual void append(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER) = 0;
+        virtual int8_t* getMemoryPtr() = 0;
         
-        virtual mapd_size_t pageCount() const = 0;
-        virtual mapd_size_t pageSize() const = 0;
-        virtual mapd_size_t size() const = 0;
-        virtual mapd_size_t reservedSize() const = 0;
-        //virtual mapd_size_t used() const = 0;
+        virtual size_t pageCount() const = 0;
+        virtual size_t pageSize() const = 0;
+        virtual size_t size() const = 0;
+        virtual size_t reservedSize() const = 0;
+        //virtual size_t used() const = 0;
         virtual int getDeviceId() const {return -1;}
         virtual BufferType getType() const = 0;
 
@@ -61,7 +67,7 @@ namespace Memory_Namespace {
             isDirty_ = true;
         }
 
-        void setSize(const mapd_size_t size) {
+        void setSize(const size_t size) {
             size_ = size;
         }
         void clearDirtyBits() {
@@ -69,10 +75,36 @@ namespace Memory_Namespace {
             isUpdated_ = false;
             isDirty_ = false;
         }
+        void initEncoder(const SQLTypes tmpSqlType, const EncodingType tmpEncodingType = kENCODING_NONE, const int tmpEncodingBits = 0) {
+            hasEncoder = true;
+            sqlType = tmpSqlType;
+            encodingType = tmpEncodingType;
+            encodingBits = tmpEncodingBits;
+            encoder = Encoder::Create(this,sqlType,encodingType,encodingBits);
+        }
 
+        void syncEncoder(const AbstractBuffer *srcBuffer) {
+            hasEncoder = srcBuffer->hasEncoder;
+            if (hasEncoder) {
+                if (encoder == 0) { // Encoder not initialized
+                    initEncoder(srcBuffer->sqlType,srcBuffer->encodingType,srcBuffer->encodingBits);
+                }
+                encoder->copyMetadata(srcBuffer->encoder);
+            }
+        }
+
+
+
+        Encoder * encoder;
+        bool hasEncoder;
+        SQLTypes sqlType;
+        EncodingType encodingType;
+        int encodingBits;
+        //EncodedDataType encodedDataType;
 
     protected:
-        mapd_size_t size_;
+
+        size_t size_;
         bool isDirty_;
         bool isAppended_;
         bool isUpdated_;
@@ -84,6 +116,6 @@ namespace Memory_Namespace {
 
     };
     
-} // Memory_Namespace
+} // Data_Namespace
 
 #endif // DATAMGR_MEMORY_ABSTRACTBUFFER_H
