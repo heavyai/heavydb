@@ -48,11 +48,12 @@ int main() {
   int8_t* byte_stream_col_0 = new int8_t[N];
   memset(byte_stream_col_0, 42, N);
   const int8_t* byte_stream[] = { byte_stream_col_0 };
-  typedef void (*agg_query)(const int8_t** byte_stream, const int64_t* row_count, const int64_t* init_agg_value, int64_t* out);
+  typedef void (*agg_query)(const int8_t** byte_stream, const int64_t* row_count, const int64_t* init_agg_value, int64_t** out);
   int64_t init_agg_value = 0;
   LOG(INFO) << measure<>::execution([&]() {
     int64_t out;
-    reinterpret_cast<agg_query>(cgen.getNativeCode())(byte_stream, &N, &init_agg_value, &out);
+    int64_t* out_vec[] = { &out };
+    reinterpret_cast<agg_query>(cgen.getNativeCode())(byte_stream, &N, &init_agg_value, out_vec);
     LOG(INFO) << out;
   });
 
