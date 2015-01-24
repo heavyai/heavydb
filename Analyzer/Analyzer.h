@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <utility>
 #include <list>
 #include <set>
 #include "../Shared/sqltypes.h"
@@ -34,6 +35,7 @@ namespace Analyzer {
 			Expr(const SQLTypeInfo &ti) : type_info(ti) {}
 			virtual ~Expr() {}
 			const SQLTypeInfo &get_type_info() const { return type_info; }
+			void set_type_info(const SQLTypeInfo &ti) { type_info = ti; }
 			virtual Expr *add_cast(const SQLTypeInfo &new_type_info);
 			virtual void check_group_by(const std::list<Expr*> *groupby) const {};
 			virtual Expr *deep_copy() const = 0; // make a deep copy of self
@@ -336,12 +338,8 @@ namespace Analyzer {
 			bool get_is_distinct() const { return is_distinct; }
 			virtual Expr *deep_copy() const;
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
-			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
-			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const {
-				if ( include_agg && arg != nullptr) {
-					arg->collect_column_var(colvar_set, include_agg);
-				}
-			}
+			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); };
+			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { if ( include_agg && arg != nullptr) arg->collect_column_var(colvar_set, include_agg); }
 			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const;
 			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const;
 			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const;
@@ -352,6 +350,31 @@ namespace Analyzer {
 			SQLAgg aggtype; // aggregate type: kAVG, kMIN, kMAX, kSUM, kCOUNT
 			Expr *arg; // argument to aggregate
 			bool is_distinct; // true only if it is for COUNT(DISTINCT x).
+	};
+
+	/*
+	 * @type CaseExpr
+	 * @brief the CASE-WHEN-THEN-ELSE expression
+	 */
+	class CaseExpr : public Expr {
+		public:
+			CaseExpr(const SQLTypeInfo &ti, const std::list<std::pair<Expr*, Expr*>> &w, Expr *e) : Expr(ti), expr_pair_list(w), else_expr(e) {}
+			virtual ~CaseExpr();
+			const std::list<std::pair<Expr*, Expr*>> &get_expr_pair_list() const { return expr_pair_list; }
+			const Expr *get_else_expr() const { return else_expr; }
+			virtual Expr *deep_copy() const;
+			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
+			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const;
+			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const;
+			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const;
+			virtual bool operator==(const Expr &rhs) const;
+			virtual void print() const;
+			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
+		private:
+			std::list<std::pair<Expr*, Expr*>> expr_pair_list;
+			Expr *else_expr;
 	};
 
 	/*

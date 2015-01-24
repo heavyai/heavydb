@@ -62,6 +62,16 @@ namespace Analyzer {
 			delete next_query;
 	}
 
+	CaseExpr::~CaseExpr()
+	{
+		for (auto p : expr_pair_list) {
+			delete p.first;
+			delete p.second;
+		}
+		if (else_expr != nullptr)
+			delete else_expr;
+	}
+
 	Expr *
 	ColumnVar::deep_copy() const
 	{
@@ -126,6 +136,16 @@ namespace Analyzer {
 	AggExpr::deep_copy() const
 	{
 		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->deep_copy(), is_distinct);
+	}
+
+	Expr *
+	CaseExpr::deep_copy() const
+	{
+		std::list<std::pair<Expr*, Expr*>> new_list;
+		for (auto p : expr_pair_list) {
+			new_list.push_back(std::make_pair(p.first->deep_copy(), p.second->deep_copy()));
+		}
+		return new CaseExpr(type_info, new_list, else_expr == nullptr ? nullptr : else_expr->deep_copy());
 	}
 
 	SQLTypeInfo
@@ -361,6 +381,7 @@ namespace Analyzer {
 						constval.bigintval = (int64_t)constval.intval;
 						for (int i = 0; i < new_type_info.scale; i++)
 							constval.bigintval *= 10;
+						break;
 					default:
 						assert(false);
 				}
@@ -386,6 +407,7 @@ namespace Analyzer {
 						constval.bigintval = (int64_t)constval.smallintval;
 						for (int i = 0; i < new_type_info.scale; i++)
 							constval.bigintval *= 10;
+						break;
 					default:
 						assert(false);
 				}
@@ -410,6 +432,7 @@ namespace Analyzer {
 					case kDECIMAL:
 						for (int i = 0; i < new_type_info.scale; i++)
 							constval.bigintval *= 10;
+						break;
 					default:
 						assert(false);
 				}
@@ -435,6 +458,7 @@ namespace Analyzer {
 						for (int i = 0; i < new_type_info.scale; i++)
 							constval.doubleval *= 10;
 						constval.bigintval = (int64_t)constval.doubleval;
+						break;
 					default:
 						assert(false);
 				}
@@ -460,6 +484,7 @@ namespace Analyzer {
 						for (int i = 0; i < new_type_info.scale; i++)
 							constval.floatval *= 10;
 						constval.bigintval = (int64_t)constval.floatval;
+						break;
 					default:
 						assert(false);
 				}
@@ -721,6 +746,25 @@ namespace Analyzer {
 			const_predicates.push_back(this);
 	}
 
+	void
+	CaseExpr::group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const
+	{
+		std::set<int> rte_idx_set;
+		for (auto p : expr_pair_list) {
+			p.first->collect_rte_idx(rte_idx_set);
+			p.second->collect_rte_idx(rte_idx_set);
+		}
+		if (else_expr != nullptr)
+			else_expr->collect_rte_idx(rte_idx_set);
+		if(rte_idx_set.size() > 1)
+			join_predicates.push_back(this);
+		else if (rte_idx_set.size() == 1)
+			scan_predicates.push_back(this);
+		else
+			const_predicates.push_back(this);
+	}
+
+
 	Expr *
 	ColumnVar::rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const
 	{
@@ -833,6 +877,36 @@ namespace Analyzer {
 		throw std::runtime_error("Intern error: cannot find AggExpr from having clause in targetlist.");
 	}
 
+	Expr *
+	CaseExpr::rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const
+	{
+		std::list<std::pair<Expr*, Expr*>> epair_list;
+		for (auto p : expr_pair_list) {
+			epair_list.push_back(std::make_pair(p.first->rewrite_with_targetlist(tlist), p.second->rewrite_with_targetlist(tlist)));
+		}
+		return new CaseExpr(type_info, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_with_targetlist(tlist));
+	}
+
+	Expr *
+	CaseExpr::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	{
+		std::list<std::pair<Expr*, Expr*>> epair_list;
+		for (auto p : expr_pair_list) {
+			epair_list.push_back(std::make_pair(p.first->rewrite_with_child_targetlist(tlist), p.second->rewrite_with_child_targetlist(tlist)));
+		}
+		return new CaseExpr(type_info, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_with_child_targetlist(tlist));
+	}
+
+	Expr *
+	CaseExpr::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
+	{
+		std::list<std::pair<Expr*, Expr*>> epair_list;
+		for (auto p : expr_pair_list) {
+			epair_list.push_back(std::make_pair(p.first->rewrite_agg_to_var(tlist), p.second->rewrite_agg_to_var(tlist)));
+		}
+		return new CaseExpr(type_info, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_agg_to_var(tlist));
+	}
+
 	bool
 	ColumnVar::operator==(const Expr &rhs) const
 	{
@@ -918,6 +992,26 @@ namespace Analyzer {
 		return *arg == *rhs_ae.get_arg();
 	}
 
+	bool
+	CaseExpr::operator==(const Expr &rhs) const
+	{
+		if (typeid(rhs) != typeid(CaseExpr))
+			return false;
+		const CaseExpr &rhs_ce = dynamic_cast<const CaseExpr&>(rhs);
+		if (expr_pair_list.size() != rhs_ce.get_expr_pair_list().size())
+			return false;
+		if ((else_expr == nullptr && rhs_ce.get_else_expr() != nullptr) ||
+			  (else_expr != nullptr && rhs_ce.get_else_expr() == nullptr))
+			return false;
+		std::list<std::pair<Expr*, Expr*>>::const_iterator it = rhs_ce.get_expr_pair_list().begin();
+		for (auto p : expr_pair_list) {
+			if (!(*p.first == *it->first) || !(*p.second == *it->second))
+				return false;
+			++it;
+		}
+		return else_expr == nullptr || (else_expr != nullptr && *else_expr == *rhs_ce.get_else_expr());
+	}
+
 	void
 	ColumnVar::print() const
 	{
@@ -969,6 +1063,7 @@ namespace Analyzer {
 				case kTIME:
 				case kTIMESTAMP:
 					std::cout << "time) ";
+					return;
 				default:
 					std::cout << ") ";
 			}
@@ -1113,6 +1208,24 @@ namespace Analyzer {
 	}
 
 	void
+	CaseExpr::print() const
+	{
+		std::cout << "CASE ";
+		for (auto p : expr_pair_list) {
+			std::cout << "(",
+			p.first->print();
+			std::cout << ", ";
+			p.second->print();
+			std::cout << ") ";
+		}
+		if (else_expr != nullptr) {
+			std::cout << "ELSE ";
+			else_expr->print();
+		}
+		std::cout << " END ";
+	}
+
+	void
 	TargetEntry::print() const
 	{
 		std::cout << "(" << resname << " ";;
@@ -1196,5 +1309,42 @@ namespace Analyzer {
 		}
 		if (arg != nullptr)
 			arg->find_expr(f, expr_list);
+	}
+
+	void
+	CaseExpr::find_expr(bool (*f)(const Expr*), std::list<const Expr*> &expr_list) const
+	{
+		if (f(this)) {
+			add_unique(expr_list);
+			return;
+		}
+		for (auto p : expr_pair_list) {
+			p.first->find_expr(f, expr_list);
+			p.second->find_expr(f, expr_list);
+		}
+		if (else_expr != nullptr)
+			else_expr->find_expr(f, expr_list);
+	}
+
+	void
+	CaseExpr::collect_rte_idx(std::set<int> &rte_idx_set) const
+	{
+		for (auto p : expr_pair_list) {
+			p.first->collect_rte_idx(rte_idx_set);
+			p.second->collect_rte_idx(rte_idx_set);
+		}
+		if (else_expr != nullptr)
+			else_expr->collect_rte_idx(rte_idx_set);
+	}
+
+	void
+	CaseExpr::collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const
+	{
+		for (auto p : expr_pair_list) {
+			p.first->collect_column_var(colvar_set, include_agg);
+			p.second->collect_column_var(colvar_set, include_agg);
+		}
+		if (else_expr != nullptr)
+			else_expr->collect_column_var(colvar_set, include_agg);
 	}
 }

@@ -486,6 +486,61 @@ namespace Parser {
 		return arg_expr->add_cast(ti);
 	}
 
+	CaseExpr::~CaseExpr()
+	{
+		for (auto p : *when_then_list)
+			delete p;
+		delete when_then_list;
+		if (else_expr != nullptr)
+			delete else_expr;
+	}
+
+	Analyzer::Expr *
+	CaseExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
+	{
+		SQLTypeInfo ti;
+		ti.type = kNULLT;
+		std::list<std::pair<Analyzer::Expr*, Analyzer::Expr*>> expr_pair_list;
+		for (auto p : *when_then_list) {
+			Analyzer::Expr *e1, *e2;
+			e1 = p->get_expr1()->analyze(catalog, query);
+			if (e1->get_type_info().type != kBOOLEAN)
+				throw std::runtime_error("Only boolean expressions can be used after WHEN.");
+			e2 = p->get_expr2()->analyze(catalog, query);
+			if (ti.type == kNULLT)
+				ti = e2->get_type_info();
+			else if (e2->get_type_info().type == kNULLT)
+				e2->set_type_info(ti);
+			else if (ti != e2->get_type_info())
+				// @TODO check type promotions
+				throw std::runtime_error("expressions in THEN clause must be of the same or compatible types.");
+			expr_pair_list.push_back(std::make_pair(e1, e2));
+		}
+		Analyzer::Expr *else_e = nullptr;
+		if (else_expr != nullptr) {
+			else_e = else_expr->analyze(catalog, query);
+			if (else_e->get_type_info().type == kNULLT)
+				else_e->set_type_info(ti);
+			else if (ti != else_e->get_type_info())
+				// @TODO check type promotions
+				throw std::runtime_error("expressions in ELSE clause must be of the same or compatible types as those in the THEN clauses.");
+		}
+		return new Analyzer::CaseExpr(ti, expr_pair_list, else_e);
+	}
+
+	std::string
+	CaseExpr::to_string() const
+	{
+		std::string str("CASE ");
+		for (auto p : *when_then_list) {
+			str += "WHEN " + p->get_expr1()->to_string() + " THEN " + p->get_expr2()->to_string() + " ";
+		}
+		if (else_expr != nullptr)
+			str += "ELSE " + else_expr->to_string();
+		str += " END";
+		return str;
+	}
+
 	void
 	UnionQuery::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
 	{
