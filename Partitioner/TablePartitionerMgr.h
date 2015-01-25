@@ -109,7 +109,8 @@ namespace Partitioner_Namespace {
         //@todo make deletePartitioner function
         
     private:
-        
+       
+        void init();
         
         /**
          * @brief Creates partitioners table (curreintly in Postgres)

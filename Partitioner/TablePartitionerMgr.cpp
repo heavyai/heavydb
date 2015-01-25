@@ -12,16 +12,20 @@
 
 #include <limits>
 #include <boost/lexical_cast.hpp>
+#include <iostream>
 
 using std::vector;
 using std::string;
 using std::pair;
+using std::cout;
+using std::endl;
 
 namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
 TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr): dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false), sqliteConnector_("partitions") {
+    init();
     vector<pair<ChunkKey,ChunkMetadata> > chunkMetadataVec;
     dataMgr_ -> getChunkMetadataVec(chunkMetadataVec);
     /*
@@ -54,6 +58,10 @@ TablePartitionerMgr::~TablePartitionerMgr() {
     */
 }
 
+void TablePartitionerMgr::init() {
+	sqliteConnector_.query("CREATE TABLE if not exists mapd_partitioners (database_id integer, table_id integer, partitioner_id integer, partitioner_type integer, primary key(database_id, table_id, partitioner_id))");  
+}
+
 
 /// Notes: predicate can be null; queryInfo should hold the metadata needed for
 /// the executor for the most optimal partitioner for this query
@@ -83,12 +91,25 @@ void TablePartitionerMgr::getQueryPartitionInfo(const int databaseId, const int 
 
 void TablePartitionerMgr::createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partitionerType, const size_t maxPartitionRows, const size_t pageSize) {
     int32_t tableId = tableDescriptor -> tableId;
+    int32_t partitionerId = ++maxPartitionerId_;
+	sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+        string queryString("INSERT INTO mapd_partitioners (database_id, table_id, partitioner_id, partitioner_type) VALUES (" + boost::lexical_cast<string>(databaseId) + ","+boost::lexical_cast<string>(tableId)+","+boost::lexical_cast<string>(partitionerId)+","+boost::lexical_cast<string> (static_cast<int> (partitionerType)) +")");
+        cout << queryString << endl;
+        sqliteConnector_.query(queryString);
+    }
+    catch (std::exception &e) {
+		sqliteConnector_.query("ROLLBACK TRANSACTION");
+		throw;
+    }
+	sqliteConnector_.query("END TRANSACTION");
+
     vector<ColumnInfo> columnInfoVec;
     translateColumnDescriptorsToColumnInfoVec(columnDescriptors, columnInfoVec);
     AbstractTablePartitioner *partitioner = nullptr;
     ChunkKey tablePrefix = {databaseId, tableId};
     ChunkKey chunkKeyPrefix = tablePrefix;
-    chunkKeyPrefix.push_back(++maxPartitionerId_);
+    chunkKeyPrefix.push_back(partitionerId);
     if (partitionerType == INSERT_ORDER) {
         partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, dataMgr_);
     }
