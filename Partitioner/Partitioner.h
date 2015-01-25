@@ -19,6 +19,23 @@ namespace Partitioner_Namespace {
     };
     
     /**
+     * @type ColumnInfo
+     * @brief data structure to store id, type, bitsize
+     * and insert buffer (if applicable) of a given column
+     * managed by the partitioner
+     */
+
+    struct ColumnInfo {
+        int columnId; // for when we iterate over all structs of ColumnInfo instead of using a map
+        SQLTypes columnType; 
+        EncodingType encodingType;
+        int encodingBits;
+        Data_Namespace::AbstractBuffer * insertBuffer; // a pointer so can be null
+        //@todo get the constructor for ColumnInfo compiling
+        //ColumnInfo(const int columnId, const mapd_data_t columnType, const int bitSize): columnId(columnId), columnType(columnType), bitSize(bitSize), insertBuffer(NULL) {}
+        //ColumnInfo& operator=(const ColumnInfo&);
+    };
+    /**
      * @struct InsertData
      * @brief The data to be inserted using the partition manager.
      *
@@ -37,7 +54,7 @@ namespace Partitioner_Namespace {
         size_t numRows;				/// the number of rows being inserted
         std::vector <int8_t *> data;							/// points to the start of the data for the row(s) being inserted
     };
-    
+   
     /**
      * @struct PartitionInfo
      * @brief Used by Partitioner classes to store info about each
@@ -67,9 +84,9 @@ namespace Partitioner_Namespace {
     struct QueryInfo {
         std::vector <int> chunkKeyPrefix; 
         std::vector<PartitionInfo> partitions;
-        //size_t numTuples;
+        size_t numTuples;
     };
-    
+   
 } // Partitioner_Namespace
 
 #endif // DATAMGR_PARTITIONER_PARTITIONER_H

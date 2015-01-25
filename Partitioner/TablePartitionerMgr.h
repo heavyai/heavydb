@@ -97,7 +97,7 @@ namespace Partitioner_Namespace {
          */
         
         //void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
-        void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
+        void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1000000, const mapd_size_t pageSize = 1048576);
         
         /**
          * @brief Insert data (insertDataStruct) into the table
@@ -113,31 +113,12 @@ namespace Partitioner_Namespace {
         
     private:
         
-        /**
-         * @brief given a data type (enum) - returns its size in bits
-         *
-         * This bitsize is needed by partitioner during data insertion
-         * @param dataType gets size in bits of this data type
-         */
-        
-        inline mapd_size_t getBitSizeForType(const SQLTypeInfo &dataType) {
-            switch (dataType.type) {
-                case kINT:
-                case kFLOAT:
-                    return 32;
-                    break;
-                case kBOOLEAN:
-                    return 1;
-                    break;
-            }
-            return 0;
-        }
         
         /**
          * @brief Creates partitioners table (curreintly in Postgres)
          */
         
-        void createStateTableIfDne();
+        //void createStateTableIfDne();
         
         /**
          * @brief reads metadata about partitioners from table
@@ -146,14 +127,14 @@ namespace Partitioner_Namespace {
          * the partitioners.
          *
          */
-        void readState();
+        //void readState();
         
         /**
          * @brief updates metadata on disk - currently uses
          * postgres, wiping table and rewriting
          */
         
-        void writeState();
+        //void writeState();
         
         /**
          * @brief Iterate over all entries in columnRows
@@ -187,7 +168,7 @@ namespace Partitioner_Namespace {
          * possible TablePartitioner objects. (Note that a multimap permits the mapping of
          * a key to multiple values.)
          */
-        std::multimap<int, AbstractTablePartitioner*> tableToPartitionerMMap_;
+        std::multimap<ChunkKey, AbstractTablePartitioner*> tableToPartitionerMMap_;
         
         //Catalog_Namespace::Catalog &catalog_; /**< reference to Catalog object - must be queried to get metadata for tables and columns before partitioner creation */
         

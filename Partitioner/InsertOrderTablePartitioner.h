@@ -31,7 +31,7 @@ class InsertOrderTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = 1048576, const size_t pageSize = 1048576 /*default 1MB*/);
+    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = 1000000, const size_t pageSize = 1048576 /*default 1MB*/);
 
     virtual ~InsertOrderTablePartitioner();
     /**

@@ -117,8 +117,14 @@ void InsertOrderTablePartitioner::getPartitionsForQuery(QueryInfo &queryInfo) {
     queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
     // right now we don't test predicate, so just return (copy of) all partitions 
     {
-        boost::shared_lock < boost::shared_mutex > readLock (partitionInfoMutex_);
-        queryInfo.partitions = partitionInfoVec_; //makes a copy
+        {
+            boost::shared_lock < boost::shared_mutex > readLock (partitionInfoMutex_);
+            queryInfo.partitions = partitionInfoVec_; //makes a copy
+        }
+        queryInfo.numTuples = 0;
+        for (auto partIt = queryInfo.partitions.begin(); partIt != queryInfo.partitions.end(); ++partIt) {
+            queryInfo.numTuples += partIt -> numTuples;  
+        }
     }
 }
 
