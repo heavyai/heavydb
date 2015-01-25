@@ -17,20 +17,20 @@ namespace {
 
 Catalog_Namespace::Catalog get_catalog() {
   string db_name { MAPD_SYSTEM_DB };
-	string user_name { "mapd" };
-	string passwd { "HyperInteractive" };
+  string user_name { "mapd" };
+  string passwd { "HyperInteractive" };
   boost::filesystem::path base_path { "/tmp" };
-	CHECK(boost::filesystem::exists(base_path));
-	auto system_db_file = base_path / "mapd_catalogs" / "mapd";
-	CHECK(boost::filesystem::exists(system_db_file));
+  CHECK(boost::filesystem::exists(base_path));
+  auto system_db_file = base_path / "mapd_catalogs" / "mapd";
+  CHECK(boost::filesystem::exists(system_db_file));
   Catalog_Namespace::SysCatalog sys_cat(base_path.string());
   Catalog_Namespace::UserMetadata user;
-	CHECK(sys_cat.getMetadataForUser(user_name, user));
-	CHECK_EQ(user.passwd, passwd);
-	Catalog_Namespace::DBMetadata db;
-	CHECK(sys_cat.getMetadataForDB(db_name, db));
-	CHECK(user.isSuper || (user.userId == db.dbOwner));
-	Catalog_Namespace::Catalog cat(base_path.string(), user, db);
+  CHECK(sys_cat.getMetadataForUser(user_name, user));
+  CHECK_EQ(user.passwd, passwd);
+  Catalog_Namespace::DBMetadata db;
+  CHECK(sys_cat.getMetadataForDB(db_name, db));
+  CHECK(user.isSuper || (user.userId == db.dbOwner));
+  Catalog_Namespace::Catalog cat(base_path.string(), user, db);
   return cat;
 }
 
