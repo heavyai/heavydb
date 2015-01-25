@@ -7,6 +7,9 @@
 #include "../../DataMgr/DataMgr.h"
 #include "../TablePartitionerMgr.h"
 #include "../InsertOrderTablePartitioner.h"
+#include "../../Catalog/TableDescriptor.h"
+#include "../../Catalog/ColumnDescriptor.h"
+
 
 #include <iostream>
 #include <vector>
@@ -39,13 +42,18 @@ namespace Partitioner_Namespace {
                 tableDesc1.tableId = 1;
                 tableDesc1.tableName = "table_1";
                 tableDesc1.nColumns = 3;
+                SQLTypeInfo sqlTypeInfo;
+                sqlTypeInfo.type = kINT;
+                columnDescsTable0.push_back(new ColumnDescriptor(0,0,"col0_0",sqlTypeInfo,kENCODING_FIXED,8)); 
+                sqlTypeInfo.type = kFLOAT;
+                columnDescsTable0.push_back(new ColumnDescriptor(0,1,"col0_1",sqlTypeInfo,kENCODING_NONE)); 
 
-                columnDescsTable0.push_back(new ColumnDescriptor(0,0,"col0_0",kINT,kENCODING_FIXED,8)); 
-                columnDescsTable0.push_back(new ColumnDescriptor(0,1,"col0_1",kFLOAT,kENCODING_NONE)); 
-
-                columnDescsTable1.push_back(new ColumnDescriptor(1,0,"col1_0",kDOUBLE,kENCODING_NONE)); 
-                columnDescsTable1.push_back(new ColumnDescriptor(1,1,"col1_1",kBIGINT,kENCODING_FIXED,32)); 
-                columnDescsTable1.push_back(new ColumnDescriptor(1,2,"col1_2",kSMALLINT,kENCODING_NONE)); 
+                sqlTypeInfo.type = kDOUBLE;
+                columnDescsTable1.push_back(new ColumnDescriptor(1,0,"col1_0",sqlTypeInfo,kENCODING_NONE)); 
+                sqlTypeInfo.type = kBIGINT;
+                columnDescsTable1.push_back(new ColumnDescriptor(1,1,"col1_1",sqlTypeInfo,kENCODING_FIXED,32)); 
+                sqlTypeInfo.type = kSMALLINT;
+                columnDescsTable1.push_back(new ColumnDescriptor(1,2,"col1_2",sqlTypeInfo,kENCODING_NONE)); 
 
                 tablePartitionerMgr = new TablePartitionerMgr(dataMgr);
             }
@@ -68,15 +76,16 @@ namespace Partitioner_Namespace {
             Data_Namespace::DataMgr *dataMgr;
             TablePartitionerMgr *tablePartitionerMgr;
             InsertOrderTablePartitioner *insertOrderTablePartitioner;
-            TableDescriptor  tableDesc0;
-            TableDescriptor  tableDesc1;
-            vector <ColumnDescriptor *> columnDescsTable0;
-            vector <ColumnDescriptor *> columnDescsTable1;
+            TableDescriptor tableDesc0;
+            TableDescriptor tableDesc1;
+            vector <const ColumnDescriptor *> columnDescsTable0;
+            vector <const ColumnDescriptor *> columnDescsTable1;
             int64_t maxPartitionRows;
     };
 
     TEST_F (TablePartitionerMgrTest, createPartitionerTest) {
-        tablePartitionerMgr->createPartitionerForTable(0,tableDesc0,colDescsTable0);
+        const TableDescriptor * tableDesc = &tableDesc0;
+        tablePartitionerMgr->createPartitionerForTable(0,tableDesc,columnDescsTable0);
     }
 
 } // Partitioner_Namespace

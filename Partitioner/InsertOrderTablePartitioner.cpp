@@ -26,11 +26,12 @@ InsertOrderTablePartitioner::~InsertOrderTablePartitioner() {
 
 }
 
-void InsertOrderTablePartitioner::insertData (InsertData &insertDataStruct) {
+void InsertOrderTablePartitioner::insertData (const InsertData &insertDataStruct) {
     boost::lock_guard<boost::mutex> insertLock (insertMutex_); // prevent two threads from trying to insert into the same table simultaneously
 
     size_t numRowsLeft = insertDataStruct.numRows;
     size_t numRowsInserted = 0;
+    vector<int8_t *> dataCopy = insertDataStruct.data; // bc append data will move ptr forward and this violates constness of InsertData
     //vector <PartitionInfo *> partitionsToBeUpdated;  
     //std::vector<PartitionInfo>::iterator partIt = partitionInfoVec_.back();
     if (numRowsLeft <= 0) {
@@ -63,7 +64,7 @@ void InsertOrderTablePartitioner::insertData (InsertData &insertDataStruct) {
             auto colMapIt = columnMap_.find(columnId);
             assert(colMapIt != columnMap_.end());
             AbstractBuffer *insertBuffer = colMapIt->second.insertBuffer;
-            currentPartition->shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(insertDataStruct.data[i],numRowsToInsert);
+            currentPartition->shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(dataCopy[i],numRowsToInsert);
             //partitionInfoVec_.back().shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(static_cast<int8_t *>(insertDataStruct.data[i]),numRowsToInsert);
         }
 

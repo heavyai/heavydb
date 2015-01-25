@@ -9,6 +9,7 @@
 #include "Partitioner.h"
 #include "AbstractTablePartitioner.h"
 #include "../../Shared/types.h"
+#include "../SqliteConnector/SqliteConnector.h"
 
 #include <map>
 #include <vector>
@@ -17,13 +18,9 @@
 namespace Data_Namespace {
     class DataMgr;
 };
-/*
-namespace Catalog_Namespace {
-    //class Catalog;
-    struct TableDescriptor;
-    struct ColumnDescriptor;
-}
-*/
+
+struct TableDescriptor;
+struct ColumnDescriptor;
 
 namespace Partitioner_Namespace {
     
@@ -49,7 +46,7 @@ namespace Partitioner_Namespace {
          * Data_Namespace::DataMgr object
          */
         
-        TablePartitionerMgr(Data_Namespace::DataMgr &dataMgr);
+        TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr);
         
         /**
          * @brief Destructor - writes metadata to storage and
@@ -96,8 +93,8 @@ namespace Partitioner_Namespace {
          * @see Catalog
          */
         
-        //void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1048576, const mapd_size_t pageSize = 1048576);
-        void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partititonerType = INSERT_ORDER, const mapd_size_t maxPartitionRows = 1000000, const mapd_size_t pageSize = 1048576);
+        //void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = INSERT_ORDER, const size_t maxPartitionRows = 1048576, const size_t pageSize = 1048576);
+        void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const std::vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partitionerType = INSERT_ORDER, const size_t maxPartitionRows = 1000000, const size_t pageSize = 1048576);
         
         /**
          * @brief Insert data (insertDataStruct) into the table
@@ -152,7 +149,7 @@ namespace Partitioner_Namespace {
          */
         
         // columnInfoVec needed  by partitioner
-        void translateColumnDescriptorsToColumnInfoVec (std::vector <const ColumnDescriptor *> &columnDescriptors, std::vector<ColumnInfo> &columnInfoVec);
+        void translateColumnDescriptorsToColumnInfoVec (const std::vector <const ColumnDescriptor *> &columnDescriptors, std::vector<ColumnInfo> &columnInfoVec);
         
         
         int maxPartitionerId_; /**< Since each new partitioner is
@@ -172,7 +169,7 @@ namespace Partitioner_Namespace {
         
         //Catalog_Namespace::Catalog &catalog_; /**< reference to Catalog object - must be queried to get metadata for tables and columns before partitioner creation */
         
-        Data_Namespace::DataMgr & dataMgr_;									/**< reference to the buffer manager object*/
+        Data_Namespace::DataMgr * dataMgr_;									/**< reference to the buffer manager object*/
         SqliteConnector sqliteConnector_; /**<object that connects to sqlite to allow metadata storage */
         
         bool isDirty_;  /**< Specifies if the TablePartitionerMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */

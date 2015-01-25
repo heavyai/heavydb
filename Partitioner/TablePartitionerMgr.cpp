@@ -1,24 +1,27 @@
 /**
- * @file	TablePartitionMgr.cpp
+ * @file	TablePartitionerMgr.cpp
  * @author	Steven Stewart <steve@map-d.com>
  * @author	Todd Mostak <todd@map-d.com>
  */
-#include "TablePartitionMgr.h"
+#include "TablePartitionerMgr.h"
 //#include "Catalog.h"
-#include "DataMgr.h"
+#include "../DataMgr/DataMgr.h"
 #include "InsertOrderTablePartitioner.h"
+#include "../Catalog/TableDescriptor.h"
+#include "../Catalog/ColumnDescriptor.h"
 
 #include <limits>
 #include <boost/lexical_cast.hpp>
 
 using std::vector;
 using std::string;
+using std::pair;
 
 namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionMgr::TablePartitionMgr(Data_Namespace::DataMgr &dataMgr) dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false) {
+TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr): dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false), sqliteConnector_("partitions") {
     vector<pair<ChunkKey,ChunkMetadata> > chunkMetadataVec;
     dataMgr_ -> getChunkMetadataVec(chunkMetadataVec);
     /*
@@ -42,7 +45,7 @@ TablePartitionMgr::TablePartitionMgr(Data_Namespace::DataMgr &dataMgr) dataMgr_(
     */
 }
 
-TablePartitionMgr::~TablePartitionMgr() {
+TablePartitionerMgr::~TablePartitionerMgr() {
     //writeState();
     // now delete the Partitioners allocated on heap
     /*
@@ -54,9 +57,10 @@ TablePartitionMgr::~TablePartitionMgr() {
 
 /// Notes: predicate can be null; queryInfo should hold the metadata needed for
 /// the executor for the most optimal partitioner for this query
-void TablePartitionMgr::getQueryPartitionInfo(const int databaseId, const int tableId, QueryInfo &queryInfo/*, const void *predicate*/) {
+void TablePartitionerMgr::getQueryPartitionInfo(const int databaseId, const int tableId, QueryInfo &queryInfo/*, const void *predicate*/) {
     // obtain iterator over partitions for the given tableId
-    auto mapIt = tableToPartitionerMMap_.find(tableId);
+    ChunkKey tableKey = {databaseId, tableId};
+    auto mapIt = tableToPartitionerMMap_.find(tableKey);
     assert (mapIt != tableToPartitionerMMap_.end());
 
     // set numTuples to maximum allowable value given its type
@@ -67,7 +71,7 @@ void TablePartitionMgr::getQueryPartitionInfo(const int databaseId, const int ta
     // iterate over each partitioner that exists for the table,
     // obtaining a QueryInfo object for the least number of tuples
     for (; mapIt != tableToPartitionerMMap_.end(); ++mapIt) {
-        assert(tableId == mapIt->first);
+        assert(tableKey == mapIt->first);
         QueryInfo tempQueryInfo;
         AbstractTablePartitioner *abstractTablePartitioner = mapIt->second;
         abstractTablePartitioner->getPartitionsForQuery(tempQueryInfo/*, predicate*/);
@@ -77,7 +81,7 @@ void TablePartitionMgr::getQueryPartitionInfo(const int databaseId, const int ta
     }
 }
 
-void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partititonerType, const size_t maxPartitionRows, const size_t pageSize) {
+void TablePartitionerMgr::createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partitionerType, const size_t maxPartitionRows, const size_t pageSize) {
     int32_t tableId = tableDescriptor -> tableId;
     vector<ColumnInfo> columnInfoVec;
     translateColumnDescriptorsToColumnInfoVec(columnDescriptors, columnInfoVec);
@@ -86,7 +90,7 @@ void createPartitionerForTable (const int databaseId, const TableDescriptor *tab
     ChunkKey chunkKeyPrefix = tablePrefix;
     chunkKeyPrefix.push_back(++maxPartitionerId_);
     if (partitionerType == INSERT_ORDER) {
-        partitioner = new InsertOrderTablePartitioner(chunKeyPrefix, columnInfoVec, dataMgr_);
+        partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, dataMgr_);
     }
     assert (partitionerType == INSERT_ORDER); // only INSERT_ORDER is currently supported
     
@@ -100,9 +104,10 @@ void createPartitionerForTable (const int databaseId, const TableDescriptor *tab
     //isDirty_ = true;
 }
 
-void TablePartitionMgr::insertData(const InsertData &insertDataStruct) {
-	auto mapIt = tableToPartitionerMMap_.find(insertDataStruct.tableId);
-    printf("# of partitioners = %lu\n", tableToPartitionerMMap_.count(insertDataStruct.tableId));
+void TablePartitionerMgr::insertData(const InsertData &insertDataStruct) {
+    ChunkKey tableKey = {insertDataStruct.databaseId, insertDataStruct.tableId};
+	auto mapIt = tableToPartitionerMMap_.find(tableKey);
+    printf("# of partitioners = %lu\n", tableToPartitionerMMap_.count(tableKey));
     assert (mapIt != tableToPartitionerMMap_.end());
     
     // Now iterate over all partitioners for given table
@@ -112,13 +117,13 @@ void TablePartitionMgr::insertData(const InsertData &insertDataStruct) {
     }
 }
 
-void TablePartitionMgr::translateColumnDescriptorsToColumnInfoVec (vector <const Catalog_Namespace::ColumnDescriptor *> &columnDescriptors, vector<ColumnInfo> &columnInfoVec) {
+void TablePartitionerMgr::translateColumnDescriptorsToColumnInfoVec (const vector <const ColumnDescriptor *> &columnDescriptors, vector<ColumnInfo> &columnInfoVec) {
     // Iterate over all entries in columnRows and translate to 
     // columnInfoVec needed  by partitioner
     for (auto colDescIt = columnDescriptors.begin(); colDescIt != columnDescriptors.end(); ++colDescIt) {
         ColumnInfo columnInfo;
-        columnInfo.columnId = (*colDescIt) -> columnId;
-        columnInfo.columnType = (*colDescIt) -> columnType;
+        columnInfo.columnId = (*colDescIt)->columnId;
+        columnInfo.columnType = (*colDescIt)->columnType.type;
         //columnInfo.bitSize = getBitSizeForType(columnInfo.columnType);  
         columnInfo.insertBuffer = NULL; // set as NULL
         //ColumnInfo columnInfo (colDescIt -> columnId, colDescIt -> columnType, getBitSizeForType(columnInfo.columnType));
@@ -126,12 +131,12 @@ void TablePartitionMgr::translateColumnDescriptorsToColumnInfoVec (vector <const
     }
 }
 
-//void TablePartitionMgr::createStateTableIfDne() {
+//void TablePartitionerMgr::createStateTableIfDne() {
 //     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS partitioners(table_id INT, partitioner_id INT, partitioner_type text, PRIMARY KEY (table_id, partitioner_id))");
 //     assert(status == MAPD_SUCCESS);
 //}
 //
-//void TablePartitionMgr::readState() {
+//void TablePartitionerMgr::readState() {
 //    vector <AbstractTablePartitioner*> partitionerVec_;
 //    vector<ColumnInfo> columnInfoVec;
 //
@@ -169,7 +174,7 @@ void TablePartitionMgr::translateColumnDescriptorsToColumnInfoVec (vector <const
 //    }
 //}
 //
-//void TablePartitionMgr::writeState() {
+//void TablePartitionerMgr::writeState() {
 //    if (isDirty_) { // only need to rewrite state if we've made modifications since last write
 //        
 //        // submit query to clear the partitioners table

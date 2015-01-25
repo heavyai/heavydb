@@ -6,6 +6,10 @@
 #include <map>
 #include <vector>
 
+namespace Data_Namespace {
+    class AbstractBuffer;
+}
+
 namespace Partitioner_Namespace {
     
     /**

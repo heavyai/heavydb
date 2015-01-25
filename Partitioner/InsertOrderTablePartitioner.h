@@ -50,7 +50,7 @@ public:
      * @todo be able to fill up current partition in
      * multi-row insert before creating new partition
      */
-    virtual void insertData (InsertData &insertDataStruct);
+    virtual void insertData (const InsertData &insertDataStruct);
     /**
      * @brief get partitioner's id
      */

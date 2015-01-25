@@ -1,3 +1,9 @@
+/**
+ * @file SqliteConnector.cpp
+ * @author Todd Mostak <todd@mapd.com>
+ *
+ */
+
 #include "SqliteConnector.h" 
 #include <iostream>
 
