@@ -1,6 +1,7 @@
 #include "Execute.h"
 #include "Codec.h"
 #include "DataSourceMock.h"
+#include "NvidiaKernel.h"
 #include "Partitioner/Partitioner.h"
 #include "QueryTemplateGenerator.h"
 
@@ -11,12 +12,14 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <nvvm.h>
 
 #include <chrono>
 
@@ -46,7 +49,9 @@ SQLTypes get_column_type(const int col_id, const int table_id, const Catalog_Nam
 
 }
 
-std::vector<Executor::AggResult> Executor::execute(const ExecutorOptLevel opt_level) {
+std::vector<Executor::AggResult> Executor::execute(
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel opt_level) {
   const auto stmt_type = root_plan_->get_stmt_type();
   switch (stmt_type) {
   case kSELECT: {
@@ -54,7 +59,7 @@ std::vector<Executor::AggResult> Executor::execute(const ExecutorOptLevel opt_le
     CHECK(plan);
     const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
     CHECK(agg_plan);
-    return executeAggScanPlan(agg_plan, opt_level);
+    return executeAggScanPlan(agg_plan, device_type, opt_level);
     break;
   }
   case kINSERT: {
@@ -382,17 +387,38 @@ std::vector<Analyzer::AggExpr*> get_agg_exprs(const Planner::AggPlan* agg_plan) 
   return result;
 }
 
+void launch_query_gpu_code(
+    CUfunction kernel,
+    CUdeviceptr col_buffers,
+    CUdeviceptr num_rows,
+    CUdeviceptr init_agg_vals,
+    CUdeviceptr out_vec) {
+  const unsigned block_size_x = 128;
+  const unsigned block_size_y = 1;
+  const unsigned block_size_z = 1;
+  const unsigned grid_size_x  = 128;
+  const unsigned grid_size_y  = 1;
+  const unsigned grid_size_z  = 1;
+  void* kernel_params[] = { &col_buffers, &num_rows, &init_agg_vals, &out_vec };
+  auto status = cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+                               block_size_x, block_size_y, block_size_z,
+                               0, nullptr, kernel_params, nullptr);
+  CHECK_EQ(status, CUDA_SUCCESS);
+}
+
 }  // namespace
 
 std::vector<Executor::AggResult> Executor::executeAggScanPlan(
     const Planner::AggPlan* agg_plan,
+    const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
+  CHECK(device_type == ExecutorDeviceType::CPU);
   typedef void (*agg_query)(
     const int8_t** col_buffers,
     const int64_t* num_rows,
     const int64_t* init_agg_value,
     int64_t** out);
-  compileAggScanPlan(agg_plan, opt_level);
+  compileAggScanPlan(agg_plan, device_type, opt_level);
   const int table_id = 1;
   const auto fragments = get_fragments(table_id);
   std::vector<std::pair<const ChunkKey, const size_t>> chunk_keys;
@@ -404,7 +430,9 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
         ChunkKey { table_id, fragment.fragment_id, col_id },
         fragment.num_tuples));
     }
-    const auto buffers = get_chunk_multi<int32_t>(chunk_keys, AddressSpace::CPU);
+    const auto buffers = get_chunk_multi<int32_t>(
+      chunk_keys,
+      device_type == ExecutorDeviceType::CPU ? AddressSpace::CPU : AddressSpace::GPU);
     const int8_t* col_buffers[buffers.size()];
     int64_t num_rows { static_cast<int64_t>(fragment.num_tuples) };
     for (size_t buffer_idx = 0; buffer_idx < buffers.size(); ++buffer_idx) {
@@ -418,7 +446,11 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
       auto buff = calloc(1, sizeof(int64_t));
       out_vec.push_back(static_cast<int64_t*>(buff));
     }
-    reinterpret_cast<agg_query>(query_native_code_)(col_buffers, &num_rows, &init_agg_vals_[0], &out_vec[0]);
+    if (device_type == ExecutorDeviceType::CPU) {
+      reinterpret_cast<agg_query>(query_cpu_code_)(col_buffers, &num_rows, &init_agg_vals_[0], &out_vec[0]);
+    } else {
+      CHECK(false);
+    }
     const auto agg_exprs = get_agg_exprs(agg_plan);
     CHECK_EQ(agg_exprs.size(), agg_col_count);
     for (size_t i = 0; i < agg_col_count; ++i) {
@@ -613,6 +645,7 @@ llvm::Function* make_query_template(
 
 void Executor::compileAggScanPlan(
     const Planner::AggPlan* agg_plan,
+    const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
@@ -673,11 +706,15 @@ void Executor::compileAggScanPlan(
     }
   }
 
-  query_native_code_ = optimizeAndCodegen(query_func, opt_level, module_);
-  CHECK(query_native_code_);
+  if (device_type == ExecutorDeviceType::CPU) {
+    query_cpu_code_ = optimizeAndCodegenCPU(query_func, opt_level, module_);
+  } else {
+    query_gpu_code_ = optimizeAndCodegenGPU(query_func, opt_level, module_);
+  }
+  CHECK(query_cpu_code_);
 }
 
-void* Executor::optimizeAndCodegen(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
+void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
 
@@ -707,6 +744,16 @@ void* Executor::optimizeAndCodegen(llvm::Function* query_func, const ExecutorOpt
   }
 
   return execution_engine_->getPointerToFunction(query_func);
+}
+
+CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
+  std::stringstream ss;
+  llvm::raw_os_ostream os(ss);
+  module->print(os, nullptr);
+  if (!gpu_context_) {
+    gpu_context_.reset(new GpuExecutionContext(ss.str()));
+  }
+  return gpu_context_->kernel();
 }
 
 void Executor::call_aggregators(

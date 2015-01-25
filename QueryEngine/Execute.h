@@ -3,6 +3,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Planner/Planner.h"
+#include "NvidiaKernel.h"
 
 #include <boost/variant.hpp>
 #include <glog/logging.h>
@@ -12,6 +13,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <cuda.h>
 
 #include <unordered_map>
 
@@ -19,6 +21,11 @@
 enum class ExecutorOptLevel {
   Default,
   LoopStrengthReduction
+};
+
+enum class ExecutorDeviceType {
+  CPU,
+  GPU
 };
 
 class Executor {
@@ -29,7 +36,9 @@ public:
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t> AggInfo;
   typedef boost::variant<int64_t, double> AggResult;
 
-  std::vector<AggResult> execute(const ExecutorOptLevel = ExecutorOptLevel::Default);
+  std::vector<AggResult> execute(
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
+    const ExecutorOptLevel = ExecutorOptLevel::Default);
 private:
   llvm::Value* codegen(const Analyzer::Expr*) const;
   llvm::Value* codegen(const Analyzer::BinOper*) const;
@@ -41,11 +50,18 @@ private:
   llvm::Value* codegenArith(const Analyzer::BinOper*) const;
   llvm::Value* codegenLogical(const Analyzer::UOper*) const;
   llvm::Value* codegenCast(const Analyzer::UOper*) const;
-  std::vector<AggResult> executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
+  std::vector<AggResult> executeAggScanPlan(
+    const Planner::AggPlan* agg_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel);
   void executeSimpleInsert();
   void executeScanPlan(const Planner::Scan* scan_plan);
-  void compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
-  void* optimizeAndCodegen(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
+  void compileAggScanPlan(
+    const Planner::AggPlan* agg_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel);
+  void* optimizeAndCodegenCPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
+  CUfunction optimizeAndCodegenGPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
   void call_aggregators(
     const std::vector<AggInfo>& agg_infos,
     llvm::Value* filter_result,
@@ -60,7 +76,11 @@ private:
   llvm::Module* module_;
   mutable llvm::IRBuilder<> ir_builder_;
   llvm::ExecutionEngine* execution_engine_;
-  void* query_native_code_;
+  union {
+    void* query_cpu_code_;
+    CUfunction query_gpu_code_;
+  };
+  std::unique_ptr<GpuExecutionContext> gpu_context_;
   mutable std::unordered_map<int, llvm::Value*> fetch_cache_;
   llvm::Function* row_func_;
   std::vector<int64_t> init_agg_vals_;
