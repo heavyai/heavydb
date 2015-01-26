@@ -42,6 +42,7 @@ private:
   llvm::Value* codegenLogical(const Analyzer::UOper*) const;
   llvm::Value* codegenCast(const Analyzer::UOper*) const;
   std::vector<AggResult> executeAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
+  void executeSimpleInsert();
   void executeScanPlan(const Planner::Scan* scan_plan);
   void compileAggScanPlan(const Planner::AggPlan* agg_plan, const ExecutorOptLevel);
   void* optimizeAndCodegen(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
