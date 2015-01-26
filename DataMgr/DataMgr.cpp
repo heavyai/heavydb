@@ -1,12 +1,14 @@
 /**
  * @file    DataMgr.cpp
- * @author Todd Mostak <todd@map-d.com>
+ * @author Todd Mostak <todd@mapd.com>
  */
 
 #include "DataMgr.h"
 #include "FileMgr/FileMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
+#ifdef USE_GPU
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+#endif 
 
 #include <limits>
 
@@ -25,10 +27,15 @@ namespace Data_Namespace {
         bufferMgrs_.resize(3);
         bufferMgrs_[0].push_back(new FileMgr (dataDir_)); 
         levelSizes_.push_back(1);
+        #ifdef USE_GPU
         bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CUDA_HOST, 1 << 30,512,bufferMgrs_[0][0])); 
         levelSizes_.push_back(1);
         bufferMgrs_[2].push_back(new GpuCudaBufferMgr(1 << 30, 0, 1 << 29,512,bufferMgrs_[1][0])); 
         levelSizes_.push_back(1);
+        #else
+        bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CPU_HOST, 1 << 30,512,bufferMgrs_[0][0])); 
+        levelSizes_.push_back(1);
+        #endif
     }
     /*
     DataMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey,int64_t> > &metadata)  {

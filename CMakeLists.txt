@@ -20,6 +20,7 @@ ADD_SUBDIRECTORY    (Parser)
 ADD_SUBDIRECTORY    (Analyzer)
 ADD_SUBDIRECTORY    (Planner)
 ADD_SUBDIRECTORY    (QueryEngine)
+ADD_SUBDIRECTORY    (DataMgr)
 ADD_SUBDIRECTORY    (Tests)
 
 set(mapd_source_files main.cpp)
@@ -31,5 +32,5 @@ add_executable(initdb ${initdb_source_files})
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (initdb Catalog SqliteConnector ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )

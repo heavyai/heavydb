@@ -15,7 +15,9 @@ namespace Buffer_Namespace {
         else if (dstBufferType == GPU_BUFFER) {
             //CudaUtils::copyToGpu(dst,mem_+offset,numBytes,1,dst->getDeviceId());
             //@todo: use actual device id in next call
+            #ifdef USE_GPU
             CudaUtils::copyToGpu(dst,mem_+offset,numBytes,1,0);
+            #endif USE_GPU
         }
         else {
             throw std::runtime_error("Unsupported buffer type");
@@ -31,7 +33,9 @@ namespace Buffer_Namespace {
             std::cout << "At Gpu_Buffer Writedata" << std::endl;
             //CudaUtils::copyToHost(mem_+offset, src, numBytes,1,src->getDeviceId());
             //@todo: use actual device id in next call
+            #ifdef USE_GPU
             CudaUtils::copyToHost(mem_+offset, src, numBytes,1,0);
+            #endif
         }
         else {
             throw std::runtime_error("Unsupported buffer type");

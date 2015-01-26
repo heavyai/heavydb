@@ -26,7 +26,6 @@ namespace Partitioner_Namespace {
 
 TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr): dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false), sqliteConnector_("partitions") {
     init();
-    vector<pair<ChunkKey,ChunkMetadata> > chunkMetadataVec;
     //dataMgr_-> getChunkMetadataVec(chunkMetadataVec);
     /*
     ChunkKey lastChunkKey;
@@ -69,8 +68,15 @@ void TablePartitionerMgr::init() {
             maxPartitionerId_ = partitionerId;
         }
         ChunkKey tableKeyPrefix = {sqliteConnector_.getData<int>(r,0), sqliteConnector_.getData<int>(r,1),partitionerId}; // database_id, table_id, partitioner_id
+        //SqliteConnector
         std::vector<std::pair <ChunkKey,ChunkMetadata> > chunkMetadataVec;
         dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,tableKeyPrefix);
+        for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
+
+
+        }
+
+       
     }
     cout << "Max Partitioner id: " << maxPartitionerId_ << endl;
 }
@@ -163,6 +169,24 @@ void TablePartitionerMgr::translateColumnDescriptorsToColumnInfoVec (const vecto
         //ColumnInfo columnInfo (colDescIt -> columnId, colDescIt -> columnType, getBitSizeForType(columnInfo.columnType));
         columnInfoVec.push_back(columnInfo);
     }
+}
+
+void TablePartitionerMgr::translateChunkMetadataVectoColumnInfoVec(const std::vector<std::pair <ChunkKey,ChunkMetadata> &chunkMetadataVec, vector<ColumnInfo> &columnInfoVec) {
+    for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
+        ColumnInfo columnInfo;
+        columnInfo.columnId = 
+
+
+
+
+    }
+        
+        
+        
+        columnDescriptors.begin(); colDescIt != columnDescriptors.end(); ++colDescIt) {
+
+
+
 }
 
 

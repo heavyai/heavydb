@@ -1,6 +1,8 @@
 #include "CpuBufferMgr.h"
 #include "CpuBuffer.h"
+#ifdef USE_GPU
 #include "../CudaUtils.h"
+#endif
 
 namespace Buffer_Namespace {
 
@@ -13,10 +15,13 @@ namespace Buffer_Namespace {
     void CpuBufferMgr::addSlab(const size_t slabSize) {
         slabs_.resize(slabs_.size()+1);
         if (cpuBufferMgrMemType_ == CUDA_HOST) {
+            #ifdef USE_GPU
             CudaUtils::allocPinnedHostMem(slabs_.back(),slabSize,1);
+            #endif 
         }
         else {
-            slabs_.back() = (int8_t *) new int8_t[slabSize];
+
+            slabs_.back() = new int8_t[slabSize];
         }
         //slabs_.push_back((int8_t *) malloc(slabSize));
         slabSegments_.resize(slabSegments_.size()+1);
@@ -26,7 +31,9 @@ namespace Buffer_Namespace {
     void CpuBufferMgr::freeAllMem() {
         for (auto bufIt = slabs_.begin(); bufIt != slabs_.end(); ++bufIt) { 
             if (cpuBufferMgrMemType_ == CUDA_HOST) {
+                #ifdef USE_GPU
                 CudaUtils::hostFree(*bufIt);
+                #endif
             }
             else {
                 delete [] *bufIt;
