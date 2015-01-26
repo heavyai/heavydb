@@ -63,7 +63,7 @@ void InsertOrderTablePartitioner::insertData (const InsertData &insertDataStruct
             int columnId = insertDataStruct.columnIds[i];
             auto colMapIt = columnMap_.find(columnId);
             assert(colMapIt != columnMap_.end());
-            AbstractBuffer *insertBuffer = colMapIt->second.insertBuffer;
+            //AbstractBuffer *insertBuffer = colMapIt->second.insertBuffer;
             currentPartition->shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(dataCopy[i],numRowsToInsert);
             //partitionInfoVec_.back().shadowChunkMetadataMap[columnId] = colMapIt->second.insertBuffer->encoder->appendData(static_cast<int8_t *>(insertDataStruct.data[i]),numRowsToInsert);
         }
@@ -102,6 +102,7 @@ PartitionInfo * InsertOrderTablePartitioner::createNewPartition() {
         chunkKey.push_back(colMapIt->second.columnId);
         chunkKey.push_back(maxPartitionId_);
         colMapIt->second.insertBuffer = dataMgr_->createChunk(Data_Namespace::DISK_LEVEL,chunkKey);
+        cout << "Creating chunk with encodingType: " << colMapIt->second.encodingType << endl;
         colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnType,colMapIt->second.encodingType,colMapIt->second.encodingBits);
     }
     PartitionInfo newPartitionInfo;

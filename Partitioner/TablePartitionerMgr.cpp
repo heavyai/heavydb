@@ -86,8 +86,9 @@ void TablePartitionerMgr::init() {
 void TablePartitionerMgr::getQueryPartitionInfo(const int databaseId, const int tableId, QueryInfo &queryInfo/*, const void *predicate*/) {
     // obtain iterator over partitions for the given tableId
     ChunkKey tableKey = {databaseId, tableId};
-    auto mapIt = tableToPartitionerMMap_.find(tableKey);
-    assert (mapIt != tableToPartitionerMMap_.end());
+    //auto mapIt = tableToPartitionerMMap_.find(tableKey);
+    auto mapRangeIt = tableToPartitionerMMap_.equal_range(tableKey); 
+    //assert (mapIt != tableToPartitionerMMap_.end());
 
     // set numTuples to maximum allowable value given its type
     // to allow finding the partitioner that makes us scan the 
@@ -96,7 +97,8 @@ void TablePartitionerMgr::getQueryPartitionInfo(const int databaseId, const int 
 
     // iterate over each partitioner that exists for the table,
     // obtaining a QueryInfo object for the least number of tuples
-    for (; mapIt != tableToPartitionerMMap_.end(); ++mapIt) {
+    for (auto mapIt = mapRangeIt.first; mapIt != mapRangeIt.second; ++mapIt) {
+        //cout << "Table Key: " << mapIt->first[0] << endl;
         assert(tableKey == mapIt->first);
         QueryInfo tempQueryInfo;
         AbstractTablePartitioner *abstractTablePartitioner = mapIt->second;
@@ -163,6 +165,8 @@ void TablePartitionerMgr::translateColumnDescriptorsToColumnInfoVec (const list 
         ColumnInfo columnInfo;
         columnInfo.columnId = (*colDescIt)->columnId;
         columnInfo.columnType = (*colDescIt)->columnType.type;
+        columnInfo.encodingType = (*colDescIt)->compression;
+        columnInfo.encodingBits = (*colDescIt)->comp_param;
         //columnInfo.bitSize = getBitSizeForType(columnInfo.columnType);  
         columnInfo.insertBuffer = NULL; // set as NULL
         //ColumnInfo columnInfo (colDescIt -> columnId, colDescIt -> columnType, getBitSizeForType(columnInfo.columnType));

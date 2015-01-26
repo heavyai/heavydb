@@ -14,7 +14,6 @@ namespace Data_Namespace {
     class AbstractBuffer;
 }
 
-
 class Encoder {
     public: 
         static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits);
