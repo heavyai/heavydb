@@ -1010,9 +1010,14 @@ namespace Parser {
 	{
 		InsertStmt::analyze(catalog, query);
 		std::list<Analyzer::TargetEntry*> &tlist = query.get_targetlist_nonconst();
+		std::list<int>::const_iterator it = query.get_result_col_list().begin();
 		for (auto v : *value_list) {
 			Analyzer::Expr *e = v->analyze(catalog, query);
+			const ColumnDescriptor *cd = catalog.getMetadataForColumn(query.get_result_table_id(), *it);
+			assert (cd != nullptr);
+			e = e->add_cast(cd->columnType);
 			tlist.push_back(new Analyzer::TargetEntry("", e));
+			++it;
 		}
 	}
 
