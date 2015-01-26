@@ -365,11 +365,34 @@ namespace Parser {
 	class CastExpr : public Expr {
 		public:
 			CastExpr(Expr *a, SQLType *t) : arg(a), target_type(t) {}
+			virtual ~CastExpr() { delete arg; delete target_type; }
 			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 			virtual std::string to_string() const { return "CAST(" + arg->to_string() + " AS " + target_type->to_string() + ")"; }
 		private:
 			Expr *arg;
 			SQLType *target_type;
+	};
+
+	class ExprPair : public Node {
+		public:
+			ExprPair(Expr *e1, Expr *e2) : expr1(e1), expr2(e2) {}
+			virtual ~ExprPair() { delete expr1; delete expr2; }
+			const Expr *get_expr1() const { return expr1; }
+			const Expr *get_expr2() const { return expr2; }
+		private:
+			Expr *expr1;
+			Expr *expr2;
+	};
+
+	class CaseExpr : public Expr {
+		public:
+			CaseExpr(std::list<ExprPair*> *w, Expr *e) : when_then_list(w), else_expr(e) {}
+			virtual ~CaseExpr();
+			virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
+			virtual std::string to_string() const;
+		private:
+			std::list<ExprPair*> *when_then_list;
+			Expr *else_expr;
 	};
 
 	/*

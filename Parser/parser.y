@@ -17,6 +17,7 @@
 #include <sstream>
 #include <list>
 #include <string>
+#include <utility>
 #include <stdexcept>
 #include <boost/algorithm/string/predicate.hpp>
 #include <FlexLexer.h>
@@ -74,7 +75,7 @@ using namespace Parser;
 %token IS KEY LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
-%token SMALLINT SOME TABLE TEXT TIME TIMESTAMP TO UNION
+%token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
 %token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
 %start sql_list
@@ -727,6 +728,28 @@ subquery:
 		'(' query_spec ')' { $<nodeval>$ = new SubqueryExpr(dynamic_cast<QuerySpec*>($<nodeval>2)); }
 	;
 
+when_then_list:
+		WHEN search_condition THEN scalar_exp
+		{
+			$<listval>$ = new std::list<Node*>(1, new ExprPair(dynamic_cast<Expr*>($<nodeval>2), dynamic_cast<Expr*>($<nodeval>4)));
+		}
+		| when_then_list WHEN search_condition THEN scalar_exp
+		{
+			$<listval>$ = $<listval>1;
+			$<listval>$->push_back(new ExprPair(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>5)));
+		}
+		;
+opt_else_expr :
+		ELSE scalar_exp { $<nodeval>$ = $<nodeval>2; }
+		| /* empty */ { $<nodeval>$ = nullptr; }
+		;
+
+case_exp: CASE when_then_list opt_else_expr END
+	{
+		$<nodeval>$ = new CaseExpr(reinterpret_cast<std::list<ExprPair*>*>($<listval>2), dynamic_cast<Expr*>($<nodeval>3));
+	}
+	;
+
 	/* scalar expressions */
 
 scalar_exp:
@@ -742,7 +765,7 @@ scalar_exp:
 	|	'(' scalar_exp ')' { $<nodeval>$ = $<nodeval>2; }
 	| CAST '(' scalar_exp AS data_type ')'
 	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
-	/* | case_exp; */
+	| case_exp { $<nodeval>$ = $<nodeval>1; }
 	;
 
 select_entry: scalar_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }

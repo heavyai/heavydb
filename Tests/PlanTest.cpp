@@ -118,6 +118,9 @@ TEST(ParseAnalyzePlan, Select) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select e, f, g from fat where e not in (3.5, 133.33, 222.22);")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select e, f, g from fat where e not in (3.5, 133.33, 222.22) or l not like '%whatever%';")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, b, c from fat where i between 10e5 and 10e6 and j not between 10e-4 and 10e-1;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select case when e between 10 and 20 then 1 when e between 20 and 40 then 2 when e is null then 100 else 5 end as x, a from fat where case when g > f then 100 when l like '%whatever%' then 200 else 300 end > 100;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select case when e between 10 and 20 then 1 when e between 20 and 40 then 2.1 when e is null then 100.33 else 5e2 end as x, a from fat where case when g > f then 100 when l like '%whatever%' then 200 else 300 end > 100;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select case when e between 10 and 20 then i when e between 20 and 40 then j when e is null then d else 5e2 end as x, a from fat where case when g > f then 100 when l like '%whatever%' then 200 else 300 end > 100;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select count(*), min(a), max(a), avg(b), sum(c), count(distinct b) from skinny;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, b, count(*) from skinny group by a, b;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select c, avg(b) from skinny where a > 10 group by c;")); } );
