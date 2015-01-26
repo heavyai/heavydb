@@ -417,34 +417,13 @@ void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
   CHECK(false);
 }
 
-extern int _binary_RuntimeFunctions_ll_size;
-extern int _binary_RuntimeFunctions_ll_start;
-extern int _binary_RuntimeFunctions_ll_end;
+llvm::Module* makeLLVMModuleContents(llvm::Module *mod);
 
 namespace {
 
-#ifdef __APPLE__
-llvm::Module* read_template_module(llvm::LLVMContext& context) {
-  llvm::SMDiagnostic err;
-  auto module = llvm::ParseIRFile("./QueryEngine/RuntimeFunctions.ll", err, context);
-  CHECK(module);
-  return module;
+llvm::Module* create_runtime_module(llvm::LLVMContext& context) {
+  return makeLLVMModuleContents(new llvm::Module("empty_module", context));
 }
-#else
-llvm::Module* read_template_module(llvm::LLVMContext& context) {
-  // read the LLIR embedded as ELF binary data
-  auto llir_size = reinterpret_cast<size_t>(&_binary_RuntimeFunctions_ll_size);
-  auto llir_data_start = reinterpret_cast<const char*>(&_binary_RuntimeFunctions_ll_start);
-  auto llir_data_end = reinterpret_cast<const char*>(&_binary_RuntimeFunctions_ll_end);
-  CHECK_EQ(llir_data_end - llir_data_start, llir_size);
-  std::string llir_data(llir_data_start, llir_size);
-  auto llir_mb = llvm::MemoryBuffer::getMemBuffer(llir_data, "", true);
-  llvm::SMDiagnostic err;
-  auto module = llvm::ParseIR(llir_mb, err, context);
-  CHECK(module);
-  return module;
-}
-#endif
 
 void bind_pos_placeholders(const std::string& pos_fn_name, llvm::Function* query_func, llvm::Module* module) {
   for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
@@ -566,7 +545,7 @@ void Executor::compileAggScanPlan(
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
-  module_ = read_template_module(context_);
+  module_ = create_runtime_module(context_);
   auto query_func = make_query_template(agg_plan, module_);
   bind_pos_placeholders("pos_start", query_func, module_);
   bind_pos_placeholders("pos_step", query_func, module_);

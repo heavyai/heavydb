@@ -4,16 +4,19 @@ set(query_engine_source_files
     Codec.cpp
     Execute.cpp
     QueryTemplateGenerator.cpp
+    RuntimeFunctions.cpp
+    RuntimeFunctionsCodegenWithIncludes.cpp
     Translator.cpp
     Codec.h
     Execute.h
+    RuntimeFunctions.h
     QueryTemplateGenerator.h
-    Translator.h
-    RuntimeFunctions.ll)
+    Translator.h)
 set(group_by_hash_test_files
     GroupByHashTest.cpp
     RuntimeFunctions.cpp
-    RuntimeStubs.cpp)
+    RuntimeStubs.cpp
+    RuntimeFunctions.h)
 
 set(llvm_config_cmd "llvm-config")
 set(llvm_config_inc_arg "--includedir")
@@ -24,6 +27,18 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 include_directories(.. ${LLVM_INC_FLAGS})
+
+add_custom_command(
+    DEPENDS RuntimeFunctions.ll
+    OUTPUT RuntimeFunctionsCodegen.cpp
+    COMMAND llc
+    ARGS -march=cpp -cppgen=contents RuntimeFunctions.ll -o RuntimeFunctionsCodegen.cpp)
+
+add_custom_command(
+    DEPENDS RuntimeFunctionsCodegen.cpp RuntimeFunctionsCodegenIncludes.cpp
+    OUTPUT RuntimeFunctionsCodegenWithIncludes.cpp
+    COMMAND cat
+    ARGS RuntimeFunctionsCodegenIncludes.cpp RuntimeFunctionsCodegen.cpp > RuntimeFunctionsCodegenWithIncludes.cpp)
 
 add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h

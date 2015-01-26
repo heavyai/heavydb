@@ -367,10 +367,6 @@ void OpNot::collectUsedColumns(std::unordered_set<int>& columns) {
   op_->collectUsedColumns(columns);
 }
 
-extern int _binary_RuntimeFunctions_ll_size;
-extern int _binary_RuntimeFunctions_ll_start;
-extern int _binary_RuntimeFunctions_ll_end;
-
 namespace {
 
 std::vector<llvm::Value*> generate_column_heads_load(
@@ -474,6 +470,8 @@ void call_aggregator(
 
 }
 
+llvm::Module* makeLLVMModuleContents(llvm::Module *mod);
+
 AggQueryCodeGenerator::AggQueryCodeGenerator(
     std::shared_ptr<AstNode> filter,
     std::shared_ptr<AstNode> aggr_col,
@@ -485,22 +483,8 @@ AggQueryCodeGenerator::AggQueryCodeGenerator(
     const std::string& pos_start_name,
     const std::string& pos_step_name) {
   auto& context = llvm::getGlobalContext();
-  // read the LLIR embedded as ELF binary data
-#ifdef __APPLE__
-  llvm::SMDiagnostic err;
-  auto module = llvm::ParseIRFile("./RuntimeFunctions.ll", err, context);
+  auto module = makeLLVMModuleContents(new llvm::Module("empty_module", context));
   CHECK(module);
-#else
-  auto llir_size = reinterpret_cast<size_t>(&_binary_RuntimeFunctions_ll_size);
-  auto llir_data_start = reinterpret_cast<const char*>(&_binary_RuntimeFunctions_ll_start);
-  auto llir_data_end = reinterpret_cast<const char*>(&_binary_RuntimeFunctions_ll_end);
-  CHECK_EQ(llir_data_end - llir_data_start, llir_size);
-  std::string llir_data(llir_data_start, llir_size);
-  auto llir_mb = llvm::MemoryBuffer::getMemBuffer(llir_data, "", true);
-  llvm::SMDiagnostic err;
-  auto module = llvm::ParseIR(llir_mb, err, context);
-  CHECK(module);
-#endif
 
   auto query_func = query_template_name == "query_template"
     ? query_template(module, 1) : query_group_by_template(module, 1);
