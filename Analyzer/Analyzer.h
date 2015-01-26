@@ -374,8 +374,8 @@ namespace Analyzer {
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
 		private:
-			std::list<std::pair<Expr*, Expr*>> expr_pair_list;
-			Expr *else_expr;
+			std::list<std::pair<Expr*, Expr*>> expr_pair_list; // a pair of expressions for each WHEN expr1 THEN expr2.  expr1 must be of boolean type.  all expr2's must be of compatible types and will be promoted to the common type.
+			Expr *else_expr; // expression for ELSE.  nullptr if omitted.
 	};
 
 	/*
