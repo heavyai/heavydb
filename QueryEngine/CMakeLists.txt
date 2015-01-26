@@ -30,21 +30,21 @@ include_directories(.. ${LLVM_INC_FLAGS})
 
 add_custom_command(
     DEPENDS RuntimeFunctions.ll
-    OUTPUT RuntimeFunctionsCodegen.cpp
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp
     COMMAND llc
-    ARGS -march=cpp -cppgen=contents RuntimeFunctions.ll -o RuntimeFunctionsCodegen.cpp)
+    ARGS -march=cpp -cppgen=contents RuntimeFunctions.ll -o ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp)
 
 add_custom_command(
     DEPENDS RuntimeFunctionsCodegen.cpp RuntimeFunctionsCodegenIncludes.cpp
-    OUTPUT RuntimeFunctionsCodegenWithIncludes.cpp
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp
     COMMAND cat
-    ARGS RuntimeFunctionsCodegenIncludes.cpp RuntimeFunctionsCodegen.cpp > RuntimeFunctionsCodegenWithIncludes.cpp)
+    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenIncludes.cpp ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp > ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp)
 
 add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h
-    OUTPUT RuntimeFunctions.ll
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     COMMAND clang++
-    ARGS -std=c++11 -O3 -c -S -emit-llvm RuntimeFunctions.cpp)
+    ARGS -std=c++11 -O3 -c -S -emit-llvm ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
