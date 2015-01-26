@@ -2,6 +2,7 @@
 #define CHUNKMETADATA_H
 
 #include "../Shared/sqltypes.h"
+#include <stddef.h>
 
 struct ChunkStats {
     Datum min;
@@ -12,8 +13,8 @@ struct ChunkMetadata {
     SQLTypes sqlType;
     EncodingType encodingType;
     int encodingBits;
-    int64_t numBytes;
-    int64_t numElements;
+    size_t numBytes;
+    size_t numElements;
     ChunkStats chunkStats;
 
     template <typename T> void fillChunkStats (const T min, const T max) {

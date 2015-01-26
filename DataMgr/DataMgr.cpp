@@ -48,7 +48,10 @@ namespace Data_Namespace {
         bufferMgrs_[0][0] -> getChunkMetadataVec(chunkMetadataVec);
     }
 
-        
+    void DataMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) {
+        bufferMgrs_[0][0] -> getChunkMetadataVecForKeyPrefix(chunkMetadataVec,keyPrefix);
+    }
+
     AbstractBuffer * DataMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];

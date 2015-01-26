@@ -29,7 +29,6 @@ namespace Data_Namespace {
             AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
             AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);
-
             AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
             void deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer);
             AbstractBuffer * copyBuffer(const MemoryLevel memoryLevel, const int deviceId, const AbstractBuffer * srcBuffer);
@@ -37,6 +36,7 @@ namespace Data_Namespace {
             const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             void checkpoint();
             void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
+            void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix);
 
             // database_id, table_id, partitioner_id, column_id, fragment_id
 

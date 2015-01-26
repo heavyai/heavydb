@@ -27,7 +27,7 @@ namespace Partitioner_Namespace {
 TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr): dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false), sqliteConnector_("partitions") {
     init();
     vector<pair<ChunkKey,ChunkMetadata> > chunkMetadataVec;
-    dataMgr_ -> getChunkMetadataVec(chunkMetadataVec);
+    //dataMgr_-> getChunkMetadataVec(chunkMetadataVec);
     /*
     ChunkKey lastChunkKey;
     vector <int> lastPartitionerKey;
@@ -59,7 +59,20 @@ TablePartitionerMgr::~TablePartitionerMgr() {
 }
 
 void TablePartitionerMgr::init() {
-	sqliteConnector_.query("CREATE TABLE if not exists mapd_partitioners (database_id integer, table_id integer, partitioner_id integer, partitioner_type integer, primary key(database_id, table_id, partitioner_id))");  
+	sqliteConnector_.query("CREATE TABLE if not exists mapd_partitioners (database_id integer, table_id integer, partitioner_id integer, partitioner_type integer, max_partition_rows bigint, page_size bigint, primary key(database_id, table_id, partitioner_id))");  
+
+	sqliteConnector_.query("SELECT database_id, table_id, partitioner_id, partitioner_type, max_partition_rows, page_size from mapd_partitioners");
+	size_t numRows = sqliteConnector_.getNumRows();
+    for (size_t r = 0; r != numRows; ++r) {
+        int partitionerId = sqliteConnector_.getData<int>(r,2);
+        if (partitionerId > maxPartitionerId_) {
+            maxPartitionerId_ = partitionerId;
+        }
+        ChunkKey tableKeyPrefix = {sqliteConnector_.getData<int>(r,0), sqliteConnector_.getData<int>(r,1),partitionerId}; // database_id, table_id, partitioner_id
+        std::vector<std::pair <ChunkKey,ChunkMetadata> > chunkMetadataVec;
+        dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,tableKeyPrefix);
+    }
+    cout << "Max Partitioner id: " << maxPartitionerId_ << endl;
 }
 
 
@@ -94,7 +107,7 @@ void TablePartitionerMgr::createPartitionerForTable (const int databaseId, const
     int32_t partitionerId = ++maxPartitionerId_;
 	sqliteConnector_.query("BEGIN TRANSACTION");
     try {
-        string queryString("INSERT INTO mapd_partitioners (database_id, table_id, partitioner_id, partitioner_type) VALUES (" + boost::lexical_cast<string>(databaseId) + ","+boost::lexical_cast<string>(tableId)+","+boost::lexical_cast<string>(partitionerId)+","+boost::lexical_cast<string> (static_cast<int> (partitionerType)) +")");
+        string queryString("INSERT INTO mapd_partitioners (database_id, table_id, partitioner_id, partitioner_type, max_partition_rows, page_size) VALUES (" + boost::lexical_cast<string>(databaseId) + ","+boost::lexical_cast<string>(tableId)+","+boost::lexical_cast<string>(partitionerId)+","+boost::lexical_cast<string> (static_cast<int> (partitionerType)) + "," + boost::lexical_cast<string>(maxPartitionRows) + "," + boost::lexical_cast<string>(pageSize) +")");
         cout << queryString << endl;
         sqliteConnector_.query(queryString);
     }
@@ -151,6 +164,10 @@ void TablePartitionerMgr::translateColumnDescriptorsToColumnInfoVec (const vecto
         columnInfoVec.push_back(columnInfo);
     }
 }
+
+
+
+
 
 //void TablePartitionerMgr::createStateTableIfDne() {
 //     mapd_err_t status = pgConnector_.query("CREATE TABLE IF NOT EXISTS partitioners(table_id INT, partitioner_id INT, partitioner_type text, PRIMARY KEY (table_id, partitioner_id))");

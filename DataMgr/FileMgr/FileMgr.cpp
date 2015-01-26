@@ -449,9 +449,23 @@ namespace File_Namespace {
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
             if (chunkIt -> second -> hasEncoder) {
                 ChunkMetadata chunkMetadata;
-                chunkIt -> second -> encoder -> getMetadata(chunkMetadata);
+                chunkIt->second->encoder->getMetadata(chunkMetadata);
                 chunkMetadataVec.push_back(std::make_pair(chunkIt -> first, chunkMetadata));
             }
         }
     }
+
+    void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) {
+        auto chunkIt = chunkIndex_.lower_bound(keyPrefix); 
+        auto chunkEndIt = chunkIndex_.upper_bound(keyPrefix); 
+
+        for (; chunkIt != chunkEndIt; ++chunkIt) {
+            ChunkMetadata chunkMetadata;
+            chunkIt->second->encoder->getMetadata(chunkMetadata);
+            chunkMetadataVec.push_back(std::make_pair(chunkIt -> first, chunkMetadata));
+        }
+    }
+
+
+
 } // File_Namespace

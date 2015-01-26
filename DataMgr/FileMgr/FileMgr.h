@@ -120,6 +120,7 @@ namespace File_Namespace {
         void requestFreePages(size_t npages, size_t pagesize, std::vector<Page> &pages);
 
         virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
+        virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix);
 
         /**
          * @brief Fsyncs data files, writes out epoch and

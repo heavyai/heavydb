@@ -38,6 +38,7 @@ namespace Data_Namespace {
         //virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;
         virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;
         virtual void getChunkMetadataVec(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadata) = 0;
+        virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) = 0;
 
         virtual void checkpoint() = 0;
 

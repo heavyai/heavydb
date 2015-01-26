@@ -521,6 +521,9 @@ namespace Buffer_Namespace {
     }
     void BufferMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
         throw std::runtime_error ("getChunkMetadataVec not supported for BufferMgr");
-    
+    }
+
+    void BufferMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) {
+        throw std::runtime_error ("getChunkMetadataVecForPrefix not supported for BufferMgr");
     }
 }

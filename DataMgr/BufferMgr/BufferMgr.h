@@ -81,6 +81,7 @@ namespace Buffer_Namespace {
 
         BufferList::iterator reserveBuffer(BufferList::iterator & segIt, const size_t numBytes);
         virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
+        virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix);
 
        
     protected: 
