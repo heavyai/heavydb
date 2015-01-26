@@ -221,6 +221,7 @@ namespace Analyzer {
 			const Expr *get_right_operand() const { return right_operand; }
 			static SQLTypeInfo analyze_type_info(SQLOps op, const SQLTypeInfo &left_type, const SQLTypeInfo &right_type, SQLTypeInfo *new_left_type, SQLTypeInfo *new_right_type);
 			static SQLTypeInfo common_numeric_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2);
+			static SQLTypeInfo common_string_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2);
 			virtual void check_group_by(const std::list<Expr*> *groupby) const;
 			virtual Expr *deep_copy() const;
 			virtual Expr *normalize_simple_predicate(int &rte_idx) const;

@@ -188,6 +188,20 @@ namespace Analyzer {
 	}
 
 	SQLTypeInfo
+	BinOper::common_string_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
+	{
+		SQLTypeInfo common_type;
+		assert(IS_STRING(type1.type) && IS_STRING(type2.type));
+		if (type1.type == kTEXT || type2.type == kTEXT) {
+			common_type.type = kTEXT;
+			return common_type;
+		}
+		common_type.type = kVARCHAR;
+		common_type.dimension = std::max(type1.dimension, type2.dimension);
+		return common_type;
+	}
+
+	SQLTypeInfo
 	BinOper::common_numeric_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
 	{
 		SQLTypeInfo common_type;
