@@ -16,14 +16,14 @@ namespace Buffer_Namespace {
         MemStatus memStatus;
         Buffer * buffer;
         ChunkKey chunkKey;
-        unsigned int lastTouched;
         unsigned int pinCount;
         int slabNum;
+        unsigned int lastTouched;
 
-        BufferSeg(): memStatus (FREE), buffer(0),pinCount(0),lastTouched(0),slabNum(-1) {}
-        BufferSeg(const int startPage, const size_t numPages): startPage(startPage), numPages(numPages),  memStatus (FREE), buffer(0),pinCount(0), lastTouched(0),slabNum(-1) {}
-        BufferSeg(const int startPage, const size_t numPages, const MemStatus memStatus): startPage(startPage), numPages(numPages),  memStatus (memStatus), buffer(0),pinCount(0),lastTouched(0),slabNum(-1) {}
-        BufferSeg(const int startPage, const size_t numPages, const MemStatus memStatus, const int lastTouched): startPage(startPage), numPages(numPages),  memStatus (memStatus), lastTouched(lastTouched), buffer(0),pinCount(0),slabNum(-1) {}
+        BufferSeg(): memStatus (FREE), buffer(0),pinCount(0),slabNum(-1),lastTouched(0) {}
+        BufferSeg(const int startPage, const size_t numPages): startPage(startPage), numPages(numPages),  memStatus (FREE), buffer(0),pinCount(0),slabNum(-1),lastTouched(0) {}
+        BufferSeg(const int startPage, const size_t numPages, const MemStatus memStatus): startPage(startPage), numPages(numPages),  memStatus (memStatus), buffer(0),pinCount(0),slabNum(-1),lastTouched(0) {}
+        BufferSeg(const int startPage, const size_t numPages, const MemStatus memStatus, const int lastTouched): startPage(startPage), numPages(numPages),  memStatus (memStatus), buffer(0),pinCount(0),slabNum(-1), lastTouched(lastTouched) {}
     };
 
     typedef std::list<BufferSeg> BufferList;

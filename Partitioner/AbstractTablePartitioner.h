@@ -6,7 +6,7 @@
 #ifndef _ABSTRACT_TABLE_PARTITIONER_H
 #define _ABSTRACT_TABLE_PARTITIONER_H
 
-#include "../../Shared/SQLTypes.h"
+#include "../Shared/SQLTypes.h"
 #include "Partitioner.h"
 #include <vector>
 #include <string>

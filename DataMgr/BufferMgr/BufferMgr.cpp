@@ -33,7 +33,7 @@ namespace Buffer_Namespace {
             delete chunkIt -> second -> buffer;
         }
         chunkIndex_.clear();
-        size_t numBufferSlabs = slabSegments_.size();
+        //size_t numBufferSlabs = slabSegments_.size();
         slabs_.clear();
         slabSegments_.clear();
         //addSlab(slabSize_);

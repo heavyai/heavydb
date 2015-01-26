@@ -117,10 +117,10 @@ namespace File_Namespace {
             FileMgr *fm_; // a reference to FileMgr is needed for writing to new pages in available files
             static size_t headerBufferOffset_; 
             std::vector<MultiPage> multiPages_;
-            ChunkKey chunkKey_;
             size_t pageSize_;
             size_t pageDataSize_;
             size_t reservedHeaderSize_; // lets make this a constant now for simplicity - 128 bytes
+            ChunkKey chunkKey_;
     };
     
 } // File_Namespace

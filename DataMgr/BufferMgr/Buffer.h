@@ -136,8 +136,8 @@ namespace Buffer_Namespace {
         virtual void readData(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType, const size_t offset = 0 ) = 0;
         virtual void writeData(int8_t * const src, const size_t numBytes, const BufferType srcBufferType, const size_t offset = 0) = 0;
 
-        BufferList::iterator segIt_;
         BufferMgr * bm_;
+        BufferList::iterator segIt_;
         //size_t numBytes_;
         size_t pageSize_;      /// the size of each page in the buffer
         size_t numPages_;

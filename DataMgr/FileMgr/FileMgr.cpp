@@ -62,7 +62,7 @@ namespace File_Namespace {
         if (basePath_.size() > 0 && basePath_[basePath_.size()-1] != '/')
             basePath_.push_back('/');
         if (boost::filesystem::exists(path)) {
-            std::cout << "Path exists" << std::endl;
+            //std::cout << "Path exists" << std::endl;
             if (!boost::filesystem::is_directory(path))
                 throw std::runtime_error("Specified path is not a directory.");
             //std::cout << basePath_ << " exists." << std::endl;
@@ -152,11 +152,11 @@ namespace File_Namespace {
             //std::cout << "next file id: " << nextFileId_ << std::endl;
         }
         else { // data directory does not exist
-            std::cout << basePath_ << " does not exist. Creating" << std::endl;
+            //std::cout << basePath_ << " does not exist. Creating" << std::endl;
             if (!boost::filesystem::create_directory(path)) {
                 throw std::runtime_error("Could not create data directory");
             }
-            std::cout << basePath_ << " created." << std::endl;
+            //std::cout << basePath_ << " created." << std::endl;
             // now create epoch file
             createEpochFile(EPOCH_FILENAME);
         }

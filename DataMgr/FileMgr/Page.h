@@ -103,12 +103,9 @@ namespace File_Namespace {
         int pageId;
         int versionEpoch; 
         Page page;
-        size_t chunkSize;
-        //size_t chunkNumElems;
-        
         
 
-        HeaderInfo(const ChunkKey &chunkKey, const int pageId, const int versionEpoch, const Page &page, const size_t chunkSize): chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page), chunkSize(chunkSize) {}
+        HeaderInfo(const ChunkKey &chunkKey, const int pageId, const int versionEpoch, const Page &page): chunkKey(chunkKey), pageId(pageId), versionEpoch(versionEpoch), page(page) {}
     };
     
 } // File_Namespace

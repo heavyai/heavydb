@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 PROJECT			(mapd_exe)
 
 set( CMAKE_CXX_FLAGS "-g -std=c++11 -Wall -O3 -pthread ${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS" )
-FIND_PACKAGE( Boost COMPONENTS filesystem program_options system REQUIRED )
+FIND_PACKAGE( Boost COMPONENTS filesystem program_options thread system REQUIRED )
 set(llvm_config_cmd "llvm-config")
 set(llvm_config_inc_arg "--includedir")
 set(llvm_config_ld_arg "--ldflags")
@@ -21,6 +21,7 @@ ADD_SUBDIRECTORY    (Analyzer)
 ADD_SUBDIRECTORY    (Planner)
 ADD_SUBDIRECTORY    (QueryEngine)
 ADD_SUBDIRECTORY    (DataMgr)
+ADD_SUBDIRECTORY    (Partitioner)
 ADD_SUBDIRECTORY    (Tests)
 
 set(mapd_source_files main.cpp)
@@ -32,5 +33,5 @@ add_executable(initdb ${initdb_source_files})
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Partitioner ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (initdb Catalog SqliteConnector ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )

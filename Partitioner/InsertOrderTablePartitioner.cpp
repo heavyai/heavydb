@@ -1,6 +1,6 @@
 #include "InsertOrderTablePartitioner.h"
-#include "../../DataMgr/DataMgr.h"
-#include "../../DataMgr/AbstractBuffer.h"
+#include "../DataMgr/DataMgr.h"
+#include "../DataMgr/AbstractBuffer.h"
 #include <math.h>
 #include <iostream>
 #include <thread>

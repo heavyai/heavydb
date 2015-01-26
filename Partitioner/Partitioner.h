@@ -1,8 +1,8 @@
 #ifndef PARTITIONER_PARTITIONER_H
 #define PARTITIONER_PARTITIONER_H
 
-#include "../../Shared/types.h"
-#include "../../DataMgr/ChunkMetadata.h"
+#include "../Shared/types.h"
+#include "../DataMgr/ChunkMetadata.h"
 #include <map>
 #include <vector>
 

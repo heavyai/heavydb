@@ -13,7 +13,7 @@
 
 namespace File_Namespace {
     
-    class Page;
+    struct Page;
 
     /**
      * @type FileInfo

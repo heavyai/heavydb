@@ -155,11 +155,11 @@ namespace File_Namespace {
         std::string basePath_; 				/// The OS file system path containing the files.
         std::vector<FileInfo*> files_;		/// A vector of files accessible via a file identifier.
         PageSizeFileMMap fileIndex_; 		/// Maps page sizes to FileInfo objects.
+        size_t defaultPageSize_;
         unsigned nextFileId_;				/// the index of the next file id
         int epoch_;                         /// the current epoch (time of last checkpoint)
         FILE *epochFile_;
-        bool isDirty_;                      /// true if metadata changed since last writeState()
-        size_t defaultPageSize_;
+        //bool isDirty_;                      /// true if metadata changed since last writeState()
         std::mutex getPageMutex_;  
         std::mutex chunkIndexMutex_;  
         

@@ -12,7 +12,7 @@
 
 
 #include <iostream>
-#include <vector>
+#include <list>
 #include <math.h>
 #include <boost/filesystem.hpp>
 
@@ -78,8 +78,8 @@ namespace Partitioner_Namespace {
             InsertOrderTablePartitioner *insertOrderTablePartitioner;
             TableDescriptor tableDesc0;
             TableDescriptor tableDesc1;
-            vector <const ColumnDescriptor *> columnDescsTable0;
-            vector <const ColumnDescriptor *> columnDescsTable1;
+            list <const ColumnDescriptor *> columnDescsTable0;
+            list <const ColumnDescriptor *> columnDescsTable1;
             int64_t maxPartitionRows;
     };
 

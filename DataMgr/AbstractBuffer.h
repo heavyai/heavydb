@@ -29,7 +29,7 @@ namespace Data_Namespace {
         
     public:
 
-        AbstractBuffer (): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), hasEncoder(0), encoder(0) {}
+        AbstractBuffer (): encoder(0), hasEncoder(0), size_(0),  isDirty_(false),isAppended_(false),isUpdated_(false) {}
         AbstractBuffer (const SQLTypes sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
         initEncoder(sqlType, encodingType, numEncodingBits);
         }

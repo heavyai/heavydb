@@ -5,7 +5,7 @@
 #ifndef INSERT_ORDER_TABLE_PARTITIONER_H
 #define INSERT_ORDER_TABLE_PARTITIONER_H
 
-#include "../../Shared/types.h"
+#include "../Shared/types.h"
 #include "AbstractTablePartitioner.h"
 
 #include <vector>
@@ -64,15 +64,15 @@ public:
 private:
 
 	int partitionerId_; /**< Stores the id of the partitioner - passed to constructor */
-    std::string partitionerType_;
-	size_t maxPartitionRows_;
-    int maxPartitionId_;
-    size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
     std::vector<int> chunkKeyPrefix_;
     std::map <int, ColumnInfo> columnMap_; /**< stores a map of column id to metadata about that column */ 
     std::vector<PartitionInfo> partitionInfoVec_; /**< data about each partition stored - id and number of rows */  
     //int currentInsertBufferPartitionId_;
     Data_Namespace::DataMgr *dataMgr_;
+	size_t maxPartitionRows_;
+    size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
+    int maxPartitionId_;
+    std::string partitionerType_;
     boost::shared_mutex partitionInfoMutex_; // to prevent read-write conflicts for partitionInfoVec_
     boost::mutex insertMutex_; // to prevent race conditions on insert - only one insert statement should be going to a table at a time
     

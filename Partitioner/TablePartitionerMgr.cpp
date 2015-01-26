@@ -15,6 +15,7 @@
 #include <iostream>
 
 using std::vector;
+using std::list;
 using std::string;
 using std::pair;
 using std::cout;
@@ -24,7 +25,7 @@ namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr): dataMgr_(dataMgr), maxPartitionerId_(-1), isDirty_(false), sqliteConnector_("partitions") {
+TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr, const string &basePath): dataMgr_(dataMgr), maxPartitionerId_(-1), basePath_(basePath), sqliteConnector_("mapd_partitions", basePath) {
     init();
     //dataMgr_-> getChunkMetadataVec(chunkMetadataVec);
     /*
@@ -75,10 +76,8 @@ void TablePartitionerMgr::init() {
 
 
         }
-
-       
     }
-    cout << "Max Partitioner id: " << maxPartitionerId_ << endl;
+    //cout << "Max Partitioner id: " << maxPartitionerId_ << endl;
 }
 
 
@@ -108,13 +107,13 @@ void TablePartitionerMgr::getQueryPartitionInfo(const int databaseId, const int 
     }
 }
 
-void TablePartitionerMgr::createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const vector<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partitionerType, const size_t maxPartitionRows, const size_t pageSize) {
+void TablePartitionerMgr::createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const list<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partitionerType, const size_t maxPartitionRows, const size_t pageSize) {
     int32_t tableId = tableDescriptor -> tableId;
     int32_t partitionerId = ++maxPartitionerId_;
 	sqliteConnector_.query("BEGIN TRANSACTION");
     try {
         string queryString("INSERT INTO mapd_partitioners (database_id, table_id, partitioner_id, partitioner_type, max_partition_rows, page_size) VALUES (" + boost::lexical_cast<string>(databaseId) + ","+boost::lexical_cast<string>(tableId)+","+boost::lexical_cast<string>(partitionerId)+","+boost::lexical_cast<string> (static_cast<int> (partitionerType)) + "," + boost::lexical_cast<string>(maxPartitionRows) + "," + boost::lexical_cast<string>(pageSize) +")");
-        cout << queryString << endl;
+        //cout << queryString << endl;
         sqliteConnector_.query(queryString);
     }
     catch (std::exception &e) {
@@ -157,7 +156,7 @@ void TablePartitionerMgr::insertData(const InsertData &insertDataStruct) {
     }
 }
 
-void TablePartitionerMgr::translateColumnDescriptorsToColumnInfoVec (const vector <const ColumnDescriptor *> &columnDescriptors, vector<ColumnInfo> &columnInfoVec) {
+void TablePartitionerMgr::translateColumnDescriptorsToColumnInfoVec (const list <const ColumnDescriptor *> &columnDescriptors, vector<ColumnInfo> &columnInfoVec) {
     // Iterate over all entries in columnRows and translate to 
     // columnInfoVec needed  by partitioner
     for (auto colDescIt = columnDescriptors.begin(); colDescIt != columnDescriptors.end(); ++colDescIt) {
@@ -171,23 +170,16 @@ void TablePartitionerMgr::translateColumnDescriptorsToColumnInfoVec (const vecto
     }
 }
 
-void TablePartitionerMgr::translateChunkMetadataVectoColumnInfoVec(const std::vector<std::pair <ChunkKey,ChunkMetadata> &chunkMetadataVec, vector<ColumnInfo> &columnInfoVec) {
-    for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
-        ColumnInfo columnInfo;
-        columnInfo.columnId = 
 
 
-
-
-    }
-        
-        
-        
-        columnDescriptors.begin(); colDescIt != columnDescriptors.end(); ++colDescIt) {
-
-
-
-}
+//void TablePartitionerMgr::translateChunkMetadataVectoColumnInfoVec(const std::vector<std::pair <ChunkKey,ChunkMetadata> &chunkMetadataVec, vector<ColumnInfo> &columnInfoVec) {
+//    for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
+//        ColumnInfo columnInfo;
+//        columnInfo.columnId = 
+//
+//    }
+//
+//}
 
 
 

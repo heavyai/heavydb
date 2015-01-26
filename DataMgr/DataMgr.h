@@ -45,8 +45,8 @@ namespace Data_Namespace {
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
             std::vector <int> levelSizes_;
-            std::string dataDir_;
             int partitionKeyIndex_;
+            std::string dataDir_;
     };
 } // Data_Namespace
 

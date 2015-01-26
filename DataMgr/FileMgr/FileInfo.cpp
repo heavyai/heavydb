@@ -49,7 +49,7 @@ namespace File_Namespace {
                 std::vector<int> chunkKey (numHeaderElems - 2); 
                 int pageId;
                 int versionEpoch;
-                size_t chunkSize;
+                //size_t chunkSize;
                 // We don't want to read headerSize in our header - so start
                 // reading 4 bytes past it
                 fread((int8_t *)(&chunkKey[0]),headerSize - 2*sizeof(int),1,f);
@@ -80,7 +80,7 @@ namespace File_Namespace {
                 }
                 else { // page was checkpointed properly
                     Page page(fileId,pageNum);
-                    headerVec.push_back(HeaderInfo(chunkKey,pageId,versionEpoch,page,chunkSize));
+                    headerVec.push_back(HeaderInfo(chunkKey,pageId,versionEpoch,page));
                     //std::cout << "Inserted into headerVec" << std::endl;
                 }
             }

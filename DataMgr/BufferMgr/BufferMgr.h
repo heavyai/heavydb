@@ -107,9 +107,9 @@ namespace Buffer_Namespace {
         size_t slabSize_;   /// size of the individual memory allocations that compose the buffer pool (up to maxBufferSize_)
         size_t maxNumSlabs_;
         size_t pageSize_;
-        unsigned int bufferEpoch_;
         AbstractBufferMgr *parentMgr_;
         int maxBufferId_;
+        unsigned int bufferEpoch_;
         //File_Namespace::FileMgr *fileMgr_;
 
         /// Maps sizes of free memory areas to host buffer pool memory addresses

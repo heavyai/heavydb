@@ -31,6 +31,9 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes
                     return new NoneEncoder <double>  (buffer);
                     break;
                 }
+                default: {
+                    return 0;
+                }
             }
             break;
          }
@@ -87,13 +90,19 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypes
                     }
                 break;
                 }
+                default: {
+                    return 0;
+                    break;
+                }
             } // switch (sqlType)
             break;
         } // Case: kENCODING_FIXED
-        default:
+        default: {
             return 0;
             break;
+        }
     } // switch (encodingType)
+    return 0;
 
 }
 

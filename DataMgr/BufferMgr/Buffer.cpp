@@ -16,7 +16,7 @@
 
 namespace Buffer_Namespace {
 
-    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const size_t pageSize, const size_t numBytes): AbstractBuffer(), bm_(bm), segIt_(segIt), pageSize_(pageSize), mem_(0), numPages_(0), pinCount_(0) {
+    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const size_t pageSize, const size_t numBytes): AbstractBuffer(), mem_(0), bm_(bm), segIt_(segIt), pageSize_(pageSize), numPages_(0), pinCount_(0) {
         // so that the pointer value of this Buffer is stored
         segIt_ -> buffer = this;
         if (numBytes > 0) {

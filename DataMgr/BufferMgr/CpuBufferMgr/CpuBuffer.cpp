@@ -17,7 +17,7 @@ namespace Buffer_Namespace {
             //@todo: use actual device id in next call
             #ifdef USE_GPU
             CudaUtils::copyToGpu(dst,mem_+offset,numBytes,1,0);
-            #endif USE_GPU
+            #endif
         }
         else {
             throw std::runtime_error("Unsupported buffer type");
