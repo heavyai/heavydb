@@ -33,6 +33,7 @@ namespace Data_Namespace {
         // Chunk API
         virtual AbstractBuffer* createChunk(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0) = 0;
         virtual void deleteChunk(const ChunkKey &key) = 0;
+        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix) = 0;
         virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0) = 0;
         virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes = 0) = 0;
         //virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;

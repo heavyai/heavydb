@@ -29,6 +29,7 @@ namespace Data_Namespace {
             AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
             AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);
+            void deleteChunksWithPrefix(const ChunkKey &keyPrefix);
             AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
             void deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer);
             AbstractBuffer * copyBuffer(const MemoryLevel memoryLevel, const int deviceId, const AbstractBuffer * srcBuffer);
@@ -42,6 +43,7 @@ namespace Data_Namespace {
 
         private:
             FRIEND_TEST(DataMgrTest,buffer);
+            FRIEND_TEST(DataMgrTest,deletePrefix);
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
             std::vector <int> levelSizes_;

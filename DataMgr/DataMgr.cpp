@@ -40,35 +40,35 @@ namespace Data_Namespace {
     /*
     DataMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey,int64_t> > &metadata)  {
         // needed by TablePartitionerMgr
-        bufferMgrs_[0] -> getAllChunkMetaInfo(metadata);
+        bufferMgrs_[0]->getAllChunkMetaInfo(metadata);
     }
     */
     /*
     const std::map<ChunkKey, File_Namespace::FileBuffer *> & DataMgr::getChunkMap()  {
-        return reinterpret_cast <File_Namespace::FileMgr *> (bufferMgrs_[0][0]) -> chunkIndex_;
+        return reinterpret_cast <File_Namespace::FileMgr *> (bufferMgrs_[0][0])->chunkIndex_;
     }
     */
     
     void DataMgr::getChunkMetadataVec(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
         // Can we always assume this will just be at the disklevel bc we just
         // started?
-        bufferMgrs_[0][0] -> getChunkMetadataVec(chunkMetadataVec);
+        bufferMgrs_[0][0]->getChunkMetadataVec(chunkMetadataVec);
     }
 
     void DataMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) {
-        bufferMgrs_[0][0] -> getChunkMetadataVecForKeyPrefix(chunkMetadataVec,keyPrefix);
+        bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,keyPrefix);
     }
 
     AbstractBuffer * DataMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
-        return bufferMgrs_[level][device] -> createChunk(key);
+        return bufferMgrs_[level][device]->createChunk(key);
     }
 
     AbstractBuffer * DataMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         int device = key[partitionKeyIndex_] % levelSizes_[level];
-        return bufferMgrs_[level][device] -> getChunk(key, numBytes);
+        return bufferMgrs_[level][device]->getChunk(key, numBytes);
     }
 
     void DataMgr::deleteChunk(const ChunkKey &key) {
@@ -81,7 +81,7 @@ namespace Data_Namespace {
         for (int level = numLevels - 1; level >= 0; --level) {
             int device = key[partitionKeyIndex_] % levelSizes_[level];
             try {
-                bufferMgrs_[level][device] -> deleteChunk(key);
+                bufferMgrs_[level][device]->deleteChunk(key);
             }
             catch (std::runtime_error &error) {
                 std::cout << "Chunk did not exist at level " <<level <<  std::endl;
@@ -89,16 +89,26 @@ namespace Data_Namespace {
         }
     }
 
+    void DataMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
+        int numLevels = bufferMgrs_.size();
+        for (int level = numLevels - 1; level >= 0; --level) {
+            cout << "Level: " << level << endl;
+            for (int device = 0; device < levelSizes_[level]; ++device) {
+                bufferMgrs_[level][device]->deleteChunksWithPrefix(keyPrefix);
+            }
+        }
+    }
+
     AbstractBuffer * DataMgr::createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         assert(deviceId < levelSizes_[level]);
-        return bufferMgrs_[level][deviceId] -> createBuffer(numBytes);
+        return bufferMgrs_[level][deviceId]->createBuffer(numBytes);
     }
 
     void DataMgr::deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer) {
         int level = static_cast <int> (memoryLevel);
         assert(deviceId < levelSizes_[level]);
-        bufferMgrs_[level][deviceId] -> deleteBuffer(buffer);
+        bufferMgrs_[level][deviceId]->deleteBuffer(buffer);
     }
 
 
@@ -107,7 +117,7 @@ namespace Data_Namespace {
         for (auto levelIt = bufferMgrs_.rbegin(); levelIt != bufferMgrs_.rend(); ++levelIt) {
             // use reverse iterator so we start at GPU level, then CPU then DISK
             for (auto deviceIt = levelIt->begin(); deviceIt != levelIt->end(); ++deviceIt) {
-                (*deviceIt) -> checkpoint();
+                (*deviceIt)->checkpoint();
             }
         }
     }
