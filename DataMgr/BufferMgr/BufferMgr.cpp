@@ -30,7 +30,7 @@ namespace Buffer_Namespace {
     void BufferMgr::clear() {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            delete chunkIt -> second -> buffer;
+            delete chunkIt->second->buffer;
         }
         chunkIndex_.clear();
         //size_t numBufferSlabs = slabSegments_.size();
@@ -61,7 +61,7 @@ namespace Buffer_Namespace {
         //slabSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(slabSegments_.end(),1), chunkPageSize, initialSize); 
         //new Buffer(this, chunkIndex_[chunkKey], chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
 
-        return chunkIndex_[chunkKey] -> buffer;
+        return chunkIndex_[chunkKey]->buffer;
     }
 
     BufferList::iterator BufferMgr::evict(BufferList::iterator &evictStart, const size_t numPagesRequested, const int slabNum) {
@@ -70,14 +70,14 @@ namespace Buffer_Namespace {
         // it
         auto evictIt = evictStart;
         size_t numPages = 0;
-        size_t startPage = evictStart -> startPage;
+        size_t startPage = evictStart->startPage;
         while (numPages < numPagesRequested) {
-            if (evictIt -> memStatus == USED) {
-                assert (evictIt -> buffer -> getPinCount() == 0);
+            if (evictIt->memStatus == USED) {
+                assert (evictIt->buffer->getPinCount() == 0);
             }
-            numPages += evictIt -> numPages;
-            if (evictIt -> memStatus == USED && evictIt -> chunkKey.size() > 0) {
-                chunkIndex_.erase(evictIt -> chunkKey);
+            numPages += evictIt->numPages;
+            if (evictIt->memStatus == USED && evictIt->chunkKey.size() > 0) {
+                chunkIndex_.erase(evictIt->chunkKey);
             }
             evictIt = slabSegments_[slabNum].erase(evictIt); // erase operations returns next iterator - safe if we ever move to a vector (as opposed to erase(evictIt++)
         }
@@ -87,9 +87,9 @@ namespace Buffer_Namespace {
         auto dataSegIt = slabSegments_[slabNum].insert(evictIt,dataSeg); // Will insert before evictIt
         if (numPagesRequested < numPages) {
             size_t excessPages = numPages - numPagesRequested;
-            if (evictIt != slabSegments_[slabNum].end() && evictIt -> memStatus == FREE) { // need to merge with current page
-                evictIt -> startPage = startPage + numPagesRequested;
-                evictIt -> numPages += excessPages;
+            if (evictIt != slabSegments_[slabNum].end() && evictIt->memStatus == FREE) { // need to merge with current page
+                evictIt->startPage = startPage + numPagesRequested;
+                evictIt->numPages += excessPages;
             }
             else { // need to insert a free seg before evictIt for excessPages
                 BufferSeg freeSeg(startPage + numPagesRequested,excessPages,FREE);
@@ -105,22 +105,22 @@ namespace Buffer_Namespace {
         //cout << "Reserve number bytes: " << numBytes << endl;
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
         //cout << "Reserve actual number bytes: " << numPagesRequested * pageSize_ << endl;
-        size_t numPagesExtraNeeded = numPagesRequested -  segIt -> numPages;
+        size_t numPagesExtraNeeded = numPagesRequested -  segIt->numPages;
        
         //cout << "Num extra pages needed: " << numPagesExtraNeeded << endl;
 
-        if (numPagesRequested < segIt -> numPages) { // We already have enough pages in existing segment
+        if (numPagesRequested < segIt->numPages) { // We already have enough pages in existing segment
             return segIt;
         }
         // First check for freeSeg after segIt 
-        int slabNum = segIt -> slabNum;
+        int slabNum = segIt->slabNum;
         if (slabNum >= 0) { //not dummy page
             BufferList::iterator nextIt = std::next(segIt);
-            if (nextIt != slabSegments_[slabNum].end() && nextIt -> memStatus == FREE && nextIt -> numPages >= numPagesExtraNeeded) { // Then we can just use the next BufferSeg which happens to be free
-                size_t leftoverPages = nextIt -> numPages - numPagesExtraNeeded;
-                segIt -> numPages = numPagesRequested;
-                nextIt -> numPages = leftoverPages;
-                nextIt -> startPage = segIt -> startPage + segIt -> numPages;
+            if (nextIt != slabSegments_[slabNum].end() && nextIt->memStatus == FREE && nextIt->numPages >= numPagesExtraNeeded) { // Then we can just use the next BufferSeg which happens to be free
+                size_t leftoverPages = nextIt->numPages - numPagesExtraNeeded;
+                segIt->numPages = numPagesRequested;
+                nextIt->numPages = leftoverPages;
+                nextIt->startPage = segIt->startPage + segIt->numPages;
                 return segIt;
             }
         }
@@ -130,47 +130,47 @@ namespace Buffer_Namespace {
          * delete old
          */
         
-        //segIt -> pinCount++; // so we don't evict this while trying to find a new segment for it - @todo - maybe should go up top?
+        //segIt->pinCount++; // so we don't evict this while trying to find a new segment for it - @todo - maybe should go up top?
         auto newSegIt = findFreeBuffer(numBytes);
         /* Below should be in copy constructor for BufferSeg?*/
-        newSegIt -> buffer = segIt -> buffer;
-        //newSegIt -> buffer -> segIt_ = newSegIt;
-        newSegIt -> chunkKey = segIt -> chunkKey;
-        int8_t * oldMem = newSegIt -> buffer -> mem_;
-        newSegIt -> buffer -> mem_ = slabs_[newSegIt->slabNum] + newSegIt -> startPage * pageSize_;
+        newSegIt->buffer = segIt->buffer;
+        //newSegIt->buffer->segIt_ = newSegIt;
+        newSegIt->chunkKey = segIt->chunkKey;
+        int8_t * oldMem = newSegIt->buffer->mem_;
+        newSegIt->buffer->mem_ = slabs_[newSegIt->slabNum] + newSegIt->startPage * pageSize_;
         // now need to copy over memory
         // only do this if the old segment is valid (i.e. not new w/
         // unallocated buffer
-        if (segIt -> startPage >= 0 && segIt -> buffer -> mem_ != 0)  {
-            newSegIt -> buffer -> writeData(oldMem, newSegIt->buffer->size(),newSegIt -> buffer -> getType());
-            //memcpy(newSegIt -> buffer -> mem_, segIt -> buffer -> mem_, newSegIt->buffer->size());
+        if (segIt->startPage >= 0 && segIt->buffer->mem_ != 0)  {
+            newSegIt->buffer->writeData(oldMem, newSegIt->buffer->size(),newSegIt->buffer->getType());
+            //memcpy(newSegIt->buffer->mem_, segIt->buffer->mem_, newSegIt->buffer->size());
         }
         // Deincrement pin count to reverse effect above
         removeSegment(segIt);
         /*
-        if (segIt -> slabNum < 0) {
+        if (segIt->slabNum < 0) {
             unsizedSegs_.erase(segIt);
         }
         else {
-            slabSegments_[segIt -> slabNum].erase(segIt);
+            slabSegments_[segIt->slabNum].erase(segIt);
             //@todo - need to delete chunks around it
         }
         */
-        chunkIndex_[newSegIt -> chunkKey] = newSegIt; 
-        //newSegIt -> pinCount = 0;
+        chunkIndex_[newSegIt->chunkKey] = newSegIt; 
+        //newSegIt->pinCount = 0;
 
         return newSegIt;
     }
 
     BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slabNum, const size_t numPagesRequested) {
             for (auto bufferIt = slabSegments_[slabNum].begin(); bufferIt != slabSegments_[slabNum].end(); ++bufferIt) {
-                if (bufferIt -> memStatus == FREE && bufferIt -> numPages >= numPagesRequested) {
+                if (bufferIt->memStatus == FREE && bufferIt->numPages >= numPagesRequested) {
                     // startPage doesn't change
-                    size_t excessPages = bufferIt -> numPages - numPagesRequested;
-                    bufferIt -> numPages = numPagesRequested;
-                    bufferIt -> memStatus = USED;
-                    bufferIt -> lastTouched  = bufferEpoch_++;
-                    bufferIt -> slabNum = slabNum;
+                    size_t excessPages = bufferIt->numPages - numPagesRequested;
+                    bufferIt->numPages = numPagesRequested;
+                    bufferIt->memStatus = USED;
+                    bufferIt->lastTouched  = bufferEpoch_++;
+                    bufferIt->slabNum = slabNum;
                     if (excessPages > 0) {
                         BufferSeg freeSeg(bufferIt->startPage+numPagesRequested,excessPages,FREE);
                         auto tempIt = bufferIt; // this should make a copy and not be a reference
@@ -222,7 +222,7 @@ namespace Buffer_Namespace {
         int slabNum = 0;
 
         for (auto slabIt = slabSegments_.begin(); slabIt != slabSegments_.end(); ++slabIt, ++slabNum) {
-            for (auto bufferIt = slabIt -> begin(); bufferIt != slabIt -> end(); ++bufferIt) {
+            for (auto bufferIt = slabIt->begin(); bufferIt != slabIt->end(); ++bufferIt) {
                 /* Note there are some shortcuts we could take here - like we
                  * should never consider a USED buffer coming after a free buffer
                  * as we would have used the FREE buffer, but we won't worry about
@@ -232,7 +232,7 @@ namespace Buffer_Namespace {
                 // We can't evict pinned  buffers - only normal used
                 // buffers
 
-                //if (bufferIt -> memStatus == FREE || bufferIt -> buffer -> getPinCount() == 0) {
+                //if (bufferIt->memStatus == FREE || bufferIt->buffer->getPinCount() == 0) {
                     size_t pageCount = 0;
                     size_t score = 0;
                     bool solutionFound = false;
@@ -241,12 +241,12 @@ namespace Buffer_Namespace {
                         // pinCount should never go up - only down because we have
                         // global lock on buffer pool and pin count only increments
                         // on getChunk
-                        if (evictIt -> memStatus == USED && evictIt -> buffer -> getPinCount() == 0) {
+                        if (evictIt->memStatus == USED && evictIt->buffer->getPinCount() == 0) {
                            break;
                         }
-                        pageCount += evictIt -> numPages;
-                        if (evictIt -> memStatus == USED) {
-                            score += evictIt -> lastTouched;
+                        pageCount += evictIt->numPages;
+                        if (evictIt->memStatus == USED) {
+                            score += evictIt->lastTouched;
                         }
                         if (pageCount >= numPagesRequested) {
                             solutionFound = true;
@@ -281,18 +281,18 @@ namespace Buffer_Namespace {
     void BufferMgr::printSeg(BufferList::iterator &segIt) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
 
-        std::cout << "Start page: " << segIt -> startPage << std::endl;
-        std::cout << "Num Pages: " << segIt -> numPages << std::endl;
-        std::cout << "Last touched: " << segIt -> lastTouched << std::endl;
-        if (segIt -> memStatus == FREE)
+        std::cout << "Start page: " << segIt->startPage << std::endl;
+        std::cout << "Num Pages: " << segIt->numPages << std::endl;
+        std::cout << "Last touched: " << segIt->lastTouched << std::endl;
+        if (segIt->memStatus == FREE)
             std::cout << "FREE" << std::endl;
         else {
             std::cout << "USED - Chunk: ";
-            for (auto vecIt = segIt -> chunkKey.begin(); vecIt != segIt -> chunkKey.end(); ++vecIt) {
+            for (auto vecIt = segIt->chunkKey.begin(); vecIt != segIt->chunkKey.end(); ++vecIt) {
                 std::cout << *vecIt << ",";
             }
             std::cout << std::endl;
-            std::cout << "Pin count: " << segIt -> buffer -> getPinCount() << std::endl;
+            std::cout << "Pin count: " << segIt->buffer->getPinCount() << std::endl;
         }
     }
 
@@ -306,7 +306,7 @@ namespace Buffer_Namespace {
         std::cout << std::endl << std::endl;
         for (auto slabIt = slabSegments_.begin(); slabIt != slabSegments_.end(); ++slabIt,++slabNum) {
             std::cout << "Slab Num: " << slabNum << std::endl;
-            for (auto segIt = slabIt -> begin(); segIt != slabIt -> end(); ++segIt,++segNum) {
+            for (auto segIt = slabIt->begin(); segIt != slabIt->end(); ++segIt,++segNum) {
                 std::cout << "Segment: " << segNum << std::endl;
                 printSeg(segIt);
                 std::cout << std::endl;
@@ -321,23 +321,21 @@ namespace Buffer_Namespace {
         std::cout << std::endl << "Map Contents: " <<  std::endl;
         for (auto segIt = chunkIndex_.begin(); segIt != chunkIndex_.end(); ++segIt,++segNum) {
             std::cout << "Chunk " << segNum << ": ";
-            for (auto vecIt = segIt -> first.begin(); vecIt != segIt -> first.end(); ++vecIt) {
+            for (auto vecIt = segIt->first.begin(); vecIt != segIt->first.end(); ++vecIt) {
                 std::cout << *vecIt << ",";
             }
             std::cout << std::endl;
-            printSeg(segIt -> second);
+            printSeg(segIt->second);
         }
         std::cout << "--------------------" << std::endl;
     }
 
-
-    
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
     void BufferMgr::deleteChunk(const ChunkKey &key) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         // lookup the buffer for the Chunk in chunkIndex_
         auto chunkIt = chunkIndex_.find(key);
-        //Buffer *buffer = chunkIt -> second -> buffer;
+        //Buffer *buffer = chunkIt->second->buffer;
 
         if (chunkIndex_.find(key) == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist");
@@ -349,11 +347,49 @@ namespace Buffer_Namespace {
         chunkIndex_.erase(chunkIt);
     }
 
+    void BufferMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
+        cout << "At start of delete" << endl;
+        printSegs();
+        cout << "Map" << endl;
+        printMap();
+        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
+        // lookup the buffer for the Chunk in chunkIndex_
+        auto startChunkIt = chunkIndex_.lower_bound(keyPrefix);
+        if (startChunkIt == chunkIndex_.end()) {
+            cout << "Start is at end" << endl;
+            return;
+        }
+        else {
+            for (auto vecIt = startChunkIt->first.begin(); vecIt != startChunkIt->first.end(); ++vecIt) {
+                std::cout << *vecIt << ",";
+            }
+            cout << endl;
+        }
+        auto chunkIt = startChunkIt;
+        while (std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
+        cout << "Before getting segIt" << endl;
+        auto  segIt = chunkIt->second;
+        printSeg(segIt);
+        cout << "After getting segIt" << endl;
+        delete segIt->buffer; // Delete Buffer for segment
+        cout << "AFter delete buffer" << endl;
+        segIt->buffer = 0;
+        removeSegment(segIt);
+        cout << "AFter remove segment" << endl;
+        chunkIndex_.erase(chunkIt++);
+        cout << "AFter chunk index erase" << endl;
+        }
+        cout << "Segs After " << endl;
+        printSegs();
 
+        cout << "Map After " << endl;
+        printMap();
+    }
 
      void BufferMgr::removeSegment(BufferList::iterator &segIt) {
          // Note: does not delete buffer as this may be moved somewhere else
-        int slabNum = segIt -> slabNum;
+        int slabNum = segIt->slabNum;
+        cout << "Slab num: " << slabNum << endl;
         if (slabNum < 0) {
             unsizedSegs_.erase(segIt);
         }
@@ -362,22 +398,22 @@ namespace Buffer_Namespace {
                 auto prevIt = std::prev(segIt);
                 //std::cout << "PrevIt: " << std::endl;
                 //printSeg(prevIt);
-                if (prevIt -> memStatus == FREE) { 
-                    segIt -> startPage = prevIt -> startPage;
-                    segIt -> numPages += prevIt -> numPages; 
+                if (prevIt->memStatus == FREE) { 
+                    segIt->startPage = prevIt->startPage;
+                    segIt->numPages += prevIt->numPages; 
                     slabSegments_[slabNum].erase(prevIt);
                 }
             }
             auto nextIt = std::next(segIt);
             if (nextIt != slabSegments_[slabNum].end()) {
-                if (nextIt -> memStatus == FREE) { 
-                    segIt -> numPages += nextIt -> numPages;
+                if (nextIt->memStatus == FREE) { 
+                    segIt->numPages += nextIt->numPages;
                     slabSegments_[slabNum].erase(nextIt);
                 }
             }
-            segIt -> memStatus = FREE;
-            //segIt -> pinCount = 0;
-            segIt -> buffer = 0;
+            segIt->memStatus = FREE;
+            //segIt->pinCount = 0;
+            segIt->buffer = 0;
         }
 
     }
@@ -385,14 +421,14 @@ namespace Buffer_Namespace {
     void BufferMgr::checkpoint() {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            if (chunkIt -> second -> chunkKey[0] != -1 && chunkIt -> second -> buffer -> isDirty_) { // checks that buffer is actual chunk (not just buffer) and is dirty
+            if (chunkIt->second->chunkKey[0] != -1 && chunkIt->second->buffer->isDirty_) { // checks that buffer is actual chunk (not just buffer) and is dirty
                 //cout << "Flushing: ";
-                //for (auto vecIt = chunkIt -> second -> chunkKey.begin(); vecIt != chunkIt -> second -> chunkKey.end(); ++vecIt) {
+                //for (auto vecIt = chunkIt->second->chunkKey.begin(); vecIt != chunkIt->second->chunkKey.end(); ++vecIt) {
                 //    std::cout << *vecIt << ",";
                 //}
                 //std::cout << std::endl;
-                parentMgr_ -> putChunk(chunkIt -> second -> chunkKey, chunkIt -> second -> buffer); 
-                chunkIt -> second -> buffer -> clearDirtyBits();
+                parentMgr_->putChunk(chunkIt->second->chunkKey, chunkIt->second->buffer); 
+                chunkIt->second->buffer->clearDirtyBits();
             }
         }
     }
@@ -403,18 +439,18 @@ namespace Buffer_Namespace {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt != chunkIndex_.end()) {
-            chunkIt -> second -> buffer -> pin();
-            chunkIt -> second -> lastTouched = bufferEpoch_++;
-            if (chunkIt -> second -> buffer -> size() < numBytes) {  // need to fetch part of buffer we don't have - up to numBytes 
-                parentMgr_ -> fetchChunk(key, chunkIt -> second -> buffer, numBytes);
+            chunkIt->second->buffer->pin();
+            chunkIt->second->lastTouched = bufferEpoch_++;
+            if (chunkIt->second->buffer->size() < numBytes) {  // need to fetch part of buffer we don't have - up to numBytes 
+                parentMgr_->fetchChunk(key, chunkIt->second->buffer, numBytes);
             }
-            return chunkIt -> second -> buffer; 
+            return chunkIt->second->buffer; 
         }
         else { // If wasn't in pool then we need to fetch it
             AbstractBuffer * buffer = createChunk(key,pageSize_,numBytes);
-            buffer -> pin();
+            buffer->pin();
             try {
-                parentMgr_ -> fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
+                parentMgr_->fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
             }
             catch (std::runtime_error &error) {
                 // if here, fetch chunk was unsuccessful - delete chunk we just
@@ -437,7 +473,7 @@ namespace Buffer_Namespace {
             }
             buffer = createChunk(key,pageSize_,numBytes);
             try {
-                parentMgr_ -> fetchChunk(key, buffer, numBytes);
+                parentMgr_->fetchChunk(key, buffer, numBytes);
             }
             catch (std::runtime_error &error) {
                 deleteChunk(key);
@@ -445,9 +481,9 @@ namespace Buffer_Namespace {
             }
         }
         else {
-            buffer = chunkIt -> second -> buffer;
+            buffer = chunkIt->second->buffer;
         }
-        size_t chunkSize = numBytes == 0 ? buffer -> size() : numBytes;
+        size_t chunkSize = numBytes == 0 ? buffer->size() : numBytes;
         destBuffer->reserve(chunkSize);
         //std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (buffer->isUpdated()) {
@@ -507,7 +543,7 @@ namespace Buffer_Namespace {
         if (castedBuffer == 0) {
             throw std::runtime_error ("Wrong buffer type - expects base class pointer to Buffer type");
         }
-        deleteChunk(castedBuffer -> segIt_ -> chunkKey);
+        deleteChunk(castedBuffer->segIt_->chunkKey);
     }
     
     size_t BufferMgr::getNumChunks() {

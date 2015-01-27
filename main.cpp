@@ -40,7 +40,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
 				if (td == nullptr)
 					throw runtime_error("Table " + table_name + " does not exist.");
 				list <const ColumnDescriptor *> col_list = cat.getAllColumnMetadataForTable(td->tableId);
-				cout << "TalbeId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
+				cout << "TableId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
 				std::string SQLTypeName[] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT" };
 				std::string compression[] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE" };
 
