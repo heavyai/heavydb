@@ -348,48 +348,47 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
-        cout << "At start of delete" << endl;
-        printSegs();
-        cout << "Map" << endl;
-        printMap();
+        //cout << "At start of delete" << endl;
+        //printSegs();
+        //cout << "Map" << endl;
+        //printMap();
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         // lookup the buffer for the Chunk in chunkIndex_
         auto startChunkIt = chunkIndex_.lower_bound(keyPrefix);
         if (startChunkIt == chunkIndex_.end()) {
-            cout << "Start is at end" << endl;
+            //cout << "Start is at end" << endl;
             return;
         }
-        else {
-            for (auto vecIt = startChunkIt->first.begin(); vecIt != startChunkIt->first.end(); ++vecIt) {
-                std::cout << *vecIt << ",";
-            }
-            cout << endl;
-        }
+        //else {
+        //    for (auto vecIt = startChunkIt->first.begin(); vecIt != startChunkIt->first.end(); ++vecIt) {
+        //        std::cout << *vecIt << ",";
+        //    }
+        //    cout << endl;
+        //}
         auto chunkIt = startChunkIt;
         while (std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
-        cout << "Before getting segIt" << endl;
+        //cout << "Before getting segIt" << endl;
         auto  segIt = chunkIt->second;
-        printSeg(segIt);
-        cout << "After getting segIt" << endl;
+        //printSeg(segIt);
+        //cout << "After getting segIt" << endl;
         delete segIt->buffer; // Delete Buffer for segment
-        cout << "AFter delete buffer" << endl;
+        //cout << "AFter delete buffer" << endl;
         segIt->buffer = 0;
         removeSegment(segIt);
-        cout << "AFter remove segment" << endl;
+        //cout << "AFter remove segment" << endl;
         chunkIndex_.erase(chunkIt++);
-        cout << "AFter chunk index erase" << endl;
+        //cout << "AFter chunk index erase" << endl;
         }
-        cout << "Segs After " << endl;
-        printSegs();
-
-        cout << "Map After " << endl;
-        printMap();
+        //cout << "Segs After " << endl;
+        //printSegs();
+        //cout << "Map After " << endl;
+        //printMap();
     }
 
      void BufferMgr::removeSegment(BufferList::iterator &segIt) {
          // Note: does not delete buffer as this may be moved somewhere else
         int slabNum = segIt->slabNum;
-        cout << "Slab num: " << slabNum << endl;
+        //cout << "Slab num: " << slabNum << endl;
         if (slabNum < 0) {
             unsizedSegs_.erase(segIt);
         }
