@@ -144,7 +144,7 @@ class Catalog {
 				 std::list<const TableDescriptor *> getAllTableMetadata() const;
          const UserMetadata &get_currentUser() { return currentUser_; }
          void set_currentUser(const UserMetadata &user) { currentUser_ = user; }
-         const DBMetadata &get_currentDB() { return currentDB_; }
+         const DBMetadata &get_currentDB() const { return currentDB_; }
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 
     protected:

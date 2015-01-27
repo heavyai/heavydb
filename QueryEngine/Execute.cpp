@@ -1,6 +1,7 @@
 #include "Execute.h"
 #include "Codec.h"
 #include "DataSourceMock.h"
+#include "Partitioner/Partitioner.h"
 #include "QueryTemplateGenerator.h"
 
 #include <llvm/ExecutionEngine/JIT.h>
@@ -35,14 +36,34 @@ Executor::~Executor() {
   delete execution_engine_;
 }
 
+namespace {
+
+SQLTypes get_column_type(const int col_id, const int table_id, const Catalog_Namespace::Catalog& cat) {
+  const auto col_desc = cat.getMetadataForColumn(table_id, col_id);
+  CHECK(col_desc);
+  return col_desc->columnType.type;
+}
+
+}
+
 std::vector<Executor::AggResult> Executor::execute(const ExecutorOptLevel opt_level) {
-  const auto plan = root_plan_->get_plan();
-  CHECK(plan);
-  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
-  if (agg_plan) {
+  const auto stmt_type = root_plan_->get_stmt_type();
+  switch (stmt_type) {
+  case kSELECT: {
+    const auto plan = root_plan_->get_plan();
+    CHECK(plan);
+    const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+    CHECK(agg_plan);
     return executeAggScanPlan(agg_plan, opt_level);
+    break;
   }
-  CHECK(false);
+  case kINSERT: {
+    executeSimpleInsert();
+    return {};
+  }
+  default:
+    CHECK(false);
+  }
 }
 
 llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
@@ -411,6 +432,57 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
     }
   }
   return results;
+}
+
+void Executor::executeSimpleInsert() {
+  root_plan_->print();
+  const auto plan = root_plan_->get_plan();
+  CHECK(plan);
+  const auto values_plan = dynamic_cast<const Planner::ValuesScan*>(plan);
+  CHECK(values_plan);
+  const auto& targets = values_plan->get_targetlist();
+  const int table_id = root_plan_->get_result_table_id();
+  const auto& col_id_list = root_plan_->get_result_col_list();
+  std::vector<SQLTypes> col_types;
+  std::vector<int> col_ids;
+  std::unordered_map<int, int8_t*> col_buffers;
+  auto& cat = root_plan_->get_catalog();
+  for (const int col_id : col_id_list) {
+    auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
+    CHECK(it_ok.second);
+    col_types.push_back(get_column_type(col_id, table_id, cat));
+    col_ids.push_back(col_id);
+  }
+  size_t col_idx = 0;
+  Partitioner_Namespace::InsertData insert_data;
+  insert_data.databaseId = cat.get_currentDB().dbId;
+  insert_data.tableId = table_id;
+  for (auto target_entry : targets) {
+    auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
+    CHECK(col_cv);
+    const auto col_type = col_types[col_idx++];
+    auto col_datum = col_cv->get_constval();
+    switch (col_type) {
+    case kSMALLINT:
+      CHECK(false);
+      break;
+    case kINT: {
+      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(&col_datum.intval);
+      break;
+    }
+    case kBIGINT:
+      CHECK(false);
+      break;
+    default:
+      CHECK(false);
+    }
+  }
+  for (const auto kv : col_buffers) {
+    insert_data.columnIds.push_back(kv.first);
+    insert_data.data.push_back(kv.second);
+    insert_data.numRows = 1;
+  }
+  CHECK(false);
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
