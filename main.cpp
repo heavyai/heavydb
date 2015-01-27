@@ -63,7 +63,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
 			break;
 		case 't':
 			{
-				cout << "TableId|TableName|NColumns|IsView|IsMaterialized|ViewSQL|Fragments|Partitions|Storage|Refresh|Ready\n";
+				cout << "TableId|TableName|NColumns|IsView|IsMaterialized|ViewSQL|Fragments|FragType|FragSize|PageSize|Partitions|Storage|Refresh|Ready\n";
 				list<const TableDescriptor *> table_list = cat.getAllTableMetadata();
 				std::string storage_name[] = { "DISK", "GPU", "CPU" };
 				std::string refresh_name[] = { "MANUAL", "AUTO", "IMMEDIATE" };
@@ -81,6 +81,9 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
 						cout << "false|";
 					cout << td->viewSQL << "|";
 					cout << td->fragments << "|";
+					cout << td->fragType << "|";
+					cout << td->maxFragRows << "|";
+					cout << td->fragPageSize << "|";
 					cout << td->partitions << "|";
 					cout << storage_name[td->storageOption] << "|";
 					cout << refresh_name[td->refreshOption] << "|";
@@ -183,7 +186,7 @@ main(int argc, char* argv[])
 	}
 
     Data_Namespace::DataMgr dataMgr (2, base_path + "/mapd_data/"); 
-    Partitioner_Namespace::TablePartitionerMgr partitionerMgr (&dataMgr, base_path);
+    Partitioner_Namespace::TablePartitionerMgr partitionerMgr (&dataMgr);
 	SysCatalog sys_cat(base_path);
 	UserMetadata user;
 	if (!sys_cat.getMetadataForUser(user_name, user)) {

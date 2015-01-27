@@ -19,7 +19,7 @@ namespace Partitioner_Namespace {
      */
     
     enum PartitionerType {
-        INSERT_ORDER
+        INSERT_ORDER = 0 // these values persist in catalog.  make explicit
     };
     
     /**

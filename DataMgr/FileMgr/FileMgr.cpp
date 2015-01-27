@@ -188,7 +188,7 @@ namespace File_Namespace {
         }
         epochFile_ = open(epochFilePath);
         read(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
-        std::cout << "Epoch after open file: " << epoch_ << std::endl;
+        // std::cout << "Epoch after open file: " << epoch_ << std::endl;
         epoch_++; // we are in new epoch from last checkpoint
     }
 

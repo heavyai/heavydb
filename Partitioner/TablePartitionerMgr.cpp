@@ -25,8 +25,7 @@ namespace Partitioner_Namespace {
 
 /// Searches for the table's partitioner and calls its getPartitionIds() method
 
-TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr, const string &basePath): dataMgr_(dataMgr), maxPartitionerId_(-1), basePath_(basePath), sqliteConnector_("mapd_partitions", basePath) {
-    init();
+TablePartitionerMgr::TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr): dataMgr_(dataMgr) {
     //dataMgr_-> getChunkMetadataVec(chunkMetadataVec);
     /*
     ChunkKey lastChunkKey;
@@ -58,29 +57,6 @@ TablePartitionerMgr::~TablePartitionerMgr() {
     */
 }
 
-void TablePartitionerMgr::init() {
-	sqliteConnector_.query("CREATE TABLE if not exists mapd_partitioners (database_id integer, table_id integer, partitioner_id integer, partitioner_type integer, max_partition_rows bigint, page_size bigint, primary key(database_id, table_id, partitioner_id))");  
-
-	sqliteConnector_.query("SELECT database_id, table_id, partitioner_id, partitioner_type, max_partition_rows, page_size from mapd_partitioners");
-	size_t numRows = sqliteConnector_.getNumRows();
-    for (size_t r = 0; r != numRows; ++r) {
-        int partitionerId = sqliteConnector_.getData<int>(r,2);
-        if (partitionerId > maxPartitionerId_) {
-            maxPartitionerId_ = partitionerId;
-        }
-        ChunkKey tableKeyPrefix = {sqliteConnector_.getData<int>(r,0), sqliteConnector_.getData<int>(r,1),partitionerId}; // database_id, table_id, partitioner_id
-        //SqliteConnector
-        std::vector<std::pair <ChunkKey,ChunkMetadata> > chunkMetadataVec;
-        dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,tableKeyPrefix);
-        for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
-
-
-        }
-    }
-    //cout << "Max Partitioner id: " << maxPartitionerId_ << endl;
-}
-
-
 /// Notes: predicate can be null; queryInfo should hold the metadata needed for
 /// the executor for the most optimal partitioner for this query
 void TablePartitionerMgr::getQueryPartitionInfo(const int databaseId, const int tableId, QueryInfo &queryInfo/*, const void *predicate*/) {
@@ -109,40 +85,23 @@ void TablePartitionerMgr::getQueryPartitionInfo(const int databaseId, const int 
     }
 }
 
-void TablePartitionerMgr::createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const list<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partitionerType, const size_t maxPartitionRows, const size_t pageSize) {
+void TablePartitionerMgr::createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const list<const ColumnDescriptor*> &columnDescriptors) {
     int32_t tableId = tableDescriptor -> tableId;
-    int32_t partitionerId = ++maxPartitionerId_;
-	sqliteConnector_.query("BEGIN TRANSACTION");
-    try {
-        string queryString("INSERT INTO mapd_partitioners (database_id, table_id, partitioner_id, partitioner_type, max_partition_rows, page_size) VALUES (" + boost::lexical_cast<string>(databaseId) + ","+boost::lexical_cast<string>(tableId)+","+boost::lexical_cast<string>(partitionerId)+","+boost::lexical_cast<string> (static_cast<int> (partitionerType)) + "," + boost::lexical_cast<string>(maxPartitionRows) + "," + boost::lexical_cast<string>(pageSize) +")");
-        //cout << queryString << endl;
-        sqliteConnector_.query(queryString);
-    }
-    catch (std::exception &e) {
-		sqliteConnector_.query("ROLLBACK TRANSACTION");
-		throw;
-    }
-	sqliteConnector_.query("END TRANSACTION");
-
     vector<ColumnInfo> columnInfoVec;
     translateColumnDescriptorsToColumnInfoVec(columnDescriptors, columnInfoVec);
     AbstractTablePartitioner *partitioner = nullptr;
     ChunkKey tablePrefix = {databaseId, tableId};
     ChunkKey chunkKeyPrefix = tablePrefix;
-    chunkKeyPrefix.push_back(partitionerId);
-    if (partitionerType == INSERT_ORDER) {
+    if (tableDescriptor->fragType == INSERT_ORDER) {
         partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, dataMgr_);
     }
-    assert (partitionerType == INSERT_ORDER); // only INSERT_ORDER is currently supported
+    assert (tableDescriptor->fragType == INSERT_ORDER); // only INSERT_ORDER is currently supported
     
     auto partMapIt = tableToPartitionerMMap_.find(tablePrefix);
     if (partMapIt != tableToPartitionerMMap_.end()) {
         //@todo we need to copy existing partitioner's data to this partitioner
     }
     tableToPartitionerMMap_.insert(std::pair<ChunkKey, AbstractTablePartitioner*>(tablePrefix, partitioner));
-    
-    // metadata has changed so needs to be written to disk by next checkpoint
-    //isDirty_ = true;
 }
 
 void TablePartitionerMgr::insertData(const InsertData &insertDataStruct) {

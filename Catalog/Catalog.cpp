@@ -75,7 +75,7 @@ SysCatalog::createDatabase(const string &name, int owner)
 		throw runtime_error("Database " + name + " already exists.");
 	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(owner) + ")");
 	SqliteConnector dbConn(name, basePath_+"/mapd_catalogs/");
-	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, partitions text)");
+	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, partitions text)");
 	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, refresh int)");
 }
@@ -180,7 +180,7 @@ Catalog::~Catalog() {
 }
 
 void Catalog::buildMaps() {
-    string tableQuery("SELECT tableid, name, ncolumns, isview, fragments, partitions from mapd_tables");
+    string tableQuery("SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions from mapd_tables");
     sqliteConnector_.query(tableQuery);
     size_t numRows = sqliteConnector_.getNumRows();
     for (int r = 0; r < numRows; ++r) {
@@ -190,7 +190,10 @@ void Catalog::buildMaps() {
 				td->nColumns = sqliteConnector_.getData<int>(r,2);
         td->isView = sqliteConnector_.getData<bool>(r, 3);
 				td->fragments = sqliteConnector_.getData<string>(r, 4);
-				td->partitions = sqliteConnector_.getData<string>(r, 5);
+				td->fragType = (Partitioner_Namespace::PartitionerType)sqliteConnector_.getData<int>(r, 5);
+				td->maxFragRows = sqliteConnector_.getData<int>(r, 6);
+				td->fragPageSize = sqliteConnector_.getData<int>(r, 7);
+				td->partitions = sqliteConnector_.getData<string>(r, 8);
 				if (!td->isView) {
 					// initialize view fields even though irrelevant
 					td->isMaterialized = false;
@@ -337,7 +340,7 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
 	list<ColumnDescriptor> cds;
 	sqliteConnector_.query("BEGIN TRANSACTION");
 	try {
-		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, partitions) VALUES ('" + td.tableName + "', " + boost::lexical_cast<string>(columns.size()) + ", " + boost::lexical_cast<string>(td.isView) + ", '', '')");
+		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions) VALUES ('" + td.tableName + "', " + boost::lexical_cast<string>(columns.size()) + ", " + boost::lexical_cast<string>(td.isView) + ", '', " + boost::lexical_cast<string>(td.fragType) + ", " + boost::lexical_cast<string>(td.maxFragRows) + ", " + boost::lexical_cast<string>(td.fragPageSize) +  ", '')");
 		// now get the auto generated tableid
 		sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + td.tableName + "'");
 		td.tableId = sqliteConnector_.getData<int>(0, 0);

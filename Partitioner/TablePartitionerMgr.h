@@ -47,7 +47,7 @@ namespace Partitioner_Namespace {
          * Data_Namespace::DataMgr object
          */
         
-        TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr, const std::string &basePath ="");
+        TablePartitionerMgr(Data_Namespace::DataMgr *dataMgr);
         
         /**
          * @brief Destructor - writes metadata to storage and
@@ -94,8 +94,10 @@ namespace Partitioner_Namespace {
          * @see Catalog
          */
         
-        //void createPartitionerForTable (const std::string &tableName, const PartitionerType partititonerType = INSERT_ORDER, const size_t maxPartitionRows = 1048576, const size_t pageSize = 1048576);
-        void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const std::list<const ColumnDescriptor*> &columnDescriptors, const PartitionerType partitionerType = INSERT_ORDER, const size_t maxPartitionRows = 1000000, const size_t pageSize = 1048576);
+
+#define DEFAULT_FRAGMENT_SIZE		1000000
+#define DEFAULT_PAGE_SIZE				1048576
+        void createPartitionerForTable (const int databaseId, const TableDescriptor *tableDescriptor, const std::list<const ColumnDescriptor*> &columnDescriptors);
         
         /**
          * @brief Insert data (insertDataStruct) into the table
@@ -111,30 +113,6 @@ namespace Partitioner_Namespace {
         
     private:
        
-        void init();
-        
-        /**
-         * @brief Creates partitioners table (curreintly in Postgres)
-         */
-        
-        //void createStateTableIfDne();
-        
-        /**
-         * @brief reads metadata about partitioners from table
-         * into memory * (currently partitioners table in
-         * Postgres) and uses this data to recreate
-         * the partitioners.
-         *
-         */
-        //void readState();
-        
-        /**
-         * @brief updates metadata on disk - currently uses
-         * postgres, wiping table and rewriting
-         */
-        
-        //void writeState();
-        
         /**
          * @brief Iterate over all entries in columnRows
          * and translate to columnInfoVec needed by partitioner
@@ -155,11 +133,6 @@ namespace Partitioner_Namespace {
         
         Data_Namespace::DataMgr * dataMgr_;									/**< reference to the buffer manager object*/
         
-        int maxPartitionerId_; /**< Since each new partitioner is
-                                assigned a monotonically increasing
-                                id - we keep track of the maximum
-                                id already assigned */
-        
         /**
          * @type tableToPartitionerMMap_
          * @brief Maps table ids to TablePartitioner objects.
@@ -170,12 +143,6 @@ namespace Partitioner_Namespace {
          */
         std::multimap<ChunkKey, AbstractTablePartitioner*> tableToPartitionerMMap_;
         
-        //Catalog_Namespace::Catalog &catalog_; /**< reference to Catalog object - must be queried to get metadata for tables and columns before partitioner creation */
-        std::string basePath_;
-        
-        SqliteConnector sqliteConnector_; /**<object that connects to sqlite to allow metadata storage */
-        
-        //bool isDirty_;  /**< Specifies if the TablePartitionerMgr has been modified in memory since the last flush to file - no need to rewrite state if this is false. */
     };
     
 } // Partitioner_Namespace
