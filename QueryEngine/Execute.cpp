@@ -21,8 +21,6 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <nvvm.h>
 
-#include <chrono>
-
 
 Executor::Executor(const Planner::RootPlan* root_plan)
   : root_plan_(root_plan)
