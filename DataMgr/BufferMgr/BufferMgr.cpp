@@ -6,6 +6,7 @@
 #include "BufferMgr.h"
 #include "Buffer.h"
 
+#include <algorithm>
 #include <cassert>
 #include <limits>
 
