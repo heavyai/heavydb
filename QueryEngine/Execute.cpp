@@ -385,11 +385,13 @@ std::vector<Analyzer::AggExpr*> get_agg_exprs(const Planner::AggPlan* agg_plan) 
   return result;
 }
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
-
+#else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
+#endif
 
 void launch_query_gpu_code(
     CUfunction kernel,
@@ -410,8 +412,11 @@ void launch_query_gpu_code(
   CHECK_EQ(status, CUDA_SUCCESS);
 }
 
-#pragma GCC diagnostic pop
+#ifdef __clang__
 #pragma clang diagnostic pop
+#else
+#pragma GCC diagnostic pop
+#endif
 
 }  // namespace
 
