@@ -7,6 +7,7 @@
 
 #include "../Shared/types.h"
 #include "AbstractTablePartitioner.h"
+#include "../DataMgr/MemoryLevel.h"
 
 #include <vector>
 #include <map>
@@ -17,6 +18,9 @@
 namespace Data_Namespace {
     class DataMgr; 
 }
+
+#define DEFAULT_FRAGMENT_SIZE		1000000 // in tuples
+#define DEFAULT_PAGE_SIZE				1048576 // in bytes
 
 namespace Partitioner_Namespace {
 
@@ -31,7 +35,7 @@ class InsertOrderTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = 1000000, const size_t pageSize = 1048576 /*default 1MB*/);
+    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/);
 
     virtual ~InsertOrderTablePartitioner();
     /**
@@ -85,7 +89,7 @@ private:
      * Also unpins the chunks of the previous insert buffer
      */
 
-    PartitionInfo * createNewPartition();
+    PartitionInfo * createNewPartition(const Data_Namespace::MemoryLevel memoryLevel = Data_Namespace::DISK_LEVEL);
 
     /**
      * @brief Called at readState to associate chunks of 
@@ -93,6 +97,7 @@ private:
      */
 
     void getInsertBufferChunks(); 
+    void getChunkMetadata();
 	
 	InsertOrderTablePartitioner(const InsertOrderTablePartitioner&);
 	InsertOrderTablePartitioner& operator=(const InsertOrderTablePartitioner&);

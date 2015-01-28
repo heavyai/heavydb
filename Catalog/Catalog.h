@@ -23,6 +23,7 @@
 #include "../SqliteConnector/SqliteConnector.h"
 #include "TableDescriptor.h"
 #include "ColumnDescriptor.h"
+#include "../DataMgr/DataMgr.h"
 
 namespace Catalog_Namespace {
 
@@ -94,17 +95,18 @@ struct DBMetadata {
 class Catalog {
 
     public:
-				Catalog(const std::string &basePath, const std::string &dbname, bool is_initdb);
+				Catalog(const std::string &basePath, const std::string &dbname, Data_Namespace::DataMgr &dataMgr, bool is_initdb);
 
         /**
          * @brief Constructor - takes basePath to already extant
          * data directory for writing
          * @param basePath directory path for writing catalog 
 				 * @param dbName name of the database
+				 * @param partitioner TablePartitionerMgr object
          * metadata - expects for this directory to already exist
          */
 
-        Catalog(const std::string &basePath, const UserMetadata &curUser, const DBMetadata &curDB);
+        Catalog(const std::string &basePath, const UserMetadata &curUser, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr);
 
         /**
          * @brief Destructor - deletes all
@@ -142,15 +144,18 @@ class Catalog {
          std::list <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
 				 std::list<const TableDescriptor *> getAllTableMetadata() const;
-         const UserMetadata &get_currentUser() { return currentUser_; }
+         const UserMetadata &get_currentUser() const { return currentUser_; }
          void set_currentUser(const UserMetadata &user) { currentUser_ = user; }
          const DBMetadata &get_currentDB() const { return currentDB_; }
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
+				 Data_Namespace::DataMgr &get_dataMgr() const { return dataMgr_; }
 
     protected:
         void buildMaps();
         void addTableToMap(TableDescriptor &td, const std::list<ColumnDescriptor> &columns);
         void removeTableFromMap(const std::string &tableName, int tableId);
+				void instantiatePartitioner(TableDescriptor *td) const;
+				void getAllColumnMetadataForTable(const TableDescriptor *td, std::list<const ColumnDescriptor *> &colDescs) const;
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableDescriptorMap tableDescriptorMap_;
@@ -160,6 +165,7 @@ class Catalog {
         SqliteConnector sqliteConnector_;
         UserMetadata currentUser_;
         DBMetadata currentDB_;
+				Data_Namespace::DataMgr &dataMgr_;
 };
 
 /*
@@ -168,7 +174,7 @@ class Catalog {
  */
 class SysCatalog : public Catalog {
 	public:
-		SysCatalog(const std::string &basePath, bool is_initdb = false) : Catalog(basePath, MAPD_SYSTEM_DB, is_initdb) {}
+		SysCatalog(const std::string &basePath, Data_Namespace::DataMgr &dataMgr, bool is_initdb = false) : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {}
 		virtual ~SysCatalog() {};
 		void initDB();
 		void createUser(const std::string &name, const std::string &passwd, bool issuper);

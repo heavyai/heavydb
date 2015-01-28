@@ -45,7 +45,7 @@ namespace File_Namespace {
     }
 
     FileMgr::~FileMgr() {
-        checkpoint();
+        //checkpoint();
         // free memory used by FileInfo objects
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
             delete chunkIt->second;
@@ -206,7 +206,12 @@ namespace File_Namespace {
     void FileMgr::checkpoint() {
         std::cout << "Checkpointing " << epoch_ <<  std::endl;
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
+                std::cout << *vecIt << ",";
+            }
+            cout << endl;
             if (chunkIt->second->isDirty_) {
+                cout << "dirty" << endl;
                 chunkIt->second->writeMetadata(epoch_);
                 chunkIt->second->clearDirtyBits();
             }
@@ -249,12 +254,14 @@ namespace File_Namespace {
     }
 
     void FileMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
-        auto startChunkIt = chunkIndex_.find(keyPrefix);
-        auto endChunkIt = chunkIndex_.upper_bound(keyPrefix);
-        for (auto chunkIt = startChunkIt; chunkIt != endChunkIt; ++chunkIt) {
+        auto chunkIt = chunkIndex_.find(keyPrefix);
+        if (chunkIt == chunkIndex_.end()) {
+            return; // should we throw?
+        }
+        while (chunkIt != chunkIndex_.end() && std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
             chunkIt->second->freePages();
             delete chunkIt->second;
-            chunkIndex_.erase(chunkIt);
+            chunkIndex_.erase(chunkIt++);
         }
     }
 
@@ -467,15 +474,25 @@ namespace File_Namespace {
 
     void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) {
         auto chunkIt = chunkIndex_.lower_bound(keyPrefix); 
-        auto chunkEndIt = chunkIndex_.upper_bound(keyPrefix); 
-
-        for (; chunkIt != chunkEndIt; ++chunkIt) {
+        if (chunkIt == chunkIndex_.end()) {
+            return; // throw?
+        }
+        cout << "Before getChunkMetadataPrefix loop" << endl;
+        int counter = 0;
+        while (chunkIt != chunkIndex_.end() && std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
+            for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
+                std::cout << *vecIt << ",";
+            }
+            cout << endl;
+            cout << "matches prefix " << counter++ << endl;
             ChunkMetadata chunkMetadata;
             chunkIt->second->encoder->getMetadata(chunkMetadata);
+            cout << "after got metadata" << endl;
             chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
+            cout << "after push back" << endl;
+            chunkIt++;
         }
     }
-
 
 
 } // File_Namespace

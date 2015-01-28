@@ -4,6 +4,7 @@
 #include "../Parser/ParserNode.h"
 #include "../Planner/Planner.h"
 #include "../QueryEngine/Execute.h"
+#include "../DataMgr/DataMgr.h"
 
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
@@ -23,14 +24,16 @@ Catalog_Namespace::Catalog get_catalog() {
   CHECK(boost::filesystem::exists(base_path));
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   CHECK(boost::filesystem::exists(system_db_file));
-  Catalog_Namespace::SysCatalog sys_cat(base_path.string());
+	auto data_dir = base_path / "mapd_data";
+	Data_Namespace::DataMgr *dataMgr = new Data_Namespace::DataMgr(2, data_dir.string());
+  Catalog_Namespace::SysCatalog sys_cat(base_path.string(), *dataMgr);
   Catalog_Namespace::UserMetadata user;
   CHECK(sys_cat.getMetadataForUser(user_name, user));
   CHECK_EQ(user.passwd, passwd);
   Catalog_Namespace::DBMetadata db;
   CHECK(sys_cat.getMetadataForDB(db_name, db));
   CHECK(user.isSuper || (user.userId == db.dbOwner));
-  Catalog_Namespace::Catalog cat(base_path.string(), user, db);
+  Catalog_Namespace::Catalog cat(base_path.string(), user, db, *dataMgr);
   return cat;
 }
 
@@ -53,7 +56,7 @@ std::vector<Executor::AggResult> run_multiple_agg(const std::string& query_str) 
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
   Executor executor(plan);
-  return executor.execute(ExecutorOptLevel::LoopStrengthReduction);
+  return executor.execute(ExecutorDeviceType::CPU, ExecutorOptLevel::LoopStrengthReduction);
 }
 
 Executor::AggResult run_simple_agg(const std::string& query_str) {

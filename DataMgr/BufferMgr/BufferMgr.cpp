@@ -6,6 +6,7 @@
 #include "BufferMgr.h"
 #include "Buffer.h"
 
+#include <algorithm>
 #include <cassert>
 #include <limits>
 
@@ -366,7 +367,7 @@ namespace Buffer_Namespace {
         //    cout << endl;
         //}
         auto chunkIt = startChunkIt;
-        while (std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
+        while (chunkIt != chunkIndex_.end() && std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
         //cout << "Before getting segIt" << endl;
         auto  segIt = chunkIt->second;
         //printSeg(segIt);

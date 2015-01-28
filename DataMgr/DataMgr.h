@@ -7,18 +7,20 @@
 
 #include "AbstractBufferMgr.h"
 #include "AbstractBuffer.h"
+#include "MemoryLevel.h"
 
 #include <map>
 #include <vector>
 #include <string>
 #include <gtest/gtest_prod.h>
+
+
+
 namespace File_Namespace {
     class FileBuffer;
 }
 
 namespace Data_Namespace {
-
-    enum MemoryLevel {DISK_LEVEL = 0, CPU_LEVEL = 1, GPU_LEVEL = 2};
 
     class DataMgr { 
 
@@ -53,7 +55,7 @@ namespace Data_Namespace {
 } // Data_Namespace
 
 
-#endif
+#endif // DATAMGR_H
 
 
 

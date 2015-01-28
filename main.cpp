@@ -7,7 +7,6 @@
 #include "boost/program_options.hpp"
 #include "boost/filesystem.hpp"
 #include "DataMgr/DataMgr.h"
-#include "Partitioner/TablePartitionerMgr.h"
 #include "Catalog/Catalog.h"
 #include "Parser/parser.h"
 #include "Analyzer/Analyzer.h"
@@ -185,9 +184,8 @@ main(int argc, char* argv[])
 		return 1;
 	}
 
-    Data_Namespace::DataMgr dataMgr (2, base_path + "/mapd_data/"); 
-    Partitioner_Namespace::TablePartitionerMgr partitionerMgr (&dataMgr);
-	SysCatalog sys_cat(base_path);
+	Data_Namespace::DataMgr dataMgr (2, base_path + "/mapd_data/"); 
+	SysCatalog sys_cat(base_path, dataMgr);
 	UserMetadata user;
 	if (!sys_cat.getMetadataForUser(user_name, user)) {
 		cerr << "User " << user_name << " does not exist." << std::endl;
@@ -206,7 +204,7 @@ main(int argc, char* argv[])
 		cerr << "User " << user_name << " is not authorized to access database " << db_name << std::endl;
 		return 1;
 	}
-	Catalog cat(base_path, user, db);
+	Catalog cat(base_path, user, db, dataMgr);
 	while (true) {
 		try {
 			cout << "MapD > ";
