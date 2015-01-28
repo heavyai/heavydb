@@ -1,0 +1,18 @@
+#!/bin/bash
+
+result="success"
+for test in build/Tests/PlanTest build/Tests/ExecuteTest
+do
+	eval $test
+	if [ $? != 0 ]
+	then
+		result="fail"
+	fi
+done
+if [ $result == "fail" ]
+then
+	echo "--------- Sanity Tests Failed ---------."
+	exit 1
+else
+	echo "+++++++++ Sanity Tests Passed +++++++++."
+fi
