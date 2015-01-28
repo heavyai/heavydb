@@ -62,6 +62,7 @@ namespace File_Namespace {
         }
 
         inline int syncToDisk() {
+            fflush(f);
             return fsync(fileno(f));
             //return fcntl(fileno(f),51);
 
