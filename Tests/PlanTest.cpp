@@ -104,6 +104,9 @@ TEST(ParseAnalyzePlan, Create) {
 	ASSERT_TRUE(gcat->getMetadataForTable("fat") != nullptr);
 	ASSERT_NO_THROW(run_ddl("create table if not exists skinny (a smallint, b int, c bigint);"););
 	ASSERT_TRUE(gcat->getMetadataForTable("skinny") != nullptr);
+	ASSERT_NO_THROW(run_ddl("create table if not exists smallfrag (a int, b text, c bigint) with (fragment_size = 1000, page_size = 512);"););
+	const TableDescriptor *td = gcat->getMetadataForTable("smallfrag");
+	EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
 }
 
 TEST(ParseAnalyzePlan, Select) {
@@ -163,6 +166,7 @@ TEST(ParseAnalyzePlan, Drop) {
 	EXPECT_NO_THROW(run_ddl("drop view if exists fatview;"));
 	EXPECT_NO_THROW(run_ddl("drop table if exists fat;"));
 	EXPECT_NO_THROW(run_ddl("drop table if exists skinny;"));
+	EXPECT_NO_THROW(run_ddl("drop table if exists smallfrag;"));
 }
 
 int

@@ -303,7 +303,7 @@ Catalog::instantiatePartitioner(TableDescriptor *td) const
 	getAllColumnMetadataForTable(td, columnDescs);
 	ColumnInfo::translateColumnDescriptorsToColumnInfoVec(columnDescs , columnInfoVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-	td->partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, &dataMgr_);
+	td->partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, &dataMgr_, td->maxFragRows, td->fragPageSize);
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {

@@ -119,6 +119,11 @@ namespace Parser {
 		for (auto p : *table_element_list)
 			delete p;
 		delete table_element_list;
+		if (storage_options != nullptr) {
+			for (auto p : *storage_options)
+				delete p;
+			delete storage_options;
+		}
 	}
 
 	SelectEntry::~SelectEntry()
@@ -1116,6 +1121,26 @@ namespace Parser {
 		td.fragType = Partitioner_Namespace::PartitionerType::INSERT_ORDER;
 		td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
 		td.fragPageSize = DEFAULT_PAGE_SIZE;
+		if (storage_options != nullptr) {
+			for (auto p : *storage_options) {
+				if (boost::iequals(*p->get_name(), "fragment_size")) {
+					if (typeid(*p->get_value()) != typeid(IntLiteral))
+						throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
+					int frag_size = dynamic_cast<const IntLiteral*>(p->get_value())->get_intval();
+					if (frag_size <= 0)
+						throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
+					td.maxFragRows = frag_size;
+				} else if (boost::iequals(*p->get_name(), "page_size")) {
+					if (typeid(*p->get_value()) != typeid(IntLiteral))
+						throw std::runtime_error("PAGE_SIZE must be an integer literal.");
+					int page_size =  dynamic_cast<const IntLiteral*>(p->get_value())->get_intval();
+					if (page_size <= 0)
+						throw std::runtime_error("PAGE_SIZE must be a positive number.");
+					td.fragPageSize = page_size;
+				} else
+					throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() + ".  Should be FRAGMENT_SIZE or PAGE_SIZE.");
+			}
+		}
 		catalog.createTable(td, columns);
 	}
 
@@ -1146,23 +1171,29 @@ namespace Parser {
 		if (matview_options != nullptr) {
 			for (auto p : *matview_options) {
 				if (boost::iequals(*p->get_name(), "storage")) {
-					if (boost::iequals(*p->get_value(), "gpu") || boost::iequals(*p->get_value(), "mic"))
+					if (typeid(*p->get_value()) != typeid(StringLiteral))
+						throw std::runtime_error("Storage option must be a string literal.");
+					const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+					if (boost::iequals(*str, "gpu") || boost::iequals(*str, "mic"))
 						matview_storage = kGPU;
-					else if (boost::iequals(*p->get_value(), "cpu"))
+					else if (boost::iequals(*str, "cpu"))
 						matview_storage = kCPU;
-					else if (boost::iequals(*p->get_value(), "disk"))
+					else if (boost::iequals(*str, "disk"))
 						matview_storage = kDISK;
 					else
-						throw std::runtime_error("Invalid storage option " + *p->get_value() + ". Should be GPU, MIC, CPU or DISK.");
+						throw std::runtime_error("Invalid storage option " + *str + ". Should be GPU, MIC, CPU or DISK.");
 				} else if (boost::iequals(*p->get_name(), "refresh")) {
-					if (boost::iequals(*p->get_value(), "auto"))
+					if (typeid(*p->get_value()) != typeid(StringLiteral))
+						throw std::runtime_error("Refresh option must be a string literal.");
+					const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+					if (boost::iequals(*str, "auto"))
 						matview_refresh = kAUTO;
-					else if (boost::iequals(*p->get_value(), "manual"))
+					else if (boost::iequals(*str, "manual"))
 						matview_refresh = kMANUAL;
-					else if (boost::iequals(*p->get_value(), "immediate"))
+					else if (boost::iequals(*str, "immediate"))
 						matview_refresh = kIMMEDIATE;
 					else
-						throw std::runtime_error("Invalid refresh option " + *p->get_value() + ". Should be AUTO, MANUAL or IMMEDIATE.");
+						throw std::runtime_error("Invalid refresh option " + *str + ". Should be AUTO, MANUAL or IMMEDIATE.");
 				} else
 					throw std::runtime_error("Invalid CREATE MATERIALIZED VIEW option " + *p->get_name() + ".  Should be STORAGE or REFRESH.");
 			}
@@ -1280,9 +1311,12 @@ namespace Parser {
 		if (name_value_list != nullptr) {
 			for (auto p : *name_value_list) {
 				if (boost::iequals(*p->get_name(), "owner")) {
+					if (typeid(*p->get_value()) != typeid(StringLiteral))
+						throw std::runtime_error("Owner name must be a string literal.");
+					const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
 					Catalog_Namespace::UserMetadata user;
-					if (!syscat.getMetadataForUser(*p->get_value(), user))
-						throw std::runtime_error("User " + *p->get_value() + " does not exist.");
+					if (!syscat.getMetadataForUser(*str, user))
+						throw std::runtime_error("User " + *str + " does not exist.");
 					ownerId = user.userId;
 				}
 				else
@@ -1307,12 +1341,17 @@ namespace Parser {
 		std::string passwd;
 		bool is_super = false;
 		for (auto p : *name_value_list) {
-			if (boost::iequals(*p->get_name(), "password"))
-				passwd = *p->get_value();
-			else if (boost::iequals(*p->get_name(), "is_super")) {
-				if (boost::iequals(*p->get_value(), "true"))
+			if (boost::iequals(*p->get_name(), "password")) {
+				if (typeid(*p->get_value()) != typeid(StringLiteral))
+					throw std::runtime_error("Password must be a string literal.");
+				passwd = *dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+			} else if (boost::iequals(*p->get_name(), "is_super")) {
+				if (typeid(*p->get_value()) != typeid(StringLiteral))
+					throw std::runtime_error("IS_SUPER option must be a string literal.");
+				const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+				if (boost::iequals(*str, "true"))
 					is_super = true;
-				else if (boost::iequals(*p->get_value(), "false"))
+				else if (boost::iequals(*str, "false"))
 					is_super = false;
 				else
 					throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
@@ -1344,13 +1383,18 @@ namespace Parser {
 		bool is_super = false;
 		bool *is_superp = nullptr;
 		for (auto p : *name_value_list) {
-			if (boost::iequals(*p->get_name(), "password"))
-				passwd = p->get_value();
-			else if (boost::iequals(*p->get_name(), "is_super")) {
-				if (boost::iequals(*p->get_value(), "true")) {
+			if (boost::iequals(*p->get_name(), "password")) {
+				if (typeid(*p->get_value()) != typeid(StringLiteral))
+					throw std::runtime_error("Password must be a string literal.");
+				passwd = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+			} else if (boost::iequals(*p->get_name(), "is_super")) {
+				if (typeid(*p->get_value()) != typeid(StringLiteral))
+					throw std::runtime_error("IS_SUPER option must be a string literal.");
+				const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+				if (boost::iequals(*str, "true")) {
 					is_super = true;
 					is_superp = &is_super;
-				} else if (boost::iequals(*p->get_value(), "false")) {
+				} else if (boost::iequals(*str, "false")) {
 					is_super = false;
 					is_superp = &is_super;
 				} else
