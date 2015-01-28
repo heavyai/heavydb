@@ -66,7 +66,7 @@ main(int argc, char* argv[])
 	}
 
 	try {
-		Data_Namespace::DataMgr dummy(0, "");
+		Data_Namespace::DataMgr dummy(0, data_path);
 		Catalog_Namespace::SysCatalog sys_cat(base_path, dummy, true);
 		sys_cat.initDB();
 	}
