@@ -1,6 +1,5 @@
 #include "Execute.h"
 #include "Codec.h"
-#include "DataSourceMock.h"
 #include "NvidiaKernel.h"
 #include "Partitioner/Partitioner.h"
 #include "QueryTemplateGenerator.h"
