@@ -11,6 +11,7 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
 #include "../Planner/Planner.h"
+#include "../DataMgr/DataMgr.h"
 #include "gtest/gtest.h"
 #include "glog/logging.h"
 
@@ -24,6 +25,7 @@ using namespace Planner;
 namespace {
 	SysCatalog *gsys_cat = nullptr;
 	Catalog *gcat = nullptr;
+	Data_Namespace::DataMgr *dataMgr = nullptr;
 
 	class SQLTestEnv : public ::testing::Environment {
 		public:
@@ -32,11 +34,13 @@ namespace {
 				boost::filesystem::path base_path { BASE_PATH };
 				CHECK(boost::filesystem::exists(base_path));
 				auto system_db_file = base_path / "mapd_catalogs" / MAPD_SYSTEM_DB ;
+				auto data_dir = base_path / "mapd_data";
+				dataMgr = new Data_Namespace::DataMgr(2, data_dir.string());
 				if (!boost::filesystem::exists(system_db_file)) {
-					SysCatalog syscat(base_path.string(), true);
+					SysCatalog syscat(base_path.string(), *dataMgr, true);
 					syscat.initDB();
 				}
-				gsys_cat = new SysCatalog(base_path.string());
+				gsys_cat = new SysCatalog(base_path.string(), *dataMgr);
 				UserMetadata user;
 				CHECK(gsys_cat->getMetadataForUser(MAPD_ROOT_USER, user));
 				gsys_cat->set_currentUser(user);
@@ -49,7 +53,7 @@ namespace {
 					gsys_cat->createDatabase("gtest_db", user.userId);
 					CHECK(gsys_cat->getMetadataForDB("gtest_db", db));
 				}
-				gcat = new Catalog(base_path.string(), user, db);
+				gcat = new Catalog(base_path.string(), user, db, *dataMgr);
 			}
 			virtual void TearDown()
 			{
@@ -57,6 +61,8 @@ namespace {
 					delete gsys_cat;
 				if (gcat != nullptr)
 					delete gcat;
+				if (dataMgr != nullptr)
+					delete dataMgr;
 			}
 	};
 

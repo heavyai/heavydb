@@ -52,12 +52,22 @@ main(int argc, char* argv[])
 			return 1;
 		}
 	}
+	std::string data_path = base_path + "/mapd_data";
+	if (boost::filesystem::exists(data_path)) {
+		if (force)
+			boost::filesystem::remove_all(data_path);
+		else {
+			std::cerr << "MapD data directory already exists at " + base_path + ". Use -f to force reinitialization.\n";
+			return 1;
+		}
+	}
 	if (!boost::filesystem::create_directory(catalogs_path)) {
 		std::cerr << "Cannot create mapd_catalogs subdirectory under " << base_path << std::endl;
 	}
 
 	try {
-		Catalog_Namespace::SysCatalog sys_cat(base_path, true);
+		Data_Namespace::DataMgr dummy(0, "");
+		Catalog_Namespace::SysCatalog sys_cat(base_path, dummy, true);
 		sys_cat.initDB();
 	}
 	catch (std::exception &e)

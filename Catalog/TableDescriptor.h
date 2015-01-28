@@ -4,7 +4,7 @@
 #include <string>
 #include <cstdint>
 #include "../Shared/sqldefs.h"
-#include "../Partitioner/Partitioner.h"
+#include "../Partitioner/AbstractTablePartitioner.h"
 
 /**
  * @type TableDescriptor
@@ -27,7 +27,8 @@ struct TableDescriptor {
 		ViewStorageOption storageOption; // only relevant to materialized views
 		ViewRefreshOption refreshOption; // only relevant to materialized views
 		bool checkOption; // only relevant to updateable views.  CHECK OPTION
-		bool isReady; // only set at run time when a materialized view is ready to be consumed
+		bool isReady; // only set at run time when a materialized view is ready to be consumed.  already set to true for tables.
+		Partitioner_Namespace::AbstractTablePartitioner *partitioner; // point to partitioner object for the table.  it's instantiated upon first use.
 };
 
 

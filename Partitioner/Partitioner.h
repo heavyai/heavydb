@@ -1,10 +1,12 @@
 #ifndef PARTITIONER_PARTITIONER_H
 #define PARTITIONER_PARTITIONER_H
 
-#include "../Shared/types.h"
-#include "../DataMgr/ChunkMetadata.h"
 #include <map>
 #include <vector>
+#include <list>
+#include "../Shared/types.h"
+#include "../DataMgr/ChunkMetadata.h"
+#include "../Catalog/ColumnDescriptor.h"
 
 namespace Data_Namespace {
     class AbstractBuffer;
@@ -30,14 +32,14 @@ namespace Partitioner_Namespace {
      */
 
     struct ColumnInfo {
-        int columnId; // for when we iterate over all structs of ColumnInfo instead of using a map
-        SQLTypes columnType; 
-        EncodingType encodingType;
-        int encodingBits;
+				const ColumnDescriptor *columnDesc;
         Data_Namespace::AbstractBuffer * insertBuffer; // a pointer so can be null
-        //@todo get the constructor for ColumnInfo compiling
-        //ColumnInfo(const int columnId, const mapd_data_t columnType, const int bitSize): columnId(columnId), columnType(columnType), bitSize(bitSize), insertBuffer(NULL) {}
-        //ColumnInfo& operator=(const ColumnInfo&);
+				ColumnInfo() : columnDesc(nullptr), insertBuffer(nullptr) {}
+				ColumnInfo(const ColumnDescriptor *c) : columnDesc(c), insertBuffer(nullptr) {}
+				static void translateColumnDescriptorsToColumnInfoVec(const std::list<const ColumnDescriptor*> &colDescs, std::vector<ColumnInfo> &columnInfoVec) {
+					for (auto cd : colDescs)
+						columnInfoVec.push_back(ColumnInfo(cd));
+				}
     };
     /**
      * @struct InsertData

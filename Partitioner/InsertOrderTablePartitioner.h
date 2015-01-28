@@ -18,6 +18,9 @@ namespace Data_Namespace {
     class DataMgr; 
 }
 
+#define DEFAULT_FRAGMENT_SIZE		1000000
+#define DEFAULT_PAGE_SIZE				1048576
+
 namespace Partitioner_Namespace {
 
 /**
@@ -31,7 +34,7 @@ class InsertOrderTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = 1000000, const size_t pageSize = 1048576 /*default 1MB*/);
+    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/);
 
     virtual ~InsertOrderTablePartitioner();
     /**

@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
 SET (partitioner_source_files
-    TablePartitionerMgr.cpp
     InsertOrderTablePartitioner.cpp
 )
 

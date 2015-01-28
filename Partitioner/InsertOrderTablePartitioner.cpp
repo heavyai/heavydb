@@ -18,7 +18,7 @@ namespace Partitioner_Namespace {
 InsertOrderTablePartitioner::InsertOrderTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows, const size_t pageSize /*default 1MB*/) :
 		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"){
     for (auto colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
-        columnMap_[colIt -> columnId] = *colIt; 
+        columnMap_[colIt -> columnDesc->columnId] = *colIt; 
     }
 }
 
@@ -99,11 +99,11 @@ PartitionInfo * InsertOrderTablePartitioner::createNewPartition() {
             colMapIt -> second.insertBuffer -> unPin();
         }
         ChunkKey chunkKey =  chunkKeyPrefix_;
-        chunkKey.push_back(colMapIt->second.columnId);
+        chunkKey.push_back(colMapIt->second.columnDesc->columnId);
         chunkKey.push_back(maxPartitionId_);
         colMapIt->second.insertBuffer = dataMgr_->createChunk(Data_Namespace::DISK_LEVEL,chunkKey);
-        cout << "Creating chunk with encodingType: " << colMapIt->second.encodingType << endl;
-        colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnType,colMapIt->second.encodingType,colMapIt->second.encodingBits);
+        cout << "Creating chunk with encodingType: " << colMapIt->second.columnDesc->compression << endl;
+        colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnDesc->columnType.type,colMapIt->second.columnDesc->compression,colMapIt->second.columnDesc->comp_param);
     }
     PartitionInfo newPartitionInfo;
     newPartitionInfo.partitionId = maxPartitionId_;
@@ -139,7 +139,7 @@ void InsertOrderTablePartitioner::getInsertBufferChunks() {
             // method up front
             colMapIt -> second.insertBuffer -> unPin();
         }
-        ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnId};
+        ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnDesc->columnId};
         colMapIt -> second.insertBuffer = dataMgr_->getChunk(Data_Namespace::DISK_LEVEL,chunkKey);
     }
 }

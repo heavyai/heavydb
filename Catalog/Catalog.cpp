@@ -11,12 +11,17 @@
 #include <cassert>
 #include "boost/filesystem.hpp"
 #include "Catalog.h"
+#include "../Partitioner/Partitioner.h"
+#include "../Partitioner/InsertOrderTablePartitioner.h"
 
 using std::runtime_error;
 using std::string;
 using std::map;
 using std::list;
 using std::pair;
+using std::vector;
+using Partitioner_Namespace::ColumnInfo;
+using Partitioner_Namespace::InsertOrderTablePartitioner;
 
 namespace Catalog_Namespace {
 
@@ -152,7 +157,7 @@ SysCatalog::getMetadataForDB(const string &name, DBMetadata &db)
 	return true;
 }
 
-Catalog::Catalog(const string &basePath, const string &dbname, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname, basePath + "/mapd_catalogs/")
+Catalog::Catalog(const string &basePath, const string &dbname, Data_Namespace::DataMgr &dataMgr, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname, basePath + "/mapd_catalogs/"), dataMgr_(dataMgr)
 {
 		if (!is_initdb)
 			buildMaps();
@@ -161,15 +166,18 @@ Catalog::Catalog(const string &basePath, const string &dbname, bool is_initdb): 
 		}
 }
 
-Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMetadata &curDB): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentUser_(curUser), currentDB_(curDB) 
+Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentUser_(curUser), currentDB_(curDB), dataMgr_(dataMgr) 
 {
     buildMaps();
 }
 
 Catalog::~Catalog() {
     // must clean up heap-allocated TableDescriptor and ColumnDescriptor structs
-    for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin(); tableDescIt != tableDescriptorMap_.end(); ++tableDescIt)
+    for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin(); tableDescIt != tableDescriptorMap_.end(); ++tableDescIt) {
+				if (tableDescIt->second->partitioner != nullptr)
+					delete tableDescIt->second->partitioner;
         delete tableDescIt -> second;
+		}
 
 		// TableDescriptorMapById points to the same descriptors.  No need to delete
 		
@@ -201,6 +209,7 @@ void Catalog::buildMaps() {
 					td->refreshOption = kMANUAL;
 					td->checkOption = false;
 					td->isReady = true;
+					td->partitioner = nullptr;
 				} 
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
@@ -236,6 +245,7 @@ void Catalog::buildMaps() {
 				td->storageOption = (ViewStorageOption)sqliteConnector_.getData<int>(r,3);
 				td->refreshOption = (ViewRefreshOption)sqliteConnector_.getData<int>(r,4);
 				td->isReady = !td->isMaterialized;
+				td->partitioner = nullptr;
     }
 }
 
@@ -266,6 +276,8 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
 	int ncolumns = td->nColumns;
 	tableDescriptorMapById_.erase(tableDescIt);
 	tableDescriptorMap_.erase(tableName);
+	if (td->partitioner != nullptr)
+		delete td->partitioner;
 	delete td;
 
 	// delete all column descriptors for the table
@@ -280,12 +292,29 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
 	}
 }
 
+void
+Catalog::instantiatePartitioner(TableDescriptor *td) const
+{
+	// instatiion table partitioner upon first use
+	// assume only insert order partitioner is supported
+	assert(td->fragType == Partitioner_Namespace::PartitionerType::INSERT_ORDER);
+	vector<ColumnInfo> columnInfoVec;
+	list<const ColumnDescriptor *> columnDescs;
+	getAllColumnMetadataForTable(td, columnDescs);
+	ColumnInfo::translateColumnDescriptorsToColumnInfoVec(columnDescs , columnInfoVec);
+	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
+	td->partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, &dataMgr_);
+}
+
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {
     auto tableDescIt = tableDescriptorMap_.find(tableName);
     if (tableDescIt == tableDescriptorMap_.end()) { // check to make sure table exists
         return nullptr;
     }
-    return tableDescIt -> second; // returns pointer to table descriptor
+		TableDescriptor *td = tableDescIt->second;
+		if (td->partitioner == nullptr)
+			instantiatePartitioner(td);
+    return td; // returns pointer to table descriptor
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (int tableId) const  {
@@ -293,7 +322,10 @@ const TableDescriptor * Catalog::getMetadataForTable (int tableId) const  {
     if (tableDescIt == tableDescriptorMapById_.end()) { // check to make sure table exists
         return nullptr;
     }
-    return tableDescIt -> second; // returns pointer to table descriptor
+		TableDescriptor *td = tableDescIt->second;
+		if (td->partitioner == nullptr)
+			instantiatePartitioner(td);
+    return td; // returns pointer to table descriptor
 }
 
 const ColumnDescriptor * Catalog::getMetadataForColumn (int tableId, const string &columnName) const {
@@ -314,14 +346,19 @@ const ColumnDescriptor * Catalog::getMetadataForColumn (int tableId, int columnI
     return colDescIt -> second;
 }
 
-list <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId) const {
-    list <const ColumnDescriptor *> columnDescriptors;
-		const TableDescriptor *td = getMetadataForTable(tableId);
+void 
+Catalog::getAllColumnMetadataForTable(const TableDescriptor *td, list<const ColumnDescriptor *> &columnDescriptors) const {
 		for (int i = 1; i <= td->nColumns; i++) {
-			const ColumnDescriptor *cd = getMetadataForColumn(tableId, i);
+			const ColumnDescriptor *cd = getMetadataForColumn(td->tableId, i);
 			assert(cd != nullptr);
 			columnDescriptors.push_back(cd);
 		}
+}
+
+list <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId) const {
+    list <const ColumnDescriptor *> columnDescriptors;
+		const TableDescriptor *td = getMetadataForTable(tableId);
+		getAllColumnMetadataForTable(td, columnDescriptors);
     return columnDescriptors;
 }
 
