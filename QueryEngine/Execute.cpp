@@ -531,6 +531,7 @@ void Executor::executeSimpleInsert() {
   insert_data.numRows = 1;
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   table_descriptor->partitioner->insertData(insert_data);
+  cat.get_dataMgr().checkpoint();
   for (const auto kv : col_buffers) {
     free(kv.second);
   }
