@@ -242,7 +242,7 @@ void Catalog::buildMaps() {
 				TableDescriptor *td = tableDescriptorMapById_[tableId];
 				td->viewSQL = sqliteConnector_.getData<string>(r,1);
 				td->isMaterialized = sqliteConnector_.getData<bool>(r,2);
-				td->storageOption = (ViewStorageOption)sqliteConnector_.getData<int>(r,3);
+				td->storageOption = (StorageOption)sqliteConnector_.getData<int>(r,3);
 				td->refreshOption = (ViewRefreshOption)sqliteConnector_.getData<int>(r,4);
 				td->isReady = !td->isMaterialized;
 				td->partitioner = nullptr;
@@ -303,7 +303,7 @@ Catalog::instantiatePartitioner(TableDescriptor *td) const
 	getAllColumnMetadataForTable(td, columnDescs);
 	ColumnInfo::translateColumnDescriptorsToColumnInfoVec(columnDescs , columnInfoVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-	td->partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, &dataMgr_);
+	td->partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, &dataMgr_, td->maxFragRows, td->fragPageSize);
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {

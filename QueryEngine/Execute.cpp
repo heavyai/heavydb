@@ -385,6 +385,14 @@ std::vector<Analyzer::AggExpr*> get_agg_exprs(const Planner::AggPlan* agg_plan) 
   return result;
 }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
 void launch_query_gpu_code(
     CUfunction kernel,
     CUdeviceptr col_buffers,
@@ -403,6 +411,12 @@ void launch_query_gpu_code(
                                0, nullptr, kernel_params, nullptr);
   CHECK_EQ(status, CUDA_SUCCESS);
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
+#pragma GCC diagnostic pop
+#endif
 
 }  // namespace
 
@@ -490,7 +504,7 @@ void Executor::executeSimpleInsert() {
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     CHECK(col_cv);
-    const auto col_type = col_types[col_idx++];
+    const auto col_type = col_types[col_idx];
     auto col_datum = col_cv->get_constval();
     switch (col_type) {
     case kSMALLINT:
@@ -506,13 +520,15 @@ void Executor::executeSimpleInsert() {
     default:
       CHECK(false);
     }
+    ++col_idx;
   }
   for (const auto kv : col_buffers) {
     insert_data.columnIds.push_back(kv.first);
     insert_data.data.push_back(kv.second);
-    insert_data.numRows = 1;
   }
-  CHECK(false);
+  insert_data.numRows = 1;
+  const auto table_descriptor = cat.getMetadataForTable(table_id);
+  table_descriptor->partitioner->insertData(insert_data);
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {

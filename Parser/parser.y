@@ -173,7 +173,7 @@ name_eq_value_list:
 			$<listval>$->push_back($<nodeval>3);
 		}
 		;
-name_eq_value: NAME EQUAL STRING { $<nodeval>$ = new NameValueAssign($<stringval>1, $<stringval>3); }
+name_eq_value: NAME EQUAL literal { $<nodeval>$ = new NameValueAssign($<stringval>1, dynamic_cast<Literal*>($<nodeval>3)); }
 		;
 
 opt_if_not_exists:
@@ -182,9 +182,9 @@ opt_if_not_exists:
 		;
 
 create_table_statement:
-		CREATE TABLE opt_if_not_exists table '(' base_table_element_commalist ')'
+		CREATE TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
 		{
-			$<nodeval>$ = new CreateTableStmt($<stringval>4, reinterpret_cast<std::list<TableElement*>*>($<listval>6), $<boolval>3);
+			$<nodeval>$ = new CreateTableStmt($<stringval>4, reinterpret_cast<std::list<TableElement*>*>($<listval>6), $<boolval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>8));
 		}
 	;
 

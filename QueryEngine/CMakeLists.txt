@@ -41,7 +41,7 @@ add_custom_command(
     DEPENDS RuntimeFunctionsCodegen.cpp RuntimeFunctionsCodegenIncludes.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp
     COMMAND cat
-    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenIncludes.cpp ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp > ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp)
+    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenIncludes.cpp ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenEpilogue.cpp > ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp)
 
 add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h

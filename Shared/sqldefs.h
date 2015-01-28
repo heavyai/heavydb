@@ -57,7 +57,7 @@ enum SQLStmtType {
 	kCREATE_TABLE
 };
 
-enum ViewStorageOption {
+enum StorageOption {
 	kDISK = 0,
 	kGPU = 1,
 	kCPU = 2
