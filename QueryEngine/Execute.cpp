@@ -57,7 +57,7 @@ std::vector<Executor::AggResult> Executor::execute(
     CHECK(plan);
     const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
     CHECK(agg_plan);
-    return executeAggScanPlan(agg_plan, device_type, opt_level);
+    return executeAggScanPlan(agg_plan, device_type, opt_level, root_plan_->get_catalog());
     break;
   }
   case kINSERT: {
@@ -423,7 +423,8 @@ void launch_query_gpu_code(
 std::vector<Executor::AggResult> Executor::executeAggScanPlan(
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel opt_level) {
+    const ExecutorOptLevel opt_level,
+    const Catalog_Namespace::Catalog& cat) {
   CHECK(device_type == ExecutorDeviceType::CPU);
   typedef void (*agg_query)(
     const int8_t** col_buffers,
@@ -431,25 +432,28 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
     const int64_t* init_agg_value,
     int64_t** out);
   compileAggScanPlan(agg_plan, device_type, opt_level);
-  const int table_id = 1;
-  const auto fragments = get_fragments(table_id);
-  std::vector<std::pair<const ChunkKey, const size_t>> chunk_keys;
+  const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
+  CHECK(scan_plan);
+  const int table_id = scan_plan->get_table_id();
+  const auto table_descriptor = cat.getMetadataForTable(table_id);
+  const auto partitioner = table_descriptor->partitioner;
+  CHECK(partitioner);
+  Partitioner_Namespace::QueryInfo query_info;
+  partitioner->getPartitionsForQuery(query_info);
+  const auto& partitions = query_info.partitions;
+  const auto current_db = cat.get_currentDB();
+  const auto& col_global_ids = scan_plan->get_col_list();
+  const int8_t* col_buffers[global_to_local_col_ids_.size()];
   std::vector<Executor::AggResult> results;
-  for (const auto& fragment : fragments) {
-    for (size_t local_col_id = 0; local_col_id < local_to_global_col_ids_.size(); ++local_col_id) {
-      const int col_id = local_to_global_col_ids_[local_col_id];
-      chunk_keys.push_back(std::make_pair(
-        ChunkKey { table_id, fragment.fragment_id, col_id },
-        fragment.num_tuples));
-    }
-    const auto buffers = get_chunk_multi<int32_t>(
-      chunk_keys,
-      device_type == ExecutorDeviceType::CPU ? AddressSpace::CPU : AddressSpace::GPU);
-    const int8_t* col_buffers[buffers.size()];
-    int64_t num_rows { static_cast<int64_t>(fragment.num_tuples) };
-    for (size_t buffer_idx = 0; buffer_idx < buffers.size(); ++buffer_idx) {
-      col_buffers[buffer_idx] = buffers[buffer_idx].data;
-      CHECK_EQ(num_rows, buffers[buffer_idx].num_rows);
+  for (const auto& partition : partitions) {
+    auto num_rows = static_cast<int64_t>(partition.numTuples);
+    for (const int col_id : col_global_ids) {
+      Data_Namespace::AbstractBuffer* ab = cat.get_dataMgr().getChunk(Data_Namespace::CPU_LEVEL, { current_db.dbId, table_id, col_id, partition.partitionId });
+      CHECK(ab->getMemoryPtr());
+      auto it = global_to_local_col_ids_.find(col_id);
+      CHECK(it != global_to_local_col_ids_.end());
+      CHECK_LT(it->second, global_to_local_col_ids_.size());
+      col_buffers[it->second] = ab->getMemoryPtr();
     }
     std::vector<int64_t*> out_vec;
     const size_t agg_col_count = init_agg_vals_.size();
@@ -479,7 +483,6 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
 }
 
 void Executor::executeSimpleInsert() {
-  root_plan_->print();
   const auto plan = root_plan_->get_plan();
   CHECK(plan);
   const auto values_plan = dynamic_cast<const Planner::ValuesScan*>(plan);
