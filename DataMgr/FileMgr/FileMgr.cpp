@@ -48,7 +48,7 @@ namespace File_Namespace {
         checkpoint();
         // free memory used by FileInfo objects
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            delete chunkIt -> second;
+            delete chunkIt->second;
         }
         for (int i = 0; i < files_.size(); ++i) {
             delete files_[i];
@@ -80,13 +80,13 @@ namespace File_Namespace {
             int maxFileId = -1;
             std::vector <HeaderInfo> headerVec;
             for (boost::filesystem::directory_iterator fileIt (path); fileIt != endItr; ++fileIt) {
-                if (boost::filesystem::is_regular_file(fileIt ->status())) {
+                if (boost::filesystem::is_regular_file(fileIt->status())) {
                     //note that boost::filesystem leaves preceding dot on
                     //extension - hence MAPD_FILE_EXT is ".mapd"
-                    std::string extension (fileIt ->path().extension().string());
+                    std::string extension (fileIt->path().extension().string());
             
                     if (extension == MAPD_FILE_EXT) { 
-                        std::string fileStem(fileIt -> path().stem().string());
+                        std::string fileStem(fileIt->path().stem().string());
                         // remove trailing dot if any
                         if (fileStem.size() > 0 && fileStem.back() == '.') {
                             fileStem = fileStem.substr(0,fileStem.size()-1);
@@ -100,7 +100,7 @@ namespace File_Namespace {
                             maxFileId = fileId;
                         }
                         size_t pageSize = boost::lexical_cast<size_t>(fileStem.substr(dotPos+1,fileStem.size()));
-                        std::string filePath(fileIt ->path().string());
+                        std::string filePath(fileIt->path().string());
                         size_t fileSize = boost::filesystem::file_size(filePath);
                         assert (fileSize % pageSize == 0); // should be no partial pages
                         size_t numPages = fileSize / pageSize;
@@ -124,26 +124,26 @@ namespace File_Namespace {
 
             //std::cout << "Header vec size: " << headerVec.size() << std::endl;
             if (headerVec.size() > 0) {
-                ChunkKey lastChunkKey = headerVec.begin() -> chunkKey;
+                ChunkKey lastChunkKey = headerVec.begin()->chunkKey;
                 auto startIt = headerVec.begin();
 
                 for (auto headerIt = headerVec.begin() + 1 ; headerIt != headerVec.end(); ++headerIt) {
                             
-                    //for (auto chunkIt = headerIt -> chunkKey.begin(); chunkIt != headerIt -> chunkKey.end(); ++chunkIt) {
+                    //for (auto chunkIt = headerIt->chunkKey.begin(); chunkIt != headerIt->chunkKey.end(); ++chunkIt) {
                     //    std::cout << *chunkIt << " ";
                     //}
                     
-                    if (headerIt -> chunkKey != lastChunkKey) {
+                    if (headerIt->chunkKey != lastChunkKey) {
                         //std::cout << "New chunkkey" << std::endl;
                         
-                        //size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                        //size_t pageSize = files_[startIt->page.fileId]->pageSize;
                         chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerIt);
-                        lastChunkKey = headerIt -> chunkKey;
+                        lastChunkKey = headerIt->chunkKey;
                         startIt = headerIt;
                     }
                 }
                 // now need to insert last Chunk
-                //size_t pageSize = files_[startIt -> page.fileId] -> pageSize;
+                //size_t pageSize = files_[startIt->page.fileId]->pageSize;
                 //cout << "Inserting last chunk" << endl;
                 chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerVec.end());
 
@@ -206,13 +206,13 @@ namespace File_Namespace {
     void FileMgr::checkpoint() {
         std::cout << "Checkpointing " << epoch_ <<  std::endl;
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            if (chunkIt -> second -> isDirty_) {
-                chunkIt -> second -> writeMetadata(epoch_);
-                chunkIt -> second -> clearDirtyBits();
+            if (chunkIt->second->isDirty_) {
+                chunkIt->second->writeMetadata(epoch_);
+                chunkIt->second->clearDirtyBits();
             }
         }
         for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
-            int status = (*fileIt) -> syncToDisk();
+            int status = (*fileIt)->syncToDisk();
             if (status != 0)
                 throw std::runtime_error("Could not sync file to disk");
         }
@@ -243,9 +243,19 @@ namespace File_Namespace {
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist.");
         }
-        chunkIt -> second -> freePages();
-        delete chunkIt -> second;
+        chunkIt->second->freePages();
+        delete chunkIt->second;
         chunkIndex_.erase(chunkIt);
+    }
+
+    void FileMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
+        auto startChunkIt = chunkIndex_.find(keyPrefix);
+        auto endChunkIt = chunkIndex_.upper_bound(keyPrefix);
+        for (auto chunkIt = startChunkIt; chunkIt != endChunkIt; ++chunkIt) {
+            chunkIt->second->freePages();
+            delete chunkIt->second;
+            chunkIndex_.erase(chunkIt);
+        }
     }
 
     AbstractBuffer* FileMgr::getChunk(const ChunkKey &key, const size_t numBytes) {
@@ -264,10 +274,10 @@ namespace File_Namespace {
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist");
         }
-        if (destBuffer -> isDirty()) {
+        if (destBuffer->isDirty()) {
             throw std::runtime_error("Chunk inconsitency - fetchChunk");
         }
-        AbstractBuffer *chunk = chunkIt -> second;
+        AbstractBuffer *chunk = chunkIt->second;
         // ChunkSize is either specified in function call with numBytes or we
         // just look at pageSize * numPages in FileBuffer
         size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
@@ -314,7 +324,7 @@ namespace File_Namespace {
             assert(oldChunkSize < newChunkSize);
             chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
         }
-        //chunk -> clearDirtyBits(); // Hack: because write and append will set dirty bits
+        //chunk->clearDirtyBits(); // Hack: because write and append will set dirty bits
         //@todo commenting out line above will make sure this metadata is set
         // but will trigger error on fetch chunk
         srcBuffer->clearDirtyBits();
@@ -341,15 +351,15 @@ namespace File_Namespace {
         auto candidateFiles = fileIndex_.equal_range(pageSize);
         int pageNum = -1;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-            FileInfo *fileInfo = files_[fileIt -> second]; 
-            pageNum = fileInfo ->getFreePage();
+            FileInfo *fileInfo = files_[fileIt->second]; 
+            pageNum = fileInfo->getFreePage();
             if (pageNum != -1) {
                 return (Page (fileInfo->fileId,pageNum));
             }
         }
         // if here then we need to add a file
         FileInfo *fileInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
-        pageNum = fileInfo -> getFreePage();
+        pageNum = fileInfo->getFreePage();
         assert(pageNum != -1);
         return (Page (fileInfo->fileId,pageNum));
     }
@@ -360,10 +370,10 @@ namespace File_Namespace {
         auto candidateFiles = fileIndex_.equal_range(pageSize);
         size_t numPagesNeeded = numPagesRequested;
         for (auto fileIt = candidateFiles.first; fileIt != candidateFiles.second; ++fileIt) {
-            FileInfo *fileInfo = files_[fileIt -> second]; 
+            FileInfo *fileInfo = files_[fileIt->second]; 
             int pageNum;
             do {
-                pageNum = fileInfo -> getFreePage();
+                pageNum = fileInfo->getFreePage();
                 if (pageNum != -1) {
                     pages.push_back(Page(fileInfo->fileId,pageNum));
                     numPagesNeeded--;
@@ -378,7 +388,7 @@ namespace File_Namespace {
             FileInfo *fileInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
             int pageNum;
             do {
-                pageNum = fileInfo -> getFreePage();
+                pageNum = fileInfo->getFreePage();
                 if (pageNum != -1) {
                     pages.push_back(Page(fileInfo->fileId,pageNum));
                     numPagesNeeded--;
@@ -397,7 +407,7 @@ namespace File_Namespace {
         FILE *f = open(path);
         FileInfo *fInfo = new FileInfo (fileId, f, pageSize, numPages,false); // false means don't init file
         
-        fInfo -> openExistingFile(headerVec,epoch_);
+        fInfo->openExistingFile(headerVec,epoch_);
         if (fileId >= files_.size()) {
             files_.resize(fileId+1);
         }
@@ -434,23 +444,23 @@ namespace File_Namespace {
     FILE * FileMgr::getFileForFileId(const int fileId) {
         assert (fileId >= 0);
         //assert(fileId < nextFileId_);
-        return files_[fileId] -> f;
+        return files_[fileId]->f;
     }
     /*
     void FileMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey, int64_t> > &metadata) {
         metadata.reserve(chunkIndex_.size());
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
-            metadata.push_back(std::make_pair(chunkIt -> first, chunkIt -> second -> encoder -> numElems));
+            metadata.push_back(std::make_pair(chunkIt->first, chunkIt->second->encoder->numElems));
         }
     }
     */
     void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
         chunkMetadataVec.reserve(chunkIndex_.size());
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
-            if (chunkIt -> second -> hasEncoder) {
+            if (chunkIt->second->hasEncoder) {
                 ChunkMetadata chunkMetadata;
                 chunkIt->second->encoder->getMetadata(chunkMetadata);
-                chunkMetadataVec.push_back(std::make_pair(chunkIt -> first, chunkMetadata));
+                chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
             }
         }
     }
@@ -462,7 +472,7 @@ namespace File_Namespace {
         for (; chunkIt != chunkEndIt; ++chunkIt) {
             ChunkMetadata chunkMetadata;
             chunkIt->second->encoder->getMetadata(chunkMetadata);
-            chunkMetadataVec.push_back(std::make_pair(chunkIt -> first, chunkMetadata));
+            chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
         }
     }
 

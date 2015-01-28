@@ -3,6 +3,8 @@ set(CMAKE_CXX_FLAGS "-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -std=c++11 -
 set(query_engine_source_files
     Codec.cpp
     Execute.cpp
+    DeviceSideLaunch.cpp
+    NvidiaKernel.cpp
     QueryTemplateGenerator.cpp
     RuntimeFunctions.cpp
     RuntimeFunctionsCodegenWithIncludes.cpp
@@ -10,6 +12,7 @@ set(query_engine_source_files
     Codec.h
     Execute.h
     RuntimeFunctions.h
+    NvidiaKernel.h
     QueryTemplateGenerator.h
     Translator.h)
 set(group_by_hash_test_files
@@ -26,7 +29,7 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
     OUTPUT_VARIABLE LLVM_INC_FLAGS)
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
-include_directories(.. ${LLVM_INC_FLAGS})
+include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/")
 
 add_custom_command(
     DEPENDS RuntimeFunctions.ll

@@ -18,7 +18,7 @@ namespace Buffer_Namespace {
 
     Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const size_t pageSize, const size_t numBytes): AbstractBuffer(), mem_(0), bm_(bm), segIt_(segIt), pageSize_(pageSize), numPages_(0), pinCount_(0) {
         // so that the pointer value of this Buffer is stored
-        segIt_ -> buffer = this;
+        segIt_->buffer = this;
         if (numBytes > 0) {
             reserve(numBytes);
         }
@@ -54,7 +54,7 @@ namespace Buffer_Namespace {
         if (numPages > numPages_) {
             pageDirtyFlags_.resize(numPages);
             numPages_ = numPages;
-            segIt_ = bm_ -> reserveBuffer(segIt_,reservedSize());
+            segIt_ = bm_->reserveBuffer(segIt_,reservedSize());
         }
     }
 
@@ -83,7 +83,7 @@ namespace Buffer_Namespace {
 #endif
         if (numBytes + offset > reservedSize()) {
             reserve(numBytes+offset);
-            //bm_ -> reserveBuffer(segIt_,numBytes + offset);
+            //bm_->reserveBuffer(segIt_,numBytes + offset);
         }
         //std::cout << "Size at beginning of write: " << size_ << std::endl;
         // write source contents to buffer

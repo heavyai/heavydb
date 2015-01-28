@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-set( CMAKE_CXX_FLAGS "-g -std=c++11 -Wall -O3 -pthread ${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS" )
+set( CMAKE_CXX_FLAGS "-g -std=c++11 -Wall -O3 -pthread ${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/nvvm/lib -L/usr/local/cuda/nvvm/lib64")
 FIND_PACKAGE( Boost COMPONENTS filesystem program_options system REQUIRED )
 set(llvm_config_cmd "llvm-config")
 set(llvm_config_inc_arg "--includedir")
@@ -11,10 +11,10 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
-include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_CURRENT_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS})
+include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_CURRENT_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/")
 
 add_executable(ExecuteTest ExecuteTest.cpp)
 ADD_EXECUTABLE (PlanTest PlanTest.cpp)
 
 target_link_libraries (PlanTest Catalog SqliteConnector Parser Analyzer Planner DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
-target_link_libraries (ExecuteTest Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lglog -lgtest -lz -lncurses -ldl -pthread")
+target_link_libraries (ExecuteTest Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lgtest -lz -lncurses -ldl -pthread")

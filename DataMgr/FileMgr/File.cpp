@@ -12,7 +12,6 @@
 #include <unistd.h>
 #include "File.h"
 
-
 namespace File_Namespace {
     
     FILE* create(const std::string &basePath, const int fileId, const size_t pageSize, const size_t numPages) {
