@@ -1141,7 +1141,7 @@ namespace Parser {
 				return;
 			throw std::runtime_error("Table or View " + *view_name + " already exists.");
 		}
-		ViewStorageOption matview_storage = kDISK;
+		StorageOption matview_storage = kDISK;
 		ViewRefreshOption matview_refresh = kMANUAL;
 		if (matview_options != nullptr) {
 			for (auto p : *matview_options) {

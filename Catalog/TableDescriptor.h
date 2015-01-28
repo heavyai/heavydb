@@ -24,7 +24,7 @@ struct TableDescriptor {
 		int32_t maxFragRows; // max number of rows per fragment
 		int32_t fragPageSize; // page size
 		std::string partitions; // placeholder for distributed partition scheme
-		ViewStorageOption storageOption; // only relevant to materialized views
+		StorageOption storageOption; // only relevant to materialized views
 		ViewRefreshOption refreshOption; // only relevant to materialized views
 		bool checkOption; // only relevant to updateable views.  CHECK OPTION
 		bool isReady; // only set at run time when a materialized view is ready to be consumed.  already set to true for tables.
