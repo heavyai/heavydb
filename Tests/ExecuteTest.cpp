@@ -105,8 +105,10 @@ TEST(Select, FilterAndSimpleAggregation) {
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x <> 7;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y = 49;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x + y = 49;")), 49 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x - y = -35;")), 2 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE y - x = 35;")), 2 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(2 * x) FROM test WHERE x = 7;")), 14 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x - y = -35;")), 49 * g_num_rows + 51 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE y - x = 35;")), 49 * g_num_rows + 51 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309);
