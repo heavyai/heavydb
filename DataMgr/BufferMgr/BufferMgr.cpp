@@ -332,7 +332,8 @@ namespace Buffer_Namespace {
     }
 
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
-    void BufferMgr::deleteChunk(const ChunkKey &key) {
+    void BufferMgr::deleteChunk(const ChunkKey &key, const bool purge) { 
+        // Note: purge is unused
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         // lookup the buffer for the Chunk in chunkIndex_
         auto chunkIt = chunkIndex_.find(key);
@@ -348,7 +349,8 @@ namespace Buffer_Namespace {
         chunkIndex_.erase(chunkIt);
     }
 
-    void BufferMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
+    void BufferMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge) {
+        // Note: purge is unused
         //cout << "At start of delete" << endl;
         //printSegs();
         //cout << "Map" << endl;

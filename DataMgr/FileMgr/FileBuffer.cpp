@@ -16,7 +16,7 @@ using namespace std;
 namespace File_Namespace {
     size_t FileBuffer::headerBufferOffset_ = 32;
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(), fm_(fm), pageSize_(pageSize), chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(pageSize), chunkKey_(chunkKey) {
         // Create a new FileBuffer
         assert(fm_);
         calcHeaderBuffer();
@@ -36,7 +36,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits , const size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits) {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits , const size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
         assert(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
@@ -45,27 +45,28 @@ namespace File_Namespace {
 
 
 
-    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm),/* pageSize_(pageSize),*/chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), /* pageSize_(pageSize),*/chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
         assert(fm_);
         calcHeaderBuffer();
-        MultiPage multiPage(pageSize_);
+        //MultiPage multiPage(pageSize_); // why was this here?
         int lastPageId = -1;
-        Page lastMetadataPage;
+        //Page lastMetadataPage;
         for (auto vecIt = headerStartIt; vecIt != headerEndIt; ++vecIt) {
             int curPageId = vecIt->pageId;
 
             // We only want to read last metadata page
             if (curPageId == -1) { //stats page
-                lastMetadataPage = vecIt->page;
+                metadataPages_.epochs.push_back(vecIt->versionEpoch);
+                metadataPages_.pageVersions.push_back(vecIt->page);
             }
             else {
                 if (curPageId != lastPageId) {
                     if (lastPageId == -1) {
                         // If we are on first real page
-                        assert(lastMetadataPage.fileId != -1); // was initialized
-                        readMetadata(lastMetadataPage);
+                        assert(metadataPages_.pageVersions.back().fileId != -1); // was initialized
+                        readMetadata(metadataPages_.pageVersions.back());
                         pageDataSize_ = pageSize_-reservedHeaderSize_;
 
                     }
@@ -112,15 +113,18 @@ namespace File_Namespace {
 
     void FileBuffer::freePages() {
         // Need to zero headers (actually just first four bytes of header)
+        
+        // First delete metadata pages
+        for (auto metaPageIt = metadataPages_.pageVersions.begin(); metaPageIt != metadataPages_.pageVersions.end(); ++metaPageIt) {
+            FileInfo *fileInfo = fm_->getFileInfoForFileId(metaPageIt->fileId);
+            fileInfo->freePage(metaPageIt->pageNum);
+        }
+
+        // Now delete regular pages
         for (auto multiPageIt = multiPages_.begin(); multiPageIt != multiPages_.end(); ++multiPageIt) {
             for (auto pageIt = multiPageIt->pageVersions.begin(); pageIt != multiPageIt->pageVersions.end(); ++pageIt) { 
                 FileInfo *fileInfo = fm_->getFileInfoForFileId(pageIt->fileId);
                 fileInfo->freePage(pageIt->pageNum);
-                //File_Namespace::write(fileInfo->f,pageIt->pageNum * pageSize_,sizeof(int),zeroAddr);
-
-                //FILE *f = fm_->getFileForFileId(pageIt->fileId);
-                //@todo - need to insert back into freePages set
-
             }
         }
     }
@@ -212,7 +216,6 @@ namespace File_Namespace {
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
         fread((int8_t *)&pageSize_,sizeof(size_t),1,f);
         fread((int8_t *)&size_,sizeof(size_t),1,f);
-        //cout << "Read size: " << size_ << endl;
         vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         fread((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         hasEncoder = static_cast <bool> (typeData[0]);
@@ -248,6 +251,8 @@ namespace File_Namespace {
         if (hasEncoder) { // redundant
             encoder->writeMetadata(f);
          }
+        metadataPages_.epochs.push_back(epoch);
+        metadataPages_.pageVersions.push_back(page);
     }
 
 

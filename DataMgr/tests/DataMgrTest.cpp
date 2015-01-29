@@ -126,7 +126,7 @@ namespace Data_Namespace {
         EXPECT_EQ(4,dataMgr->bufferMgrs_[1][0]->getNumChunks());
         //EXPECT_EQ(2,dataMgr->bufferMgrs_[2][0]->getNumChunks());
         cout << "Before checkpoint" << endl;
-        //dataMgr->checkpoint();
+        dataMgr->checkpoint();
         ChunkKey deletePrefix = {1,2};
         dataMgr->deleteChunksWithPrefix(deletePrefix);
         cout << "After delete" << endl;
@@ -140,9 +140,6 @@ namespace Data_Namespace {
         EXPECT_NO_THROW(dataMgr->getChunk(GPU_LEVEL,key4));
         delete [] data1;
     }
-
-
-
 
     TEST_F (DataMgrTest, encoding) {
         ChunkKey key1 = {1,2,3};
@@ -189,17 +186,6 @@ namespace Data_Namespace {
         EXPECT_EQ(0, chunk1Metadata.chunkStats.min.smallintval);
         EXPECT_EQ(99, chunk1Metadata.chunkStats.max.smallintval);
 
-        /*
-        delete dataMgr;
-
-        dataMgr = new DataMgr(2,"data");
-        AbstractBuffer *cpuChunk1 = dataMgr->getChunk(DISK_LEVEL,key1);
-        EXPECT_EQ(kINT,cpuChunk1->sqlType);
-        EXPECT_EQ(kENCODING_FIXED,cpuChunk1->encodingType);
-        EXPECT_EQ(8,cpuChunk1->encodingBits);
-        EXPECT_EQ(numElems,cpuChunk1->size());
-        EXPECT_EQ(numElems,cpuChunk1->encoder->numElems);
-        */
 
         delete [] data1;
         delete [] data2;

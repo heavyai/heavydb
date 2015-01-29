@@ -134,10 +134,19 @@ namespace File_Namespace {
                     //}
                     
                     if (headerIt->chunkKey != lastChunkKey) {
-                        //std::cout << "New chunkkey" << std::endl;
-                        
-                        //size_t pageSize = files_[startIt->page.fileId]->pageSize;
                         chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerIt);
+                        /*
+                        if (startIt->versionEpoch != -1) {
+                            cout << "not skipping bc version != -1" << endl;
+                            // -1 means that chunk was deleted
+                            // lets not read it in
+                            chunkIndex_[lastChunkKey] = new FileBuffer (this,/lastChunkKey,startIt,headerIt);
+
+                        }
+                        else {
+                            cout << "Skipping bc version == -1" << endl;
+                        }
+                        */
                         lastChunkKey = headerIt->chunkKey;
                         startIt = headerIt;
                     }
@@ -145,7 +154,9 @@ namespace File_Namespace {
                 // now need to insert last Chunk
                 //size_t pageSize = files_[startIt->page.fileId]->pageSize;
                 //cout << "Inserting last chunk" << endl;
+                //if (startIt->versionEpoch != -1) {
                 chunkIndex_[lastChunkKey] = new FileBuffer (this,/*pageSize,*/lastChunkKey,startIt,headerVec.end());
+                //}
 
             }
             nextFileId_ = maxFileId + 1;
@@ -243,24 +254,39 @@ namespace File_Namespace {
         return (chunkIndex_[key]);
     }
 
-    void FileMgr::deleteChunk(const ChunkKey &key) {
+    void FileMgr::deleteChunk(const ChunkKey &key, const bool purge) {
         auto chunkIt = chunkIndex_.find(key);
         // ensure the Chunk exists
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist.");
         }
-        chunkIt->second->freePages();
+        //chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
+        if (purge) {
+            chunkIt->second->freePages();
+        }
+        //@todo need a way to represent delete in non purge case
         delete chunkIt->second;
         chunkIndex_.erase(chunkIt);
     }
 
-    void FileMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
-        auto chunkIt = chunkIndex_.find(keyPrefix);
+    void FileMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge) {
+        auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
         if (chunkIt == chunkIndex_.end()) {
             return; // should we throw?
         }
         while (chunkIt != chunkIndex_.end() && std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
-            chunkIt->second->freePages();
+            /*
+            cout << "Freeing pages for chunk ";
+            for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
+                std::cout << *vecIt << ",";
+            }
+            cout << endl;
+            */
+            //chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
+            if (purge) { 
+                chunkIt->second->freePages();
+            }
+            //@todo need a way to represent delete in non purge case
             delete chunkIt->second;
             chunkIndex_.erase(chunkIt++);
         }

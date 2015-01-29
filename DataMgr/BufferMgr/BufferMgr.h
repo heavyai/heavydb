@@ -55,8 +55,8 @@ namespace Buffer_Namespace {
         virtual AbstractBuffer * createChunk(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0);
         
         /// Deletes the chunk with the specified key
-        virtual void deleteChunk(const ChunkKey &key);
-        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix);
+        virtual void deleteChunk(const ChunkKey &key, const bool purge=true);
+        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge=true);
         
         /// Returns the a pointer to the chunk with the specified key.
         virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0);

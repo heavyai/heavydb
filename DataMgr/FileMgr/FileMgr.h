@@ -77,9 +77,12 @@ namespace File_Namespace {
         virtual AbstractBuffer * createChunk(const ChunkKey &key, size_t pageSize = 0, const size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
-        virtual void deleteChunk(const ChunkKey &key);
+        // Purge == true means delete the data chunks - 
+        // can't undelete and revert to previous
+        // state - reclaims disk space for chunk
+        virtual void deleteChunk(const ChunkKey &key, const bool purge = true); 
 
-        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix);
+        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge = true);
 
         /// Returns the a pointer to the chunk with the specified key.
         virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0);
