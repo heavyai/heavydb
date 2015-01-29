@@ -305,12 +305,15 @@ namespace Parser {
 		SQLTypeInfo result_type, left_type, right_type;
 		SQLTypeInfo new_left_type, new_right_type;
 		Analyzer::Expr *left_expr, *right_expr;
+		left_expr = left->analyze(catalog, query);
+		left_type = left_expr->get_type_info();
+		if (right == nullptr) {
+			return new Analyzer::UOper(left_type, optype, left_expr);
+		}
 		SQLQualifier qual = kONE;
 		if (typeid(*right) == typeid(SubqueryExpr))
 			qual = dynamic_cast<SubqueryExpr*>(right)->get_qualifier();
-		left_expr = left->analyze(catalog, query);
 		right_expr = right->analyze(catalog, query);
-		left_type = left_expr->get_type_info();
 		right_type = right_expr->get_type_info();
 		result_type = Analyzer::BinOper::analyze_type_info(optype, left_type, right_type, &new_left_type, &new_right_type);
 		if (left_type != new_left_type)

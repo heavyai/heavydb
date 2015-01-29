@@ -34,6 +34,7 @@ enum SQLOps {
 #define IS_LOGIC(X) ((X) == kAND || (X) == kOR)
 #define IS_ARITHMETIC(X) ((X) == kMINUS || (X) == kPLUS || (X) == kMULTIPLY || (X) == kDIVIDE)
 #define COMMUTE_COMPARISON(X) ((X) == kLT ? kGT : (X) == kLE ? kGE : (X) == kGT ? kLT : (X) == kGE ? kLE : (X))
+#define IS_UNARY(X) ((X) == kNOT || (X) == kUMINUS || (X) == kISNULL || (X) == kEXISTS || (X) == kCAST)
 
 enum SQLQualifier {
 	kONE,

@@ -655,13 +655,13 @@ namespace Parser {
 	 */
 	class QuerySpec : public QueryExpr {
 		public:
-			QuerySpec(bool d, std::list<SelectEntry*> *s, std::list<TableRef*> *f, Expr *w, std::list<ColumnRef*> *g, Expr *h) : is_distinct(d), select_clause(s), from_clause(f), where_clause(w), groupby_clause(g), having_clause(h) {}
+			QuerySpec(bool d, std::list<SelectEntry*> *s, std::list<TableRef*> *f, Expr *w, std::list<Expr*> *g, Expr *h) : is_distinct(d), select_clause(s), from_clause(f), where_clause(w), groupby_clause(g), having_clause(h) {}
 			virtual ~QuerySpec();
 			bool get_is_distinct() const { return is_distinct; }
 			const std::list<SelectEntry*> *get_select_clause() const { return select_clause; }
 			const std::list<TableRef*> *get_from_clause() const { return from_clause; }
 			const Expr *get_where_clause() const { return where_clause; }
-			const std::list<ColumnRef*> *get_groupby_clause() const { return groupby_clause; }
+			const std::list<Expr*> *get_groupby_clause() const { return groupby_clause; }
 			const Expr *get_having_clause() const { return having_clause; }
 			virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 			std::string to_string() const;
@@ -670,7 +670,7 @@ namespace Parser {
 			std::list<SelectEntry*> *select_clause; /* nullptr means SELECT * */
 			std::list<TableRef*> *from_clause;
 			Expr *where_clause;
-			std::list<ColumnRef*> *groupby_clause;
+			std::list<Expr*> *groupby_clause;
 			Expr *having_clause;
 			void analyze_from_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
 			void analyze_select_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;

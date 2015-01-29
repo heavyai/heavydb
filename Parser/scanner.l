@@ -134,9 +134,9 @@ WORK		TOK(WORK)
 
 	/* numbers */
 
-[0-9]+ { yylval.intval = atoll(yytext); TOK(INTNUM) }
-[0-9]+"."[0-9]* |
-"."[0-9]*		{ 
+-?[0-9]+ { yylval.intval = atoll(yytext); TOK(INTNUM) }
+-?[0-9]+"."[0-9]* |
+-?"."[0-9]*		{ 
 		yylval.stringval = new std::string(yytext); 
 		// numeric and decimal precisions cannot exceed 19
 		if (yylval.stringval->length() < 20)
@@ -147,9 +147,9 @@ WORK		TOK(WORK)
 	}
 
 	/* TODO: handle FLOAT v.s. DOUBLE */
-[0-9]+[eE][+-]?[0-9]+	|
-[0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
-"."[0-9]*[eE][+-]?[0-9]+	{ yylval.doubleval = atof(yytext); TOK(DOUBLE) }
+-?[0-9]+[eE][+-]?[0-9]+	|
+-?[0-9]+"."[0-9]*[eE][+-]?[0-9]+ |
+-?"."[0-9]*[eE][+-]?[0-9]+	{ yylval.doubleval = atof(yytext); TOK(DOUBLE) }
 
 	/* strings */
 

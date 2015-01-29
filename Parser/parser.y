@@ -23,7 +23,6 @@
 #include <FlexLexer.h>
 #include "ParserNode.h"
 
-using namespace std;
 using namespace Parser;
 #define YY_Parser_PARSE_PARAM std::list<Stmt*>& parseTrees
 %}
@@ -572,7 +571,7 @@ query_spec:
 																	reinterpret_cast<std::list<SelectEntry*>*>($<listval>3),
 																	reinterpret_cast<std::list<TableRef*>*>($<listval>4),
 																	dynamic_cast<Expr*>($<nodeval>5),
-																	reinterpret_cast<std::list<ColumnRef*>*>($<listval>6),
+																	reinterpret_cast<std::list<Expr*>*>($<listval>6),
 																	dynamic_cast<Expr*>($<nodeval>7));
 		}
 	;
@@ -606,12 +605,12 @@ where_clause:
 
 opt_group_by_clause:
 		/* empty */ { $<listval>$ = nullptr; }
-	|	GROUP BY column_ref_commalist { $<listval>$ = $<listval>3; }
+	|	GROUP BY exp_commalist { $<listval>$ = $<listval>3; }
 	;
 
-column_ref_commalist:
-		column_ref { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
-	|	column_ref_commalist ',' column_ref
+exp_commalist:
+		scalar_exp { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+	|	exp_commalist ',' scalar_exp
 	{
 		$<listval>$ = $<listval>1;
 		$<listval>$->push_back($<nodeval>3);
