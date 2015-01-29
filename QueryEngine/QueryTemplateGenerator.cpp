@@ -166,7 +166,6 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
     AttributeSet PAS;
     {
       AttrBuilder B;
-      B.addAttribute(Attribute::ReadNone);
       B.addAttribute(Attribute::NoCapture);
       PAS = AttributeSet::get(mod->getContext(), 1U, B);
     }
@@ -174,7 +173,6 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
     Attrs.push_back(PAS);
     {
       AttrBuilder B;
-      B.addAttribute(Attribute::ReadOnly);
       B.addAttribute(Attribute::NoCapture);
       PAS = AttributeSet::get(mod->getContext(), 2U, B);
     }
@@ -183,22 +181,14 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
 
     {
       AttrBuilder B;
-      B.addAttribute(Attribute::ReadOnly);
       B.addAttribute(Attribute::NoCapture);
       Attrs.push_back(AttributeSet::get(mod->getContext(), 3U, B));
     }
 
     {
       AttrBuilder B;
-      B.addAttribute(Attribute::ReadOnly);
       B.addAttribute(Attribute::NoCapture);
       Attrs.push_back(AttributeSet::get(mod->getContext(), 4U, B));
-    }
-
-    {
-      AttrBuilder B;
-      B.addAttribute(Attribute::UWTable);
-      PAS = AttributeSet::get(mod->getContext(), ~0U, B);
     }
 
     Attrs.push_back(PAS);

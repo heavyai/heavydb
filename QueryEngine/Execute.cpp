@@ -796,15 +796,70 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
   return execution_engine_->getPointerToFunction(query_func);
 }
 
+namespace {
+
+const std::string cuda_llir_prologue =
+R"(
+target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
+target triple = "nvptx64-nvidia-cuda"
+
+declare i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+declare i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+declare i32 @llvm.nvvm.read.ptx.sreg.nctaid.x()
+
+define i32 @pos_start_impl() {
+  %threadIdx = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+  %blockIdx = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+  %blockDim = call i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+  %1 = mul nsw i32 %blockIdx, %blockDim
+  %2 = add nsw i32 %threadIdx, %1
+  ret i32 %2
+}
+
+define i32 @pos_step_impl() {
+  %blockDim = call i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+  %gridDim = call i32 @llvm.nvvm.read.ptx.sreg.nctaid.x()
+  %1 = mul nsw i32 %blockDim, %gridDim
+  ret i32 %1
+}
+)";
+
+const std::string nvvm_annotations_template =
+R"(
+!nvvm.annotations = !{!0}
+!0 = metadata !{void (i8**,
+                      i64*,
+                      i64*,
+                      i64**)* @%s, metadata !"kernel", i32 1}
+)";
+
+}
+
 CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
   // run optimizations
   optimizeIR(module, opt_level);
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
-  module->print(os, nullptr);
+  query_func->print(os);
+
+  char nvvm_annotations[1024];
+  auto func_name = query_func->getName().str();
+  snprintf(nvvm_annotations, sizeof(nvvm_annotations),
+R"(
+!nvvm.annotations = !{!0}
+!0 = metadata !{void (i8**,
+                      i64*,
+                      i64*,
+                      i64**)* @%s, metadata !"kernel", i32 1}
+)", func_name.c_str());
+
+  auto cuda_llir = cuda_llir_prologue + ss.str() +
+    std::string(nvvm_annotations);
+
   if (!gpu_context_) {
-    gpu_context_.reset(new GpuExecutionContext(ss.str()));
+    gpu_context_.reset(new GpuExecutionContext(cuda_llir, func_name));
   }
   return gpu_context_->kernel();
 }

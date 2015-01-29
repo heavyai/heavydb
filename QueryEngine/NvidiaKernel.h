@@ -6,7 +6,7 @@
 
 class GpuExecutionContext {
 public:
-  GpuExecutionContext(const std::string& llir_module);
+  GpuExecutionContext(const std::string& llir_module, const std::string& func_name);
   ~GpuExecutionContext();
   CUfunction kernel() {
     return hKernel;

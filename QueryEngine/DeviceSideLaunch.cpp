@@ -76,8 +76,8 @@ CUdevice cudaDeviceInit() {
 
   checkCudaErrors(cuDeviceComputeCapability(&major, &minor, cuDevice));
   printf("compute capability = %d.%d\n", major, minor);
-  if (major < 3 || minor < 5) {
-    fprintf(stderr, "Device 0 is not sm_35 or later\n");
+  if (major < 3) {
+    fprintf(stderr, "Device 0 is not sm_30 or later\n");
     exit(-1);
   }
   return cuDevice;
@@ -137,7 +137,7 @@ char *generatePTX(const char *ll, size_t size, const char *filename) {
   nvvmProgram program;
   size_t PTXSize;
   char *PTX = NULL;
-  const char *options[] = {"-arch=compute_35"};
+  const char *options[] = {"-arch=compute_30"};
 
   result = nvvmCreateProgram(&program);
   if (result != NVVM_SUCCESS) {
