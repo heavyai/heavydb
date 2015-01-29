@@ -756,6 +756,22 @@ void Executor::compileAggScanPlan(
   CHECK(query_cpu_code_);
 }
 
+namespace {
+
+void optimizeIR(llvm::Module* module, const ExecutorOptLevel opt_level) {
+  llvm::legacy::PassManager pass_manager;
+  pass_manager.add(llvm::createAlwaysInlinerPass());
+  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
+  pass_manager.add(llvm::createInstructionSimplifierPass());
+  pass_manager.add(llvm::createInstructionCombiningPass());
+  if (opt_level == ExecutorOptLevel::LoopStrengthReduction) {
+    pass_manager.add(llvm::createLoopStrengthReducePass());
+  }
+  pass_manager.run(*module);
+}
+
+}
+
 void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
@@ -771,15 +787,7 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
   CHECK(execution_engine_);
 
   // run optimizations
-  llvm::legacy::PassManager pass_manager;
-  pass_manager.add(llvm::createAlwaysInlinerPass());
-  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
-  pass_manager.add(llvm::createInstructionSimplifierPass());
-  pass_manager.add(llvm::createInstructionCombiningPass());
-  if (opt_level == ExecutorOptLevel::LoopStrengthReduction) {
-    pass_manager.add(llvm::createLoopStrengthReducePass());
-  }
-  pass_manager.run(*module);
+  optimizeIR(module, opt_level);
 
   if (llvm::verifyFunction(*query_func)) {
     LOG(FATAL) << "Generated invalid code. ";
@@ -789,6 +797,9 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
 }
 
 CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
+  // run optimizations
+  optimizeIR(module, opt_level);
+
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
   module->print(os, nullptr);
