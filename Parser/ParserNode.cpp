@@ -1260,12 +1260,12 @@ namespace Parser {
 		if (numErrors > 0)
 			throw std::runtime_error("Internal Error: syntax error at: " + last_parsed);
 		DMLStmt *view_stmt = dynamic_cast<DMLStmt*>(parse_trees.front());
-		unique_ptr<Stmt> stmt_ptr(view_stmt); // make sure it's deleted
+		std::unique_ptr<Stmt> stmt_ptr(view_stmt); // make sure it's deleted
 		Analyzer::Query query;
 		view_stmt->analyze(catalog, query);
 		Planner::Optimizer optimizer(query, catalog);
 		Planner::RootPlan *plan = optimizer.optimize();
-		unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
+		std::unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
 		// @TODO execute plan
 		// plan->print();
 	}

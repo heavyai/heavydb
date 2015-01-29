@@ -9,6 +9,8 @@
 
 #define yylval (dynamic_cast<SQLLexer*>(this)->yylval)
 
+using namespace std;
+
 	/* macro to save the text and return a token */
 #define TOK(name) { return SQLParser::name; }
 

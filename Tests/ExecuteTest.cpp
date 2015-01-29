@@ -14,6 +14,8 @@
 #include <memory>
 
 
+using namespace std;
+
 namespace {
 
 Catalog_Namespace::Catalog get_catalog() {
@@ -39,7 +41,7 @@ Catalog_Namespace::Catalog get_catalog() {
 
 Catalog_Namespace::Catalog g_cat(get_catalog());
 
-std::vector<Executor::AggResult> run_multiple_agg(const std::string& query_str) {
+vector<Executor::AggResult> run_multiple_agg(const string& query_str) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -59,11 +61,11 @@ std::vector<Executor::AggResult> run_multiple_agg(const std::string& query_str) 
   return executor.execute(ExecutorDeviceType::CPU, ExecutorOptLevel::LoopStrengthReduction);
 }
 
-Executor::AggResult run_simple_agg(const std::string& query_str) {
+Executor::AggResult run_simple_agg(const string& query_str) {
   return run_multiple_agg(query_str).front();
 }
 
-void run_ddl_statement(const std::string& create_table_stmt) {
+void run_ddl_statement(const string& create_table_stmt) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -109,7 +111,7 @@ TEST(Select, FilterAndSimpleAggregation) {
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;")), std::numeric_limits<int64_t>::max());
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;")), numeric_limits<int64_t>::max());
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x = 7;")), 7);
   ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y) FROM test;")), 50.);
   ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;")), 42.);
@@ -136,7 +138,7 @@ int main(int argc, char** argv)
   int err { 0 };
   try {
     err = RUN_ALL_TESTS();
-  } catch (const std::exception& e) {
+  } catch (const exception& e) {
     LOG(ERROR) << e.what();
   }
   run_ddl_statement("DROP TABLE test;");
