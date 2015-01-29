@@ -447,7 +447,17 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
   for (const auto& partition : partitions) {
     auto num_rows = static_cast<int64_t>(partition.numTuples);
     for (const int col_id : col_global_ids) {
-      Data_Namespace::AbstractBuffer* ab = cat.get_dataMgr().getChunk(Data_Namespace::CPU_LEVEL, { current_db.dbId, table_id, col_id, partition.partitionId });
+      ChunkKey chunk_key { current_db.dbId, table_id, col_id, partition.partitionId };
+      std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata;
+      cat.get_dataMgr().getChunkMetadataVecForKeyPrefix(chunk_metadata, chunk_key);
+      size_t num_bytes { 0 };
+      for (const auto& kv : chunk_metadata) {
+        if (kv.first == chunk_key) {
+          num_bytes = kv.second.numBytes;
+        }
+      }
+      CHECK_GT(num_bytes, 0);
+      auto ab = cat.get_dataMgr().getChunk(Data_Namespace::CPU_LEVEL, chunk_key, num_bytes);
       CHECK(ab->getMemoryPtr());
       auto it = global_to_local_col_ids_.find(col_id);
       CHECK(it != global_to_local_col_ids_.end());
