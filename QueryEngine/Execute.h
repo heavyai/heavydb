@@ -53,7 +53,8 @@ private:
   std::vector<AggResult> executeAggScanPlan(
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel);
+    const ExecutorOptLevel,
+    const Catalog_Namespace::Catalog&);
   void executeSimpleInsert();
   void executeScanPlan(const Planner::Scan* scan_plan);
   void compileAggScanPlan(

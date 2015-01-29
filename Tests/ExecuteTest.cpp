@@ -84,36 +84,41 @@ T v(const Executor::AggResult& r) {
   return *p;
 }
 
+const size_t g_num_rows { 10 };
+
 }
 
 TEST(Select, FilterAndSimpleAggregation) {
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;")), 1000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test;")), 42);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test;")), 42);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test;")), 84000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 41 AND x < 43;")), 1000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x <> 42;")), 0);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y = 84;")), 1000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x + y = 84;")), 84000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x - y = 0;")), 1000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(2 * x) FROM test WHERE x = 42;")), 84000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x - y = 0;")), 84000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x * y + 15) FROM test WHERE x + y + 6 = 90;")), 1779000000);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x * y + 15) FROM test WHERE x + y + 6 = 90;")), 1779);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x * y + 15) FROM test WHERE x + y + 6 = 90;")), 1779);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 42;")), std::numeric_limits<int64_t>::max());
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x = 42;")), 42);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y) FROM test;")), 84.);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 41 AND x < 43;")), 42.);
+  for (size_t i = 0; i < g_num_rows; ++i) {
+    run_multiple_agg("INSERT INTO test VALUES(7, 42);");
+  }
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;")), g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test;")), 7);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test;")), 7);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test;")), 49 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8;")), g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x <> 7;")), 0);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y = 49;")), g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x + y = 49;")), 49 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE y - x = 35;")), g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(2 * x) FROM test WHERE x = 7;")), 14 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE y - x = 35;")), 49 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x * y + 15) FROM test WHERE x + y + 1 = 50;")), 309);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7;")), std::numeric_limits<int64_t>::max());
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x = 7;")), 7);
+  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y) FROM test;")), 49.);
+  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;")), 42.);
 }
 
 TEST(Select, FilterAndMultipleAggregation) {
-  auto agg_results = run_multiple_agg("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 82 AND x + y < 86;");
+  auto agg_results = run_multiple_agg("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;");
   CHECK_EQ(agg_results.size(), 4);
-  ASSERT_EQ(v<int64_t>(agg_results[0]), 42);
-  ASSERT_EQ(v<double>(agg_results[1]), 1764.);
+  ASSERT_EQ(v<int64_t>(agg_results[0]), 7);
+  ASSERT_EQ(v<double>(agg_results[1]), 294.);
   ASSERT_EQ(v<int64_t>(agg_results[2]), 49);
-  ASSERT_EQ(v<int64_t>(agg_results[3]), 1000000);
+  ASSERT_EQ(v<int64_t>(agg_results[3]), g_num_rows);
 }
 
 int main(int argc, char** argv)
