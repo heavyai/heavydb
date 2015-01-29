@@ -409,6 +409,9 @@ Catalog::dropTable(const TableDescriptor *td)
 		sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
 		if (td->isView)
 			sqliteConnector_.query("DELETE FROM mapd_views WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+		ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
+		// assuming deleteChunksWithPrefix is atomic
+		dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);
 	}
 	catch (std::exception &e) {
 		sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -416,7 +419,6 @@ Catalog::dropTable(const TableDescriptor *td)
 	}
 	sqliteConnector_.query("END TRANSACTION");
 	removeTableFromMap(td->tableName, td->tableId);
-	// @TODO delete all the fragments/chunks of this table
 }
 
 } // Catalog_Namespace
