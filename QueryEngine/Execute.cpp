@@ -467,12 +467,17 @@ std::vector<Executor::AggResult> Executor::executeAggScanPlan(
       CHECK(false);
     }
     const auto agg_exprs = get_agg_exprs(agg_plan);
-    CHECK_EQ(agg_exprs.size(), agg_col_count);
-    for (size_t i = 0; i < agg_col_count; ++i) {
-      auto result = agg_exprs[i]->get_aggtype() == kAVG
-        ? Executor::AggResult(static_cast<double>(out_vec[i][0]) / num_rows)
-        : Executor::AggResult(out_vec[i][0]);
-      results.push_back(result);
+    size_t out_vec_idx = 0;
+    for (const auto agg_expr : agg_exprs) {
+      if (agg_expr->get_aggtype() == kAVG) {
+        results.push_back(Executor::AggResult(
+          static_cast<double>(out_vec[out_vec_idx][0]) /
+          static_cast<double>(out_vec[out_vec_idx + 1][0])));
+        out_vec_idx += 2;
+      } else {
+        results.push_back(Executor::AggResult(out_vec[out_vec_idx][0]));
+        ++out_vec_idx;
+      }
     }
     for (auto out : out_vec) {
       free(out);
@@ -593,19 +598,19 @@ const Planner::Scan* get_scan(const Planner::AggPlan* agg_plan) {
 }
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
-    const Planner::AggPlan* agg_plan,
+    const Planner::Scan* scan_plan,
+    const std::vector<Executor::AggInfo>& agg_infos,
     llvm::Function* query_func,
     llvm::Module* module,
     llvm::LLVMContext& context) {
   // Generate the function signature and column head fetches s.t.
   // double indirection isn't needed in the inner loop
-  auto scan_plan = get_scan(agg_plan);
   const auto& col_global_ids = scan_plan->get_col_list();
 
   auto col_heads = generate_column_heads_load(col_global_ids.size(), query_func);
 
   std::vector<llvm::Type*> row_process_arg_types;
-  const size_t agg_col_count { agg_plan->get_targetlist().size() };
+  const size_t agg_col_count { agg_infos.size() };
   for (size_t i = 0; i < agg_col_count; ++i) {
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
   }
@@ -634,6 +639,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
     switch (agg_expr->get_aggtype()) {
     case kAVG:
       result.emplace_back("agg_sum", agg_expr->get_arg(), 0);
+      result.emplace_back("agg_count", agg_expr->get_arg(), 0);
       break;
     case kMIN:
       result.emplace_back("agg_min", agg_expr->get_arg(), std::numeric_limits<int64_t>::max());
@@ -654,15 +660,6 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
   return result;
 }
 
-llvm::Function* make_query_template(
-    const Planner::AggPlan* agg_plan,
-    llvm::Module* mod) {
-  const size_t aggr_col_count = agg_plan->get_targetlist().size();
-  return agg_plan->get_groupby_list().empty()
-    ? query_template(mod, aggr_col_count)
-    : query_group_by_template(mod, aggr_col_count);
-}
-
 }  // namespace
 
 void Executor::compileAggScanPlan(
@@ -673,12 +670,16 @@ void Executor::compileAggScanPlan(
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   module_ = create_runtime_module(context_);
-  auto query_func = make_query_template(agg_plan, module_);
+  auto agg_infos = get_agg_name_and_exprs(agg_plan);
+  auto query_func = agg_plan->get_groupby_list().empty()
+    ? query_template(module_, agg_infos.size())
+    : query_template(module_, agg_infos.size());
   bind_pos_placeholders("pos_start", query_func, module_);
   bind_pos_placeholders("pos_step", query_func, module_);
 
   std::vector<llvm::Value*> col_heads;
-  std::tie(row_func_, col_heads) = create_row_function(agg_plan, query_func, module_, context_);
+  auto scan_plan = get_scan(agg_plan);
+  std::tie(row_func_, col_heads) = create_row_function(scan_plan, agg_infos, query_func, module_, context_);
   CHECK(row_func_);
 
   // make sure it's in-lined, we don't want register spills in the inner loop
@@ -688,7 +689,6 @@ void Executor::compileAggScanPlan(
   ir_builder_.SetInsertPoint(bb);
 
   // generate the code for the filter
-  auto scan_plan = get_scan(agg_plan);
   allocateLocalColumnIds(scan_plan);
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(context_), true);
@@ -701,7 +701,6 @@ void Executor::compileAggScanPlan(
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   {
-    auto agg_infos = get_agg_name_and_exprs(agg_plan);
     // TODO(alex): fix, each aggregate column should have its own init value
     for (const auto& agg_info : agg_infos) {
       init_agg_vals_.push_back(std::get<2>(agg_info));
