@@ -26,9 +26,7 @@ namespace Data_Namespace {
     DataMgr::~DataMgr() {
         int numLevels = bufferMgrs_.size();
         for (int level = numLevels - 1; level >= 0; --level) {
-            cout << "Level: " << level << endl;
             for (int device = 0; device < bufferMgrs_[level].size(); device++) {
-                cout << "Device: " << device << endl;
                 delete bufferMgrs_[level][device];
             }
         }
@@ -106,7 +104,6 @@ namespace Data_Namespace {
     void DataMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {
         int numLevels = bufferMgrs_.size();
         for (int level = numLevels - 1; level >= 0; --level) {
-            cout << "Level: " << level << endl;
             for (int device = 0; device < levelSizes_[level]; ++device) {
                 bufferMgrs_[level][device]->deleteChunksWithPrefix(keyPrefix);
             }

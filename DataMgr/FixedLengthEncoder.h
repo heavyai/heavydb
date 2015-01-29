@@ -19,7 +19,7 @@ class FixedLengthEncoder : public Encoder {
                 //std::cout << "Min: " << dataMin << " Max: " <<  dataMax << std::endl;
                 encodedData[i] = static_cast <V>(unencodedData[i]);
                 if (unencodedData[i] != encodedData[i]) {
-                    std::cout << "Unencoded: " << unencodedData[i] << " Encoded: " << encodedData[i] << std::endl;
+                    //std::cout << "Unencoded: " << unencodedData[i] << " Encoded: " << encodedData[i] << std::endl;
                     delete [] encodedData;
                     throw std::runtime_error ("Encoding failed");
                 }
@@ -30,7 +30,6 @@ class FixedLengthEncoder : public Encoder {
 
             }
             numElems += numAppendElems;
-            std::cout << "Min: " << dataMin << " Max: " << dataMax << std::endl;
 
             // assume always CPU_BUFFER?
             buffer_ -> append((int8_t *)(encodedData),numAppendElems*sizeof(V));

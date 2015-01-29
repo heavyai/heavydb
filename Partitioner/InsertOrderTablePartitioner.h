@@ -35,7 +35,7 @@ class InsertOrderTablePartitioner : public AbstractTablePartitioner {
 
 public:
 
-    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/);
+    InsertOrderTablePartitioner(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/, const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
 
     virtual ~InsertOrderTablePartitioner();
     /**
@@ -79,6 +79,8 @@ private:
     std::string partitionerType_;
     boost::shared_mutex partitionInfoMutex_; // to prevent read-write conflicts for partitionInfoVec_
     boost::mutex insertMutex_; // to prevent race conditions on insert - only one insert statement should be going to a table at a time
+    Data_Namespace::MemoryLevel defaultInsertLevel_;
+    
     
 
     /**

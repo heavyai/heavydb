@@ -16,8 +16,6 @@ class NoneEncoder : public Encoder {
                 dataMin = std::min(dataMin,unencodedData[i]);
                 dataMax = std::max(dataMax,unencodedData[i]);
             }
-            std::cout << "dataMin " << dataMin << std::endl;
-            std::cout << "dataMax " << dataMax << std::endl;
             numElems += numAppendElems;
             buffer_ -> append(srcData,numAppendElems*sizeof(T));
             ChunkMetadata chunkMetadata;

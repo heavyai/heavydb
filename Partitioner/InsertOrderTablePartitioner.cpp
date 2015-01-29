@@ -16,8 +16,8 @@ using namespace std;
 namespace Partitioner_Namespace {
 
 
-InsertOrderTablePartitioner::InsertOrderTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows, const size_t pageSize /*default 1MB*/) :
-		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"){
+InsertOrderTablePartitioner::InsertOrderTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows, const size_t pageSize /*default 1MB*/, const Data_Namespace::MemoryLevel defaultInsertLevel) :
+		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"), defaultInsertLevel_(defaultInsertLevel) {
     for (auto colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
         columnMap_[colIt -> columnDesc->columnId] = *colIt; 
     }
@@ -33,7 +33,6 @@ void InsertOrderTablePartitioner::getChunkMetadata() {
     std::vector<std::pair<ChunkKey,ChunkMetadata> > chunkMetadataVec;
     dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,chunkKeyPrefix_);
     //dataMgr_->getChunkMetadataVec(chunkMetadataVec);
-    cout << "Chunkmetadatavec size: " << chunkMetadataVec.size() << endl;
 
     // data comes like this - database_id, table_id, column_id, partition_id
     // but lets sort by database_id, table_id, partition_id, column_id
@@ -49,19 +48,27 @@ void InsertOrderTablePartitioner::getChunkMetadata() {
             partitionInfoVec_.push_back(PartitionInfo());
             partitionInfoVec_.back().partitionId = curPartitionId;
             partitionInfoVec_.back().numTuples = chunkIt->second.numElements;
-            cout << "Start Num elems: " << chunkIt->second.numElements << endl;
+            partitionInfoVec_.back().shadowNumTuples = partitionInfoVec_.back().numTuples;
         }
         else {
-            cout << "Num elems: " << chunkIt->second.numElements << endl;
             if (chunkIt->second.numElements != partitionInfoVec_.back().numTuples) {
                 throw std::runtime_error ("Inconsistency in num tuples within fragment");
             }
         }
         int columnId = chunkIt->first[2];
-
         partitionInfoVec_.back().chunkMetadataMap[columnId] = chunkIt->second; 
     }
-
+    // Now need to get the insert buffers for each column - should be last
+    // partition
+    if (partitionInfoVec_.size() > 0) {
+        int lastPartitionId = partitionInfoVec_.back().partitionId;
+        for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
+            ChunkKey insertKey = chunkKeyPrefix_; //database_id and table_id
+            insertKey.push_back(colIt->first); // column id
+            insertKey.push_back(lastPartitionId); // partition id
+            colIt->second.insertBuffer=dataMgr_->getChunk(defaultInsertLevel_,insertKey);
+        }
+    }
 }
 
 
@@ -82,7 +89,7 @@ void InsertOrderTablePartitioner::insertData (const InsertData &insertDataStruct
     PartitionInfo *currentPartition=0;
 
     if (partitionInfoVec_.empty()) { // if no partitions exist for table 
-        currentPartition = createNewPartition();
+        currentPartition = createNewPartition(defaultInsertLevel_);
     }
     else {
         currentPartition = &(partitionInfoVec_.back());
@@ -90,10 +97,8 @@ void InsertOrderTablePartitioner::insertData (const InsertData &insertDataStruct
     size_t startPartition = partitionInfoVec_.size() - 1;
 
     while (numRowsLeft > 0) { // may have to create multiple partitions for bulk insert
-        cout << "Num rows left: " << numRowsLeft << endl;
         // loop until done inserting all rows
         size_t rowsLeftInCurrentPartition = maxPartitionRows_ - currentPartition->shadowNumTuples;
-        cout << "Num rows left in currentPartition: " << rowsLeftInCurrentPartition << endl;
         if (rowsLeftInCurrentPartition == 0) {
             currentPartition = createNewPartition(); 
             rowsLeftInCurrentPartition = maxPartitionRows_;
@@ -110,7 +115,6 @@ void InsertOrderTablePartitioner::insertData (const InsertData &insertDataStruct
         }
 
         currentPartition->shadowNumTuples = partitionInfoVec_.back().numTuples + numRowsToInsert;
-        cout << "Shadow tuples: "  << currentPartition->shadowNumTuples << endl;
         //partitionInfoVec_.back().shadowNumTuples = partitionInfoVec_.back().numTuples + numRowsToInsert;
         //cout << "Shadow tuples"  << partitionInfoVec_.back().shadowNumTuples << endl;
         //partitionsToBeUpdated.push_back(&(partitionInfoVec_.back()));
@@ -118,14 +122,11 @@ void InsertOrderTablePartitioner::insertData (const InsertData &insertDataStruct
         numRowsInserted += numRowsToInsert;
     }
     boost::unique_lock < boost::shared_mutex > writeLock (partitionInfoMutex_);
-    cout << "Before update" << endl;
     //for (auto partIt = partitionsToBeUpdated.begin(); partIt != partitionsToBeUpdated.end(); ++partIt) {
     for (auto partIt = partitionInfoVec_.begin() + startPartition; partIt != partitionInfoVec_.end(); ++partIt) { 
-        cout << partIt->shadowNumTuples << endl;
         partIt->numTuples = partIt->shadowNumTuples;
         partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
     }
-    cout << "After update" << endl;
 }
 
 PartitionInfo * InsertOrderTablePartitioner::createNewPartition(const Data_Namespace::MemoryLevel memoryLevel) { 
@@ -134,7 +135,7 @@ PartitionInfo * InsertOrderTablePartitioner::createNewPartition(const Data_Names
     // iterate through all ColumnInfo structs in map, unpin previous insert buffer and
     // create new insert buffer
     maxPartitionId_++;
-    cout << "Create new partition: " << maxPartitionId_ << endl;
+    //cout << "Create new partition: " << maxPartitionId_ << endl;
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
         if (colMapIt -> second.insertBuffer != 0) {
             colMapIt -> second.insertBuffer -> unPin();
@@ -143,7 +144,7 @@ PartitionInfo * InsertOrderTablePartitioner::createNewPartition(const Data_Names
         chunkKey.push_back(colMapIt->second.columnDesc->columnId);
         chunkKey.push_back(maxPartitionId_);
         colMapIt->second.insertBuffer = dataMgr_->createChunk(memoryLevel,chunkKey);
-        cout << "Creating chunk with encodingType: " << colMapIt->second.columnDesc->compression << endl;
+        //cout << "Creating chunk with encodingType: " << colMapIt->second.columnDesc->compression << endl;
         colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnDesc->columnType.type,colMapIt->second.columnDesc->compression,colMapIt->second.columnDesc->comp_param);
     }
     PartitionInfo newPartitionInfo;
