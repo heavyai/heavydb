@@ -28,6 +28,7 @@ namespace Data_Namespace {
 
         public:
             DataMgr(const int partitionKeyIndex, const std::string &dataDir);
+            ~DataMgr();
             AbstractBuffer * createChunk(const MemoryLevel memoryLevel, const ChunkKey &key);
             AbstractBuffer * getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);

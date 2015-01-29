@@ -194,6 +194,7 @@ namespace File_Namespace {
 
     void FileMgr::writeAndSyncEpochToDisk() {
         write(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
+        fflush(epochFile_);
         int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
         //int status = fcntl(fileno(epochFile_),51);
         if (status != 0) {
@@ -204,14 +205,15 @@ namespace File_Namespace {
     }
 
     void FileMgr::checkpoint() {
-        std::cout << "Checkpointing " << epoch_ <<  std::endl;
+        //std::cout << "Checkpointing " << epoch_ <<  std::endl;
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
+            /*
             for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
                 std::cout << *vecIt << ",";
             }
             cout << endl;
+            */
             if (chunkIt->second->isDirty_) {
-                cout << "dirty" << endl;
                 chunkIt->second->writeMetadata(epoch_);
                 chunkIt->second->clearDirtyBits();
             }
@@ -242,7 +244,6 @@ namespace File_Namespace {
     }
 
     void FileMgr::deleteChunk(const ChunkKey &key) {
-        std::cout << "Deleting file chunk" << std::endl;
         auto chunkIt = chunkIndex_.find(key);
         // ensure the Chunk exists
         if (chunkIt == chunkIndex_.end()) {
@@ -420,7 +421,6 @@ namespace File_Namespace {
         }
         files_[fileId] = fInfo;
         fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
-        cout << "At end of openExistingfile" << endl;
         return fInfo;
     }
 
@@ -477,19 +477,16 @@ namespace File_Namespace {
         if (chunkIt == chunkIndex_.end()) {
             return; // throw?
         }
-        cout << "Before getChunkMetadataPrefix loop" << endl;
-        int counter = 0;
         while (chunkIt != chunkIndex_.end() && std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
+            /*
             for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
                 std::cout << *vecIt << ",";
             }
             cout << endl;
-            cout << "matches prefix " << counter++ << endl;
+            */
             ChunkMetadata chunkMetadata;
             chunkIt->second->encoder->getMetadata(chunkMetadata);
-            cout << "after got metadata" << endl;
             chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
-            cout << "after push back" << endl;
             chunkIt++;
         }
     }

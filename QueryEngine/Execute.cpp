@@ -511,7 +511,9 @@ void Executor::executeSimpleInsert() {
       CHECK(false);
       break;
     case kINT: {
-      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(&col_datum.intval);
+      auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
+      *col_data = col_datum.intval;
+      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
     case kBIGINT:
@@ -529,6 +531,10 @@ void Executor::executeSimpleInsert() {
   insert_data.numRows = 1;
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   table_descriptor->partitioner->insertData(insert_data);
+  cat.get_dataMgr().checkpoint();
+  for (const auto kv : col_buffers) {
+    free(kv.second);
+  }
 }
 
 void Executor::executeScanPlan(const Planner::Scan* scan_plan) {

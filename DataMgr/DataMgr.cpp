@@ -23,11 +23,25 @@ namespace Data_Namespace {
         populateMgrs();
     }
 
+    DataMgr::~DataMgr() {
+        int numLevels = bufferMgrs_.size();
+        for (int level = numLevels - 1; level >= 0; --level) {
+            cout << "Level: " << level << endl;
+            for (int device = 0; device < bufferMgrs_[level].size(); device++) {
+                cout << "Device: " << device << endl;
+                delete bufferMgrs_[level][device];
+            }
+        }
+    }
+
+
+
     void DataMgr::populateMgrs() {
-        bufferMgrs_.resize(3);
+        bufferMgrs_.resize(2);
         bufferMgrs_[0].push_back(new FileMgr (dataDir_)); 
         levelSizes_.push_back(1);
         #ifdef USE_GPU
+        bufferMgrs_.resize(3);
         bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CUDA_HOST, 1 << 30,512,bufferMgrs_[0][0])); 
         levelSizes_.push_back(1);
         bufferMgrs_[2].push_back(new GpuCudaBufferMgr(1 << 30, 0, 1 << 29,512,bufferMgrs_[1][0])); 
