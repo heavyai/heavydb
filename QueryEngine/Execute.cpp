@@ -375,14 +375,11 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
 
 namespace {
 
-std::vector<Analyzer::AggExpr*> get_agg_exprs(const Planner::AggPlan* agg_plan) {
+std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::AggPlan* agg_plan) {
   const auto& target_list = agg_plan->get_targetlist();
-  std::vector<Analyzer::AggExpr*> result;
+  std::vector<Analyzer::Expr*> result;
   for (auto target : target_list) {
-    const auto target_expr = target->get_expr();
-    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    CHECK(agg_expr);
-    result.push_back(agg_expr);
+    result.push_back(target->get_expr());
   }
   return result;
 }
@@ -484,10 +481,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         // TODO(alex): enable GPU support
         CHECK(false);
       }
-      const auto agg_exprs = get_agg_exprs(agg_plan);
+      const auto target_exprs = get_agg_target_exprs(agg_plan);
       size_t out_vec_idx = 0;
       ResultRow result_row;
-      for (const auto agg_expr : agg_exprs) {
+      for (const auto target_expr : target_exprs) {
+        const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
         if (agg_expr->get_aggtype() == kAVG) {
           result_row.agg_results.emplace_back(
             static_cast<double>(out_vec[out_vec_idx][0]) /
@@ -503,10 +501,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         free(out);
       }
     } else {
-      const auto agg_exprs = get_agg_exprs(agg_plan);
+      const auto target_exprs = get_agg_target_exprs(agg_plan);
       // TODO(alex): fix multiple aggregate columns, average
-      CHECK_EQ(agg_exprs.size(), 1);
-      CHECK_NE(agg_exprs.front()->get_aggtype(), kAVG);
+      CHECK_EQ(target_exprs.size(), 1);
+      {
+        const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_exprs.front());
+        CHECK(agg_expr);
+        CHECK_NE(agg_expr->get_aggtype(), kAVG);
+      }
       const size_t group_by_col_count = groupby_exprs.size();
       const size_t groups_buffer_size { (group_by_col_count + 1) * groups_buffer_entry_count * sizeof(int64_t) };
       // TODO(alex):
@@ -693,8 +695,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
 std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
   std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
-  const auto agg_exprs = get_agg_exprs(agg_plan);
-  for (auto agg_expr : agg_exprs) {
+  const auto target_exprs = get_agg_target_exprs(agg_plan);
+  for (auto target_expr : target_exprs) {
+    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     CHECK(!agg_expr->get_is_distinct());
     switch (agg_expr->get_aggtype()) {
     case kAVG:
