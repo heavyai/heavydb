@@ -20,6 +20,8 @@ int64_t fixed_width_int_decode(
     return *(reinterpret_cast<const int16_t*>(&byte_stream[pos * byte_width]));
   case 4:
     return *(reinterpret_cast<const int32_t*>(&byte_stream[pos * byte_width]));
+  case 8:
+    return *(reinterpret_cast<const int64_t*>(&byte_stream[pos * byte_width]));
   default:
     // TODO(alex)
     return std::numeric_limits<int64_t>::min() + 1;

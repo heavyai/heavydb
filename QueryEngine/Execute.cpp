@@ -144,6 +144,8 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   switch (enc_type) {
   case kENCODING_NONE:
     switch (type_info.type) {
+    case kSMALLINT:
+      return std::make_shared<FixedWidthInt>(2);
     case kINT:
       return std::make_shared<FixedWidthInt>(4);
     case kBIGINT:
@@ -277,7 +279,7 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
   const auto lhs_lv = codegen(lhs);
   const auto rhs_lv = codegen(rhs);
   CHECK_EQ(lhs_type.type, rhs_type.type);
-  if (lhs_type.type == kINT || lhs_type.type == kBIGINT) {
+  if (lhs_type.type == kSMALLINT || lhs_type.type == kINT || lhs_type.type == kBIGINT) {
     return ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
   }
   if (lhs_type.type == kFLOAT) {
@@ -339,7 +341,10 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
   const auto& rhs_type = rhs->get_type_info();
   const auto lhs_lv = codegen(lhs);
   const auto rhs_lv = codegen(rhs);
-  if (lhs_type.type == kINT && rhs_type.type == kINT) {
+  CHECK_EQ(lhs_type.type, rhs_type.type);
+  if (lhs_type.type == kSMALLINT ||
+      lhs_type.type == kINT ||
+      lhs_type.type == kBIGINT) {
     switch (optype) {
     case kMINUS:
       return ir_builder_.CreateSub(lhs_lv, rhs_lv);
@@ -353,7 +358,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
       CHECK(false);
     }
   }
-  if (lhs_type.type == kFLOAT && rhs_type.type == kFLOAT) {
+  if (lhs_type.type) {
     switch (optype) {
     case kMINUS:
       return ir_builder_.CreateFSub(lhs_lv, rhs_lv);
@@ -524,18 +529,24 @@ void Executor::executeSimpleInsert() {
     const auto col_type = col_types[col_idx];
     auto col_datum = col_cv->get_constval();
     switch (col_type) {
-    case kSMALLINT:
-      CHECK(false);
+    case kSMALLINT: {
+      auto col_data = reinterpret_cast<int16_t*>(malloc(sizeof(int16_t)));
+      *col_data = col_datum.smallintval;
+      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
+    }
     case kINT: {
       auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
       *col_data = col_datum.intval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
-    case kBIGINT:
-      CHECK(false);
+    case kBIGINT: {
+      auto col_data = reinterpret_cast<int64_t*>(malloc(sizeof(int64_t)));
+      *col_data = col_datum.bigintval;
+      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
+    }
     default:
       CHECK(false);
     }
@@ -745,6 +756,22 @@ void Executor::compileAggScanPlan(
   CHECK(query_cpu_code_);
 }
 
+namespace {
+
+void optimizeIR(llvm::Module* module, const ExecutorOptLevel opt_level) {
+  llvm::legacy::PassManager pass_manager;
+  pass_manager.add(llvm::createAlwaysInlinerPass());
+  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
+  pass_manager.add(llvm::createInstructionSimplifierPass());
+  pass_manager.add(llvm::createInstructionCombiningPass());
+  if (opt_level == ExecutorOptLevel::LoopStrengthReduction) {
+    pass_manager.add(llvm::createLoopStrengthReducePass());
+  }
+  pass_manager.run(*module);
+}
+
+}
+
 void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
@@ -760,15 +787,7 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
   CHECK(execution_engine_);
 
   // run optimizations
-  llvm::legacy::PassManager pass_manager;
-  pass_manager.add(llvm::createAlwaysInlinerPass());
-  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
-  pass_manager.add(llvm::createInstructionSimplifierPass());
-  pass_manager.add(llvm::createInstructionCombiningPass());
-  if (opt_level == ExecutorOptLevel::LoopStrengthReduction) {
-    pass_manager.add(llvm::createLoopStrengthReducePass());
-  }
-  pass_manager.run(*module);
+  optimizeIR(module, opt_level);
 
   if (llvm::verifyFunction(*query_func)) {
     LOG(FATAL) << "Generated invalid code. ";
@@ -778,6 +797,9 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
 }
 
 CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
+  // run optimizations
+  optimizeIR(module, opt_level);
+
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
   module->print(os, nullptr);
