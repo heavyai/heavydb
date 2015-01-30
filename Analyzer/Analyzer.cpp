@@ -81,7 +81,7 @@ namespace Analyzer {
 	Expr *
 	Var::deep_copy() const
 	{
-		return new Var(type_info, table_id, column_id, rte_idx, compression, comp_param, is_inner, varno);
+		return new Var(type_info, table_id, column_id, rte_idx, compression, comp_param, which_row, varno);
 	}
 
 	Expr *
@@ -100,13 +100,13 @@ namespace Analyzer {
 	Expr *
 	UOper::deep_copy() const
 	{
-		return new UOper(type_info, optype, operand->deep_copy());
+		return new UOper(type_info, contains_agg, optype, operand->deep_copy());
 	}
 	
 	Expr *
 	BinOper::deep_copy() const
 	{
-		return new BinOper(type_info, optype, qualifier, left_operand->deep_copy(), right_operand->deep_copy());
+		return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->deep_copy(), right_operand->deep_copy());
 	}
 
 	Expr *
@@ -145,7 +145,7 @@ namespace Analyzer {
 		for (auto p : expr_pair_list) {
 			new_list.push_back(std::make_pair(p.first->deep_copy(), p.second->deep_copy()));
 		}
-		return new CaseExpr(type_info, new_list, else_expr == nullptr ? nullptr : else_expr->deep_copy());
+		return new CaseExpr(type_info, contains_agg, new_list, else_expr == nullptr ? nullptr : else_expr->deep_copy());
 	}
 
 	SQLTypeInfo
@@ -367,7 +367,7 @@ namespace Analyzer {
 		if (new_type_info == type_info)
 			return this;
 		// @TODO check CASTability between types
-		return new UOper(new_type_info, kCAST, this);
+		return new UOper(new_type_info, contains_agg, kCAST, this);
 	}
 
 	void
@@ -596,7 +596,7 @@ namespace Analyzer {
 	}
 
 	void
-	RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, std::list<TargetEntry*> &tlist, int rte_idx)
+	RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, std::vector<TargetEntry*> &tlist, int rte_idx)
 	{
 		column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
 		for (auto col_desc : column_descs) {
@@ -651,6 +651,13 @@ namespace Analyzer {
 	}
 
 	void
+	Var::check_group_by(const std::list<Expr*> *groupby) const
+	{
+		if (which_row != kGROUPBY)
+			throw std::runtime_error("Intern error: invalid VAR in GROUP BY or HAVING.");
+	}
+
+	void
 	UOper::check_group_by(const std::list<Expr*> *groupby) const
 	{
 		operand->check_group_by(groupby);
@@ -676,7 +683,7 @@ namespace Analyzer {
 		} else if (typeid(*left_operand) == typeid(Constant) && typeid(*right_operand) == typeid(ColumnVar)) {
 			ColumnVar *cv = dynamic_cast<ColumnVar*>(right_operand);
 			rte_idx = cv->get_rte_idx();
-			return new BinOper(type_info, COMMUTE_COMPARISON(optype), qualifier, right_operand->deep_copy(), left_operand->deep_copy());
+			return new BinOper(type_info, contains_agg, COMMUTE_COMPARISON(optype), qualifier, right_operand->deep_copy(), left_operand->deep_copy());
 		}
 		return nullptr;
 	}
@@ -780,14 +787,12 @@ namespace Analyzer {
 
 
 	Expr *
-	ColumnVar::rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const
+	ColumnVar::rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		for (auto tle : tlist) {
 			const Expr *e = tle->get_expr();
-			if (typeid(*e) != typeid(AggExpr)) {
-				const ColumnVar *colvar = dynamic_cast<const ColumnVar*>(e);
-				if (colvar == nullptr)
-					throw std::runtime_error("Internal Error: targetlist in rewrite_with_targetlist is not all columns or aggregates.");
+			const ColumnVar *colvar = dynamic_cast<const ColumnVar*>(e);
+			if (colvar != nullptr) {
 				if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
 					return colvar->deep_copy();
 			}
@@ -796,7 +801,7 @@ namespace Analyzer {
 	}
 
 	Expr *
-	ColumnVar::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	ColumnVar::rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		int varno = 1;
 		for (auto tle : tlist) {
@@ -805,14 +810,14 @@ namespace Analyzer {
 			if (colvar == nullptr)
 				throw std::runtime_error("Internal Error: targetlist in rewrite_with_child_targetlist is not all columns.");
 			if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
-				return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), false, varno);
+				return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), Var::kINPUT_OUTER, varno);
 			varno++;
 		}
 		throw std::runtime_error("Intern error: cannot find ColumnVar in child targetlist.");
 	}
 
 	Expr *
-	ColumnVar::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
+	ColumnVar::rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const
 	{
 		int varno = 1;
 		for (auto tle : tlist) {
@@ -822,7 +827,7 @@ namespace Analyzer {
 				if (colvar == nullptr)
 					throw std::runtime_error("Internal Error: targetlist in rewrite_agg_to_var is not all columns and aggregates.");
 				if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
-					return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), false, varno);
+					return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), Var::kINPUT_OUTER, varno);
 			}
 			varno++;
 		}
@@ -830,7 +835,20 @@ namespace Analyzer {
 	}
 
 	Expr *
-	InValues::rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const
+	Var::rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const
+	{
+		int varno = 1;
+		for (auto tle : tlist) {
+			const Expr *e = tle->get_expr();
+			if (*e == *this)
+				return new Var(e->get_type_info(), Var::kINPUT_OUTER, varno);
+			varno++;
+		}
+		throw std::runtime_error("Intern error: cannot find Var from having clause in targetlist.");
+	}
+
+	Expr *
+	InValues::rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		std::list<Expr*> *new_value_list = new std::list<Expr*>();
 		for (auto v : *value_list)
@@ -839,7 +857,7 @@ namespace Analyzer {
 	}
 
 	Expr *
-	InValues::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	InValues::rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		std::list<Expr*> *new_value_list = new std::list<Expr*>();
 		for (auto v : *value_list)
@@ -848,7 +866,7 @@ namespace Analyzer {
 	}
 
 	Expr *
-	InValues::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
+	InValues::rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const
 	{
 		// should never be called
 		assert(false);
@@ -856,7 +874,7 @@ namespace Analyzer {
 	}
 
 	Expr *
-	AggExpr::rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const
+	AggExpr::rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		for (auto tle : tlist) {
 			const Expr *e = tle->get_expr();
@@ -870,13 +888,13 @@ namespace Analyzer {
 	}
 
 	Expr *
-	AggExpr::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	AggExpr::rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->rewrite_with_child_targetlist(tlist), is_distinct);
 	}
 
 	Expr *
-	AggExpr::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
+	AggExpr::rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const
 	{
 		int varno = 1;
 		for (auto tle : tlist) {
@@ -884,7 +902,7 @@ namespace Analyzer {
 			if (typeid(*e) == typeid(AggExpr)) {
 				const AggExpr *agg_expr = dynamic_cast<const AggExpr*>(e);
 				if (*this == *agg_expr)
-					return new Var(agg_expr->get_type_info(), false, varno);
+					return new Var(agg_expr->get_type_info(), Var::kINPUT_OUTER, varno);
 			}
 			varno++;
 		}
@@ -892,33 +910,33 @@ namespace Analyzer {
 	}
 
 	Expr *
-	CaseExpr::rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const
+	CaseExpr::rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		std::list<std::pair<Expr*, Expr*>> epair_list;
 		for (auto p : expr_pair_list) {
 			epair_list.push_back(std::make_pair(p.first->rewrite_with_targetlist(tlist), p.second->rewrite_with_targetlist(tlist)));
 		}
-		return new CaseExpr(type_info, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_with_targetlist(tlist));
+		return new CaseExpr(type_info, contains_agg, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_with_targetlist(tlist));
 	}
 
 	Expr *
-	CaseExpr::rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const
+	CaseExpr::rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const
 	{
 		std::list<std::pair<Expr*, Expr*>> epair_list;
 		for (auto p : expr_pair_list) {
 			epair_list.push_back(std::make_pair(p.first->rewrite_with_child_targetlist(tlist), p.second->rewrite_with_child_targetlist(tlist)));
 		}
-		return new CaseExpr(type_info, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_with_child_targetlist(tlist));
+		return new CaseExpr(type_info, contains_agg, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_with_child_targetlist(tlist));
 	}
 
 	Expr *
-	CaseExpr::rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const
+	CaseExpr::rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const
 	{
 		std::list<std::pair<Expr*, Expr*>> epair_list;
 		for (auto p : expr_pair_list) {
 			epair_list.push_back(std::make_pair(p.first->rewrite_agg_to_var(tlist), p.second->rewrite_agg_to_var(tlist)));
 		}
-		return new CaseExpr(type_info, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_agg_to_var(tlist));
+		return new CaseExpr(type_info, contains_agg, epair_list, else_expr == nullptr ? nullptr : else_expr->rewrite_agg_to_var(tlist));
 	}
 
 	bool
@@ -1035,7 +1053,7 @@ namespace Analyzer {
 	void
 	Var::print() const
 	{
-		std::cout << "(Var table: " << table_id << " column: " << column_id << " rte: " << rte_idx << " inner: " << is_inner << " varno: " << varno << ") ";
+		std::cout << "(Var table: " << table_id << " column: " << column_id << " rte: " << rte_idx << " which_row: " << which_row << " varno: " << varno << ") ";
 	}
 
 	void
@@ -1360,5 +1378,16 @@ namespace Analyzer {
 		}
 		if (else_expr != nullptr)
 			else_expr->collect_column_var(colvar_set, include_agg);
+	}
+
+	void
+	CaseExpr::check_group_by(const std::list<Expr*> *groupby) const
+	{
+		for (auto p : expr_pair_list) {
+			p.first->check_group_by(groupby);
+			p.second->check_group_by(groupby);
+		}
+		if (else_expr != nullptr)
+			else_expr->check_group_by(groupby);
 	}
 }

@@ -29,13 +29,15 @@ namespace Analyzer {
 	 */
 	class Expr {
 		public:
-			Expr(SQLTypes t) { type_info.type = t; type_info.dimension = 0; type_info.scale = 0; }
-			Expr(SQLTypes t, int d) { type_info.type = t; type_info.dimension = d; type_info.scale = 0; }
-			Expr(SQLTypes t, int d, int s) { type_info.type = t; type_info.dimension = d; type_info.scale = s; }
-			Expr(const SQLTypeInfo &ti) : type_info(ti) {}
+			Expr(SQLTypes t) : contains_agg(false) { type_info.type = t; type_info.dimension = 0; type_info.scale = 0; }
+			Expr(SQLTypes t, int d) : contains_agg(false) { type_info.type = t; type_info.dimension = d; type_info.scale = 0; }
+			Expr(SQLTypes t, int d, int s) : contains_agg(false) { type_info.type = t; type_info.dimension = d; type_info.scale = s; }
+			Expr(const SQLTypeInfo &ti, bool has_agg = false) : type_info(ti), contains_agg(has_agg) {}
 			virtual ~Expr() {}
 			const SQLTypeInfo &get_type_info() const { return type_info; }
 			void set_type_info(const SQLTypeInfo &ti) { type_info = ti; }
+			bool get_contains_agg() const { return contains_agg; }
+			void set_contains_agg(bool a) { contains_agg = a; }
 			virtual Expr *add_cast(const SQLTypeInfo &new_type_info);
 			virtual void check_group_by(const std::list<Expr*> *groupby) const {};
 			virtual Expr *deep_copy() const = 0; // make a deep copy of self
@@ -69,20 +71,20 @@ namespace Analyzer {
 			 * targetlist expressions are expected to be only Var's or AggExpr's.
 			 * returns a new expression copy
 			 */
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const { return deep_copy(); };
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return deep_copy(); };
 			/*
 			 * @brief rewrite_with_child_targetlist rewrite ColumnVar's in expression with entries in a child plan's targetlist.
 			 * targetlist expressions are expected to be only Var's or ColumnVar's
 			 * returns a new expression copy
 			 */
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const { return deep_copy(); };
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return deep_copy(); };
 			/*
 			 * @brief rewrite_agg_to_var rewrite ColumnVar's in expression with entries in an AggPlan's targetlist.
 			 * targetlist expressions are expected to be only Var's or ColumnVar's or AggExpr's
 			 * All AggExpr's are written into Var's.
 			 * returns a new expression copy
 			 */
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const { return deep_copy(); }
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return deep_copy(); }
 			virtual bool operator==(const Expr &rhs) const = 0;
 			virtual void print() const = 0;
 			virtual void add_unique(std::list<const Expr*> &expr_list) const;
@@ -96,6 +98,7 @@ namespace Analyzer {
 
 		protected:
 			SQLTypeInfo type_info; // SQLTypeInfo of the return result of this expression
+			bool contains_agg;
 	};
 
 	/*
@@ -118,9 +121,9 @@ namespace Analyzer {
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { rte_idx_set.insert(rte_idx); }
 			static bool colvar_comp(const ColumnVar* l, const ColumnVar* r) { return l->get_table_id() < r->get_table_id() || (l->get_table_id() == r->get_table_id() && l->get_column_id() < r->get_column_id()); }
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { colvar_set.insert(this); }
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const;
 			virtual bool operator==(const Expr &rhs) const;
 			virtual void print() const;
 		protected:
@@ -141,14 +144,23 @@ namespace Analyzer {
 	 */
 	class Var : public ColumnVar {
 		public:
-			Var(const SQLTypeInfo &ti, int r, int c, int i, EncodingType e, int p, bool o, int v) : ColumnVar(ti, r, c, i, e, p), is_inner(o), varno(v) {}
-			Var(const SQLTypeInfo &ti, bool o, int v) : ColumnVar(ti, 0, 0, -1, kENCODING_NONE, 0), is_inner(o), varno(v) {}
-			bool get_is_inner() const { return is_inner; }
+			enum WhichRow { kINPUT_OUTER, kINPUT_INNER, kOUTPUT, kGROUPBY };
+			Var(const SQLTypeInfo &ti, int r, int c, int i, EncodingType e, int p, WhichRow o, int v) : ColumnVar(ti, r, c, i, e, p), which_row(o), varno(v) {}
+			Var(const SQLTypeInfo &ti, WhichRow o, int v) : ColumnVar(ti, 0, 0, -1, kENCODING_NONE, 0), which_row(o), varno(v) {}
+			WhichRow get_which_row() const { return which_row; }
+			void set_which_row(WhichRow r) { which_row = r; }
 			int get_varno() const { return varno; }
+			void set_varno(int n) { varno = n; }
 			virtual Expr *deep_copy() const;
 			virtual void print() const;
+			virtual void check_group_by(const std::list<Expr*> *groupby) const;
+			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { rte_idx_set.insert(-1); }
+			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const {}
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return deep_copy(); }
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return deep_copy(); }
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const;
 		private:
-			bool is_inner; // indicate the row is produced by the inner plan
+			WhichRow which_row; // indicate which row this Var should project from.  It can be from the outer input plan or the inner input plan (for joins) or the output row in the current plan.
 			int varno; // the column number in the row.  1-based
 	};
 
@@ -183,7 +195,7 @@ namespace Analyzer {
 	 */
 	class UOper : public Expr {
 		public:
-			UOper(const SQLTypeInfo &ti, SQLOps o, Expr *p) : Expr(ti), optype(o), operand(p) {}
+			UOper(const SQLTypeInfo &ti, bool has_agg, SQLOps o, Expr *p) : Expr(ti, has_agg), optype(o), operand(p) {}
 			UOper(SQLTypes t, SQLOps o, Expr *p) : Expr(t), optype(o), operand(p) {}
 			virtual ~UOper() { delete operand; }
 			SQLOps get_optype() const { return optype; }
@@ -193,9 +205,9 @@ namespace Analyzer {
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { operand->collect_rte_idx(rte_idx_set); }
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { operand->collect_column_var(colvar_set, include_agg); }
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const { return new UOper(type_info, optype, operand->rewrite_with_targetlist(tlist)); }
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const { return new UOper(type_info, optype, operand->rewrite_with_child_targetlist(tlist)); }
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const { return new UOper(type_info, optype, operand->rewrite_agg_to_var(tlist)); }
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return new UOper(type_info, contains_agg, optype, operand->rewrite_with_targetlist(tlist)); }
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return new UOper(type_info, contains_agg, optype, operand->rewrite_with_child_targetlist(tlist)); }
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return new UOper(type_info, contains_agg, optype, operand->rewrite_agg_to_var(tlist)); }
 			virtual bool operator==(const Expr &rhs) const;
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -212,7 +224,7 @@ namespace Analyzer {
 	 */
 	class BinOper : public Expr {
 		public:
-			BinOper(const SQLTypeInfo &ti, SQLOps o, SQLQualifier q, Expr *l, Expr *r) : Expr(ti), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
+			BinOper(const SQLTypeInfo &ti, bool has_agg, SQLOps o, SQLQualifier q, Expr *l, Expr *r) : Expr(ti, has_agg), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
 			BinOper(SQLTypes t, SQLOps o, SQLQualifier q, Expr *l, Expr *r) : Expr(t), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
 			virtual ~BinOper() { delete left_operand; delete right_operand; }
 			SQLOps get_optype() const { return optype; }
@@ -228,9 +240,9 @@ namespace Analyzer {
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { left_operand->collect_rte_idx(rte_idx_set); right_operand->collect_rte_idx(rte_idx_set); }
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { left_operand->collect_column_var(colvar_set, include_agg); right_operand->collect_column_var(colvar_set, include_agg); }
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const { return new BinOper(type_info, optype, qualifier, left_operand->rewrite_with_targetlist(tlist), right_operand->rewrite_with_targetlist(tlist)); }
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const { return new BinOper(type_info, optype, qualifier, left_operand->rewrite_with_child_targetlist(tlist), right_operand->rewrite_with_child_targetlist(tlist)); }
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const { return new BinOper(type_info, optype, qualifier, left_operand->rewrite_agg_to_var(tlist), right_operand->rewrite_agg_to_var(tlist)); }
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->rewrite_with_targetlist(tlist), right_operand->rewrite_with_targetlist(tlist)); }
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->rewrite_with_child_targetlist(tlist), right_operand->rewrite_with_child_targetlist(tlist)); }
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->rewrite_agg_to_var(tlist), right_operand->rewrite_agg_to_var(tlist)); }
 			virtual bool operator==(const Expr &rhs) const;
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -260,9 +272,9 @@ namespace Analyzer {
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const { assert(false); }
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { assert(false); }
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { assert(false); }
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const { assert(false); }
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const { assert(false); }
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const { assert(false); }
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { assert(false); }
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { assert(false); }
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { assert(false); }
 			virtual bool operator==(const Expr &rhs) const { assert(false); return false;}
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const { assert(false); }
@@ -286,9 +298,9 @@ namespace Analyzer {
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { arg->collect_column_var(colvar_set, include_agg); }
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const;
 			virtual bool operator==(const Expr &rhs) const { assert(false); return false;}
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -313,9 +325,9 @@ namespace Analyzer {
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { arg->collect_column_var(colvar_set, include_agg); }
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_child_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_agg_to_var(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_child_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_agg_to_var(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
 			virtual bool operator==(const Expr &rhs) const { assert(false); return false;}
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -331,8 +343,8 @@ namespace Analyzer {
 	 */
 	class AggExpr : public Expr {
 		public:
-			AggExpr(const SQLTypeInfo &ti, SQLAgg a, Expr *g, bool d) : Expr(ti), aggtype(a), arg(g), is_distinct(d) {}
-			AggExpr(SQLTypes t, SQLAgg a, Expr *g, bool d, int idx) : Expr(t), aggtype(a), arg(g), is_distinct(d) {}
+			AggExpr(const SQLTypeInfo &ti, SQLAgg a, Expr *g, bool d) : Expr(ti, true), aggtype(a), arg(g), is_distinct(d) {}
+			AggExpr(SQLTypes t, SQLAgg a, Expr *g, bool d, int idx) : Expr(t, true), aggtype(a), arg(g), is_distinct(d) {}
 			virtual ~AggExpr() { delete arg; }
 			SQLAgg get_aggtype() const { return aggtype; }
 			const Expr *get_arg() const { return arg; }
@@ -341,9 +353,9 @@ namespace Analyzer {
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); };
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { if ( include_agg && arg != nullptr) arg->collect_column_var(colvar_set, include_agg); }
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const;
 			virtual bool operator==(const Expr &rhs) const;
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -359,17 +371,18 @@ namespace Analyzer {
 	 */
 	class CaseExpr : public Expr {
 		public:
-			CaseExpr(const SQLTypeInfo &ti, const std::list<std::pair<Expr*, Expr*>> &w, Expr *e) : Expr(ti), expr_pair_list(w), else_expr(e) {}
+			CaseExpr(const SQLTypeInfo &ti, bool has_agg, const std::list<std::pair<Expr*, Expr*>> &w, Expr *e) : Expr(ti, has_agg), expr_pair_list(w), else_expr(e) {}
 			virtual ~CaseExpr();
 			const std::list<std::pair<Expr*, Expr*>> &get_expr_pair_list() const { return expr_pair_list; }
 			const Expr *get_else_expr() const { return else_expr; }
 			virtual Expr *deep_copy() const;
+			virtual void check_group_by(const std::list<Expr*> *groupby) const;
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
 			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const;
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const;
-			virtual Expr *rewrite_with_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_with_child_targetlist(const std::list<TargetEntry*> &tlist) const;
-			virtual Expr *rewrite_agg_to_var(const std::list<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const;
+			virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const;
 			virtual bool operator==(const Expr &rhs) const;
 			virtual void print() const;
 			virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -387,9 +400,10 @@ namespace Analyzer {
 			TargetEntry(const std::string &n, Expr *e) : resname(n), expr(e) {}
 			TargetEntry(const std::string &n, Expr *e, bool d) : resname(n), expr(e) {}
 			virtual ~TargetEntry() { delete expr; }
-			const std::string &get_resname() { return resname; }
+			const std::string &get_resname() const { return resname; }
 			void set_resname( const std::string &name) { resname = name; }
 			Expr *get_expr() { return expr; }
+			void set_expr(Expr *e) { expr = e; }
 			virtual void print() const;
 		private:
 			std::string resname; // alias name, e.g., SELECT salary + bonus AS compensation, 
@@ -418,7 +432,7 @@ namespace Analyzer {
 			const std::string &get_table_name() const { return table_desc->tableName; }
 			const TableDescriptor *get_table_desc() const { return table_desc; }
 			const Query *get_view_query() const { return view_query; }
-			void expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, std::list<TargetEntry*> &tlist, int rte_idx);
+			void expand_star_in_targetlist(const Catalog_Namespace::Catalog &catalog, std::vector<TargetEntry*> &tlist, int rte_idx);
 			void add_all_column_descs(const Catalog_Namespace::Catalog &catalog);
 		private:
 			std::string rangevar; // range variable name, e.g., FROM emp e, dept d
@@ -450,8 +464,8 @@ namespace Analyzer {
 			virtual ~Query();
 			bool get_is_distinct() const { return is_distinct; }
 			int get_num_aggs() const { return num_aggs; }
-			const std::list<TargetEntry*> &get_targetlist() const { return targetlist; }
-			std::list<TargetEntry*> &get_targetlist_nonconst() { return targetlist; }
+			const std::vector<TargetEntry*> &get_targetlist() const { return targetlist; }
+			std::vector<TargetEntry*> &get_targetlist_nonconst() { return targetlist; }
 			const std::vector<RangeTblEntry*> &get_rangetable() const { return rangetable; }
 			const Expr *get_where_predicate() const { return where_predicate; }
 			const std::list<Expr*> *get_group_by() const { return group_by; };
@@ -483,7 +497,7 @@ namespace Analyzer {
 			void set_offset(int64_t o) { offset = o; }
 		private:
 			bool is_distinct; // true only if SELECT DISTINCT
-			std::list<TargetEntry*> targetlist; // represents the SELECT clause
+			std::vector<TargetEntry*> targetlist; // represents the SELECT clause
 			std::vector<RangeTblEntry*> rangetable; // represents the FROM clause for SELECT.  For INSERT, DELETE, UPDATE the result table is always the first entry in rangetable.
 			Expr *where_predicate; // represents the WHERE clause
 			std::list<Expr*> *group_by; // represents the GROUP BY clause
