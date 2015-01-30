@@ -379,7 +379,9 @@ std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::AggPlan* agg_pl
   const auto& target_list = agg_plan->get_targetlist();
   std::vector<Analyzer::Expr*> result;
   for (auto target : target_list) {
-    result.push_back(target->get_expr());
+    auto target_expr = target->get_expr();
+    CHECK(target_expr);
+    result.push_back(target_expr);
   }
   return result;
 }
@@ -697,7 +699,12 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
   std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
   const auto target_exprs = get_agg_target_exprs(agg_plan);
   for (auto target_expr : target_exprs) {
+    CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+    if (!agg_expr) {
+      result.emplace_back("", target_expr, 0);
+      continue;
+    }
     CHECK(!agg_expr->get_is_distinct());
     switch (agg_expr->get_aggtype()) {
     case kAVG:
