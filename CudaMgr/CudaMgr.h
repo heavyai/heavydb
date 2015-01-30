@@ -7,7 +7,7 @@
 namespace CudaMgr_Namespace {
 
 struct DeviceProperties {
-    int device;
+    CUdevice device;
     int computeMajor;
     int computeMinor;
     size_t globalMem;
@@ -22,7 +22,6 @@ struct DeviceProperties {
     int memoryClockKhz;
     int memoryBusWidth; // in bits
     float memoryBandwidthGBs;
-
 };
     
 
@@ -30,9 +29,14 @@ struct DeviceProperties {
 struct CudaMgr {
 
     CudaMgr();
+    ~CudaMgr();
+    void fillDeviceProperties();
+    void createDeviceContexts();
+    void printDeviceProperties();
     void checkError(CUresult cuResult);
     int deviceCount;
     std::vector <DeviceProperties> deviceProperties;
+    std::vector <CUcontext> deviceContexts;
 
 
 }; //class CudaMgr

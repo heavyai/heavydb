@@ -7,9 +7,19 @@ using std::endl;
 namespace CudaMgr_Namespace {
 
 CudaMgr::CudaMgr() {
-    cout << "Before get device count" << endl;
     checkError(cuInit(0));
     checkError(cuDeviceGetCount(&deviceCount));
+    fillDeviceProperties();
+    createDeviceContexts();
+}
+
+CudaMgr::~CudaMgr() {
+    for (int d = 0; d < deviceCount; ++d) {
+        checkError(cuCtxDestroy(deviceContexts[d]));
+    }
+}
+
+void CudaMgr::fillDeviceProperties() {
     deviceProperties.resize(deviceCount);
     for (int deviceNum = 0; deviceNum < deviceCount; ++deviceNum) {
         checkError(cuDeviceGet(&deviceProperties[deviceNum].device,deviceNum));
@@ -28,10 +38,40 @@ CudaMgr::CudaMgr() {
         deviceProperties[deviceNum].memoryBandwidthGBs = deviceProperties[deviceNum].memoryClockKhz / 1000000.0 / 8.0 * deviceProperties[deviceNum].memoryBusWidth;
 
     }
-
-
 }
 
+void CudaMgr::createDeviceContexts() {
+    deviceContexts.resize(deviceCount);
+    for (int d = 0; d < deviceCount; ++d) {
+         CUresult status = cuCtxCreate(&deviceContexts[d], 0, deviceProperties[d].device);
+         if (status != CUDA_SUCCESS) {
+             // this is called from destructor so we need
+             // to clean up
+             // destroy all contexts up to this point
+             for (int destroyId = 0; destroyId <= d; ++destroyId) {
+                checkError(cuCtxDestroy(deviceContexts[destroyId])); // check error here - what if it throws?
+            }
+            // now throw via checkError
+            checkError(status);
+        }
+    }
+}
+
+
+void CudaMgr::printDeviceProperties() {
+    cout << "Num devices: " << deviceCount << endl << endl;
+    for (int d = 0; d < deviceCount; ++d) {
+        cout << "Device: " << deviceProperties[d].device << endl;
+        cout << "Compute Major: " << deviceProperties[d].computeMajor << endl;
+        cout << "Compute Minor: " << deviceProperties[d].computeMinor << endl;
+        cout << "PCI bus id: " << deviceProperties[d].pciBusId << endl;
+        cout << "PCI deviceId id: " << deviceProperties[d].pciDeviceId << endl;
+        cout << "Total Global memory: " << deviceProperties[d].globalMem / 1073741824.0 << " GB" <<  endl;
+        cout << "Memory clock (khz): " << deviceProperties[d].memoryClockKhz << endl;
+        cout << "Memory bandwidth: " << deviceProperties[d].memoryBandwidthGBs << " GB/sec" << endl;
+        cout << endl;
+    }
+}
 
 void CudaMgr::checkError(CUresult status) {
     if (status != CUDA_SUCCESS) {
@@ -42,20 +82,12 @@ void CudaMgr::checkError(CUresult status) {
     }
 }
 
-} // CudaMgr_Namespacek
+} // CudaMgr_Namespace
 
 int main () {
     try {
         CudaMgr_Namespace::CudaMgr cudaMgr;
-        cout << "Num devices: " << cudaMgr.deviceCount << endl;
-        for (int d = 0; d < cudaMgr.deviceCount; ++d) {
-            cout << "Device: " << d << endl;
-            cout << "Compute Major: " << cudaMgr.deviceProperties[d].computeMajor << endl;
-            cout << "Compute Minor: " << cudaMgr.deviceProperties[d].computeMinor << endl;
-            cout << "Total Global memory: " << cudaMgr.deviceProperties[d].globalMem << endl;
-            cout << "Memory clock (khz): " << cudaMgr.deviceProperties[d].memoryClockKhz << endl;
-            cout << "Memory bandwidth: " << cudaMgr.deviceProperties[d].memoryBandwidthGBs << " GB/sec" << endl;
-        }
+        cudaMgr.printDeviceProperties();
     }
     catch (std::runtime_error &error) {
         cout << "Caught error: " << error.what() << endl;
