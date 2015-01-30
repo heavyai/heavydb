@@ -28,15 +28,22 @@ enum class ExecutorDeviceType {
   GPU
 };
 
+typedef boost::variant<int64_t, double> AggResult;
+
+struct ResultRow {
+  // TODO(alex): support for strings
+  std::vector<int64_t> value_tuple;
+  std::vector<AggResult> agg_results;
+};
+
 class Executor {
 public:
   Executor(const Planner::RootPlan* root_plan);
   ~Executor();
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t> AggInfo;
-  typedef boost::variant<int64_t, double> AggResult;
 
-  std::vector<AggResult> execute(
+  std::vector<ResultRow> execute(
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
     const ExecutorOptLevel = ExecutorOptLevel::Default);
 private:
@@ -50,7 +57,7 @@ private:
   llvm::Value* codegenArith(const Analyzer::BinOper*) const;
   llvm::Value* codegenLogical(const Analyzer::UOper*) const;
   llvm::Value* codegenCast(const Analyzer::UOper*) const;
-  std::vector<AggResult> executeAggScanPlan(
+  std::vector<ResultRow> executeAggScanPlan(
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
@@ -60,7 +67,8 @@ private:
   void compileAggScanPlan(
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel);
+    const ExecutorOptLevel,
+    const size_t groups_buffer_entry_count);
   void* optimizeAndCodegenCPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
   CUfunction optimizeAndCodegenGPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
   void call_aggregators(

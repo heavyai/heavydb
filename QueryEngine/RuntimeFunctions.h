@@ -2,6 +2,10 @@
 #define QUERYENGINE_RUNTIMEFUNCTIONS_H
 
 #include <cstdint>
+#include <limits>
+
+
+#define EMPTY_KEY std::numeric_limits<int64_t>::min()
 
 extern "C"
 void init_groups(int64_t* groups_buffer,

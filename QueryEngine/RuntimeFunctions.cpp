@@ -1,8 +1,6 @@
 #include "RuntimeFunctions.h"
 
 #include <algorithm>
-#include <cstdint>
-#include <limits>
 #include <string.h>
 
 
@@ -79,8 +77,6 @@ int32_t pos_step_impl() {
 }
 
 // group by helpers
-
-#define EMPTY_KEY std::numeric_limits<int64_t>::min()
 
 extern "C"
 void init_groups(int64_t* groups_buffer,

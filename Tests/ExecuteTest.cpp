@@ -41,7 +41,7 @@ Catalog_Namespace::Catalog get_catalog() {
 
 Catalog_Namespace::Catalog g_cat(get_catalog());
 
-vector<Executor::AggResult> run_multiple_agg(const string& query_str) {
+vector<ResultRow> run_multiple_agg(const string& query_str) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -61,8 +61,8 @@ vector<Executor::AggResult> run_multiple_agg(const string& query_str) {
   return executor.execute(ExecutorDeviceType::CPU, ExecutorOptLevel::LoopStrengthReduction);
 }
 
-Executor::AggResult run_simple_agg(const string& query_str) {
-  return run_multiple_agg(query_str).front();
+AggResult run_simple_agg(const string& query_str) {
+  return run_multiple_agg(query_str).front().agg_results.front();
 }
 
 void run_ddl_statement(const string& create_table_stmt) {
@@ -80,7 +80,7 @@ void run_ddl_statement(const string& create_table_stmt) {
 }
 
 template<class T>
-T v(const Executor::AggResult& r) {
+T v(const AggResult& r) {
   auto p = boost::get<T>(&r);
   CHECK(p);
   return *p;
@@ -155,12 +155,31 @@ TEST(Select, FilterAndSimpleAggregation) {
 }
 
 TEST(Select, FilterAndMultipleAggregation) {
-  auto agg_results = run_multiple_agg("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;");
+  auto agg_results = run_multiple_agg("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;")
+    .front()
+    .agg_results;
   CHECK_EQ(agg_results.size(), 4);
   ASSERT_EQ(v<int64_t>(agg_results[0]), 7);
   ASSERT_EQ(v<double>(agg_results[1]), 294.);
   ASSERT_EQ(v<int64_t>(agg_results[2]), 49);
   ASSERT_EQ(v<int64_t>(agg_results[3]), g_num_rows);
+}
+
+TEST(Select, FilterAndGroupBy) {
+  const auto rows = run_multiple_agg("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;");
+  CHECK_EQ(rows.size(), 2);
+  {
+  const auto row = rows[0];
+  std::vector<int64_t> val_tuple { 7, 42 };
+  ASSERT_EQ(row.value_tuple, val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 49);
+  }
+  {
+  const auto row = rows[1];
+  std::vector<int64_t> val_tuple { 8, 43 };
+  ASSERT_EQ(row.value_tuple, val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 51);
+  }
 }
 
 int main(int argc, char** argv)

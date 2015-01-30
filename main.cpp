@@ -241,12 +241,23 @@ main(int argc, char* argv[])
 						Executor executor(plan);
 						const auto results = executor.execute();
 						if (!results.empty()) {
-							cout << results[0];
-							for (size_t i = 1; i < results.size(); ++i) {
-								cout << ", " << results[i];
+							for (const auto& row : results) {
+								const auto val_tuple = row.value_tuple;
+								if (!val_tuple.empty()) {
+									cout << '(' << val_tuple[0];
+									for (size_t i = 1; i < val_tuple.size(); ++i) {
+										cout << ", " << val_tuple[i];
+									}
+									cout << ")\t";
+								}
+								const auto agg_results = row.agg_results;
+								cout << agg_results[0];
+								for (size_t i = 1; i < agg_results.size(); ++i) {
+									cout << ", " << agg_results[i];
+								}
+								cout << endl;
 							}
 						}
-						cout << endl;
 					}
 				}
 			}
