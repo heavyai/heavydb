@@ -1,5 +1,6 @@
 #include "CudaMgr.h"
 #include <iostream>
+#include "assert.h"
 
 using std::cout;
 using std::endl;
@@ -73,6 +74,45 @@ void CudaMgr::printDeviceProperties() {
     }
 }
 
+void CudaMgr::setContext(const int deviceNum) {
+    //assert (deviceNum < deviceCount);
+    cuCtxSetCurrent(deviceContexts[deviceNum]);
+}
+
+int8_t * CudaMgr::allocatePinnedHostMem(const size_t numBytes) {
+    //setContext(deviceNum);
+    void * hostPtr;
+    checkError(cuMemHostAlloc(&hostPtr,numBytes,CU_MEMHOSTALLOC_PORTABLE));
+    return (reinterpret_cast <int8_t *> (hostPtr));
+}
+
+int8_t * CudaMgr::allocateDeviceMem(const size_t numBytes, const int deviceNum) {
+    setContext(deviceNum);
+    CUdeviceptr devicePtr;
+    checkError(cuMemAlloc(&devicePtr,numBytes));
+    return (reinterpret_cast <int8_t *> (devicePtr));
+}
+
+void CudaMgr::freePinnedHostMem(int8_t * hostPtr) {
+    checkError(cuMemFreeHost(reinterpret_cast <void *> (hostPtr)));
+}
+
+void CudaMgr::freeDeviceMem(int8_t * devicePtr) {
+    checkError(cuMemFree(reinterpret_cast <CUdeviceptr> (devicePtr)));
+}
+
+void CudaMgr::copyHostToDevice(int8_t *devicePtr, const int8_t *hostPtr, const size_t numBytes, const int deviceNum) {
+    setContext(deviceNum);
+    checkError(cuMemcpyHtoD(reinterpret_cast <CUdeviceptr> (devicePtr),hostPtr,numBytes)); 
+}
+
+void CudaMgr::copyDeviceToHost(int8_t *hostPtr, const int8_t *devicePtr, const size_t numBytes, const int deviceNum) {
+    setContext(deviceNum);
+    checkError(cuMemcpyDtoH(hostPtr, reinterpret_cast <const CUdeviceptr> (devicePtr),numBytes)); 
+}
+
+
+
 void CudaMgr::checkError(CUresult status) {
     if (status != CUDA_SUCCESS) {
         const char *errorString;
@@ -88,11 +128,36 @@ int main () {
     try {
         CudaMgr_Namespace::CudaMgr cudaMgr;
         cudaMgr.printDeviceProperties();
+        int numDevices = cudaMgr.getDeviceCount();
+        cout << "There exists " << numDevices << " CUDA devices." << endl;
+        int8_t *hostPtr, *hostPtr2, *devicePtr;
+        const size_t numBytes = 1000000;
+        hostPtr = cudaMgr.allocatePinnedHostMem(numBytes);
+        hostPtr2 = cudaMgr.allocatePinnedHostMem(numBytes);
+        devicePtr = cudaMgr.allocateDeviceMem(numBytes,0);
+        for (int i = 0; i < numBytes; ++i) {
+            hostPtr[i] = i % 100;
+        }
+        cudaMgr.copyHostToDevice(devicePtr,hostPtr,numBytes,0);
+        cudaMgr.copyDeviceToHost(hostPtr2,devicePtr,numBytes,0);
+
+        bool matchFlag = true;
+        for (int i = 0; i < numBytes; ++i) {
+            if (hostPtr[i] != hostPtr2[i]) {
+                matchFlag = false;
+                break;
+            }
+        }
+        cout << "Match flag: " << matchFlag << endl;
+
+
+        cudaMgr.setContext(0);
+        cudaMgr.freeDeviceMem(devicePtr);
+        cudaMgr.freePinnedHostMem(hostPtr);
     }
     catch (std::runtime_error &error) {
         cout << "Caught error: " << error.what() << endl;
     }
-
 }
 
 

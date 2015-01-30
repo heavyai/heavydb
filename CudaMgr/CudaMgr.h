@@ -26,17 +26,30 @@ struct DeviceProperties {
     
 
 
-struct CudaMgr {
+class CudaMgr {
 
-    CudaMgr();
-    ~CudaMgr();
-    void fillDeviceProperties();
-    void createDeviceContexts();
+    public:
+        CudaMgr();
+        ~CudaMgr();
+    void setContext(const int deviceNum);
     void printDeviceProperties();
-    void checkError(CUresult cuResult);
-    int deviceCount;
-    std::vector <DeviceProperties> deviceProperties;
-    std::vector <CUcontext> deviceContexts;
+    int8_t * allocatePinnedHostMem(const size_t numBytes);
+    int8_t * allocateDeviceMem(const size_t numBytes, const int deviceNum);
+    void freePinnedHostMem(int8_t * hostPtr);
+    void freeDeviceMem(int8_t * devicePtr);
+    void copyHostToDevice(int8_t *devicePtr, const int8_t *hostPtr, const size_t numBytes, const int deviceNum);
+    void copyDeviceToHost(int8_t *hostPtr, const int8_t *devicePtr, const size_t numBytes, const int deviceNum);
+
+    inline int getDeviceCount() {return deviceCount;}
+
+    private: 
+        void fillDeviceProperties();
+        void createDeviceContexts();
+        void checkError(CUresult cuResult);
+
+        int deviceCount;
+        std::vector <DeviceProperties> deviceProperties;
+        std::vector <CUcontext> deviceContexts;
 
 
 }; //class CudaMgr
