@@ -758,7 +758,7 @@ void Executor::compileAggScanPlan(
 
 namespace {
 
-void optimizeIR(llvm::Module* module, const ExecutorOptLevel opt_level) {
+void optimizeIR(llvm::Function* query_func, llvm::Module* module, const ExecutorOptLevel opt_level) {
   llvm::legacy::PassManager pass_manager;
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
@@ -768,6 +768,12 @@ void optimizeIR(llvm::Module* module, const ExecutorOptLevel opt_level) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
   pass_manager.run(*module);
+
+  // optimizations might add attributes to the function
+  // and libNVVM doesn't understand all of them; play it
+  // safe and clear all attributes
+  llvm::AttributeSet no_attributes;
+  query_func->setAttributes(no_attributes);
 }
 
 }
@@ -787,7 +793,7 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
   CHECK(execution_engine_);
 
   // run optimizations
-  optimizeIR(module, opt_level);
+  optimizeIR(query_func, module, opt_level);
 
   if (llvm::verifyFunction(*query_func)) {
     LOG(FATAL) << "Generated invalid code. ";
@@ -838,7 +844,7 @@ R"(
 
 CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
   // run optimizations
-  optimizeIR(module, opt_level);
+  optimizeIR(query_func, module, opt_level);
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
