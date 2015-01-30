@@ -8,13 +8,11 @@ set(query_engine_source_files
     QueryTemplateGenerator.cpp
     RuntimeFunctions.cpp
     RuntimeFunctionsCodegenWithIncludes.cpp
-    Translator.cpp
     Codec.h
     Execute.h
     RuntimeFunctions.h
     NvidiaKernel.h
-    QueryTemplateGenerator.h
-    Translator.h)
+    QueryTemplateGenerator.h)
 set(group_by_hash_test_files
     GroupByHashTest.cpp
     RuntimeFunctions.cpp
@@ -52,9 +50,6 @@ add_custom_command(
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
 add_library(QueryEngine ${query_engine_source_files})
-
-add_executable(benchmark_x64 main.cpp)
-target_link_libraries(benchmark_x64 QueryEngine "${LLVM_LINKER_FLAGS} -lglog -lz -lncurses -ldl -pthread")
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test "-lgtest -pthread")

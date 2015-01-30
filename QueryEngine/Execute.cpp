@@ -47,6 +47,14 @@ SQLTypes get_column_type(const int col_id, const int table_id, const Catalog_Nam
 
 }
 
+/*
+ * x64 benchmark: "SELECT COUNT(*) FROM test WHERE x > 41;"
+ *                x = 42, 64-bit column, 1-byte encoding
+ *                3B rows in 1.2s on a i7-4870HQ core
+ *
+ * TODO(alex): check we haven't introduced a regression with the new translator.
+ */
+
 std::vector<ResultRow> Executor::execute(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {

@@ -1,5 +1,4 @@
 #include "Codec.h"
-#include "Translator.h"
 
 #include <glog/logging.h>
 #include <llvm/IR/Constants.h>
