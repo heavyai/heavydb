@@ -138,7 +138,6 @@ llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
 }  // namespace
 
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
-  // TODO(alex)
   const auto enc_type = col_var->get_compression();
   const auto& type_info = col_var->get_type_info();
   switch (enc_type) {
@@ -172,7 +171,6 @@ size_t get_bit_width(const SQLTypes type) {
 }
 
 size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
-  // TODO(alex)
   const auto& type_info = col_var->get_type_info();
   return get_bit_width(type_info.type);
 }
@@ -197,7 +195,6 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
       pos_arg = &arg;
       pos_idx = arg_idx;
     } else if (pos_arg && arg_idx == pos_idx + 1 + static_cast<size_t>(local_col_id)) {
-      // TODO(alex)
       const auto decoder = get_col_decoder(col_var);
       auto dec_val = decoder->codegenDecode(
         &arg,
@@ -654,7 +651,6 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
   std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
   const auto agg_exprs = get_agg_exprs(agg_plan);
-  // TODO(alex)
   for (auto agg_expr : agg_exprs) {
     CHECK(!agg_expr->get_is_distinct());
     switch (agg_expr->get_aggtype()) {
@@ -694,7 +690,7 @@ void Executor::compileAggScanPlan(
   auto agg_infos = get_agg_name_and_exprs(agg_plan);
   auto query_func = agg_plan->get_groupby_list().empty()
     ? query_template(module_, agg_infos.size())
-    : query_template(module_, agg_infos.size());
+    : query_group_by_template(module_, agg_infos.size());
   bind_pos_placeholders("pos_start", query_func, module_);
   bind_pos_placeholders("pos_step", query_func, module_);
 
@@ -722,7 +718,6 @@ void Executor::compileAggScanPlan(
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   {
-    // TODO(alex): fix, each aggregate column should have its own init value
     for (const auto& agg_info : agg_infos) {
       init_agg_vals_.push_back(std::get<2>(agg_info));
     }
@@ -895,6 +890,13 @@ void Executor::call_aggregators(
       auto group_key = codegen(group_by_col);
       auto group_key_ptr = ir_builder_.CreateGEP(group_keys_buffer,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
+      auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
+      CHECK_LE(group_key_bitwidth, 64);
+      if (group_key_bitwidth < 64) {
+        group_key = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+          group_key,
+          get_int_type(64, context_));
+      }
       ir_builder_.CreateStore(group_key, group_key_ptr);
       ++i;
     }
