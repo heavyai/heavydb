@@ -135,6 +135,7 @@ main(int argc, char* argv[])
 	string passwd;
 	bool debug = false;
 	bool execute = false;
+	bool timer = false;
 	namespace po = boost::program_options;
 
 	po::options_description desc("Options");
@@ -145,7 +146,8 @@ main(int argc, char* argv[])
 		("user,u", po::value<string>(&user_name)->required(), "User name")
 		("passwd,p", po::value<string>(&passwd)->required(), "Password")
 		("debug,d", "Verbose debug mode")
-		("execute,e", "Execute queries");
+		("execute,e", "Execute queries")
+		("timer,t", "Show query time information");
 
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("path", 1);
@@ -163,6 +165,9 @@ main(int argc, char* argv[])
 			debug = true;
 		if (vm.count("execute"))
 			execute = true;
+		if (vm.count("timer"))
+			timer = true;
+
 		po::notify(vm);
 	}
 	catch (boost::program_options::error &e)
@@ -239,7 +244,10 @@ main(int argc, char* argv[])
 					if (debug) plan->print();
 					if (execute) {
 						Executor executor(plan);
-						const auto results = executor.execute();
+						std::vector<ResultRow> results;
+						auto ms = measure<>::execution([&]() {
+							results = executor.execute();
+						});
 						if (!results.empty()) {
 							for (const auto& row : results) {
 								const auto val_tuple = row.value_tuple;
@@ -257,6 +265,9 @@ main(int argc, char* argv[])
 								}
 								cout << endl;
 							}
+						}
+						if (timer) {
+							cout << "Query took " << ms << " ms to execute." << endl;
 						}
 					}
 				}
