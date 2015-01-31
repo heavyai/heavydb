@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "../CpuBufferMgr.h"
 #include "../../../FileMgr/FileMgr.h"
+#include "../../../../CudaMgr/CudaMgr.h"
 
 #include <boost/timer/timer.hpp>
 #include <boost/filesystem.hpp>
@@ -22,12 +23,14 @@ class CpuBufferMgrTest : public ::testing::Test {
 protected:
     virtual void SetUp() {
         deleteData("data");
+        cudaMgr = new CudaMgr_Namespace::CudaMgr;
         fm = new File_Namespace::FileMgr("data");
-        bm = new CpuBufferMgr(memSize,CPU_HOST,slabSize,pageSize,fm);
+        bm = new CpuBufferMgr(memSize,CUDA_HOST,cudaMgr,slabSize,pageSize,fm);
     }
     
     virtual void TearDown() {
         delete bm;
+        delete cudaMgr;
     }
 
     void deleteData(const std::string &dirName) {
@@ -39,6 +42,7 @@ protected:
     size_t pageSize = 512;
     CpuBufferMgr *bm;
     File_Namespace::FileMgr *fm;
+    CudaMgr_Namespace::CudaMgr *cudaMgr;
 
 };
 

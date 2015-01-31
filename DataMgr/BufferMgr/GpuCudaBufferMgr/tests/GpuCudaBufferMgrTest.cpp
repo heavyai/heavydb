@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include "../GpuCudaBufferMgr.h"
 #include "../../CpuBufferMgr/CpuBufferMgr.h"
+#include "../../../../CudaMgr/CudaMgr.h"
 
 #include <boost/timer/timer.hpp>
 
@@ -20,8 +21,9 @@ class GpuCudaBufferMgrTest : public ::testing::Test {
     
 protected:
     virtual void SetUp() {
-        cpuBufferMgr = new CpuBufferMgr(memSize,CUDA_HOST);
-        gpuBufferMgr = new GpuCudaBufferMgr(memSize,0,slabSize,pageSize,cpuBufferMgr);
+        cudaMgr = new CudaMgr_Namespace::CudaMgr();
+        cpuBufferMgr = new CpuBufferMgr(memSize,CUDA_HOST,cudaMgr);
+        gpuBufferMgr = new GpuCudaBufferMgr(memSize,0,cudaMgr, slabSize,pageSize,cpuBufferMgr);
     }
     
     virtual void TearDown() {
@@ -30,10 +32,11 @@ protected:
     }
     
     size_t memSize = 1 << 31; 
-    size_t slabSize = 1 << 28; 
+    size_t slabSize = 1 << 27; 
     size_t pageSize = 512;
     GpuCudaBufferMgr *gpuBufferMgr;
     CpuBufferMgr *cpuBufferMgr;
+    CudaMgr_Namespace::CudaMgr *cudaMgr;
 
 };
 

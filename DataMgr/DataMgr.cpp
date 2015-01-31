@@ -5,10 +5,9 @@
 
 #include "DataMgr.h"
 #include "FileMgr/FileMgr.h"
+#include "../CudaMgr/CudaMgr.h"
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
-#ifdef USE_GPU
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
-#endif 
 
 #include <limits>
 
@@ -20,6 +19,7 @@ using namespace File_Namespace;
 namespace Data_Namespace {
 
     DataMgr::DataMgr(const int partitionKeyIndex, const string &dataDir): partitionKeyIndex_(partitionKeyIndex), dataDir_(dataDir) {
+        cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
         populateMgrs();
     }
 
@@ -30,24 +30,23 @@ namespace Data_Namespace {
                 delete bufferMgrs_[level][device];
             }
         }
+        delete cudaMgr_;
     }
 
 
 
     void DataMgr::populateMgrs() {
-        bufferMgrs_.resize(2);
+        bufferMgrs_.resize(3);
         bufferMgrs_[0].push_back(new FileMgr (dataDir_)); 
         levelSizes_.push_back(1);
-        #ifdef USE_GPU
-        bufferMgrs_.resize(3);
-        bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CUDA_HOST, 1 << 30,512,bufferMgrs_[0][0])); 
+        bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
         levelSizes_.push_back(1);
-        bufferMgrs_[2].push_back(new GpuCudaBufferMgr(1 << 30, 0, 1 << 29,512,bufferMgrs_[1][0])); 
-        levelSizes_.push_back(1);
-        #else
-        bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CPU_HOST, 1 << 30,512,bufferMgrs_[0][0])); 
-        levelSizes_.push_back(1);
-        #endif
+        int numGpus = cudaMgr_->getDeviceCount();
+        for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+            size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (1<<29); // set max mem size to be size of global mem - 512MB
+            bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuMaxMemSize, gpuNum, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
+        }
+        levelSizes_.push_back(numGpus);
     }
     /*
     DataMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey,int64_t> > &metadata)  {

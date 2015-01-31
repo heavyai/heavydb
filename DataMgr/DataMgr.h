@@ -20,6 +20,10 @@ namespace File_Namespace {
     class FileBuffer;
 }
 
+namespace CudaMgr_Namespace {
+    class CudaMgr;
+}
+
 namespace Data_Namespace {
 
     class DataMgr { 
@@ -41,6 +45,8 @@ namespace Data_Namespace {
             void checkpoint();
             void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
             void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix);
+
+            CudaMgr_Namespace::CudaMgr *cudaMgr_;
 
             // database_id, table_id, partitioner_id, column_id, fragment_id
 

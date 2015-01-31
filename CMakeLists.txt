@@ -22,6 +22,7 @@ ADD_SUBDIRECTORY    (Analyzer)
 ADD_SUBDIRECTORY    (Planner)
 ADD_SUBDIRECTORY    (QueryEngine)
 ADD_SUBDIRECTORY    (DataMgr)
+ADD_SUBDIRECTORY    (CudaMgr)
 ADD_SUBDIRECTORY    (Partitioner)
 ADD_SUBDIRECTORY    (Tests)
 
