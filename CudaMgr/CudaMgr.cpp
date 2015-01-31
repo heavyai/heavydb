@@ -111,6 +111,17 @@ void CudaMgr::copyDeviceToHost(int8_t *hostPtr, const int8_t *devicePtr, const s
     checkError(cuMemcpyDtoH(hostPtr, reinterpret_cast <const CUdeviceptr> (devicePtr),numBytes)); 
 }
 
+void CudaMgr::copyDeviceToDevice(int8_t *destPtr, int8_t *srcPtr, const size_t numBytes, const int destDeviceNum, const int srcDeviceNum) {
+    checkError(cuMemcpyPeer(reinterpret_cast<CUdeviceptr> (destPtr), deviceContexts[destDeviceNum], reinterpret_cast<CUdeviceptr> (srcPtr),deviceContexts[srcDeviceNum],numBytes)); // will we always have peer?
+}
+
+
+
+void CudaMgr::zeroDeviceMem(int8_t *devicePtr, const size_t numBytes, const int deviceNum) {
+    setContext(deviceNum);
+    checkError(cuMemsetD8(reinterpret_cast <CUdeviceptr> (devicePtr), 0, numBytes)); 
+}
+
 
 
 void CudaMgr::checkError(CUresult status) {
@@ -124,6 +135,7 @@ void CudaMgr::checkError(CUresult status) {
 
 } // CudaMgr_Namespace
 
+/*
 int main () {
     try {
         CudaMgr_Namespace::CudaMgr cudaMgr;
@@ -159,5 +171,6 @@ int main () {
         cout << "Caught error: " << error.what() << endl;
     }
 }
+*/
 
 

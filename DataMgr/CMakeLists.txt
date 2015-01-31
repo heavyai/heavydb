@@ -8,6 +8,8 @@ SET (datamgr_source_files
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
     FileMgr/File.cpp
+    BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
+    BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.cpp
     BufferMgr/CpuBufferMgr/CpuBufferMgr.cpp
     BufferMgr/CpuBufferMgr/CpuBuffer.cpp
     BufferMgr/BufferMgr.cpp
@@ -16,5 +18,5 @@ SET (datamgr_source_files
 
 ADD_LIBRARY(DataMgr ${datamgr_source_files})
 
-TARGET_LINK_LIBRARIES (DataMgr ${Boost_THREAD_LIBRARY})
+TARGET_LINK_LIBRARIES (DataMgr CudaMgr ${Boost_THREAD_LIBRARY})
 
