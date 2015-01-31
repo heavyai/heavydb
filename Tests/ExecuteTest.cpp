@@ -86,15 +86,15 @@ T v(const AggResult& r) {
   return *p;
 }
 
-const size_t g_num_rows { 10 };
+const ssize_t g_num_rows { 10 };
 
 }
 
 TEST(Select, FilterAndSimpleAggregation) {
-  for (size_t i = 0; i < g_num_rows; ++i) {
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
     run_multiple_agg("INSERT INTO test VALUES(7, 42, 101, 1001);");
   }
-  for (size_t i = 0; i < g_num_rows; ++i) {
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
     run_multiple_agg("INSERT INTO test VALUES(8, 43, 102, 1002);");
   }
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;")), 2 * g_num_rows);
