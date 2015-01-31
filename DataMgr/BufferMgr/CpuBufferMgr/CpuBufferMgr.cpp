@@ -16,7 +16,6 @@ namespace Buffer_Namespace {
             slabs_.back() = cudaMgr_->allocatePinnedHostMem(slabSize);
         }
         else {
-
             slabs_.back() = new int8_t[slabSize];
         }
         slabSegments_.resize(slabSegments_.size()+1);

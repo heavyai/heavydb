@@ -45,6 +45,9 @@ namespace Data_Namespace {
             void checkpoint();
             void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
             void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix);
+            inline bool gpusPresent() {
+                return hasGpus_;
+            }
 
             CudaMgr_Namespace::CudaMgr *cudaMgr_;
 
@@ -58,6 +61,8 @@ namespace Data_Namespace {
             std::vector <int> levelSizes_;
             int partitionKeyIndex_;
             std::string dataDir_;
+            bool hasGpus_;
+
     };
 } // Data_Namespace
 

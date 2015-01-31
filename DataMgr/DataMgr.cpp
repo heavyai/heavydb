@@ -19,7 +19,15 @@ using namespace File_Namespace;
 namespace Data_Namespace {
 
     DataMgr::DataMgr(const int partitionKeyIndex, const string &dataDir): partitionKeyIndex_(partitionKeyIndex), dataDir_(dataDir) {
-        cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
+        try {
+            cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
+            hasGpus_ = true;
+        }
+        catch (std::runtime_error &error) {
+            hasGpus_ = false;
+            cudaMgr_ = 0;
+        }
+
         populateMgrs();
     }
 
@@ -30,23 +38,32 @@ namespace Data_Namespace {
                 delete bufferMgrs_[level][device];
             }
         }
-        delete cudaMgr_;
+        if (hasGpus_) {
+            delete cudaMgr_;
+        }
     }
 
 
 
     void DataMgr::populateMgrs() {
-        bufferMgrs_.resize(3);
+        bufferMgrs_.resize(2);
         bufferMgrs_[0].push_back(new FileMgr (dataDir_)); 
         levelSizes_.push_back(1);
-        bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
-        levelSizes_.push_back(1);
-        int numGpus = cudaMgr_->getDeviceCount();
-        for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-            size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (1<<29); // set max mem size to be size of global mem - 512MB
-            bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuMaxMemSize, gpuNum, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
+        if (hasGpus_) {
+            bufferMgrs_.resize(3);
+            bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
+            levelSizes_.push_back(1);
+            int numGpus = cudaMgr_->getDeviceCount();
+            for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+                size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (1<<29); // set max mem size to be size of global mem - 512MB
+                bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuMaxMemSize, gpuNum, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
+            }
+            levelSizes_.push_back(numGpus);
         }
-        levelSizes_.push_back(numGpus);
+        else {
+            bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
+            levelSizes_.push_back(1);
+        }
     }
     /*
     DataMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey,int64_t> > &metadata)  {
