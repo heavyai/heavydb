@@ -462,7 +462,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       auto chunk_meta_it = partition.chunkMetadataMap.find(col_id);
       CHECK(chunk_meta_it != partition.chunkMetadataMap.end());
       ChunkKey chunk_key { current_db.dbId, table_id, col_id, partition.partitionId };
-      auto ab = cat.get_dataMgr().getChunk(Data_Namespace::CPU_LEVEL, chunk_key, chunk_meta_it->second.numBytes);
+      auto ab = cat.get_dataMgr().getChunk(chunk_key, Data_Namespace::CPU_LEVEL, partition.deviceIds[static_cast<int>(Data_Namespace::CPU_LEVEL)],chunk_meta_it->second.numBytes);
       CHECK(ab->getMemoryPtr());
       auto it = global_to_local_col_ids_.find(col_id);
       CHECK(it != global_to_local_col_ids_.end());

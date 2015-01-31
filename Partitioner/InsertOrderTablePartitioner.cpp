@@ -66,11 +66,13 @@ void InsertOrderTablePartitioner::getChunkMetadata() {
     // partition
     if (partitionInfoVec_.size() > 0) {
         int lastPartitionId = partitionInfoVec_.back().partitionId;
+        int deviceId = partitionInfoVec_.back().deviceIds[static_cast<int>(defaultInsertLevel_)];
         for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
             ChunkKey insertKey = chunkKeyPrefix_; //database_id and table_id
             insertKey.push_back(colIt->first); // column id
             insertKey.push_back(lastPartitionId); // partition id
-            colIt->second.insertBuffer=dataMgr_->getChunk(defaultInsertLevel_,insertKey);
+            cout << "Device id: " << deviceId << endl;
+            colIt->second.insertBuffer=dataMgr_->getChunk(insertKey,defaultInsertLevel_,deviceId);
         }
     }
 }
@@ -140,6 +142,14 @@ PartitionInfo * InsertOrderTablePartitioner::createNewPartition(const Data_Names
     // create new insert buffer
     maxPartitionId_++;
     //cout << "Create new partition: " << maxPartitionId_ << endl;
+    PartitionInfo newPartitionInfo;
+    newPartitionInfo.partitionId = maxPartitionId_;
+    newPartitionInfo.shadowNumTuples = 0; 
+    newPartitionInfo.numTuples = 0; 
+    for (const auto levelSize: dataMgr_->levelSizes_) { 
+        newPartitionInfo.deviceIds.push_back(newPartitionInfo.partitionId % levelSize);
+    }
+
     for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
         if (colMapIt -> second.insertBuffer != 0) {
             colMapIt -> second.insertBuffer -> unPin();
@@ -147,16 +157,11 @@ PartitionInfo * InsertOrderTablePartitioner::createNewPartition(const Data_Names
         ChunkKey chunkKey =  chunkKeyPrefix_;
         chunkKey.push_back(colMapIt->second.columnDesc->columnId);
         chunkKey.push_back(maxPartitionId_);
-        colMapIt->second.insertBuffer = dataMgr_->createChunk(memoryLevel,chunkKey);
+        colMapIt->second.insertBuffer = dataMgr_->createChunk(chunkKey,memoryLevel,newPartitionInfo.deviceIds[static_cast<int>(memoryLevel)]);
+        // shouldn't be evicted between these two statements b/c not sized yet
+        colMapIt->second.insertBuffer->pin();
         //cout << "Creating chunk with encodingType: " << colMapIt->second.columnDesc->compression << endl;
         colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnDesc->columnType.type,colMapIt->second.columnDesc->compression,colMapIt->second.columnDesc->comp_param);
-    }
-    PartitionInfo newPartitionInfo;
-    newPartitionInfo.partitionId = maxPartitionId_;
-    newPartitionInfo.shadowNumTuples = 0; 
-    newPartitionInfo.numTuples = 0; 
-    for (const auto levelSize: dataMgr_->levelSizes_) { 
-        newPartitionInfo.deviceIds.push_back(newPartitionInfo.partitionId % levelSize);
     }
 
     boost::unique_lock < boost::shared_mutex > writeLock (partitionInfoMutex_);
@@ -189,7 +194,7 @@ void InsertOrderTablePartitioner::getInsertBufferChunks() {
             colMapIt -> second.insertBuffer -> unPin();
         }
         ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnDesc->columnId};
-        colMapIt -> second.insertBuffer = dataMgr_->getChunk(defaultInsertLevel_,chunkKey);
+        colMapIt -> second.insertBuffer = dataMgr_->getChunk(chunkKey,defaultInsertLevel_);
     }
 }
 

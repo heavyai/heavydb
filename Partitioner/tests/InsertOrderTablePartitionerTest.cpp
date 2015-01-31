@@ -106,8 +106,8 @@ namespace Partitioner_Namespace {
             EXPECT_EQ(99,queryInfo.partitions[p].chunkMetadataMap[0].chunkStats.max.intval);
             ChunkKey intChunkKey = {0,1,0,queryInfo.partitions[p].partitionId}; 
             ChunkKey floatChunkKey = {0,1,1,queryInfo.partitions[p].partitionId}; 
-            Data_Namespace::AbstractBuffer *intBuffer = dataMgr->getChunk(Data_Namespace::CPU_LEVEL,intChunkKey); 
-            Data_Namespace::AbstractBuffer *floatBuffer = dataMgr->getChunk(Data_Namespace::CPU_LEVEL,floatChunkKey); 
+            Data_Namespace::AbstractBuffer *intBuffer = dataMgr->getChunk(intChunkKey,Data_Namespace::CPU_LEVEL); 
+            Data_Namespace::AbstractBuffer *floatBuffer = dataMgr->getChunk(floatChunkKey,Data_Namespace::CPU_LEVEL); 
             int8_t *intPtr = intBuffer -> getMemoryPtr();
             float *floatPtr = reinterpret_cast<float *> (floatBuffer -> getMemoryPtr());
             int minIntVal = std::numeric_limits<int>::max(); 
@@ -176,8 +176,8 @@ namespace Partitioner_Namespace {
             ChunkKey floatChunkKey = {0,1,1,queryInfo.partitions[p].partitionId}; 
             cout << "PartitionId: " << queryInfo.partitions[p].partitionId << endl;
 
-            Data_Namespace::AbstractBuffer *intBuffer = dataMgr->getChunk(Data_Namespace::CPU_LEVEL,intChunkKey); 
-            Data_Namespace::AbstractBuffer *floatBuffer = dataMgr->getChunk(Data_Namespace::CPU_LEVEL,floatChunkKey); 
+            Data_Namespace::AbstractBuffer *intBuffer = dataMgr->getChunk(intChunkKey,Data_Namespace::CPU_LEVEL); 
+            Data_Namespace::AbstractBuffer *floatBuffer = dataMgr->getChunk(floatChunkKey,Data_Namespace::CPU_LEVEL); 
             /*
             int8_t *intPtr = intBuffer -> getMemoryPtr();
             float *floatPtr = reinterpret_cast<float *> (floatBuffer -> getMemoryPtr());

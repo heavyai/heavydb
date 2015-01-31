@@ -87,16 +87,16 @@ namespace Data_Namespace {
         bufferMgrs_[0][0]->getChunkMetadataVecForKeyPrefix(chunkMetadataVec,keyPrefix);
     }
 
-    AbstractBuffer * DataMgr::createChunk(const MemoryLevel memoryLevel, const ChunkKey &key) {
+    AbstractBuffer * DataMgr::createChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId) {
         int level = static_cast <int> (memoryLevel);
-        int device = key[partitionKeyIndex_] % levelSizes_[level];
-        return bufferMgrs_[level][device]->createChunk(key);
+        //int device = key[partitionKeyIndex_] % levelSizes_[level];
+        return bufferMgrs_[level][deviceId]->createChunk(key);
     }
 
-    AbstractBuffer * DataMgr::getChunk(const MemoryLevel memoryLevel, const ChunkKey &key, const size_t numBytes) {
+    AbstractBuffer * DataMgr::getChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
-        int device = key[partitionKeyIndex_] % levelSizes_[level];
-        return bufferMgrs_[level][device]->getChunk(key, numBytes);
+        //int device = key[partitionKeyIndex_] % levelSizes_[level];
+        return bufferMgrs_[level][deviceId]->getChunk(key, numBytes);
     }
 
     void DataMgr::deleteChunk(const ChunkKey &key) {

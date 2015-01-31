@@ -42,7 +42,7 @@ namespace Data_Namespace {
         for (int i = 0; i < 3; ++i) {
             key.push_back(i);
         }
-        AbstractBuffer * gpuBuffer = dataMgr->createChunk(GPU_LEVEL,key);
+        AbstractBuffer * gpuBuffer = dataMgr->createChunk(key,GPU_LEVEL);
         const int numInts = 10000;
         int * data1 = new int [numInts];
         for (size_t i = 0; i < numInts; ++i) {
@@ -52,7 +52,7 @@ namespace Data_Namespace {
         // will put gpu chunk to cpu chunk, and then cpu chunk to file chunk
         dataMgr->checkpoint();
         // will read File chunk into Cpu chunk
-        AbstractBuffer * cpuBuffer = dataMgr->getChunk(CPU_LEVEL,key);
+        AbstractBuffer * cpuBuffer = dataMgr->getChunk(key,CPU_LEVEL);
         int *data2 = new int [numInts];
         cpuBuffer->read((int8_t *)data2,numInts*sizeof(int),Data_Namespace::CPU_BUFFER,0);
         for (size_t i = 0; i < numInts; ++i) {
@@ -68,7 +68,7 @@ namespace Data_Namespace {
         for (int i = 0; i < 3; ++i) {
             key.push_back(i);
         }
-        AbstractBuffer * cpuChunk = dataMgr->createChunk(CPU_LEVEL,key);
+        AbstractBuffer * cpuChunk = dataMgr->createChunk(key,CPU_LEVEL);
         const int numInts = 10000;
         int * data1 = new int [numInts];
         for (size_t i = 0; i < numInts; ++i) {
@@ -76,13 +76,13 @@ namespace Data_Namespace {
         }
         cpuChunk->append((int8_t *)data1,numInts*sizeof(int),Data_Namespace::CPU_BUFFER);
         dataMgr->checkpoint();
-        EXPECT_NO_THROW(dataMgr->getChunk(GPU_LEVEL,key));
-        EXPECT_NO_THROW(dataMgr->getChunk(CPU_LEVEL,key));
-        EXPECT_NO_THROW(dataMgr->getChunk(DISK_LEVEL,key));
+        EXPECT_NO_THROW(dataMgr->getChunk(key,GPU_LEVEL));
+        EXPECT_NO_THROW(dataMgr->getChunk(key,CPU_LEVEL));
+        EXPECT_NO_THROW(dataMgr->getChunk(key,DISK_LEVEL));
         dataMgr->deleteChunk(key);
-        EXPECT_THROW(dataMgr->getChunk(GPU_LEVEL,key), std::runtime_error);
-        EXPECT_THROW(dataMgr->getChunk(CPU_LEVEL,key), std::runtime_error);
-        EXPECT_THROW(dataMgr->getChunk(DISK_LEVEL,key), std::runtime_error);
+        EXPECT_THROW(dataMgr->getChunk(key,GPU_LEVEL), std::runtime_error);
+        EXPECT_THROW(dataMgr->getChunk(key,CPU_LEVEL), std::runtime_error);
+        EXPECT_THROW(dataMgr->getChunk(key,DISK_LEVEL), std::runtime_error);
         delete [] data1;
     }
 
@@ -110,10 +110,10 @@ namespace Data_Namespace {
         ChunkKey key4 = {1,3,4};
 
         const int numInts = 100000;
-        AbstractBuffer *chunk1 = dataMgr->createChunk(CPU_LEVEL,key1);
-        AbstractBuffer *chunk2 = dataMgr->createChunk(CPU_LEVEL,key2);
-        AbstractBuffer *chunk3 = dataMgr->createChunk(CPU_LEVEL,key3);
-        AbstractBuffer *chunk4 = dataMgr->createChunk(CPU_LEVEL,key4);
+        AbstractBuffer *chunk1 = dataMgr->createChunk(key1,CPU_LEVEL);
+        AbstractBuffer *chunk2 = dataMgr->createChunk(key2,CPU_LEVEL);
+        AbstractBuffer *chunk3 = dataMgr->createChunk(key3,CPU_LEVEL);
+        AbstractBuffer *chunk4 = dataMgr->createChunk(key4,CPU_LEVEL);
 
         int * data1 = new int [numInts];
         for (size_t i = 0; i < numInts; ++i) {
@@ -134,10 +134,10 @@ namespace Data_Namespace {
         //EXPECT_EQ(1,dataMgr->bufferMgrs_[2][0]->getNumChunks());
         cout << "After expect" << endl;
 
-        EXPECT_ANY_THROW(dataMgr->getChunk(GPU_LEVEL,key3));
-        EXPECT_ANY_THROW(dataMgr->getChunk(GPU_LEVEL,key1));
-        EXPECT_NO_THROW(dataMgr->getChunk(GPU_LEVEL,key2));
-        EXPECT_NO_THROW(dataMgr->getChunk(GPU_LEVEL,key4));
+        EXPECT_ANY_THROW(dataMgr->getChunk(key3,GPU_LEVEL));
+        EXPECT_ANY_THROW(dataMgr->getChunk(key1,GPU_LEVEL));
+        EXPECT_NO_THROW(dataMgr->getChunk(key2,GPU_LEVEL));
+        EXPECT_NO_THROW(dataMgr->getChunk(key4,GPU_LEVEL));
         delete [] data1;
     }
 
@@ -145,8 +145,8 @@ namespace Data_Namespace {
         ChunkKey key1 = {1,2,3};
         ChunkKey key2 = {4,5,6,7};
 
-        AbstractBuffer *gpuChunk1 = dataMgr->createChunk(GPU_LEVEL,key1);
-        AbstractBuffer *gpuChunk2 = dataMgr->createChunk(GPU_LEVEL,key2);
+        AbstractBuffer *gpuChunk1 = dataMgr->createChunk(key1,GPU_LEVEL);
+        AbstractBuffer *gpuChunk2 = dataMgr->createChunk(key2,GPU_LEVEL);
         gpuChunk1->initEncoder(kINT,kENCODING_FIXED,8);
         EXPECT_EQ(kINT,gpuChunk1->sqlType);
         EXPECT_EQ(kENCODING_FIXED,gpuChunk1->encodingType);
@@ -163,7 +163,7 @@ namespace Data_Namespace {
         EXPECT_EQ(numElems,gpuChunk1->size());
         EXPECT_EQ(numElems,gpuChunk1->encoder->numElems);
         dataMgr->checkpoint();
-        AbstractBuffer *fileChunk1 = dataMgr->getChunk(DISK_LEVEL,key1);
+        AbstractBuffer *fileChunk1 = dataMgr->getChunk(key1,DISK_LEVEL);
         EXPECT_EQ(kINT,fileChunk1->sqlType);
         EXPECT_EQ(kENCODING_FIXED,fileChunk1->encodingType);
         EXPECT_EQ(8,fileChunk1->encodingBits);
