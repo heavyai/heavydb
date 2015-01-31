@@ -466,6 +466,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       for (const auto& kv : chunk_metadata) {
         if (kv.first == chunk_key) {
           num_bytes = kv.second.numBytes;
+          break;
         }
       }
       CHECK_GT(num_bytes, 0);
