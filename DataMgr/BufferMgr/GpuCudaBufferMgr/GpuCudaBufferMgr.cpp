@@ -5,7 +5,7 @@
 
 namespace Buffer_Namespace {
 
-    GpuCudaBufferMgr::GpuCudaBufferMgr(const size_t maxBufferSize, const int gpuNum, CudaMgr_Namespace::CudaMgr *cudaMgr, const size_t bufferAllocIncrement,  const size_t pageSize, AbstractBufferMgr *parentMgr) : BufferMgr(maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), cudaMgr_(cudaMgr), gpuNum_(gpuNum) {}
+    GpuCudaBufferMgr::GpuCudaBufferMgr(const size_t maxBufferSize, const int gpuNum, CudaMgr_Namespace::CudaMgr *cudaMgr, const size_t bufferAllocIncrement,  const size_t pageSize, AbstractBufferMgr *parentMgr) : BufferMgr(maxBufferSize, bufferAllocIncrement, pageSize, parentMgr), gpuNum_(gpuNum), cudaMgr_(cudaMgr) {}
 
     GpuCudaBufferMgr::~GpuCudaBufferMgr() {
         freeAllMem();

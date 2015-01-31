@@ -9,6 +9,7 @@ using std::endl;
 namespace CudaMgr_Namespace {
 
 CudaMgr::CudaMgr() {
+
     checkError(cuInit(0));
     checkError(cuDeviceGetCount(&deviceCount));
     fillDeviceProperties();
@@ -60,7 +61,7 @@ void CudaMgr::createDeviceContexts() {
 }
 
 
-void CudaMgr::printDeviceProperties() {
+void CudaMgr::printDeviceProperties() const {
     cout << "Num devices: " << deviceCount << endl << endl;
     for (int d = 0; d < deviceCount; ++d) {
         cout << "Device: " << deviceProperties[d].device << endl;
@@ -75,7 +76,7 @@ void CudaMgr::printDeviceProperties() {
     }
 }
 
-void CudaMgr::setContext(const int deviceNum) {
+void CudaMgr::setContext(const int deviceNum) const {
     //assert (deviceNum < deviceCount);
     cuCtxSetCurrent(deviceContexts[deviceNum]);
 }

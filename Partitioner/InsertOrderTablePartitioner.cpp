@@ -18,6 +18,7 @@ namespace Partitioner_Namespace {
 
 InsertOrderTablePartitioner::InsertOrderTablePartitioner(const vector <int> chunkKeyPrefix, vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxPartitionRows, const size_t pageSize /*default 1MB*/, const Data_Namespace::MemoryLevel defaultInsertLevel) :
 		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxPartitionRows_(maxPartitionRows), pageSize_(pageSize), maxPartitionId_(-1), partitionerType_("insert_order"), defaultInsertLevel_(defaultInsertLevel) {
+
     for (auto colIt = columnInfoVec.begin(); colIt != columnInfoVec.end(); ++colIt) {
         columnMap_[colIt -> columnDesc->columnId] = *colIt; 
     }
@@ -48,6 +49,9 @@ void InsertOrderTablePartitioner::getChunkMetadata() {
             partitionInfoVec_.push_back(PartitionInfo());
             partitionInfoVec_.back().partitionId = curPartitionId;
             partitionInfoVec_.back().numTuples = chunkIt->second.numElements;
+            for (const auto levelSize: dataMgr_->levelSizes_) { 
+                partitionInfoVec_.back().deviceIds.push_back(curPartitionId  % levelSize);
+            }
             partitionInfoVec_.back().shadowNumTuples = partitionInfoVec_.back().numTuples;
         }
         else {
@@ -151,6 +155,9 @@ PartitionInfo * InsertOrderTablePartitioner::createNewPartition(const Data_Names
     newPartitionInfo.partitionId = maxPartitionId_;
     newPartitionInfo.shadowNumTuples = 0; 
     newPartitionInfo.numTuples = 0; 
+    for (const auto levelSize: dataMgr_->levelSizes_) { 
+        newPartitionInfo.deviceIds.push_back(newPartitionInfo.partitionId % levelSize);
+    }
 
     boost::unique_lock < boost::shared_mutex > writeLock (partitionInfoMutex_);
     partitionInfoVec_.push_back(newPartitionInfo);
@@ -182,55 +189,8 @@ void InsertOrderTablePartitioner::getInsertBufferChunks() {
             colMapIt -> second.insertBuffer -> unPin();
         }
         ChunkKey chunkKey = {partitionerId_, maxPartitionId_,  colMapIt -> second.columnDesc->columnId};
-        colMapIt -> second.insertBuffer = dataMgr_->getChunk(Data_Namespace::DISK_LEVEL,chunkKey);
+        colMapIt -> second.insertBuffer = dataMgr_->getChunk(defaultInsertLevel_,chunkKey);
     }
 }
-/*
-void InsertOrderTablePartitioner::readState() {
-    string partitionQuery ("select fragment_id, num_rows from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
-    partitionQuery += " order by fragment_id";
-    mapd_err_t status = pgConnector_.query(partitionQuery);
-    assert(status == MAPD_SUCCESS);
-    size_t numRows = pgConnector_.getNumRows();
-    partitionInfoVec_.resize(numRows);
-    for (int r = 0; r < numRows; ++r) {
-        partitionInfoVec_[r].partitionId = pgConnector_.getData<int>(r,0);  
-        partitionInfoVec_[r].numTuples = pgConnector_.getData<int>(r,1);
-    }
-    if (numRows > 0) {
-        maxPartitionId_ = partitionInfoVec_[numRows-1].partitionId; 
-        getInsertBufferChunks();
-    }
-    string statsQuery ("select fragment_id");
-    for (map<int, ColumnInfo>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
-        int columnId = colMapIt -> first;
-        string baseStatsColumnName = "col_" + boost::lexical_cast <string> (columnId);
-        statsQuery += "," + baseStatsColumnName + "_min," + baseStatsColumnName + "_max";
-    }
-    statsQuery += " from partitioner_" + boost::lexical_cast <string> (partitionerId_) + "_stats";
-    status = pgConnector_.query(statsQuery);
-    assert(status == MAPD_SUCCESS);
-    numRows = pgConnector_.getNumRows();
-}
-void InsertOrderTablePartitioner::writeState() {
-    // do we want this to be fully durable or will allow ourselves
-    // to delete existing rows for this table
-    // out of convenience before adding the
-    // newest state back in?
-    // Will do latter for now as we do not 
-    // plan on using postgres forever for metadata
-    if (isDirty_) {
-         string deleteQuery ("delete from fragments where partitioner_id = " + boost::lexical_cast <string> (partitionerId_));
-         mapd_err_t status = pgConnector_.query(deleteQuery);
-         assert(status == MAPD_SUCCESS);
-        for (auto partIt = partitionInfoVec_.begin(); partIt != partitionInfoVec_.end(); ++partIt) {
-            string insertQuery("INSERT INTO fragments (partitioner_id, fragment_id, num_rows) VALUES (" + boost::lexical_cast<string>(partitionerId_) + "," + boost::lexical_cast<string>(partIt -> partitionId) + "," + boost::lexical_cast<string>(partIt -> numTuples) + ")"); 
-            status = pgConnector_.query(insertQuery);
-             assert(status == MAPD_SUCCESS);
-        }
-    }
-    isDirty_ = false;
-}
-*/
 
 } // Partitioner_Namespace

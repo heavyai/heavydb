@@ -52,13 +52,13 @@ namespace Data_Namespace {
             CudaMgr_Namespace::CudaMgr *cudaMgr_;
 
             // database_id, table_id, partitioner_id, column_id, fragment_id
+            std::vector <int> levelSizes_;
 
         private:
             FRIEND_TEST(DataMgrTest,buffer);
             FRIEND_TEST(DataMgrTest,deletePrefix);
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
-            std::vector <int> levelSizes_;
             int partitionKeyIndex_;
             std::string dataDir_;
             bool hasGpus_;
