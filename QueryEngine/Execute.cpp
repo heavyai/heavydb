@@ -5,7 +5,7 @@
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 
-#include <llvm/ExecutionEngine/JIT.h>
+#include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
@@ -838,10 +838,14 @@ void optimizeIR(llvm::Function* query_func, llvm::Module* module, const Executor
 void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeNativeTargetAsmPrinter();
+  llvm::InitializeNativeTargetAsmParser();
 
   std::string err_str;
   llvm::EngineBuilder eb(module);
   eb.setErrorStr(&err_str);
+  eb.setUseMCJIT(true);
   eb.setEngineKind(llvm::EngineKind::JIT);
   llvm::TargetOptions to;
   to.EnableFastISel = true;
@@ -855,6 +859,8 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
   if (llvm::verifyFunction(*query_func)) {
     LOG(FATAL) << "Generated invalid code. ";
   }
+
+  execution_engine_->finalizeObject();
 
   return execution_engine_->getPointerToFunction(query_func);
 }
