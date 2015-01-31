@@ -313,8 +313,6 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
 }
 
 llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count) {
-  CHECK_EQ(aggr_col_count, 1);
-
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);

@@ -471,9 +471,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     }
     // TODO(alex): multiple devices support
     const auto groupby_exprs = agg_plan->get_groupby_list();
+    const size_t agg_col_count = init_agg_vals_.size();
     if (groupby_exprs.empty()) {
       std::vector<int64_t*> out_vec;
-      const size_t agg_col_count = init_agg_vals_.size();
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto buff = calloc(1, sizeof(int64_t));
         out_vec.push_back(static_cast<int64_t*>(buff));
@@ -504,22 +504,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         free(out);
       }
     } else {
-      const auto target_exprs = get_agg_target_exprs(agg_plan);
-      // TODO(alex): fix multiple aggregate columns, average
-      CHECK_EQ(target_exprs.size(), 1);
-      {
-        const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_exprs.front());
-        CHECK(agg_expr);
-        CHECK_NE(agg_expr->get_aggtype(), kAVG);
-      }
       const size_t group_by_col_count = groupby_exprs.size();
-      const size_t groups_buffer_size { (group_by_col_count + 1) * groups_buffer_entry_count * sizeof(int64_t) };
+      const size_t groups_buffer_size { (group_by_col_count + agg_col_count) * groups_buffer_entry_count * sizeof(int64_t) };
       // TODO(alex):
       // 1. Optimize size (make keys more compact).
       // 2. Resize on overflow.
       // 3. Optimize runtime.
       auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
-      init_groups(group_by_buffer, groups_buffer_entry_count, group_by_col_count, init_agg_vals_[0]);
+      init_groups(group_by_buffer, groups_buffer_entry_count, group_by_col_count, &init_agg_vals_[0], agg_col_count);
       int64_t* group_by_buffers[] = { group_by_buffer };
       if (device_type == ExecutorDeviceType::CPU) {
         reinterpret_cast<agg_query>(query_cpu_code_)(col_buffers, &num_rows, &init_agg_vals_[0], group_by_buffers);
@@ -528,15 +520,28 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         CHECK(false);
       }
       for (size_t i = 0; i < groups_buffer_entry_count; ++i) {
-        const size_t key_off = (group_by_col_count + 1) * i;
+        const size_t key_off = (group_by_col_count + agg_col_count) * i;
         if (group_by_buffer[key_off] != EMPTY_KEY) {
+          const auto target_exprs = get_agg_target_exprs(agg_plan);
+          size_t out_vec_idx = 0;
           ResultRow result_row;
-          for (size_t i = 0; i < group_by_col_count; ++i) {
-            const int64_t key_comp = group_by_buffer[key_off + i];
+          for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
+            const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
             CHECK_NE(key_comp, EMPTY_KEY);
             result_row.value_tuple.push_back(key_comp);
           }
-          result_row.agg_results.push_back(group_by_buffer[key_off + group_by_col_count]);
+          for (const auto target_expr : target_exprs) {
+            const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+            if (agg_expr->get_aggtype() == kAVG) {
+              result_row.agg_results.emplace_back(
+                static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count]) /
+                static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]));
+              out_vec_idx += 2;
+            } else {
+              result_row.agg_results.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+              ++out_vec_idx;
+            }
+          }
           results.push_back(result_row);
         }
       }
@@ -665,7 +670,7 @@ const Planner::Scan* get_scan(const Planner::AggPlan* agg_plan) {
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     const Planner::Scan* scan_plan,
-    const std::vector<Executor::AggInfo>& agg_infos,
+    const size_t agg_col_count,
     llvm::Function* query_func,
     llvm::Module* module,
     llvm::LLVMContext& context) {
@@ -676,7 +681,6 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
   auto col_heads = generate_column_heads_load(col_global_ids.size(), query_func);
 
   std::vector<llvm::Type*> row_process_arg_types;
-  const size_t agg_col_count { agg_infos.size() };
   for (size_t i = 0; i < agg_col_count; ++i) {
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
   }
@@ -743,15 +747,17 @@ void Executor::compileAggScanPlan(
   // stride access for GPU, contiguous for CPU
   module_ = create_runtime_module(context_);
   auto agg_infos = get_agg_name_and_exprs(agg_plan);
-  auto query_func = agg_plan->get_groupby_list().empty()
-    ? query_template(module_, agg_infos.size())
-    : query_group_by_template(module_, agg_infos.size());
+  const bool is_group_by = !agg_plan->get_groupby_list().empty();
+  auto query_func = is_group_by
+    ? query_group_by_template(module_, agg_infos.size())
+    : query_template(module_, agg_infos.size());
   bind_pos_placeholders("pos_start", query_func, module_);
   bind_pos_placeholders("pos_step", query_func, module_);
 
   std::vector<llvm::Value*> col_heads;
   auto scan_plan = get_scan(agg_plan);
-  std::tie(row_func_, col_heads) = create_row_function(scan_plan, agg_infos, query_func, module_, context_);
+  std::tie(row_func_, col_heads) = create_row_function(
+    scan_plan, is_group_by ? 1 : agg_infos.size(), query_func, module_, context_);
   CHECK(row_func_);
 
   // make sure it's in-lined, we don't want register spills in the inner loop
@@ -967,7 +973,8 @@ void Executor::call_aggregators(
       &groups_buffer,
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), groups_buffer_entry_count),
       group_keys_buffer,
-      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size())
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size()),
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), init_agg_vals_.size())
     };
     agg_out_vec.push_back(ir_builder_.CreateCall(get_group_value_func, get_group_value_args));
   } else {
@@ -995,7 +1002,18 @@ void Executor::call_aggregators(
           get_int_type(64, context_));
       }
     }
-    std::vector<llvm::Value*> agg_args { agg_out_vec[i], agg_expr_lv };
+    std::vector<llvm::Value*> agg_args;
+    if (group_by_cols.empty()) {
+      agg_args = { agg_out_vec[i], agg_expr_lv };
+    } else {
+      CHECK_EQ(agg_out_vec.size(), 1);
+      agg_args = {
+        ir_builder_.CreateGEP(
+          agg_out_vec.front(),
+          llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i)),
+        agg_expr_lv
+      };
+    }
     ir_builder_.CreateCall(agg_func, agg_args);
   }
   ir_builder_.CreateBr(filter_false);

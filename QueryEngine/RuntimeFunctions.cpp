@@ -1,7 +1,7 @@
 #include "RuntimeFunctions.h"
 
 #include <algorithm>
-#include <string.h>
+#include <cstring>
 
 
 // decoder implementations
@@ -82,10 +82,12 @@ extern "C"
 void init_groups(int64_t* groups_buffer,
                  const int32_t groups_buffer_entry_count,
                  const int32_t key_qw_count,
-                 const int64_t init_val) {
-  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + 1);
+                 const int64_t* init_vals,
+                 const int32_t agg_col_count) {
+  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
   for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
-    groups_buffer[i] = (i + 1) % (key_qw_count + 1) ? EMPTY_KEY : init_val;
+    groups_buffer[i] = (i % (key_qw_count + agg_col_count) < key_qw_count)
+      ? EMPTY_KEY : init_vals[(i - key_qw_count) % (key_qw_count + agg_col_count)];
   }
 }
 
@@ -93,8 +95,9 @@ extern "C" __attribute__((always_inline))
 int64_t* get_matching_group_value(int64_t* groups_buffer,
                                   const int32_t h,
                                   const int64_t* key,
-                                  const int32_t key_qw_count) {
-  auto off = h * (key_qw_count + 1);
+                                  const int32_t key_qw_count,
+                                  const int32_t agg_col_count) {
+  auto off = h * (key_qw_count + agg_col_count);
   if (groups_buffer[off] == EMPTY_KEY) {
     memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
     return groups_buffer + off + key_qw_count;
@@ -118,15 +121,16 @@ extern "C"
 int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t groups_buffer_entry_count,
                          const int64_t* key,
-                         const int32_t key_qw_count) {
+                         const int32_t key_qw_count,
+                         const int32_t agg_col_count) {
   auto h = key_hash(key, key_qw_count, groups_buffer_entry_count);
-  auto matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count);
+  auto matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, agg_col_count);
   if (matching_group) {
     return matching_group;
   }
   auto h_probe = h + 1;
   while (h_probe != h) {
-    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count);
+    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, agg_col_count);
     if (matching_group) {
       return matching_group;
     }

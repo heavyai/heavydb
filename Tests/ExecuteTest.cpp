@@ -182,6 +182,27 @@ TEST(Select, FilterAndGroupBy) {
   }
 }
 
+TEST(Select, FilterAndGroupByMultipleAgg) {
+  const auto rows = run_multiple_agg("SELECT MIN(x + y), COUNT(*), AVG(x + 1) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;");
+  CHECK_EQ(rows.size(), 2);
+  {
+  const auto row = rows[0];
+  std::vector<int64_t> val_tuple { 7, 42 };
+  ASSERT_EQ(row.value_tuple, val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 49);
+  ASSERT_EQ(v<int64_t>(row.agg_results[1]), g_num_rows);
+  ASSERT_EQ(v<double>(row.agg_results[2]), 8);
+  }
+  {
+  const auto row = rows[1];
+  std::vector<int64_t> val_tuple { 8, 43 };
+  ASSERT_EQ(row.value_tuple, val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 51);
+  ASSERT_EQ(v<int64_t>(row.agg_results[1]), g_num_rows);
+  ASSERT_EQ(v<double>(row.agg_results[2]), 9);
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
