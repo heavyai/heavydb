@@ -1,4 +1,5 @@
 #include "CudaMgr.h"
+#include <stdexcept>
 #include <iostream>
 #include "assert.h"
 
