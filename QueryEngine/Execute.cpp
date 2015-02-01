@@ -749,7 +749,7 @@ void Executor::compileAggScanPlan(
   auto agg_infos = get_agg_name_and_exprs(agg_plan);
   const bool is_group_by = !agg_plan->get_groupby_list().empty();
   auto query_func = is_group_by
-    ? query_group_by_template(module_, agg_infos.size())
+    ? query_group_by_template(module_, 1)
     : query_template(module_, agg_infos.size());
   bind_pos_placeholders("pos_start", query_func, module_);
   bind_pos_placeholders("pos_step", query_func, module_);
