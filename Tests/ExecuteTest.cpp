@@ -41,7 +41,9 @@ Catalog_Namespace::Catalog get_catalog() {
 
 Catalog_Namespace::Catalog g_cat(get_catalog());
 
-vector<ResultRow> run_multiple_agg(const string& query_str) {
+vector<ResultRow> run_multiple_agg(
+    const string& query_str,
+    const ExecutorDeviceType device_type) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -58,11 +60,30 @@ vector<ResultRow> run_multiple_agg(const string& query_str) {
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
   Executor executor(plan);
-  return executor.execute(ExecutorDeviceType::CPU, ExecutorOptLevel::LoopStrengthReduction);
+  return executor.execute(device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 
-AggResult run_simple_agg(const string& query_str) {
-  return run_multiple_agg(query_str).front().agg_results.front();
+AggResult run_simple_agg(
+    const string& query_str,
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU) {
+  return run_multiple_agg(query_str, device_type).front().agg_results.front();
+}
+
+template<class T>
+T v(const AggResult& r) {
+  auto p = boost::get<T>(&r);
+  CHECK(p);
+  return *p;
+}
+
+template<class T>
+T run_simple_agg_both(const string& query_str) {
+  auto cpu = run_multiple_agg(query_str, ExecutorDeviceType::CPU).front().agg_results.front();
+  if (g_cat.get_dataMgr().gpusPresent()) {
+    auto gpu = run_multiple_agg(query_str, ExecutorDeviceType::GPU).front().agg_results.front();
+    CHECK_EQ(v<T>(cpu), v<T>(gpu));
+  }
+  return v<T>(cpu);
 }
 
 void run_ddl_statement(const string& create_table_stmt) {
@@ -79,25 +100,18 @@ void run_ddl_statement(const string& create_table_stmt) {
     ddl->execute(g_cat);
 }
 
-template<class T>
-T v(const AggResult& r) {
-  auto p = boost::get<T>(&r);
-  CHECK(p);
-  return *p;
-}
-
 const ssize_t g_num_rows { 10 };
 
 }
 
 TEST(Select, FilterAndSimpleAggregation) {
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(7, 42, 101, 1001);");
+    run_multiple_agg("INSERT INTO test VALUES(7, 42, 101, 1001);", ExecutorDeviceType::CPU);
   }
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(8, 43, 102, 1002);");
+    run_multiple_agg("INSERT INTO test VALUES(8, 43, 102, 1002);", ExecutorDeviceType::CPU);
   }
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;")), 2 * g_num_rows);
+  ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT COUNT(*) FROM test;"), 2 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test;")), 7);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test;")), 8);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(z) FROM test;")), 101);
@@ -107,15 +121,15 @@ TEST(Select, FilterAndSimpleAggregation) {
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test;")), 49 * g_num_rows + 51 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y + z) FROM test;")), 150 * g_num_rows + 153 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y + z + t) FROM test;")), 1151 * g_num_rows + 1155 * g_num_rows);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8;")), g_num_rows);
+  ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8;"), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 OR (z > 100 AND z < 103);")), 2 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 AND z > 100 AND z < 102 AND t > 1000 AND t < 1002;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 OR (z > 100 AND z < 103);")), 2 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x > 6 AND x < 8 OR (z > 100 AND z < 102) OR (t > 1000 AND t < 1003);")), 2 * g_num_rows);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x <> 7;")), g_num_rows);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE z <> 102;")), g_num_rows);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE t <> 1002;")), g_num_rows);
+  ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT COUNT(*) FROM test WHERE x <> 7;"), g_num_rows);
+  ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT COUNT(*) FROM test WHERE z <> 102;"), g_num_rows);
+  ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT COUNT(*) FROM test WHERE t <> 1002;"), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y = 49;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y + z = 150;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x + y + z + t = 1151;")), g_num_rows);
@@ -126,7 +140,7 @@ TEST(Select, FilterAndSimpleAggregation) {
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x - y + z = 66;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x - y + z + t = 1067;")), g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE y - x = 35;")), 2 * g_num_rows);
-  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(2 * x) FROM test WHERE x = 7;")), 14 * g_num_rows);
+  ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT SUM(2 * x) FROM test WHERE x = 7;"), 14 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(2 * x + z) FROM test WHERE x = 7;")), 115 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE x - y = -35;")), 49 * g_num_rows + 51 * g_num_rows);
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE y - x = 35;")), 49 * g_num_rows + 51 * g_num_rows);
@@ -155,7 +169,8 @@ TEST(Select, FilterAndSimpleAggregation) {
 }
 
 TEST(Select, FilterAndMultipleAggregation) {
-  auto agg_results = run_multiple_agg("SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;")
+  auto agg_results = run_multiple_agg(
+    "SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", ExecutorDeviceType::CPU)
     .front()
     .agg_results;
   CHECK_EQ(agg_results.size(), 4);
@@ -166,7 +181,8 @@ TEST(Select, FilterAndMultipleAggregation) {
 }
 
 TEST(Select, FilterAndGroupBy) {
-  const auto rows = run_multiple_agg("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;");
+  const auto rows = run_multiple_agg(
+    "SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", ExecutorDeviceType::CPU);
   CHECK_EQ(rows.size(), 2);
   {
   const auto row = rows[0];
@@ -183,7 +199,8 @@ TEST(Select, FilterAndGroupBy) {
 }
 
 TEST(Select, FilterAndGroupByMultipleAgg) {
-  const auto rows = run_multiple_agg("SELECT MIN(x + y), COUNT(*), AVG(x + 1) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;");
+  const auto rows = run_multiple_agg(
+    "SELECT MIN(x + y), COUNT(*), AVG(x + 1) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", ExecutorDeviceType::CPU);
   CHECK_EQ(rows.size(), 2);
   {
   const auto row = rows[0];
