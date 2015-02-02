@@ -415,13 +415,14 @@ std::vector<int64_t*> launch_query_gpu_code(
   std::vector<int64_t*> out_vec;
   CUdeviceptr col_buffers_dev_ptr;
   {
-    checkCudaErrors(cuMemAlloc(&col_buffers_dev_ptr, sizeof(CUdeviceptr)));
+    const size_t col_count { col_buffers.size() };
     std::vector<CUdeviceptr> col_dev_buffers;
     for (auto col_buffer : col_buffers) {
       col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
     }
     if (!col_dev_buffers.empty()) {
-      checkCudaErrors(cuMemcpyHtoD(col_buffers_dev_ptr, &col_dev_buffers[0], sizeof(CUdeviceptr)));
+      checkCudaErrors(cuMemAlloc(&col_buffers_dev_ptr, col_count * sizeof(CUdeviceptr)));
+      checkCudaErrors(cuMemcpyHtoD(col_buffers_dev_ptr, &col_dev_buffers[0], col_count * sizeof(CUdeviceptr)));
     }
   }
   CUdeviceptr num_rows_dev_ptr;
