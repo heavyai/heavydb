@@ -6,8 +6,7 @@
 char *generatePTX(const char *ll, size_t size, const char *filename);
 
 GpuExecutionContext::GpuExecutionContext(const std::string& llir_module, const std::string& func_name)
-  : hDevice(0)
-  , hModule(nullptr)
+  : hModule(nullptr)
   , hKernel(nullptr) {
   ptx = generatePTX(llir_module.c_str(), llir_module.size(), nullptr);
   CHECK(ptx);
