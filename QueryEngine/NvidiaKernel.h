@@ -12,7 +12,6 @@ public:
     return hKernel;
   }
 private:
-  CUdevice hDevice;
   CUmodule hModule;
   CUfunction hKernel;
   char* ptx;
