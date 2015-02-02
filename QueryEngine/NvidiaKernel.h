@@ -12,7 +12,6 @@ public:
     return hKernel;
   }
 private:
-  CUcontext hContext;
   CUdevice hDevice;
   CUmodule hModule;
   CUfunction hKernel;

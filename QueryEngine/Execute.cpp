@@ -402,23 +402,40 @@ std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::AggPlan* agg_pl
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
+// TODO(alex): wip, refactor
 void launch_query_gpu_code(
     CUfunction kernel,
-    CUdeviceptr col_buffers,
-    CUdeviceptr num_rows,
+    std::vector<const int8_t*> col_buffers,
+    const int64_t num_rows,
     CUdeviceptr init_agg_vals,
     CUdeviceptr out_vec) {
-  const unsigned block_size_x = 128;
-  const unsigned block_size_y = 1;
-  const unsigned block_size_z = 1;
-  const unsigned grid_size_x  = 128;
-  const unsigned grid_size_y  = 1;
-  const unsigned grid_size_z  = 1;
-  void* kernel_params[] = { &col_buffers, &num_rows, &init_agg_vals, &out_vec };
-  auto status = cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
-                               block_size_x, block_size_y, block_size_z,
-                               0, nullptr, kernel_params, nullptr);
-  CHECK_EQ(status, CUDA_SUCCESS);
+  CUdeviceptr col_buffers_dev_ptr;
+  {
+    cuMemAlloc(&col_buffers_dev_ptr, sizeof(CUdeviceptr));
+    std::vector<CUdeviceptr> col_dev_buffers;
+    for (auto col_buffer : col_buffers) {
+      col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
+    }
+    cuMemcpyHtoD(col_buffers_dev_ptr, &col_dev_buffers[0], sizeof(CUdeviceptr));
+  }
+  CUdeviceptr num_rows_dev_ptr;
+  {
+    cuMemAlloc(&num_rows_dev_ptr, sizeof(int64_t));
+    cuMemcpyHtoD(num_rows_dev_ptr, &num_rows, sizeof(int64_t));
+  }
+  void* kernel_params[] = { &col_buffers_dev_ptr, &num_rows_dev_ptr, &init_agg_vals, &out_vec };
+  {
+    const unsigned block_size_x = 128;
+    const unsigned block_size_y = 1;
+    const unsigned block_size_z = 1;
+    const unsigned grid_size_x  = 128;
+    const unsigned grid_size_y  = 1;
+    const unsigned grid_size_z  = 1;
+    auto status = cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+                                 block_size_x, block_size_y, block_size_z,
+                                 0, nullptr, kernel_params, nullptr);
+    CHECK_EQ(status, CUDA_SUCCESS);
+  }
 }
 
 #ifdef __clang__
@@ -434,7 +451,6 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
-  CHECK(device_type == ExecutorDeviceType::CPU);
   typedef void (*agg_query)(
     const int8_t** col_buffers,
     const int64_t* num_rows,
@@ -454,7 +470,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const auto& partitions = query_info.partitions;
   const auto current_db = cat.get_currentDB();
   const auto& col_global_ids = scan_plan->get_col_list();
-  const int8_t* col_buffers[global_to_local_col_ids_.size()];
+  std::vector<const int8_t*> col_buffers(global_to_local_col_ids_.size());
   std::vector<ResultRow> results;
   for (const auto& partition : partitions) {
     auto num_rows = static_cast<int64_t>(partition.numTuples);
@@ -462,7 +478,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       auto chunk_meta_it = partition.chunkMetadataMap.find(col_id);
       CHECK(chunk_meta_it != partition.chunkMetadataMap.end());
       ChunkKey chunk_key { current_db.dbId, table_id, col_id, partition.partitionId };
-      auto ab = cat.get_dataMgr().getChunk(chunk_key, Data_Namespace::CPU_LEVEL, partition.deviceIds[static_cast<int>(Data_Namespace::CPU_LEVEL)],chunk_meta_it->second.numBytes);
+      const auto memory_level = device_type == ExecutorDeviceType::GPU
+        ? Data_Namespace::GPU_LEVEL
+        : Data_Namespace::CPU_LEVEL;
+      auto ab = cat.get_dataMgr().getChunk(
+        chunk_key,
+        memory_level,
+        partition.deviceIds[static_cast<int>(memory_level)],
+        chunk_meta_it->second.numBytes);
       CHECK(ab->getMemoryPtr());
       auto it = global_to_local_col_ids_.find(col_id);
       CHECK(it != global_to_local_col_ids_.end());
@@ -479,10 +502,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         out_vec.push_back(static_cast<int64_t*>(buff));
       }
       if (device_type == ExecutorDeviceType::CPU) {
-        reinterpret_cast<agg_query>(query_cpu_code_)(col_buffers, &num_rows, &init_agg_vals_[0], &out_vec[0]);
+        reinterpret_cast<agg_query>(query_cpu_code_)(&col_buffers[0], &num_rows, &init_agg_vals_[0], &out_vec[0]);
       } else {
         // TODO(alex): enable GPU support
         CHECK(false);
+        launch_query_gpu_code(query_gpu_code_, col_buffers, num_rows, 0, 0);
       }
       const auto target_exprs = get_agg_target_exprs(agg_plan);
       size_t out_vec_idx = 0;
@@ -514,7 +538,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       init_groups(group_by_buffer, groups_buffer_entry_count, group_by_col_count, &init_agg_vals_[0], agg_col_count);
       int64_t* group_by_buffers[] = { group_by_buffer };
       if (device_type == ExecutorDeviceType::CPU) {
-        reinterpret_cast<agg_query>(query_cpu_code_)(col_buffers, &num_rows, &init_agg_vals_[0], group_by_buffers);
+        reinterpret_cast<agg_query>(query_cpu_code_)(&col_buffers[0], &num_rows, &init_agg_vals_[0], group_by_buffers);
       } else {
         // TODO(alex): enable GPU support
         CHECK(false);
