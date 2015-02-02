@@ -95,7 +95,8 @@ SysCatalog::dropDatabase(const string &name)
 		throw runtime_error("Only the super user or the owner can drop database.");
 	sqliteConnector_.query("DELETE FROM mapd_databases WHERE name = '" + name + "'");
 	boost::filesystem::remove(basePath_+"/mapd_catalogs/" + name);
-	// @TODO delete all the fragments/chunks of this database
+	ChunkKey chunkKeyPrefix = {db.dbId};
+	dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);
 }
 
 bool
