@@ -420,7 +420,9 @@ std::vector<int64_t*> launch_query_gpu_code(
     for (auto col_buffer : col_buffers) {
       col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
     }
-    checkCudaErrors(cuMemcpyHtoD(col_buffers_dev_ptr, &col_dev_buffers[0], sizeof(CUdeviceptr)));
+    if (!col_dev_buffers.empty()) {
+      checkCudaErrors(cuMemcpyHtoD(col_buffers_dev_ptr, &col_dev_buffers[0], sizeof(CUdeviceptr)));
+    }
   }
   CUdeviceptr num_rows_dev_ptr;
   {
