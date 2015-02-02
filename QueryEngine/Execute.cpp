@@ -402,41 +402,65 @@ std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::AggPlan* agg_pl
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
+#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS);
+
 // TODO(alex): wip, refactor
-void launch_query_gpu_code(
+std::vector<int64_t*> launch_query_gpu_code(
     CUfunction kernel,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
-    CUdeviceptr init_agg_vals,
-    CUdeviceptr out_vec) {
+    const std::vector<int64_t>& init_agg_vals,
+    const unsigned block_size_x,
+    const unsigned grid_size_x) {
+  std::vector<int64_t*> out_vec;
   CUdeviceptr col_buffers_dev_ptr;
   {
-    cuMemAlloc(&col_buffers_dev_ptr, sizeof(CUdeviceptr));
+    checkCudaErrors(cuMemAlloc(&col_buffers_dev_ptr, sizeof(CUdeviceptr)));
     std::vector<CUdeviceptr> col_dev_buffers;
     for (auto col_buffer : col_buffers) {
       col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
     }
-    cuMemcpyHtoD(col_buffers_dev_ptr, &col_dev_buffers[0], sizeof(CUdeviceptr));
+    checkCudaErrors(cuMemcpyHtoD(col_buffers_dev_ptr, &col_dev_buffers[0], sizeof(CUdeviceptr)));
   }
   CUdeviceptr num_rows_dev_ptr;
   {
-    cuMemAlloc(&num_rows_dev_ptr, sizeof(int64_t));
-    cuMemcpyHtoD(num_rows_dev_ptr, &num_rows, sizeof(int64_t));
+    checkCudaErrors(cuMemAlloc(&num_rows_dev_ptr, sizeof(int64_t)));
+    checkCudaErrors(cuMemcpyHtoD(num_rows_dev_ptr, &num_rows, sizeof(int64_t)));
   }
-  void* kernel_params[] = { &col_buffers_dev_ptr, &num_rows_dev_ptr, &init_agg_vals, &out_vec };
+  CUdeviceptr init_agg_vals_dev_ptr;
   {
-    const unsigned block_size_x = 128;
+    checkCudaErrors(cuMemAlloc(&init_agg_vals_dev_ptr, init_agg_vals.size() * sizeof(int64_t)));
+    checkCudaErrors(cuMemcpyHtoD(init_agg_vals_dev_ptr, &init_agg_vals[0], init_agg_vals.size() * sizeof(int64_t)));
+  }
+  {
     const unsigned block_size_y = 1;
     const unsigned block_size_z = 1;
-    const unsigned grid_size_x  = 128;
     const unsigned grid_size_y  = 1;
     const unsigned grid_size_z  = 1;
-    auto status = cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
-                                 block_size_x, block_size_y, block_size_z,
-                                 0, nullptr, kernel_params, nullptr);
-    CHECK_EQ(status, CUDA_SUCCESS);
+    std::vector<CUdeviceptr> out_vec_dev_buffers;
+    const size_t agg_col_count { init_agg_vals.size() };
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      CUdeviceptr out_vec_dev_buffer;
+      checkCudaErrors(cuMemAlloc(&out_vec_dev_buffer, block_size_x * grid_size_x * sizeof(int64_t)));
+      out_vec_dev_buffers.push_back(out_vec_dev_buffer);
+    }
+    CUdeviceptr out_vec_dev_ptr;
+    checkCudaErrors(cuMemAlloc(&out_vec_dev_ptr, sizeof(CUdeviceptr)));
+    checkCudaErrors(cuMemcpyHtoD(out_vec_dev_ptr, &out_vec_dev_buffers[0], sizeof(CUdeviceptr)));
+    void* kernel_params[] = { &col_buffers_dev_ptr, &num_rows_dev_ptr, &init_agg_vals_dev_ptr, &out_vec_dev_ptr };
+    checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+                                   block_size_x, block_size_y, block_size_z,
+                                   0, nullptr, kernel_params, nullptr));
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t)];
+      checkCudaErrors(cuMemcpyDtoH(host_out_vec, out_vec_dev_buffers[i], block_size_x * grid_size_x * sizeof(int64_t)));
+      out_vec.push_back(host_out_vec);
+    }
   }
+  return out_vec;
 }
+
+#undef checkCudaErrors
 
 #ifdef __clang__
 #pragma clang diagnostic pop
@@ -504,9 +528,23 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       if (device_type == ExecutorDeviceType::CPU) {
         reinterpret_cast<agg_query>(query_cpu_code_)(&col_buffers[0], &num_rows, &init_agg_vals_[0], &out_vec[0]);
       } else {
-        // TODO(alex): enable GPU support
-        CHECK(false);
-        launch_query_gpu_code(query_gpu_code_, col_buffers, num_rows, 0, 0);
+        const unsigned block_size_x { 128 };
+        const unsigned grid_size_x { 128 };
+        auto gpu_out_vec = launch_query_gpu_code(
+          query_gpu_code_, col_buffers, num_rows, init_agg_vals_, block_size_x, grid_size_x);
+        int64_t result = 0;
+        // TODO(alex): fix it
+        for (auto gpu_out : gpu_out_vec) {
+          for (size_t i = 0; i < block_size_x * grid_size_x; ++i) {
+            result += gpu_out[i];
+          }
+        }
+        ResultRow result_row;
+        result_row.agg_results.emplace_back(result);
+        for (auto gpu_out : gpu_out_vec) {
+          delete[] gpu_out;
+        }
+        out_vec[0][0] = result;
       }
       const auto target_exprs = get_agg_target_exprs(agg_plan);
       size_t out_vec_idx = 0;
