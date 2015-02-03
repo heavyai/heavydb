@@ -63,6 +63,22 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
+  void executeAggScanPlanWithGroupBy(
+    std::vector<ResultRow>& results,
+    const Planner::AggPlan* agg_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel,
+    const Catalog_Namespace::Catalog&,
+    std::vector<const int8_t*>& col_buffers,
+    const int64_t num_rows);
+  void executeAggScanPlanWithoutGroupBy(
+    std::vector<ResultRow>& results,
+    const Planner::AggPlan* agg_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel,
+    const Catalog_Namespace::Catalog&,
+    std::vector<const int8_t*>& col_buffers,
+    const int64_t num_rows);
   void executeSimpleInsert();
   void executeScanPlan(const Planner::Scan* scan_plan);
   void compileAggScanPlan(
@@ -81,6 +97,12 @@ private:
   void allocateLocalColumnIds(const Planner::Scan* scan_plan);
   int getLocalColumnId(const int global_col_id) const;
 
+  typedef void (*agg_query)(
+    const int8_t** col_buffers,
+    const int64_t* num_rows,
+    const int64_t* init_agg_value,
+    int64_t** out);
+
   const Planner::RootPlan* root_plan_;
   llvm::LLVMContext& context_;
   llvm::Module* module_;
@@ -96,6 +118,7 @@ private:
   std::vector<int64_t> init_agg_vals_;
   std::unordered_map<int, int> global_to_local_col_ids_;
   std::vector<int> local_to_global_col_ids_;
+  const size_t groups_buffer_entry_count_ { 2048 };
 };
 
 template<typename TimeT = std::chrono::milliseconds>
