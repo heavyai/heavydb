@@ -160,24 +160,26 @@ TEST(Select, FilterAndSimpleAggregation) {
   ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT MIN(x) FROM test WHERE x = 7;"), 7);
   ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT MIN(z) FROM test WHERE z = 101;"), 101);
   ASSERT_EQ(run_simple_agg_both<int64_t>("SELECT MIN(t) FROM test WHERE t = 1001;"), 1001);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y) FROM test;")), 50.);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y + z) FROM test;")), 151.5);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y + z + t) FROM test;")), 1153.);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;")), 42.);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE z > 100 AND z < 102;")), 42.);
-  ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE t > 1000 AND t < 1002;")), 42.);
+  ASSERT_EQ(run_simple_agg_both<double>("SELECT AVG(x + y) FROM test;"), 50.);
+  ASSERT_EQ(run_simple_agg_both<double>("SELECT AVG(x + y + z) FROM test;"), 151.5);
+  ASSERT_EQ(run_simple_agg_both<double>("SELECT AVG(x + y + z + t) FROM test;"), 1153.);
+  ASSERT_EQ(run_simple_agg_both<double>("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;"), 42.);
+  ASSERT_EQ(run_simple_agg_both<double>("SELECT AVG(y) FROM test WHERE z > 100 AND z < 102;"), 42.);
+  ASSERT_EQ(run_simple_agg_both<double>("SELECT AVG(y) FROM test WHERE t > 1000 AND t < 1002;"), 42.);
 }
 
 TEST(Select, FilterAndMultipleAggregation) {
-  auto agg_results = run_multiple_agg(
-    "SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", ExecutorDeviceType::CPU)
-    .front()
-    .agg_results;
-  CHECK_EQ(agg_results.size(), 4);
-  ASSERT_EQ(v<int64_t>(agg_results[0]), 7);
-  ASSERT_EQ(v<double>(agg_results[1]), 294.);
-  ASSERT_EQ(v<int64_t>(agg_results[2]), 49);
-  ASSERT_EQ(v<int64_t>(agg_results[3]), g_num_rows);
+  for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    auto agg_results = run_multiple_agg(
+      "SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", device_type)
+      .front()
+      .agg_results;
+    CHECK_EQ(agg_results.size(), 4);
+    ASSERT_EQ(v<int64_t>(agg_results[0]), 7);
+    ASSERT_EQ(v<double>(agg_results[1]), 294.);
+    ASSERT_EQ(v<int64_t>(agg_results[2]), 49);
+    ASSERT_EQ(v<int64_t>(agg_results[3]), g_num_rows);
+  }
 }
 
 TEST(Select, FilterAndGroupBy) {

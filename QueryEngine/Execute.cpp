@@ -450,8 +450,8 @@ std::vector<int64_t*> launch_query_gpu_code(
       out_vec_dev_buffers.push_back(out_vec_dev_buffer);
     }
     CUdeviceptr out_vec_dev_ptr;
-    checkCudaErrors(cuMemAlloc(&out_vec_dev_ptr, sizeof(CUdeviceptr)));
-    checkCudaErrors(cuMemcpyHtoD(out_vec_dev_ptr, &out_vec_dev_buffers[0], sizeof(CUdeviceptr)));
+    checkCudaErrors(cuMemAlloc(&out_vec_dev_ptr, agg_col_count * sizeof(CUdeviceptr)));
+    checkCudaErrors(cuMemcpyHtoD(out_vec_dev_ptr, &out_vec_dev_buffers[0], agg_col_count * sizeof(CUdeviceptr)));
     void* kernel_params[] = { &col_buffers_dev_ptr, &num_rows_dev_ptr, &init_agg_vals_dev_ptr, &out_vec_dev_ptr };
     checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
                                    block_size_x, block_size_y, block_size_z,
@@ -475,6 +475,7 @@ std::vector<int64_t*> launch_query_gpu_code(
 
 int64_t reduce_results(const SQLAgg agg, const int64_t* out_vec, const size_t out_vec_sz) {
   switch (agg) {
+  case kAVG:
   case kSUM:
   case kCOUNT:
     return std::accumulate(out_vec, out_vec + out_vec_sz, 0);
@@ -555,7 +556,6 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       if (device_type == ExecutorDeviceType::CPU) {
         reinterpret_cast<agg_query>(query_cpu_code_)(&col_buffers[0], &num_rows, &init_agg_vals_[0], &out_vec[0]);
       } else {
-        CHECK_EQ(agg_col_count, 1);
         gpu_out_vec = launch_query_gpu_code(
           query_gpu_code_, col_buffers, num_rows, init_agg_vals_, block_size_x, grid_size_x);
       }
@@ -566,10 +566,21 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
         const auto agg_type = agg_expr->get_aggtype();
         if (agg_type == kAVG) {
-          CHECK(device_type == ExecutorDeviceType::CPU);
-          result_row.agg_results.emplace_back(
-            static_cast<double>(out_vec[out_vec_idx][0]) /
-            static_cast<double>(out_vec[out_vec_idx + 1][0]));
+          if (device_type == ExecutorDeviceType::GPU) {
+            result_row.agg_results.emplace_back(
+              static_cast<double>(reduce_results(
+                agg_type,
+                gpu_out_vec[out_vec_idx],
+                block_size_x * grid_size_x)) /
+              static_cast<double>(reduce_results(
+                agg_type,
+                gpu_out_vec[out_vec_idx + 1],
+                block_size_x * grid_size_x)));
+          } else {
+            result_row.agg_results.emplace_back(
+              static_cast<double>(out_vec[out_vec_idx][0]) /
+              static_cast<double>(out_vec[out_vec_idx + 1][0]));
+          }
           out_vec_idx += 2;
         } else {
           if (device_type == ExecutorDeviceType::GPU) {
