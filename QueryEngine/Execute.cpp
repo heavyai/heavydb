@@ -650,7 +650,7 @@ void Executor::executeAggScanPlanWithGroupBy(
       }
       for (const auto target_expr : target_exprs) {
         const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-        if (agg_expr->get_aggtype() == kAVG) {
+        if (agg_expr && agg_expr->get_aggtype() == kAVG) {
           result_row.agg_results.emplace_back(
             static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count]) /
             static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]));
@@ -822,7 +822,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
     CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
-      result.emplace_back("", target_expr, 0);
+      result.emplace_back("agg_id", target_expr, 0);
       continue;
     }
     CHECK(!agg_expr->get_is_distinct());

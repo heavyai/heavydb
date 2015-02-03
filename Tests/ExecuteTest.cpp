@@ -65,7 +65,7 @@ vector<ResultRow> run_multiple_agg(
 
 AggResult run_simple_agg(
     const string& query_str,
-    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU) {
+    const ExecutorDeviceType device_type) {
   return run_multiple_agg(query_str, device_type).front().agg_results.front();
 }
 
@@ -189,7 +189,7 @@ TEST(Select, FilterAndMultipleAggregation) {
 }
 
 TEST(Select, FilterAndGroupBy) {
-  const auto rows = run_multiple_agg(
+  auto rows = run_multiple_agg(
     "SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", ExecutorDeviceType::CPU);
   CHECK_EQ(rows.size(), 2);
   {
@@ -204,6 +204,25 @@ TEST(Select, FilterAndGroupBy) {
   ASSERT_EQ(row.value_tuple, val_tuple);
   ASSERT_EQ(v<int64_t>(row.agg_results[0]), 51);
   }
+  rows = run_multiple_agg("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", ExecutorDeviceType::CPU);
+  CHECK_EQ(rows.size(), 2);
+  {
+    const auto row = rows[0];
+    std::vector<int64_t> val_tuple { 7, 42 };
+    ASSERT_EQ(row.value_tuple, val_tuple);
+    ASSERT_EQ(v<int64_t>(row.agg_results[0]), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_results[1]), 42);
+    ASSERT_EQ(v<int64_t>(row.agg_results[2]), g_num_rows);
+  }
+  {
+    const auto row = rows[1];
+    std::vector<int64_t> val_tuple { 8, 43 };
+    ASSERT_EQ(row.value_tuple, val_tuple);
+    ASSERT_EQ(v<int64_t>(row.agg_results[0]), 8);
+    ASSERT_EQ(v<int64_t>(row.agg_results[1]), 43);
+    ASSERT_EQ(v<int64_t>(row.agg_results[2]), g_num_rows);
+  }
+  CHECK_EQ(rows.size(), 2);
 }
 
 TEST(Select, FilterAndGroupByMultipleAgg) {
