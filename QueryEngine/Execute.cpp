@@ -498,19 +498,34 @@ std::vector<int64_t*> launch_query_cpu_code(
 #pragma GCC diagnostic pop
 #endif
 
+int64_t init_agg_val(const SQLAgg agg) {
+  switch (agg) {
+  case kAVG:
+  case kSUM:
+  case kCOUNT:
+    return 0;
+  case kMIN:
+    return std::numeric_limits<int64_t>::max();
+  case kMAX:
+    return std::numeric_limits<int64_t>::min();
+  default:
+    CHECK(false);
+  }
+}
+
 int64_t reduce_results(const SQLAgg agg, const int64_t* out_vec, const size_t out_vec_sz) {
   switch (agg) {
   case kAVG:
   case kSUM:
   case kCOUNT:
-    return std::accumulate(out_vec, out_vec + out_vec_sz, 0);
+    return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg));
   case kMIN: {
     const int64_t& (*f)(const int64_t&, const int64_t&) = std::min<int64_t>;
-    return std::accumulate(out_vec, out_vec + out_vec_sz, std::numeric_limits<int64_t>::max(), f);
+    return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg), f);
   }
   case kMAX: {
     const int64_t& (*f)(const int64_t&, const int64_t&) = std::max<int64_t>;
-    return std::accumulate(out_vec, out_vec + out_vec_sz, std::numeric_limits<int64_t>::min(), f);
+    return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg), f);
   }
   default:
     CHECK(false);
@@ -832,22 +847,24 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
       continue;
     }
     CHECK(!agg_expr->get_is_distinct());
-    switch (agg_expr->get_aggtype()) {
+    const auto agg_type = agg_expr->get_aggtype();
+    const auto agg_init_val = init_agg_val(agg_type);
+    switch (agg_type) {
     case kAVG:
-      result.emplace_back("agg_sum", agg_expr->get_arg(), 0);
-      result.emplace_back("agg_count", agg_expr->get_arg(), 0);
+      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
+      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
       break;
     case kMIN:
-      result.emplace_back("agg_min", agg_expr->get_arg(), std::numeric_limits<int64_t>::max());
+      result.emplace_back("agg_min", agg_expr->get_arg(), agg_init_val);
       break;
     case kMAX:
-      result.emplace_back("agg_max", agg_expr->get_arg(), std::numeric_limits<int64_t>::min());
+      result.emplace_back("agg_max", agg_expr->get_arg(), agg_init_val);
       break;
     case kSUM:
-      result.emplace_back("agg_sum", agg_expr->get_arg(), 0);
+      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
       break;
     case kCOUNT:
-      result.emplace_back("agg_count", agg_expr->get_arg(), 0);
+      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
       break;
     default:
       CHECK(false);
