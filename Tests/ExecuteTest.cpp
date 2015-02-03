@@ -90,6 +90,10 @@ void run_ddl_statement(const string& create_table_stmt) {
     ddl->execute(g_cat);
 }
 
+bool skip_tests(const ExecutorDeviceType device_type) {
+  return device_type == ExecutorDeviceType::GPU && !g_cat.get_dataMgr().gpusPresent();
+}
+
 const ssize_t g_num_rows { 10 };
 
 }
@@ -102,6 +106,9 @@ TEST(Select, FilterAndSimpleAggregation) {
     run_multiple_agg("INSERT INTO test VALUES(8, 43, 102, 1002);", ExecutorDeviceType::CPU);
   }
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    if (skip_tests(device_type)) {
+      continue;
+    }
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;", device_type)), 2 * g_num_rows);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test;", device_type)), 7);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test;", device_type)), 8);
@@ -162,6 +169,9 @@ TEST(Select, FilterAndSimpleAggregation) {
 
 TEST(Select, FilterAndMultipleAggregation) {
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    if (skip_tests(device_type)) {
+      continue;
+    }
     auto agg_results = run_multiple_agg(
       "SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", device_type)
       .front()
