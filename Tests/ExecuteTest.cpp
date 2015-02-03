@@ -251,7 +251,7 @@ int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
   try {
-    run_ddl_statement("CREATE TABLE test(x int, y int, z smallint, t bigint);");
+    run_ddl_statement("CREATE TABLE IF NOT EXISTS test(x int, y int, z smallint, t bigint);");
   } catch (...) {
     LOG(ERROR) << "Failed to create table 'test'";
     return -EEXIST;
