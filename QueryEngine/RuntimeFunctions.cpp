@@ -57,6 +57,11 @@ void agg_min(int64_t* agg, const int64_t val) {
   *agg = std::min(*agg, val);
 }
 
+extern "C" __attribute__((always_inline))
+void agg_id(int64_t* agg, const int64_t val) {
+  *agg = val;
+}
+
 // placeholder functions -- either replaced by platform specific implementation
 // at runtime or auto-generated
 
