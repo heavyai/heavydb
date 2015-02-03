@@ -465,6 +465,31 @@ std::vector<int64_t*> launch_query_gpu_code(
   return out_vec;
 }
 
+std::vector<int64_t*> launch_query_cpu_code(
+    void* fn_ptr,
+    std::vector<const int8_t*> col_buffers,
+    const int64_t num_rows,
+    const std::vector<int64_t>& init_agg_vals,
+    std::vector<int64_t*> group_by_buffers) {
+  const size_t agg_col_count = init_agg_vals.size();
+  std::vector<int64_t*> out_vec;
+  for (size_t i = 0; i < agg_col_count; ++i) {
+    auto buff = new int64_t[1];
+    out_vec.push_back(static_cast<int64_t*>(buff));
+  }
+  typedef void (*agg_query)(
+    const int8_t** col_buffers,
+    const int64_t* num_rows,
+    const int64_t* init_agg_value,
+    int64_t** out);
+  if (group_by_buffers.empty()) {
+    reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0]);
+  } else {
+    reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &num_rows, &init_agg_vals[0], &group_by_buffers[0]);
+  }
+  return out_vec;
+}
+
 #undef checkCudaErrors
 
 #ifdef __clang__
@@ -538,7 +563,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     // TODO(alex): multiple devices support
     const auto groupby_exprs = agg_plan->get_groupby_list();
     if (groupby_exprs.empty()) {
-      executeAggScanPlanWithoutGroupBy(results, agg_plan, device_type, cat, col_buffers, num_rows);
+      executeAggScanPlanWithoutGroupBy(results, agg_plan, device_type, col_buffers, num_rows);
     } else {
       executeAggScanPlanWithGroupBy(results, agg_plan, device_type, cat, col_buffers, num_rows);
     }
@@ -550,22 +575,16 @@ void Executor::executeAggScanPlanWithoutGroupBy(
     std::vector<ResultRow>& results,
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const Catalog_Namespace::Catalog& cat,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows) {
-  const size_t agg_col_count = init_agg_vals_.size();
   std::vector<int64_t*> out_vec;
-  for (size_t i = 0; i < agg_col_count; ++i) {
-    auto buff = calloc(1, sizeof(int64_t));
-    out_vec.push_back(static_cast<int64_t*>(buff));
-  }
-  std::vector<int64_t*> gpu_out_vec;
   const unsigned block_size_x { 128 };
   const unsigned grid_size_x { 128 };
   if (device_type == ExecutorDeviceType::CPU) {
-    reinterpret_cast<agg_query>(query_cpu_code_)(&col_buffers[0], &num_rows, &init_agg_vals_[0], &out_vec[0]);
+    out_vec = launch_query_cpu_code(
+      query_cpu_code_, col_buffers, num_rows, init_agg_vals_, {});
   } else {
-    gpu_out_vec = launch_query_gpu_code(
+    out_vec = launch_query_gpu_code(
       query_gpu_code_, col_buffers, num_rows, init_agg_vals_, block_size_x, grid_size_x);
   }
   const auto target_exprs = get_agg_target_exprs(agg_plan);
@@ -575,40 +594,27 @@ void Executor::executeAggScanPlanWithoutGroupBy(
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     const auto agg_type = agg_expr->get_aggtype();
     if (agg_type == kAVG) {
-      if (device_type == ExecutorDeviceType::GPU) {
-        result_row.agg_results.emplace_back(
-          static_cast<double>(reduce_results(
-            agg_type,
-            gpu_out_vec[out_vec_idx],
-            block_size_x * grid_size_x)) /
-          static_cast<double>(reduce_results(
-            agg_type,
-            gpu_out_vec[out_vec_idx + 1],
-            block_size_x * grid_size_x)));
-      } else {
-        result_row.agg_results.emplace_back(
-          static_cast<double>(out_vec[out_vec_idx][0]) /
-          static_cast<double>(out_vec[out_vec_idx + 1][0]));
-      }
+      result_row.agg_results.emplace_back(
+        static_cast<double>(reduce_results(
+          agg_type,
+          out_vec[out_vec_idx],
+          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1)) /
+        static_cast<double>(reduce_results(
+          agg_type,
+          out_vec[out_vec_idx + 1],
+          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1)));
       out_vec_idx += 2;
     } else {
-      if (device_type == ExecutorDeviceType::GPU) {
-        result_row.agg_results.emplace_back(reduce_results(
-          agg_type,
-          gpu_out_vec[out_vec_idx],
-          block_size_x * grid_size_x));
-      } else {
-        result_row.agg_results.emplace_back(out_vec[out_vec_idx][0]);
-      }
+      result_row.agg_results.emplace_back(reduce_results(
+        agg_type,
+        out_vec[out_vec_idx],
+        device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
       ++out_vec_idx;
     }
   }
   results.push_back(result_row);
   for (auto out : out_vec) {
-    free(out);
-  }
-  for (auto gpu_out : gpu_out_vec) {
-    delete[] gpu_out;
+    delete[] out;
   }
 }
 
@@ -630,9 +636,9 @@ void Executor::executeAggScanPlanWithGroupBy(
   // 3. Optimize runtime.
   auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
   init_groups(group_by_buffer, groups_buffer_entry_count_, group_by_col_count, &init_agg_vals_[0], agg_col_count);
-  int64_t* group_by_buffers[] = { group_by_buffer };
+  std::vector<int64_t*> group_by_buffers { group_by_buffer };
   if (device_type == ExecutorDeviceType::CPU) {
-    reinterpret_cast<agg_query>(query_cpu_code_)(&col_buffers[0], &num_rows, &init_agg_vals_[0], group_by_buffers);
+    launch_query_cpu_code(query_cpu_code_, col_buffers, num_rows, init_agg_vals_, group_by_buffers);
   } else {
     // TODO(alex): enable GPU support
     CHECK(false);

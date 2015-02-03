@@ -74,7 +74,6 @@ private:
     std::vector<ResultRow>& results,
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const Catalog_Namespace::Catalog&,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows);
   void executeSimpleInsert();
@@ -94,12 +93,6 @@ private:
     llvm::Module* module);
   void allocateLocalColumnIds(const Planner::Scan* scan_plan);
   int getLocalColumnId(const int global_col_id) const;
-
-  typedef void (*agg_query)(
-    const int8_t** col_buffers,
-    const int64_t* num_rows,
-    const int64_t* init_agg_value,
-    int64_t** out);
 
   const Planner::RootPlan* root_plan_;
   llvm::LLVMContext& context_;
