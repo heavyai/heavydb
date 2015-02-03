@@ -107,6 +107,8 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     if (skip_tests(device_type)) {
+      CHECK(device_type == ExecutorDeviceType::GPU);
+      LOG(WARNING) << "GPU not available, skipping GPU tests";
       continue;
     }
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test;", device_type)), 2 * g_num_rows);
@@ -170,6 +172,8 @@ TEST(Select, FilterAndSimpleAggregation) {
 TEST(Select, FilterAndMultipleAggregation) {
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     if (skip_tests(device_type)) {
+      CHECK(device_type == ExecutorDeviceType::GPU);
+      LOG(WARNING) << "GPU not available, skipping GPU tests";
       continue;
     }
     auto agg_results = run_multiple_agg(
