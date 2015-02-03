@@ -471,6 +471,25 @@ std::vector<int64_t*> launch_query_gpu_code(
 #pragma GCC diagnostic pop
 #endif
 
+int64_t reduce_results(const SQLAgg agg, const int64_t* out_vec, const size_t out_vec_sz) {
+  switch (agg) {
+  case kSUM:
+  case kCOUNT:
+    return std::accumulate(out_vec, out_vec + out_vec_sz, 0);
+  case kMIN: {
+    const int64_t& (*f)(const int64_t&, const int64_t&) = std::min<int64_t>;
+    return std::accumulate(out_vec, out_vec + out_vec_sz, std::numeric_limits<int64_t>::max(), f);
+  }
+  case kMAX: {
+    const int64_t& (*f)(const int64_t&, const int64_t&) = std::max<int64_t>;
+    return std::accumulate(out_vec, out_vec + out_vec_sz, std::numeric_limits<int64_t>::min(), f);
+  }
+  default:
+    CHECK(false);
+  }
+  CHECK(false);
+}
+
 }  // namespace
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
@@ -528,45 +547,46 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         auto buff = calloc(1, sizeof(int64_t));
         out_vec.push_back(static_cast<int64_t*>(buff));
       }
+      std::vector<int64_t*> gpu_out_vec;
+      const unsigned block_size_x { 128 };
+      const unsigned grid_size_x { 128 };
       if (device_type == ExecutorDeviceType::CPU) {
         reinterpret_cast<agg_query>(query_cpu_code_)(&col_buffers[0], &num_rows, &init_agg_vals_[0], &out_vec[0]);
       } else {
-        const unsigned block_size_x { 128 };
-        const unsigned grid_size_x { 128 };
-        auto gpu_out_vec = launch_query_gpu_code(
+        CHECK_EQ(agg_col_count, 1);
+        gpu_out_vec = launch_query_gpu_code(
           query_gpu_code_, col_buffers, num_rows, init_agg_vals_, block_size_x, grid_size_x);
-        int64_t result = 0;
-        // TODO(alex): fix it
-        for (auto gpu_out : gpu_out_vec) {
-          for (size_t i = 0; i < block_size_x * grid_size_x; ++i) {
-            result += gpu_out[i];
-          }
-        }
-        ResultRow result_row;
-        result_row.agg_results.emplace_back(result);
-        for (auto gpu_out : gpu_out_vec) {
-          delete[] gpu_out;
-        }
-        out_vec[0][0] = result;
       }
       const auto target_exprs = get_agg_target_exprs(agg_plan);
       size_t out_vec_idx = 0;
       ResultRow result_row;
       for (const auto target_expr : target_exprs) {
         const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-        if (agg_expr->get_aggtype() == kAVG) {
+        const auto agg_type = agg_expr->get_aggtype();
+        if (agg_type == kAVG) {
+          CHECK(device_type == ExecutorDeviceType::CPU);
           result_row.agg_results.emplace_back(
             static_cast<double>(out_vec[out_vec_idx][0]) /
             static_cast<double>(out_vec[out_vec_idx + 1][0]));
           out_vec_idx += 2;
         } else {
-          result_row.agg_results.emplace_back(out_vec[out_vec_idx][0]);
+          if (device_type == ExecutorDeviceType::GPU) {
+            result_row.agg_results.emplace_back(reduce_results(
+              agg_type,
+              gpu_out_vec[out_vec_idx],
+              block_size_x * grid_size_x));
+          } else {
+            result_row.agg_results.emplace_back(out_vec[out_vec_idx][0]);
+          }
           ++out_vec_idx;
         }
       }
       results.push_back(result_row);
       for (auto out : out_vec) {
         free(out);
+      }
+      for (auto gpu_out : gpu_out_vec) {
+        delete[] gpu_out;
       }
     } else {
       const size_t group_by_col_count = groupby_exprs.size();
