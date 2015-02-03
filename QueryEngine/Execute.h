@@ -67,7 +67,6 @@ private:
     std::vector<ResultRow>& results,
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows);
@@ -75,7 +74,6 @@ private:
     std::vector<ResultRow>& results,
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows);

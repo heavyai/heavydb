@@ -538,9 +538,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     // TODO(alex): multiple devices support
     const auto groupby_exprs = agg_plan->get_groupby_list();
     if (groupby_exprs.empty()) {
-      executeAggScanPlanWithoutGroupBy(results, agg_plan, device_type, opt_level, cat, col_buffers, num_rows);
+      executeAggScanPlanWithoutGroupBy(results, agg_plan, device_type, cat, col_buffers, num_rows);
     } else {
-      executeAggScanPlanWithGroupBy(results, agg_plan, device_type, opt_level, cat, col_buffers, num_rows);
+      executeAggScanPlanWithGroupBy(results, agg_plan, device_type, cat, col_buffers, num_rows);
     }
   }
   return results;
@@ -550,7 +550,6 @@ void Executor::executeAggScanPlanWithoutGroupBy(
     std::vector<ResultRow>& results,
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows) {
@@ -617,7 +616,6 @@ void Executor::executeAggScanPlanWithGroupBy(
     std::vector<ResultRow>& results,
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows) {
