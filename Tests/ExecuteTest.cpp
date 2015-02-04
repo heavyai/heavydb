@@ -66,7 +66,7 @@ vector<ResultRow> run_multiple_agg(
 AggResult run_simple_agg(
     const string& query_str,
     const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type).front().agg_results.front();
+  return run_multiple_agg(query_str, device_type).front().agg_result(0);
 }
 
 template<class T>
@@ -176,15 +176,14 @@ TEST(Select, FilterAndMultipleAggregation) {
       LOG(WARNING) << "GPU not available, skipping GPU tests";
       continue;
     }
-    auto agg_results = run_multiple_agg(
+    auto row = run_multiple_agg(
       "SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", device_type)
-      .front()
-      .agg_results;
-    CHECK_EQ(agg_results.size(), 4);
-    ASSERT_EQ(v<int64_t>(agg_results[0]), 7);
-    ASSERT_EQ(v<double>(agg_results[1]), 294.);
-    ASSERT_EQ(v<int64_t>(agg_results[2]), 49);
-    ASSERT_EQ(v<int64_t>(agg_results[3]), g_num_rows);
+      .front();
+    CHECK_EQ(row.size(), 4);
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<double>(row.agg_result(1)), 294.);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 49);
+    ASSERT_EQ(v<int64_t>(row.agg_result(3)), g_num_rows);
   }
 }
 
@@ -195,32 +194,32 @@ TEST(Select, FilterAndGroupBy) {
   {
   const auto row = rows[0];
   std::vector<int64_t> val_tuple { 7, 42 };
-  ASSERT_EQ(row.value_tuple, val_tuple);
-  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 49);
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
   }
   {
   const auto row = rows[1];
   std::vector<int64_t> val_tuple { 8, 43 };
-  ASSERT_EQ(row.value_tuple, val_tuple);
-  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 51);
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
   }
   rows = run_multiple_agg("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", ExecutorDeviceType::CPU);
   CHECK_EQ(rows.size(), 2);
   {
     const auto row = rows[0];
     std::vector<int64_t> val_tuple { 7, 42 };
-    ASSERT_EQ(row.value_tuple, val_tuple);
-    ASSERT_EQ(v<int64_t>(row.agg_results[0]), 7);
-    ASSERT_EQ(v<int64_t>(row.agg_results[1]), 42);
-    ASSERT_EQ(v<int64_t>(row.agg_results[2]), g_num_rows);
+    ASSERT_EQ(row.value_tuple(), val_tuple);
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 42);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), g_num_rows);
   }
   {
     const auto row = rows[1];
     std::vector<int64_t> val_tuple { 8, 43 };
-    ASSERT_EQ(row.value_tuple, val_tuple);
-    ASSERT_EQ(v<int64_t>(row.agg_results[0]), 8);
-    ASSERT_EQ(v<int64_t>(row.agg_results[1]), 43);
-    ASSERT_EQ(v<int64_t>(row.agg_results[2]), g_num_rows);
+    ASSERT_EQ(row.value_tuple(), val_tuple);
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 8);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), g_num_rows);
   }
   CHECK_EQ(rows.size(), 2);
 }
@@ -232,18 +231,18 @@ TEST(Select, FilterAndGroupByMultipleAgg) {
   {
   const auto row = rows[0];
   std::vector<int64_t> val_tuple { 7, 42 };
-  ASSERT_EQ(row.value_tuple, val_tuple);
-  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 49);
-  ASSERT_EQ(v<int64_t>(row.agg_results[1]), g_num_rows);
-  ASSERT_EQ(v<double>(row.agg_results[2]), 8);
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+  ASSERT_EQ(v<int64_t>(row.agg_result(1)), g_num_rows);
+  ASSERT_EQ(v<double>(row.agg_result(2)), 8);
   }
   {
   const auto row = rows[1];
   std::vector<int64_t> val_tuple { 8, 43 };
-  ASSERT_EQ(row.value_tuple, val_tuple);
-  ASSERT_EQ(v<int64_t>(row.agg_results[0]), 51);
-  ASSERT_EQ(v<int64_t>(row.agg_results[1]), g_num_rows);
-  ASSERT_EQ(v<double>(row.agg_results[2]), 9);
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+  ASSERT_EQ(v<int64_t>(row.agg_result(1)), g_num_rows);
+  ASSERT_EQ(v<double>(row.agg_result(2)), 9);
   }
 }
 

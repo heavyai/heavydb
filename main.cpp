@@ -250,7 +250,7 @@ main(int argc, char* argv[])
 						});
 						if (!results.empty()) {
 							for (const auto& row : results) {
-								const auto val_tuple = row.value_tuple;
+								const auto val_tuple = row.value_tuple();
 								if (!val_tuple.empty()) {
 									cout << '(' << val_tuple[0];
 									for (size_t i = 1; i < val_tuple.size(); ++i) {
@@ -258,10 +258,9 @@ main(int argc, char* argv[])
 									}
 									cout << ")\t";
 								}
-								const auto agg_results = row.agg_results;
-								cout << agg_results[0];
-								for (size_t i = 1; i < agg_results.size(); ++i) {
-									cout << ", " << agg_results[i];
+								cout << row.agg_result(0);
+								for (size_t i = 1; i < row.size(); ++i) {
+									cout << ", " << row.agg_result(i);
 								}
 								cout << endl;
 							}

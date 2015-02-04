@@ -609,7 +609,7 @@ void Executor::executeAggScanPlanWithoutGroupBy(
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     const auto agg_type = agg_expr->get_aggtype();
     if (agg_type == kAVG) {
-      result_row.agg_results.emplace_back(
+      result_row.agg_results_.emplace_back(
         static_cast<double>(reduce_results(
           agg_type,
           out_vec[out_vec_idx],
@@ -620,7 +620,7 @@ void Executor::executeAggScanPlanWithoutGroupBy(
           device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1)));
       out_vec_idx += 2;
     } else {
-      result_row.agg_results.emplace_back(reduce_results(
+      result_row.agg_results_.emplace_back(reduce_results(
         agg_type,
         out_vec[out_vec_idx],
         device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
@@ -667,17 +667,17 @@ void Executor::executeAggScanPlanWithGroupBy(
       for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
         const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
         CHECK_NE(key_comp, EMPTY_KEY);
-        result_row.value_tuple.push_back(key_comp);
+        result_row.value_tuple_.push_back(key_comp);
       }
       for (const auto target_expr : target_exprs) {
         const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
         if (agg_expr && agg_expr->get_aggtype() == kAVG) {
-          result_row.agg_results.emplace_back(
+          result_row.agg_results_.emplace_back(
             static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count]) /
             static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]));
           out_vec_idx += 2;
         } else {
-          result_row.agg_results.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           ++out_vec_idx;
         }
       }

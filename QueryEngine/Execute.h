@@ -31,10 +31,26 @@ enum class ExecutorDeviceType {
 
 typedef boost::variant<int64_t, double> AggResult;
 
-struct ResultRow {
+class ResultRow {
+public:
+  AggResult agg_result(const size_t idx) const {
+    CHECK_GE(idx, 0);
+    CHECK_LT(idx, agg_results_.size());
+    return agg_results_[idx];
+  }
+  size_t size() const {
+    return agg_results_.size();
+  }
+  std::vector<int64_t> value_tuple() const {
+    return value_tuple_;
+  }
+private:
   // TODO(alex): support for strings
-  std::vector<int64_t> value_tuple;
-  std::vector<AggResult> agg_results;
+  std::vector<int64_t> value_tuple_;
+  std::vector<AggResult> agg_results_;
+  std::vector<SQLAgg> agg_type_;
+
+  friend class Executor;
 };
 
 class Executor {
