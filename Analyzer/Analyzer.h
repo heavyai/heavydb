@@ -351,7 +351,7 @@ namespace Analyzer {
 			bool get_is_distinct() const { return is_distinct; }
 			virtual Expr *deep_copy() const;
 			virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
-			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); };
+			virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { if (arg) arg->collect_rte_idx(rte_idx_set); };
 			virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { if ( include_agg && arg != nullptr) arg->collect_column_var(colvar_set, include_agg); }
 			virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const;
 			virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const;

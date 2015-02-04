@@ -253,7 +253,6 @@ namespace Planner {
 		if (having_pred != nullptr) {
 			std::list<const Analyzer::Expr*> preds, others;
 			having_pred->group_predicates(preds, others, others);
-			assert(others.empty());
 			for (auto p : preds) {
 				having_quals.push_back(p->rewrite_agg_to_var(agg_tlist));
 			}
