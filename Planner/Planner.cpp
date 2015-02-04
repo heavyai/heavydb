@@ -251,8 +251,8 @@ namespace Planner {
 
 		std::list<Analyzer::Expr*> having_quals;
 		if (having_pred != nullptr) {
-			std::list<const Analyzer::Expr*> preds, others;
-			having_pred->group_predicates(preds, others, others);
+			std::list<const Analyzer::Expr*> preds;
+			having_pred->group_predicates(preds, preds, preds);
 			for (auto p : preds) {
 				having_quals.push_back(p->rewrite_agg_to_var(agg_tlist));
 			}
