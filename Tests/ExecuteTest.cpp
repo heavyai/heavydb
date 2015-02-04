@@ -203,6 +203,21 @@ TEST(Select, FilterAndGroupBy) {
   ASSERT_EQ(row.value_tuple(), val_tuple);
   ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
   }
+  rows = run_multiple_agg(
+    "SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", ExecutorDeviceType::CPU);
+  CHECK_EQ(rows.size(), 2);
+  {
+  const auto row = rows[0];
+  std::vector<int64_t> val_tuple { 8, 49 };
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+  }
+  {
+  const auto row = rows[1];
+  std::vector<int64_t> val_tuple { 9, 51 };
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+  }
   rows = run_multiple_agg("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", ExecutorDeviceType::CPU);
   CHECK_EQ(rows.size(), 2);
   {
@@ -225,7 +240,7 @@ TEST(Select, FilterAndGroupBy) {
 }
 
 TEST(Select, FilterAndGroupByMultipleAgg) {
-  const auto rows = run_multiple_agg(
+  auto rows = run_multiple_agg(
     "SELECT MIN(x + y), COUNT(*), AVG(x + 1) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", ExecutorDeviceType::CPU);
   CHECK_EQ(rows.size(), 2);
   {
@@ -239,6 +254,24 @@ TEST(Select, FilterAndGroupByMultipleAgg) {
   {
   const auto row = rows[1];
   std::vector<int64_t> val_tuple { 8, 43 };
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+  ASSERT_EQ(v<int64_t>(row.agg_result(1)), g_num_rows);
+  ASSERT_EQ(v<double>(row.agg_result(2)), 9);
+  }
+  rows = run_multiple_agg(
+    "SELECT MIN(x + y), COUNT(*), AVG(x + 1) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", ExecutorDeviceType::CPU);
+  {
+  const auto row = rows[0];
+  std::vector<int64_t> val_tuple { 8, 49 };
+  ASSERT_EQ(row.value_tuple(), val_tuple);
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+  ASSERT_EQ(v<int64_t>(row.agg_result(1)), g_num_rows);
+  ASSERT_EQ(v<double>(row.agg_result(2)), 8);
+  }
+  {
+  const auto row = rows[1];
+  std::vector<int64_t> val_tuple { 9, 51 };
   ASSERT_EQ(row.value_tuple(), val_tuple);
   ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
   ASSERT_EQ(v<int64_t>(row.agg_result(1)), g_num_rows);
