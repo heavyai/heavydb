@@ -22,6 +22,7 @@
 #include <nvvm.h>
 
 #include <numeric>
+#include <thread>
 
 
 Executor::Executor(const Planner::RootPlan* root_plan)
@@ -535,6 +536,76 @@ int64_t reduce_results(const SQLAgg agg, const int64_t* out_vec, const size_t ou
 
 }  // namespace
 
+Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Executor::ResultRows>& results_per_device) {
+  CHECK(!results_per_device.empty());
+  std::map<
+    decltype(results_per_device.front().front().value_tuple()),
+    decltype(results_per_device.front().front().agg_results_)
+  > reduced_results_map;
+  Executor::ResultRows reduced_results_vec;
+
+  decltype(results_per_device.front().front().agg_results_idx_) agg_results_idx;
+  decltype(results_per_device.front().front().agg_types_) agg_types;
+
+  for (const auto& device_results : results_per_device) {
+    for (const auto& row : device_results) {
+      // cache / check the shape of the results;
+      if (agg_results_idx.empty()) {
+        agg_results_idx = row.agg_results_idx_;
+      } else {
+        CHECK(agg_results_idx == row.agg_results_idx_);
+      }
+      if (agg_types.empty()) {
+        agg_types = row.agg_types_;
+      } else {
+        CHECK(agg_types == row.agg_types_);
+      }
+      auto it = reduced_results_map.find(row.value_tuple_);
+      if (it == reduced_results_map.end()) {
+        reduced_results_map.insert(std::make_pair(row.value_tuple_, row.agg_results_));
+      } else {
+        auto& old_agg_results = it->second;
+        CHECK_EQ(old_agg_results.size(), row.agg_results_.size());
+        const size_t agg_col_count = row.size();
+        for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+          const auto agg_type = row.agg_types_[agg_col_idx];
+          const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
+          switch (agg_type) {
+          case kSUM:
+          case kCOUNT:
+          case kAVG:
+            old_agg_results[actual_col_idx] += row.agg_results_[actual_col_idx];
+            if (agg_type == kAVG) {
+              old_agg_results[actual_col_idx + 1] += row.agg_results_[actual_col_idx + 1];
+            }
+            break;
+          case kMIN:
+            old_agg_results[actual_col_idx] = std::min(
+              old_agg_results[actual_col_idx], row.agg_results_[actual_col_idx]);
+            break;
+          case kMAX:
+            old_agg_results[actual_col_idx] = std::max(
+              old_agg_results[actual_col_idx], row.agg_results_[actual_col_idx]);
+            break;
+          default:
+            CHECK(false);
+          }
+        }
+      }
+    }
+  }
+  // now flatten the reduced map
+  for (const auto& kv : reduced_results_map) {
+    ResultRow row;
+    row.value_tuple_ = kv.first;
+    row.agg_results_ = kv.second;
+    row.agg_results_idx_ = agg_results_idx;
+    row.agg_types_ = agg_types;
+    reduced_results_vec.push_back(row);
+  }
+  return reduced_results_vec;
+}
+
 std::vector<ResultRow> Executor::executeAggScanPlan(
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
@@ -551,39 +622,55 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   Partitioner_Namespace::QueryInfo query_info;
   partitioner->getPartitionsForQuery(query_info);
   const auto& partitions = query_info.partitions;
-  const auto current_db = cat.get_currentDB();
+  const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
-  std::vector<const int8_t*> col_buffers(global_to_local_col_ids_.size());
-  std::vector<ResultRow> results;
-  for (const auto& partition : partitions) {
-    auto num_rows = static_cast<int64_t>(partition.numTuples);
-    for (const int col_id : col_global_ids) {
-      auto chunk_meta_it = partition.chunkMetadataMap.find(col_id);
-      CHECK(chunk_meta_it != partition.chunkMetadataMap.end());
-      ChunkKey chunk_key { current_db.dbId, table_id, col_id, partition.partitionId };
-      const auto memory_level = device_type == ExecutorDeviceType::GPU
-        ? Data_Namespace::GPU_LEVEL
-        : Data_Namespace::CPU_LEVEL;
-      auto ab = cat.get_dataMgr().getChunk(
-        chunk_key,
-        memory_level,
-        partition.deviceIds[static_cast<int>(memory_level)],
-        chunk_meta_it->second.numBytes);
-      CHECK(ab->getMemoryPtr());
-      auto it = global_to_local_col_ids_.find(col_id);
-      CHECK(it != global_to_local_col_ids_.end());
-      CHECK_LT(it->second, global_to_local_col_ids_.size());
-      col_buffers[it->second] = ab->getMemoryPtr();
-    }
-    // TODO(alex): multiple devices support
-    const auto groupby_exprs = agg_plan->get_groupby_list();
-    if (groupby_exprs.empty()) {
-      executeAggScanPlanWithoutGroupBy(results, agg_plan, device_type, col_buffers, num_rows);
+  std::vector<ResultRows> all_partition_results(partitions.size());
+  std::vector<std::thread> query_threads;
+  for (size_t i = 0; i < partitions.size(); ++i) {
+    auto dispatch = [this, agg_plan, current_dbid, device_type, i, table_id, &all_partition_results, &cat, &col_global_ids, &partitions]() {
+      const auto& partition = partitions[i];
+      std::vector<const int8_t*> col_buffers(global_to_local_col_ids_.size());
+      ResultRows device_results;
+      auto num_rows = static_cast<int64_t>(partition.numTuples);
+      for (const int col_id : col_global_ids) {
+        auto chunk_meta_it = partition.chunkMetadataMap.find(col_id);
+        CHECK(chunk_meta_it != partition.chunkMetadataMap.end());
+        ChunkKey chunk_key { current_dbid, table_id, col_id, partition.partitionId };
+        const auto memory_level = device_type == ExecutorDeviceType::GPU
+          ? Data_Namespace::GPU_LEVEL
+          : Data_Namespace::CPU_LEVEL;
+        auto ab = cat.get_dataMgr().getChunk(
+          chunk_key,
+          memory_level,
+          partition.deviceIds[static_cast<int>(memory_level)],
+          chunk_meta_it->second.numBytes);
+        CHECK(ab->getMemoryPtr());
+        auto it = global_to_local_col_ids_.find(col_id);
+        CHECK(it != global_to_local_col_ids_.end());
+        CHECK_LT(it->second, global_to_local_col_ids_.size());
+        col_buffers[it->second] = ab->getMemoryPtr();
+      }
+      // TODO(alex): multiple devices support
+      const auto groupby_exprs = agg_plan->get_groupby_list();
+      if (groupby_exprs.empty()) {
+        executeAggScanPlanWithoutGroupBy(device_results, agg_plan, device_type, col_buffers, num_rows);
+      } else {
+        executeAggScanPlanWithGroupBy(device_results, agg_plan, device_type, cat, col_buffers, num_rows);
+      }
+      reduce_mutex_.lock();
+      all_partition_results.push_back(device_results);
+      reduce_mutex_.unlock();
+    };
+    if (cat.get_dataMgr().gpusPresent()) {
+      dispatch();
     } else {
-      executeAggScanPlanWithGroupBy(results, agg_plan, device_type, cat, col_buffers, num_rows);
+      query_threads.push_back(std::thread(dispatch));
     }
   }
-  return results;
+  for (auto& child : query_threads) {
+    child.join();
+  }
+  return reduceMultiDeviceResults(all_partition_results);
 }
 
 void Executor::executeAggScanPlanWithoutGroupBy(
