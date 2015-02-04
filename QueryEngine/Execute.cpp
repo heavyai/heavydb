@@ -23,6 +23,7 @@
 
 #include <numeric>
 #include <thread>
+#include <unistd.h>
 
 
 Executor::Executor(const Planner::RootPlan* root_plan)
@@ -626,6 +627,10 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const auto& col_global_ids = scan_plan->get_col_list();
   std::vector<ResultRows> all_partition_results(partitions.size());
   std::vector<std::thread> query_threads;
+  // MAX_THREADS could use std::thread::hardware_concurrency(), but some
+  // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
+  // Play it POSIX.1 safe instead.
+  const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
   for (size_t i = 0; i < partitions.size(); ++i) {
     auto dispatch = [this, agg_plan, current_dbid, device_type, i, table_id, &all_partition_results, &cat, &col_global_ids, &partitions]() {
       const auto& partition = partitions[i];
@@ -662,9 +667,17 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       reduce_mutex_.unlock();
     };
     if (cat.get_dataMgr().gpusPresent()) {
+      // TODO(alex): figure out why CudaMgr constructor / destructor
+      //             hates threads; for now, we just serialize
       dispatch();
     } else {
       query_threads.push_back(std::thread(dispatch));
+    }
+    if (query_threads.size() >= static_cast<size_t>(MAX_THREADS)) {
+      for (auto& child : query_threads) {
+        child.join();
+      }
+      query_threads.clear();
     }
   }
   for (auto& child : query_threads) {
