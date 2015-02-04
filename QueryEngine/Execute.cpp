@@ -68,8 +68,14 @@ std::vector<ResultRow> Executor::execute(
     const auto plan = root_plan_->get_plan();
     CHECK(plan);
     const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
-    CHECK(agg_plan);
-    return executeAggScanPlan(agg_plan, device_type, opt_level, root_plan_->get_catalog());
+    if (agg_plan) {
+      return executeAggScanPlan(agg_plan, device_type, opt_level, root_plan_->get_catalog());
+    }
+    const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
+    if (result_plan) {
+      return executeResultPlan(result_plan, device_type, opt_level, root_plan_->get_catalog());
+    }
+    CHECK(false);
     break;
   }
   case kINSERT: {
@@ -605,6 +611,56 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
     reduced_results_vec.push_back(row);
   }
   return reduced_results_vec;
+}
+
+namespace {
+
+class ColumnarResults {
+public:
+  ColumnarResults(const std::vector<ResultRow>& rows) {
+    const size_t num_rows { rows.size() };
+    CHECK_GT(num_rows, 0);
+    const size_t num_columns { rows.front().size() };
+    column_buffers_.resize(num_columns);
+    for (size_t i = 0; i < num_columns; ++i) {
+      column_buffers_[i] = static_cast<int8_t*>(malloc(num_rows * sizeof(int64_t)));
+    }
+  }
+  ~ColumnarResults() {
+    for (const auto column_buffer : column_buffers_) {
+      free(column_buffer);
+    }
+  }
+  const std::vector<int8_t*>& getColumnBuffers() const {
+    return column_buffers_;
+  }
+private:
+  std::vector<int8_t*> column_buffers_;
+};
+
+}
+
+std::vector<ResultRow> Executor::executeResultPlan(
+    const Planner::Result* result_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel opt_level,
+    const Catalog_Namespace::Catalog& cat) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
+  CHECK(agg_plan);
+  auto result_rows = executeAggScanPlan(agg_plan, device_type, opt_level, cat);
+  const auto& targets = result_plan->get_targetlist();
+  CHECK(!targets.empty());
+  for (auto target_entry : targets) {
+    auto target_var = dynamic_cast<Analyzer::Var*>(target_entry->get_expr());
+    CHECK(target_var);
+    CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
+  }
+  ColumnarResults result_columns(result_rows);
+  for (auto expr : result_plan->get_quals()) {
+    codegen(expr);
+  }
+  CHECK(false);
+  return result_rows;
 }
 
 std::vector<ResultRow> Executor::executeAggScanPlan(

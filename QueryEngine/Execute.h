@@ -93,6 +93,11 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
+  std::vector<ResultRow> executeResultPlan(
+    const Planner::Result* result_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel,
+    const Catalog_Namespace::Catalog&);
   void executeAggScanPlanWithGroupBy(
     std::vector<ResultRow>& results,
     const Planner::AggPlan* agg_plan,
