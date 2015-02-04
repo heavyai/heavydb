@@ -135,6 +135,7 @@ TEST(ParseAnalyzePlan, Select) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, b, count(*) from skinny group by a, b;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select c, avg(b) from skinny where a > 10 group by c;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select c, avg(b) from skinny where a > 10 group by c having max(a) < 100;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select c, avg(b) from skinny where a > 10 group by c having max(a) < 100 and count(*) > 1000;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select count(*)*avg(c) - sum(c) from skinny;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by a, b;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by a, b having b > 2*a and min(b) > max(a);")); } );
