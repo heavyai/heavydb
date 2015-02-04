@@ -35,11 +35,23 @@ class ResultRow {
 public:
   AggResult agg_result(const size_t idx) const {
     CHECK_GE(idx, 0);
-    CHECK_LT(idx, agg_results_.size());
+    CHECK_LT(idx, agg_types_.size());
+    CHECK_EQ(agg_results_idx_.size(), agg_types_.size());
+    if (agg_types_[idx] == kAVG) {
+      CHECK_LT(idx, agg_results_.size() - 1);
+      auto actual_idx = agg_results_idx_[idx];
+      return AggResult(
+        static_cast<double>(agg_results_[actual_idx]) /
+        static_cast<double>(agg_results_[actual_idx + 1]));
+    } else {
+      CHECK_LT(idx, agg_results_.size());
+      auto actual_idx = agg_results_idx_[idx];
+      return AggResult(agg_results_[actual_idx]);
+    }
     return agg_results_[idx];
   }
   size_t size() const {
-    return agg_results_.size();
+    return agg_results_idx_.size();
   }
   std::vector<int64_t> value_tuple() const {
     return value_tuple_;
@@ -47,8 +59,9 @@ public:
 private:
   // TODO(alex): support for strings
   std::vector<int64_t> value_tuple_;
-  std::vector<AggResult> agg_results_;
-  std::vector<SQLAgg> agg_type_;
+  std::vector<int64_t> agg_results_;
+  std::vector<size_t> agg_results_idx_;
+  std::vector<SQLAgg> agg_types_;
 
   friend class Executor;
 };

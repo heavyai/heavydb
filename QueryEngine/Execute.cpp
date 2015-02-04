@@ -608,19 +608,22 @@ void Executor::executeAggScanPlanWithoutGroupBy(
   for (const auto target_expr : target_exprs) {
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     const auto agg_type = agg_expr->get_aggtype();
+    result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
+    result_row.agg_types_.push_back(agg_type);
     if (agg_type == kAVG) {
-      result_row.agg_results_.emplace_back(
-        static_cast<double>(reduce_results(
+      result_row.agg_results_.push_back(
+        reduce_results(
           agg_type,
           out_vec[out_vec_idx],
-          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1)) /
-        static_cast<double>(reduce_results(
+          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
+      result_row.agg_results_.push_back(
+        reduce_results(
           agg_type,
           out_vec[out_vec_idx + 1],
-          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1)));
+          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
       out_vec_idx += 2;
     } else {
-      result_row.agg_results_.emplace_back(reduce_results(
+      result_row.agg_results_.push_back(reduce_results(
         agg_type,
         out_vec[out_vec_idx],
         device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
@@ -671,10 +674,12 @@ void Executor::executeAggScanPlanWithGroupBy(
       }
       for (const auto target_expr : target_exprs) {
         const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-        if (agg_expr && agg_expr->get_aggtype() == kAVG) {
-          result_row.agg_results_.emplace_back(
-            static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count]) /
-            static_cast<double>(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]));
+        const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kCOUNT;  // kCOUNT is a meaningless placeholder here
+        result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
+        result_row.agg_types_.push_back(agg_type);
+        if (agg_expr && agg_type == kAVG) {
+          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
         } else {
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
