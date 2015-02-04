@@ -643,7 +643,7 @@ namespace Analyzer {
 		if (groupby != nullptr) {
 			for (auto e : *groupby) {
 				ColumnVar *c = dynamic_cast<ColumnVar*>(e);
-				if (table_id == c->get_table_id() && column_id == c->get_column_id())
+				if (c && table_id == c->get_table_id() && column_id == c->get_column_id())
 					return;
 			}
 		}
