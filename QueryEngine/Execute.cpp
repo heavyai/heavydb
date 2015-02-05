@@ -1090,12 +1090,6 @@ std::vector<llvm::Value*> generate_column_heads_load(
   return col_heads;
 }
 
-const Planner::Scan* get_scan(const Planner::Plan* plan) {
-  const auto child_plan = plan->get_child_plan();
-  CHECK(child_plan);
-  return dynamic_cast<const Planner::Scan*>(child_plan);
-}
-
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     const size_t in_col_count,
     const size_t agg_col_count,
