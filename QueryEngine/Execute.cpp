@@ -492,9 +492,11 @@ std::vector<int64_t*> launch_query_cpu_code(
     std::vector<int64_t*> group_by_buffers) {
   const size_t agg_col_count = init_agg_vals.size();
   std::vector<int64_t*> out_vec;
-  for (size_t i = 0; i < agg_col_count; ++i) {
-    auto buff = new int64_t[1];
-    out_vec.push_back(static_cast<int64_t*>(buff));
+  if (group_by_buffers.empty()) {
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      auto buff = new int64_t[1];
+      out_vec.push_back(static_cast<int64_t*>(buff));
+    }
   }
   typedef void (*agg_query)(
     const int8_t** col_buffers,
