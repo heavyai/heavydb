@@ -621,11 +621,11 @@ namespace {
 class ColumnarResults {
 public:
   ColumnarResults(const std::vector<ResultRow>& rows, const size_t num_columns)
-    : column_buffers_(num_columns) {
-    const size_t num_rows { rows.size() };
+    : column_buffers_(num_columns)
+    , num_rows_(rows.size()) {
     column_buffers_.resize(num_columns);
     for (size_t i = 0; i < num_columns; ++i) {
-      column_buffers_[i] = static_cast<int8_t*>(malloc(num_rows * sizeof(int64_t)));
+      column_buffers_[i] = static_cast<int8_t*>(malloc(num_rows_ * sizeof(int64_t)));
     }
     for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
       const auto& row = rows[row_idx];
@@ -646,8 +646,12 @@ public:
   const std::vector<int8_t*>& getColumnBuffers() const {
     return column_buffers_;
   }
+  const size_t size() const {
+    return num_rows_;
+  }
 private:
   std::vector<int8_t*> column_buffers_;
+  const size_t num_rows_;
 };
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
@@ -656,6 +660,43 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     llvm::Function* query_func,
     llvm::Module* module,
     llvm::LLVMContext& context);
+
+std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
+  std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
+  const auto target_exprs = get_agg_target_exprs(agg_plan);
+  for (auto target_expr : target_exprs) {
+    CHECK(target_expr);
+    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+    if (!agg_expr) {
+      result.emplace_back("agg_id", target_expr, 0);
+      continue;
+    }
+    CHECK(!agg_expr->get_is_distinct());
+    const auto agg_type = agg_expr->get_aggtype();
+    const auto agg_init_val = init_agg_val(agg_type);
+    switch (agg_type) {
+    case kAVG:
+      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
+      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
+      break;
+    case kMIN:
+      result.emplace_back("agg_min", agg_expr->get_arg(), agg_init_val);
+      break;
+    case kMAX:
+      result.emplace_back("agg_max", agg_expr->get_arg(), agg_init_val);
+      break;
+    case kSUM:
+      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
+      break;
+    case kCOUNT:
+      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
+      break;
+    default:
+      CHECK(false);
+    }
+  }
+  return result;
+}
 
 }
 
@@ -669,26 +710,40 @@ std::vector<ResultRow> Executor::executeResultPlan(
   auto result_rows = executeAggScanPlan(agg_plan, device_type, opt_level, cat);
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
+  printf("Targets      :\n");
+  printf("==============\n");
   for (auto target_entry : targets) {
     auto target_var = dynamic_cast<Analyzer::Var*>(target_entry->get_expr());
     CHECK(target_var);
+    target_var->print();
+    printf("\n");
     CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
   }
   const size_t in_col_count { agg_plan->get_targetlist().size() };
   const size_t in_agg_count { targets.size() };
+  printf("Input columns:\n");
+  printf("==============\n");
+  for (auto in_col : agg_plan->get_targetlist()) {
+    in_col->get_expr()->print();
+    printf("\n");
+  }
   ColumnarResults result_columns(result_rows, in_col_count);
   std::vector<llvm::Value*> col_heads;
   llvm::Function* row_func;
   // Nested query, increment the query id
   ++query_id_;
-  auto query_func = query_template(module_, in_agg_count, query_id_);
+  auto query_func = query_group_by_template(module_, in_agg_count, query_id_);
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, query_func, module_, context_);
   CHECK(row_func);
+  printf("Qualifiers   :\n");
+  printf("==============\n");
   for (auto expr : result_plan->get_quals()) {
     expr->print();
+    printf("\n");
   }
-  compilePlan(result_plan, device_type, opt_level, groups_buffer_entry_count_);
+  const auto& column_buffers = result_columns.getColumnBuffers();
+  CHECK_EQ(column_buffers.size(), in_col_count);
   CHECK(false);
   return result_rows;
 }
@@ -699,9 +754,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
   // TODO(alex): heuristic for group by buffer size
-  compilePlan(agg_plan, device_type, opt_level, groups_buffer_entry_count_);
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
   CHECK(scan_plan);
+  compilePlan(get_agg_name_and_exprs(agg_plan), agg_plan->get_groupby_list(),
+    scan_plan->get_col_list(), scan_plan->get_simple_quals(), scan_plan->get_quals(),
+    device_type, opt_level, groups_buffer_entry_count_);
   const int table_id = scan_plan->get_table_id();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto fragmenter = table_descriptor->fragmenter;
@@ -990,9 +1047,7 @@ std::vector<llvm::Value*> generate_column_heads_load(
 const Planner::Scan* get_scan(const Planner::Plan* plan) {
   const auto child_plan = plan->get_child_plan();
   CHECK(child_plan);
-  const auto scan_plan = dynamic_cast<const Planner::Scan*>(child_plan);
-  CHECK(scan_plan);
-  return scan_plan;
+  return dynamic_cast<const Planner::Scan*>(child_plan);
 }
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
@@ -1025,47 +1080,14 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     col_heads);
 }
 
-std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
-  std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
-  const auto target_exprs = get_agg_target_exprs(agg_plan);
-  for (auto target_expr : target_exprs) {
-    CHECK(target_expr);
-    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    if (!agg_expr) {
-      result.emplace_back("agg_id", target_expr, 0);
-      continue;
-    }
-    CHECK(!agg_expr->get_is_distinct());
-    const auto agg_type = agg_expr->get_aggtype();
-    const auto agg_init_val = init_agg_val(agg_type);
-    switch (agg_type) {
-    case kAVG:
-      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
-      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
-      break;
-    case kMIN:
-      result.emplace_back("agg_min", agg_expr->get_arg(), agg_init_val);
-      break;
-    case kMAX:
-      result.emplace_back("agg_max", agg_expr->get_arg(), agg_init_val);
-      break;
-    case kSUM:
-      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
-      break;
-    case kCOUNT:
-      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
-      break;
-    default:
-      CHECK(false);
-    }
-  }
-  return result;
-}
-
 }  // namespace
 
 void Executor::compilePlan(
-    const Planner::Plan* plan,
+    const std::vector<Executor::AggInfo>& agg_infos,
+    const std::list<Analyzer::Expr*>& groupby_list,
+    const std::list<int>& scan_cols,
+    const std::list<Analyzer::Expr*>& simple_quals,
+    const std::list<Analyzer::Expr*>& quals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const size_t groups_buffer_entry_count) {
@@ -1073,9 +1095,7 @@ void Executor::compilePlan(
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   module_ = create_runtime_module(context_);
-  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
-  auto agg_infos = agg_plan ? get_agg_name_and_exprs(agg_plan) : std::vector<Executor::AggInfo> {};
-  const bool is_group_by = agg_plan ? !agg_plan->get_groupby_list().empty() : false;
+  const bool is_group_by = !groupby_list.empty();
   auto query_func = is_group_by
     ? query_group_by_template(module_, 1, query_id_)
     : query_template(module_, agg_infos.size(), query_id_);
@@ -1083,8 +1103,6 @@ void Executor::compilePlan(
   bind_pos_placeholders("pos_step", query_func, module_);
 
   std::vector<llvm::Value*> col_heads;
-  auto scan_plan = get_scan(plan);
-  const auto& scan_cols = scan_plan->get_col_list();
   std::tie(row_func_, col_heads) = create_row_function(
     scan_cols.size(), is_group_by ? 1 : agg_infos.size(), query_func, module_, context_);
   CHECK(row_func_);
@@ -1096,13 +1114,13 @@ void Executor::compilePlan(
   ir_builder_.SetInsertPoint(bb);
 
   // generate the code for the filter
-  allocateLocalColumnIds(scan_plan);
+  allocateLocalColumnIds(scan_cols);
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(context_), true);
-  for (auto expr : scan_plan->get_simple_quals()) {
+  for (auto expr : simple_quals) {
     filter_lv = ir_builder_.CreateAnd(filter_lv, codegen(expr));
   }
-  for (auto expr : scan_plan->get_quals()) {
+  for (auto expr : quals) {
     filter_lv = ir_builder_.CreateAnd(filter_lv, codegen(expr));
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
@@ -1112,7 +1130,7 @@ void Executor::compilePlan(
       init_agg_vals_.push_back(std::get<2>(agg_info));
     }
     call_aggregators(agg_infos, filter_lv,
-        agg_plan ? agg_plan->get_groupby_list() : std::list<Analyzer::Expr*> {},
+        groupby_list,
         groups_buffer_entry_count, module_);
   }
 
@@ -1352,8 +1370,7 @@ void Executor::call_aggregators(
   ir_builder_.CreateRetVoid();
 }
 
-void Executor::allocateLocalColumnIds(const Planner::Scan* scan_plan) {
-  const auto global_col_ids = scan_plan->get_col_list();
+void Executor::allocateLocalColumnIds(const std::list<int>& global_col_ids) {
   for (const int col_id : global_col_ids) {
     const auto local_col_id = global_to_local_col_ids_.size();
     const auto it_ok = global_to_local_col_ids_.insert(std::make_pair(col_id, local_col_id));
