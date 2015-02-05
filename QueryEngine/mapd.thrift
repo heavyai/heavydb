@@ -1,23 +1,23 @@
-enum DatumType {
+enum TDatumType {
   INT,
   REAL,
   STR
 }
 
-union Datum {
-  1: DatumType type,
+union TDatum {
+  1: TDatumType type,
   2: i64 int_val,
   3: double real_val,
   4: string str_val
 }
 
-typedef list<Datum> ResultRow
-typedef list<ResultRow> ResultRowSet
-typedef list<string> ResultProjNames
+typedef list<TDatum> TResultRow
+typedef list<TResultRow> TResultRowSet
+typedef list<string> TResultProjNames
 
 struct QueryResult {
-  1: ResultProjNames proj_names
-  2: ResultRowSet rows
+  1: TResultProjNames proj_names
+  2: TResultRowSet rows
 }
 
 service MapD {
