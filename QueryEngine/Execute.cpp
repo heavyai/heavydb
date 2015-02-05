@@ -649,6 +649,13 @@ private:
   std::vector<int8_t*> column_buffers_;
 };
 
+std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
+    const size_t in_col_count,
+    const size_t agg_col_count,
+    llvm::Function* query_func,
+    llvm::Module* module,
+    llvm::LLVMContext& context);
+
 }
 
 std::vector<ResultRow> Executor::executeResultPlan(
@@ -666,9 +673,17 @@ std::vector<ResultRow> Executor::executeResultPlan(
     CHECK(target_var);
     CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
   }
-  ColumnarResults result_columns(result_rows, agg_plan->get_targetlist().size());
+  const size_t in_col_count { agg_plan->get_targetlist().size() };
+  const size_t in_agg_count { targets.size() };
+  ColumnarResults result_columns(result_rows, in_col_count);
+  std::vector<llvm::Value*> col_heads;
+  llvm::Function* row_func;
+  auto query_func = query_template(module_, in_agg_count);
+  std::tie(row_func, col_heads) = create_row_function(
+    in_col_count, in_agg_count, query_func, module_, context_);
+  CHECK(row_func);
   for (auto expr : result_plan->get_quals()) {
-    codegen(expr);
+    expr->print();
   }
   CHECK(false);
   return result_rows;
@@ -977,16 +992,14 @@ const Planner::Scan* get_scan(const Planner::AggPlan* agg_plan) {
 }
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
-    const Planner::Scan* scan_plan,
+    const size_t in_col_count,
     const size_t agg_col_count,
     llvm::Function* query_func,
     llvm::Module* module,
     llvm::LLVMContext& context) {
   // Generate the function signature and column head fetches s.t.
   // double indirection isn't needed in the inner loop
-  const auto& col_global_ids = scan_plan->get_col_list();
-
-  auto col_heads = generate_column_heads_load(col_global_ids.size(), query_func);
+  auto col_heads = generate_column_heads_load(in_col_count, query_func);
 
   std::vector<llvm::Type*> row_process_arg_types;
   for (size_t i = 0; i < agg_col_count; ++i) {
@@ -1066,8 +1079,9 @@ void Executor::compileAggScanPlan(
 
   std::vector<llvm::Value*> col_heads;
   auto scan_plan = get_scan(agg_plan);
+  const auto& scan_cols = scan_plan->get_col_list();
   std::tie(row_func_, col_heads) = create_row_function(
-    scan_plan, is_group_by ? 1 : agg_infos.size(), query_func, module_, context_);
+    scan_cols.size(), is_group_by ? 1 : agg_infos.size(), query_func, module_, context_);
   CHECK(row_func_);
 
   // make sure it's in-lined, we don't want register spills in the inner loop

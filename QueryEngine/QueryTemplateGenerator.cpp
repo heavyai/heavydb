@@ -21,13 +21,13 @@ llvm::Function* pos_start(llvm::Module* mod) {
     /*isVarArg=*/false);
 
   auto func_pos_start = mod->getFunction("pos_start");
-  CHECK(!func_pos_start);
-
-  func_pos_start = Function::Create(
-    /*Type=*/FuncTy_7,
-    /*Linkage=*/GlobalValue::ExternalLinkage,
-    /*Name=*/"pos_start", mod); // (external, no body)
-  func_pos_start->setCallingConv(CallingConv::C);
+  if (!func_pos_start) {
+    func_pos_start = Function::Create(
+      /*Type=*/FuncTy_7,
+      /*Linkage=*/GlobalValue::ExternalLinkage,
+      /*Name=*/"pos_start", mod); // (external, no body)
+    func_pos_start->setCallingConv(CallingConv::C);
+  }
 
   AttributeSet func_pos_start_PAL;
   {
@@ -56,13 +56,13 @@ llvm::Function* pos_step(llvm::Module* mod) {
     /*isVarArg=*/false);
 
   auto func_pos_step = mod->getFunction("pos_step");
-  CHECK(!func_pos_step);
-
-  func_pos_step = Function::Create(
-    /*Type=*/FuncTy_7,
-    /*Linkage=*/GlobalValue::ExternalLinkage,
-    /*Name=*/"pos_step", mod); // (external, no body)
-  func_pos_step->setCallingConv(CallingConv::C);
+  if (!func_pos_step) {
+    func_pos_step = Function::Create(
+      /*Type=*/FuncTy_7,
+      /*Linkage=*/GlobalValue::ExternalLinkage,
+      /*Name=*/"pos_step", mod); // (external, no body)
+    func_pos_step->setCallingConv(CallingConv::C);
+  }
 
   AttributeSet func_pos_step_PAL;
   {
@@ -96,7 +96,9 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count) {
     /*Params=*/FuncTy_5_args,
     /*isVarArg=*/false);
 
-  auto func_row_process = mod->getFunction("row_process");
+  char row_process_name[128];
+  snprintf(row_process_name, sizeof(row_process_name), "row_process_%ld", aggr_col_count);
+  auto func_row_process = mod->getFunction(row_process_name);
   CHECK(!func_row_process);
 
   func_row_process = Function::Create(
