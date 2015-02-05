@@ -11,8 +11,8 @@
 #include <cassert>
 #include "boost/filesystem.hpp"
 #include "Catalog.h"
-#include "../Partitioner/Partitioner.h"
-#include "../Partitioner/InsertOrderTablePartitioner.h"
+#include "../Fragmenter/Fragmenter.h"
+#include "../Fragmenter/InsertOrderFragmenter.h"
 
 using std::runtime_error;
 using std::string;
@@ -20,8 +20,8 @@ using std::map;
 using std::list;
 using std::pair;
 using std::vector;
-using Partitioner_Namespace::ColumnInfo;
-using Partitioner_Namespace::InsertOrderTablePartitioner;
+using Fragmenter_Namespace::ColumnInfo;
+using Fragmenter_Namespace::InsertOrderFragmenter;
 
 namespace Catalog_Namespace {
 
@@ -175,8 +175,8 @@ Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMe
 Catalog::~Catalog() {
     // must clean up heap-allocated TableDescriptor and ColumnDescriptor structs
     for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin(); tableDescIt != tableDescriptorMap_.end(); ++tableDescIt) {
-				if (tableDescIt->second->partitioner != nullptr)
-					delete tableDescIt->second->partitioner;
+				if (tableDescIt->second->fragmenter != nullptr)
+					delete tableDescIt->second->fragmenter;
         delete tableDescIt -> second;
 		}
 
@@ -199,7 +199,7 @@ void Catalog::buildMaps() {
 				td->nColumns = sqliteConnector_.getData<int>(r,2);
         td->isView = sqliteConnector_.getData<bool>(r, 3);
 				td->fragments = sqliteConnector_.getData<string>(r, 4);
-				td->fragType = (Partitioner_Namespace::PartitionerType)sqliteConnector_.getData<int>(r, 5);
+				td->fragType = (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(r, 5);
 				td->maxFragRows = sqliteConnector_.getData<int>(r, 6);
 				td->fragPageSize = sqliteConnector_.getData<int>(r, 7);
 				td->partitions = sqliteConnector_.getData<string>(r, 8);
@@ -210,7 +210,7 @@ void Catalog::buildMaps() {
 					td->refreshOption = kMANUAL;
 					td->checkOption = false;
 					td->isReady = true;
-					td->partitioner = nullptr;
+					td->fragmenter = nullptr;
 				} 
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
@@ -246,7 +246,7 @@ void Catalog::buildMaps() {
 				td->storageOption = (StorageOption)sqliteConnector_.getData<int>(r,3);
 				td->refreshOption = (ViewRefreshOption)sqliteConnector_.getData<int>(r,4);
 				td->isReady = !td->isMaterialized;
-				td->partitioner = nullptr;
+				td->fragmenter = nullptr;
     }
 }
 
@@ -277,8 +277,8 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
 	int ncolumns = td->nColumns;
 	tableDescriptorMapById_.erase(tableDescIt);
 	tableDescriptorMap_.erase(tableName);
-	if (td->partitioner != nullptr)
-		delete td->partitioner;
+	if (td->fragmenter != nullptr)
+		delete td->fragmenter;
 	delete td;
 
 	// delete all column descriptors for the table
@@ -294,17 +294,17 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
 }
 
 void
-Catalog::instantiatePartitioner(TableDescriptor *td) const
+Catalog::instantiateFragmenter(TableDescriptor *td) const
 {
-	// instatiion table partitioner upon first use
-	// assume only insert order partitioner is supported
-	assert(td->fragType == Partitioner_Namespace::PartitionerType::INSERT_ORDER);
+	// instatiion table fragmenter upon first use
+	// assume only insert order fragmenter is supported
+	assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
 	vector<ColumnInfo> columnInfoVec;
 	list<const ColumnDescriptor *> columnDescs;
 	getAllColumnMetadataForTable(td, columnDescs);
 	ColumnInfo::translateColumnDescriptorsToColumnInfoVec(columnDescs , columnInfoVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-	td->partitioner = new InsertOrderTablePartitioner(chunkKeyPrefix, columnInfoVec, &dataMgr_, td->maxFragRows, td->fragPageSize);
+	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, columnInfoVec, &dataMgr_, td->maxFragRows, td->fragPageSize);
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {
@@ -313,8 +313,8 @@ const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) c
         return nullptr;
     }
 		TableDescriptor *td = tableDescIt->second;
-		if (td->partitioner == nullptr)
-			instantiatePartitioner(td);
+		if (td->fragmenter == nullptr)
+			instantiateFragmenter(td);
     return td; // returns pointer to table descriptor
 }
 
@@ -324,8 +324,8 @@ const TableDescriptor * Catalog::getMetadataForTable (int tableId) const  {
         return nullptr;
     }
 		TableDescriptor *td = tableDescIt->second;
-		if (td->partitioner == nullptr)
-			instantiatePartitioner(td);
+		if (td->fragmenter == nullptr)
+			instantiateFragmenter(td);
     return td; // returns pointer to table descriptor
 }
 

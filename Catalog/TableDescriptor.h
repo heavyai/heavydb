@@ -4,7 +4,7 @@
 #include <string>
 #include <cstdint>
 #include "../Shared/sqldefs.h"
-#include "../Partitioner/AbstractTablePartitioner.h"
+#include "../Fragmenter/AbstractFragmenter.h"
 
 /**
  * @type TableDescriptor
@@ -20,7 +20,7 @@ struct TableDescriptor {
 		bool isMaterialized;
 		std::string viewSQL;
 		std::string fragments; // placeholder for fragmentation information
-		Partitioner_Namespace::PartitionerType fragType; // fragmentation type. Only INSERT_ORDER is supported now.
+		Fragmenter_Namespace::FragmenterType fragType; // fragmentation type. Only INSERT_ORDER is supported now.
 		int32_t maxFragRows; // max number of rows per fragment
 		int32_t fragPageSize; // page size
 		std::string partitions; // placeholder for distributed partition scheme
@@ -28,7 +28,7 @@ struct TableDescriptor {
 		ViewRefreshOption refreshOption; // only relevant to materialized views
 		bool checkOption; // only relevant to updateable views.  CHECK OPTION
 		bool isReady; // only set at run time when a materialized view is ready to be consumed.  already set to true for tables.
-		Partitioner_Namespace::AbstractTablePartitioner *partitioner; // point to partitioner object for the table.  it's instantiated upon first use.
+		Fragmenter_Namespace::AbstractFragmenter *fragmenter; // point to fragmenter object for the table.  it's instantiated upon first use.
 };
 
 

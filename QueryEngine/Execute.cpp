@@ -1,7 +1,7 @@
 #include "Execute.h"
 #include "Codec.h"
 #include "NvidiaKernel.h"
-#include "Partitioner/Partitioner.h"
+#include "Fragmenter/Fragmenter.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 
@@ -704,36 +704,36 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   CHECK(scan_plan);
   const int table_id = scan_plan->get_table_id();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
-  const auto partitioner = table_descriptor->partitioner;
-  CHECK(partitioner);
-  Partitioner_Namespace::QueryInfo query_info;
-  partitioner->getPartitionsForQuery(query_info);
-  const auto& partitions = query_info.partitions;
+  const auto fragmenter = table_descriptor->fragmenter;
+  CHECK(fragmenter);
+  Fragmenter_Namespace::QueryInfo query_info;
+  fragmenter->getFragmentsForQuery(query_info);
+  const auto& fragments = query_info.fragments;
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
-  std::vector<ResultRows> all_partition_results(partitions.size());
+  std::vector<ResultRows> all_fragment_results(fragments.size());
   std::vector<std::thread> query_threads;
   // MAX_THREADS could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
   const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
-  for (size_t i = 0; i < partitions.size(); ++i) {
-    auto dispatch = [this, agg_plan, current_dbid, device_type, i, table_id, &all_partition_results, &cat, &col_global_ids, &partitions]() {
-      const auto& partition = partitions[i];
+  for (size_t i = 0; i < fragments.size(); ++i) {
+    auto dispatch = [this, agg_plan, current_dbid, device_type, i, table_id, &all_fragment_results, &cat, &col_global_ids, &fragments]() {
+      const auto& fragment = fragments[i];
       std::vector<const int8_t*> col_buffers(global_to_local_col_ids_.size());
       ResultRows device_results;
-      auto num_rows = static_cast<int64_t>(partition.numTuples);
+      auto num_rows = static_cast<int64_t>(fragment.numTuples);
       for (const int col_id : col_global_ids) {
-        auto chunk_meta_it = partition.chunkMetadataMap.find(col_id);
-        CHECK(chunk_meta_it != partition.chunkMetadataMap.end());
-        ChunkKey chunk_key { current_dbid, table_id, col_id, partition.partitionId };
+        auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+        CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+        ChunkKey chunk_key { current_dbid, table_id, col_id, fragment.fragmentId };
         const auto memory_level = device_type == ExecutorDeviceType::GPU
           ? Data_Namespace::GPU_LEVEL
           : Data_Namespace::CPU_LEVEL;
         auto ab = cat.get_dataMgr().getChunk(
           chunk_key,
           memory_level,
-          partition.deviceIds[static_cast<int>(memory_level)],
+          fragment.deviceIds[static_cast<int>(memory_level)],
           chunk_meta_it->second.numBytes);
         CHECK(ab->getMemoryPtr());
         auto it = global_to_local_col_ids_.find(col_id);
@@ -751,7 +751,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           device_type, cat, col_buffers, num_rows);
       }
       reduce_mutex_.lock();
-      all_partition_results.push_back(device_results);
+      all_fragment_results.push_back(device_results);
       reduce_mutex_.unlock();
     };
     if (cat.get_dataMgr().gpusPresent()) {
@@ -771,7 +771,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   for (auto& child : query_threads) {
     child.join();
   }
-  return reduceMultiDeviceResults(all_partition_results);
+  return reduceMultiDeviceResults(all_fragment_results);
 }
 
 void Executor::executePlanWithoutGroupBy(
@@ -897,7 +897,7 @@ void Executor::executeSimpleInsert() {
     col_ids.push_back(col_id);
   }
   size_t col_idx = 0;
-  Partitioner_Namespace::InsertData insert_data;
+  Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = cat.get_currentDB().dbId;
   insert_data.tableId = table_id;
   for (auto target_entry : targets) {
@@ -935,7 +935,7 @@ void Executor::executeSimpleInsert() {
   }
   insert_data.numRows = 1;
   const auto table_descriptor = cat.getMetadataForTable(table_id);
-  table_descriptor->partitioner->insertData(insert_data);
+  table_descriptor->fragmenter->insertData(insert_data);
   cat.get_dataMgr().checkpoint();
   for (const auto kv : col_buffers) {
     free(kv.second);

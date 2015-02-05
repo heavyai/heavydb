@@ -1,5 +1,5 @@
-#ifndef PARTITIONER_PARTITIONER_H
-#define PARTITIONER_PARTITIONER_H
+#ifndef FRAGMENTER_H
+#define FRAGMENTER_H
 
 #include <map>
 #include <vector>
@@ -12,15 +12,15 @@ namespace Data_Namespace {
     class AbstractBuffer;
 }
 
-namespace Partitioner_Namespace {
+namespace Fragmenter_Namespace {
     
     /**
-     * @enum PartitionerType
+     * @enum FragmenterType
      * stores the type of a child class of
-     * AbstractTablePartitioner
+     * AbstractTableFragmenter
      */
     
-    enum PartitionerType {
+    enum FragmenterType {
         INSERT_ORDER = 0 // these values persist in catalog.  make explicit
     };
     
@@ -28,7 +28,7 @@ namespace Partitioner_Namespace {
      * @type ColumnInfo
      * @brief data structure to store id, type, bitsize
      * and insert buffer (if applicable) of a given column
-     * managed by the partitioner
+     * managed by the fragmenter
      */
 
     struct ColumnInfo {
@@ -43,7 +43,7 @@ namespace Partitioner_Namespace {
     };
     /**
      * @struct InsertData
-     * @brief The data to be inserted using the partition manager.
+     * @brief The data to be inserted using the fragment manager.
      *
      * The data being inserted is assumed to be in columnar format, and so the offset
      * to the beginning of each column can be calculated by multiplying the column size
@@ -62,39 +62,39 @@ namespace Partitioner_Namespace {
     };
    
     /**
-     * @struct PartitionInfo
-     * @brief Used by Partitioner classes to store info about each
-     * partition - the partition id and number of tuples(rows)
-     * currently stored by that partition
+     * @struct FragmentInfo
+     * @brief Used by Fragmenter classes to store info about each
+     * fragment - the fragment id and number of tuples(rows)
+     * currently stored by that fragment
      */
     
-    struct PartitionInfo {
-        //std::vector<int>partitionKeys;
-        int partitionId;
+    struct FragmentInfo {
+        //std::vector<int>fragmentKeys;
+        int fragmentId;
         size_t numTuples;
         size_t shadowNumTuples;
         std::vector<int> deviceIds;
         std::map <int, ChunkMetadata> chunkMetadataMap; 
         std::map <int, ChunkMetadata> shadowChunkMetadataMap; 
 
-        PartitionInfo(): partitionId(-1), numTuples(0),shadowNumTuples(0) {}
+        FragmentInfo(): fragmentId(-1), numTuples(0),shadowNumTuples(0) {}
     };
     
     /**
      * @struct QueryInfo
-     * @brief returned by Partitioner classes in
-     * getPartitionsForQuery - tells Executor which
-     * partitions to scan from which partitioner
-     * (partitioner id and partition id needed for building
+     * @brief returned by Fragmenter classes in
+     * getFragmentsForQuery - tells Executor which
+     * fragments to scan from which fragmenter
+     * (fragmenter id and fragment id needed for building
      * ChunkKey)
      */
     
     struct QueryInfo {
         std::vector <int> chunkKeyPrefix; 
-        std::vector<PartitionInfo> partitions;
+        std::vector<FragmentInfo> fragments;
         size_t numTuples;
     };
    
-} // Partitioner_Namespace
+} // Fragmenter_Namespace
 
-#endif // DATAMGR_PARTITIONER_PARTITIONER_H
+#endif // FRAGMENTER_H

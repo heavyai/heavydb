@@ -1,30 +1,30 @@
 /**
- * @file    AbstractTablePartitioner.h
+ * @file    AbstractFragmenter.h
  * @author  Todd Mostak <todd@map-d.com
  */
 
-#ifndef _ABSTRACT_TABLE_PARTITIONER_H
-#define _ABSTRACT_TABLE_PARTITIONER_H
+#ifndef _ABSTRACT_FRAGMENTER_H
+#define _ABSTRACT_FRAGMENTER_H
 
 #include "../Shared/sqltypes.h"
-#include "Partitioner.h"
+#include "Fragmenter.h"
 #include <vector>
 #include <string>
 
-// Should the ColumnInfo and PartitionInfo structs be in
-// AbstractTablePartitioner?
+// Should the ColumnInfo and FragmentInfo structs be in
+// AbstractFragmenter?
 
 namespace Data_Namespace {
     class AbstractBuffer;
     class AbstractDataMgr;
 };
 
-namespace Partitioner_Namespace {
+namespace Fragmenter_Namespace {
 
 
 
 /*
- * @type AbstractTablePartitioner
+ * @type AbstractFragmenter
  * @brief abstract base class for all table partitioners
  *
  * The virtual methods of this class provide an interface
@@ -34,10 +34,10 @@ namespace Partitioner_Namespace {
  * partitioner that must be queried given a predicate
  */
 
-class AbstractTablePartitioner { 
+class AbstractFragmenter { 
 
     public:
-        virtual ~AbstractTablePartitioner() {}
+        virtual ~AbstractFragmenter() {}
 
         /**
          * @brief Should get the partitions(fragments) 
@@ -47,8 +47,8 @@ class AbstractTablePartitioner {
          * keeps. May also prune the predicate.
          */
 
-        //virtual void getPartitionsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
-        virtual void getPartitionsForQuery(QueryInfo &queryInfo) = 0;
+        //virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
+        virtual void getFragmentsForQuery(QueryInfo &queryInfo) = 0;
 
         /**
          * @brief Given data wrapped in an InsertData struct,
@@ -60,17 +60,17 @@ class AbstractTablePartitioner {
         /**
          * @brief Gets the id of the partitioner
          */
-        virtual int getPartitionerId() = 0;
+        virtual int getFragmenterId() = 0;
 
         /**
          * @brief Gets the string type of the partitioner
          * @todo have a method returning the enum type?
          */
 
-        virtual std::string getPartitionerType() = 0;
+        virtual std::string getFragmenterType() = 0;
 
 };
 
-} // Partitioner_Namespace
+} // Fragmenter_Namespace
 
-#endif // _ABSTRACT_TABLE_PARTITIONER 
+#endif // _ABSTRACT_FRAGMENTER_H

@@ -13,7 +13,7 @@
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
 #include "../Planner/Planner.h"
-#include "../Partitioner/InsertOrderTablePartitioner.h"
+#include "../Fragmenter/InsertOrderFragmenter.h"
 #include "parser.h"
 
 namespace Parser {
@@ -1175,8 +1175,8 @@ namespace Parser {
 		td.refreshOption = kMANUAL;
 		td.checkOption = false;
 		td.isReady = true;
-		td.partitioner = nullptr;
-		td.fragType = Partitioner_Namespace::PartitionerType::INSERT_ORDER;
+		td.fragmenter = nullptr;
+		td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
 		td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
 		td.fragPageSize = DEFAULT_PAGE_SIZE;
 		if (storage_options != nullptr) {
@@ -1290,8 +1290,8 @@ namespace Parser {
 		td.storageOption = matview_storage;
 		td.refreshOption = matview_refresh;
 		td.isReady = !is_materialized;
-		td.partitioner = nullptr;
-		td.fragType = Partitioner_Namespace::PartitionerType::INSERT_ORDER;
+		td.fragmenter = nullptr;
+		td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
 		td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
 		td.fragPageSize = DEFAULT_PAGE_SIZE;
 		catalog.createTable(td, columns);

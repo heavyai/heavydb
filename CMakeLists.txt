@@ -22,7 +22,7 @@ ADD_SUBDIRECTORY    (Planner)
 ADD_SUBDIRECTORY    (QueryEngine)
 ADD_SUBDIRECTORY    (DataMgr)
 ADD_SUBDIRECTORY    (CudaMgr)
-ADD_SUBDIRECTORY    (Partitioner)
+ADD_SUBDIRECTORY    (Fragmenter)
 ADD_SUBDIRECTORY    (Tests)
 
 set(mapd_source_files main.cpp)
@@ -34,5 +34,5 @@ add_executable(initdb ${initdb_source_files})
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Partitioner ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (initdb Catalog SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )

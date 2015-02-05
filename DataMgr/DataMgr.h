@@ -31,7 +31,7 @@ namespace Data_Namespace {
         friend class FileMgr; 
 
         public:
-            DataMgr(const int partitionKeyIndex, const std::string &dataDir);
+            DataMgr(const int fragmentKeyIndex, const std::string &dataDir);
             ~DataMgr();
             AbstractBuffer * createChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0);
             AbstractBuffer * getChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0,  const size_t numBytes = 0);
@@ -51,7 +51,7 @@ namespace Data_Namespace {
 
             CudaMgr_Namespace::CudaMgr *cudaMgr_;
 
-            // database_id, table_id, partitioner_id, column_id, fragment_id
+            // database_id, table_id, column_id, fragment_id
             std::vector <int> levelSizes_;
 
         private:
@@ -59,7 +59,7 @@ namespace Data_Namespace {
             FRIEND_TEST(DataMgrTest,deletePrefix);
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
-            int partitionKeyIndex_;
+            int fragmentKeyIndex_;
             std::string dataDir_;
             bool hasGpus_;
 

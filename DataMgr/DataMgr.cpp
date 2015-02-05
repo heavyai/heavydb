@@ -18,7 +18,7 @@ using namespace File_Namespace;
 
 namespace Data_Namespace {
 
-    DataMgr::DataMgr(const int partitionKeyIndex, const string &dataDir): partitionKeyIndex_(partitionKeyIndex), dataDir_(dataDir) {
+    DataMgr::DataMgr(const int fragmentKeyIndex, const string &dataDir): fragmentKeyIndex_(fragmentKeyIndex), dataDir_(dataDir) {
         try {
             cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
             hasGpus_ = true;
@@ -65,17 +65,6 @@ namespace Data_Namespace {
             levelSizes_.push_back(1);
         }
     }
-    /*
-    DataMgr::getAllChunkMetaInfo(std::vector<std::pair<ChunkKey,int64_t> > &metadata)  {
-        // needed by TablePartitionerMgr
-        bufferMgrs_[0]->getAllChunkMetaInfo(metadata);
-    }
-    */
-    /*
-    const std::map<ChunkKey, File_Namespace::FileBuffer *> & DataMgr::getChunkMap()  {
-        return reinterpret_cast <File_Namespace::FileMgr *> (bufferMgrs_[0][0])->chunkIndex_;
-    }
-    */
     
     void DataMgr::getChunkMetadataVec(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
         // Can we always assume this will just be at the disklevel bc we just
@@ -89,25 +78,25 @@ namespace Data_Namespace {
 
     AbstractBuffer * DataMgr::createChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId) {
         int level = static_cast <int> (memoryLevel);
-        //int device = key[partitionKeyIndex_] % levelSizes_[level];
+        //int device = key[fragmentKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][deviceId]->createChunk(key);
     }
 
     AbstractBuffer * DataMgr::getChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
-        //int device = key[partitionKeyIndex_] % levelSizes_[level];
+        //int device = key[fragmentKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][deviceId]->getChunk(key, numBytes);
     }
 
     void DataMgr::deleteChunk(const ChunkKey &key) {
         // We don't know whether a given manager (of
-        // correct partition key) actually has a chunk at
+        // correct fragment key) actually has a chunk at
         // a given point. So try-except block a delete to
         // all of them.  Will change if we have DataMgr
         // keep track of this state
         int numLevels = bufferMgrs_.size();
         for (int level = numLevels - 1; level >= 0; --level) {
-            int device = key[partitionKeyIndex_] % levelSizes_[level];
+            int device = key[fragmentKeyIndex_] % levelSizes_[level];
             try {
                 bufferMgrs_[level][device]->deleteChunk(key);
             }

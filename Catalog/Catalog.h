@@ -102,7 +102,7 @@ class Catalog {
          * data directory for writing
          * @param basePath directory path for writing catalog 
 				 * @param dbName name of the database
-				 * @param partitioner TablePartitionerMgr object
+				 * @param fragmenter Fragmenter object
          * metadata - expects for this directory to already exist
          */
 
@@ -154,7 +154,7 @@ class Catalog {
         void buildMaps();
         void addTableToMap(TableDescriptor &td, const std::list<ColumnDescriptor> &columns);
         void removeTableFromMap(const std::string &tableName, int tableId);
-				void instantiatePartitioner(TableDescriptor *td) const;
+				void instantiateFragmenter(TableDescriptor *td) const;
 				void getAllColumnMetadataForTable(const TableDescriptor *td, std::list<const ColumnDescriptor *> &colDescs) const;
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
