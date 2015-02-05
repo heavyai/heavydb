@@ -279,6 +279,11 @@ TEST(Select, FilterAndGroupByMultipleAgg) {
   }
 }
 
+TEST(Select, Having) {
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING MAX(x) < 100;", ExecutorDeviceType::CPU)), 42);
+  ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(y) FROM test WHERE x > 7 GROUP BY z HAVING MAX(x) < 100;", ExecutorDeviceType::CPU)), 43);
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);

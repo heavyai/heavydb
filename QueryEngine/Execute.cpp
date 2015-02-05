@@ -791,6 +791,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
+  // TOOD(alex): the group by list shouldn't be target_exprs; will fix soon
   compilePlan(agg_infos, target_exprs, pseudo_scan_cols, {}, result_plan->get_quals(),
     device_type, opt_level, groups_buffer_entry_count_);
   auto column_buffers = result_columns.getColumnBuffers();
@@ -799,7 +800,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
   init_groups(group_by_buffer, groups_buffer_entry_count_, target_exprs.size(), &init_agg_vals[0], 1);
   std::vector<int64_t*> group_by_buffers { group_by_buffer };
-  auto out_vec = launch_query_cpu_code(query_cpu_code_, column_buffers, result_columns.size(),
+  launch_query_cpu_code(query_cpu_code_, column_buffers, result_columns.size(),
     init_agg_vals, group_by_buffers);
   return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs);
 }
