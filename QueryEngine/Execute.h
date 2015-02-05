@@ -82,7 +82,6 @@ private:
   llvm::Value* codegen(const Analyzer::Expr*) const;
   llvm::Value* codegen(const Analyzer::BinOper*) const;
   llvm::Value* codegen(const Analyzer::UOper*) const;
-  llvm::Value* codegen(const Analyzer::Var*) const;
   llvm::Value* codegen(const Analyzer::ColumnVar*) const;
   llvm::Value* codegen(const Analyzer::Constant*) const;
   llvm::Value* codegenCmp(const Analyzer::BinOper*) const;
@@ -110,6 +109,11 @@ private:
     const int64_t num_rows);
   typedef std::vector<ResultRow> ResultRows;
   static ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
+  ResultRows groupBufferToResults(
+    const int64_t* group_by_buffer,
+    const size_t group_by_col_count,
+    const size_t agg_col_count,
+    const std::list<Analyzer::Expr*>& target_exprs);
   void executePlanWithoutGroupBy(
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
@@ -127,6 +131,7 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const size_t groups_buffer_entry_count);
+  void nukeOldState();
   void* optimizeAndCodegenCPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
   CUfunction optimizeAndCodegenGPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
   void call_aggregators(

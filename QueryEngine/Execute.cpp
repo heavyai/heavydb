@@ -21,6 +21,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <nvvm.h>
 
+#include <algorithm>
 #include <numeric>
 #include <thread>
 #include <unistd.h>
@@ -96,10 +97,6 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
   auto u_oper = dynamic_cast<const Analyzer::UOper*>(expr);
   if (u_oper) {
     return codegen(u_oper);
-  }
-  auto var = dynamic_cast<const Analyzer::Var*>(expr);
-  if (var) {
-    return codegen(var);
   }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
@@ -201,18 +198,19 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 
 }  // namespace
 
-llvm::Value* Executor::codegen(const Analyzer::Var* var) const {
-  if (var->get_rte_idx() >= 0) {
-    CHECK(var->get_column_id() > 0);
-    return codegen(static_cast<const Analyzer::ColumnVar*>(var));
-  }
-  CHECK(false);
-}
-
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
   // only generate the decoding code once; if a column has been previously
   // fetch in the generated IR, we'll reuse it
-  const int local_col_id = getLocalColumnId(col_var->get_column_id());
+  auto col_id = col_var->get_column_id();
+  if (col_var->get_rte_idx() >= 0) {
+    CHECK_GT(col_id, 0);
+  } else {
+    CHECK_EQ(col_id, 0);
+    const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
+    CHECK(var);
+    col_id = var->get_varno();
+  }
+  const int local_col_id = getLocalColumnId(col_id);
   auto it = fetch_cache_.find(local_col_id);
   if (it != fetch_cache_.end()) {
     return it->second;
@@ -628,16 +626,55 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
   return reduced_results_vec;
 }
 
+Executor::ResultRows Executor::groupBufferToResults(
+    const int64_t* group_by_buffer,
+    const size_t group_by_col_count,
+    const size_t agg_col_count,
+    const std::list<Analyzer::Expr*>& target_exprs) {
+  std::vector<ResultRow> results;
+  for (size_t i = 0; i < groups_buffer_entry_count_; ++i) {
+    const size_t key_off = (group_by_col_count + agg_col_count) * i;
+    if (group_by_buffer[key_off] != EMPTY_KEY) {
+      size_t out_vec_idx = 0;
+      ResultRow result_row;
+      for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
+        const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
+        CHECK_NE(key_comp, EMPTY_KEY);
+        result_row.value_tuple_.push_back(key_comp);
+      }
+      for (const auto target_expr : target_exprs) {
+        const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+        const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kCOUNT;  // kCOUNT is a meaningless placeholder here
+        result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
+        result_row.agg_types_.push_back(agg_type);
+        if (agg_expr && agg_type == kAVG) {
+          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
+          out_vec_idx += 2;
+        } else {
+          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+          ++out_vec_idx;
+        }
+      }
+      results.push_back(result_row);
+    }
+  }
+  return results;
+}
+
 namespace {
 
 class ColumnarResults {
 public:
-  ColumnarResults(const std::vector<ResultRow>& rows, const size_t num_columns)
+  ColumnarResults(const std::vector<ResultRow>& rows,
+                  const size_t num_columns,
+                  const std::vector<SQLTypes>& target_types)
     : column_buffers_(num_columns)
     , num_rows_(rows.size()) {
     column_buffers_.resize(num_columns);
     for (size_t i = 0; i < num_columns; ++i) {
-      column_buffers_[i] = static_cast<int8_t*>(malloc(num_rows_ * sizeof(int64_t)));
+      column_buffers_[i] = static_cast<const int8_t*>(
+        malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
     }
     for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
       const auto& row = rows[row_idx];
@@ -646,23 +683,23 @@ public:
         const auto& col_val = row.agg_result(i);
         auto p = boost::get<int64_t>(&col_val);
         CHECK(p);
-        reinterpret_cast<int64_t*>(column_buffers_[i])[row_idx] = *p;
+        ((int64_t*) column_buffers_[i])[row_idx] = *p;
       }
     }
   }
   ~ColumnarResults() {
     for (const auto column_buffer : column_buffers_) {
-      free(column_buffer);
+      free((void*) column_buffer);
     }
   }
-  const std::vector<int8_t*>& getColumnBuffers() const {
+  const std::vector<const int8_t*>& getColumnBuffers() const {
     return column_buffers_;
   }
   const size_t size() const {
     return num_rows_;
   }
 private:
-  std::vector<int8_t*> column_buffers_;
+  std::vector<const int8_t*> column_buffers_;
   const size_t num_rows_;
 };
 
@@ -722,26 +759,22 @@ std::vector<ResultRow> Executor::executeResultPlan(
   auto result_rows = executeAggScanPlan(agg_plan, device_type, opt_level, cat);
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
-  printf("Targets      :\n");
-  printf("==============\n");
   std::vector<AggInfo> agg_infos;
   for (auto target_entry : targets) {
     auto target_var = dynamic_cast<Analyzer::Var*>(target_entry->get_expr());
     CHECK(target_var);
-    target_var->print();
-    printf("\n");
     agg_infos.emplace_back("agg_id", target_var, 0);
     CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
   }
-  const size_t in_col_count { agg_plan->get_targetlist().size() };
+  const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
   const size_t in_agg_count { targets.size() };
-  printf("Input columns:\n");
-  printf("==============\n");
+  std::vector<SQLTypes> target_types;
+  std::vector<int64_t> init_agg_vals(in_col_count);
   for (auto in_col : agg_plan->get_targetlist()) {
-    in_col->get_expr()->print();
-    printf("\n");
+    // TODO(alex): make sure the compression is going to be set properly
+    target_types.push_back(in_col->get_expr()->get_type_info().type);
   }
-  ColumnarResults result_columns(result_rows, in_col_count);
+  ColumnarResults result_columns(result_rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
   llvm::Function* row_func;
   // Nested query, increment the query id
@@ -750,22 +783,25 @@ std::vector<ResultRow> Executor::executeResultPlan(
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, query_func, module_, context_);
   CHECK(row_func);
-  printf("Qualifiers   :\n");
-  printf("==============\n");
-  for (auto expr : result_plan->get_quals()) {
-    expr->print();
-    printf("\n");
-  }
   std::list<Analyzer::Expr*> target_exprs;
   for (auto target_entry : targets) {
     target_exprs.push_back(target_entry->get_expr());
   }
-  compilePlan(agg_infos, target_exprs, {}, {}, result_plan->get_quals(),
+  std::list<int> pseudo_scan_cols;
+  for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
+    pseudo_scan_cols.push_back(pseudo_col);
+  }
+  compilePlan(agg_infos, target_exprs, pseudo_scan_cols, {}, result_plan->get_quals(),
     device_type, opt_level, groups_buffer_entry_count_);
-  const auto& column_buffers = result_columns.getColumnBuffers();
+  auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
-  CHECK(false);
-  return result_rows;
+  const size_t groups_buffer_size { (target_exprs.size() + 1) * groups_buffer_entry_count_ * sizeof(int64_t) };
+  auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
+  init_groups(group_by_buffer, groups_buffer_entry_count_, target_exprs.size(), &init_agg_vals[0], 1);
+  std::vector<int64_t*> group_by_buffers { group_by_buffer };
+  auto out_vec = launch_query_cpu_code(query_cpu_code_, column_buffers, result_columns.size(),
+    init_agg_vals, group_by_buffers);
+  return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs);
 }
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
@@ -925,32 +961,11 @@ void Executor::executePlanWithGroupBy(
     // TODO(alex): enable GPU support
     CHECK(false);
   }
-  for (size_t i = 0; i < groups_buffer_entry_count_; ++i) {
-    const size_t key_off = (group_by_col_count + agg_col_count) * i;
-    if (group_by_buffer[key_off] != EMPTY_KEY) {
-      size_t out_vec_idx = 0;
-      ResultRow result_row;
-      for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
-        const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
-        CHECK_NE(key_comp, EMPTY_KEY);
-        result_row.value_tuple_.push_back(key_comp);
-      }
-      for (const auto target_expr : target_exprs) {
-        const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-        const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kCOUNT;  // kCOUNT is a meaningless placeholder here
-        result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
-        result_row.agg_types_.push_back(agg_type);
-        if (agg_expr && agg_type == kAVG) {
-          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
-          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
-          out_vec_idx += 2;
-        } else {
-          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
-          ++out_vec_idx;
-        }
-      }
-      results.push_back(result_row);
-    }
+  {
+    // TODO(alex): get rid of std::list everywhere
+    std::list<Analyzer::Expr*> target_exprs_list;
+    std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
+    results = groupBufferToResults(group_by_buffer, group_by_col_count, agg_col_count, target_exprs_list);
   }
   free(group_by_buffer);
 }
@@ -1102,6 +1117,25 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
 }  // namespace
 
+void Executor::nukeOldState() {
+  {
+    decltype(fetch_cache_) empty;
+    fetch_cache_.swap(empty);
+  }
+  {
+    decltype(local_to_global_col_ids_) empty;
+    local_to_global_col_ids_.swap(empty);
+  }
+  {
+    decltype(global_to_local_col_ids_) empty;
+    global_to_local_col_ids_.swap(empty);
+  }
+  {
+    decltype(init_agg_vals_) empty;
+    init_agg_vals_.swap(empty);
+  }
+}
+
 void Executor::compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
@@ -1111,6 +1145,9 @@ void Executor::compilePlan(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const size_t groups_buffer_entry_count) {
+  // nuke the old state
+  // TODO(alex): separate the compiler from the executor instead
+  nukeOldState();
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
