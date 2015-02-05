@@ -634,7 +634,7 @@ public:
         const auto& col_val = row.agg_result(i);
         auto p = boost::get<int64_t>(&col_val);
         CHECK(p);
-        column_buffers_[i][row_idx] = *p;
+        reinterpret_cast<int64_t*>(column_buffers_[i])[row_idx] = *p;
       }
     }
   }
