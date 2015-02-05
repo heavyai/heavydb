@@ -32,7 +32,8 @@ Executor::Executor(const Planner::RootPlan* root_plan)
   , module_(nullptr)
   , ir_builder_(context_)
   , execution_engine_(nullptr)
-  , row_func_(nullptr) {
+  , row_func_(nullptr)
+  , query_id_(0) {
   CHECK(root_plan_);
 }
 
@@ -678,7 +679,9 @@ std::vector<ResultRow> Executor::executeResultPlan(
   ColumnarResults result_columns(result_rows, in_col_count);
   std::vector<llvm::Value*> col_heads;
   llvm::Function* row_func;
-  auto query_func = query_template(module_, in_agg_count);
+  // Nested query, increment the query id
+  ++query_id_;
+  auto query_func = query_template(module_, in_agg_count, query_id_);
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, query_func, module_, context_);
   CHECK(row_func);
@@ -1072,8 +1075,8 @@ void Executor::compileAggScanPlan(
   auto agg_infos = get_agg_name_and_exprs(agg_plan);
   const bool is_group_by = !agg_plan->get_groupby_list().empty();
   auto query_func = is_group_by
-    ? query_group_by_template(module_, 1)
-    : query_template(module_, agg_infos.size());
+    ? query_group_by_template(module_, 1, query_id_)
+    : query_template(module_, agg_infos.size(), query_id_);
   bind_pos_placeholders("pos_start", query_func, module_);
   bind_pos_placeholders("pos_step", query_func, module_);
 
@@ -1116,7 +1119,7 @@ void Executor::compileAggScanPlan(
       continue;
     }
     auto& filter_call = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(filter_call.getCalledFunction()->getName()) == "row_process") {
+    if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", query_id_)) {
       std::vector<llvm::Value*> args;
       for (size_t i = 0; i < filter_call.getNumArgOperands(); ++i) {
         args.push_back(filter_call.getArgOperand(i));

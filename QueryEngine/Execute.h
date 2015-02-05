@@ -16,6 +16,7 @@
 #include <llvm/IR/Value.h>
 #include <cuda.h>
 
+#include <atomic>
 #include <chrono>
 #include <unordered_map>
 
@@ -148,6 +149,7 @@ private:
   std::vector<int> local_to_global_col_ids_;
   const size_t groups_buffer_entry_count_ { 2048 };
   boost::mutex reduce_mutex_;
+  std::atomic<int32_t> query_id_;
 };
 
 template<typename TimeT = std::chrono::milliseconds>

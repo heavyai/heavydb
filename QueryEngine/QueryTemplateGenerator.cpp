@@ -81,7 +81,7 @@ llvm::Function* pos_step(llvm::Module* mod) {
   return func_pos_step;
 }
 
-llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count) {
+llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, const uint32_t query_id) {
   using namespace llvm;
 
   std::vector<Type*>FuncTy_5_args;
@@ -96,15 +96,14 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count) {
     /*Params=*/FuncTy_5_args,
     /*isVarArg=*/false);
 
-  char row_process_name[128];
-  snprintf(row_process_name, sizeof(row_process_name), "row_process_%ld", aggr_col_count);
+  auto row_process_name = unique_name("row_process", query_id);
   auto func_row_process = mod->getFunction(row_process_name);
   CHECK(!func_row_process);
 
   func_row_process = Function::Create(
     /*Type=*/FuncTy_5,
     /*Linkage=*/GlobalValue::ExternalLinkage,
-    /*Name=*/"row_process", mod); // (external, no body)
+    /*Name=*/row_process_name, mod); // (external, no body)
   func_row_process->setCallingConv(CallingConv::C);
 
   AttributeSet func_row_process_PAL;
@@ -126,14 +125,14 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count) {
 
 }  // namespace
 
-llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
+llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count, const unsigned query_id) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, aggr_col_count);
+  auto func_row_process = row_process(mod, aggr_col_count, query_id);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -153,13 +152,14 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
     /*Params=*/FuncTy_8_args,
     /*isVarArg=*/false);
 
-  auto func_query_template = mod->getFunction("query_template");
+  auto query_template_name = unique_name("query_template", query_id);
+  auto func_query_template = mod->getFunction(query_template_name);
   CHECK(!func_query_template);
 
   func_query_template = Function::Create(
     /*Type=*/FuncTy_8,
     /*Linkage=*/GlobalValue::ExternalLinkage,
-    /*Name=*/"query_template", mod);
+    /*Name=*/query_template_name, mod);
   func_query_template->setCallingConv(CallingConv::C);
 
   AttributeSet func_query_template_PAL;
@@ -314,14 +314,14 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count) {
   return func_query_template;
 }
 
-llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count) {
+llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count, const uint32_t query_id) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, aggr_col_count);
+  auto func_row_process = row_process(mod, aggr_col_count, query_id);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -340,7 +340,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
     /*Params=*/FuncTy_12_args,
     /*isVarArg=*/false);
 
-  auto func_query_group_by_template = mod->getFunction("query_group_by_template");
+  auto query_group_by_template_name = unique_name("query_group_by_template", query_id);
+  auto func_query_group_by_template = mod->getFunction(query_group_by_template_name);
   CHECK(!func_query_group_by_template);
 
   func_query_group_by_template = Function::Create(
@@ -470,4 +471,10 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   delete fwdref_161;
 
   return func_query_group_by_template;
+}
+
+std::string unique_name(const char* base_name, const uint32_t query_id) {
+  char full_name[128] = { 0 };
+  snprintf(full_name, sizeof(full_name), "%s_%u", base_name, query_id);
+  return full_name;
 }
