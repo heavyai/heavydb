@@ -544,7 +544,9 @@ int64_t reduce_results(const SQLAgg agg, const int64_t* out_vec, const size_t ou
 }  // namespace
 
 Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Executor::ResultRows>& results_per_device) {
-  CHECK(!results_per_device.empty());
+  if (results_per_device.empty()) {
+    return {};
+  }
   std::map<
     decltype(results_per_device.front().front().value_tuple()),
     decltype(results_per_device.front().front().agg_results_)
