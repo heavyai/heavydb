@@ -13,8 +13,13 @@ union Datum {
 
 typedef list<Datum> ResultRow
 typedef list<ResultRow> ResultRowSet
+typedef list<string> ResultProjNames
 
+struct QueryResult {
+  1: ResultProjNames proj_names
+  2: ResultRowSet rows
+}
 
 service MapD {
-  ResultRowSet select(1: string query)
+  QueryResult select(1: string query)
 }
