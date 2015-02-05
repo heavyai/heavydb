@@ -118,7 +118,11 @@ private:
   void executeSimpleInsert();
   void executeScanPlan(const Planner::Scan* scan_plan);
   void compilePlan(
-    const Planner::Plan* plan,
+    const std::vector<Executor::AggInfo>& agg_infos,
+    const std::list<Analyzer::Expr*>& groupby_list,
+    const std::list<int>& scan_cols,
+    const std::list<Analyzer::Expr*>& simple_quals,
+    const std::list<Analyzer::Expr*>& quals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const size_t groups_buffer_entry_count);
@@ -130,7 +134,7 @@ private:
     const std::list<Analyzer::Expr*>& group_by_cols,
     const int32_t groups_buffer_entry_count,
     llvm::Module* module);
-  void allocateLocalColumnIds(const Planner::Scan* scan_plan);
+  void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
 
   const Planner::RootPlan* root_plan_;
