@@ -619,13 +619,22 @@ namespace {
 
 class ColumnarResults {
 public:
-  ColumnarResults(const std::vector<ResultRow>& rows) {
+  ColumnarResults(const std::vector<ResultRow>& rows, const size_t num_columns)
+    : column_buffers_(num_columns) {
     const size_t num_rows { rows.size() };
-    CHECK_GT(num_rows, 0);
-    const size_t num_columns { rows.front().size() };
     column_buffers_.resize(num_columns);
     for (size_t i = 0; i < num_columns; ++i) {
       column_buffers_[i] = static_cast<int8_t*>(malloc(num_rows * sizeof(int64_t)));
+    }
+    for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
+      const auto& row = rows[row_idx];
+      CHECK_EQ(row.size(), num_columns);
+      for (size_t i = 0; i < num_columns; ++i) {
+        const auto& col_val = row.agg_result(i);
+        auto p = boost::get<int64_t>(&col_val);
+        CHECK(p);
+        column_buffers_[i][row_idx] = *p;
+      }
     }
   }
   ~ColumnarResults() {
@@ -657,7 +666,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
     CHECK(target_var);
     CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
   }
-  ColumnarResults result_columns(result_rows);
+  ColumnarResults result_columns(result_rows, agg_plan->get_targetlist().size());
   for (auto expr : result_plan->get_quals()) {
     codegen(expr);
   }
