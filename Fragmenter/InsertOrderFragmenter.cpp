@@ -161,7 +161,7 @@ FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::Me
         // shouldn't be evicted between these two statements b/c not sized yet
         colMapIt->second.insertBuffer->pin();
         //cout << "Creating chunk with encodingType: " << colMapIt->second.columnDesc->compression << endl;
-        colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnDesc->columnType.type,colMapIt->second.columnDesc->compression,colMapIt->second.columnDesc->comp_param);
+        colMapIt->second.insertBuffer->initEncoder(colMapIt->second.columnDesc->columnType,colMapIt->second.columnDesc->compression,colMapIt->second.columnDesc->comp_param);
     }
 
     boost::unique_lock < boost::shared_mutex > writeLock (fragmentInfoMutex_);

@@ -16,7 +16,7 @@ namespace Data_Namespace {
 
 class Encoder {
     public: 
-        static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits);
+        static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits);
         Encoder(Data_Namespace::AbstractBuffer * buffer): numElems(0), buffer_(buffer) {
             /*
             metadataTemplate_.sqlType = buffer_ -> sqlType;

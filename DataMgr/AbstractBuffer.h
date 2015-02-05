@@ -30,7 +30,7 @@ namespace Data_Namespace {
     public:
 
         AbstractBuffer (): encoder(0), hasEncoder(0), size_(0),  isDirty_(false),isAppended_(false),isUpdated_(false) {}
-        AbstractBuffer (const SQLTypes sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
+        AbstractBuffer (const SQLTypeInfo sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
         initEncoder(sqlType, encodingType, numEncodingBits);
         }
         virtual ~AbstractBuffer() {}
@@ -75,7 +75,7 @@ namespace Data_Namespace {
             isUpdated_ = false;
             isDirty_ = false;
         }
-        void initEncoder(const SQLTypes tmpSqlType, const EncodingType tmpEncodingType = kENCODING_NONE, const int tmpEncodingBits = 0) {
+        void initEncoder(const SQLTypeInfo tmpSqlType, const EncodingType tmpEncodingType = kENCODING_NONE, const int tmpEncodingBits = 0) {
             hasEncoder = true;
             sqlType = tmpSqlType;
             encodingType = tmpEncodingType;
@@ -97,7 +97,7 @@ namespace Data_Namespace {
 
         Encoder * encoder;
         bool hasEncoder;
-        SQLTypes sqlType;
+        SQLTypeInfo sqlType;
         EncodingType encodingType;
         int encodingBits;
         //EncodedDataType encodedDataType;

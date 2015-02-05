@@ -36,7 +36,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypes sqlType, const EncodingType encodingType, const int encodingBits , const size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits , const size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
         assert(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
@@ -216,14 +216,16 @@ namespace File_Namespace {
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
         fread((int8_t *)&pageSize_,sizeof(size_t),1,f);
         fread((int8_t *)&size_,sizeof(size_t),1,f);
-        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
+        vector <int> typeData (7); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         fread((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         hasEncoder = static_cast <bool> (typeData[0]);
         if (hasEncoder) {
-            sqlType = static_cast<SQLTypes> (typeData[1]);
-            encodingType = static_cast<EncodingType> (typeData[2]);
-            encodingBits = typeData[3]; 
-            //encodedDataType = static_cast<EncodedDataType> (typeData[3]);
+            sqlType.type = static_cast<SQLTypes> (typeData[1]);
+						sqlType.dimension = typeData[2];
+						sqlType.scale = typeData[3];
+						sqlType.notnull = static_cast<bool>(typeData[4]);
+            encodingType = static_cast<EncodingType> (typeData[5]);
+            encodingBits = typeData[6]; 
             initEncoder(sqlType,encodingType,encodingBits);
             encoder->readMetadata(f);
         }
@@ -239,13 +241,15 @@ namespace File_Namespace {
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
         size_t numBytesWritten = fwrite((int8_t *)&pageSize_,sizeof(size_t),1,f);
         numBytesWritten = fwrite((int8_t *)&size_,sizeof(size_t),1,f);
-        vector <int> typeData (4); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
+        vector <int> typeData (7); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         typeData[0] = static_cast<int>(hasEncoder); 
         if (hasEncoder) {
-            typeData[1] = static_cast<int>(sqlType); 
-            typeData[2] = static_cast<int>(encodingType); 
-            typeData[3] = encodingBits; 
-            //typeData[3] = static_cast<int>(encodedDataType); 
+            typeData[1] = static_cast<int>(sqlType.type); 
+            typeData[2] = sqlType.dimension; 
+            typeData[3] = sqlType.scale; 
+            typeData[4] = static_cast<int>(sqlType.notnull); 
+            typeData[5] = static_cast<int>(encodingType); 
+            typeData[6] = encodingBits; 
         }
         numBytesWritten = fwrite((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         if (hasEncoder) { // redundant

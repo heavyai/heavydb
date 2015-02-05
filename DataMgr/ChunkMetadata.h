@@ -10,7 +10,7 @@ struct ChunkStats {
 };
 
 struct ChunkMetadata {
-    SQLTypes sqlType;
+    SQLTypeInfo sqlType;
     EncodingType encodingType;
     int encodingBits;
     size_t numBytes;
@@ -18,7 +18,7 @@ struct ChunkMetadata {
     ChunkStats chunkStats;
 
     template <typename T> void fillChunkStats (const T min, const T max) {
-        switch (sqlType) {
+        switch (sqlType.type) {
             case kSMALLINT: {
                 chunkStats.min.smallintval = min;
                 chunkStats.max.smallintval = max;
@@ -29,7 +29,9 @@ struct ChunkMetadata {
                 chunkStats.max.intval = max;
                 break;
             }
-            case kBIGINT: {
+            case kBIGINT: 
+						case kNUMERIC:
+						case kDECIMAL: {
                 chunkStats.min.bigintval = min;
                 chunkStats.max.bigintval = max;
                 break;
