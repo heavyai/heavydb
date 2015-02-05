@@ -25,6 +25,7 @@
 #include <numeric>
 #include <thread>
 #include <unistd.h>
+#include <set>
 
 
 Executor::Executor(const Planner::RootPlan* root_plan)
@@ -713,34 +714,37 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     llvm::LLVMContext& context);
 
 std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
-  std::vector<std::tuple<std::string, const Analyzer::Expr*, int64_t>> result;
+  std::vector<Executor::AggInfo> result;
   const auto target_exprs = get_agg_target_exprs(agg_plan);
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
-      result.emplace_back("agg_id", target_expr, 0);
+      result.emplace_back("agg_id", target_expr, 0, nullptr);
       continue;
     }
-    CHECK(!agg_expr->get_is_distinct());
     const auto agg_type = agg_expr->get_aggtype();
     const auto agg_init_val = init_agg_val(agg_type);
     switch (agg_type) {
     case kAVG:
-      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
-      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
+      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val, nullptr);
+      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kMIN:
-      result.emplace_back("agg_min", agg_expr->get_arg(), agg_init_val);
+      result.emplace_back("agg_min", agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kMAX:
-      result.emplace_back("agg_max", agg_expr->get_arg(), agg_init_val);
+      result.emplace_back("agg_max", agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kSUM:
-      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val);
+      result.emplace_back("agg_sum", agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kCOUNT:
-      result.emplace_back("agg_count", agg_expr->get_arg(), agg_init_val);
+      result.emplace_back(
+        agg_expr->get_is_distinct() ? "agg_count_distinct" : "agg_count",
+        agg_expr->get_arg(),
+        agg_init_val,
+        agg_expr->get_is_distinct() ? new std::set<int64_t>() : nullptr);
       break;
     default:
       CHECK(false);
@@ -765,7 +769,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (auto target_entry : targets) {
     auto target_var = dynamic_cast<Analyzer::Var*>(target_entry->get_expr());
     CHECK(target_var);
-    agg_infos.emplace_back("agg_id", target_var, 0);
+    agg_infos.emplace_back("agg_id", target_var, 0, nullptr);
     CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
   }
   const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
@@ -815,7 +819,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   // TODO(alex): heuristic for group by buffer size
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
   CHECK(scan_plan);
-  compilePlan(get_agg_name_and_exprs(agg_plan), agg_plan->get_groupby_list(),
+  auto agg_infos = get_agg_name_and_exprs(agg_plan);
+  compilePlan(agg_infos, agg_plan->get_groupby_list(),
     scan_plan->get_col_list(), scan_plan->get_simple_quals(), scan_plan->get_quals(),
     device_type, opt_level, groups_buffer_entry_count_);
   const int table_id = scan_plan->get_table_id();
@@ -886,6 +891,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   }
   for (auto& child : query_threads) {
     child.join();
+  }
+  for (auto& agg_info : agg_infos) {
+    delete reinterpret_cast<std::set<int64_t>*>(std::get<3>(agg_info));
   }
   return reduceMultiDeviceResults(all_fragment_results);
 }
@@ -1422,6 +1430,12 @@ void Executor::call_aggregators(
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i)),
         agg_expr_lv
       };
+    }
+    auto count_distinct_set = std::get<3>(agg_info);
+    if (count_distinct_set) {
+      agg_args.push_back(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+        reinterpret_cast<int64_t>(count_distinct_set)));
     }
     ir_builder_.CreateCall(agg_func, agg_args);
   }

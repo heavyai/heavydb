@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <set>
 
 
 // decoder implementations
@@ -40,6 +41,20 @@ int64_t diff_fixed_width_int_decode(
 extern "C" __attribute__((always_inline))
 void agg_count(int64_t* agg, const int64_t val) {
   ++*agg;;
+}
+
+namespace {
+
+int add_to_unique_set(const int64_t val, int64_t unique_set_handle) {
+  auto it_ok = reinterpret_cast<std::set<int64_t>*>(unique_set_handle)->insert(val);
+  return it_ok.second ? 1 : 0;
+}
+
+}
+
+extern "C" __attribute__((always_inline))
+void agg_count_distinct(int64_t* agg, const int64_t val, int64_t unique_set_handle) {
+  *agg += add_to_unique_set(val, unique_set_handle);
 }
 
 extern "C" __attribute__((always_inline))

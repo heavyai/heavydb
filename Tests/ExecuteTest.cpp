@@ -284,6 +284,21 @@ TEST(Select, Having) {
   ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MAX(y) FROM test WHERE x > 7 GROUP BY z HAVING MAX(x) < 100;", ExecutorDeviceType::CPU)), 43);
 }
 
+TEST(Select, CountDistinct) {
+  auto rows = run_multiple_agg(
+    "SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct y) from test;",
+    ExecutorDeviceType::CPU
+  );
+  CHECK_EQ(rows.size(), 1);
+  const auto row = rows.front();
+  ASSERT_EQ(v<int64_t>(row.agg_result(0)), 2 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(row.agg_result(1)), 7);
+  ASSERT_EQ(v<int64_t>(row.agg_result(2)), 8);
+  ASSERT_EQ(v<double>(row.agg_result(3)), 42.5);
+  ASSERT_EQ(v<int64_t>(row.agg_result(4)), 101 * g_num_rows + 102 * g_num_rows);
+  ASSERT_EQ(v<int64_t>(row.agg_result(5)), 2);
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);

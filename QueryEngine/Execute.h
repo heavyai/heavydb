@@ -73,7 +73,7 @@ public:
   Executor(const Planner::RootPlan* root_plan);
   ~Executor();
 
-  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t> AggInfo;
+  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
 
   std::vector<ResultRow> execute(
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
