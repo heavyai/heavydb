@@ -97,6 +97,10 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
   if (u_oper) {
     return codegen(u_oper);
   }
+  auto var = dynamic_cast<const Analyzer::Var*>(expr);
+  if (var) {
+    return codegen(var);
+  }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
     return codegen(col_var);
@@ -196,6 +200,14 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 }
 
 }  // namespace
+
+llvm::Value* Executor::codegen(const Analyzer::Var* var) const {
+  if (var->get_rte_idx() >= 0) {
+    CHECK(var->get_column_id() > 0);
+    return codegen(static_cast<const Analyzer::ColumnVar*>(var));
+  }
+  CHECK(false);
+}
 
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
   // only generate the decoding code once; if a column has been previously
@@ -712,11 +724,13 @@ std::vector<ResultRow> Executor::executeResultPlan(
   CHECK(!targets.empty());
   printf("Targets      :\n");
   printf("==============\n");
+  std::vector<AggInfo> agg_infos;
   for (auto target_entry : targets) {
     auto target_var = dynamic_cast<Analyzer::Var*>(target_entry->get_expr());
     CHECK(target_var);
     target_var->print();
     printf("\n");
+    agg_infos.emplace_back("agg_id", target_var, 0);
     CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
   }
   const size_t in_col_count { agg_plan->get_targetlist().size() };
@@ -742,6 +756,12 @@ std::vector<ResultRow> Executor::executeResultPlan(
     expr->print();
     printf("\n");
   }
+  std::list<Analyzer::Expr*> target_exprs;
+  for (auto target_entry : targets) {
+    target_exprs.push_back(target_entry->get_expr());
+  }
+  compilePlan(agg_infos, target_exprs, {}, {}, result_plan->get_quals(),
+    device_type, opt_level, groups_buffer_entry_count_);
   const auto& column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   CHECK(false);

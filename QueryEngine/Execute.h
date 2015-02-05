@@ -82,6 +82,7 @@ private:
   llvm::Value* codegen(const Analyzer::Expr*) const;
   llvm::Value* codegen(const Analyzer::BinOper*) const;
   llvm::Value* codegen(const Analyzer::UOper*) const;
+  llvm::Value* codegen(const Analyzer::Var*) const;
   llvm::Value* codegen(const Analyzer::ColumnVar*) const;
   llvm::Value* codegen(const Analyzer::Constant*) const;
   llvm::Value* codegenCmp(const Analyzer::BinOper*) const;
