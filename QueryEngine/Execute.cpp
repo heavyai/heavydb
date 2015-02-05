@@ -688,6 +688,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (auto expr : result_plan->get_quals()) {
     expr->print();
   }
+  compilePlan(result_plan, device_type, opt_level, groups_buffer_entry_count_);
   CHECK(false);
   return result_rows;
 }
@@ -698,7 +699,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
   // TODO(alex): heuristic for group by buffer size
-  compileAggScanPlan(agg_plan, device_type, opt_level, groups_buffer_entry_count_);
+  compilePlan(agg_plan, device_type, opt_level, groups_buffer_entry_count_);
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
   CHECK(scan_plan);
   const int table_id = scan_plan->get_table_id();
@@ -743,9 +744,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       // TODO(alex): multiple devices support
       const auto groupby_exprs = agg_plan->get_groupby_list();
       if (groupby_exprs.empty()) {
-        executeAggScanPlanWithoutGroupBy(device_results, agg_plan, device_type, col_buffers, num_rows);
+        executePlanWithoutGroupBy(device_results, get_agg_target_exprs(agg_plan),
+          device_type, col_buffers, num_rows);
       } else {
-        executeAggScanPlanWithGroupBy(device_results, agg_plan, device_type, cat, col_buffers, num_rows);
+        executePlanWithGroupBy(device_results, get_agg_target_exprs(agg_plan), agg_plan->get_groupby_list(),
+          device_type, cat, col_buffers, num_rows);
       }
       reduce_mutex_.lock();
       all_partition_results.push_back(device_results);
@@ -771,9 +774,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   return reduceMultiDeviceResults(all_partition_results);
 }
 
-void Executor::executeAggScanPlanWithoutGroupBy(
+void Executor::executePlanWithoutGroupBy(
     std::vector<ResultRow>& results,
-    const Planner::AggPlan* agg_plan,
+    const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows) {
@@ -787,7 +790,6 @@ void Executor::executeAggScanPlanWithoutGroupBy(
     out_vec = launch_query_gpu_code(
       query_gpu_code_, col_buffers, num_rows, init_agg_vals_, block_size_x, grid_size_x);
   }
-  const auto target_exprs = get_agg_target_exprs(agg_plan);
   size_t out_vec_idx = 0;
   ResultRow result_row;
   for (const auto target_expr : target_exprs) {
@@ -821,14 +823,14 @@ void Executor::executeAggScanPlanWithoutGroupBy(
   }
 }
 
-void Executor::executeAggScanPlanWithGroupBy(
+void Executor::executePlanWithGroupBy(
     std::vector<ResultRow>& results,
-    const Planner::AggPlan* agg_plan,
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::list<Analyzer::Expr*>& groupby_exprs,
     const ExecutorDeviceType device_type,
     const Catalog_Namespace::Catalog& cat,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows) {
-  const auto groupby_exprs = agg_plan->get_groupby_list();
   const size_t agg_col_count = init_agg_vals_.size();
   const size_t group_by_col_count = groupby_exprs.size();
   CHECK_GT(group_by_col_count, 0);
@@ -849,7 +851,6 @@ void Executor::executeAggScanPlanWithGroupBy(
   for (size_t i = 0; i < groups_buffer_entry_count_; ++i) {
     const size_t key_off = (group_by_col_count + agg_col_count) * i;
     if (group_by_buffer[key_off] != EMPTY_KEY) {
-      const auto target_exprs = get_agg_target_exprs(agg_plan);
       size_t out_vec_idx = 0;
       ResultRow result_row;
       for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
@@ -986,8 +987,8 @@ std::vector<llvm::Value*> generate_column_heads_load(
   return col_heads;
 }
 
-const Planner::Scan* get_scan(const Planner::AggPlan* agg_plan) {
-  const auto child_plan = agg_plan->get_child_plan();
+const Planner::Scan* get_scan(const Planner::Plan* plan) {
+  const auto child_plan = plan->get_child_plan();
   CHECK(child_plan);
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(child_plan);
   CHECK(scan_plan);
@@ -1063,8 +1064,8 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
 
 }  // namespace
 
-void Executor::compileAggScanPlan(
-    const Planner::AggPlan* agg_plan,
+void Executor::compilePlan(
+    const Planner::Plan* plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const size_t groups_buffer_entry_count) {
@@ -1072,8 +1073,9 @@ void Executor::compileAggScanPlan(
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   module_ = create_runtime_module(context_);
-  auto agg_infos = get_agg_name_and_exprs(agg_plan);
-  const bool is_group_by = !agg_plan->get_groupby_list().empty();
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+  auto agg_infos = agg_plan ? get_agg_name_and_exprs(agg_plan) : std::vector<Executor::AggInfo> {};
+  const bool is_group_by = agg_plan ? !agg_plan->get_groupby_list().empty() : false;
   auto query_func = is_group_by
     ? query_group_by_template(module_, 1, query_id_)
     : query_template(module_, agg_infos.size(), query_id_);
@@ -1081,7 +1083,7 @@ void Executor::compileAggScanPlan(
   bind_pos_placeholders("pos_step", query_func, module_);
 
   std::vector<llvm::Value*> col_heads;
-  auto scan_plan = get_scan(agg_plan);
+  auto scan_plan = get_scan(plan);
   const auto& scan_cols = scan_plan->get_col_list();
   std::tie(row_func_, col_heads) = create_row_function(
     scan_cols.size(), is_group_by ? 1 : agg_infos.size(), query_func, module_, context_);
@@ -1109,7 +1111,9 @@ void Executor::compileAggScanPlan(
     for (const auto& agg_info : agg_infos) {
       init_agg_vals_.push_back(std::get<2>(agg_info));
     }
-    call_aggregators(agg_infos, filter_lv, agg_plan->get_groupby_list(), groups_buffer_entry_count, module_);
+    call_aggregators(agg_infos, filter_lv,
+        agg_plan ? agg_plan->get_groupby_list() : std::list<Analyzer::Expr*> {},
+        groups_buffer_entry_count, module_);
   }
 
   // iterate through all the instruction in the query template function and

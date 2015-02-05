@@ -99,25 +99,26 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
-  void executeAggScanPlanWithGroupBy(
+  void executePlanWithGroupBy(
     std::vector<ResultRow>& results,
-    const Planner::AggPlan* agg_plan,
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::list<Analyzer::Expr*>& groupby_exprs,
     const ExecutorDeviceType device_type,
     const Catalog_Namespace::Catalog&,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows);
   typedef std::vector<ResultRow> ResultRows;
   static ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
-  void executeAggScanPlanWithoutGroupBy(
+  void executePlanWithoutGroupBy(
     std::vector<ResultRow>& results,
-    const Planner::AggPlan* agg_plan,
+    const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows);
   void executeSimpleInsert();
   void executeScanPlan(const Planner::Scan* scan_plan);
-  void compileAggScanPlan(
-    const Planner::AggPlan* agg_plan,
+  void compilePlan(
+    const Planner::Plan* plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const size_t groups_buffer_entry_count);
