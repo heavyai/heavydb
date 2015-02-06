@@ -744,7 +744,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
         agg_expr->get_is_distinct() ? "agg_count_distinct" : "agg_count",
         agg_expr->get_arg(),
         agg_init_val,
-        agg_expr->get_is_distinct() ? new std::set<int64_t>() : nullptr);
+        agg_expr->get_is_distinct() ? new std::set<std::pair<int64_t, int64_t*>>() : nullptr);
       break;
     default:
       CHECK(false);
@@ -893,7 +893,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     child.join();
   }
   for (auto& agg_info : agg_infos) {
-    delete reinterpret_cast<std::set<int64_t>*>(std::get<3>(agg_info));
+    delete reinterpret_cast<std::set<std::pair<int64_t, int64_t*>>*>(std::get<3>(agg_info));
   }
   return reduceMultiDeviceResults(all_fragment_results);
 }
