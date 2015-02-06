@@ -64,6 +64,11 @@ public:
         std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
         Executor executor(plan);
         const auto results = executor.execute();
+        if (!results.empty()) {
+          for (size_t i = 0; i < results.front().size(); ++i) {
+            _return.proj_names.push_back(std::to_string(i));
+          }
+        }
         for (const auto& row : results) {
           TResultRow trow;
           for (size_t i = 0; i < row.size(); ++i) {
