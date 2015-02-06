@@ -35,10 +35,10 @@ set(mapd_server_source_files MapDServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/
 add_executable(mapd_server ${mapd_server_source_files})
 
 add_custom_command(
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/mapd.thrift
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp
     COMMAND thrift
-    ARGS -gen cpp -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/mapd.thrift)
+    ARGS -gen cpp -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift)
 
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
