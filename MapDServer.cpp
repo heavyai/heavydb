@@ -1,16 +1,13 @@
-// Compile with
-// g++ -std=c++11 -Wall -o MapDServer MapDServer.cpp gen-cpp/MapD.cpp gen-cpp/mapd_constants.cpp gen-cpp/mapd_types.cpp -I/usr/local/cuda/include/ -I`llvm-config --includedir` -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ../Parser/libParser.a ../Analyzer/libAnalyzer.a -ll ../Catalog/libCatalog.a ../Planner/libPlanner.a ../DataMgr/libDataMgr.a ../CudaMgr/libCudaMgr.a ../SqliteConnector/libSqliteConnector.a ../Fragmenter/libFragmenter.a ../QueryEngine/libQueryEngine.a `llvm-config --libs` `llvm-config --ldflags` -L/usr/local/cuda/nvvm/lib64/ -lboost_filesystem -lboost_system -lboost_thread -lcuda -ldl -lglog -lnvvm -lthrift -ltinfo -lz -pthread
-
 #include "gen-cpp/MapD.h"
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TSimpleServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
 
-#include "Execute.h"
-#include "../Catalog/Catalog.h"
-#include "../Parser/parser.h"
-#include "../Planner/Planner.h"
+#include "Catalog/Catalog.h"
+#include "QueryEngine/Execute.h"
+#include "Parser/parser.h"
+#include "Planner/Planner.h"
 
 #include <boost/filesystem.hpp>
 #include <memory>
@@ -112,4 +109,3 @@ int main(int argc, char **argv) {
   server.serve();
   return 0;
 }
-
