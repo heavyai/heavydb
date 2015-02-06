@@ -424,8 +424,6 @@ std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::AggPlan* agg_pl
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
-#define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS);
-
 // TODO(alex): wip, refactor
 std::vector<int64_t*> launch_query_gpu_code(
     CUfunction kernel,
