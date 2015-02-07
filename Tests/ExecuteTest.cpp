@@ -346,6 +346,98 @@ TEST(Select, CountDistinct) {
   }
 }
 
+TEST(Select, ScanNoAggregation) {
+  {
+  auto rows = run_multiple_agg("SELECT * FROM test;", ExecutorDeviceType::CPU);
+  CHECK_EQ(rows.size(), 20);
+  ssize_t i = 0;
+  for (; i < g_num_rows; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 42);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 101);
+    ASSERT_EQ(v<int64_t>(row.agg_result(3)), 1001);
+  }
+  for (; i < g_num_rows / 2; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 8);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 102);
+    ASSERT_EQ(v<int64_t>(row.agg_result(3)), 1002);
+  }
+  for (; i < g_num_rows / 2; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 102);
+    ASSERT_EQ(v<int64_t>(row.agg_result(3)), 1002);
+  }
+  }
+  {
+  auto rows = run_multiple_agg("SELECT t.* FROM test t;", ExecutorDeviceType::CPU);
+  CHECK_EQ(rows.size(), 20);
+  ssize_t i = 0;
+  for (; i < g_num_rows; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 42);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 101);
+    ASSERT_EQ(v<int64_t>(row.agg_result(3)), 1001);
+  }
+  for (; i < g_num_rows / 2; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 8);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 102);
+    ASSERT_EQ(v<int64_t>(row.agg_result(3)), 1002);
+  }
+  for (; i < g_num_rows / 2; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 102);
+    ASSERT_EQ(v<int64_t>(row.agg_result(3)), 1002);
+  }
+  }
+  {
+  auto rows = run_multiple_agg("SELECT x, z, t FROM test;", ExecutorDeviceType::CPU);
+  CHECK_EQ(rows.size(), 20);
+  ssize_t i = 0;
+  for (; i < g_num_rows; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 101);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 1001);
+  }
+  for (; i < g_num_rows / 2; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 8);;
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 102);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 1002);
+  }
+  for (; i < g_num_rows / 2; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 102);
+    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 1002);
+  }
+  }
+  {
+  auto rows = run_multiple_agg("SELECT x + z, t FROM test WHERE x <> 7 AND y > 42;", ExecutorDeviceType::CPU);
+  CHECK_EQ(rows.size(), 5);
+  ssize_t i = 0;
+  for (; i < g_num_rows / 2; ++i) {
+    const auto row = rows[i];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 110);;
+    ASSERT_EQ(v<int64_t>(row.agg_result(1)), 1002);
+  }
+  }
+  {
+  auto rows = run_multiple_agg("SELECT * FROM test WHERE x > 8;", ExecutorDeviceType::CPU);
+  CHECK_EQ(rows.size(), 0);
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);

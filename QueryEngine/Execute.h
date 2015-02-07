@@ -74,6 +74,7 @@ public:
   ~Executor();
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
+  typedef std::vector<ResultRow> ResultRows;
 
   std::vector<ResultRow> execute(
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
@@ -92,7 +93,7 @@ private:
   llvm::Value* codegenUMinus(const Analyzer::UOper*) const;
   llvm::Value* codegenIsNull(const Analyzer::UOper*) const;
   std::vector<ResultRow> executeAggScanPlan(
-    const Planner::AggPlan* agg_plan,
+    const Planner::Plan* plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
@@ -104,26 +105,24 @@ private:
   void executePlanWithGroupBy(
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
-    const std::list<Analyzer::Expr*>& groupby_exprs,
+    const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     const Catalog_Namespace::Catalog&,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows);
-  typedef std::vector<ResultRow> ResultRows;
-  static ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
-  ResultRows groupBufferToResults(
-    const int64_t* group_by_buffer,
-    const size_t group_by_col_count,
-    const size_t agg_col_count,
-    const std::list<Analyzer::Expr*>& target_exprs);
   void executePlanWithoutGroupBy(
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows);
+  static ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
+  ResultRows groupBufferToResults(
+    const int64_t* group_by_buffer,
+    const size_t group_by_col_count,
+    const size_t agg_col_count,
+    const std::list<Analyzer::Expr*>& target_exprs);
   void executeSimpleInsert();
-  void executeScanPlan(const Planner::Scan* scan_plan);
   void compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,

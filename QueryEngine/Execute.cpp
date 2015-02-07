@@ -70,9 +70,8 @@ std::vector<ResultRow> Executor::execute(
   case kSELECT: {
     const auto plan = root_plan_->get_plan();
     CHECK(plan);
-    const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
-    if (agg_plan) {
-      return executeAggScanPlan(agg_plan, device_type, opt_level, root_plan_->get_catalog());
+    if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
+      return executeAggScanPlan(plan, device_type, opt_level, root_plan_->get_catalog());
     }
     const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
     if (result_plan) {
@@ -91,6 +90,19 @@ std::vector<ResultRow> Executor::execute(
 }
 
 llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
+  if (!expr) {
+    llvm::Value* pos_arg { nullptr };
+    auto& in_arg_list = row_func_->getArgumentList();
+    for (auto& arg : in_arg_list) {
+      if (arg.getType()->isIntegerTy()) {
+        pos_arg = &arg;
+        break;
+      }
+    }
+    CHECK(pos_arg);
+    CHECK_EQ(static_cast<llvm::IntegerType*>(pos_arg->getType())->getBitWidth(), 64);
+    return pos_arg;
+  }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
     return codegen(bin_oper);
@@ -422,8 +434,8 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
 
 namespace {
 
-std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::AggPlan* agg_plan) {
-  const auto& target_list = agg_plan->get_targetlist();
+std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
+  const auto& target_list = plan->get_targetlist();
   std::vector<Analyzer::Expr*> result;
   for (auto target : target_list) {
     auto target_expr = target->get_expr();
@@ -728,9 +740,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     llvm::Module* module,
     llvm::LLVMContext& context);
 
-std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* agg_plan) {
+std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan) {
   std::vector<Executor::AggInfo> result;
-  const auto target_exprs = get_agg_target_exprs(agg_plan);
+  const auto target_exprs = get_agg_target_exprs(plan);
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
@@ -766,6 +778,14 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::AggPlan* ag
     }
   }
   return result;
+}
+
+Executor::ResultRows results_union(const std::vector<Executor::ResultRows>& results_per_device) {
+  Executor::ResultRows all_results;
+  for (const auto& device_result : results_per_device) {
+    all_results.insert(all_results.end(), device_result.begin(), device_result.end());
+  }
+  return all_results;
 }
 
 }
@@ -827,17 +847,20 @@ std::vector<ResultRow> Executor::executeResultPlan(
 }
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
-    const Planner::AggPlan* agg_plan,
+    const Planner::Plan* plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // TODO(alex): heuristic for group by buffer size
-  const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
+  const auto scan_plan = agg_plan
+    ? dynamic_cast<const Planner::Scan*>(plan->get_child_plan())
+    : dynamic_cast<const Planner::Scan*>(plan);
   CHECK(scan_plan);
-  auto agg_infos = get_agg_name_and_exprs(agg_plan);
-  compilePlan(agg_infos, agg_plan->get_groupby_list(),
-    scan_plan->get_col_list(), scan_plan->get_simple_quals(), scan_plan->get_quals(),
-    device_type, opt_level, groups_buffer_entry_count_);
+  auto agg_infos = get_agg_name_and_exprs(plan);
+  std::list<Analyzer::Expr*> groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<Analyzer::Expr*> { nullptr };
+  compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(), scan_plan->get_simple_quals(),
+    scan_plan->get_quals(), device_type, opt_level, groups_buffer_entry_count_);
   const int table_id = scan_plan->get_table_id();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto fragmenter = table_descriptor->fragmenter;
@@ -854,7 +877,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   // Play it POSIX.1 safe instead.
   const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
   for (size_t i = 0; i < fragments.size(); ++i) {
-    auto dispatch = [this, agg_plan, current_dbid, device_type, i, table_id, &all_fragment_results, &cat, &col_global_ids, &fragments]() {
+    auto dispatch = [this, plan, current_dbid, device_type, i, table_id,
+        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
       const auto& fragment = fragments[i];
       std::vector<const int8_t*> col_buffers(global_to_local_col_ids_.size());
       ResultRows device_results;
@@ -878,12 +902,12 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         col_buffers[it->second] = ab->getMemoryPtr();
       }
       // TODO(alex): multiple devices support
-      const auto groupby_exprs = agg_plan->get_groupby_list();
       if (groupby_exprs.empty()) {
-        executePlanWithoutGroupBy(device_results, get_agg_target_exprs(agg_plan),
+        executePlanWithoutGroupBy(device_results, get_agg_target_exprs(plan),
           device_type, col_buffers, num_rows);
       } else {
-        executePlanWithGroupBy(device_results, get_agg_target_exprs(agg_plan), agg_plan->get_groupby_list(),
+        executePlanWithGroupBy(device_results, get_agg_target_exprs(plan),
+          groupby_exprs.size(),
           device_type, cat, col_buffers, num_rows);
       }
       reduce_mutex_.lock();
@@ -910,7 +934,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   for (auto& agg_info : agg_infos) {
     delete reinterpret_cast<std::set<std::pair<int64_t, int64_t*>>*>(std::get<3>(agg_info));
   }
-  return reduceMultiDeviceResults(all_fragment_results);
+  return agg_plan ? reduceMultiDeviceResults(all_fragment_results) : results_union(all_fragment_results);
 }
 
 void Executor::executePlanWithoutGroupBy(
@@ -965,13 +989,12 @@ void Executor::executePlanWithoutGroupBy(
 void Executor::executePlanWithGroupBy(
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
-    const std::list<Analyzer::Expr*>& groupby_exprs,
+    const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     const Catalog_Namespace::Catalog& cat,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows) {
   const size_t agg_col_count = init_agg_vals_.size();
-  const size_t group_by_col_count = groupby_exprs.size();
   CHECK_GT(group_by_col_count, 0);
   const size_t groups_buffer_size { (group_by_col_count + agg_col_count) * groups_buffer_entry_count_ * sizeof(int64_t) };
   // TODO(alex):
@@ -1058,10 +1081,6 @@ void Executor::executeSimpleInsert() {
   for (const auto kv : col_buffers) {
     free(kv.second);
   }
-}
-
-void Executor::executeScanPlan(const Planner::Scan* scan_plan) {
-  CHECK(false);
 }
 
 llvm::Module* makeLLVMModuleContents(llvm::Module *mod);
