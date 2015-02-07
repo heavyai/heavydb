@@ -133,6 +133,8 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper) const {
     return codegenCast(u_oper);
   case kUMINUS:
     return codegenUMinus(u_oper);
+  case kISNULL:
+    return codegenIsNull(u_oper);
   default:
     CHECK(false);
   }
@@ -367,6 +369,12 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper) const {
   default:
     CHECK(false);
   }
+}
+
+llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper) const {
+  // TODO(alex): we don't have null support at the storage level yet,
+  //             which means a value is never null
+  return llvm::ConstantInt::get(get_int_type(1, context_), 0);
 }
 
 llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
