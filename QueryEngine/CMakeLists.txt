@@ -55,13 +55,13 @@ add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
     COMMAND nvcc
-    ARGS -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
+    ARGS -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
-    ARGS --device-link --gpu-architecture sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
+    ARGS --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test "-lgtest -pthread")
