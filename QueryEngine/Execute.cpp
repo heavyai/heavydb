@@ -131,6 +131,8 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper) const {
     return codegenLogical(u_oper);
   case kCAST:
     return codegenCast(u_oper);
+  case kUMINUS:
+    return codegenUMinus(u_oper);
   default:
     CHECK(false);
   }
@@ -345,6 +347,13 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) const {
         : llvm::Instruction::CastOps::Trunc,
       operand_lv,
       get_int_type(target_width, context_));
+}
+
+llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper) const {
+  CHECK_EQ(uoper->get_optype(), kUMINUS);
+  const auto operand_lv = codegen(uoper->get_operand());
+  CHECK(operand_lv->getType()->isIntegerTy());
+  return ir_builder_.CreateNeg(operand_lv);
 }
 
 llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper) const {

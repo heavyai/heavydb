@@ -89,6 +89,7 @@ private:
   llvm::Value* codegenArith(const Analyzer::BinOper*) const;
   llvm::Value* codegenLogical(const Analyzer::UOper*) const;
   llvm::Value* codegenCast(const Analyzer::UOper*) const;
+  llvm::Value* codegenUMinus(const Analyzer::UOper*) const;
   std::vector<ResultRow> executeAggScanPlan(
     const Planner::AggPlan* agg_plan,
     const ExecutorDeviceType device_type,
