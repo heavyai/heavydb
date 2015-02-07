@@ -1,13 +1,14 @@
 #!/bin/bash
 
 result="success"
-for test in build/Tests/PlanTest build/Tests/ExecuteTest
+for test in Tests/PlanTest Tests/ExecuteTest
 do
-	eval $test
+	cd build && eval $test
 	if [ $? != 0 ]
 	then
 		result="fail"
 	fi
+	cd -
 done
 if [ $result == "fail" ]
 then
