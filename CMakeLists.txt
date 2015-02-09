@@ -47,6 +47,6 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp G
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Chunk Fragmenter ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
-target_link_libraries (mapd_server Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Chunk Fragmenter ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
-target_link_libraries (initdb Catalog Chunk SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
+target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (mapd_server Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
+target_link_libraries (initdb Catalog Fragmenter Chunk SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
