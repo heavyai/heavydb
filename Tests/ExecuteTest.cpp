@@ -172,7 +172,8 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y) FROM test;", device_type)), 49.75);
     ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y + z) FROM test;", device_type)), 151.25);
     ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(x + y + z + t) FROM test;", device_type)), 1152.75);
-    //ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;", device_type)), 42.);
+    ASSERT_GT(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;", device_type)), 42.32);
+    ASSERT_LT(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;", device_type)), 42.34);
     ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE z > 100 AND z < 102;", device_type)), 42.);
     ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE t > 1000 AND t < 1002;", device_type)), 42.);
   }
