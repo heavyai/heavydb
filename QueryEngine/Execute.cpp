@@ -220,10 +220,10 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
   // only generate the decoding code once; if a column has been previously
   // fetch in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
-  if (col_var->get_rte_idx() >= 0) {
+  if (col_var->get_rte_idx() >= 0 && query_id_ == 0) {
     CHECK_GT(col_id, 0);
   } else {
-    CHECK_EQ(col_id, 0);
+    CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
     const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
     CHECK(var);
     col_id = var->get_varno();
@@ -714,7 +714,19 @@ public:
         const auto& col_val = row.agg_result(i);
         auto p = boost::get<int64_t>(&col_val);
         CHECK(p);
-        ((int64_t*) column_buffers_[i])[row_idx] = *p;
+        switch (get_bit_width(target_types[i])) {
+        case 16:
+          ((int16_t*) column_buffers_[i])[row_idx] = *p;
+          break;
+        case 32:
+          ((int32_t*) column_buffers_[i])[row_idx] = *p;
+          break;
+        case 64:
+          ((int64_t*) column_buffers_[i])[row_idx] = *p;
+          break;
+        default:
+          CHECK(false);
+        }
       }
     }
   }
@@ -833,8 +845,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
-  // TOOD(alex): the group by list shouldn't be target_exprs; will fix soon
-  compilePlan(agg_infos, target_exprs, pseudo_scan_cols, {}, result_plan->get_quals(),
+  compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
+    result_plan->get_constquals(), result_plan->get_quals(),
     device_type, opt_level, groups_buffer_entry_count_);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
