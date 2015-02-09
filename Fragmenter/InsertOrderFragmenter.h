@@ -8,6 +8,7 @@
 #include "../Shared/types.h"
 #include "AbstractFragmenter.h"
 #include "../DataMgr/MemoryLevel.h"
+#include "../Chunk/Chunk.h"
 
 #include <vector>
 #include <map>
@@ -35,7 +36,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
 public:
 
-    InsertOrderFragmenter(const std::vector <int> chunkKeyPrefix, std::vector <ColumnInfo> &columnInfoVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/, const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
+    InsertOrderFragmenter(const std::vector <int> chunkKeyPrefix, std::vector <Chunk_NS::Chunk> &chunkVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/, const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
 
     virtual ~InsertOrderFragmenter();
     /**
@@ -69,7 +70,7 @@ private:
 
 	int fragmenterId_; /**< Stores the id of the fragmenter - passed to constructor */
     std::vector<int> chunkKeyPrefix_;
-    std::map <int, ColumnInfo> columnMap_; /**< stores a map of column id to metadata about that column */ 
+    std::map <int, Chunk_NS::Chunk> columnMap_; /**< stores a map of column id to metadata about that column */ 
     std::vector<FragmentInfo> fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */  
     //int currentInsertBufferFragmentId_;
     Data_Namespace::DataMgr *dataMgr_;

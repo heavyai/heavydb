@@ -25,23 +25,6 @@ namespace Fragmenter_Namespace {
     };
     
     /**
-     * @type ColumnInfo
-     * @brief data structure to store id, type, bitsize
-     * and insert buffer (if applicable) of a given column
-     * managed by the fragmenter
-     */
-
-    struct ColumnInfo {
-				const ColumnDescriptor *columnDesc;
-        Data_Namespace::AbstractBuffer * insertBuffer; // a pointer so can be null
-				ColumnInfo() : columnDesc(nullptr), insertBuffer(nullptr) {}
-				ColumnInfo(const ColumnDescriptor *c) : columnDesc(c), insertBuffer(nullptr) {}
-				static void translateColumnDescriptorsToColumnInfoVec(const std::list<const ColumnDescriptor*> &colDescs, std::vector<ColumnInfo> &columnInfoVec) {
-					for (auto cd : colDescs)
-						columnInfoVec.push_back(ColumnInfo(cd));
-				}
-    };
-    /**
      * @struct InsertData
      * @brief The data to be inserted using the fragment manager.
      *

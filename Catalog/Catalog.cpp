@@ -20,7 +20,7 @@ using std::map;
 using std::list;
 using std::pair;
 using std::vector;
-using Fragmenter_Namespace::ColumnInfo;
+using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
 
 namespace Catalog_Namespace {
@@ -299,12 +299,12 @@ Catalog::instantiateFragmenter(TableDescriptor *td) const
 	// instatiion table fragmenter upon first use
 	// assume only insert order fragmenter is supported
 	assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
-	vector<ColumnInfo> columnInfoVec;
+	vector<Chunk> chunkVec;
 	list<const ColumnDescriptor *> columnDescs;
 	getAllColumnMetadataForTable(td, columnDescs);
-	ColumnInfo::translateColumnDescriptorsToColumnInfoVec(columnDescs , columnInfoVec);
+	Chunk::translateColumnDescriptorsToChunkVec(columnDescs , chunkVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, columnInfoVec, &dataMgr_, td->maxFragRows, td->fragPageSize);
+	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, chunkVec, &dataMgr_, td->maxFragRows, td->fragPageSize);
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {

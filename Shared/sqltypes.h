@@ -44,6 +44,15 @@ typedef union {
 	void *pointerval; // by reference values
 } Datum;
 
+struct VarlenDatum {
+	int length;
+	int8_t *pointer;
+	bool is_null;
+
+	VarlenDatum() : length(0), pointer(nullptr), is_null(true) {}
+	VarlenDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n) {}
+};
+
 // must not change because these values persist in catalogs.
 enum EncodingType {
 	kENCODING_NONE = 0, // no encoding

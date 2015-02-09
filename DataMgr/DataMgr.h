@@ -33,8 +33,8 @@ namespace Data_Namespace {
         public:
             DataMgr(const int fragmentKeyIndex, const std::string &dataDir);
             ~DataMgr();
-            AbstractBuffer * createChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0);
-            AbstractBuffer * getChunk(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0,  const size_t numBytes = 0);
+            AbstractBuffer * createChunkBuffer(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0);
+            AbstractBuffer * getChunkBuffer(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0,  const size_t numBytes = 0);
             void deleteChunk(const ChunkKey &key);
             void deleteChunksWithPrefix(const ChunkKey &keyPrefix);
             AbstractBuffer * createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
