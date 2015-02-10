@@ -500,6 +500,12 @@ TEST(Select, OrderBy) {
   }
 }
 
+TEST(Select, ResultPlan) {
+  ASSERT_EQ(v<int64_t>(run_simple_agg(
+    "SELECT COUNT(*) * MAX(y) - SUM(z) FROM test;", ExecutorDeviceType::CPU)),
+    -117 * g_num_rows);
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);

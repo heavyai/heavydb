@@ -823,10 +823,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
   for (auto target_entry : targets) {
-    auto target_var = dynamic_cast<Analyzer::Var*>(target_entry->get_expr());
-    CHECK(target_var);
-    agg_infos.emplace_back("agg_id", target_var, 0, nullptr);
-    CHECK_EQ(target_var->get_which_row(), Analyzer::Var::kINPUT_OUTER);
+    agg_infos.emplace_back("agg_id", target_entry->get_expr(), 0, nullptr);
   }
   const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
   const size_t in_agg_count { targets.size() };
