@@ -490,7 +490,7 @@ TEST(Select, OrderBy) {
   const auto rows = run_multiple_agg(
     "SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;",
     ExecutorDeviceType::CPU);
-  CHECK_EQ(rows.size(), std::min(5L, g_num_rows));
+  CHECK_EQ(rows.size(), std::min(5, static_cast<int>(g_num_rows)));
   for (const auto& row : rows) {
     CHECK_EQ(row.size(), 4);
     ASSERT_TRUE(v<int64_t>(row.agg_result(0)) == 8 || v<int64_t>(row.agg_result(0)) == 7);
