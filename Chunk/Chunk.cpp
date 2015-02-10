@@ -30,7 +30,15 @@ namespace Chunk_NS {
 	void
 	Chunk::createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id)
 	{
-		buffer = data_mgr->createChunkBuffer(key, mem_level, device_id);
+		if (column_desc->is_varlen()) {
+			ChunkKey subKey = key;
+			subKey.push_back(1); // 1 for the main buffer
+			buffer = data_mgr->createChunkBuffer(subKey, mem_level, device_id);
+			subKey.pop_back();
+			subKey.push_back(2); // 2 for the index buffer
+			index_buf = data_mgr->createChunkBuffer(subKey, mem_level, device_id);
+		} else
+			buffer = data_mgr->createChunkBuffer(key, mem_level, device_id);
 	}
 
 	ChunkMetadata

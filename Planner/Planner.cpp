@@ -120,7 +120,7 @@ namespace Planner {
 	{
 		optimize_scans();
 		optimize_joins();
-		if (cur_query->get_num_aggs() > 0 || cur_query->get_having_predicate() != nullptr)
+		if (cur_query->get_num_aggs() > 0 || cur_query->get_having_predicate() != nullptr || cur_query->get_group_by() != nullptr)
 			optimize_aggs();
 		else {
 			process_targetlist();
