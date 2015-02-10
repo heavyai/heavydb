@@ -106,6 +106,11 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
+  std::vector<ResultRow> executeSortPlan(
+    const Planner::Sort* sort_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel,
+    const Catalog_Namespace::Catalog&);
   void executePlanWithGroupBy(
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,

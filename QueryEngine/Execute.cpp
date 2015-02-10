@@ -66,6 +66,10 @@ std::vector<ResultRow> Executor::executeSelectPlan(
   if (result_plan) {
     return executeResultPlan(result_plan, device_type, opt_level, root_plan_->get_catalog());
   }
+  const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
+  if (sort_plan) {
+    return executeSortPlan(sort_plan, device_type, opt_level, root_plan_->get_catalog());
+  }
   CHECK(false);
 }
 
@@ -860,6 +864,30 @@ std::vector<ResultRow> Executor::executeResultPlan(
   launch_query_cpu_code(query_cpu_code_, column_buffers, result_columns.size(),
     init_agg_vals, group_by_buffers);
   return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs);
+}
+
+std::vector<ResultRow> Executor::executeSortPlan(
+    const Planner::Sort* sort_plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel opt_level,
+    const Catalog_Namespace::Catalog&) {
+  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), device_type, opt_level);
+  const auto& target_list = sort_plan->get_targetlist();
+  const auto& order_entries = sort_plan->get_order_entries();
+  // TODO(alex): check the semantics for order by multiple columns
+  CHECK_EQ(order_entries.size(), 1);
+  for (const auto order_entry : order_entries) {
+    CHECK_GT(order_entry.tle_no, 0);
+    CHECK_LT(order_entry.tle_no, target_list.size());
+    std::sort(rows_to_sort.begin(), rows_to_sort.end(),
+      [&order_entry](const ResultRow& lhs, const ResultRow& rhs) {
+        bool result = lhs.agg_result(order_entry.tle_no) < rhs.agg_result(order_entry.tle_no);
+        return order_entry.is_desc ? !result : result;
+      });
+  }
+  return root_plan_->get_limit()
+    ? decltype(rows_to_sort)(rows_to_sort.begin(), rows_to_sort.begin() + root_plan_->get_limit())
+    : rows_to_sort;
 }
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
