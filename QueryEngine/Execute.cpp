@@ -37,7 +37,8 @@ Executor::Executor(const Planner::RootPlan* root_plan)
   , ir_builder_(context_)
   , execution_engine_(nullptr)
   , row_func_(nullptr)
-  , query_id_(0) {
+  , query_id_(0)
+  , filter_false_(nullptr) {
   CHECK(root_plan_);
 }
 
@@ -127,6 +128,10 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
     return codegen(constant);
+  }
+  auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
+  if (case_expr) {
+    return codegen(case_expr);
   }
   CHECK(false);
 }
@@ -302,6 +307,38 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
     CHECK(false);
   }
   CHECK(false);
+}
+
+llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) const {
+  // SELECT CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END FROM test;
+  const auto& expr_pair_list = case_expr->get_expr_pair_list();
+  const auto else_expr = case_expr->get_else_expr();
+  CHECK(else_expr);
+  auto expr_store_ptr = ir_builder_.CreateAlloca(
+    get_int_type(get_bit_width(case_expr->get_type_info().type), context_),
+    llvm::ConstantInt::get(llvm::Type::getInt32Ty(context_), 1));
+  CHECK(filter_false_);
+  const auto end_case = llvm::BasicBlock::Create(context_, "end_case", row_func_, filter_false_);
+  size_t expr_idx = 0;
+  for (const auto& expr_pair : expr_pair_list) {
+    const auto cond_lv = codegen(expr_pair.first);
+    auto next_case_branch = expr_idx < expr_pair_list.size() - 1
+      ? llvm::BasicBlock::Create(context_, "next_case_branch", row_func_, end_case)
+      : end_case;
+    auto crt_case_branch = llvm::BasicBlock::Create(context_, "crt_case_branch", row_func_, next_case_branch);
+    ir_builder_.CreateCondBr(cond_lv, crt_case_branch, next_case_branch);
+    ir_builder_.SetInsertPoint(crt_case_branch);
+    ir_builder_.CreateStore(codegen(expr_pair.second), expr_store_ptr);
+    ir_builder_.CreateBr(end_case);
+    ir_builder_.SetInsertPoint(next_case_branch);
+    ++expr_idx;
+  }
+  auto else_case_branch = llvm::BasicBlock::Create(context_, "else_case_branch", row_func_, end_case);
+  ir_builder_.SetInsertPoint(else_case_branch);
+  ir_builder_.CreateStore(codegen(else_expr), expr_store_ptr);
+  ir_builder_.CreateBr(end_case);
+  ir_builder_.SetInsertPoint(end_case);
+  return ir_builder_.CreateLoad(expr_store_ptr);
 }
 
 namespace {
@@ -1245,6 +1282,14 @@ void Executor::nukeOldState() {
     decltype(init_agg_vals_) empty;
     init_agg_vals_.swap(empty);
   }
+  {
+    decltype(group_by_expr_cache_) empty;
+    group_by_expr_cache_.swap(empty);
+  }
+  {
+    decltype(expr_cache_) empty;
+    expr_cache_.swap(empty);
+  }
 }
 
 void Executor::compilePlan(
@@ -1440,9 +1485,9 @@ void Executor::call_aggregators(
   auto& context = llvm::getGlobalContext();
 
   auto filter_true = llvm::BasicBlock::Create(context, "filter_true", row_func_);
-  auto filter_false = llvm::BasicBlock::Create(context, "filter_false", row_func_);
+  filter_false_ = llvm::BasicBlock::Create(context, "filter_false", row_func_);
 
-  ir_builder_.CreateCondBr(filter_result, filter_true, filter_false);
+  ir_builder_.CreateCondBr(filter_result, filter_true, filter_false_);
   ir_builder_.SetInsertPoint(filter_true);
 
   std::vector<llvm::Value*> agg_out_vec;
@@ -1523,8 +1568,8 @@ void Executor::call_aggregators(
     }
     ir_builder_.CreateCall(agg_func, agg_args);
   }
-  ir_builder_.CreateBr(filter_false);
-  ir_builder_.SetInsertPoint(filter_false);
+  ir_builder_.CreateBr(filter_false_);
+  ir_builder_.SetInsertPoint(filter_false_);
   ir_builder_.CreateRetVoid();
 }
 
@@ -1542,4 +1587,15 @@ int Executor::getLocalColumnId(const int global_col_id) const {
   const auto it = global_to_local_col_ids_.find(global_col_id);
   CHECK(it != global_to_local_col_ids_.end());
   return it->second;
+}
+
+llvm::Value* Executor::codegenOrGetCached(const Analyzer::Expr* expr) {
+  for (const auto cached_expr_kv : expr_cache_) {
+    if (*expr == *cached_expr_kv.first) {
+      return cached_expr_kv.second;
+    }
+  }
+  auto expr_lv = codegen(expr);
+  expr_cache_.emplace_back(expr, expr_lv);
+  return expr_lv;
 }

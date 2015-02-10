@@ -85,6 +85,7 @@ private:
   llvm::Value* codegen(const Analyzer::UOper*) const;
   llvm::Value* codegen(const Analyzer::ColumnVar*) const;
   llvm::Value* codegen(const Analyzer::Constant*) const;
+  llvm::Value* codegen(const Analyzer::CaseExpr*) const;
   llvm::Value* codegenCmp(const Analyzer::BinOper*) const;
   llvm::Value* codegenLogical(const Analyzer::BinOper*) const;
   llvm::Value* codegenArith(const Analyzer::BinOper*) const;
@@ -152,6 +153,7 @@ private:
     llvm::Module* module);
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
+  llvm::Value* codegenOrGetCached(const Analyzer::Expr*);
 
   const Planner::RootPlan* root_plan_;
   llvm::LLVMContext& context_;
@@ -165,6 +167,7 @@ private:
   std::unique_ptr<GpuExecutionContext> gpu_context_;
   mutable std::unordered_map<int, llvm::Value*> fetch_cache_;
   mutable std::vector<llvm::Value*> group_by_expr_cache_;
+  mutable std::vector<std::pair<const Analyzer::Expr*, llvm::Value*>> expr_cache_;
   llvm::Function* row_func_;
   std::vector<int64_t> init_agg_vals_;
   std::unordered_map<int, int> global_to_local_col_ids_;
@@ -172,6 +175,7 @@ private:
   const size_t groups_buffer_entry_count_ { 2048 };
   boost::mutex reduce_mutex_;
   std::atomic<int32_t> query_id_;
+  llvm::BasicBlock* filter_false_;
 };
 
 template<typename TimeT = std::chrono::milliseconds>

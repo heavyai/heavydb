@@ -622,6 +622,14 @@ TEST(Select, GroupByExprNoFilterNoAggregate) {
   }
 }
 
+TEST(Select, Case) {
+  ASSERT_EQ(v<int64_t>(run_simple_agg(
+    "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) FROM test;",
+    ExecutorDeviceType::CPU)),
+    2 * g_num_rows + g_num_rows / 2
+  );
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
