@@ -605,6 +605,23 @@ TEST(Select, ComplexQueries) {
   }
 }
 
+TEST(Select, GroupByExprNoFilterNoAggregate) {
+  const auto rows = run_multiple_agg("SELECT x + y AS a FROM test GROUP BY a;", ExecutorDeviceType::CPU);
+  ASSERT_EQ(rows.size(), 3);
+  {
+    const auto row = rows[0];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+  }
+  {
+    const auto row = rows[1];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
+  }
+  {
+    const auto row = rows[2];
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
