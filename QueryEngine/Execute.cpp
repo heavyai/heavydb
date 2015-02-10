@@ -6,6 +6,7 @@
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 
+#include <boost/range/adaptor/reversed.hpp>
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
@@ -875,7 +876,7 @@ std::vector<ResultRow> Executor::executeSortPlan(
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
   // TODO(alex): check the semantics for order by multiple columns
-  for (const auto order_entry : order_entries) {
+  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
     CHECK_GE(order_entry.tle_no, 1);
     CHECK_LE(order_entry.tle_no, target_list.size());
     auto compare = [&order_entry](const ResultRow& lhs, const ResultRow& rhs) {
