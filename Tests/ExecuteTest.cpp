@@ -43,7 +43,8 @@ Catalog_Namespace::Catalog g_cat(get_catalog());
 
 vector<ResultRow> run_multiple_agg(
     const string& query_str,
-    const ExecutorDeviceType device_type) {
+    const ExecutorDeviceType device_type,
+    bool sort_by_key = true) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -61,10 +62,12 @@ vector<ResultRow> run_multiple_agg(
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
   Executor executor(plan);
   auto results = executor.execute(device_type, ExecutorOptLevel::LoopStrengthReduction);
-  std::sort(results.begin(), results.end(),
-    [](const ResultRow& lhs, const ResultRow& rhs) {
-      return lhs.value_tuple() < rhs.value_tuple();
-    });
+  if (sort_by_key) {
+    std::sort(results.begin(), results.end(),
+      [](const ResultRow& lhs, const ResultRow& rhs) {
+        return lhs.value_tuple() < rhs.value_tuple();
+      });
+  }
   return results;
 }
 
@@ -489,7 +492,7 @@ TEST(Select, ScanNoAggregation) {
 TEST(Select, OrderBy) {
   const auto rows = run_multiple_agg(
     "SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;",
-    ExecutorDeviceType::CPU);
+    ExecutorDeviceType::CPU, false);
   CHECK_EQ(rows.size(), std::min(5, static_cast<int>(g_num_rows)));
   for (const auto& row : rows) {
     CHECK_EQ(row.size(), 4);
@@ -500,28 +503,105 @@ TEST(Select, OrderBy) {
   }
 }
 
-TEST(Select, ResultPlan) {
+TEST(Select, ComplexQueries) {
   ASSERT_EQ(v<int64_t>(run_simple_agg(
     "SELECT COUNT(*) * MAX(y) - SUM(z) FROM test;", ExecutorDeviceType::CPU)),
     -117 * g_num_rows);
-  const auto rows = run_multiple_agg(
-    "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test WHERE z BETWEEN 100 AND 200 GROUP BY x, y;",
-    ExecutorDeviceType::CPU);
-  CHECK_EQ(rows.size(), 3);
   {
-    const auto row = rows[0];
-    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
-    ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows);
+    const auto rows = run_multiple_agg(
+      "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test WHERE z BETWEEN 100 AND 200 GROUP BY x, y;",
+      ExecutorDeviceType::CPU);
+    ASSERT_EQ(rows.size(), 3);
+    {
+      const auto row = rows[0];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows);
+    }
+    {
+      const auto row = rows[1];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+    {
+      const auto row = rows[2];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
   }
   {
-    const auto row = rows[1];
+    const auto rows = run_multiple_agg(
+      "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test WHERE z BETWEEN 100 AND 200 "
+      "GROUP BY x, y HAVING y > 2 * x AND MIN(y) > MAX(x);", ExecutorDeviceType::CPU);
+    ASSERT_EQ(rows.size(), 3);
+    {
+      const auto row = rows[0];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows);
+    }
+    {
+      const auto row = rows[1];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+    {
+      const auto row = rows[2];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+  }
+  {
+    const auto rows = run_multiple_agg(
+      "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test WHERE z BETWEEN 100 AND 200 "
+      "GROUP BY x, y HAVING y > 2 * x AND MIN(y) > MAX(x) + 35;", ExecutorDeviceType::CPU);
+    ASSERT_EQ(rows.size(), 1);
+    const auto row = rows[0];
     ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
     ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
   }
   {
-    const auto row = rows[2];
-    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
-    ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    const auto rows = run_multiple_agg(
+      "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test WHERE z BETWEEN 100 AND 200 "
+      "GROUP BY x, y HAVING y > 2 * x AND MIN(y) > MAX(x) + 36;", ExecutorDeviceType::CPU);
+    ASSERT_EQ(rows.size(), 0);
+  }
+  {
+    const auto rows = run_multiple_agg(
+      "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
+      "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
+      ExecutorDeviceType::CPU, false);
+    ASSERT_EQ(rows.size(), 2);
+    {
+      const auto row = rows[0];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+    {
+      const auto row = rows[1];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+  }
+  {
+    const auto rows = run_multiple_agg(
+      "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
+      "WHERE z BETWEEN 100 AND 200 GROUP BY a, y;",
+      ExecutorDeviceType::CPU);
+    ASSERT_EQ(rows.size(), 3);
+    {
+      const auto row = rows[0];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows);
+    }
+    {
+      const auto row = rows[1];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+    {
+      const auto row = rows[2];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
   }
 }
 
