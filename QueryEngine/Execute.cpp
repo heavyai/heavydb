@@ -718,7 +718,7 @@ public:
       const auto& row = rows[row_idx];
       CHECK_EQ(row.size(), num_columns);
       for (size_t i = 0; i < num_columns; ++i) {
-        const auto& col_val = row.agg_result(i);
+        const auto col_val = row.agg_result(i);
         auto p = boost::get<int64_t>(&col_val);
         CHECK(p);
         switch (get_bit_width(target_types[i])) {
@@ -879,11 +879,28 @@ std::vector<ResultRow> Executor::executeSortPlan(
   for (const auto order_entry : order_entries) {
     CHECK_GT(order_entry.tle_no, 0);
     CHECK_LT(order_entry.tle_no, target_list.size());
-    std::sort(rows_to_sort.begin(), rows_to_sort.end(),
-      [&order_entry](const ResultRow& lhs, const ResultRow& rhs) {
-        bool result = lhs.agg_result(order_entry.tle_no) < rhs.agg_result(order_entry.tle_no);
-        return order_entry.is_desc ? !result : result;
-      });
+    auto compare = [&order_entry](const ResultRow& lhs, const ResultRow& rhs) {
+      // The compare function must define a strict weak ordering, which means
+      // we can't use the overloaded less than operator for boost::variant since
+      // there's not greater than counterpart. If we naively use "not less than"
+      // as the compare function for descending order, std::sort will trigger
+      // a segmentation fault (or corrupt memory).
+      const auto lhs_v = lhs.agg_result(order_entry.tle_no);
+      const auto rhs_v = rhs.agg_result(order_entry.tle_no);
+      const auto lhs_ip = boost::get<int64_t>(&lhs_v);
+      if (lhs_ip) {
+        const auto rhs_ip = boost::get<int64_t>(&rhs_v);
+        CHECK(rhs_ip);
+        return order_entry.is_desc ? *lhs_ip > *rhs_ip : *lhs_ip < *rhs_ip;
+      } else {
+        const auto lhs_fp = boost::get<double>(&lhs_v);
+        CHECK(lhs_fp);
+        const auto rhs_fp = boost::get<double>(&rhs_v);
+        CHECK(rhs_fp);
+        return order_entry.is_desc ? *lhs_fp > *rhs_fp : *lhs_fp < *rhs_fp;
+      }
+    };
+    std::sort(rows_to_sort.begin(), rows_to_sort.end(), compare);
   }
   int64_t limit = root_plan_->get_limit();
   if (limit) {

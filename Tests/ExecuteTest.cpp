@@ -487,11 +487,10 @@ TEST(Select, ScanNoAggregation) {
 }
 
 TEST(Select, OrderBy) {
-#if 0
   const auto rows = run_multiple_agg(
     "SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;",
     ExecutorDeviceType::CPU);
-  CHECK_EQ(rows.size(), g_num_rows / 2);
+  CHECK_EQ(rows.size(), std::min(5L, g_num_rows));
   for (const auto& row : rows) {
     CHECK_EQ(row.size(), 4);
     ASSERT_EQ(v<int64_t>(row.agg_result(0)), 8);
@@ -499,7 +498,6 @@ TEST(Select, OrderBy) {
     ASSERT_EQ(v<int64_t>(row.agg_result(2)), 1104);
     ASSERT_EQ(v<int64_t>(row.agg_result(3)), 344);
   }
-#endif
 }
 
 int main(int argc, char** argv)
