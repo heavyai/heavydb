@@ -55,6 +55,20 @@ SQLTypes get_column_type(const int col_id, const int table_id, const Catalog_Nam
 
 }
 
+std::vector<ResultRow> Executor::executeSelectPlan(
+    const Planner::Plan* plan,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel opt_level) {
+  if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
+    return executeAggScanPlan(plan, device_type, opt_level, root_plan_->get_catalog());
+  }
+  const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
+  if (result_plan) {
+    return executeResultPlan(result_plan, device_type, opt_level, root_plan_->get_catalog());
+  }
+  CHECK(false);
+}
+
 /*
  * x64 benchmark: "SELECT COUNT(*) FROM test WHERE x > 41;"
  *                x = 42, 64-bit column, 1-byte encoding
@@ -68,19 +82,8 @@ std::vector<ResultRow> Executor::execute(
     const ExecutorOptLevel opt_level) {
   const auto stmt_type = root_plan_->get_stmt_type();
   switch (stmt_type) {
-  case kSELECT: {
-    const auto plan = root_plan_->get_plan();
-    CHECK(plan);
-    if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
-      return executeAggScanPlan(plan, device_type, opt_level, root_plan_->get_catalog());
-    }
-    const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
-    if (result_plan) {
-      return executeResultPlan(result_plan, device_type, opt_level, root_plan_->get_catalog());
-    }
-    CHECK(false);
-    break;
-  }
+  case kSELECT:
+    return executeSelectPlan(root_plan_->get_plan(), device_type, opt_level);
   case kINSERT: {
     executeSimpleInsert();
     return {};
