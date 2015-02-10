@@ -143,6 +143,7 @@ TEST(ParseAnalyzePlan, Select) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by a, b order by x desc null first limit 10 offset 100000000;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select cast(a+b as decimal(10,3)) as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by a, b order by x desc null first limit 10 offset 100000000;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by x, b having x > 10;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select distinct a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by x, b having x > 10;")); } );
 }
 
 TEST(ParseAnalyzePlan, Insert) {
