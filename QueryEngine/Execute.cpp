@@ -1136,7 +1136,9 @@ void Executor::executeSimpleInsert() {
   }
   for (const auto kv : col_buffers) {
     insert_data.columnIds.push_back(kv.first);
-    insert_data.data.push_back(kv.second);
+		DataBlockPtr p;
+		p.numbersPtr = kv.second;
+    insert_data.data.push_back(p);
   }
   insert_data.numRows = 1;
   const auto table_descriptor = cat.getMetadataForTable(table_id);

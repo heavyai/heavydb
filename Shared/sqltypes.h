@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // must not change because these values persist in catalogs.
 enum SQLTypes {
@@ -53,6 +54,11 @@ struct VarlenDatum {
 
 	VarlenDatum() : length(0), pointer(nullptr), is_null(true) {}
 	VarlenDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n) {}
+};
+
+union DataBlockPtr {
+	int8_t *numbersPtr;
+	std::vector<std::string> *stringsPtr;
 };
 
 // must not change because these values persist in catalogs.

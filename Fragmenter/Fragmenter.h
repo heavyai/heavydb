@@ -41,7 +41,7 @@ namespace Fragmenter_Namespace {
         int tableId;						/// identifies the table into which the data is being inserted
         std::vector<int> columnIds;				/// a vector of column ids for the row(s) being inserted
         size_t numRows;				/// the number of rows being inserted
-        std::vector <int8_t *> data;							/// points to the start of the data for the row(s) being inserted
+        std::vector <DataBlockPtr> data;							/// points to the start of the data block per column for the row(s) being inserted
     };
    
     /**

@@ -30,6 +30,7 @@ class Encoder {
         virtual void writeMetadata(FILE *f/*, const size_t offset*/) = 0;
         virtual void readMetadata(FILE *f/*, const size_t offset*/) = 0;
         size_t numElems;
+				virtual ~Encoder() {}
 
     protected:
         Data_Namespace::AbstractBuffer * buffer_;

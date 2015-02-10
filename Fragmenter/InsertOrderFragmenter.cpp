@@ -86,9 +86,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
 
     size_t numRowsLeft = insertDataStruct.numRows;
     size_t numRowsInserted = 0;
-    vector<int8_t *> dataCopy = insertDataStruct.data; // bc append data will move ptr forward and this violates constness of InsertData
-    //vector <FragmentInfo *> fragmentsToBeUpdated;  
-    //std::vector<FragmentInfo>::iterator partIt = fragmentInfoVec_.back();
+    vector<DataBlockPtr> dataCopy = insertDataStruct.data; // bc append data will move ptr forward and this violates constness of InsertData
     if (numRowsLeft <= 0) {
         return;
     }

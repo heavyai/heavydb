@@ -33,7 +33,7 @@ namespace Data_Namespace {
         AbstractBuffer (const SQLTypeInfo sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
         initEncoder(sqlType, encodingType, numEncodingBits);
         }
-        virtual ~AbstractBuffer() {}
+        virtual ~AbstractBuffer() { if (hasEncoder) delete encoder; }
         
         virtual void read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const size_t offset = 0) = 0;
         virtual void write(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const size_t offset = 0) = 0;

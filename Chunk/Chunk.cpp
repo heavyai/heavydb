@@ -27,9 +27,9 @@ namespace Chunk_NS {
 	}
 
 	ChunkMetadata
-	Chunk::appendData(int8_t *&src_data, const size_t num_elems)
+	Chunk::appendData(DataBlockPtr &src_data, const size_t num_elems)
 	{
-		return buffer->encoder->appendData(src_data, num_elems);
+		return buffer->encoder->appendData(src_data.numbersPtr, num_elems);
 	}
 
 	void
