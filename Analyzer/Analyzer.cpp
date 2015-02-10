@@ -18,7 +18,7 @@ namespace Analyzer {
 	Constant::~Constant() 
 	{
 		if (IS_STRING(type_info.type) && !is_null)
-			delete (char*)constval.pointerval;
+			delete constval.stringval;
 	}
 
 	Subquery::~Subquery() {
@@ -89,10 +89,7 @@ namespace Analyzer {
 	{
 		Datum d = constval;
 		if (IS_STRING(type_info.type) && !is_null) {
-			char *str = (char*)constval.pointerval;
-			char *new_str = new char[strlen(str) + 1];
-			strcpy(new_str, str);
-			d.pointerval = (void*)new_str;
+			d.stringval = new std::string(*constval.stringval);
 		}
 		return new Constant(type_info, is_null, d);
 	}
@@ -553,13 +550,11 @@ namespace Analyzer {
 	void
 	Constant::cast_string(const SQLTypeInfo &new_type_info)
 	{
-		char *str = (char*)constval.pointerval;
-		if (new_type_info.type != kTEXT && new_type_info.dimension < strlen(str)) {
+		std::string *s = constval.stringval;
+		if (s != nullptr && new_type_info.type != kTEXT && new_type_info.dimension < s->length()) {
 			// truncate string
-			char *new_str = new char[new_type_info.dimension + 1];
-			strncpy(new_str, str, new_type_info.dimension);
-			delete str;
-			constval.pointerval = (void*)new_str;
+			constval.stringval = new std::string(s->substr(0, new_type_info.dimension));
+			delete s;
 		}
 		type_info = new_type_info;
 	}
@@ -957,7 +952,7 @@ namespace Analyzer {
 			case kCHAR:
 			case kVARCHAR:
 			case kTEXT:
-				return strcmp((char*)val1.pointerval, (char*)val2.pointerval) == 0;
+				return *val1.stringval == *val2.stringval;
 			case kNUMERIC:
 			case kDECIMAL:
 			case kBIGINT:
@@ -1073,7 +1068,7 @@ namespace Analyzer {
 				case kCHAR:
 				case kVARCHAR:
 				case kTEXT:
-					std::cout << "'" << (char*)constval.pointerval << "') ";
+					std::cout << "'" << constval.stringval << "') ";
 					return;
 				case kNUMERIC:
 				case kDECIMAL:

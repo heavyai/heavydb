@@ -216,7 +216,7 @@ namespace Parser {
 	{
 		Analyzer::Constant *c = new Analyzer::Constant(kNULLT, true);
 		Datum d;
-		d.pointerval = nullptr;
+		d.bigintval = 0;
 		c->set_constval(d);
 		return c;
 	}
@@ -228,10 +228,8 @@ namespace Parser {
 		ti.type = kVARCHAR;
 		ti.dimension = stringval->length();
 		ti.scale = 0;
-		char *s = new char[stringval->length() + 1];
-		strcpy(s, stringval->c_str());
 		Datum d;
-		d.pointerval = (void*)s;
+		d.stringval = new std::string(*stringval);
 		return new Analyzer::Constant(ti, false, d);
 	}
 

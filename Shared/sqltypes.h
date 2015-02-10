@@ -9,6 +9,7 @@
 #define SQLTYPES_H
 
 #include <cstdint>
+#include <string>
 
 // must not change because these values persist in catalogs.
 enum SQLTypes {
@@ -42,7 +43,7 @@ typedef union {
 	int64_t bigintval;
 	float floatval;
 	double doubleval;
-	void *pointerval; // by reference values
+	std::string *stringval; // string value
 } Datum;
 
 struct VarlenDatum {
