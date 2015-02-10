@@ -61,6 +61,7 @@ namespace Chunk_NS {
 			void unpin_buffer();
 			void pin_buffer();
 			void init_encoder();
+			void decompress(int8_t *compressed, VarlenDatum *result, Datum *datum) const;
 		private:
 			AbstractBuffer *buffer;
 			AbstractBuffer *index_buf;

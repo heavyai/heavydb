@@ -73,6 +73,88 @@ namespace Chunk_NS {
 	}
 
 	void
+	Chunk::decompress(int8_t *compressed, VarlenDatum *result, Datum *datum) const
+	{
+		result->is_null = false;
+		switch (column_desc->columnType.type) {
+			case kSMALLINT:
+				result->length = sizeof(int16_t);
+				result->pointer = (int8_t*)&datum->smallintval;
+				switch (column_desc->compression) {
+					case kENCODING_FIXED:
+						assert(column_desc->comp_param == 8);
+						datum->smallintval = (int16_t)*(int8_t*)compressed;
+						break;
+					case kENCODING_RL:
+					case kENCODING_DIFF:
+					case kENCODING_DICT:
+					case kENCODING_SPARSE:
+					case kENCODING_NONE:
+						assert(false);
+					break;
+				}
+				break;
+			case kINT:
+				result->length = sizeof(int32_t);
+				result->pointer = (int8_t*)&datum->intval;
+				switch (column_desc->compression) {
+					case kENCODING_FIXED:
+						switch (column_desc->comp_param) {
+							case 8:
+								datum->intval = (int32_t)*(int8_t*)compressed;
+								break;
+							case 16:
+								datum->intval = (int32_t)*(int16_t*)compressed;
+								break;
+							default:
+								assert(false);
+						}
+						break;
+					case kENCODING_RL:
+					case kENCODING_DIFF:
+					case kENCODING_DICT:
+					case kENCODING_SPARSE:
+					case kENCODING_NONE:
+						assert(false);
+					break;
+				}
+				break;
+			case kBIGINT:
+			case kNUMERIC:
+			case kDECIMAL:
+				result->length = sizeof(int64_t);
+				result->pointer = (int8_t*)&datum->bigintval;
+				switch (column_desc->compression) {
+					case kENCODING_FIXED:
+						switch (column_desc->comp_param) {
+							case 8:
+								datum->bigintval = (int64_t)*(int8_t*)compressed;
+								break;
+							case 16:
+								datum->bigintval = (int64_t)*(int16_t*)compressed;
+								break;
+							case 32:
+								datum->bigintval = (int64_t)*(int32_t*)compressed;
+								break;
+							default:
+								assert(false);
+						}
+						break;
+					case kENCODING_RL:
+					case kENCODING_DIFF:
+					case kENCODING_DICT:
+					case kENCODING_SPARSE:
+					case kENCODING_NONE:
+						assert(false);
+					break;
+				}
+				break;
+			default:
+				assert(false);
+		}
+	}
+
+	void
 	ChunkIter_reset(ChunkIter *it)
 	{
 		it->current_pos = it->start_pos;
@@ -93,7 +175,7 @@ namespace Chunk_NS {
 		if (it->skip_size > 0) {
 			// for fixed-size
 			if (uncompress && it->chunk->get_column_desc()->compression != kENCODING_NONE) {
-				assert(false);
+				it->chunk->decompress(it->current_pos, result, &it->datum);
 			} else {
 				result->length = it->skip_size;
 				result->pointer = it->current_pos;
