@@ -18,7 +18,24 @@ using Data_Namespace::DataMgr;
 using Data_Namespace::MemoryLevel;
 
 namespace Chunk_NS {
-	class ChunkIter;
+	class Chunk;
+};
+
+struct ChunkIter {
+		const Chunk_NS::Chunk *chunk;
+		int8_t *current_pos;
+		int8_t *start_pos;
+		int8_t *end_pos;
+		int skip;
+		int skip_size;
+		Datum datum; // used to hold uncompressed value
+};
+
+void ChunkIter_reset(ChunkIter *it);
+VarlenDatum ChunkIter_get_next(ChunkIter *it, bool uncompress, bool *is_end);
+
+
+namespace Chunk_NS {
 
 	class Chunk {
 		public:
@@ -50,20 +67,6 @@ namespace Chunk_NS {
 			const ColumnDescriptor *column_desc;
 	};
 
-	class ChunkIter {
-			friend class Chunk;
-		public:
-			ChunkIter(const Chunk &c, int8_t *p, int st, int sk) : chunk(c), current_pos(p), start_idx(st), skip(sk) {}
-			VarlenDatum get_next(bool uncompress, bool &is_end);
-			Datum get_next_value(bool &is_null, bool &is_end);
-		protected:
-			const Chunk &chunk;
-			int8_t *current_pos;
-			int start_idx;
-			int skip;
-	};
-
 }
-
 
 #endif // _CHUNK_H_

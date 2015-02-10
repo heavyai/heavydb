@@ -58,24 +58,56 @@ namespace Chunk_NS {
 	ChunkIter
 	Chunk::begin_iterator(int start_idx, int skip) const
 	{
-		// @TODO calculate start position
-		return ChunkIter(*this, 0, start_idx, skip);
+		ChunkIter it;
+		it.chunk = this;
+		it.skip = skip;
+		it.skip_size = column_desc->getStorageSize();
+		if (it.skip_size < 0) { // if it's variable length
+			it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(int32_t);
+			it.end_pos = index_buf->getMemoryPtr() + index_buf->size();
+		} else {
+			it.current_pos = it.start_pos = buffer->getMemoryPtr() + start_idx * it.skip_size;
+			it.end_pos = buffer->getMemoryPtr() + buffer->size();
+		}
+		return it;
 	}
 
-	VarlenDatum
-	ChunkIter::get_next(bool uncompress, bool &is_end)
+	void
+	ChunkIter_reset(ChunkIter *it)
 	{
-		is_end = true;
-		return VarlenDatum();
+		it->current_pos = it->start_pos;
 	}
 
-	Datum
-	ChunkIter::get_next_value(bool &is_null, bool &is_end)
+	void
+	ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is_end)
 	{
-		is_null = true;
-		is_end = true;
-		Datum d;
-		d.bigintval = 0;
-		return d;
+		if (it->current_pos >= it->end_pos) {
+			*is_end = true;
+			result->length = 0;
+			result->pointer = nullptr;
+			result->is_null = true;
+			return;
+		}
+		*is_end = false;
+			
+		if (it->skip_size > 0) {
+			// for fixed-size
+			if (uncompress && it->chunk->get_column_desc()->compression != kENCODING_NONE) {
+				assert(false);
+			} else {
+				result->length = it->skip_size;
+				result->pointer = it->current_pos;
+				result->is_null = false;
+			}
+			it->current_pos += it->skip * it->skip_size;
+		} else {
+			// @TODO(wei) ignore uncompress flag for variable length?
+			int offset = *(int32_t*)it->current_pos;
+			result->length = *((int32_t*)it->current_pos + 1) - offset;
+			result->pointer = it->chunk->get_buffer()->getMemoryPtr() + offset;
+			result->is_null = false;
+			it->current_pos += it->skip * sizeof(int32_t);
+		}
 	}
+
 }
