@@ -875,18 +875,17 @@ std::vector<ResultRow> Executor::executeSortPlan(
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
   // TODO(alex): check the semantics for order by multiple columns
-  CHECK_EQ(order_entries.size(), 1);
   for (const auto order_entry : order_entries) {
-    CHECK_GT(order_entry.tle_no, 0);
-    CHECK_LT(order_entry.tle_no, target_list.size());
+    CHECK_GE(order_entry.tle_no, 1);
+    CHECK_LE(order_entry.tle_no, target_list.size());
     auto compare = [&order_entry](const ResultRow& lhs, const ResultRow& rhs) {
       // The compare function must define a strict weak ordering, which means
       // we can't use the overloaded less than operator for boost::variant since
       // there's not greater than counterpart. If we naively use "not less than"
       // as the compare function for descending order, std::sort will trigger
       // a segmentation fault (or corrupt memory).
-      const auto lhs_v = lhs.agg_result(order_entry.tle_no);
-      const auto rhs_v = rhs.agg_result(order_entry.tle_no);
+      const auto lhs_v = lhs.agg_result(order_entry.tle_no - 1);
+      const auto rhs_v = rhs.agg_result(order_entry.tle_no - 1);
       const auto lhs_ip = boost::get<int64_t>(&lhs_v);
       if (lhs_ip) {
         const auto rhs_ip = boost::get<int64_t>(&rhs_v);
