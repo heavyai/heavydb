@@ -906,13 +906,13 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         const auto memory_level = device_type == ExecutorDeviceType::GPU
           ? Data_Namespace::GPU_LEVEL
           : Data_Namespace::CPU_LEVEL;
-				const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
+        const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
         Chunk_NS::Chunk chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
           chunk_key,
           memory_level,
           fragment.deviceIds[static_cast<int>(memory_level)],
           chunk_meta_it->second.numBytes);
-				auto ab = chunk.get_buffer();
+        auto ab = chunk.get_buffer();
         CHECK(ab->getMemoryPtr());
         auto it = global_to_local_col_ids_.find(col_id);
         CHECK(it != global_to_local_col_ids_.end());
