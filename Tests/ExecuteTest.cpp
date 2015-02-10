@@ -328,12 +328,12 @@ TEST(Select, Having) {
     {
       const auto row = rows[0];
       ASSERT_EQ(v<int64_t>(row.agg_result(0)), 101);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 420);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 42 * g_num_rows);
     }
     {
       const auto row = rows[1];
       ASSERT_EQ(v<int64_t>(row.agg_result(0)), 102);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 430);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43 * g_num_rows);
     }
   }
   {
@@ -344,12 +344,12 @@ TEST(Select, Having) {
     {
       const auto row = rows[0];
       ASSERT_EQ(v<int64_t>(row.agg_result(0)), 101);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 420);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 42 * g_num_rows);
     }
     {
       const auto row = rows[1];
       ASSERT_EQ(v<int64_t>(row.agg_result(0)), 102);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 430);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43 * g_num_rows);
     }
   }
   {
@@ -359,12 +359,12 @@ TEST(Select, Having) {
     {
       const auto row = rows[0];
       ASSERT_EQ(v<int64_t>(row.agg_result(0)), 101);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 420);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 42 * g_num_rows);
     }
     {
       const auto row = rows[1];
       ASSERT_EQ(v<int64_t>(row.agg_result(0)), 102);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 430);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43 * g_num_rows);
     }
   }
 }
@@ -397,7 +397,7 @@ TEST(Select, CountDistinct) {
 TEST(Select, ScanNoAggregation) {
   {
   auto rows = run_multiple_agg("SELECT * FROM test;", ExecutorDeviceType::CPU);
-  CHECK_EQ(rows.size(), 20);
+  CHECK_EQ(rows.size(), 2 * g_num_rows);
   ssize_t i = 0;
   for (; i < g_num_rows; ++i) {
     const auto row = rows[i];
@@ -423,7 +423,7 @@ TEST(Select, ScanNoAggregation) {
   }
   {
   auto rows = run_multiple_agg("SELECT t.* FROM test t;", ExecutorDeviceType::CPU);
-  CHECK_EQ(rows.size(), 20);
+  CHECK_EQ(rows.size(), 2 * g_num_rows);
   ssize_t i = 0;
   for (; i < g_num_rows; ++i) {
     const auto row = rows[i];
@@ -449,7 +449,7 @@ TEST(Select, ScanNoAggregation) {
   }
   {
   auto rows = run_multiple_agg("SELECT x, z, t FROM test;", ExecutorDeviceType::CPU);
-  CHECK_EQ(rows.size(), 20);
+  CHECK_EQ(rows.size(), 2 * g_num_rows);
   ssize_t i = 0;
   for (; i < g_num_rows; ++i) {
     const auto row = rows[i];
@@ -459,7 +459,7 @@ TEST(Select, ScanNoAggregation) {
   }
   for (; i < g_num_rows / 2; ++i) {
     const auto row = rows[i];
-    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 8);;
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 8);
     ASSERT_EQ(v<int64_t>(row.agg_result(1)), 102);
     ASSERT_EQ(v<int64_t>(row.agg_result(2)), 1002);
   }
@@ -472,11 +472,11 @@ TEST(Select, ScanNoAggregation) {
   }
   {
   auto rows = run_multiple_agg("SELECT x + z, t FROM test WHERE x <> 7 AND y > 42;", ExecutorDeviceType::CPU);
-  CHECK_EQ(rows.size(), 5);
+  CHECK_EQ(rows.size(), g_num_rows / 2);
   ssize_t i = 0;
   for (; i < g_num_rows / 2; ++i) {
     const auto row = rows[i];
-    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 110);;
+    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 110);
     ASSERT_EQ(v<int64_t>(row.agg_result(1)), 1002);
   }
   }
