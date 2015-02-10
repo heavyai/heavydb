@@ -885,8 +885,12 @@ std::vector<ResultRow> Executor::executeSortPlan(
         return order_entry.is_desc ? !result : result;
       });
   }
-  return root_plan_->get_limit()
-    ? decltype(rows_to_sort)(rows_to_sort.begin(), rows_to_sort.begin() + root_plan_->get_limit())
+  int64_t limit = root_plan_->get_limit();
+  if (limit) {
+    limit = std::min(limit, static_cast<int64_t>(rows_to_sort.size()));
+  }
+  return limit
+    ? decltype(rows_to_sort)(rows_to_sort.begin(), rows_to_sort.begin() + limit)
     : rows_to_sort;
 }
 
