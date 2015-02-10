@@ -164,6 +164,7 @@ private:
   };
   std::unique_ptr<GpuExecutionContext> gpu_context_;
   mutable std::unordered_map<int, llvm::Value*> fetch_cache_;
+  mutable std::vector<llvm::Value*> group_by_expr_cache_;
   llvm::Function* row_func_;
   std::vector<int64_t> init_agg_vals_;
   std::unordered_map<int, int> global_to_local_col_ids_;

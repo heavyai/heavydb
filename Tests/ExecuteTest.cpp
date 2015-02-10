@@ -581,6 +581,28 @@ TEST(Select, ComplexQueries) {
       ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
     }
   }
+  {
+    const auto rows = run_multiple_agg(
+      "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
+      "WHERE z BETWEEN 100 AND 200 GROUP BY a, y;",
+      ExecutorDeviceType::CPU);
+    ASSERT_EQ(rows.size(), 3);
+    {
+      const auto row = rows[0];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 49);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows);
+    }
+    {
+      const auto row = rows[1];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+    {
+      const auto row = rows[2];
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
+      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+    }
+  }
 }
 
 int main(int argc, char** argv)

@@ -235,6 +235,11 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
     const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
     CHECK(var);
     col_id = var->get_varno();
+    CHECK_GE(col_id, 1);
+    if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
+      CHECK_LE(col_id, group_by_expr_cache_.size());
+      return group_by_expr_cache_[col_id - 1];
+    }
   }
   const int local_col_id = getLocalColumnId(col_id);
   auto it = fetch_cache_.find(local_col_id);
@@ -1448,6 +1453,7 @@ void Executor::call_aggregators(
     size_t i = 0;
     for (const auto group_by_col : group_by_cols) {
       auto group_key = codegen(group_by_col);
+      group_by_expr_cache_.push_back(group_key);
       auto group_key_ptr = ir_builder_.CreateGEP(group_keys_buffer,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
       auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
