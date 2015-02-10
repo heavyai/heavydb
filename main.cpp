@@ -212,7 +212,7 @@ main(int argc, char* argv[])
 	Catalog cat(base_path, user, db, dataMgr);
 	while (true) {
 		try {
-			cout << "MapD > ";
+			cout << "mapd> ";
 			string input_str;
 			getline(cin, input_str);
 			if (cin.eof()) {
@@ -250,17 +250,9 @@ main(int argc, char* argv[])
 						});
 						if (!results.empty()) {
 							for (const auto& row : results) {
-								const auto val_tuple = row.value_tuple();
-								if (!val_tuple.empty()) {
-									cout << '(' << val_tuple[0];
-									for (size_t i = 1; i < val_tuple.size(); ++i) {
-										cout << ", " << val_tuple[i];
-									}
-									cout << ")\t";
-								}
-								cout << row.agg_result(0);
+								cout << fixed << setprecision(13) << row.agg_result(0);
 								for (size_t i = 1; i < row.size(); ++i) {
-									cout << ", " << row.agg_result(i);
+									cout << "|" << row.agg_result(i);
 								}
 								cout << endl;
 							}
