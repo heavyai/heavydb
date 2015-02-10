@@ -957,7 +957,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           chunk_key,
           memory_level,
           fragment.deviceIds[static_cast<int>(memory_level)],
-          chunk_meta_it->second.numBytes);
+          chunk_meta_it->second.numBytes,
+					chunk_meta_it->second.numElements);
         auto ab = chunk.get_buffer();
         CHECK(ab->getMemoryPtr());
         auto it = global_to_local_col_ids_.find(col_id);

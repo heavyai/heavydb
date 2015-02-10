@@ -24,6 +24,8 @@ struct ColumnDescriptor {
     ColumnDescriptor(const int tableId, const int columnId, const std::string &columnName, const SQLTypeInfo columnType, const EncodingType compression, const int comp_param = 0): tableId(tableId), columnId(columnId), columnName(columnName),columnType(columnType),compression(compression),comp_param(comp_param) {
     } 
 
+		inline bool is_varlen() const { return IS_STRING(columnType.type) && compression != kENCODING_DICT; }
+
 		int getStorageSize() const {
 			switch (columnType.type) {
 				case kBOOLEAN:

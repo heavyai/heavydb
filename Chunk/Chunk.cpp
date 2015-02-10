@@ -7,17 +7,24 @@
 
 namespace Chunk_NS {
 	Chunk
-	Chunk::getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
+	Chunk::getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes, const size_t numElems) {
 			Chunk chunk(cd);
-			chunk.getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes);
+			chunk.getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes, numElems);
 			return chunk;
 		}
 
 	void 
-	Chunk::getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id, const size_t num_bytes)
+	Chunk::getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id, const size_t num_bytes, const size_t num_elems)
 	{
-		// @TODO add logic here to handle string case
-		buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
+		if (column_desc->is_varlen()) {
+			ChunkKey subKey = key;
+			subKey.push_back(1); // 1 for the main buffer
+			buffer = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
+			subKey.pop_back();
+			subKey.push_back(2); // 2 for the index buffer
+			index_buf = data_mgr->getChunkBuffer(subKey, mem_level, device_id, (num_elems + 1) * sizeof(int32_t)); // always record n+1 offsets so string length can be calculated
+		} else
+			buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
 	}
 
 	void
