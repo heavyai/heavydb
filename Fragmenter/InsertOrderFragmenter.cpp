@@ -114,7 +114,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
             int columnId = insertDataStruct.columnIds[i];
             auto colMapIt = columnMap_.find(columnId);
             assert(colMapIt != columnMap_.end());
-            currentFragment->shadowChunkMetadataMap[columnId] = colMapIt->second.appendData(dataCopy[i],numRowsToInsert);
+            currentFragment->shadowChunkMetadataMap[columnId] = colMapIt->second.appendData(dataCopy[i],numRowsToInsert, numRowsInserted);
         }
 
         currentFragment->shadowNumTuples = fragmentInfoVec_.back().numTuples + numRowsToInsert;

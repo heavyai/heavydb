@@ -4,6 +4,7 @@ find_package(CUDA)
 SET (datamgr_source_files
     DataMgr.cpp
     Encoder.cpp
+		StringNoneEncoder.cpp
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp

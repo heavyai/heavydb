@@ -4,6 +4,7 @@
  */
 
 #include "Chunk.h"
+#include "../DataMgr/StringNoneEncoder.h"
 
 namespace Chunk_NS {
 	Chunk
@@ -22,7 +23,7 @@ namespace Chunk_NS {
 			buffer = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
 			subKey.pop_back();
 			subKey.push_back(2); // 2 for the index buffer
-			index_buf = data_mgr->getChunkBuffer(subKey, mem_level, device_id, (num_elems + 1) * sizeof(int32_t)); // always record n+1 offsets so string length can be calculated
+			index_buf = data_mgr->getChunkBuffer(subKey, mem_level, device_id, (num_elems + 1) * sizeof(int64_t)); // always record n+1 offsets so string length can be calculated
 		} else
 			buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
 	}
@@ -42,8 +43,13 @@ namespace Chunk_NS {
 	}
 
 	ChunkMetadata
-	Chunk::appendData(DataBlockPtr &src_data, const size_t num_elems)
+	Chunk::appendData(DataBlockPtr &src_data, const size_t num_elems, const size_t start_idx)
 	{
+		if (column_desc->is_varlen()) {
+			StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
+			return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
+
+		}
 		return buffer->encoder->appendData(src_data.numbersPtr, num_elems);
 	}
 
@@ -68,6 +74,10 @@ namespace Chunk_NS {
 	Chunk::init_encoder()
 	{
 		buffer->initEncoder(column_desc->columnType, column_desc->compression, column_desc->comp_param);
+		if (column_desc->is_varlen()) {
+			StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
+			str_encoder->set_index_buf(index_buf);
+		}
 	}
 
 	ChunkIter
@@ -78,7 +88,7 @@ namespace Chunk_NS {
 		it.skip = skip;
 		it.skip_size = column_desc->getStorageSize();
 		if (it.skip_size < 0) { // if it's variable length
-			it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(int32_t);
+			it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(int64_t);
 			it.end_pos = index_buf->getMemoryPtr() + index_buf->size();
 		} else {
 			it.current_pos = it.start_pos = buffer->getMemoryPtr() + start_idx * it.skip_size;
@@ -199,11 +209,11 @@ namespace Chunk_NS {
 			it->current_pos += it->skip * it->skip_size;
 		} else {
 			// @TODO(wei) ignore uncompress flag for variable length?
-			int offset = *(int32_t*)it->current_pos;
-			result->length = *((int32_t*)it->current_pos + 1) - offset;
+			int64_t offset = *(int64_t*)it->current_pos;
+			result->length = *((int64_t*)it->current_pos + 1) - offset;
 			result->pointer = it->chunk->get_buffer()->getMemoryPtr() + offset;
 			result->is_null = false;
-			it->current_pos += it->skip * sizeof(int32_t);
+			it->current_pos += it->skip * sizeof(int64_t);
 		}
 	}
 

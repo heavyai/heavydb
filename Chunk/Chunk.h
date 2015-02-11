@@ -48,7 +48,7 @@ namespace Chunk_NS {
 					chunkVec.push_back(Chunk(cd));
 			}
 			ChunkIter begin_iterator(int start_idx, int skip) const;
-			ChunkMetadata appendData(DataBlockPtr &srcData, const size_t numAppendElems);
+			ChunkMetadata appendData(DataBlockPtr &srcData, const size_t numAppendElems, const size_t startIdx);
 			void createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0);
 			void getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0, const size_t num_bytes = 0, const size_t num_elems = 0);
 			static Chunk getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId, const size_t num_bytes, const size_t num_elems = 0);
