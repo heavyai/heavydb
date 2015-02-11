@@ -1198,6 +1198,18 @@ void Executor::executeSimpleInsert() {
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
+    case kFLOAT: {
+      auto col_data = reinterpret_cast<float*>(malloc(sizeof(float)));
+      *col_data = col_datum.floatval;
+      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
+      break;
+    }
+    case kDOUBLE: {
+      auto col_data = reinterpret_cast<double*>(malloc(sizeof(double)));
+      *col_data = col_datum.floatval;
+      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
+      break;
+    }
     default:
       CHECK(false);
     }
