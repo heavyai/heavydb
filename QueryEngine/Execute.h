@@ -69,6 +69,8 @@ private:
 };
 
 class Executor {
+  static_assert(sizeof(float) == 4 && sizeof(double) == 8,
+    "Host hardware not supported, unexpected size of float / double.");
 public:
   Executor(const Planner::RootPlan* root_plan);
   ~Executor();
