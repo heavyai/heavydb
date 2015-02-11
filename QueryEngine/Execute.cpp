@@ -37,8 +37,7 @@ Executor::Executor(const Planner::RootPlan* root_plan)
   , ir_builder_(context_)
   , execution_engine_(nullptr)
   , row_func_(nullptr)
-  , query_id_(0)
-  , filter_false_(nullptr) {
+  , query_id_(0) {
   CHECK(root_plan_);
 }
 
@@ -310,35 +309,64 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
 }
 
 llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) const {
-  // SELECT CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END FROM test;
+  // Generate a "projection" function which takes the case conditions and
+  // values as arguments, interleaved. The 'else' expression is the last one.
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
-  auto expr_store_ptr = ir_builder_.CreateAlloca(
-    get_int_type(get_bit_width(case_expr->get_type_info().type), context_),
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(context_), 1));
-  CHECK(filter_false_);
-  const auto end_case = llvm::BasicBlock::Create(context_, "end_case", row_func_, filter_false_);
-  size_t expr_idx = 0;
+  std::vector<llvm::Type*> case_arg_types;
+  const auto case_type = case_expr->get_type_info().type;
+  CHECK(IS_INTEGER(case_type));
+  const auto case_llvm_type = get_int_type(get_bit_width(case_type), context_);
   for (const auto& expr_pair : expr_pair_list) {
-    const auto cond_lv = codegen(expr_pair.first);
-    auto next_case_branch = expr_idx < expr_pair_list.size() - 1
-      ? llvm::BasicBlock::Create(context_, "next_case_branch", row_func_, end_case)
-      : end_case;
-    auto crt_case_branch = llvm::BasicBlock::Create(context_, "crt_case_branch", row_func_, next_case_branch);
-    ir_builder_.CreateCondBr(cond_lv, crt_case_branch, next_case_branch);
-    ir_builder_.SetInsertPoint(crt_case_branch);
-    ir_builder_.CreateStore(codegen(expr_pair.second), expr_store_ptr);
-    ir_builder_.CreateBr(end_case);
-    ir_builder_.SetInsertPoint(next_case_branch);
+    CHECK_EQ(expr_pair.first->get_type_info().type, kBOOLEAN);
+    case_arg_types.push_back(llvm::Type::getInt1Ty(context_));
+    CHECK_EQ(expr_pair.second->get_type_info().type, case_type);
+    case_arg_types.push_back(case_llvm_type);
+  }
+  CHECK_EQ(else_expr->get_type_info().type, case_type);
+  case_arg_types.push_back(case_llvm_type);
+  auto ft = llvm::FunctionType::get(
+    case_llvm_type,
+    case_arg_types,
+    false);
+  auto case_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "case_func", module_);
+  const auto end_case = llvm::BasicBlock::Create(context_, "end_case", case_func);
+  size_t expr_idx = 0;
+  auto& case_branch_exprs = case_func->getArgumentList();
+  auto arg_it = case_branch_exprs.begin();
+  llvm::BasicBlock* next_cmp_branch { end_case };
+  auto& case_func_entry = case_func->front();
+  llvm::IRBuilder<> case_func_builder(&case_func_entry);
+  for (size_t i = 0; i < expr_pair_list.size(); ++i) {
+    CHECK(arg_it != case_branch_exprs.end());
+    llvm::Value* cond_lv = arg_it++;
+    CHECK(arg_it != case_branch_exprs.end());
+    llvm::Value* ret_lv = arg_it++;
+    auto ret_case = llvm::BasicBlock::Create(context_, "ret_case", case_func, next_cmp_branch);
+    case_func_builder.SetInsertPoint(ret_case);
+    case_func_builder.CreateRet(ret_lv);
+    auto cmp_case = llvm::BasicBlock::Create(context_, "cmp_case", case_func, ret_case);
+    case_func_builder.SetInsertPoint(cmp_case);
+    case_func_builder.CreateCondBr(cond_lv, ret_case, next_cmp_branch);
+    next_cmp_branch = cmp_case;
     ++expr_idx;
   }
-  auto else_case_branch = llvm::BasicBlock::Create(context_, "else_case_branch", row_func_, end_case);
-  ir_builder_.SetInsertPoint(else_case_branch);
-  ir_builder_.CreateStore(codegen(else_expr), expr_store_ptr);
-  ir_builder_.CreateBr(end_case);
-  ir_builder_.SetInsertPoint(end_case);
-  return ir_builder_.CreateLoad(expr_store_ptr);
+  CHECK(arg_it != case_branch_exprs.end());
+  case_func_builder.SetInsertPoint(end_case);
+  case_func_builder.CreateRet(arg_it++);
+  CHECK(arg_it == case_branch_exprs.end());
+  case_func->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
+  std::vector<llvm::Value*> case_func_args;
+  // The 'case_func' function checks arguments for match in reverse order
+  // (code generation is easier this way because of how 'BasicBlock::Create' works).
+  // Reverse the actual arguments to compensate for this, then call the function.
+  for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
+    case_func_args.push_back(codegen(expr_pair.first));
+    case_func_args.push_back(codegen(expr_pair.second));
+  }
+  case_func_args.push_back(codegen(else_expr));
+  return ir_builder_.CreateCall(case_func, case_func_args);
 }
 
 namespace {
@@ -374,7 +402,7 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
   const auto lhs_lv = codegen(lhs);
   const auto rhs_lv = codegen(rhs);
   CHECK_EQ(lhs_type.type, rhs_type.type);
-  if (lhs_type.type == kSMALLINT || lhs_type.type == kINT || lhs_type.type == kBIGINT) {
+  if (IS_INTEGER(lhs_type.type)) {
     return ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
   }
   if (lhs_type.type == kFLOAT) {
@@ -450,9 +478,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
   const auto lhs_lv = codegen(lhs);
   const auto rhs_lv = codegen(rhs);
   CHECK_EQ(lhs_type.type, rhs_type.type);
-  if (lhs_type.type == kSMALLINT ||
-      lhs_type.type == kINT ||
-      lhs_type.type == kBIGINT) {
+  if (IS_INTEGER(lhs_type.type)) {
     switch (optype) {
     case kMINUS:
       return ir_builder_.CreateSub(lhs_lv, rhs_lv);
@@ -1485,9 +1511,9 @@ void Executor::call_aggregators(
   auto& context = llvm::getGlobalContext();
 
   auto filter_true = llvm::BasicBlock::Create(context, "filter_true", row_func_);
-  filter_false_ = llvm::BasicBlock::Create(context, "filter_false", row_func_);
+  auto filter_false = llvm::BasicBlock::Create(context, "filter_false", row_func_);
 
-  ir_builder_.CreateCondBr(filter_result, filter_true, filter_false_);
+  ir_builder_.CreateCondBr(filter_result, filter_true, filter_false);
   ir_builder_.SetInsertPoint(filter_true);
 
   std::vector<llvm::Value*> agg_out_vec;
@@ -1568,8 +1594,8 @@ void Executor::call_aggregators(
     }
     ir_builder_.CreateCall(agg_func, agg_args);
   }
-  ir_builder_.CreateBr(filter_false_);
-  ir_builder_.SetInsertPoint(filter_false_);
+  ir_builder_.CreateBr(filter_false);
+  ir_builder_.SetInsertPoint(filter_false);
   ir_builder_.CreateRetVoid();
 }
 

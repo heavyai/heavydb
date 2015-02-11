@@ -175,7 +175,6 @@ private:
   const size_t groups_buffer_entry_count_ { 2048 };
   boost::mutex reduce_mutex_;
   std::atomic<int32_t> query_id_;
-  llvm::BasicBlock* filter_false_;
 };
 
 template<typename TimeT = std::chrono::milliseconds>
