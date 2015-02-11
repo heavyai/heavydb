@@ -200,6 +200,10 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       return std::make_shared<FixedWidthInt>(4);
     case kBIGINT:
       return std::make_shared<FixedWidthInt>(8);
+    case kFLOAT:
+      return std::make_shared<FixedWidthInt>(4);
+    case kDOUBLE:
+      return std::make_shared<FixedWidthInt>(8);
     default:
       CHECK(false);
     }
@@ -215,6 +219,10 @@ size_t get_bit_width(const SQLTypes type) {
     case kINT:
       return 32;
     case kBIGINT:
+      return 64;
+    case kFLOAT:
+      return 32;
+    case kDOUBLE:
       return 64;
     default:
       CHECK(false);

@@ -109,13 +109,13 @@ const ssize_t g_num_rows { 10 };
 TEST(Select, FilterAndSimpleAggregation) {
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(7, 42, 101, 1001);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2);", ExecutorDeviceType::CPU);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(8, 43, 102, 1002);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4);", ExecutorDeviceType::CPU);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(7, 43, 102, 1002);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6);", ExecutorDeviceType::CPU);
   }
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     if (skip_tests(device_type)) {
@@ -668,7 +668,7 @@ int main(int argc, char** argv)
   testing::InitGoogleTest(&argc, argv);
   try {
     run_ddl_statement("DROP TABLE IF EXISTS test;");
-    run_ddl_statement("CREATE TABLE test(x int, y int, z smallint, t bigint);");
+    run_ddl_statement("CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
