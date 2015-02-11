@@ -267,7 +267,7 @@ namespace Analyzer {
 						common_type.type = kBIGINT;
 						break;
 					case kFLOAT:
-						common_type.type = kDOUBLE;
+						common_type.type = kFLOAT;
 						break;
 					case kDOUBLE:
 						common_type.type = kDOUBLE;
@@ -291,14 +291,14 @@ namespace Analyzer {
 						common_type.type = kFLOAT;
 						break;
 					case kBIGINT:
-						common_type.type = kDOUBLE;
+						common_type.type = kFLOAT;
 						break;
 					case kDOUBLE:
 						common_type.type = kDOUBLE;
 						break;
 					case kNUMERIC:
 					case kDECIMAL:
-						common_type.type = kDOUBLE;
+						common_type.type = kFLOAT;
 						break;
 					default:
 						assert(false);
@@ -337,7 +337,7 @@ namespace Analyzer {
 						common_type.scale = type2.scale;
 						break;
 					case kFLOAT:
-						common_type.type = kDOUBLE; // promote to DOUBLE
+						common_type.type = kFLOAT;
 						break;
 					case kDOUBLE:
 						common_type.type = kDOUBLE;
