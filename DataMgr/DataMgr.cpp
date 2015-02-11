@@ -18,7 +18,7 @@ using namespace File_Namespace;
 
 namespace Data_Namespace {
 
-    DataMgr::DataMgr(const int fragmentKeyIndex, const string &dataDir): fragmentKeyIndex_(fragmentKeyIndex), dataDir_(dataDir) {
+    DataMgr::DataMgr(const string &dataDir): dataDir_(dataDir) {
         try {
             cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
             hasGpus_ = true;
@@ -78,32 +78,12 @@ namespace Data_Namespace {
 
     AbstractBuffer * DataMgr::createChunkBuffer(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId) {
         int level = static_cast <int> (memoryLevel);
-        //int device = key[fragmentKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][deviceId]->createChunk(key);
     }
 
     AbstractBuffer * DataMgr::getChunkBuffer(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
-        //int device = key[fragmentKeyIndex_] % levelSizes_[level];
         return bufferMgrs_[level][deviceId]->getChunk(key, numBytes);
-    }
-
-    void DataMgr::deleteChunk(const ChunkKey &key) {
-        // We don't know whether a given manager (of
-        // correct fragment key) actually has a chunk at
-        // a given point. So try-except block a delete to
-        // all of them.  Will change if we have DataMgr
-        // keep track of this state
-        int numLevels = bufferMgrs_.size();
-        for (int level = numLevels - 1; level >= 0; --level) {
-            int device = key[fragmentKeyIndex_] % levelSizes_[level];
-            try {
-                bufferMgrs_[level][device]->deleteChunk(key);
-            }
-            catch (std::runtime_error &error) {
-                std::cout << "Chunk did not exist at level " <<level <<  std::endl;
-            }
-        }
     }
 
     void DataMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix) {

@@ -189,7 +189,7 @@ main(int argc, char* argv[])
 		return 1;
 	}
 
-	Data_Namespace::DataMgr dataMgr (2, base_path + "/mapd_data/"); 
+	Data_Namespace::DataMgr dataMgr (base_path + "/mapd_data/"); 
 	SysCatalog sys_cat(base_path, dataMgr);
 	UserMetadata user;
 	if (!sys_cat.getMetadataForUser(user_name, user)) {

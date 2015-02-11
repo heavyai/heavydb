@@ -28,7 +28,7 @@ public:
     const auto system_db_file = boost::filesystem::path(base_path_) / "mapd_catalogs" / "mapd";
     CHECK(boost::filesystem::exists(system_db_file));
     const auto data_path = boost::filesystem::path(base_path_) / "mapd_data";
-    data_mgr_.reset(new Data_Namespace::DataMgr(2, data_path.string()));
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string()));
     Catalog_Namespace::SysCatalog sys_cat(base_path_, *data_mgr_);
     Catalog_Namespace::UserMetadata user_meta;
     CHECK(sys_cat.getMetadataForUser(user_, user_meta));

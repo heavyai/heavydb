@@ -27,7 +27,7 @@ Catalog_Namespace::Catalog get_catalog() {
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   CHECK(boost::filesystem::exists(system_db_file));
 	auto data_dir = base_path / "mapd_data";
-	Data_Namespace::DataMgr *dataMgr = new Data_Namespace::DataMgr(2, data_dir.string());
+	Data_Namespace::DataMgr *dataMgr = new Data_Namespace::DataMgr(data_dir.string());
   Catalog_Namespace::SysCatalog sys_cat(base_path.string(), *dataMgr);
   Catalog_Namespace::UserMetadata user;
   CHECK(sys_cat.getMetadataForUser(user_name, user));
