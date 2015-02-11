@@ -182,6 +182,24 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, FloatAndDoubleTests) {
+  for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    if (skip_tests(device_type)) {
+      CHECK(device_type == ExecutorDeviceType::GPU);
+      LOG(WARNING) << "GPU not available, skipping GPU tests";
+      continue;
+    }
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2;", device_type)), g_num_rows);
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.1 AND f < 1.3;", device_type)), g_num_rows / 2);
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.2 AND f < 1.4;", device_type)), g_num_rows / 2);
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2 AND d > 2.0 AND d < 2.4;", device_type)), g_num_rows);
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2 OR (d > 2.0 AND d < 3.0);", device_type)), 2 * g_num_rows);
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE f > 1.0 AND f < 1.2;", device_type)), 49 * g_num_rows);
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE d + f > 3.0 AND d + f < 4.0;", device_type)),
+      49 * g_num_rows + 51 * g_num_rows / 2 + 50 * g_num_rows / 2);
+  }
+}
+
 TEST(Select, FilterAndMultipleAggregation) {
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     if (skip_tests(device_type)) {

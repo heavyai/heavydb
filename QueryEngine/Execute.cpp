@@ -719,6 +719,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
   Executor::ResultRows reduced_results_vec;
 
   decltype(results_per_device.front().front().agg_results_idx_) agg_results_idx;
+  decltype(results_per_device.front().front().agg_kinds_) agg_kinds;
   decltype(results_per_device.front().front().agg_types_) agg_types;
 
   for (const auto& device_results : results_per_device) {
@@ -729,9 +730,12 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
       } else {
         CHECK(agg_results_idx == row.agg_results_idx_);
       }
-      if (agg_types.empty()) {
+      if (agg_kinds.empty()) {
+        agg_kinds = row.agg_kinds_;
+        CHECK(agg_types.empty());
         agg_types = row.agg_types_;
       } else {
+        CHECK(agg_kinds == row.agg_kinds_);
         CHECK(agg_types == row.agg_types_);
       }
       auto it = reduced_results_map.find(row.value_tuple_);
@@ -742,7 +746,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         CHECK_EQ(old_agg_results.size(), row.agg_results_.size());
         const size_t agg_col_count = row.size();
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-          const auto agg_type = row.agg_types_[agg_col_idx];
+          const auto agg_type = row.agg_kinds_[agg_col_idx];
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
           switch (agg_type) {
           case kSUM:
@@ -774,6 +778,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
     row.value_tuple_ = kv.first;
     row.agg_results_ = kv.second;
     row.agg_results_idx_ = agg_results_idx;
+    row.agg_kinds_ = agg_kinds;
     row.agg_types_ = agg_types;
     reduced_results_vec.push_back(row);
   }
@@ -800,7 +805,8 @@ Executor::ResultRows Executor::groupBufferToResults(
         const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
         const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kCOUNT;  // kCOUNT is a meaningless placeholder here
         result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
-        result_row.agg_types_.push_back(agg_type);
+        result_row.agg_kinds_.push_back(agg_type);
+        result_row.agg_types_.push_back(target_expr->get_type_info().type);
         if (agg_expr && agg_type == kAVG) {
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
@@ -1140,7 +1146,8 @@ void Executor::executePlanWithoutGroupBy(
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     const auto agg_type = agg_expr->get_aggtype();
     result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
-    result_row.agg_types_.push_back(agg_type);
+    result_row.agg_kinds_.push_back(agg_type);
+    result_row.agg_types_.push_back(target_expr->get_type_info().type);
     if (agg_type == kAVG) {
       result_row.agg_results_.push_back(
         reduce_results(
