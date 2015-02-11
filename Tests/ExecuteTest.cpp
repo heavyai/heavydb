@@ -623,23 +623,30 @@ TEST(Select, GroupByExprNoFilterNoAggregate) {
 }
 
 TEST(Select, Case) {
-  ASSERT_EQ(v<int64_t>(run_simple_agg(
-    "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) FROM test;",
-    ExecutorDeviceType::CPU)),
-    2 * g_num_rows + g_num_rows / 2
-  );
-  ASSERT_EQ(v<int64_t>(run_simple_agg(
-    "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
-    "FROM test WHERE CASE WHEN y BETWEEN 42 AND 43 THEN 5 ELSE 4 END > 4;",
-    ExecutorDeviceType::CPU)),
-    2 * g_num_rows + g_num_rows / 2
-  );
-  ASSERT_EQ(v<int64_t>(run_simple_agg(
-    "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
-    "FROM test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;",
-    ExecutorDeviceType::CPU)),
-    0
-  );
+  for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    if (skip_tests(device_type)) {
+      CHECK(device_type == ExecutorDeviceType::GPU);
+      LOG(WARNING) << "GPU not available, skipping GPU tests";
+      continue;
+    }
+    ASSERT_EQ(v<int64_t>(run_simple_agg(
+      "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) FROM test;",
+      device_type)),
+      2 * g_num_rows + g_num_rows / 2
+    );
+    ASSERT_EQ(v<int64_t>(run_simple_agg(
+      "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
+      "FROM test WHERE CASE WHEN y BETWEEN 42 AND 43 THEN 5 ELSE 4 END > 4;",
+      device_type)),
+      2 * g_num_rows + g_num_rows / 2
+    );
+    ASSERT_EQ(v<int64_t>(run_simple_agg(
+      "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
+      "FROM test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;",
+      device_type)),
+      0
+    );
+  }
   const auto rows = run_multiple_agg(
     "SELECT CASE WHEN x + y > 50 THEN 77 ELSE 88 END AS foo, COUNT(*) FROM test GROUP BY foo;",
     ExecutorDeviceType::CPU);
