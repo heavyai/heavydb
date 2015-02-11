@@ -201,9 +201,9 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
     case kBIGINT:
       return std::make_shared<FixedWidthInt>(8);
     case kFLOAT:
-      return std::make_shared<FixedWidthInt>(4);
+      return std::make_shared<FixedWidthReal>(false);
     case kDOUBLE:
-      return std::make_shared<FixedWidthInt>(8);
+      return std::make_shared<FixedWidthReal>(true);
     default:
       CHECK(false);
     }
@@ -275,15 +275,26 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
         module_);
       ir_builder_.Insert(dec_val);
       auto dec_type = dec_val->getType();
-      CHECK(dec_type->isIntegerTy());
-      auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
-      auto col_width = get_col_bit_width(col_var);
-      auto dec_val_cast = ir_builder_.CreateCast(
-        static_cast<size_t>(col_width) > dec_width
-          ? llvm::Instruction::CastOps::SExt
-          : llvm::Instruction::CastOps::Trunc,
-        dec_val,
-        get_int_type(col_width, context_));
+      llvm::Value* dec_val_cast { nullptr };
+      if (dec_type->isIntegerTy()) {
+        auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
+        auto col_width = get_col_bit_width(col_var);
+        dec_val_cast = ir_builder_.CreateCast(
+          static_cast<size_t>(col_width) > dec_width
+            ? llvm::Instruction::CastOps::SExt
+            : llvm::Instruction::CastOps::Trunc,
+          dec_val,
+          get_int_type(col_width, context_));
+      } else {
+        CHECK(dec_type->isFloatTy() || dec_type->isDoubleTy());
+        if (dec_type->isDoubleTy()) {
+          CHECK(col_var->get_type_info().type == kDOUBLE);
+        } else if (dec_type->isFloatTy()) {
+          CHECK(col_var->get_type_info().type == kFLOAT);
+        }
+        dec_val_cast = dec_val;
+      }
+      CHECK(dec_val_cast);
       auto it_ok = fetch_cache_.insert(std::make_pair(
         local_col_id,
         dec_val_cast));
@@ -398,6 +409,25 @@ llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
   }
 }
 
+llvm::CmpInst::Predicate llvm_fcmp_pred(const SQLOps op_type) {
+  switch (op_type) {
+  case kEQ:
+    return llvm::CmpInst::FCMP_OEQ;
+  case kNE:
+    return llvm::CmpInst::FCMP_ONE;
+  case kLT:
+    return llvm::CmpInst::FCMP_OLT;
+  case kGT:
+    return llvm::CmpInst::FCMP_OGT;
+  case kLE:
+    return llvm::CmpInst::FCMP_OLE;
+  case kGE:
+    return llvm::CmpInst::FCMP_OGE;
+  default:
+    CHECK(false);
+  }
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
@@ -413,8 +443,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
   if (IS_INTEGER(lhs_type.type)) {
     return ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
   }
-  if (lhs_type.type == kFLOAT) {
-    return ir_builder_.CreateFCmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
+  if (lhs_type.type == kFLOAT || lhs_type.type == kDOUBLE) {
+    return ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lv, rhs_lv);
   }
   CHECK(false);
 }
@@ -438,16 +468,25 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper) const {
 
 llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) const {
   CHECK_EQ(uoper->get_optype(), kCAST);
-  const auto operand_lv = codegen(uoper->get_operand());
-  CHECK(operand_lv->getType()->isIntegerTy());
-  const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
   const auto& ti = uoper->get_type_info();
-  const auto target_width = get_bit_width(ti.type);
-  return ir_builder_.CreateCast(target_width > operand_width
-        ? llvm::Instruction::CastOps::SExt
-        : llvm::Instruction::CastOps::Trunc,
-      operand_lv,
-      get_int_type(target_width, context_));
+  const auto operand_lv = codegen(uoper->get_operand());
+  if (operand_lv->getType()->isIntegerTy()) {
+    const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
+    const auto target_width = get_bit_width(ti.type);
+    return ir_builder_.CreateCast(target_width > operand_width
+          ? llvm::Instruction::CastOps::SExt
+          : llvm::Instruction::CastOps::Trunc,
+        operand_lv,
+        get_int_type(target_width, context_));
+  } else {
+    CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
+    if (operand_lv->getType()->isFloatTy()) {
+      CHECK(ti.type == kDOUBLE);
+      return ir_builder_.CreateFPExt(operand_lv, llvm::Type::getDoubleTy(context_));
+    } else {
+      return operand_lv;
+    }
+  }
 }
 
 llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper) const {
@@ -844,7 +883,8 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
     CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
-      result.emplace_back("agg_id", target_expr, 0, nullptr);
+      result.emplace_back(IS_INTEGER(target_expr->get_type_info().type) ? "agg_id" : "agg_id_double",
+                          target_expr, 0, nullptr);
       continue;
     }
     const auto agg_type = agg_expr->get_aggtype();
@@ -1214,7 +1254,7 @@ void Executor::executeSimpleInsert() {
     }
     case kDOUBLE: {
       auto col_data = reinterpret_cast<double*>(malloc(sizeof(double)));
-      *col_data = col_datum.floatval;
+      *col_data = col_datum.doubleval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
@@ -1585,13 +1625,19 @@ void Executor::call_aggregators(
     if (aggr_col) {
       agg_expr_lv = codegen(aggr_col);
       auto agg_col_type = agg_expr_lv->getType();
-      CHECK(agg_col_type->isIntegerTy());
-      auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();
-      CHECK_LE(agg_col_width, 64);
-      if (agg_col_width < 64) {
-        agg_expr_lv = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
-          agg_expr_lv,
-          get_int_type(64, context_));
+      if (agg_col_type->isIntegerTy()) {
+        auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();
+        CHECK_LE(agg_col_width, 64);
+        if (agg_col_width < 64) {
+          agg_expr_lv = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+            agg_expr_lv,
+            get_int_type(64, context_));
+        }
+      } else {
+        CHECK(agg_col_type->isFloatTy() || agg_col_type->isDoubleTy());
+        if (agg_col_type->isFloatTy()) {
+          agg_expr_lv = ir_builder_.CreateFPExt(agg_expr_lv, llvm::Type::getDoubleTy(context_));
+        }
       }
     }
     std::vector<llvm::Value*> agg_args;

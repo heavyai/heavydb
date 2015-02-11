@@ -37,4 +37,15 @@ private:
   const int64_t baseline_;
 };
 
+class FixedWidthReal : public Decoder {
+public:
+  FixedWidthReal(const bool is_double);
+  llvm::Instruction* codegenDecode(
+      llvm::Value* byte_stream,
+      llvm::Value* pos,
+      llvm::Module* module) const;
+private:
+  const bool is_double_;
+};
+
 #endif  // QUERYENGINE_CODEC_H

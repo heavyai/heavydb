@@ -42,3 +42,18 @@ llvm::Instruction* DiffFixedWidthInt::codegenDecode(
   };
   return llvm::CallInst::Create(f, args);
 }
+
+FixedWidthReal::FixedWidthReal(const bool is_double) : is_double_(is_double) {}
+
+llvm::Instruction* FixedWidthReal::codegenDecode(
+    llvm::Value* byte_stream,
+    llvm::Value* pos,
+    llvm::Module* module) const {
+  auto f = module->getFunction(is_double_ ? "fixed_width_double_decode" : "fixed_width_float_decode");
+  CHECK(f);
+  llvm::Value *args[] = {
+    byte_stream,
+    pos
+  };
+  return llvm::CallInst::Create(f, args);
+}

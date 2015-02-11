@@ -36,6 +36,20 @@ int64_t diff_fixed_width_int_decode(
   return fixed_width_int_decode(byte_stream, byte_width, pos) + baseline;
 }
 
+extern "C" __attribute__((always_inline))
+float fixed_width_float_decode(
+    const int8_t* byte_stream,
+    const int64_t pos) {
+  return *(reinterpret_cast<const float*>(&byte_stream[pos * sizeof(float)]));
+}
+
+extern "C" __attribute__((always_inline))
+double fixed_width_double_decode(
+    const int8_t* byte_stream,
+    const int64_t pos) {
+  return *(reinterpret_cast<const double*>(&byte_stream[pos * sizeof(double)]));
+}
+
 // aggregator implementations
 
 extern "C" __attribute__((always_inline))
@@ -76,6 +90,12 @@ void agg_min(int64_t* agg, const int64_t val) {
 extern "C" __attribute__((always_inline))
 void agg_id(int64_t* agg, const int64_t val) {
   *agg = val;
+}
+
+// TODO(alex): fix signature, implement the rest
+extern "C" __attribute__((always_inline))
+void agg_id_double(int64_t* agg, const double val) {
+  *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
 // placeholder functions -- either replaced by platform specific implementation
