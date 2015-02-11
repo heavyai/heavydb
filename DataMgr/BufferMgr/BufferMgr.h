@@ -15,7 +15,6 @@
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
 #include "BufferSeg.h"
-#include <gtest/gtest_prod.h>
 #include <mutex>
 
 using namespace Data_Namespace;
@@ -34,8 +33,6 @@ namespace Buffer_Namespace {
     class BufferMgr : public AbstractBufferMgr { // implements
         
     public:
-        //FRIEND_TEST(BufferMgrTest, slabTest);
-        //friend class BufferMgrTest_slabTest_Test;
         
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t

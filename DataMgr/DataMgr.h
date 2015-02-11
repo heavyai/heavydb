@@ -12,7 +12,6 @@
 #include <map>
 #include <vector>
 #include <string>
-#include <gtest/gtest_prod.h>
 
 
 
@@ -55,8 +54,6 @@ namespace Data_Namespace {
             std::vector <int> levelSizes_;
 
         private:
-            FRIEND_TEST(DataMgrTest,buffer);
-            FRIEND_TEST(DataMgrTest,deletePrefix);
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
             int fragmentKeyIndex_;

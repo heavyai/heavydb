@@ -1,6 +1,7 @@
 #include "Encoder.h"
 #include "NoneEncoder.h"
 #include "FixedLengthEncoder.h"
+#include "StringNoneEncoder.h"
 
 
 Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits) {
@@ -33,6 +34,10 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
                     return new NoneEncoder <double>  (buffer);
                     break;
                 }
+								case kTEXT:
+								case kVARCHAR:
+								case kCHAR:
+									return new StringNoneEncoder(buffer);
                 default: {
                     return 0;
                 }
