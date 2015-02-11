@@ -5,3 +5,4 @@ SET (chunk_source_files
 )
 
 ADD_LIBRARY(Chunk ${chunk_source_files})
+TARGET_LINK_LIBRARIES(Chunk DataMgr)
