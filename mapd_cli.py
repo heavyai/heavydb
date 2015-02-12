@@ -70,7 +70,7 @@ def input_loop(client):
 
 if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   print('')
-  print('Usage: ' + sys.argv[0] + ' [-h host[:port]]')
+  print('Usage: ' + sys.argv[0] + ' [-h host[:port]] [-vi]')
   print('')
   sys.exit(0)
 
@@ -84,6 +84,11 @@ if sys.argv[argi] == '-h':
   if len(parts) > 1:
     port = int(parts[1])
   argi += 2
+
+vi_mode = False
+
+if argi < len(sys.argv) and (sys.argv[argi] == '-v' or sys.argv[argi] == '-vi'):
+  vi_mode = True
 
 socket = TSocket.TSocket(host, port)
 transport = TTransport.TBufferedTransport(socket)
@@ -99,6 +104,8 @@ readline.set_completer(SimpleCompleter([
 
 # Use the tab key for completion
 readline.parse_and_bind('tab: complete')
+if vi_mode:
+    readline.parse_and_bind('set editing-mode vi')
 
 # Prompt the user for text
 input_loop(client)
