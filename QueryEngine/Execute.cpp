@@ -892,20 +892,32 @@ public:
       CHECK_EQ(row.size(), num_columns);
       for (size_t i = 0; i < num_columns; ++i) {
         const auto col_val = row.agg_result(i);
-        auto p = boost::get<int64_t>(&col_val);
-        CHECK(p);
-        switch (get_bit_width(target_types[i])) {
-        case 16:
-          ((int16_t*) column_buffers_[i])[row_idx] = *p;
-          break;
-        case 32:
-          ((int32_t*) column_buffers_[i])[row_idx] = *p;
-          break;
-        case 64:
-          ((int64_t*) column_buffers_[i])[row_idx] = *p;
-          break;
-        default:
-          CHECK(false);
+        auto i64_p = boost::get<int64_t>(&col_val);
+        if (i64_p) {
+          switch (get_bit_width(target_types[i])) {
+          case 16:
+            ((int16_t*) column_buffers_[i])[row_idx] = *i64_p;
+            break;
+          case 32:
+            ((int32_t*) column_buffers_[i])[row_idx] = *i64_p;
+            break;
+          case 64:
+            ((int64_t*) column_buffers_[i])[row_idx] = *i64_p;
+            break;
+          default:
+            CHECK(false);
+          }
+        } else {
+          CHECK(target_types[i] == kFLOAT || target_types[i] == kDOUBLE);
+          auto double_p = boost::get<double>(&col_val);
+          switch (target_types[i]) {
+          case kFLOAT:
+            ((float*) column_buffers_[i])[row_idx] = static_cast<float>(*double_p);
+            break;
+          case kDOUBLE:
+            ((double*) column_buffers_[i])[row_idx] = static_cast<double>(*double_p);
+            break;
+          }
         }
       }
     }
@@ -1001,7 +1013,9 @@ std::vector<ResultRow> Executor::executeResultPlan(
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
   for (auto target_entry : targets) {
-    agg_infos.emplace_back("agg_id", target_entry->get_expr(), 0, nullptr);
+    agg_infos.emplace_back(
+      IS_INTEGER(target_entry->get_expr()->get_type_info().type) ? "agg_id" : "agg_id_double",
+      target_entry->get_expr(), 0, nullptr);
   }
   const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
   const size_t in_agg_count { targets.size() };

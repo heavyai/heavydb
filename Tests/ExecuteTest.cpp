@@ -254,6 +254,16 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT SUM(f * d + 15) FROM test WHERE x + y + 1 = 50;", dt);
     c("SELECT MIN(x), AVG(x * y), MAX(y + 7), AVG(x * f + 15), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", dt);
   }
+  for (auto dt : { ExecutorDeviceType::CPU }) {
+    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(y) > 42.0;", dt);
+    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09;", dt);
+    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09 AND AVG(y) > 42.0;", dt);
+    c("SELECT AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(d) > 2.2 AND AVG(y) > 42.0;", dt);
+    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(d) > 2.2 AND AVG(y) > 42.0;", dt);
+    c("SELECT AVG(f) + AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.0;", dt);
+    c("SELECT AVG(f) + AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.5;", dt);
+    c("SELECT f + d AS s, x * y FROM test ORDER by s DESC;", dt);
+  }
 }
 
 TEST(Select, FilterAndMultipleAggregation) {
