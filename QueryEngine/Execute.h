@@ -43,7 +43,7 @@ public:
     if (agg_kinds_[idx] == kAVG) {
       CHECK_LT(idx, agg_results_.size() - 1);
       auto actual_idx = agg_results_idx_[idx];
-      return IS_INTEGER(agg_types_[actual_idx])
+      return IS_INTEGER(agg_types_[idx])
         ? AggResult(
             static_cast<double>(agg_results_[actual_idx]) /
             static_cast<double>(agg_results_[actual_idx + 1]))

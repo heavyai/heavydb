@@ -228,6 +228,17 @@ TEST(Select, FloatAndDoubleTests) {
       2.2 * g_num_rows));
     ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(f * d + 15) FROM test WHERE x + y + 1 = 50;", device_type)),
       (1.1 * 2.2  + 15) * g_num_rows));
+    {
+      auto row = run_multiple_agg(
+        "SELECT MIN(x), AVG(x * y), MAX(y + 7), AVG(x * f + 15), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;",
+        device_type).front();
+      ASSERT_EQ(row.size(), 5);
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+      ASSERT_TRUE(approx_eq(v<double>(row.agg_result(1)), 296.33));
+      ASSERT_EQ(v<int64_t>(row.agg_result(2)), 50);
+      ASSERT_TRUE(approx_eq(v<double>(row.agg_result(3)), 23.16));
+      ASSERT_EQ(v<int64_t>(row.agg_result(4)), g_num_rows + g_num_rows / 2);
+    }
   }
 }
 
@@ -238,15 +249,24 @@ TEST(Select, FilterAndMultipleAggregation) {
       LOG(WARNING) << "GPU not available, skipping GPU tests";
       continue;
     }
-    auto row = run_multiple_agg(
-      "SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", device_type)
-      .front();
-    CHECK_EQ(row.size(), 4);
-    ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
-    ASSERT_GT(v<double>(row.agg_result(1)), 296.32);
-    ASSERT_LT(v<double>(row.agg_result(1)), 296.34);
-    ASSERT_EQ(v<int64_t>(row.agg_result(2)), 50);
-    ASSERT_EQ(v<int64_t>(row.agg_result(3)), g_num_rows + g_num_rows / 2);
+    {
+      auto row = run_multiple_agg(
+        "SELECT AVG(x), AVG(y) FROM test;", device_type)
+        .front();
+      CHECK_EQ(row.size(), 2);
+      ASSERT_TRUE(approx_eq(v<double>(row.agg_result(0)), 7.25));
+      ASSERT_TRUE(approx_eq(v<double>(row.agg_result(1)), 42.5));
+    }
+    {
+      auto row = run_multiple_agg(
+        "SELECT MIN(x), AVG(x * y), MAX(y + 7), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", device_type)
+        .front();
+      CHECK_EQ(row.size(), 4);
+      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 7);
+      ASSERT_TRUE(approx_eq(v<double>(row.agg_result(1)), 296.33));
+      ASSERT_EQ(v<int64_t>(row.agg_result(2)), 50);
+      ASSERT_EQ(v<int64_t>(row.agg_result(3)), g_num_rows + g_num_rows / 2);
+    }
   }
 }
 
