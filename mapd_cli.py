@@ -92,7 +92,10 @@ client = MapD.Client(protocol)
 transport.open()
 
 # Register our completer function
-readline.set_completer(SimpleCompleter(['SELECT', 'FROM', 'WHERE', 'CREATE', 'TABLE']).complete)
+readline.set_completer(SimpleCompleter([
+    'SELECT', 'FROM', 'WHERE', 'CREATE', 'TABLE',
+    'COUNT', 'DESC', 'DISTINCT', 'MIN', 'MAX', 'AVG',
+    'ORDER BY']).complete)
 
 # Use the tab key for completion
 readline.parse_and_bind('tab: complete')
