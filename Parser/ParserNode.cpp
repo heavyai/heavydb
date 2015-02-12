@@ -270,7 +270,10 @@ namespace Parser {
 		// the following loop can be made more efficient if needed
 		for (int i = 0; i < ti.scale; i++)
 			d.bigintval *= 10;
-		d.bigintval += fraction;
+		if (d.bigintval < 0)
+			d.bigintval -= fraction;
+		else
+			d.bigintval += fraction;
 		return new Analyzer::Constant(ti, false, d);
 	}
 
