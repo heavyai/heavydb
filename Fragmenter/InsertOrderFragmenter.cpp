@@ -72,7 +72,6 @@ void InsertOrderFragmenter::getChunkMetadata() {
             ChunkKey insertKey = chunkKeyPrefix_; //database_id and table_id
             insertKey.push_back(colIt->first); // column id
             insertKey.push_back(lastFragmentId); // fragment id
-            cout << "Device id: " << deviceId << endl;
 						colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
         }
     }

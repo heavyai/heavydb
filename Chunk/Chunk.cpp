@@ -23,7 +23,7 @@ namespace Chunk_NS {
 			buffer = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
 			subKey.pop_back();
 			subKey.push_back(2); // 2 for the index buffer
-			index_buf = data_mgr->getChunkBuffer(subKey, mem_level, device_id, (num_elems + 1) * sizeof(int64_t)); // always record n+1 offsets so string length can be calculated
+			index_buf = data_mgr->getChunkBuffer(subKey, mem_level, device_id, (num_elems + 1) * sizeof(StringOffsetT)); // always record n+1 offsets so string length can be calculated
 		} else
 			buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
 	}
@@ -88,7 +88,7 @@ namespace Chunk_NS {
 		it.skip = skip;
 		it.skip_size = column_desc->getStorageSize();
 		if (it.skip_size < 0) { // if it's variable length
-			it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(int64_t);
+			it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(StringOffsetT);
 			it.end_pos = index_buf->getMemoryPtr() + index_buf->size();
 		} else {
 			it.current_pos = it.start_pos = buffer->getMemoryPtr() + start_idx * it.skip_size;
@@ -209,11 +209,11 @@ namespace Chunk_NS {
 			it->current_pos += it->skip * it->skip_size;
 		} else {
 			// @TODO(wei) ignore uncompress flag for variable length?
-			int64_t offset = *(int64_t*)it->current_pos;
-			result->length = *((int64_t*)it->current_pos + 1) - offset;
+			StringOffsetT offset = *(StringOffsetT*)it->current_pos;
+			result->length = *((StringOffsetT*)it->current_pos + 1) - offset;
 			result->pointer = it->chunk->get_buffer()->getMemoryPtr() + offset;
 			result->is_null = false;
-			it->current_pos += it->skip * sizeof(int64_t);
+			it->current_pos += it->skip * sizeof(StringOffsetT);
 		}
 	}
 

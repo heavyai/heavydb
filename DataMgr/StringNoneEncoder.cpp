@@ -14,12 +14,12 @@ ChunkMetadata
 StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int start_idx, const size_t numAppendElems)
 {
 	assert(index_buf != nullptr); // index_buf must be set before this.
-	size_t index_size = numAppendElems * sizeof(int64_t);
+	size_t index_size = numAppendElems * sizeof(StringOffsetT);
 	if (numElems == 0)
-		index_size += sizeof(int64_t); // plus one for the initial offset of 0.
+		index_size += sizeof(StringOffsetT); // plus one for the initial offset of 0.
 	index_buf->reserve(index_size);
 	// @TODO worry about locking 
-	int64_t *index = (int64_t*)(index_buf->getMemoryPtr() + index_buf->size());
+	StringOffsetT *index = (StringOffsetT*)(index_buf->getMemoryPtr() + index_buf->size());
 	int i = 0;
 	if (numElems == 0) {
 		index[0] = 0; // write the inital 0 offset
