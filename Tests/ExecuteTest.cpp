@@ -139,6 +139,8 @@ public:
           ASSERT_TRUE(approx_eq(ref_val, mapd_val));
           break;
         }
+        case SQLITE_NULL:
+          break;
         default:
           CHECK(false);
         }
@@ -369,12 +371,8 @@ TEST(Select, Case) {
     c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) FROM test;", dt);
     c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
       "FROM test WHERE CASE WHEN y BETWEEN 42 AND 43 THEN 5 ELSE 4 END > 4;", dt);
-    ASSERT_EQ(v<int64_t>(run_simple_agg(
-      "SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
-      "FROM test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;",
-      dt)),
-      0
-    );
+    c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
+      "FROM test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;", dt);
   }
   for (auto dt : { ExecutorDeviceType::CPU }) {
     c("SELECT CASE WHEN x + y > 50 THEN 77 ELSE 88 END AS foo, COUNT(*) FROM test GROUP BY foo;", dt);

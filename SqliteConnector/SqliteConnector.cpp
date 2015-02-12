@@ -84,7 +84,10 @@ void SqliteConnector::query_with_text_param (const std::string &queryString, con
         }
         numRows_++;
         for (int c = 0; c < numCols_; ++c) {
-            results_[c].push_back(reinterpret_cast <const char *> (sqlite3_column_text(stmt,c))); // b/c sqlite returns unsigned char* which can't be used in constructor of string
+            auto col_text = reinterpret_cast<const char*>(sqlite3_column_text(stmt,c));
+            if (col_text) {
+                results_[c].push_back(col_text); // b/c sqlite returns unsigned char* which can't be used in constructor of string
+            }
         }
     } while (1 == 1); // Loop control in break statement above
 
@@ -123,7 +126,10 @@ void SqliteConnector::query (const std::string &queryString) {
         }
         numRows_++;
         for (int c = 0; c < numCols_; ++c) {
-            results_[c].push_back(reinterpret_cast <const char *> (sqlite3_column_text(stmt,c))); // b/c sqlite returns unsigned char* which can't be used in constructor of string
+            auto col_text = reinterpret_cast<const char*>(sqlite3_column_text(stmt,c));
+            if (col_text) {
+                results_[c].push_back(col_text); // b/c sqlite returns unsigned char* which can't be used in constructor of string
+            }
         }
     } while (1 == 1); // Loop control in break statement above
 
