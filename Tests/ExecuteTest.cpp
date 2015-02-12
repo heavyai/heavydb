@@ -1,10 +1,11 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
+#include "../DataMgr/DataMgr.h"
 #include "../Parser/parser.h"
 #include "../Parser/ParserNode.h"
 #include "../Planner/Planner.h"
 #include "../QueryEngine/Execute.h"
-#include "../DataMgr/DataMgr.h"
+#include "../SqliteConnector/SqliteConnector.h"
 
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
@@ -102,21 +103,70 @@ bool skip_tests(const ExecutorDeviceType device_type) {
   return device_type == ExecutorDeviceType::GPU && !g_cat.get_dataMgr().gpusPresent();
 }
 
+bool approx_eq(const double v, const double target, const double eps = 0.01) {
+  return target - eps < v && v < target + eps;
+}
+
+class SQLiteComparator {
+public:
+  SQLiteComparator() : connector_("main", "") {}
+
+  void query(const std::string& query_string) {
+    connector_.query(query_string);
+  }
+
+  void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
+    connector_.query(query_string);
+    const auto mapd_results = run_multiple_agg(query_string, device_type);
+    ASSERT_EQ(connector_.getNumRows(), mapd_results.size());
+    const int num_rows { static_cast<int>(connector_.getNumRows()) };
+    if (mapd_results.empty()) {
+      ASSERT_EQ(0, num_rows);
+      return;
+    }
+    ASSERT_EQ(connector_.getNumCols(), mapd_results.front().size());
+    const int num_cols { static_cast<int>(connector_.getNumCols()) };
+    for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
+      for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
+        const auto ref_col_type = connector_.columnTypes[col_idx];
+        const auto mapd_variant = mapd_results[row_idx].agg_result(col_idx);
+        switch (ref_col_type) {
+        case SQLITE_INTEGER: {
+          const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
+          const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
+          ASSERT_NE(nullptr, mapd_as_int_p);
+          const auto mapd_val = *mapd_as_int_p;
+          ASSERT_EQ(ref_val, mapd_val);
+          break;
+        }
+        case SQLITE_FLOAT: {
+          const auto ref_val = connector_.getData<double>(row_idx, col_idx);
+          const auto mapd_as_double_p = boost::get<double>(&mapd_variant);
+          ASSERT_NE(nullptr, mapd_as_double_p);
+          const auto mapd_val = *mapd_as_double_p;
+          ASSERT_TRUE(approx_eq(ref_val, mapd_val));
+          break;
+        }
+        default:
+          CHECK(false);
+        }
+      }
+    }
+  }
+private:
+  SqliteConnector connector_;
+};
+
 const ssize_t g_num_rows { 10 };
+SQLiteComparator g_sqlite_comparator;
+
+void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
+  g_sqlite_comparator.compare(query_string, device_type);
+}
 
 }
 
 TEST(Select, FilterAndSimpleAggregation) {
-  CHECK_EQ(g_num_rows % 2, 0);
-  for (ssize_t i = 0; i < g_num_rows; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2);", ExecutorDeviceType::CPU);
-  }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4);", ExecutorDeviceType::CPU);
-  }
-  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    run_multiple_agg("INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6);", ExecutorDeviceType::CPU);
-  }
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     if (skip_tests(device_type)) {
       CHECK(device_type == ExecutorDeviceType::GPU);
@@ -181,14 +231,6 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_EQ(v<double>(run_simple_agg("SELECT AVG(y) FROM test WHERE t > 1000 AND t < 1002;", device_type)), 42.);
   }
 }
-
-namespace {
-
-bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  return target - eps < v && v < target + eps;
-}
-
-}  // namespace
 
 TEST(Select, FloatAndDoubleTests) {
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
@@ -736,11 +778,31 @@ int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
   try {
-    run_ddl_statement("DROP TABLE IF EXISTS test;");
-    run_ddl_statement("CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double);");
+    const std::string drop_old_test { "DROP TABLE IF EXISTS test;" };
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    const std::string create_test { "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double);" };
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query(create_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
+  }
+  CHECK_EQ(g_num_rows % 2, 0);
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
+    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2);" };
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4);" };
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
+    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6);" };
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
   }
   int err { 0 };
   try {
@@ -748,6 +810,8 @@ int main(int argc, char** argv)
   } catch (const exception& e) {
     LOG(ERROR) << e.what();
   }
-  run_ddl_statement("DROP TABLE test;");
+  const std::string drop_test { "DROP TABLE test;" };
+  run_ddl_statement(drop_test);
+  g_sqlite_comparator.query(drop_test);
   return err;
 }

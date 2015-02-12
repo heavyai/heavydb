@@ -76,6 +76,7 @@ void SqliteConnector::query_with_text_param (const std::string &queryString, con
             numCols_ = sqlite3_column_count(stmt);
             for (int c = 0; c < numCols_; ++c) {
                 columnNames.push_back(sqlite3_column_name(stmt,c));
+                columnTypes.push_back(sqlite3_column_type(stmt,c));
             }
             results_.resize(numCols_);
             atFirstResult_ = false;
@@ -113,6 +114,7 @@ void SqliteConnector::query (const std::string &queryString) {
             numCols_ = sqlite3_column_count(stmt);
             for (int c = 0; c < numCols_; ++c) {
                 columnNames.push_back(sqlite3_column_name(stmt,c));
+                columnTypes.push_back(sqlite3_column_type(stmt,c));
             }
             results_.resize(numCols_);
             atFirstResult_ = false;

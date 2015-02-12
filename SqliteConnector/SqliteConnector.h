@@ -28,11 +28,12 @@ class SqliteConnector {
         inline size_t getNumCols() {return numCols_;}
 
         template <typename T> T getData(const int row, const int col) {
-            assert (row < numRows_);
-            assert (col < numCols_);
+            assert (row < static_cast<int>(numRows_));
+            assert (col < static_cast<int>(numCols_));
             return boost::lexical_cast <T> (results_[col][row]);
         }
         std::vector<std::string> columnNames; // make this public for easy access
+        std::vector<int> columnTypes;
 
 
     private:
