@@ -20,6 +20,10 @@ struct QueryResult {
   2: TResultRowSet rows
 }
 
+exception InvalidQueryException {
+  1: string error_msg
+}
+
 service MapD {
-  QueryResult select(1: string query)
+  QueryResult select(1: string query) throws (1: InvalidQueryException e)
 }

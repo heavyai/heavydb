@@ -45,13 +45,17 @@ public:
     std::string last_parsed;
     int num_errors = parser.parse(query_str, parse_trees, last_parsed);
     if (num_errors > 0) {
-      throw std::runtime_error("Syntax error at: " + last_parsed);
+      InvalidQueryException ex;
+      ex.error_msg = "Syntax error at: " + last_parsed;
+      throw ex;
     }
     for (auto stmt : parse_trees) {
       std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
       Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
       if (ddl != nullptr) {
-        throw std::runtime_error("Query not allowed");
+        InvalidQueryException ex;
+        ex.error_msg = "Query not allowed";
+        throw ex;
       } else {
         auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
         Analyzer::Query query;
