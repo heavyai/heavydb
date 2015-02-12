@@ -471,21 +471,25 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) const {
   const auto& ti = uoper->get_type_info();
   const auto operand_lv = codegen(uoper->get_operand());
   if (operand_lv->getType()->isIntegerTy()) {
-    const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
-    const auto target_width = get_bit_width(ti.type);
-    return ir_builder_.CreateCast(target_width > operand_width
-          ? llvm::Instruction::CastOps::SExt
-          : llvm::Instruction::CastOps::Trunc,
-        operand_lv,
-        get_int_type(target_width, context_));
-  } else {
-    CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
-    if (operand_lv->getType()->isFloatTy()) {
-      CHECK(ti.type == kDOUBLE);
-      return ir_builder_.CreateFPExt(operand_lv, llvm::Type::getDoubleTy(context_));
+    CHECK(IS_INTEGER(uoper->get_operand()->get_type_info().type));
+    if (IS_INTEGER(ti.type)) {
+      const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
+      const auto target_width = get_bit_width(ti.type);
+      return ir_builder_.CreateCast(target_width > operand_width
+            ? llvm::Instruction::CastOps::SExt
+            : llvm::Instruction::CastOps::Trunc,
+          operand_lv,
+          get_int_type(target_width, context_));
     } else {
-      return operand_lv;
+      CHECK(ti.type == kFLOAT || ti.type == kDOUBLE);
+      return ir_builder_.CreateSIToFP(operand_lv,
+        ti.type == kFLOAT ? llvm::Type::getFloatTy(context_) : llvm::Type::getDoubleTy(context_));
     }
+  } else {
+    CHECK_EQ(uoper->get_operand()->get_type_info().type, kFLOAT);
+    CHECK(operand_lv->getType()->isFloatTy());
+    CHECK_EQ(ti.type, kDOUBLE);
+    return ir_builder_.CreateFPExt(operand_lv, llvm::Type::getDoubleTy(context_));
   }
 }
 

@@ -210,6 +210,8 @@ TEST(Select, FloatAndDoubleTests) {
     ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(f + d) FROM test;", device_type)),
       1.1 * g_num_rows + 1.2 * g_num_rows / 2 + 1.3 * g_num_rows / 2 +
       2.2 * g_num_rows + 2.4 * g_num_rows / 2 + 2.6 * g_num_rows / 2));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT AVG(x * f) FROM test;", device_type)),
+      (2 * 7 * 1.1 + 8 * 1.2 + 7 * 1.3) / 4));
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2;", device_type)), g_num_rows);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.1 AND f < 1.3;", device_type)), g_num_rows / 2);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.2 AND f < 1.4;", device_type)), g_num_rows / 2);
