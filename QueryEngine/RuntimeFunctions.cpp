@@ -93,6 +93,30 @@ void agg_id(int64_t* agg, const int64_t val) {
 }
 
 // TODO(alex): fix signature, implement the rest
+
+extern "C" __attribute__((always_inline))
+void agg_count_double(int64_t* agg, const double val) {
+  ++*agg;;
+}
+
+extern "C" __attribute__((always_inline))
+void agg_sum_double(int64_t* agg, const double val) {
+  const auto r = *reinterpret_cast<const double*>(agg) + val;
+  *agg = *reinterpret_cast<const int64_t*>(&r);
+}
+
+extern "C" __attribute__((always_inline))
+void agg_max_double(int64_t* agg, const double val) {
+  const auto r = std::max(*reinterpret_cast<const double*>(agg), val);
+  *agg = *(reinterpret_cast<const int64_t*>(&r));
+}
+
+extern "C" __attribute__((always_inline))
+void agg_min_double(int64_t* agg, const double val) {
+  const auto r = std::min(*reinterpret_cast<const double*>(agg), val);
+  *agg = *(reinterpret_cast<const int64_t*>(&r));
+}
+
 extern "C" __attribute__((always_inline))
 void agg_id_double(int64_t* agg, const double val) {
   *agg = *(reinterpret_cast<const int64_t*>(&val));

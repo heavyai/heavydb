@@ -182,6 +182,14 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+namespace {
+
+bool approx_eq(const double v, const double target, const double eps = 0.01) {
+  return target - eps < v && v < target + eps;
+}
+
+}  // namespace
+
 TEST(Select, FloatAndDoubleTests) {
   for (auto device_type : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     if (skip_tests(device_type)) {
@@ -189,6 +197,19 @@ TEST(Select, FloatAndDoubleTests) {
       LOG(WARNING) << "GPU not available, skipping GPU tests";
       continue;
     }
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT MIN(f) FROM test;", device_type)), 1.1));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT MAX(f) FROM test;", device_type)), 1.3));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT AVG(f) FROM test;", device_type)), 1.175));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT MIN(d) FROM test;", device_type)), 2.2));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT MAX(d) FROM test;", device_type)), 2.6));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT AVG(d) FROM test;", device_type)), 2.35));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(f) FROM test;", device_type)),
+      1.1 * g_num_rows + 1.2 * g_num_rows / 2 + 1.3 * g_num_rows / 2));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(d) FROM test;", device_type)),
+      2.2 * g_num_rows + 2.4 * g_num_rows / 2 + 2.6 * g_num_rows / 2));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(f + d) FROM test;", device_type)),
+      1.1 * g_num_rows + 1.2 * g_num_rows / 2 + 1.3 * g_num_rows / 2 +
+      2.2 * g_num_rows + 2.4 * g_num_rows / 2 + 2.6 * g_num_rows / 2));
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2;", device_type)), g_num_rows);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.1 AND f < 1.3;", device_type)), g_num_rows / 2);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE f > 1.2 AND f < 1.4;", device_type)), g_num_rows / 2);
@@ -197,6 +218,14 @@ TEST(Select, FloatAndDoubleTests) {
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE f > 1.0 AND f < 1.2;", device_type)), 49 * g_num_rows);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT SUM(x + y) FROM test WHERE d + f > 3.0 AND d + f < 4.0;", device_type)),
       49 * g_num_rows + 51 * g_num_rows / 2 + 50 * g_num_rows / 2);
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(f + d) FROM test WHERE x - y = -35;", device_type)),
+      1.1 * g_num_rows + 1.2 * g_num_rows / 2 +
+      2.2 * g_num_rows + 2.4 * g_num_rows / 2));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(f + d) FROM test WHERE x + y + 1 = 50;", device_type)),
+      1.1 * g_num_rows +
+      2.2 * g_num_rows));
+    ASSERT_TRUE(approx_eq(v<double>(run_simple_agg("SELECT SUM(f * d + 15) FROM test WHERE x + y + 1 = 50;", device_type)),
+      (1.1 * 2.2  + 15) * g_num_rows));
   }
 }
 

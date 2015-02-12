@@ -43,9 +43,13 @@ public:
     if (agg_kinds_[idx] == kAVG) {
       CHECK_LT(idx, agg_results_.size() - 1);
       auto actual_idx = agg_results_idx_[idx];
-      return AggResult(
-        static_cast<double>(agg_results_[actual_idx]) /
-        static_cast<double>(agg_results_[actual_idx + 1]));
+      return IS_INTEGER(agg_types_[actual_idx])
+        ? AggResult(
+            static_cast<double>(agg_results_[actual_idx]) /
+            static_cast<double>(agg_results_[actual_idx + 1]))
+        : AggResult(
+            *reinterpret_cast<const double*>(&agg_results_[actual_idx]) /
+            static_cast<double>(agg_results_[actual_idx + 1]));
     } else {
       CHECK_LT(idx, agg_results_.size());
       CHECK(IS_NUMBER(agg_types_[idx]));
