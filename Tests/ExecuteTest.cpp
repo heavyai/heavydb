@@ -263,6 +263,10 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT AVG(f) + AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.0;", dt);
     c("SELECT AVG(f) + AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.5;", dt);
     c("SELECT f + d AS s, x * y FROM test ORDER by s DESC;", dt);
+    c("SELECT COUNT(*) FROM test GROUP BY f;", dt);
+    c("SELECT COUNT(*) FROM test GROUP BY d;", dt);
+    c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d;", dt);
+    c("SELECT f + d AS s FROM test GROUP BY s ORDER BY s DESC;", dt);
   }
 }
 

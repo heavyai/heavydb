@@ -917,6 +917,8 @@ public:
           case kDOUBLE:
             ((double*) column_buffers_[i])[row_idx] = static_cast<double>(*double_p);
             break;
+          default:
+            CHECK(false);
           }
         }
       }
@@ -1673,14 +1675,30 @@ void Executor::call_aggregators(
       group_by_expr_cache_.push_back(group_key);
       auto group_key_ptr = ir_builder_.CreateGEP(group_keys_buffer,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
-      auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
-      CHECK_LE(group_key_bitwidth, 64);
-      if (group_key_bitwidth < 64) {
-        group_key = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
-          group_key,
-          get_int_type(64, context_));
+      const auto key_expr_type = group_by_col ? group_by_col->get_type_info().type : kBIGINT;
+      if (IS_INTEGER(key_expr_type)) {
+        CHECK(group_key->getType()->isIntegerTy());
+        auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
+        CHECK_LE(group_key_bitwidth, 64);
+        if (group_key_bitwidth < 64) {
+          group_key = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+            group_key,
+            get_int_type(64, context_));
+        }
+        ir_builder_.CreateStore(group_key, group_key_ptr);
+      } else {
+        CHECK(key_expr_type == kFLOAT || key_expr_type == kDOUBLE);
+        switch (key_expr_type) {
+        case kFLOAT:
+          group_key = ir_builder_.CreateFPExt(group_key, llvm::Type::getDoubleTy(context_));
+        case kDOUBLE:
+          group_key = ir_builder_.CreateBitCast(group_key, get_int_type(64, context_));
+          ir_builder_.CreateStore(group_key, group_key_ptr);
+          break;
+        default:
+          CHECK(false);
+        }
       }
-      ir_builder_.CreateStore(group_key, group_key_ptr);
       ++i;
     }
     auto get_group_value_func = module->getFunction("get_group_value");
