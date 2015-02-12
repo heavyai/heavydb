@@ -53,6 +53,7 @@ void SqliteConnector::query_with_text_param (const std::string &queryString, con
     numRows_ = 0;
     numCols_ = 0;
     columnNames.clear();
+    columnTypes.clear();
     results_.clear();
     sqlite3_stmt *stmt;
     int returnCode = sqlite3_prepare_v2(db_, queryString.c_str(), -1, &stmt, NULL);
@@ -95,6 +96,7 @@ void SqliteConnector::query (const std::string &queryString) {
     numRows_ = 0;
     numCols_ = 0;
     columnNames.clear();
+    columnTypes.clear();
     results_.clear();
     sqlite3_stmt *stmt;
     int returnCode = sqlite3_prepare_v2(db_, queryString.c_str(), -1, &stmt, NULL);
@@ -133,6 +135,7 @@ void SqliteConnector::queryWithCallback (const std::string &queryString) {
     numRows_ = 0;
     numCols_ = 0;
     columnNames.clear();
+    columnTypes.clear();
     results_.clear();
     char *errorMsg;
     int returnCode = sqlite3_exec(db_,queryString.c_str(), resultCallback,this,&errorMsg);
