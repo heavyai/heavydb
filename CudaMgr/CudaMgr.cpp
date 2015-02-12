@@ -128,10 +128,10 @@ void CudaMgr::zeroDeviceMem(int8_t *devicePtr, const size_t numBytes, const int 
 
 void CudaMgr::checkError(CUresult status) {
     if (status != CUDA_SUCCESS) {
-        const char *errorString;
+        const char *errorString { nullptr };
         cuGetErrorString(status,&errorString);
         // should clean up here - delete any contexts, etc.
-        throw std::runtime_error(errorString);
+        throw std::runtime_error(errorString ? errorString : "Unkown error");
     }
 }
 
