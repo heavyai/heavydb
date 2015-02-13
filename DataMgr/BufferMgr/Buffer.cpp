@@ -121,7 +121,6 @@ namespace Buffer_Namespace {
 
 
         if (numBytes + size_ > reservedSize()) {
-            //std::cout << "Reserving" << std::endl;
             reserve(numBytes+size_);
         }
 

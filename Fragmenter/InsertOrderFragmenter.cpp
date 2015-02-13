@@ -129,6 +129,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
         partIt->numTuples = partIt->shadowNumTuples;
         partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
     }
+    dataMgr_->checkpoint();
 }
 
 FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::MemoryLevel memoryLevel) { 

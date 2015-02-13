@@ -102,14 +102,27 @@ namespace Buffer_Namespace {
 
     BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator &segIt, const size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
+        /*
+        ChunkKey debugKey = segIt->chunkKey;
+        int debugKeySize = debugKey.size();
+        int dbKey = -1;
+        int tableKey = 0;
+        int colKey = 0;
+        int fragKey = 0;
+        if (debugKeySize >= 4) {
+            dbKey = debugKey[0];
+            tableKey = debugKey[1];
+            colKey = debugKey[2];
+            fragKey = debugKey[3];
+        }
+        */
+
         // doesn't resize to be smaller - like std::reserve
-        //cout << "Reserve number bytes: " << numBytes << endl;
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
         //cout << "Reserve actual number bytes: " << numPagesRequested * pageSize_ << endl;
         size_t numPagesExtraNeeded = numPagesRequested -  segIt->numPages;
        
         //cout << "Num extra pages needed: " << numPagesExtraNeeded << endl;
-
         if (numPagesRequested < segIt->numPages) { // We already have enough pages in existing segment
             return segIt;
         }
@@ -139,6 +152,7 @@ namespace Buffer_Namespace {
         newSegIt->chunkKey = segIt->chunkKey;
         int8_t * oldMem = newSegIt->buffer->mem_;
         newSegIt->buffer->mem_ = slabs_[newSegIt->slabNum] + newSegIt->startPage * pageSize_;
+
         // now need to copy over memory
         // only do this if the old segment is valid (i.e. not new w/
         // unallocated buffer
@@ -220,6 +234,7 @@ namespace Buffer_Namespace {
         // pages evicted. Evicting less pages and older pages will lower the
         // score
         BufferList::iterator bestEvictionStart = slabSegments_[0].end();
+        int bestEvictionStartSlab = -1;
         int slabNum = 0;
 
         for (auto slabIt = slabSegments_.begin(); slabIt != slabSegments_.end(); ++slabIt, ++slabNum) {
@@ -242,7 +257,7 @@ namespace Buffer_Namespace {
                         // pinCount should never go up - only down because we have
                         // global lock on buffer pool and pin count only increments
                         // on getChunk
-                        if (evictIt->memStatus == USED && evictIt->buffer->getPinCount() == 0) {
+                        if (evictIt->memStatus == USED && evictIt->buffer->getPinCount() != 0) {
                            break;
                         }
                         pageCount += evictIt->numPages;
@@ -257,6 +272,7 @@ namespace Buffer_Namespace {
                     if (solutionFound && score < minScore) {
                         minScore = score;
                         bestEvictionStart = bufferIt;
+                        bestEvictionStartSlab = slabNum;
                     }
                     else if (evictIt == slabSegments_[slabNum].end()) {
                         // this means that every segment after this will fail as
@@ -275,7 +291,7 @@ namespace Buffer_Namespace {
         if (bestEvictionStart == slabSegments_[0].end()) {
             throw std::runtime_error ("Couldn't evict chunks to get free space");
         }
-        bestEvictionStart = evict(bestEvictionStart,numPagesRequested,slabNum);
+        bestEvictionStart = evict(bestEvictionStart,numPagesRequested,bestEvictionStartSlab);
         return bestEvictionStart;
     }
 
@@ -294,6 +310,9 @@ namespace Buffer_Namespace {
             }
             std::cout << std::endl;
             std::cout << "Pin count: " << segIt->buffer->getPinCount() << std::endl;
+            //printf ("Mem address:  %p",segIt->buffer->getMemoryPtr());
+            std::cout << "t: " << segIt->buffer->getPinCount() << std::endl;
+
         }
     }
 
@@ -372,15 +391,10 @@ namespace Buffer_Namespace {
         while (chunkIt != chunkIndex_.end() && std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
         //cout << "Before getting segIt" << endl;
         auto  segIt = chunkIt->second;
-        //printSeg(segIt);
-        //cout << "After getting segIt" << endl;
         delete segIt->buffer; // Delete Buffer for segment
-        //cout << "AFter delete buffer" << endl;
         segIt->buffer = 0;
         removeSegment(segIt);
-        //cout << "AFter remove segment" << endl;
         chunkIndex_.erase(chunkIt++);
-        //cout << "AFter chunk index erase" << endl;
         }
         //cout << "Segs After " << endl;
         //printSegs();
@@ -458,6 +472,12 @@ namespace Buffer_Namespace {
                 // if here, fetch chunk was unsuccessful - delete chunk we just
                 // created
                 deleteChunk(key);
+                printMap();
+                cout << endl << endl;
+                printSegs();
+                cout << error.what() << endl;
+
+
                 throw std::runtime_error("Get chunk - Could not find chunk in buffer pool or parent buffer pools");
             }
             return buffer;

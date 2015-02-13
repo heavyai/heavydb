@@ -84,7 +84,7 @@ namespace Buffer_Namespace {
        
     protected: 
         std::vector <int8_t *> slabs_;       /// vector of beginning memory addresses for each allocation of the buffer pool
-        std::vector<BufferList> slabSegments_; // last list is for unsized segments
+        std::vector<BufferList> slabSegments_; 
         size_t numPagesPerSlab_;
 
     private:

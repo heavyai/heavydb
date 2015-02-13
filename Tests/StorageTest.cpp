@@ -111,7 +111,7 @@ TEST(StorageSmall, Numbers) {
 	ASSERT_NO_THROW(run_ddl("drop table numbers;"););
 }
 
-TEST(StorageLarge, DISABLED_Numbers) {
+TEST(StorageLarge, Numbers) {
 	ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
 	ASSERT_NO_THROW(run_ddl("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e double, f float);"););
 	EXPECT_TRUE(storage_test("numbers", LARGE));
