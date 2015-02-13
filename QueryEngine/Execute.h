@@ -157,8 +157,13 @@ private:
     const ExecutorOptLevel,
     const size_t groups_buffer_entry_count);
   void nukeOldState();
-  void* optimizeAndCodegenCPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
-  CUfunction optimizeAndCodegenGPU(llvm::Function*, const ExecutorOptLevel, llvm::Module*);
+  void* optimizeAndCodegenCPU(llvm::Function*,
+                              const ExecutorOptLevel,
+                              llvm::Module*);
+  CUfunction optimizeAndCodegenGPU(llvm::Function*,
+                                   const ExecutorOptLevel,
+                                   llvm::Module*,
+                                   const bool is_group_by);
   void call_aggregators(
     const std::vector<AggInfo>& agg_infos,
     llvm::Value* filter_result,

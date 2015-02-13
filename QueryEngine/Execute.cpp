@@ -1493,8 +1493,11 @@ void Executor::compilePlan(
     scan_cols.size(), is_group_by ? 1 : agg_infos.size(), query_func, module_, context_);
   CHECK(row_func_);
 
-  // make sure it's in-lined, we don't want register spills in the inner loop
-  row_func_->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
+  // Need to de-activate in-lining for group by queries on GPU until it's properly ported
+  if (device_type != ExecutorDeviceType::GPU || !is_group_by) {
+    // make sure it's in-lined, we don't want register spills in the inner loop
+    row_func_->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
+  }
 
   auto bb = llvm::BasicBlock::Create(context_, "entry", row_func_);
   ir_builder_.SetInsertPoint(bb);
@@ -1541,7 +1544,7 @@ void Executor::compilePlan(
   if (device_type == ExecutorDeviceType::CPU) {
     query_cpu_code_ = optimizeAndCodegenCPU(query_func, opt_level, module_);
   } else {
-    query_gpu_code_ = optimizeAndCodegenGPU(query_func, opt_level, module_);
+    query_gpu_code_ = optimizeAndCodegenGPU(query_func, opt_level, module_, is_group_by);
   }
   CHECK(query_cpu_code_);
 }
@@ -1607,6 +1610,7 @@ target triple = "nvptx64-nvidia-cuda"
 
 declare i32 @pos_start_impl();
 declare i32 @pos_step_impl();
+declare i64* @get_group_value(i64*, i32, i64*, i32, i32);
 
 )";
 
@@ -1621,12 +1625,18 @@ R"(
 
 }
 
-CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
+CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
+                                           const ExecutorOptLevel opt_level,
+                                           llvm::Module* module,
+                                           const bool is_group_by) {
   // run optimizations
   optimizeIR(query_func, module, opt_level);
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
+  if (is_group_by) {
+    row_func_->print(os);
+  }
   query_func->print(os);
 
   char nvvm_annotations[1024];
