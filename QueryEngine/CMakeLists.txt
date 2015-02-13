@@ -16,7 +16,6 @@ set(query_engine_source_files
 set(group_by_hash_test_files
     GroupByHashTest.cpp
     RuntimeFunctions.cpp
-    RuntimeStubs.cpp
     RuntimeFunctions.h)
 
 set(llvm_config_cmd "llvm-config")

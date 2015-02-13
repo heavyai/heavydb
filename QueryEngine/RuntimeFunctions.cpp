@@ -122,13 +122,6 @@ void agg_id_double(int64_t* agg, const double val) {
   *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
-// placeholder functions -- either replaced by platform specific implementation
-// at runtime or auto-generated
-
-extern "C" int32_t pos_start();
-extern "C" int32_t pos_step();
-extern "C" void row_process(int64_t* out, const int64_t pos);
-
 // x64 stride functions
 
 extern "C" __attribute__((noinline))
