@@ -68,9 +68,8 @@ namespace File_Namespace {
     
     void close(FILE *f) {
         assert(f);
-        fflush(f);
-        if (fsync(fileno(f)) != 0)
-            throw std::runtime_error("Unable to close file.");
+        if (fflush(f) != 0)
+          throw std::runtime_error("Unable to flush file.");
         if (fclose(f) != 0)
             throw std::runtime_error("Unable to close file.");
         

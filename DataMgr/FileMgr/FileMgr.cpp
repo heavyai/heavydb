@@ -205,8 +205,7 @@ namespace File_Namespace {
 
     void FileMgr::writeAndSyncEpochToDisk() {
         write(epochFile_,0,sizeof(int),(int8_t *)&epoch_);
-        fflush(epochFile_);
-        int status = fsync(fileno(epochFile_)); // gets file descriptor for epoch file and then uses it to fsync
+        int status = fflush(epochFile_);
         //int status = fcntl(fileno(epochFile_),51);
         if (status != 0) {
             throw std::runtime_error("Could not sync epoch file to disk");

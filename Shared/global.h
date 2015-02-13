@@ -2,6 +2,6 @@
 #define DEFAULTS_H
 
 #define MAPD_DEFAULT_PAGE_SIZE 4096
-#define MAPD_DEFAULT_N_PAGES 256
+#define MAPD_DEFAULT_N_PAGES 16
 
 #endif
