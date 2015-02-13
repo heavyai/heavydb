@@ -587,6 +587,8 @@ std::vector<int64_t*> launch_query_gpu_code(
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
+    std::vector<int64_t*> group_by_buffers,
+    const size_t groups_buffer_size,
     const unsigned block_size_x,
     const unsigned grid_size_x) {
   std::vector<int64_t*> out_vec;
@@ -617,24 +619,46 @@ std::vector<int64_t*> launch_query_gpu_code(
     const unsigned block_size_z = 1;
     const unsigned grid_size_y  = 1;
     const unsigned grid_size_z  = 1;
-    std::vector<CUdeviceptr> out_vec_dev_buffers;
-    const size_t agg_col_count { init_agg_vals.size() };
-    for (size_t i = 0; i < agg_col_count; ++i) {
-      CUdeviceptr out_vec_dev_buffer;
-      checkCudaErrors(cuMemAlloc(&out_vec_dev_buffer, block_size_x * grid_size_x * sizeof(int64_t)));
-      out_vec_dev_buffers.push_back(out_vec_dev_buffer);
-    }
-    CUdeviceptr out_vec_dev_ptr;
-    checkCudaErrors(cuMemAlloc(&out_vec_dev_ptr, agg_col_count * sizeof(CUdeviceptr)));
-    checkCudaErrors(cuMemcpyHtoD(out_vec_dev_ptr, &out_vec_dev_buffers[0], agg_col_count * sizeof(CUdeviceptr)));
-    void* kernel_params[] = { &col_buffers_dev_ptr, &num_rows_dev_ptr, &init_agg_vals_dev_ptr, &out_vec_dev_ptr };
-    checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
-                                   block_size_x, block_size_y, block_size_z,
-                                   0, nullptr, kernel_params, nullptr));
-    for (size_t i = 0; i < agg_col_count; ++i) {
-      int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t)];
-      checkCudaErrors(cuMemcpyDtoH(host_out_vec, out_vec_dev_buffers[i], block_size_x * grid_size_x * sizeof(int64_t)));
-      out_vec.push_back(host_out_vec);
+    if (groups_buffer_size > 0) {
+      CHECK(!group_by_buffers.empty());
+      std::vector<CUdeviceptr> group_by_dev_buffers;
+      const size_t num_buffers { block_size_x * grid_size_x };
+      for (size_t i = 0; i < num_buffers; ++i) {
+        CUdeviceptr group_by_dev_buffer;
+        checkCudaErrors(cuMemAlloc(&group_by_dev_buffer, groups_buffer_size));
+        checkCudaErrors(cuMemcpyHtoD(group_by_dev_buffer, group_by_buffers[i], groups_buffer_size));
+        group_by_dev_buffers.push_back(group_by_dev_buffer);
+      }
+      CUdeviceptr group_by_dev_ptr;
+      checkCudaErrors(cuMemAlloc(&group_by_dev_ptr, num_buffers * sizeof(CUdeviceptr)));
+      checkCudaErrors(cuMemcpyHtoD(group_by_dev_ptr, &group_by_dev_buffers[0], num_buffers * sizeof(CUdeviceptr)));
+      void* kernel_params[] = { &col_buffers_dev_ptr, &num_rows_dev_ptr, &init_agg_vals_dev_ptr, &group_by_dev_ptr };
+      checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+                                     block_size_x, block_size_y, block_size_z,
+                                     0, nullptr, kernel_params, nullptr));
+      for (size_t i = 0; i < num_buffers; ++i) {
+        checkCudaErrors(cuMemcpyDtoH(group_by_buffers[i], group_by_dev_buffers[i], groups_buffer_size));
+      }
+    } else {
+      std::vector<CUdeviceptr> out_vec_dev_buffers;
+      const size_t agg_col_count { init_agg_vals.size() };
+      for (size_t i = 0; i < agg_col_count; ++i) {
+        CUdeviceptr out_vec_dev_buffer;
+        checkCudaErrors(cuMemAlloc(&out_vec_dev_buffer, block_size_x * grid_size_x * sizeof(int64_t)));
+        out_vec_dev_buffers.push_back(out_vec_dev_buffer);
+      }
+      CUdeviceptr out_vec_dev_ptr;
+      checkCudaErrors(cuMemAlloc(&out_vec_dev_ptr, agg_col_count * sizeof(CUdeviceptr)));
+      checkCudaErrors(cuMemcpyHtoD(out_vec_dev_ptr, &out_vec_dev_buffers[0], agg_col_count * sizeof(CUdeviceptr)));
+      void* kernel_params[] = { &col_buffers_dev_ptr, &num_rows_dev_ptr, &init_agg_vals_dev_ptr, &out_vec_dev_ptr };
+      checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+                                     block_size_x, block_size_y, block_size_z,
+                                     0, nullptr, kernel_params, nullptr));
+      for (size_t i = 0; i < agg_col_count; ++i) {
+        int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t)];
+        checkCudaErrors(cuMemcpyDtoH(host_out_vec, out_vec_dev_buffers[i], block_size_x * grid_size_x * sizeof(int64_t)));
+        out_vec.push_back(host_out_vec);
+      }
     }
   }
   return out_vec;
@@ -863,7 +887,8 @@ Executor::ResultRows Executor::groupBufferToResults(
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
         } else {
-          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+          const auto v = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
+          result_row.agg_results_.push_back(v);
           ++out_vec_idx;
         }
       }
@@ -1203,14 +1228,13 @@ void Executor::executePlanWithoutGroupBy(
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows) {
   std::vector<int64_t*> out_vec;
-  const unsigned block_size_x { 128 };
-  const unsigned grid_size_x { 128 };
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
       query_cpu_code_, col_buffers, num_rows, init_agg_vals_, {});
   } else {
     out_vec = launch_query_gpu_code(
-      query_gpu_code_, col_buffers, num_rows, init_agg_vals_, block_size_x, grid_size_x);
+      query_gpu_code_, col_buffers, num_rows, init_agg_vals_, {},
+        0, block_size_x_, grid_size_x_);
   }
   size_t out_vec_idx = 0;
   ResultRow result_row;
@@ -1231,20 +1255,20 @@ void Executor::executePlanWithoutGroupBy(
           agg_type,
           target_expr->get_type_info().type,
           out_vec[out_vec_idx],
-          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
+          device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
           target_expr->get_type_info().type,
           out_vec[out_vec_idx + 1],
-          device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
+          device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       out_vec_idx += 2;
     } else {
       result_row.agg_results_.push_back(reduce_results(
         agg_type,
         target_expr->get_type_info().type,
         out_vec[out_vec_idx],
-        device_type == ExecutorDeviceType::GPU ? block_size_x * grid_size_x : 1));
+        device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       ++out_vec_idx;
     }
   }
@@ -1269,22 +1293,32 @@ void Executor::executePlanWithGroupBy(
   // 1. Optimize size (make keys more compact).
   // 2. Resize on overflow.
   // 3. Optimize runtime.
-  auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
-  init_groups(group_by_buffer, groups_buffer_entry_count_, group_by_col_count, &init_agg_vals_[0], agg_col_count);
-  std::vector<int64_t*> group_by_buffers { group_by_buffer };
+  std::vector<int64_t*> group_by_buffers;
+  const size_t num_buffers { device_type == ExecutorDeviceType::CPU ? 1 : block_size_x_ * grid_size_x_ };
+  for (size_t i = 0; i < num_buffers; ++i) {
+    auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
+    init_groups(group_by_buffer, groups_buffer_entry_count_, group_by_col_count, &init_agg_vals_[0], agg_col_count);
+    group_by_buffers.push_back(group_by_buffer);
+  }
+  // TODO(alex): get rid of std::list everywhere
+  std::list<Analyzer::Expr*> target_exprs_list;
+  std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(query_cpu_code_, col_buffers, num_rows, init_agg_vals_, group_by_buffers);
+    results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count, target_exprs_list);
   } else {
-    // TODO(alex): enable GPU support
-    CHECK(false);
+    launch_query_gpu_code(query_gpu_code_, col_buffers, num_rows, init_agg_vals_, group_by_buffers,
+      groups_buffer_size, block_size_x_, grid_size_x_);
+    std::vector<Executor::ResultRows> results_per_sm;
+    for (size_t i = 0; i < num_buffers; ++i) {
+      results_per_sm.push_back(groupBufferToResults(
+        group_by_buffers[i], group_by_col_count, agg_col_count, target_exprs_list));
+    }
+    results = reduceMultiDeviceResults(results_per_sm);
   }
-  {
-    // TODO(alex): get rid of std::list everywhere
-    std::list<Analyzer::Expr*> target_exprs_list;
-    std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
-    results = groupBufferToResults(group_by_buffer, group_by_col_count, agg_col_count, target_exprs_list);
+  for (const auto group_by_buffer : group_by_buffers) {
+    free(group_by_buffer);
   }
-  free(group_by_buffer);
 }
 
 void Executor::executeSimpleInsert() {
