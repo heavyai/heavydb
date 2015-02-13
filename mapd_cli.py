@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import readline
+import rlcompleter
 import logging
 import sys
 
@@ -103,7 +104,10 @@ readline.set_completer(SimpleCompleter([
     'ORDER BY']).complete)
 
 # Use the tab key for completion
-readline.parse_and_bind('tab: complete')
+if 'libedit' in readline.__doc__:
+    readline.parse_and_bind('bind ^I rl_complete')
+else:
+    readline.parse_and_bind('tab: complete')
 if vi_mode:
     readline.parse_and_bind('set editing-mode vi')
 
