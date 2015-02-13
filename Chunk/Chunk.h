@@ -32,7 +32,7 @@ struct ChunkIter {
 };
 
 void ChunkIter_reset(ChunkIter *it);
-VarlenDatum ChunkIter_get_next(ChunkIter *it, bool uncompress, bool *is_end);
+void ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *vd, bool *is_end);
 
 
 namespace Chunk_NS {

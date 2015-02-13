@@ -178,43 +178,43 @@ namespace Chunk_NS {
 				assert(false);
 		}
 	}
-
-	void
-	ChunkIter_reset(ChunkIter *it)
-	{
-		it->current_pos = it->start_pos;
-	}
-
-	void
-	ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is_end)
-	{
-		if (it->current_pos >= it->end_pos) {
-			*is_end = true;
-			result->length = 0;
-			result->pointer = nullptr;
-			result->is_null = true;
-			return;
-		}
-		*is_end = false;
-			
-		if (it->skip_size > 0) {
-			// for fixed-size
-			if (uncompress && it->chunk->get_column_desc()->compression != kENCODING_NONE) {
-				it->chunk->decompress(it->current_pos, result, &it->datum);
-			} else {
-				result->length = it->skip_size;
-				result->pointer = it->current_pos;
-				result->is_null = false;
-			}
-			it->current_pos += it->skip * it->skip_size;
-		} else {
-			// @TODO(wei) ignore uncompress flag for variable length?
-			StringOffsetT offset = *(StringOffsetT*)it->current_pos;
-			result->length = *((StringOffsetT*)it->current_pos + 1) - offset;
-			result->pointer = it->chunk->get_buffer()->getMemoryPtr() + offset;
-			result->is_null = false;
-			it->current_pos += it->skip * sizeof(StringOffsetT);
-		}
-	}
-
 }
+
+void
+ChunkIter_reset(ChunkIter *it)
+{
+	it->current_pos = it->start_pos;
+}
+
+void
+ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is_end)
+{
+	if (it->current_pos >= it->end_pos) {
+		*is_end = true;
+		result->length = 0;
+		result->pointer = nullptr;
+		result->is_null = true;
+		return;
+	}
+	*is_end = false;
+		
+	if (it->skip_size > 0) {
+		// for fixed-size
+		if (uncompress && it->chunk->get_column_desc()->compression != kENCODING_NONE) {
+			it->chunk->decompress(it->current_pos, result, &it->datum);
+		} else {
+			result->length = it->skip_size;
+			result->pointer = it->current_pos;
+			result->is_null = false;
+		}
+		it->current_pos += it->skip * it->skip_size;
+	} else {
+		// @TODO(wei) ignore uncompress flag for variable length?
+		StringOffsetT offset = *(StringOffsetT*)it->current_pos;
+		result->length = *((StringOffsetT*)it->current_pos + 1) - offset;
+		result->pointer = it->chunk->get_buffer()->getMemoryPtr() + offset;
+		result->is_null = false;
+		it->current_pos += it->skip * sizeof(StringOffsetT);
+	}
+}
+

@@ -15,6 +15,8 @@ include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_CURRENT_SO
 
 add_executable(ExecuteTest ExecuteTest.cpp)
 ADD_EXECUTABLE (PlanTest PlanTest.cpp)
+ADD_EXECUTABLE (StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 
 target_link_libraries (PlanTest Catalog SqliteConnector Parser Analyzer Planner Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
+target_link_libraries (StorageTest Catalog SqliteConnector Parser Analyzer Planner Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
 target_link_libraries (ExecuteTest Catalog SqliteConnector Parser Analyzer Planner QueryEngine Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lgtest -lz -lncurses -ldl -pthread")
