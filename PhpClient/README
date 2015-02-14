@@ -1,0 +1,10 @@
+From the Thrift subfolder, run:
+
+thrift -gen php ../../mapd.thrift
+
+then:
+
+php ./MapDClient.php
+
+The query is hard-coded, this is just an example.
+

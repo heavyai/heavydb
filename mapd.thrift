@@ -1,3 +1,5 @@
+namespace php mapd
+
 enum TDatumType {
   INT,
   REAL,

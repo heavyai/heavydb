@@ -18,15 +18,15 @@ require_once $GLOBALS['THRIFT_ROOT'].'/Transport/TSocket.php';
 require_once $GLOBALS['THRIFT_ROOT'].'/Type/TMessageType.php';
 require_once $GLOBALS['THRIFT_ROOT'].'/Type/TType.php';
  
-require_once $GLOBALS['THRIFT_ROOT'].'/gen-php/Types.php';
-require_once $GLOBALS['THRIFT_ROOT'].'/gen-php/MapD.php';
+require_once $GLOBALS['THRIFT_ROOT'].'/gen-php/mapd/Types.php';
+require_once $GLOBALS['THRIFT_ROOT'].'/gen-php/mapd/MapD.php';
 
 $socket = new Thrift\Transport\TSocket('localhost', '9090');
 $transport = new Thrift\Transport\TBufferedTransport($socket);
 $protocol = new Thrift\Protocol\TBinaryProtocol($transport);
 
 // Create a calculator client
-$client = new MapDClient($protocol);
+$client = new mapd\MapDClient($protocol);
 
 // Open up the connection
 $transport->open();
