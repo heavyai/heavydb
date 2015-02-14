@@ -6,8 +6,9 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <cstdlib>
 #include <algorithm>
+#include <cstdlib>
+#include <memory>
 #include "StringNoneEncoder.h"
 
 using Data_Namespace::AbstractBuffer;
