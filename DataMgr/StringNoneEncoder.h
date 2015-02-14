@@ -22,7 +22,7 @@ typedef int32_t StringOffsetT;
 class StringNoneEncoder : public Encoder {
 
     public:
-        StringNoneEncoder(AbstractBuffer *buffer): Encoder(buffer), index_buf(nullptr) {}
+        StringNoneEncoder(AbstractBuffer *buffer): Encoder(buffer), index_buf(nullptr), last_offset(-1) {}
 
         ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) {
 						assert(false); // should never be called for strings
@@ -57,6 +57,7 @@ class StringNoneEncoder : public Encoder {
 				void set_index_buf(AbstractBuffer *buf) { index_buf = buf; }
 		private:
 			AbstractBuffer *index_buf;
+			StringOffsetT last_offset;
 
 }; // class StringNoneEncoder
 

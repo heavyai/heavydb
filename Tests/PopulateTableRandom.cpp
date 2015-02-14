@@ -6,6 +6,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <iostream>
 #include <string>
 #include <cstring>
 #include <cstdlib>
@@ -108,7 +109,8 @@ random_fill_string(vector<string> &stringVec, size_t num_elems, int max_len)
 			string s(len, ' ');
 			for (int i = 0; i < len; i++)
 				s[i] = chars[char_dist(gen)];
-			stringVec.push_back(s);
+			// cout << "insert string: " << s << endl;
+			stringVec[n] = s;
 			boost::hash_combine(hash, string_hash(s));
 		}
 		return hash;

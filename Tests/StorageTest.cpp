@@ -104,9 +104,9 @@ namespace {
 #define SMALL		10000000
 #define LARGE		100000000
 
-TEST(StorageSmall, Numbers) {
+TEST(StorageSmall,DISABLED_Numbers) {
 	ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
-	ASSERT_NO_THROW(run_ddl("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e double, f float);"););
+	ASSERT_NO_THROW(run_ddl("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e double, f float) with (fragment_size = 1000, page_size = 1024);"););
 	EXPECT_TRUE(storage_test("numbers", SMALL));
 	ASSERT_NO_THROW(run_ddl("drop table numbers;"););
 }
@@ -118,17 +118,17 @@ TEST(StorageLarge, Numbers) {
 	ASSERT_NO_THROW(run_ddl("drop table numbers;"););
 }
 
-TEST(StorageSmall, DISABLED_Strings) {
+TEST(StorageSmall, Strings) {
 	ASSERT_NO_THROW(run_ddl("drop table if exists strings;"););
 	ASSERT_NO_THROW(run_ddl("create table strings (x varchar(10), y text);"););
 	EXPECT_TRUE(storage_test("strings", SMALL));
 	ASSERT_NO_THROW(run_ddl("drop table strings;"););
 }
 
-TEST(StorageSmall, DISABLED_AllTypes) {
+TEST(StorageSmall, AllTypes) {
 	ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
 	ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, x varchar(10), y text);"););
-	// EXPECT_TRUE(storage_test("alltypes", SMALL));
+	EXPECT_TRUE(storage_test("alltypes", SMALL));
 	ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }
 

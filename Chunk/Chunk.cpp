@@ -89,7 +89,7 @@ namespace Chunk_NS {
 		it.skip_size = column_desc->getStorageSize();
 		if (it.skip_size < 0) { // if it's variable length
 			it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(StringOffsetT);
-			it.end_pos = index_buf->getMemoryPtr() + index_buf->size();
+			it.end_pos = index_buf->getMemoryPtr() + index_buf->size() - sizeof(StringOffsetT);;
 		} else {
 			it.current_pos = it.start_pos = buffer->getMemoryPtr() + start_idx * it.skip_size;
 			it.end_pos = buffer->getMemoryPtr() + buffer->size();

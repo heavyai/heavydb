@@ -6,6 +6,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <iostream>
 #include <string>
 #include <cstring>
 #include <cstdlib>
@@ -61,6 +62,7 @@ scan_chunk(const Chunk &chunk, size_t &hash)
 			case kVARCHAR:
 			case kCHAR:
 			case kTEXT:
+				// cout << "read string: " << string((char*)vd.pointer, vd.length) << endl;
 				boost::hash_combine(hash, string_hash(string((char*)vd.pointer, vd.length)));
 				break;
 			default:
