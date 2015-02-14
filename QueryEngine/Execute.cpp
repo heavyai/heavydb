@@ -872,7 +872,9 @@ Executor::ResultRows Executor::groupBufferToResults(
       }
       for (const auto target_expr : target_exprs) {
         const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-        const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kCOUNT;  // kCOUNT is a meaningless placeholder here
+        // If the target is not an aggregate, use kMIN since
+        // additive would be incorrect for the reduce phase.
+        const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kMIN;
         result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
         result_row.agg_kinds_.push_back(agg_type);
         if (agg_type == kAVG) {
@@ -1235,6 +1237,7 @@ void Executor::executePlanWithoutGroupBy(
   ResultRow result_row;
   for (const auto target_expr : target_exprs) {
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+    CHECK(agg_expr);
     const auto agg_type = agg_expr->get_aggtype();
     result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
     result_row.agg_kinds_.push_back(agg_type);
