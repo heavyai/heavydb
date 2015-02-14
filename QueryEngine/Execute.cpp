@@ -878,17 +878,12 @@ Executor::ResultRows Executor::groupBufferToResults(
         if (agg_type == kAVG) {
           CHECK(agg_expr->get_arg());
           result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
-        } else {
-          result_row.agg_types_.push_back(target_expr->get_type_info().type);
-        }
-        if (agg_type == kAVG) {
-          CHECK(agg_expr);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
         } else {
-          const auto v = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
-          result_row.agg_results_.push_back(v);
+          result_row.agg_types_.push_back(target_expr->get_type_info().type);
+          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           ++out_vec_idx;
         }
       }
@@ -1246,10 +1241,6 @@ void Executor::executePlanWithoutGroupBy(
     if (agg_type == kAVG) {
       CHECK(agg_expr->get_arg());
       result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
-    } else {
-      result_row.agg_types_.push_back(target_expr->get_type_info().type);
-    }
-    if (agg_type == kAVG) {
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
@@ -1264,6 +1255,7 @@ void Executor::executePlanWithoutGroupBy(
           device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       out_vec_idx += 2;
     } else {
+      result_row.agg_types_.push_back(target_expr->get_type_info().type);
       result_row.agg_results_.push_back(reduce_results(
         agg_type,
         target_expr->get_type_info().type,
