@@ -54,7 +54,7 @@ double fixed_width_double_decode(
 
 extern "C" __attribute__((always_inline))
 void agg_count(int64_t* agg, const int64_t val) {
-  ++*agg;;
+  ++*agg;
 }
 
 namespace {
@@ -96,7 +96,7 @@ void agg_id(int64_t* agg, const int64_t val) {
 
 extern "C" __attribute__((always_inline))
 void agg_count_double(int64_t* agg, const double val) {
-  ++*agg;;
+  ++*agg;
 }
 
 extern "C" __attribute__((always_inline))

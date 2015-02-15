@@ -1092,7 +1092,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(),
-    device_type, opt_level, groups_buffer_entry_count_);
+    ExecutorDeviceType::CPU, opt_level, groups_buffer_entry_count_);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   const size_t groups_buffer_size { (target_exprs.size() + 1) * groups_buffer_entry_count_ * sizeof(int64_t) };
@@ -1150,7 +1150,7 @@ std::vector<ResultRow> Executor::executeSortPlan(
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
     const Planner::Plan* plan,
-    const ExecutorDeviceType device_type,
+    const ExecutorDeviceType device_type_in,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
@@ -1160,6 +1160,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     : dynamic_cast<const Planner::Scan*>(plan);
   CHECK(scan_plan);
   auto agg_infos = get_agg_name_and_exprs(plan);
+  auto device_type = device_type_in;
+  for (const auto& agg_info : agg_infos) {
+    // TODO(alex): ount distinct can't be executed on the GPU yet, punt to CPU
+    if (std::get<0>(agg_info) == "agg_count_distinct") {
+      device_type = ExecutorDeviceType::CPU;
+      break;
+    }
+  }
   std::list<Analyzer::Expr*> groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<Analyzer::Expr*> { nullptr };
   compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(), scan_plan->get_simple_quals(),
     scan_plan->get_quals(), device_type, opt_level, groups_buffer_entry_count_);

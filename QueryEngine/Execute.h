@@ -195,8 +195,8 @@ private:
   boost::mutex reduce_mutex_;
   std::atomic<int32_t> query_id_;
 
-  const unsigned block_size_x_ { 128 };
-  const unsigned grid_size_x_ { 128 };
+  const unsigned block_size_x_ { 16 };
+  const unsigned grid_size_x_ { 16 };
 };
 
 template<typename TimeT = std::chrono::milliseconds>

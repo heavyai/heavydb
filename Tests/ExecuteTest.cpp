@@ -253,8 +253,6 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT SUM(f + d) FROM test WHERE x + y + 1 = 50;", dt);
     c("SELECT SUM(f * d + 15) FROM test WHERE x + y + 1 = 50;", dt);
     c("SELECT MIN(x), AVG(x * y), MAX(y + 7), AVG(x * f + 15), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", dt);
-  }
-  for (auto dt : { ExecutorDeviceType::CPU }) {
     c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(y) > 42.0;", dt);
     c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09;", dt);
     c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09 AND AVG(y) > 42.0;", dt);
@@ -279,7 +277,7 @@ TEST(Select, FilterAndMultipleAggregation) {
 }
 
 TEST(Select, FilterAndGroupBy) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", dt);
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", dt);
@@ -288,7 +286,7 @@ TEST(Select, FilterAndGroupBy) {
 }
 
 TEST(Select, FilterAndGroupByMultipleAgg) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT MIN(x + y), COUNT(*), AVG(x + 1) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", dt);
     c("SELECT MIN(x + y), COUNT(*), AVG(x + 1) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", dt);
@@ -296,7 +294,7 @@ TEST(Select, FilterAndGroupByMultipleAgg) {
 }
 
 TEST(Select, Having) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING MAX(x) > 5;", dt);
     c("SELECT MAX(y) FROM test WHERE x > 7 GROUP BY z HAVING MAX(x) < 100;", dt);
@@ -307,14 +305,14 @@ TEST(Select, Having) {
 }
 
 TEST(Select, CountDistinct) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct x) FROM test GROUP BY y;", dt);
   }
 }
 
 TEST(Select, ScanNoAggregation) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT * FROM test;", dt);
     c("SELECT t.* FROM test t;", dt);
@@ -325,7 +323,7 @@ TEST(Select, ScanNoAggregation) {
 }
 
 TEST(Select, OrderBy) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     const auto rows = run_multiple_agg(
       "SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;",
@@ -342,7 +340,7 @@ TEST(Select, OrderBy) {
 }
 
 TEST(Select, ComplexQueries) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) * MAX(y) - SUM(z) FROM test;", dt);
     c("SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test WHERE z BETWEEN 100 AND 200 GROUP BY x, y;", dt);
@@ -373,7 +371,7 @@ TEST(Select, ComplexQueries) {
 }
 
 TEST(Select, GroupByExprNoFilterNoAggregate) {
-  for (auto dt : { ExecutorDeviceType::CPU }) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT x + y AS a FROM test GROUP BY a;", dt);
   }
@@ -387,8 +385,6 @@ TEST(Select, Case) {
       "FROM test WHERE CASE WHEN y BETWEEN 42 AND 43 THEN 5 ELSE 4 END > 4;", dt);
     c("SELECT SUM(CASE WHEN x BETWEEN 6 AND 7 THEN 1 WHEN x BETWEEN 8 AND 9 THEN 2 ELSE 3 END) "
       "FROM test WHERE CASE WHEN y BETWEEN 44 AND 45 THEN 5 ELSE 4 END > 4;", dt);
-  }
-  for (auto dt : { ExecutorDeviceType::CPU }) {
     c("SELECT CASE WHEN x + y > 50 THEN 77 ELSE 88 END AS foo, COUNT(*) FROM test GROUP BY foo;", dt);
   }
 }
