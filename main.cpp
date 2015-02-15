@@ -243,11 +243,33 @@ main(int argc, char* argv[])
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
 					if (debug) plan->print();
 					if (execute) {
-						Executor executor(plan);
 						std::vector<ResultRow> results;
-						auto ms = measure<>::execution([&]() {
-							results = executor.execute();
-						});
+						std::vector<ResultRow> results_cpu;
+						{
+							Executor executor_cpu(plan);
+							auto ms = measure<>::execution([&]() {
+								results_cpu = executor_cpu.execute(ExecutorDeviceType::CPU);
+							});
+							if (timer) {
+								cout << "Query took " << ms << " ms to execute." << endl;
+							}
+						}
+						if (cat.get_dataMgr().gpusPresent()) {
+							std::vector<ResultRow> results_gpu;
+							{
+								Executor executor_gpu(plan);
+								auto ms = measure<>::execution([&]() {
+									results_gpu = executor_gpu.execute(ExecutorDeviceType::GPU);
+								});
+								if (timer) {
+									cout << "Query took " << ms << " ms to execute." << endl;
+								}
+							}
+							CHECK(results_cpu == results_gpu);
+							results.swap(results_gpu);
+						} else {
+							results.swap(results_cpu);
+						}
 						if (!results.empty()) {
 							for (const auto& row : results) {
 								cout << fixed << setprecision(13) << row.agg_result(0);
@@ -256,9 +278,6 @@ main(int argc, char* argv[])
 								}
 								cout << endl;
 							}
-						}
-						if (timer) {
-							cout << "Query took " << ms << " ms to execute." << endl;
 						}
 					}
 				}

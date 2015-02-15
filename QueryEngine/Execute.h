@@ -69,6 +69,13 @@ public:
   std::vector<int64_t> value_tuple() const {
     return value_tuple_;
   }
+  bool operator==(const ResultRow& r) const {
+    return (value_tuple_ == r.value_tuple_ &&
+            agg_results_ == r.agg_results_ &&
+            agg_results_idx_ == r.agg_results_idx_ &&
+            agg_kinds_ == r.agg_kinds_ &&
+            agg_types_ == r.agg_types_);
+  }
 private:
   // TODO(alex): support for strings
   std::vector<int64_t> value_tuple_;
