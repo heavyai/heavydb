@@ -131,15 +131,16 @@ private:
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
-    const Catalog_Namespace::Catalog&,
     std::vector<const int8_t*>& col_buffers,
-    const int64_t num_rows);
+    const int64_t num_rows,
+    Data_Namespace::DataMgr*);
   void executePlanWithoutGroupBy(
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
-    const int64_t num_rows);
+    const int64_t num_rows,
+    Data_Namespace::DataMgr* data_mgr);
   static ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
   ResultRows groupBufferToResults(
     const int64_t* group_by_buffer,
