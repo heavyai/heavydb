@@ -35,17 +35,18 @@ namespace Parser {
 	 */
 	class SQLType : public Node {
 		public:
-			SQLType(SQLTypes t) : type(t), param1(0), param2(0) {}
+			SQLType(SQLTypes t) : type(t), param1(-1), param2(0) {}
 			SQLType(SQLTypes t, int p1) : type(t), param1(p1), param2(0) {}
 			SQLType(SQLTypes t, int p1, int p2) : type(t), param1(p1), param2(p2) {}
 			SQLTypes get_type() const { return type; }
 			int get_param1() const { return param1; }
 			int get_param2() const { return param2; }
 			std::string to_string() const;
+			void check_type();
 		private:
 			SQLTypes	type;
-			int param1; // e.g. for NUMERIC(10).  0 means unspecified.
-			int param2; // e.g. for NUMERIC(10,3). 0 means unspecified.
+			int param1; // e.g. for NUMERIC(10).  -1 means unspecified.
+			int param2; // e.g. for NUMERIC(10,3). 0 is default value.
 	};
 			
 	/*
@@ -498,7 +499,7 @@ namespace Parser {
 			ColumnDef(std::string *c, SQLType *t, CompressDef *cp, ColumnConstraintDef *cc) : column_name(c), column_type(t), compression(cp), column_constraint(cc) {}
 			virtual ~ColumnDef();
 			const std::string *get_column_name() const { return column_name; }
-			const SQLType *get_column_type() const { return column_type; }
+			SQLType *get_column_type() const { return column_type; }
 			const CompressDef *get_compression() const { return compression; }
 			const ColumnConstraintDef *get_column_constraint() const { return column_constraint; }
 		private:

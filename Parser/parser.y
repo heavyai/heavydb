@@ -68,7 +68,7 @@ using namespace Parser;
 
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
-%token DATABASE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
+%token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF IN INSERT INTEGER INTO
 %token IS KEY LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
@@ -825,6 +825,13 @@ column_ref:
 	/* |	NAME '.' NAME '.' NAME { $$ = new ColumnRef($<stringval>1, $<stringval>3, $<stringval>5); } */
 	;
 
+non_neg_int: INTNUM 
+		{ 
+			if ($<intval>1 < 0)
+				throw std::runtime_error("No negative number in type definition.");
+			$<intval>$ = $<intval>1; 
+		}
+
 		/* data types */
 
 data_type:
@@ -832,22 +839,25 @@ data_type:
 	| TEXT { $<nodeval>$ = new SQLType(kTEXT); }
 	|	BOOLEAN { $<nodeval>$ = new SQLType(kBOOLEAN); }
 	|	CHARACTER { $<nodeval>$ = new SQLType(kCHAR); }
-	|	CHARACTER '(' INTNUM ')' { $<nodeval>$ = new SQLType(kCHAR, $<intval>3); }
+	|	CHARACTER '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kCHAR, $<intval>3); }
 	|	NUMERIC { $<nodeval>$ = new SQLType(kNUMERIC); }
-	|	NUMERIC '(' INTNUM ')' { $<nodeval>$ = new SQLType(kNUMERIC, $<intval>3); }
-	|	NUMERIC '(' INTNUM ',' INTNUM ')' { $<nodeval>$ = new SQLType(kNUMERIC, $<intval>3, $<intval>5); }
+	|	NUMERIC '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kNUMERIC, $<intval>3); }
+	|	NUMERIC '(' non_neg_int ',' non_neg_int ')' { $<nodeval>$ = new SQLType(kNUMERIC, $<intval>3, $<intval>5); }
 	|	DECIMAL { $<nodeval>$ = new SQLType(kDECIMAL); }
-	|	DECIMAL '(' INTNUM ')' { $<nodeval>$ = new SQLType(kDECIMAL, $<intval>3); }
-	|	DECIMAL '(' INTNUM ',' INTNUM ')' { $<nodeval>$ = new SQLType(kDECIMAL, $<intval>3, $<intval>5); }
+	|	DECIMAL '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kDECIMAL, $<intval>3); }
+	|	DECIMAL '(' non_neg_int ',' non_neg_int ')' { $<nodeval>$ = new SQLType(kDECIMAL, $<intval>3, $<intval>5); }
 	|	INTEGER { $<nodeval>$ = new SQLType(kINT); }
 	|	SMALLINT { $<nodeval>$ = new SQLType(kSMALLINT); }
 	|	FLOAT { $<nodeval>$ = new SQLType(kFLOAT); }
-	|	FLOAT '(' INTNUM ')' { $<nodeval>$ = new SQLType(kFLOAT, $<intval>3); }
+	|	FLOAT '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kFLOAT, $<intval>3); }
 	|	REAL { $<nodeval>$ = new SQLType(kFLOAT); }
 	|	DOUBLE PRECISION { $<nodeval>$ = new SQLType(kDOUBLE); }
 	|	DOUBLE { $<nodeval>$ = new SQLType(kDOUBLE); }
+	| DATE { $<nodeval>$ = new SQLType(kDATE); }
 	| TIME { $<nodeval>$ = new SQLType(kTIME); }
+	| TIME '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIME, $<intval>3); }
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
+	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
 	;
 
 	/* the various things you can name */
