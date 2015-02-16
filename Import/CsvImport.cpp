@@ -53,7 +53,7 @@ Data_Namespace::DataMgr* MapDMeta::getDataMgr() const {
 
 namespace {
 
-class TypedImportBuffer {
+class TypedImportBuffer : boost::noncopyable {
 public:
   TypedImportBuffer(const SQLTypes type) : type_(type) {
     switch (type) {
@@ -65,6 +65,9 @@ public:
       break;
     case kBIGINT:
       bigint_buffer_ = new std::vector<int64_t>();
+      break;
+    case kTEXT:
+      string_buffer_ = new std::vector<std::string>();
       break;
     default:
       CHECK(false);
@@ -81,6 +84,9 @@ public:
       break;
     case kBIGINT:
       delete bigint_buffer_;
+      break;
+    case kTEXT:
+      delete string_buffer_;
       break;
     default:
       CHECK(false);
@@ -102,11 +108,16 @@ public:
     bigint_buffer_->push_back(v);
   }
 
+  void addString(const std::string& v) {
+    CHECK_EQ(kTEXT, type_);
+    string_buffer_->push_back(v);
+  }
+
   SQLTypes getType() const {
     return type_;
   }
 
-  int8_t* getBytes() const {
+  int8_t* getIntBytes() const {
     switch (type_) {
     case kSMALLINT:
       return reinterpret_cast<int8_t*>(&((*smallint_buffer_)[0]));
@@ -118,11 +129,16 @@ public:
       CHECK(false);
     }
   }
+
+  std::vector<std::string>* getStringBuffer() const {
+    return string_buffer_;
+  }
 private:
   union {
     std::vector<int16_t>* smallint_buffer_;
     std::vector<int32_t>* int_buffer_;
     std::vector<int64_t>* bigint_buffer_;
+    std::vector<std::string>* string_buffer_;
   };
   SQLTypes type_;
 };
@@ -139,6 +155,43 @@ CsvImporter::CsvImporter(
   , has_header_(has_header)
   , csv_parser_(CsvParser_new(file_path.c_str(), delim.c_str(), has_header)) {}
 
+namespace {
+
+void do_import(
+    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    const size_t row_count,
+    Fragmenter_Namespace::InsertData& insert_data,
+    Data_Namespace::DataMgr* data_mgr,
+    Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
+  {
+    decltype(insert_data.data) empty;
+    insert_data.data.swap(empty);
+  }
+  insert_data.numRows = row_count;
+  for (const auto& import_buff : import_buffers) {
+    DataBlockPtr p;
+    if (IS_INTEGER(import_buff->getType())) {
+      p.numbersPtr = import_buff->getIntBytes();
+    } else {
+      CHECK_EQ(kTEXT, import_buff->getType());
+      p.stringsPtr = import_buff->getStringBuffer();
+    }
+    insert_data.data.push_back(p);
+  }
+  fragmenter->insertData(insert_data);
+  data_mgr->checkpoint();
+  {
+    std::vector<std::unique_ptr<TypedImportBuffer>> empty;
+    import_buffers.swap(empty);
+  }
+}
+
+const auto NULL_SMALLINT = std::numeric_limits<int16_t>::min();
+const auto NULL_INT = std::numeric_limits<int32_t>::min();
+const auto NULL_BIGINT = std::numeric_limits<int64_t>::min();
+
+}
+
 void CsvImporter::import() {
   const size_t row_buffer_size { 50000 };
   const auto col_descriptors = table_meta_.getColumnDescriptors();
@@ -154,9 +207,10 @@ void CsvImporter::import() {
     }
     CsvParser_destroy_row(header);
   }
-  std::vector<TypedImportBuffer> import_buffers;
+  std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
   for (const auto col_desc : col_descriptors) {
-    import_buffers.emplace_back(col_desc->columnType.type);
+    import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(
+      new TypedImportBuffer(col_desc->columnType.type)));
   }
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = table_meta_.getDbId();
@@ -172,13 +226,28 @@ void CsvImporter::import() {
     for (const auto col_desc : col_descriptors) {
     switch (col_desc->columnType.type) {
     case kSMALLINT:
-      import_buffers[col_idx].addSmallint(boost::lexical_cast<int16_t>(row_fields[col_idx]));
+      try {
+        import_buffers[col_idx]->addSmallint(boost::lexical_cast<int16_t>(row_fields[col_idx]));
+      } catch (boost::bad_lexical_cast&) {
+        import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
+      }
       break;
     case kINT:
-      import_buffers[col_idx].addInt(boost::lexical_cast<int32_t>(row_fields[col_idx]));
+      try {
+        import_buffers[col_idx]->addInt(boost::lexical_cast<int32_t>(row_fields[col_idx]));
+      } catch (boost::bad_lexical_cast&) {
+        import_buffers[col_idx]->addInt(NULL_INT);
+      }
       break;
     case kBIGINT:
-      import_buffers[col_idx].addBigint(boost::lexical_cast<int64_t>(row_fields[col_idx]));
+      try {
+        import_buffers[col_idx]->addBigint(boost::lexical_cast<int64_t>(row_fields[col_idx]));
+      } catch (boost::bad_lexical_cast&) {
+        import_buffers[col_idx]->addBigint(NULL_BIGINT);
+      }
+      break;
+    case kTEXT:
+      import_buffers[col_idx]->addString(row_fields[col_idx]);
       break;
     default:
       CHECK(false);
@@ -188,29 +257,13 @@ void CsvImporter::import() {
     CsvParser_destroy_row(row);
     ++row_count;
     if (row_count == row_buffer_size) {
-      {
-        decltype(insert_data.data) empty;
-        insert_data.data.swap(empty);
-      }
-      insert_data.numRows = row_buffer_size;
-      for (const auto& import_buff : import_buffers) {
-        DataBlockPtr p;
-        if (IS_INTEGER(import_buff.getType())) {
-          p.numbersPtr = import_buff.getBytes();
-          insert_data.data.push_back(p);
-        } else {
-          CHECK(false);
-        }
-      }
-      table_meta_.getTableDesc()->fragmenter->insertData(insert_data);
-      table_meta_.getDataMgr()->checkpoint();
+      do_import(import_buffers, row_count, insert_data,
+        table_meta_.getDataMgr(), table_meta_.getTableDesc()->fragmenter);
       row_count = 0;
-      {
-        decltype(import_buffers) empty;
-        import_buffers.swap(empty);
-      }
     }
   }
+  do_import(import_buffers, row_count, insert_data,
+    table_meta_.getDataMgr(), table_meta_.getTableDesc()->fragmenter);
 }
 
 CsvImporter::~CsvImporter() {
