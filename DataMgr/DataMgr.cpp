@@ -101,11 +101,22 @@ namespace Data_Namespace {
         return bufferMgrs_[level][deviceId]->alloc(numBytes);
     }
 
-    void DataMgr::free(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer) {
-        int level = static_cast <int> (memoryLevel);
-        assert(deviceId < levelSizes_[level]);
-        bufferMgrs_[level][deviceId]->free(buffer);
+    void DataMgr::free(AbstractBuffer *buffer) {
+        int level = static_cast <int> (buffer->getType());
+        bufferMgrs_[level][buffer->getDeviceId()]->free(buffer);
     }
+
+    void DataMgr::freeAllBuffers() {
+        ChunkKey keyPrefix = {-1};
+        deleteChunksWithPrefix(keyPrefix);
+    }
+    /*
+    void DataMgr::copy(AbstractBuffer *destBuffer, const AbstractBuffer *srcBuffer) {
+
+    }
+    */
+
+
 
 
     void DataMgr::checkpoint() {
