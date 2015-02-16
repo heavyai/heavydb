@@ -5,6 +5,24 @@
 #include <limits>
 
 
+extern "C"
+void agg_sum(int64_t* agg, const int64_t val);
+
+extern "C"
+void agg_max(int64_t* agg, const int64_t val);
+
+extern "C"
+void agg_min(int64_t* agg, const int64_t val);
+
+extern "C"
+void agg_sum_double(int64_t* agg, const double val);
+
+extern "C"
+void agg_max_double(int64_t* agg, const double val);
+
+extern "C"
+void agg_min_double(int64_t* agg, const double val);
+
 #define EMPTY_KEY std::numeric_limits<int64_t>::min()
 
 extern "C"

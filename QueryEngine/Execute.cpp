@@ -815,24 +815,48 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         CHECK_EQ(old_agg_results.size(), row.agg_results_.size());
         const size_t agg_col_count = row.size();
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-          const auto agg_type = row.agg_kinds_[agg_col_idx];
+          const auto agg_kind = row.agg_kinds_[agg_col_idx];
+          const auto agg_type = row.agg_types_[agg_col_idx];
+          CHECK(IS_INTEGER(agg_type) || agg_type == kFLOAT || agg_type == kDOUBLE);
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
-          switch (agg_type) {
+          switch (agg_kind) {
           case kSUM:
           case kCOUNT:
           case kAVG:
-            old_agg_results[actual_col_idx] += row.agg_results_[actual_col_idx];
-            if (agg_type == kAVG) {
+            if (IS_INTEGER(agg_type)) {
+              agg_sum(
+                &old_agg_results[actual_col_idx],
+                row.agg_results_[actual_col_idx]);
+            } else {
+              agg_sum_double(
+                &old_agg_results[actual_col_idx],
+                *reinterpret_cast<const double*>(&row.agg_results_[actual_col_idx]));
+            }
+            if (agg_kind == kAVG) {
               old_agg_results[actual_col_idx + 1] += row.agg_results_[actual_col_idx + 1];
             }
             break;
           case kMIN:
-            old_agg_results[actual_col_idx] = std::min(
-              old_agg_results[actual_col_idx], row.agg_results_[actual_col_idx]);
+            if (IS_INTEGER(agg_type)) {
+              agg_min(
+                &old_agg_results[actual_col_idx],
+                row.agg_results_[actual_col_idx]);
+            } else {
+              agg_min_double(
+                &old_agg_results[actual_col_idx],
+                *reinterpret_cast<const double*>(&row.agg_results_[actual_col_idx]));
+            }
             break;
           case kMAX:
-            old_agg_results[actual_col_idx] = std::max(
-              old_agg_results[actual_col_idx], row.agg_results_[actual_col_idx]);
+            if (IS_INTEGER(agg_type)) {
+              agg_max(
+                &old_agg_results[actual_col_idx],
+                row.agg_results_[actual_col_idx]);
+            } else {
+              agg_max_double(
+                &old_agg_results[actual_col_idx],
+                *reinterpret_cast<const double*>(&row.agg_results_[actual_col_idx]));
+            }
             break;
           default:
             CHECK(false);
