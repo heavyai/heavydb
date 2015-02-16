@@ -19,6 +19,7 @@ ADD_SUBDIRECTORY    (Catalog)
 ADD_SUBDIRECTORY    (Parser)
 ADD_SUBDIRECTORY    (Analyzer)
 ADD_SUBDIRECTORY    (Planner)
+ADD_SUBDIRECTORY    (Import)
 ADD_SUBDIRECTORY    (QueryEngine)
 ADD_SUBDIRECTORY    (DataMgr)
 ADD_SUBDIRECTORY    (CudaMgr)
@@ -44,6 +45,9 @@ add_custom_command(
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
+
+add_executable(csv_import csv_import.cpp)
+target_link_libraries(csv_import CsvImport ${Boost_LIBRARIES})
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
