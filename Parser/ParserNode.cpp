@@ -834,9 +834,16 @@ namespace Parser {
 				break;
 			case kTIME:
 				str = "TIME";
+				if (param1 < 6)
+					str += "(" + boost::lexical_cast<std::string>(param1) + ")";
 				break;
 			case kTIMESTAMP:
-				str = "TIMESTAMP"; // @TODO add precision
+				str = "TIMESTAMP";
+				if (param1 < 6)
+					str += "(" + boost::lexical_cast<std::string>(param1) + ")";
+				break;
+			case kDATE:
+				str = "DATE";
 				break;
 			default:
 				assert(false);
@@ -1106,6 +1113,40 @@ namespace Parser {
 	}
 
 	void
+	SQLType::check_type()
+	{
+		switch (type) {
+			case kCHAR:
+			case kVARCHAR:
+				if (param1 <= 0)
+					throw std::runtime_error("CHAR and VARCHAR must have a positive dimension.");
+				break;
+			case kDECIMAL:
+			case kNUMERIC:
+				if (param1 <= 0)
+					throw std::runtime_error("DECIMAL and NUMERIC must have a positive precision.");
+				else if (param1 > 19)
+					throw std::runtime_error("DECIMAL and NUMERIC precision cannot be larger than 19.");
+				else if (param1 <= param2)
+					throw std::runtime_error("DECIMAL and NUMERIC must have precision larger than scale.");
+				break;
+			case kTIMESTAMP:
+			case kTIME:
+				if (param1 == -1)
+					param1 = 6; // default precision is 6
+				if (param1 > 0) { // @TODO(wei) support sub-second precision later.
+					if (type == kTIMESTAMP)
+						throw std::runtime_error("Only TIMESTAMP(0) is supported now.");
+					else
+						throw std::runtime_error("Only TIME(0) is supported now.");
+				}
+				break;
+			default:
+				break;
+		}
+	}
+
+	void
 	CreateTableStmt::execute(Catalog_Namespace::Catalog &catalog)
 	{
 		if (catalog.getMetadataForTable(*table) != nullptr) {
@@ -1120,7 +1161,8 @@ namespace Parser {
 			ColumnDef *coldef = dynamic_cast<ColumnDef*>(e);
 			ColumnDescriptor cd;
 			cd.columnName = *coldef->get_column_name();
-			const SQLType *t = coldef->get_column_type();
+			SQLType *t = coldef->get_column_type();
+			t->check_type();
 			cd.columnType.type = t->get_type();
 			cd.columnType.dimension = t->get_param1();
 			cd.columnType.scale = t->get_param2();

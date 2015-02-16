@@ -27,7 +27,8 @@ enum SQLTypes {
 	kTIME = 10,
 	kTIMESTAMP = 11,
 	kBIGINT = 12,
-	kTEXT = 13
+	kTEXT = 13,
+	kDATE = 14
 };
 
 
