@@ -3,7 +3,7 @@
 
 #include "csvparser.h"
 
-#include "Catalog/Catalog.h"
+#include "../Catalog/Catalog.h"
 
 #include <list>
 #include <memory>
