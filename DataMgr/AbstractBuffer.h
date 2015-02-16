@@ -8,6 +8,7 @@
 
 #include "../Shared/types.h"
 #include "../Shared/sqltypes.h"
+#include "MemoryLevel.h"
 #include "Encoder.h"
 
 
@@ -23,22 +24,22 @@ namespace Data_Namespace {
      * @brief   An AbstractBuffer is a unit of data management for a data manager.
      */
 
-    enum BufferType {FILE_BUFFER, CPU_BUFFER, GPU_BUFFER};
+    //enum BufferType {FILE_BUFFER, CPU_BUFFER, GPU_BUFFER};
 
     class AbstractBuffer {
         
     public:
 
-        AbstractBuffer (): encoder(0), hasEncoder(0), size_(0),  isDirty_(false),isAppended_(false),isUpdated_(false) {}
-        AbstractBuffer (const SQLTypeInfo sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false){
+        AbstractBuffer (const int deviceId): encoder(0), hasEncoder(0), size_(0),  isDirty_(false),isAppended_(false),isUpdated_(false), deviceId_(deviceId) {}
+        AbstractBuffer (const int deviceId, const SQLTypeInfo sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), deviceId_(deviceId){
         initEncoder(sqlType, encodingType, numEncodingBits);
         }
         virtual ~AbstractBuffer() { if (hasEncoder) delete encoder; }
         
-        virtual void read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType = CPU_BUFFER, const size_t offset = 0) = 0;
-        virtual void write(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER, const size_t offset = 0) = 0;
+        virtual void read(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType = CPU_LEVEL, const size_t offset = 0) = 0;
+        virtual void write(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL, const size_t offset = 0) = 0;
         virtual void reserve(size_t numBytes) = 0;
-        virtual void append(int8_t * src, const size_t numBytes, const BufferType srcBufferType = CPU_BUFFER) = 0;
+        virtual void append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL) = 0;
         virtual int8_t* getMemoryPtr() = 0;
         
         virtual size_t pageCount() const = 0;
@@ -46,8 +47,8 @@ namespace Data_Namespace {
         virtual size_t size() const = 0;
         virtual size_t reservedSize() const = 0;
         //virtual size_t used() const = 0;
-        virtual int getDeviceId() const {return -1;}
-        virtual BufferType getType() const = 0;
+        virtual int getDeviceId() const {return deviceId_;}
+        virtual MemoryLevel getType() const = 0;
 
         // Next three methods are dummy methods so FileBuffer does not implement these
         virtual inline int pin() {return 0;}
@@ -108,6 +109,7 @@ namespace Data_Namespace {
         bool isDirty_;
         bool isAppended_;
         bool isUpdated_;
+        int deviceId_;
 
 #ifdef BUFFER_MUTEX
         boost::shared_mutex readWriteMutex_;

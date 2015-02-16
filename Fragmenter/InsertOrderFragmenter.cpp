@@ -154,7 +154,8 @@ FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::Me
         chunkKey.push_back(maxFragmentId_);
 				colMapIt->second.createChunkBuffer(dataMgr_, chunkKey, memoryLevel, newFragmentInfo.deviceIds[static_cast<int>(memoryLevel)]);
         // shouldn't be evicted between these two statements b/c not sized yet
-        colMapIt->second.pin_buffer();
+        //colMapIt->second.pin_buffer(); // not needed anymore b/c create auto
+        //pins
         //cout << "Creating chunk with encodingType: " << colMapIt->second.columnDesc->compression << endl;
 				colMapIt->second.init_encoder();
     }

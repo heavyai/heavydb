@@ -68,7 +68,7 @@ namespace File_Namespace {
         
     public:
         /// Constructor
-        FileMgr(std::string basePath = ".", const size_t defaultPageSize=1048576, const int epoch = -1);
+        FileMgr(const int deviceId, std::string basePath = ".",   const size_t defaultPageSize=1048576, const int epoch = -1);
         
         /// Destructor
         virtual ~FileMgr();
@@ -98,8 +98,8 @@ namespace File_Namespace {
         virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
         
         // Buffer API
-        virtual AbstractBuffer* createBuffer(const size_t nbytes);
-        virtual void deleteBuffer(AbstractBuffer *buffer);
+        virtual AbstractBuffer* alloc(const size_t numBytes);
+        virtual void free(AbstractBuffer *buffer);
         //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         Page requestFreePage(size_t pagesize);
 

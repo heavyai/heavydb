@@ -16,7 +16,7 @@ using namespace std;
 namespace Buffer_Namespace {
 
     /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
-    BufferMgr::BufferMgr(const size_t maxBufferSize, const size_t slabSize, const size_t pageSize, AbstractBufferMgr *parentMgr): maxBufferSize_(maxBufferSize), slabSize_(slabSize), pageSize_(pageSize), parentMgr_(parentMgr), maxBufferId_(0), bufferEpoch_(0) {
+    BufferMgr::BufferMgr(const int deviceId, const size_t maxBufferSize, const size_t slabSize, const size_t pageSize, AbstractBufferMgr *parentMgr): AbstractBufferMgr(deviceId),  maxBufferSize_(maxBufferSize), slabSize_(slabSize), pageSize_(pageSize), parentMgr_(parentMgr), maxBufferId_(0), bufferEpoch_(0) {
         assert(maxBufferSize_ > 0 && slabSize_ > 0 && pageSize_ > 0 && slabSize_ % pageSize_ == 0);
         numPagesPerSlab_ = slabSize_ / pageSize_; 
         maxNumSlabs_ = (maxBufferSize_/slabSize_);
@@ -45,6 +45,7 @@ namespace Buffer_Namespace {
     /// Throws a runtime_error if the Chunk already exists
     AbstractBuffer * BufferMgr::createChunk(const ChunkKey &chunkKey, const size_t chunkPageSize, const size_t initialSize) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
+
         size_t actualChunkPageSize = chunkPageSize;
         if (actualChunkPageSize == 0) {
             actualChunkPageSize = pageSize_;
@@ -61,7 +62,7 @@ namespace Buffer_Namespace {
         allocateBuffer(chunkIndex_[chunkKey],actualChunkPageSize,initialSize); 
         //slabSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(slabSegments_.end(),1), chunkPageSize, initialSize); 
         //new Buffer(this, chunkIndex_[chunkKey], chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
-
+        chunkIndex_[chunkKey]->buffer->pin();
         return chunkIndex_[chunkKey]->buffer;
     }
 
@@ -463,8 +464,7 @@ namespace Buffer_Namespace {
             return chunkIt->second->buffer; 
         }
         else { // If wasn't in pool then we need to fetch it
-            AbstractBuffer * buffer = createChunk(key,pageSize_,numBytes);
-            buffer->pin();
+            AbstractBuffer * buffer = createChunk(key,pageSize_,numBytes); // createChunk pins for us
             try {
                 parentMgr_->fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
             }
@@ -555,12 +555,12 @@ namespace Buffer_Namespace {
     }
     
     /// client is responsible for deleting memory allocated for b->mem_
-    AbstractBuffer* BufferMgr::createBuffer(const size_t numBytes) {
+    AbstractBuffer* BufferMgr::alloc(const size_t numBytes) {
         ChunkKey chunkKey = {-1,getBufferId()};
         return createChunk(chunkKey, pageSize_, numBytes); 
     }
 
-    void BufferMgr::deleteBuffer(AbstractBuffer *buffer) {
+    void BufferMgr::free(AbstractBuffer *buffer) {
         Buffer * castedBuffer = dynamic_cast <Buffer *> (buffer); 
         if (castedBuffer == 0) {
             throw std::runtime_error ("Wrong buffer type - expects base class pointer to Buffer type");

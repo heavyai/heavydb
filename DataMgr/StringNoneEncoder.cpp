@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <memory>
+#include "MemoryLevel.h"
 #include "StringNoneEncoder.h"
 
 using Data_Namespace::AbstractBuffer;
@@ -31,7 +32,7 @@ StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int
 	} else {
 		if (last_offset < 0) {
 			// need to read the last offset from buffer/disk
-			index_buf->read((int8_t*)&last_offset, sizeof(StringOffsetT), Data_Namespace::CPU_BUFFER, index_buf->size() - sizeof(StringOffsetT));
+			index_buf->read((int8_t*)&last_offset, sizeof(StringOffsetT), Data_Namespace::CPU_LEVEL, index_buf->size() - sizeof(StringOffsetT));
 			assert(last_offset >= 0);
 		}
 	}

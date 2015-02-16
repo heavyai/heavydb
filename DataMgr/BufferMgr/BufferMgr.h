@@ -37,7 +37,7 @@ namespace Buffer_Namespace {
         /// Constructs a BufferMgr object that allocates memSize bytes.
         //@todo change this to size_t
         //explicit BufferMgr(const size_t bufferSize, const size_t pageSize);
-        BufferMgr(const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
+        BufferMgr(const int deviceId, const size_t maxBufferSize, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
         
         /// Destructor
         virtual ~BufferMgr();
@@ -69,8 +69,8 @@ namespace Buffer_Namespace {
         void checkpoint();
 
         // Buffer API
-        virtual AbstractBuffer* createBuffer(const size_t numBytes = 0);
-        virtual void deleteBuffer(AbstractBuffer *buffer);
+        virtual AbstractBuffer* alloc(const size_t numBytes = 0);
+        virtual void free(AbstractBuffer *buffer);
         //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
         
         /// Returns the total number of bytes allocated.

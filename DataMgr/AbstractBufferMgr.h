@@ -29,6 +29,7 @@ namespace Data_Namespace {
 
     public:
         virtual ~AbstractBufferMgr() {}
+        AbstractBufferMgr(const int deviceId): deviceId_(deviceId) {}
         
         // Chunk API
         virtual AbstractBuffer* createChunk(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0) = 0;
@@ -44,14 +45,17 @@ namespace Data_Namespace {
         virtual void checkpoint() = 0;
 
         // Buffer API
-        virtual AbstractBuffer* createBuffer(const size_t numBytes = 0) = 0;
-        virtual void deleteBuffer(AbstractBuffer *buffer) = 0;
+        virtual AbstractBuffer* alloc(const size_t numBytes = 0) = 0;
+        virtual void free(AbstractBuffer *buffer) = 0;
         //virtual AbstractBuffer* putBuffer(AbstractBuffer *d) = 0;
         virtual MgrType getMgrType() = 0;
         virtual size_t getNumChunks() = 0;
+        inline int getDeviceId() {return deviceId_;}
 
     protected:
         AbstractBufferMgr * parentMgr_;
+        int deviceId_;
+
 
 
     };

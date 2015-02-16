@@ -47,21 +47,21 @@ namespace Data_Namespace {
 
     void DataMgr::populateMgrs() {
         bufferMgrs_.resize(2);
-        bufferMgrs_[0].push_back(new FileMgr (dataDir_)); 
+        bufferMgrs_[0].push_back(new FileMgr (0, dataDir_)); 
         levelSizes_.push_back(1);
         if (hasGpus_) {
             bufferMgrs_.resize(3);
-            bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,std::numeric_limits<unsigned int>::max(), CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
             levelSizes_.push_back(1);
             int numGpus = cudaMgr_->getDeviceCount();
             for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
                 size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (1<<29); // set max mem size to be size of global mem - 512MB
-                bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuMaxMemSize, gpuNum, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
+                bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
             }
             levelSizes_.push_back(numGpus);
         }
         else {
-            bufferMgrs_[1].push_back(new CpuBufferMgr(std::numeric_limits<unsigned int>::max(), CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,std::numeric_limits<unsigned int>::max(), CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
             levelSizes_.push_back(1);
         }
     }
@@ -95,16 +95,16 @@ namespace Data_Namespace {
         }
     }
 
-    AbstractBuffer * DataMgr::createBuffer(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
+    AbstractBuffer * DataMgr::alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
         int level = static_cast <int> (memoryLevel);
         assert(deviceId < levelSizes_[level]);
-        return bufferMgrs_[level][deviceId]->createBuffer(numBytes);
+        return bufferMgrs_[level][deviceId]->alloc(numBytes);
     }
 
-    void DataMgr::deleteBuffer(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer) {
+    void DataMgr::free(const MemoryLevel memoryLevel, const int deviceId, AbstractBuffer *buffer) {
         int level = static_cast <int> (memoryLevel);
         assert(deviceId < levelSizes_[level]);
-        bufferMgrs_[level][deviceId]->deleteBuffer(buffer);
+        bufferMgrs_[level][deviceId]->free(buffer);
     }
 
 

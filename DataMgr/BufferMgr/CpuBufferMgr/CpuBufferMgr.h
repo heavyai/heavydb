@@ -13,7 +13,7 @@ namespace Buffer_Namespace {
     class CpuBufferMgr :  public BufferMgr {
 
         public:
-            CpuBufferMgr(const size_t maxBufferSize,CpuBufferMgrMemType cpuBufferMgrMemType, CudaMgr_Namespace::CudaMgr * cudaMgr, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
+            CpuBufferMgr(const int deviceId, const size_t maxBufferSize,CpuBufferMgrMemType cpuBufferMgrMemType, CudaMgr_Namespace::CudaMgr * cudaMgr, const size_t bufferAllocIncrement = 2147483648,  const size_t pageSize = 512, AbstractBufferMgr *parentMgr = 0);
             virtual inline MgrType getMgrType () {return CPU_MGR;}
             ~CpuBufferMgr();
         private:

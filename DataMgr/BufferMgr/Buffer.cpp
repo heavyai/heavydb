@@ -16,7 +16,7 @@
 
 namespace Buffer_Namespace {
 
-    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt,  const size_t pageSize, const size_t numBytes): AbstractBuffer(), mem_(0), bm_(bm), segIt_(segIt), pageSize_(pageSize), numPages_(0), pinCount_(0) {
+    Buffer::Buffer(BufferMgr *bm, BufferList::iterator segIt, const int deviceId, const size_t pageSize, const size_t numBytes): AbstractBuffer(deviceId), mem_(0), bm_(bm), segIt_(segIt), pageSize_(pageSize), numPages_(0), pinCount_(0) {
         // so that the pointer value of this Buffer is stored
         segIt_->buffer = this;
         if (numBytes > 0) {
@@ -59,7 +59,7 @@ namespace Buffer_Namespace {
     }
 
     
-    void Buffer::read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType, const size_t offset) {
+    void Buffer::read(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType, const size_t offset) {
         //assert (dst);
         //assert (mem_);
         assert(dst && mem_);
@@ -76,7 +76,7 @@ namespace Buffer_Namespace {
         //memcpy(dst, mem_ + offset, numBytes);
     }
     
-    void Buffer::write(int8_t * src, const size_t numBytes, const BufferType srcBufferType, const size_t offset) {
+    void Buffer::write(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType, const size_t offset) {
         assert(numBytes > 0); // cannot write 0 bytes
 #ifdef BUFFER_MUTEX
         boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
@@ -109,7 +109,7 @@ namespace Buffer_Namespace {
         }
     }
 
-    void Buffer::append(int8_t * src, const size_t numBytes, const BufferType srcBufferType) {
+    void Buffer::append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType) {
 #ifdef BUFFER_MUTEX
         boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_); // keep another thread from getting a write lock
         boost::unique_lock < boost::shared_mutex > appendLock (appendMutex_); // keep another thread from getting an append lock

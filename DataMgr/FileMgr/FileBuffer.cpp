@@ -16,7 +16,7 @@ using namespace std;
 namespace File_Namespace {
     size_t FileBuffer::headerBufferOffset_ = 32;
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(pageSize), chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(pageSize), chunkKey_(chunkKey) {
         // Create a new FileBuffer
         assert(fm_);
         calcHeaderBuffer();
@@ -36,7 +36,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits , const size_t initialSize): AbstractBuffer(sqlType,encodingType,encodingBits), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits,  const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType,encodingType,encodingBits), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
         assert(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
@@ -45,7 +45,7 @@ namespace File_Namespace {
 
 
 
-    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), /* pageSize_(pageSize),*/chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), /* pageSize_(pageSize),*/chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
         assert(fm_);
@@ -130,8 +130,8 @@ namespace File_Namespace {
     }
 
 
-    void FileBuffer::read(int8_t * const dst, const size_t numBytes, const BufferType dstBufferType, const size_t offset) {
-        if (dstBufferType != CPU_BUFFER) {
+    void FileBuffer::read(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType, const size_t offset) {
+        if (dstBufferType != CPU_LEVEL) {
             throw std::runtime_error("Unsupported Buffer type");
         }
 
@@ -272,7 +272,7 @@ namespace File_Namespace {
     }
     */
 
-    void FileBuffer::append(int8_t * src, const size_t numBytes, const BufferType srcBufferType) {
+    void FileBuffer::append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType) {
         isDirty_ = true;
         isAppended_ = true;
 
@@ -314,8 +314,8 @@ namespace File_Namespace {
         assert (bytesLeft == 0);
     }
 
-    void FileBuffer::write(int8_t * src,  const size_t numBytes, const BufferType srcBufferType, const size_t offset) {
-        if (srcBufferType != CPU_BUFFER) {
+    void FileBuffer::write(int8_t * src,  const size_t numBytes, const MemoryLevel srcBufferType, const size_t offset) {
+        if (srcBufferType != CPU_LEVEL) {
             throw std::runtime_error("Unsupported Buffer type");
         }
         isDirty_ = true;

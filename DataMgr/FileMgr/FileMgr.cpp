@@ -40,7 +40,7 @@ namespace File_Namespace {
     }
 
 
-    FileMgr::FileMgr(std::string basePath, const size_t defaultPageSize, const int epoch) : basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(epoch) {
+    FileMgr::FileMgr(const int deviceId, std::string basePath, const size_t defaultPageSize, const int epoch) : AbstractBufferMgr(deviceId), basePath_(basePath),defaultPageSize_(defaultPageSize), nextFileId_(0), epoch_(epoch) {
         init();
     }
 
@@ -365,11 +365,11 @@ namespace File_Namespace {
         return chunk;
     }
 
-    AbstractBuffer* FileMgr::createBuffer(const size_t numBytes = 0) {
+    AbstractBuffer* FileMgr::alloc(const size_t numBytes = 0) {
         throw std::runtime_error("Operation not supported");
     }
     
-    void FileMgr::deleteBuffer(AbstractBuffer *buffer) {
+    void FileMgr::free(AbstractBuffer *buffer) {
         throw std::runtime_error("Operation not supported");
 
     }
