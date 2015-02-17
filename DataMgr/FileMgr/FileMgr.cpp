@@ -10,6 +10,7 @@
 #include <string>
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
+#include <glog/logging.h>
 
 #include <vector>
 #include <utility>
@@ -510,6 +511,8 @@ namespace File_Namespace {
             cout << endl;
             */
             ChunkMetadata chunkMetadata;
+            CHECK(chunkIt->second);
+            CHECK(chunkIt->second->encoder);
             chunkIt->second->encoder->getMetadata(chunkMetadata);
             chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
             chunkIt++;

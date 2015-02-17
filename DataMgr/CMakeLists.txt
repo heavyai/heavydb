@@ -19,5 +19,5 @@ SET (datamgr_source_files
 
 ADD_LIBRARY(DataMgr ${datamgr_source_files})
 
-TARGET_LINK_LIBRARIES (DataMgr CudaMgr ${Boost_THREAD_LIBRARY})
+TARGET_LINK_LIBRARIES (DataMgr CudaMgr ${Boost_THREAD_LIBRARY} "-lglog")
 
