@@ -16,7 +16,7 @@ using namespace std;
 namespace File_Namespace {
     size_t FileBuffer::headerBufferOffset_ = 32;
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(fm->getDeviceId(),true), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(pageSize), chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(pageSize), chunkKey_(chunkKey) {
         // Create a new FileBuffer
         assert(fm_);
         calcHeaderBuffer();
@@ -36,7 +36,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits,  const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType,encodingType,encodingBits, true), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits,  const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType,encodingType,encodingBits), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
         assert(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
@@ -45,7 +45,7 @@ namespace File_Namespace {
 
 
 
-    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(fm->getDeviceId(), true), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), /* pageSize_(pageSize),*/chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), /* pageSize_(pageSize),*/chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
         assert(fm_);
@@ -78,7 +78,7 @@ namespace File_Namespace {
                 multiPages_.back().epochs.push_back(vecIt->versionEpoch);
                 multiPages_.back().pageVersions.push_back(vecIt->page);
             }
-            if (curPageId == -1) {
+            if (curPageId == -1) { // meaning there was only a metadata page
                 readMetadata(metadataPages_.pageVersions.back());
                 pageDataSize_ = pageSize_-reservedHeaderSize_;
             }
