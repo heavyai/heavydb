@@ -1354,9 +1354,16 @@ void Executor::executeSimpleInsert() {
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   auto& cat = root_plan_->get_catalog();
   for (const int col_id : col_id_list) {
-    auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
-    CHECK(it_ok.second);
-    col_types.push_back(get_column_type(col_id, table_id, cat));
+    const auto col_type = get_column_type(col_id, table_id, cat);
+    if (col_type == kTEXT) {
+      auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string> {}));
+      CHECK(it_ok.second);
+    } else {
+      CHECK(IS_INTEGER(col_type) || col_type == kFLOAT || col_type == kDOUBLE);
+      auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
+      CHECK(it_ok.second);
+    }
+    col_types.push_back(col_type);
     col_ids.push_back(col_id);
   }
   size_t col_idx = 0;
