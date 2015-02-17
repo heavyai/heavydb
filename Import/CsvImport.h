@@ -36,9 +36,9 @@ class CsvImporter {
 public:
   CsvImporter(
     const std::string& table_name,
-    const std::string& filename,
-    const std::string& delim,
-    const bool has_headers);
+    const std::string& file_path,
+    const std::string& delim = ",",
+    const bool has_headers = true);
   void import();
   ~CsvImporter();
 private:
