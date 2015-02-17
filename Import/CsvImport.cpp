@@ -275,9 +275,10 @@ void CsvImporter::import() {
         import_buffers[col_idx]->addBigint(NULL_BIGINT);
       }
       break;
-    case kTEXT:
-      import_buffers[col_idx]->addString(row_fields[col_idx]);
+    case kTEXT: {
+      import_buffers[col_idx]->addString(strlen(row_fields[col_idx]) ? row_fields[col_idx] : "empty");
       break;
+    }
     default:
       CHECK(false);
     }
