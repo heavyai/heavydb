@@ -217,7 +217,7 @@ namespace File_Namespace {
     void FileMgr::checkpoint() {
         //std::cout << "Checkpointing " << epoch_ <<  std::endl;
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            /*
+            /*   
             for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
                 std::cout << *vecIt << ",";
             }
