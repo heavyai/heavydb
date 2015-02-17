@@ -24,6 +24,8 @@ namespace Chunk_NS {
 			subKey.pop_back();
 			subKey.push_back(2); // 2 for the index buffer
 			index_buf = data_mgr->getChunkBuffer(subKey, mem_level, device_id, (num_elems + 1) * sizeof(StringOffsetT)); // always record n+1 offsets so string length can be calculated
+			StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
+			str_encoder->set_index_buf(index_buf);
 		} else
 			buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
 	}
