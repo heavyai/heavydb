@@ -133,6 +133,33 @@ public:
   std::vector<std::string>* getStringBuffer() const {
     return string_buffer_;
   }
+
+  void flush() {
+    switch (type_) {
+    case kSMALLINT: {
+      std::vector<int16_t> empty;
+      smallint_buffer_->swap(empty);
+      break;
+    }
+    case kINT: {
+      std::vector<int32_t> empty;
+      int_buffer_->swap(empty);
+      break;
+    }
+    case kBIGINT: {
+      std::vector<int64_t> empty;
+      bigint_buffer_->swap(empty);
+      break;
+    }
+    case kTEXT: {
+      std::vector<std::string> empty;
+      string_buffer_->swap(empty);
+      break;
+    }
+    default:
+      CHECK(false);
+    }
+  }
 private:
   union {
     std::vector<int16_t>* smallint_buffer_;
@@ -180,6 +207,9 @@ void do_import(
   }
   fragmenter->insertData(insert_data);
   data_mgr->checkpoint();
+  for (const auto& import_buff : import_buffers) {
+    import_buff->flush();
+  }
   {
     std::vector<std::unique_ptr<TypedImportBuffer>> empty;
     import_buffers.swap(empty);
