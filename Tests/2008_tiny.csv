@@ -1,0 +1,3 @@
+Year,Month,DayofMonth,DayOfWeek,DepTime,CRSDepTime,ArrTime,CRSArrTime,UniqueCarrier
+2008,1,3,4,2003,1955,2211,2225,WN
+2008,1,3,4,754,735,1002,1000,WN
