@@ -14,9 +14,11 @@ string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_CURRENT_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/")
 
 add_executable(ExecuteTest ExecuteTest.cpp)
+add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 ADD_EXECUTABLE (PlanTest PlanTest.cpp)
 ADD_EXECUTABLE (StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 
 target_link_libraries (PlanTest Catalog SqliteConnector Parser Analyzer Planner Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
 target_link_libraries (StorageTest Catalog SqliteConnector Parser Analyzer Planner Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
 target_link_libraries (ExecuteTest Catalog SqliteConnector Parser Analyzer Planner QueryEngine Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lgtest -lz -lncurses -ldl -pthread")
+target_link_libraries (StringDictionaryTest StringDictionary ${Boost_LIBRARIES} "-lgtest")
