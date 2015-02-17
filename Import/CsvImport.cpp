@@ -291,8 +291,10 @@ void CsvImporter::import() {
       row_count = 0;
     }
   }
-  do_import(import_buffers, row_count, insert_data,
-    table_meta_.getDataMgr(), table_meta_.getTableDesc()->fragmenter);
+  if (row_count > 0) {
+    do_import(import_buffers, row_count, insert_data,
+      table_meta_.getDataMgr(), table_meta_.getTableDesc()->fragmenter);
+  }
 }
 
 CsvImporter::~CsvImporter() {
