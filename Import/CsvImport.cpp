@@ -272,7 +272,7 @@ void CsvImporter::import() {
       }
       break;
     case kTEXT: {
-      import_buffers[col_idx]->addString(strlen(row_fields[col_idx]) ? row_fields[col_idx] : "empty");
+      import_buffers[col_idx]->addString(row_fields[col_idx]);
       break;
     }
     default:

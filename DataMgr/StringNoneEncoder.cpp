@@ -77,6 +77,10 @@ StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int
 		if (size > 0)
 			buffer_->append(inbuf, size);
 	}
+	// make sure buffer_ is flushed even if no new data is appended to it 
+	// (e.g. empty strings) because the metadata needs to be flushed.
+	if (!buffer_->isDirty())
+		buffer_->setAppended();
 
 	numElems += numAppendElems;
 	ChunkMetadata chunkMetadata;
