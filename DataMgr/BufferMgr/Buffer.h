@@ -63,7 +63,7 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer from where reading (copying) begins.
          * @param nbytes    The number of bytes being read (copied) into the destination (dst).
          */
-        virtual void read(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType = CPU_LEVEL, const size_t offset = 0);
+        virtual void read(int8_t * const dst, const size_t numBytes, const size_t offset = 0, const MemoryLevel dstBufferType = CPU_LEVEL, const int deviceId = -1);
         
         virtual void reserve(const size_t numBytes);
         /**
@@ -75,9 +75,9 @@ namespace Buffer_Namespace {
          * @param offset    The byte offset into the buffer to where writing begins.
          * @param nbytes    The number of bytes being written (copied) into the buffer.
          */
-        virtual void write(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL, const size_t offset = 0);
+        virtual void write(int8_t * src, const size_t numBytes, const size_t offset = 0, const MemoryLevel srcBufferType = CPU_LEVEL, const int deviceId = -1);
 
-        virtual void append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL);
+        virtual void append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL, const int deviceId = -1);
         
         
         /**
@@ -133,8 +133,8 @@ namespace Buffer_Namespace {
 
         Buffer(const Buffer&);      // private copy constructor
         Buffer& operator=(const Buffer&); // private overloaded assignment operator
-        virtual void readData(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType, const size_t offset = 0 ) = 0;
-        virtual void writeData(int8_t * const src, const size_t numBytes, const MemoryLevel srcBufferType, const size_t offset = 0) = 0;
+        virtual void readData(int8_t * const dst, const size_t numBytes, const size_t offset = 0, const MemoryLevel dstBufferType = CPU_LEVEL, const int dstDeviceId = -1) = 0;
+        virtual void writeData(int8_t * const src, const size_t numBytes, const size_t offset = 0, const MemoryLevel srcBufferType = CPU_LEVEL, const int srcDeviceId = -1) = 0;
 
         BufferMgr * bm_;
         BufferList::iterator segIt_;

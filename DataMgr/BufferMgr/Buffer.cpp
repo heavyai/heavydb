@@ -59,9 +59,7 @@ namespace Buffer_Namespace {
     }
 
     
-    void Buffer::read(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType, const size_t offset) {
-        //assert (dst);
-        //assert (mem_);
+    void Buffer::read(int8_t * const dst, const size_t numBytes, const size_t offset, const MemoryLevel dstBufferType, const int dstDeviceId) {
         assert(dst && mem_);
 #ifdef BUFFER_MUTEX
         boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_);
@@ -72,11 +70,11 @@ namespace Buffer_Namespace {
         if (numBytes + offset > size_) {
             throw std::runtime_error("Buffer: Out of bounds read error");
         }
-        readData(dst,numBytes, dstBufferType,offset);
+        readData(dst,numBytes,offset, dstBufferType,dstDeviceId);
         //memcpy(dst, mem_ + offset, numBytes);
     }
-    
-    void Buffer::write(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType, const size_t offset) {
+
+    void Buffer::write(int8_t * src, const size_t numBytes, const size_t offset, const MemoryLevel srcBufferType, const int srcDeviceId) {
         assert(numBytes > 0); // cannot write 0 bytes
 #ifdef BUFFER_MUTEX
         boost::unique_lock < boost::shared_mutex > writeLock (readWriteMutex_);
@@ -88,7 +86,7 @@ namespace Buffer_Namespace {
         //std::cout << "Size at beginning of write: " << size_ << std::endl;
         // write source contents to buffer
         //assert(mem_ && src);
-        writeData(src,numBytes,srcBufferType,offset);
+        writeData(src,numBytes,offset,srcBufferType,srcDeviceId);
         //memcpy(mem_ + offset, src, numBytes);
         
         // update dirty flags for buffer and each affected page
@@ -109,7 +107,7 @@ namespace Buffer_Namespace {
         }
     }
 
-    void Buffer::append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType) {
+    void Buffer::append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType, const int srcDeviceId) {
 #ifdef BUFFER_MUTEX
         boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_); // keep another thread from getting a write lock
         boost::unique_lock < boost::shared_mutex > appendLock (appendMutex_); // keep another thread from getting an append lock
@@ -124,7 +122,7 @@ namespace Buffer_Namespace {
             reserve(numBytes+size_);
         }
 
-        writeData(src,numBytes,srcBufferType,size_);
+        writeData(src,numBytes,size_,srcBufferType,srcDeviceId);
         size_ += numBytes;
         // Do we worry about dirty flags here or does append avoid them
     }

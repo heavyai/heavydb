@@ -36,10 +36,10 @@ namespace Data_Namespace {
         }
         virtual ~AbstractBuffer() { if (hasEncoder) delete encoder; }
         
-        virtual void read(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType = CPU_LEVEL, const size_t offset = 0) = 0;
-        virtual void write(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL, const size_t offset = 0) = 0;
+        virtual void read(int8_t * const dst, const size_t numBytes, const size_t offset = 0, const MemoryLevel dstBufferType = CPU_LEVEL, const int dstDeviceId = -1) = 0;
+        virtual void write(int8_t * src, const size_t numBytes, const size_t offset = 0, const MemoryLevel srcBufferType = CPU_LEVEL, const int srcDeviceId = -1) = 0;
         virtual void reserve(size_t numBytes) = 0;
-        virtual void append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL) = 0;
+        virtual void append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType = CPU_LEVEL, const int deviceId = -1) = 0;
         virtual int8_t* getMemoryPtr() = 0;
         
         virtual size_t pageCount() const = 0;

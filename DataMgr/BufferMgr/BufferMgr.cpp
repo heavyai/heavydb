@@ -145,7 +145,6 @@ namespace Buffer_Namespace {
          * delete old
          */
         
-        //segIt->pinCount++; // so we don't evict this while trying to find a new segment for it - @todo - maybe should go up top?
         auto newSegIt = findFreeBuffer(numBytes);
         /* Below should be in copy constructor for BufferSeg?*/
         newSegIt->buffer = segIt->buffer;
@@ -158,7 +157,7 @@ namespace Buffer_Namespace {
         // only do this if the old segment is valid (i.e. not new w/
         // unallocated buffer
         if (segIt->startPage >= 0 && segIt->buffer->mem_ != 0)  {
-            newSegIt->buffer->writeData(oldMem, newSegIt->buffer->size(),newSegIt->buffer->getType());
+            newSegIt->buffer->writeData(oldMem, newSegIt->buffer->size(),0,newSegIt->buffer->getType(),deviceId_);
             //memcpy(newSegIt->buffer->mem_, segIt->buffer->mem_, newSegIt->buffer->size());
         }
         // Deincrement pin count to reverse effect above
@@ -509,15 +508,15 @@ namespace Buffer_Namespace {
         destBuffer->reserve(chunkSize);
         //std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (buffer->isUpdated()) {
-            buffer->read(destBuffer->getMemoryPtr(),chunkSize,destBuffer->getType(),0);
+            buffer->read(destBuffer->getMemoryPtr(),chunkSize,0,destBuffer->getType(),deviceId_);
         }
         else {
-            buffer->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
+            buffer->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(), destBuffer->size(), destBuffer->getType(), deviceId_);
         }
         destBuffer->setSize(chunkSize);
         destBuffer->syncEncoder(buffer);
     }
-    
+
     AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
         std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         auto chunkIt = chunkIndex_.find(key);
@@ -538,11 +537,11 @@ namespace Buffer_Namespace {
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
-            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
+            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,0,srcBuffer->getType(),srcBuffer->getDeviceId());
         }
         else if (srcBuffer->isAppended()) {
             assert(oldChunkSize < newChunkSize);
-            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
+            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType(), srcBuffer->getDeviceId());
         }
         srcBuffer->clearDirtyBits();
         chunk->syncEncoder(srcBuffer);

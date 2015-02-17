@@ -38,7 +38,9 @@ namespace Data_Namespace {
             AbstractBuffer * alloc(const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes);
             void free(AbstractBuffer *buffer);
             void freeAllBuffers();
-            AbstractBuffer * copyBuffer(const MemoryLevel memoryLevel, const int deviceId, const AbstractBuffer * srcBuffer);
+            // copies one buffer to another
+            void copy(AbstractBuffer *destBuffer, AbstractBuffer *srcBuffer);
+
             //const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             void checkpoint();

@@ -55,7 +55,7 @@ namespace File_Namespace {
 
             void freePages();
             
-            virtual void read(int8_t * const dst, const size_t numBytes = 0, const MemoryLevel dstMemoryLevel = CPU_LEVEL, const size_t offset = 0);
+            virtual void read(int8_t * const dst, const size_t numBytes = 0, const size_t offset = 0, const MemoryLevel dstMemoryLevel = CPU_LEVEL, const int deviceId = -1);
 
             /**
              * @brief Writes the contents of source (src) into new versions of the affected logical pages.
@@ -64,9 +64,9 @@ namespace File_Namespace {
              * logical pages. New pages are only appended if the value of epoch (in FileMgr)
              *
              */
-            virtual void write(int8_t * src,  const size_t numBytes, const MemoryLevel srcMemoryLevel = CPU_LEVEL, const size_t offset = 0);
+            virtual void write(int8_t * src,  const size_t numBytes, const size_t offset = 0, const MemoryLevel srcMemoryLevel = CPU_LEVEL, const int deviceId = -1);
 
-            virtual void append(int8_t * src, const size_t numBytes, const MemoryLevel srcMemoryLevel = CPU_LEVEL);
+            virtual void append(int8_t * src, const size_t numBytes, const MemoryLevel srcMemoryLevel = CPU_LEVEL, const int deviceId = -1);
             void copyPage(Page &srcPage, Page &destPage, const size_t numBytes, const size_t offset = 0);
             virtual inline Data_Namespace::MemoryLevel getType() const {return DISK_LEVEL;}
 

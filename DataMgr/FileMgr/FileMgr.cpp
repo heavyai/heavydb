@@ -320,10 +320,10 @@ namespace File_Namespace {
         destBuffer->reserve(chunkSize);
         //std::cout << "After reserve chunksize: " << chunkSize << std::endl;
         if (chunk->isUpdated()) {
-            chunk->read(destBuffer->getMemoryPtr(),chunkSize,destBuffer->getType(),0);
+            chunk->read(destBuffer->getMemoryPtr(),chunkSize,0,destBuffer->getType(),destBuffer->getDeviceId());
         }
         else {
-            chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->getType(),destBuffer->size());
+            chunk->read(destBuffer->getMemoryPtr()+destBuffer->size(),chunkSize-destBuffer->size(),destBuffer->size(),destBuffer->getType(),destBuffer->getDeviceId());
         }
         destBuffer->setSize(chunkSize);
         destBuffer->syncEncoder(chunk);
@@ -351,11 +351,11 @@ namespace File_Namespace {
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
-            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,srcBuffer->getType(),0);
+            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,0,srcBuffer->getType(),srcBuffer->getDeviceId());
         }
         else if (srcBuffer->isAppended()) {
             assert(oldChunkSize < newChunkSize);
-            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType());
+            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType(),srcBuffer->getDeviceId());
         }
         //chunk->clearDirtyBits(); // Hack: because write and append will set dirty bits
         //@todo commenting out line above will make sure this metadata is set

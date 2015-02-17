@@ -110,12 +110,15 @@ namespace Data_Namespace {
         ChunkKey keyPrefix = {-1};
         deleteChunksWithPrefix(keyPrefix);
     }
-    /*
-    void DataMgr::copy(AbstractBuffer *destBuffer, const AbstractBuffer *srcBuffer) {
-
+    
+    void DataMgr::copy(AbstractBuffer *destBuffer, AbstractBuffer *srcBuffer) {
+        destBuffer->write(srcBuffer->getMemoryPtr(),srcBuffer->size(),0,srcBuffer->getType(),srcBuffer->getDeviceId());
     }
-    */
+    
+    // could add function below to do arbitrary copies between buffers
 
+    //void DataMgr::copy(AbstractBuffer *destBuffer, const AbstractBuffer *srcBuffer, const size_t numBytes, const size_t destOffset, const size_t srcOffset) {
+    //} /
 
 
 

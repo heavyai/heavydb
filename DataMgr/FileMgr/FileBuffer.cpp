@@ -130,7 +130,7 @@ namespace File_Namespace {
     }
 
 
-    void FileBuffer::read(int8_t * const dst, const size_t numBytes, const MemoryLevel dstBufferType, const size_t offset) {
+    void FileBuffer::read(int8_t * const dst, const size_t numBytes, const size_t offset, const MemoryLevel dstBufferType, const int deviceId ) {
         if (dstBufferType != CPU_LEVEL) {
             throw std::runtime_error("Unsupported Buffer type");
         }
@@ -272,7 +272,7 @@ namespace File_Namespace {
     }
     */
 
-    void FileBuffer::append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType) {
+    void FileBuffer::append(int8_t * src, const size_t numBytes, const MemoryLevel srcBufferType, const int deviceId) {
         isDirty_ = true;
         isAppended_ = true;
 
@@ -314,7 +314,7 @@ namespace File_Namespace {
         assert (bytesLeft == 0);
     }
 
-    void FileBuffer::write(int8_t * src,  const size_t numBytes, const MemoryLevel srcBufferType, const size_t offset) {
+    void FileBuffer::write(int8_t * src,  const size_t numBytes, const size_t offset, const MemoryLevel srcBufferType, const int deviceId) {
         if (srcBufferType != CPU_LEVEL) {
             throw std::runtime_error("Unsupported Buffer type");
         }
