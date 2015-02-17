@@ -205,7 +205,6 @@ void CsvImporter::import() {
       CHECK_EQ(col_desc->columnName, header_fields[col_idx]);
       ++col_idx;
     }
-    CsvParser_destroy_row(header);
   }
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
   for (const auto col_desc : col_descriptors) {
