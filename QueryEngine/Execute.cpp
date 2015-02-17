@@ -1351,6 +1351,7 @@ void Executor::executeSimpleInsert() {
   std::vector<SQLTypes> col_types;
   std::vector<int> col_ids;
   std::unordered_map<int, int8_t*> col_buffers;
+  std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   auto& cat = root_plan_->get_catalog();
   for (const int col_id : col_id_list) {
     auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
@@ -1398,6 +1399,10 @@ void Executor::executeSimpleInsert() {
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
+    case kTEXT: {
+      str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
+      break;
+    }
     default:
       CHECK(false);
     }
@@ -1407,6 +1412,12 @@ void Executor::executeSimpleInsert() {
     insert_data.columnIds.push_back(kv.first);
 		DataBlockPtr p;
 		p.numbersPtr = kv.second;
+    insert_data.data.push_back(p);
+  }
+  for (auto& kv : str_col_buffers){
+    insert_data.columnIds.push_back(kv.first);
+    DataBlockPtr p;
+    p.stringsPtr = &kv.second;
     insert_data.data.push_back(p);
   }
   insert_data.numRows = 1;
