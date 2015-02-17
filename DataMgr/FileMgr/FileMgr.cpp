@@ -221,7 +221,7 @@ namespace File_Namespace {
             for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
                 std::cout << *vecIt << ",";
             }
-            cout << endl;
+            cout << "Is dirty: " << chunkIt->second->isDirty_ << endl;
             */
             if (chunkIt->second->isDirty_) {
                 chunkIt->second->writeMetadata(epoch_);

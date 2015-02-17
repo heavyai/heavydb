@@ -30,8 +30,8 @@ namespace Data_Namespace {
         
     public:
 
-        AbstractBuffer (const int deviceId): encoder(0), hasEncoder(0), size_(0),  isDirty_(false),isAppended_(false),isUpdated_(false), deviceId_(deviceId) {}
-        AbstractBuffer (const int deviceId, const SQLTypeInfo sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false),isAppended_(false),isUpdated_(false), deviceId_(deviceId){
+        AbstractBuffer (const int deviceId): encoder(0), hasEncoder(0), size_(0),  isDirty_(true),isAppended_(false),isUpdated_(false), deviceId_(deviceId) {}
+        AbstractBuffer (const int deviceId, const SQLTypeInfo sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(true),isAppended_(false),isUpdated_(false), deviceId_(deviceId){
         initEncoder(sqlType, encodingType, numEncodingBits);
         }
         virtual ~AbstractBuffer() { if (hasEncoder) delete encoder; }
