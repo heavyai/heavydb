@@ -849,7 +849,7 @@ data_type:
 	|	INTEGER { $<nodeval>$ = new SQLType(kINT); }
 	|	SMALLINT { $<nodeval>$ = new SQLType(kSMALLINT); }
 	|	FLOAT { $<nodeval>$ = new SQLType(kFLOAT); }
-	|	FLOAT '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kFLOAT, $<intval>3); }
+	/* |	FLOAT '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kFLOAT, $<intval>3); } */
 	|	REAL { $<nodeval>$ = new SQLType(kFLOAT); }
 	|	DOUBLE PRECISION { $<nodeval>$ = new SQLType(kDOUBLE); }
 	|	DOUBLE { $<nodeval>$ = new SQLType(kDOUBLE); }

@@ -1142,6 +1142,7 @@ namespace Parser {
 				}
 				break;
 			default:
+				param1 = 0;
 				break;
 		}
 	}
