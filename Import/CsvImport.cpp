@@ -35,7 +35,7 @@ const std::list<const ColumnDescriptor*>& MapDMeta::getColumnDescriptors() const
 }
 
 int MapDMeta::getTableId() {
-  return -1;
+  return table_id_;
 }
 
 const TableDescriptor* MapDMeta::getTableDesc() const {
@@ -209,10 +209,6 @@ void do_import(
   data_mgr->checkpoint();
   for (const auto& import_buff : import_buffers) {
     import_buff->flush();
-  }
-  {
-    std::vector<std::unique_ptr<TypedImportBuffer>> empty;
-    import_buffers.swap(empty);
   }
 }
 
