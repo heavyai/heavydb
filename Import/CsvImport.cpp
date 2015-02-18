@@ -311,7 +311,11 @@ void CsvImporter::import() {
       }
       break;
     case kTEXT: {
-      import_buffers[col_idx]->addString(row_fields[col_idx]);
+      if (col_desc->compression == kENCODING_DICT) {
+        import_buffers[col_idx]->addDictEncodedString(row_fields[col_idx]);
+      } else {
+        import_buffers[col_idx]->addString(row_fields[col_idx]);
+      }
       break;
     }
     default:

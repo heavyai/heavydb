@@ -1831,7 +1831,7 @@ void Executor::call_aggregators(
       auto group_key_ptr = ir_builder_.CreateGEP(group_keys_buffer,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
       const auto key_expr_type = group_by_col ? group_by_col->get_type_info().type : kBIGINT;
-      if (IS_INTEGER(key_expr_type)) {
+      if (IS_INTEGER(key_expr_type) || key_expr_type == kTEXT) {
         CHECK(group_key->getType()->isIntegerTy());
         auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
         CHECK_LE(group_key_bitwidth, 64);
