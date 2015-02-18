@@ -52,7 +52,9 @@ class SimpleCompleter(object):
 
 def str_row(row):
     return '|'.join([
-        str(datum.int_val) if datum.type == TDatumType.INT else str(datum.real_val) for datum in row ])
+        str(datum.int_val) if datum.type == TDatumType.INT else
+        str(datum.real_val) if datum.type == TDatumType.REAL else
+        datum.str_val for datum in row ])
 
 
 def input_loop(client):

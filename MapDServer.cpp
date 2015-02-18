@@ -78,11 +78,14 @@ public:
             if (boost::get<int64_t>(&agg_result)) {
               datum.type = TDatumType::INT;
               datum.int_val = *(boost::get<int64_t>(&agg_result));
-            } else {
-              const auto p = boost::get<double>(&agg_result);
-              CHECK(p);
+            } else if (boost::get<double>(&agg_result)) {
               datum.type = TDatumType::REAL;
-              datum.real_val = *p;
+              datum.real_val = *(boost::get<double>(&agg_result));
+            } else {
+              auto s = boost::get<std::string>(&agg_result);
+              CHECK(s);
+              datum.type = TDatumType::STR;
+              datum.str_val = *s;
             }
             trow.push_back(datum);
           }
