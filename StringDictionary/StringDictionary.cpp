@@ -42,7 +42,7 @@ StringDictionary::StringDictionary(
   , payload_file_off_(0) {
   // initial capacity must be a power of two for efficient bucket computation
   CHECK_EQ(0, (initial_capacity & (initial_capacity - 1)));
-  CHECK(!boost::filesystem::create_directories(folder));
+  boost::filesystem::create_directories(folder);
   boost::filesystem::path storage_path(folder);
   offsets_path_ = (storage_path / boost::filesystem::path("DictOffsets")).string();
   const auto payload_path = (storage_path / boost::filesystem::path("DictPayload")).string();
