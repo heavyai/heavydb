@@ -53,10 +53,18 @@ Data_Namespace::DataMgr* MapDMeta::getDataMgr() const {
 }
 
 std::string MapDMeta::getStringDictFolder(const int col_id) const {
-  boost::filesystem::path str_dict_folder { base_path_ };
+  return getStringDictFolder(base_path_, getDbId(), getTableId(), col_id);
+}
+
+std::string MapDMeta::getStringDictFolder(
+    const std::string& base_path,
+    const int db_id,
+    const int table_id,
+    const int col_id) {
+  boost::filesystem::path str_dict_folder { base_path };
   str_dict_folder /= (
-    std::to_string(getDbId()) + "_" +
-    std::to_string(getTableId()) + "_" +
+    std::to_string(db_id) + "_" +
+    std::to_string(table_id) + "_" +
     std::to_string(col_id));
   return str_dict_folder.string();
 }

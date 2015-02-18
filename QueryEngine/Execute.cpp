@@ -6,6 +6,7 @@
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 #include "CudaMgr/CudaMgr.h"
+#include "Import/CsvImport.h"
 
 #include <boost/range/adaptor/reversed.hpp>
 #include <llvm/ExecutionEngine/MCJIT.h>
@@ -28,6 +29,7 @@
 #include <numeric>
 #include <thread>
 #include <unistd.h>
+#include <map>
 #include <set>
 
 
@@ -852,6 +854,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
   decltype(results_per_device.front().front().agg_results_idx_) agg_results_idx;
   decltype(results_per_device.front().front().agg_kinds_) agg_kinds;
   decltype(results_per_device.front().front().agg_types_) agg_types;
+  decltype(results_per_device.front().front().col_str_dicts_) col_str_dicts;
 
   for (const auto& device_results : results_per_device) {
     for (const auto& row : device_results) {
@@ -865,6 +868,8 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         agg_kinds = row.agg_kinds_;
         CHECK(agg_types.empty());
         agg_types = row.agg_types_;
+        CHECK(col_str_dicts.empty());
+        col_str_dicts = row.col_str_dicts_;
       } else {
         CHECK(agg_kinds == row.agg_kinds_);
         CHECK(agg_types == row.agg_types_);
@@ -879,7 +884,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
           const auto agg_kind = row.agg_kinds_[agg_col_idx];
           const auto agg_type = row.agg_types_[agg_col_idx];
-          CHECK(IS_INTEGER(agg_type) || agg_type == kFLOAT || agg_type == kDOUBLE);
+          CHECK(IS_INTEGER(agg_type) || agg_type == kTEXT || agg_type == kFLOAT || agg_type == kDOUBLE);
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
           switch (agg_kind) {
           case kSUM:
@@ -935,16 +940,44 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
     row.agg_results_idx_ = agg_results_idx;
     row.agg_kinds_ = agg_kinds;
     row.agg_types_ = agg_types;
+    row.col_str_dicts_ = col_str_dicts;
     reduced_results_vec.push_back(row);
   }
   return reduced_results_vec;
 }
 
+namespace {
+
+typedef std::tuple<int, int, int> StringDictId;
+std::map<StringDictId, std::shared_ptr<StringDictionary>> g_dicts;
+
+// TODO(alex): thread safety
+std::shared_ptr<StringDictionary> getStringDict(
+    const int db_id,
+    const int table_id,
+    const int col_id) {
+  auto it = g_dicts.find(std::make_tuple(db_id, table_id, col_id));
+  if (it != g_dicts.end()) {
+    return it->second;
+  }
+  auto new_dict = std::make_shared<StringDictionary>(MapDMeta::getStringDictFolder(
+    "/tmp", db_id, table_id, col_id));
+  // TODO(alex): don't hardcode /tmp
+  auto it_ok = g_dicts.insert(std::make_pair(
+    std::make_tuple(db_id, table_id, col_id),
+    new_dict));
+  CHECK(it_ok.second);
+  return it_ok.first->second;
+}
+
+}  // namespace
+
 Executor::ResultRows Executor::groupBufferToResults(
     const int64_t* group_by_buffer,
     const size_t group_by_col_count,
     const size_t agg_col_count,
-    const std::list<Analyzer::Expr*>& target_exprs) {
+    const std::list<Analyzer::Expr*>& target_exprs,
+    const int32_t db_id) {
   std::vector<ResultRow> results;
   for (size_t i = 0; i < groups_buffer_entry_count_; ++i) {
     const size_t key_off = (group_by_col_count + agg_col_count) * i;
@@ -966,11 +999,21 @@ Executor::ResultRows Executor::groupBufferToResults(
         if (agg_type == kAVG) {
           CHECK(agg_expr->get_arg());
           result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
+          CHECK_NE(kTEXT, target_expr->get_type_info().type);
+          result_row.col_str_dicts_.emplace_back(nullptr);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
         } else {
           result_row.agg_types_.push_back(target_expr->get_type_info().type);
+          if (target_expr->get_type_info().type == kTEXT) {
+            auto col_var = dynamic_cast<Analyzer::ColumnVar*>(target_expr);
+            CHECK(col_var);
+            result_row.col_str_dicts_.emplace_back(getStringDict(
+              db_id, col_var->get_table_id(), col_var->get_column_id()));
+          } else {
+            result_row.col_str_dicts_.emplace_back(nullptr);
+          }
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           ++out_vec_idx;
         }
@@ -999,7 +1042,7 @@ public:
       const auto& row = rows[row_idx];
       CHECK_EQ(row.size(), num_columns);
       for (size_t i = 0; i < num_columns; ++i) {
-        const auto col_val = row.agg_result(i);
+        const auto col_val = row.agg_result(i, false);
         auto i64_p = boost::get<int64_t>(&col_val);
         if (i64_p) {
           switch (get_bit_width(target_types[i])) {
@@ -1163,7 +1206,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
   std::vector<int64_t*> group_by_buffers { group_by_buffer };
   launch_query_cpu_code(query_cpu_code_, column_buffers, result_columns.size(),
     init_agg_vals, group_by_buffers);
-  return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs);
+  return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs,
+    cat.get_currentDB().dbId);
 }
 
 std::vector<ResultRow> Executor::executeSortPlan(
@@ -1282,8 +1326,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           device_type, col_buffers, num_rows, &cat.get_dataMgr());
       } else {
         executePlanWithGroupBy(device_results, get_agg_target_exprs(plan),
-          groupby_exprs.size(),
-          device_type, col_buffers, num_rows, &cat.get_dataMgr());
+          groupby_exprs.size(), device_type, col_buffers, num_rows,
+          &cat.get_dataMgr(), cat.get_currentDB().dbId);
       }
       reduce_mutex_.lock();
       all_fragment_results.push_back(device_results);
@@ -1339,6 +1383,8 @@ void Executor::executePlanWithoutGroupBy(
     if (agg_type == kAVG) {
       CHECK(agg_expr->get_arg());
       result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
+      CHECK_NE(kTEXT, target_expr->get_type_info().type);
+      result_row.col_str_dicts_.emplace_back(nullptr);
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
@@ -1354,6 +1400,8 @@ void Executor::executePlanWithoutGroupBy(
       out_vec_idx += 2;
     } else {
       result_row.agg_types_.push_back(target_expr->get_type_info().type);
+      CHECK_NE(kTEXT, target_expr->get_type_info().type);
+      result_row.col_str_dicts_.emplace_back(nullptr);
       result_row.agg_results_.push_back(reduce_results(
         agg_type,
         target_expr->get_type_info().type,
@@ -1375,7 +1423,8 @@ void Executor::executePlanWithGroupBy(
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows,
-    Data_Namespace::DataMgr* data_mgr) {
+    Data_Namespace::DataMgr* data_mgr,
+    const int32_t db_id) {
   const size_t agg_col_count = init_agg_vals_.size();
   CHECK_GT(group_by_col_count, 0);
   const size_t groups_buffer_size { (group_by_col_count + agg_col_count) * groups_buffer_entry_count_ * sizeof(int64_t) };
@@ -1395,14 +1444,16 @@ void Executor::executePlanWithGroupBy(
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(query_cpu_code_, col_buffers, num_rows, init_agg_vals_, group_by_buffers);
-    results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count, target_exprs_list);
+    results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count,
+      target_exprs_list, db_id);
   } else {
     launch_query_gpu_code(query_gpu_code_, col_buffers, num_rows, init_agg_vals_, group_by_buffers,
       groups_buffer_size, data_mgr, block_size_x_, grid_size_x_);
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
       results_per_sm.push_back(groupBufferToResults(
-        group_by_buffers[i], group_by_col_count, agg_col_count, target_exprs_list));
+        group_by_buffers[i], group_by_col_count, agg_col_count, 
+        target_exprs_list, db_id));
     }
     results = reduceMultiDeviceResults(results_per_sm);
   }

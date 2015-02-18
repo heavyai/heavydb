@@ -19,6 +19,11 @@ public:
   int getDbId() const;
   Data_Namespace::DataMgr* getDataMgr() const;
   std::string getStringDictFolder(const int col_id) const;
+  static std::string getStringDictFolder(
+    const std::string& base_path,
+    const int db_id,
+    const int table_id,
+    const int col_id);
 private:
   std::unique_ptr<Catalog_Namespace::Catalog> cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;

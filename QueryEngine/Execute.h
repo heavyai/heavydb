@@ -3,6 +3,7 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Planner/Planner.h"
+#include "../StringDictionary/StringDictionary.h"
 #include "NvidiaKernel.h"
 
 #include <boost/variant.hpp>
@@ -31,16 +32,18 @@ enum class ExecutorDeviceType {
   GPU
 };
 
-typedef boost::variant<int64_t, double> AggResult;
+typedef boost::variant<int64_t, double, std::string> AggResult;
 
 class ResultRow {
 public:
-  AggResult agg_result(const size_t idx) const {
+  AggResult agg_result(const size_t idx, const bool translate_strings = true) const {
     CHECK_GE(idx, 0);
     CHECK_LT(idx, agg_kinds_.size());
     CHECK_EQ(agg_results_idx_.size(), agg_kinds_.size());
     CHECK_EQ(agg_results_idx_.size(), agg_types_.size());
+    CHECK_EQ(agg_results_idx_.size(), col_str_dicts_.size());
     if (agg_kinds_[idx] == kAVG) {
+      CHECK_NE(kTEXT, agg_types_[idx]);
       CHECK_LT(idx, agg_results_.size() - 1);
       auto actual_idx = agg_results_idx_[idx];
       return IS_INTEGER(agg_types_[idx])
@@ -54,8 +57,13 @@ public:
       CHECK_LT(idx, agg_results_.size());
       CHECK(IS_NUMBER(agg_types_[idx]) || agg_types_[idx] == kTEXT);
       auto actual_idx = agg_results_idx_[idx];
-      if (IS_INTEGER(agg_types_[idx]) || agg_types_[idx] == kTEXT) {
+      if (IS_INTEGER(agg_types_[idx])) {
         return AggResult(agg_results_[actual_idx]);
+      } else if (agg_types_[idx] == kTEXT) {
+        CHECK(col_str_dicts_[idx]);
+        return translate_strings
+          ? AggResult(col_str_dicts_[idx]->getString(agg_results_[actual_idx]))
+          : AggResult(agg_results_[actual_idx]);
       } else {
         CHECK(agg_types_[idx] == kFLOAT || agg_types_[idx] == kDOUBLE);
         return AggResult(*reinterpret_cast<const double*>(&agg_results_[actual_idx]));
@@ -83,6 +91,7 @@ private:
   std::vector<size_t> agg_results_idx_;
   std::vector<SQLAgg> agg_kinds_;
   std::vector<SQLTypes> agg_types_;
+  std::vector<std::shared_ptr<StringDictionary>> col_str_dicts_;
 
   friend class Executor;
 };
@@ -140,7 +149,8 @@ private:
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows,
-    Data_Namespace::DataMgr*);
+    Data_Namespace::DataMgr*,
+    const int32_t db_id);
   void executePlanWithoutGroupBy(
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
@@ -153,7 +163,8 @@ private:
     const int64_t* group_by_buffer,
     const size_t group_by_col_count,
     const size_t agg_col_count,
-    const std::list<Analyzer::Expr*>& target_exprs);
+    const std::list<Analyzer::Expr*>& target_exprs,
+    const int32_t db_id);
   void executeSimpleInsert();
   void compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
