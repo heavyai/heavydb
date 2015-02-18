@@ -1706,6 +1706,9 @@ CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
   if (is_group_by) {
+    // need to do this since on GPU we're not inlining row_func_ for group by queries yet
+    llvm::AttributeSet no_attributes;
+    row_func_->setAttributes(no_attributes);
     row_func_->print(os);
   }
   query_func->print(os);
