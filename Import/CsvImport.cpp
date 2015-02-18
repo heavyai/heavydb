@@ -64,8 +64,7 @@ std::string MapDMeta::getStringDictFolder(
   boost::filesystem::path str_dict_folder { base_path };
   str_dict_folder /= (
     std::to_string(db_id) + "_" +
-    std::to_string(table_id) + "_" +
-    std::to_string(col_id));
+    std::to_string(table_id));
   return str_dict_folder.string();
 }
 
@@ -73,10 +72,12 @@ namespace {
 
 class TypedImportBuffer : boost::noncopyable {
 public:
-  TypedImportBuffer(const ColumnDescriptor* col_desc, const MapDMeta& table_meta)
+  TypedImportBuffer(
+    const ColumnDescriptor* col_desc,
+    StringDictionary* string_dict)
     : type_(col_desc->columnType.type)
     , encoding_(col_desc->compression)
-    , table_meta_(table_meta) {
+    , string_dict_(string_dict) {
     switch (type_) {
     case kSMALLINT:
       smallint_buffer_ = new std::vector<int16_t>();
@@ -93,8 +94,6 @@ public:
       } else {
         CHECK_EQ(kENCODING_DICT, encoding_);
         string_dict_buffer_ = new std::vector<int32_t>();
-        string_dict_.reset(new StringDictionary(
-          table_meta_.getStringDictFolder(col_desc->columnId)));
       }
       break;
     default:
@@ -221,10 +220,9 @@ private:
     std::vector<std::string>* string_buffer_;
     std::vector<int32_t>* string_dict_buffer_;
   };
-  std::unique_ptr<StringDictionary> string_dict_;
   SQLTypes type_;
   EncodingType encoding_;
-  const MapDMeta& table_meta_;
+  StringDictionary* string_dict_;
 };
 
 };
@@ -295,9 +293,11 @@ void CsvImporter::import() {
     }
   }
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
+  StringDictionary string_dict(MapDMeta::getStringDictFolder("/tmp",
+    table_meta_.getDbId(), table_meta_.getTableId(), 0));
   for (const auto col_desc : col_descriptors) {
     import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(
-      new TypedImportBuffer(col_desc, table_meta_)));
+      new TypedImportBuffer(col_desc, &string_dict)));
   }
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = table_meta_.getDbId();

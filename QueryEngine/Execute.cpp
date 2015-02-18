@@ -948,7 +948,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
 
 namespace {
 
-typedef std::tuple<int, int, int> StringDictId;
+typedef std::pair<int, int> StringDictId;
 std::map<StringDictId, std::shared_ptr<StringDictionary>> g_dicts;
 
 // TODO(alex): thread safety
@@ -956,7 +956,7 @@ std::shared_ptr<StringDictionary> getStringDict(
     const int db_id,
     const int table_id,
     const int col_id) {
-  auto it = g_dicts.find(std::make_tuple(db_id, table_id, col_id));
+  auto it = g_dicts.find(std::make_pair(db_id, table_id));
   if (it != g_dicts.end()) {
     return it->second;
   }
@@ -964,7 +964,7 @@ std::shared_ptr<StringDictionary> getStringDict(
     "/tmp", db_id, table_id, col_id));
   // TODO(alex): don't hardcode /tmp
   auto it_ok = g_dicts.insert(std::make_pair(
-    std::make_tuple(db_id, table_id, col_id),
+    std::make_pair(db_id, table_id),
     new_dict));
   CHECK(it_ok.second);
   return it_ok.first->second;
