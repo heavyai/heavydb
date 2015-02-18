@@ -6,4 +6,4 @@ set(csv_import_source_files
     csvparser.h)
 
 add_library(CsvImport ${csv_import_source_files})
-target_link_libraries(CsvImport Catalog Chunk DataMgr "-ldl -lglog")
+target_link_libraries(CsvImport Catalog Chunk DataMgr StringDictionary "-ldl -lglog")

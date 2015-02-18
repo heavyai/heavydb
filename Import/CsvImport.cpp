@@ -1,5 +1,6 @@
 #include "CsvImport.h"
 #include "csvparser.h"
+#include "../StringDictionary/StringDictionary.h"
 
 #include <boost/filesystem.hpp>
 #include <glog/logging.h>
@@ -34,7 +35,7 @@ const std::list<const ColumnDescriptor*>& MapDMeta::getColumnDescriptors() const
   return col_descriptors_;
 }
 
-int MapDMeta::getTableId() {
+int MapDMeta::getTableId() const {
   return table_id_;
 }
 
@@ -42,7 +43,7 @@ const TableDescriptor* MapDMeta::getTableDesc() const {
   return td_;
 }
 
-int MapDMeta::getDbId() {
+int MapDMeta::getDbId() const {
   return cat_->get_currentDB().dbId;
 }
 
@@ -51,14 +52,24 @@ Data_Namespace::DataMgr* MapDMeta::getDataMgr() const {
   return &dm;
 }
 
+std::string MapDMeta::getStringDictFolder(const int col_id) const {
+  boost::filesystem::path str_dict_folder { base_path_ };
+  str_dict_folder /= (
+    std::to_string(getDbId()) + "_" +
+    std::to_string(getTableId()) + "_" +
+    std::to_string(col_id));
+  return str_dict_folder.string();
+}
+
 namespace {
 
 class TypedImportBuffer : boost::noncopyable {
 public:
-  TypedImportBuffer(const SQLTypes type, const EncodingType encoding)
-    : type_(type)
-    , encoding_(encoding) {
-    switch (type) {
+  TypedImportBuffer(const ColumnDescriptor* col_desc, const MapDMeta& table_meta)
+    : type_(col_desc->columnType.type)
+    , encoding_(col_desc->compression)
+    , table_meta_(table_meta) {
+    switch (type_) {
     case kSMALLINT:
       smallint_buffer_ = new std::vector<int16_t>();
       break;
@@ -74,6 +85,8 @@ public:
       } else {
         CHECK_EQ(kENCODING_DICT, encoding_);
         string_dict_buffer_ = new std::vector<int32_t>();
+        string_dict_.reset(new StringDictionary(
+          table_meta_.getStringDictFolder(col_desc->columnId)));
       }
       break;
     default:
@@ -127,8 +140,8 @@ public:
 
   void addDictEncodedString(const std::string& v) {
     CHECK_EQ(kTEXT, type_);
-    // TODO(alex)
-    string_dict_buffer_->push_back(12345);
+    CHECK(string_dict_);
+    string_dict_buffer_->push_back(string_dict_->getOrAdd(v));
   }
 
   SQLTypes getType() const {
@@ -200,8 +213,10 @@ private:
     std::vector<std::string>* string_buffer_;
     std::vector<int32_t>* string_dict_buffer_;
   };
+  std::unique_ptr<StringDictionary> string_dict_;
   SQLTypes type_;
   EncodingType encoding_;
+  const MapDMeta& table_meta_;
 };
 
 };
@@ -274,7 +289,7 @@ void CsvImporter::import() {
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
   for (const auto col_desc : col_descriptors) {
     import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(
-      new TypedImportBuffer(col_desc->columnType.type, col_desc->compression)));
+      new TypedImportBuffer(col_desc, table_meta_)));
   }
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = table_meta_.getDbId();

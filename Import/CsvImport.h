@@ -14,10 +14,11 @@ class MapDMeta {
 public:
   MapDMeta(const std::string table_name);
   const std::list<const ColumnDescriptor*>& getColumnDescriptors() const;
-  int getTableId();
+  int getTableId() const;
   const TableDescriptor* getTableDesc() const;
-  int getDbId();
+  int getDbId() const;
   Data_Namespace::DataMgr* getDataMgr() const;
+  std::string getStringDictFolder(const int col_id) const;
 private:
   std::unique_ptr<Catalog_Namespace::Catalog> cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
