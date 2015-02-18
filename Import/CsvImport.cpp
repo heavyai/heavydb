@@ -55,7 +55,9 @@ namespace {
 
 class TypedImportBuffer : boost::noncopyable {
 public:
-  TypedImportBuffer(const SQLTypes type) : type_(type) {
+  TypedImportBuffer(const SQLTypes type, const EncodingType encoding)
+    : type_(type)
+    , encoding_(encoding) {
     switch (type) {
     case kSMALLINT:
       smallint_buffer_ = new std::vector<int16_t>();
@@ -67,7 +69,12 @@ public:
       bigint_buffer_ = new std::vector<int64_t>();
       break;
     case kTEXT:
-      string_buffer_ = new std::vector<std::string>();
+      if (encoding_ == kENCODING_NONE) {
+        string_buffer_ = new std::vector<std::string>();
+      } else {
+        CHECK_EQ(kENCODING_DICT, encoding_);
+        string_dict_buffer_ = new std::vector<int32_t>();
+      }
       break;
     default:
       CHECK(false);
@@ -86,7 +93,12 @@ public:
       delete bigint_buffer_;
       break;
     case kTEXT:
-      delete string_buffer_;
+      if (encoding_ == kENCODING_NONE) {
+        delete string_buffer_;
+      } else {
+        CHECK_EQ(kENCODING_DICT, encoding_);
+        delete string_dict_buffer_;
+      }
       break;
     default:
       CHECK(false);
@@ -113,8 +125,18 @@ public:
     string_buffer_->push_back(v);
   }
 
+  void addDictEncodedString(const std::string& v) {
+    CHECK_EQ(kTEXT, type_);
+    // TODO(alex)
+    string_dict_buffer_->push_back(12345);
+  }
+
   SQLTypes getType() const {
     return type_;
+  }
+
+  EncodingType getEncoding() const {
+    return encoding_;
   }
 
   int8_t* getIntBytes() const {
@@ -132,6 +154,10 @@ public:
 
   std::vector<std::string>* getStringBuffer() const {
     return string_buffer_;
+  }
+
+  int8_t* getStringDictBuffer() const {
+    return reinterpret_cast<int8_t*>(&((*string_dict_buffer_)[0]));
   }
 
   void flush() {
@@ -152,8 +178,14 @@ public:
       break;
     }
     case kTEXT: {
-      std::vector<std::string> empty;
-      string_buffer_->swap(empty);
+      if (encoding_ == kENCODING_NONE) {
+        std::vector<std::string> empty;
+        string_buffer_->swap(empty);
+      } else {
+        CHECK_EQ(kENCODING_DICT, encoding_);
+        std::vector<int32_t> empty;
+        string_dict_buffer_->swap(empty);
+      }
       break;
     }
     default:
@@ -166,8 +198,10 @@ private:
     std::vector<int32_t>* int_buffer_;
     std::vector<int64_t>* bigint_buffer_;
     std::vector<std::string>* string_buffer_;
+    std::vector<int32_t>* string_dict_buffer_;
   };
   SQLTypes type_;
+  EncodingType encoding_;
 };
 
 };
@@ -201,7 +235,12 @@ void do_import(
       p.numbersPtr = import_buff->getIntBytes();
     } else {
       CHECK_EQ(kTEXT, import_buff->getType());
-      p.stringsPtr = import_buff->getStringBuffer();
+      if (import_buff->getEncoding() == kENCODING_NONE) {
+        p.stringsPtr = import_buff->getStringBuffer();
+      } else {
+        CHECK_EQ(kENCODING_DICT, import_buff->getEncoding());
+        p.numbersPtr = import_buff->getStringDictBuffer();
+      }
     }
     insert_data.data.push_back(p);
   }
@@ -235,7 +274,7 @@ void CsvImporter::import() {
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
   for (const auto col_desc : col_descriptors) {
     import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(
-      new TypedImportBuffer(col_desc->columnType.type)));
+      new TypedImportBuffer(col_desc->columnType.type, col_desc->compression)));
   }
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = table_meta_.getDbId();

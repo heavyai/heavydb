@@ -208,6 +208,9 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
     default:
       CHECK(false);
     }
+  case kENCODING_DICT:
+    CHECK_EQ(kTEXT, type_info.type);
+    return std::make_shared<FixedWidthInt>(4);
   default:
     CHECK(false);
   }
@@ -225,6 +228,8 @@ size_t get_bit_width(const SQLTypes type) {
       return 32;
     case kDOUBLE:
       return 64;
+    case kTEXT:
+      return 32;
     default:
       CHECK(false);
   }

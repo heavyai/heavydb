@@ -52,9 +52,9 @@ public:
             static_cast<double>(agg_results_[actual_idx + 1]));
     } else {
       CHECK_LT(idx, agg_results_.size());
-      CHECK(IS_NUMBER(agg_types_[idx]));
+      CHECK(IS_NUMBER(agg_types_[idx]) || agg_types_[idx] == kTEXT);
       auto actual_idx = agg_results_idx_[idx];
-      if (IS_INTEGER(agg_types_[idx])) {
+      if (IS_INTEGER(agg_types_[idx]) || agg_types_[idx] == kTEXT) {
         return AggResult(agg_results_[actual_idx]);
       } else {
         CHECK(agg_types_[idx] == kFLOAT || agg_types_[idx] == kDOUBLE);

@@ -2,6 +2,7 @@
 #include "NoneEncoder.h"
 #include "FixedLengthEncoder.h"
 #include "StringNoneEncoder.h"
+#include <glog/logging.h>
 
 
 Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits) {
@@ -106,6 +107,11 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
             } // switch (sqlType)
             break;
         } // Case: kENCODING_FIXED
+        case kENCODING_DICT: {
+          CHECK_EQ(kTEXT, sqlType.type);
+          return new NoneEncoder <int32_t> (buffer);
+          break;
+        }
         default: {
             return 0;
             break;
