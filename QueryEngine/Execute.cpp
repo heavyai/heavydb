@@ -33,6 +33,41 @@
 #include <set>
 
 
+AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) const {
+  CHECK_GE(idx, 0);
+  CHECK_LT(idx, agg_kinds_.size());
+  CHECK_EQ(agg_results_idx_.size(), agg_kinds_.size());
+  CHECK_EQ(agg_results_idx_.size(), agg_types_.size());
+  if (agg_kinds_[idx] == kAVG) {
+    CHECK_NE(kTEXT, agg_types_[idx]);
+    CHECK_LT(idx, agg_results_.size() - 1);
+    auto actual_idx = agg_results_idx_[idx];
+    return IS_INTEGER(agg_types_[idx])
+      ? AggResult(
+          static_cast<double>(agg_results_[actual_idx]) /
+          static_cast<double>(agg_results_[actual_idx + 1]))
+      : AggResult(
+          *reinterpret_cast<const double*>(&agg_results_[actual_idx]) /
+          static_cast<double>(agg_results_[actual_idx + 1]));
+  } else {
+    CHECK_LT(idx, agg_results_.size());
+    CHECK(IS_NUMBER(agg_types_[idx]) || agg_types_[idx] == kTEXT);
+    auto actual_idx = agg_results_idx_[idx];
+    if (IS_INTEGER(agg_types_[idx])) {
+      return AggResult(agg_results_[actual_idx]);
+    } else if (agg_types_[idx] == kTEXT) {
+      CHECK(executor_);
+      return translate_strings
+        ? AggResult(executor_->getStringDictionary()->getString(agg_results_[actual_idx]))
+        : AggResult(agg_results_[actual_idx]);
+    } else {
+      CHECK(agg_types_[idx] == kFLOAT || agg_types_[idx] == kDOUBLE);
+      return AggResult(*reinterpret_cast<const double*>(&agg_results_[actual_idx]));
+    }
+  }
+  return agg_results_[idx];
+}
+
 Executor::Executor(const Planner::RootPlan* root_plan)
   : root_plan_(root_plan)
   , context_(llvm::getGlobalContext())
@@ -99,6 +134,17 @@ std::vector<ResultRow> Executor::execute(
   default:
     CHECK(false);
   }
+}
+
+StringDictionary* Executor::getStringDictionary() const {
+  if (!str_dict_) {
+    str_dict_.reset(new StringDictionary(MapDMeta::getStringDictFolder(
+      "/tmp",
+      root_plan_->get_catalog().get_currentDB().dbId,
+      -1,
+      -1)));
+  }
+  return str_dict_.get();
 }
 
 llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
@@ -329,6 +375,10 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
     return llvm::ConstantFP::get(llvm::Type::getFloatTy(context_), constant->get_constval().floatval);
   case kDOUBLE:
     return llvm::ConstantFP::get(llvm::Type::getDoubleTy(context_), constant->get_constval().doubleval);
+  case kVARCHAR: {
+    const int32_t str_id = getStringDictionary()->get(*constant->get_constval().stringval);
+    return llvm::ConstantInt::get(get_int_type(32, context_), str_id);
+  }
   default:
     CHECK(false);
   }
@@ -447,8 +497,13 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
   const auto& rhs_type = rhs->get_type_info();
   const auto lhs_lv = codegen(lhs);
   const auto rhs_lv = codegen(rhs);
-  CHECK_EQ(lhs_type.type, rhs_type.type);
-  if (IS_INTEGER(lhs_type.type)) {
+  CHECK((lhs_type.type == rhs_type.type) ||
+        (lhs_type.type == kVARCHAR && rhs_type.type == kTEXT) ||
+        (lhs_type.type == kTEXT && rhs_type.type == kVARCHAR));
+  if (IS_INTEGER(lhs_type.type) || lhs_type.type == kVARCHAR || lhs_type.type == kTEXT) {
+    if (!IS_INTEGER(lhs_type.type)) {
+      CHECK(optype == kEQ || optype == kNE);
+    }
     return ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
   }
   if (lhs_type.type == kFLOAT || lhs_type.type == kDOUBLE) {
@@ -854,7 +909,6 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
   decltype(results_per_device.front().front().agg_results_idx_) agg_results_idx;
   decltype(results_per_device.front().front().agg_kinds_) agg_kinds;
   decltype(results_per_device.front().front().agg_types_) agg_types;
-  decltype(results_per_device.front().front().col_str_dicts_) col_str_dicts;
 
   for (const auto& device_results : results_per_device) {
     for (const auto& row : device_results) {
@@ -868,8 +922,6 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         agg_kinds = row.agg_kinds_;
         CHECK(agg_types.empty());
         agg_types = row.agg_types_;
-        CHECK(col_str_dicts.empty());
-        col_str_dicts = row.col_str_dicts_;
       } else {
         CHECK(agg_kinds == row.agg_kinds_);
         CHECK(agg_types == row.agg_types_);
@@ -934,43 +986,16 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
   }
   // now flatten the reduced map
   for (const auto& kv : reduced_results_map) {
-    ResultRow row;
+    ResultRow row(this);
     row.value_tuple_ = kv.first;
     row.agg_results_ = kv.second;
     row.agg_results_idx_ = agg_results_idx;
     row.agg_kinds_ = agg_kinds;
     row.agg_types_ = agg_types;
-    row.col_str_dicts_ = col_str_dicts;
     reduced_results_vec.push_back(row);
   }
   return reduced_results_vec;
 }
-
-namespace {
-
-typedef std::pair<int, int> StringDictId;
-std::map<StringDictId, std::shared_ptr<StringDictionary>> g_dicts;
-
-// TODO(alex): thread safety
-std::shared_ptr<StringDictionary> getStringDict(
-    const int db_id,
-    const int table_id,
-    const int col_id) {
-  auto it = g_dicts.find(std::make_pair(db_id, table_id));
-  if (it != g_dicts.end()) {
-    return it->second;
-  }
-  auto new_dict = std::make_shared<StringDictionary>(MapDMeta::getStringDictFolder(
-    "/tmp", db_id, table_id, col_id));
-  // TODO(alex): don't hardcode /tmp
-  auto it_ok = g_dicts.insert(std::make_pair(
-    std::make_pair(db_id, table_id),
-    new_dict));
-  CHECK(it_ok.second);
-  return it_ok.first->second;
-}
-
-}  // namespace
 
 Executor::ResultRows Executor::groupBufferToResults(
     const int64_t* group_by_buffer,
@@ -983,7 +1008,7 @@ Executor::ResultRows Executor::groupBufferToResults(
     const size_t key_off = (group_by_col_count + agg_col_count) * i;
     if (group_by_buffer[key_off] != EMPTY_KEY) {
       size_t out_vec_idx = 0;
-      ResultRow result_row;
+      ResultRow result_row(this);
       for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
         const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
         CHECK_NE(key_comp, EMPTY_KEY);
@@ -1000,20 +1025,11 @@ Executor::ResultRows Executor::groupBufferToResults(
           CHECK(agg_expr->get_arg());
           result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
           CHECK_NE(kTEXT, target_expr->get_type_info().type);
-          result_row.col_str_dicts_.emplace_back(nullptr);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
         } else {
           result_row.agg_types_.push_back(target_expr->get_type_info().type);
-          if (target_expr->get_type_info().type == kTEXT) {
-            auto col_var = dynamic_cast<Analyzer::ColumnVar*>(target_expr);
-            CHECK(col_var);
-            result_row.col_str_dicts_.emplace_back(getStringDict(
-              db_id, col_var->get_table_id(), col_var->get_column_id()));
-          } else {
-            result_row.col_str_dicts_.emplace_back(nullptr);
-          }
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           ++out_vec_idx;
         }
@@ -1373,7 +1389,7 @@ void Executor::executePlanWithoutGroupBy(
         0, data_mgr, block_size_x_, grid_size_x_);
   }
   size_t out_vec_idx = 0;
-  ResultRow result_row;
+  ResultRow result_row(this);
   for (const auto target_expr : target_exprs) {
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     CHECK(agg_expr);
@@ -1384,7 +1400,6 @@ void Executor::executePlanWithoutGroupBy(
       CHECK(agg_expr->get_arg());
       result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
       CHECK_NE(kTEXT, target_expr->get_type_info().type);
-      result_row.col_str_dicts_.emplace_back(nullptr);
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
@@ -1401,7 +1416,6 @@ void Executor::executePlanWithoutGroupBy(
     } else {
       result_row.agg_types_.push_back(target_expr->get_type_info().type);
       CHECK_NE(kTEXT, target_expr->get_type_info().type);
-      result_row.col_str_dicts_.emplace_back(nullptr);
       result_row.agg_results_.push_back(reduce_results(
         agg_type,
         target_expr->get_type_info().type,

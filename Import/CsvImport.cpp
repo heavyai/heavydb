@@ -62,9 +62,7 @@ std::string MapDMeta::getStringDictFolder(
     const int table_id,
     const int col_id) {
   boost::filesystem::path str_dict_folder { base_path };
-  str_dict_folder /= (
-    std::to_string(db_id) + "_" +
-    std::to_string(table_id));
+  str_dict_folder /= ("mapd_strings_" + std::to_string(db_id));
   return str_dict_folder.string();
 }
 
