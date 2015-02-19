@@ -69,13 +69,14 @@ class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
     "Host hardware not supported, unexpected size of float / double.");
 public:
-  Executor(const Planner::RootPlan* root_plan);
+  Executor(const int db_id);
   ~Executor();
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
   typedef std::vector<ResultRow> ResultRows;
 
   std::vector<ResultRow> execute(
+    const Planner::RootPlan* root_plan,
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
     const ExecutorOptLevel = ExecutorOptLevel::Default);
 
@@ -96,6 +97,7 @@ private:
   llvm::Value* codegenIsNull(const Analyzer::UOper*) const;
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
+    const Planner::RootPlan* root_plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel);
   std::vector<ResultRow> executeAggScanPlan(
@@ -110,6 +112,7 @@ private:
     const Catalog_Namespace::Catalog&);
   std::vector<ResultRow> executeSortPlan(
     const Planner::Sort* sort_plan,
+    const Planner::RootPlan* root_plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
@@ -136,7 +139,7 @@ private:
     const size_t agg_col_count,
     const std::list<Analyzer::Expr*>& target_exprs,
     const int32_t db_id);
-  void executeSimpleInsert();
+  void executeSimpleInsert(const Planner::RootPlan* root_plan);
   void compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
@@ -164,7 +167,7 @@ private:
   int getLocalColumnId(const int global_col_id) const;
   llvm::Value* codegenOrGetCached(const Analyzer::Expr*);
 
-  const Planner::RootPlan* root_plan_;
+  const int db_id_;
   llvm::LLVMContext& context_;
   llvm::Module* module_;
   mutable llvm::IRBuilder<> ir_builder_;

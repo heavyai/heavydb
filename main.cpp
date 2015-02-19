@@ -245,10 +245,10 @@ main(int argc, char* argv[])
 					if (execute) {
 						std::vector<ResultRow> results;
 						std::vector<ResultRow> results_cpu;
-						std::unique_ptr<Executor> executor_cpu(new Executor(plan));
+						std::unique_ptr<Executor> executor_cpu(new Executor(plan->get_catalog().get_currentDB().dbId));
 						{
 							auto ms = measure<>::execution([&]() {
-								results_cpu = executor_cpu->execute(ExecutorDeviceType::CPU);
+								results_cpu = executor_cpu->execute(plan, ExecutorDeviceType::CPU);
 							});
 							if (timer) {
 								cout << "Query took " << ms << " ms to execute." << endl;
@@ -258,9 +258,9 @@ main(int argc, char* argv[])
 						if (cat.get_dataMgr().gpusPresent()) {
 							std::vector<ResultRow> results_gpu;
 							{
-								executor_gpu.reset(new Executor(plan));
+								executor_gpu.reset(new Executor(plan->get_catalog().get_currentDB().dbId));
 								auto ms = measure<>::execution([&]() {
-									results_gpu = executor_gpu->execute(ExecutorDeviceType::GPU);
+									results_gpu = executor_gpu->execute(plan, ExecutorDeviceType::GPU);
 								});
 								if (timer) {
 									cout << "Query took " << ms << " ms to execute." << endl;

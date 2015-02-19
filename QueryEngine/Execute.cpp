@@ -68,16 +68,14 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
   return agg_results_[idx];
 }
 
-Executor::Executor(const Planner::RootPlan* root_plan)
-  : root_plan_(root_plan)
+Executor::Executor(const int db_id)
+  : db_id_(db_id)
   , context_(llvm::getGlobalContext())
   , module_(nullptr)
   , ir_builder_(context_)
   , execution_engine_(nullptr)
   , row_func_(nullptr)
-  , query_id_(0) {
-  CHECK(root_plan_);
-}
+  , query_id_(0) {}
 
 Executor::~Executor() {
   // looks like ExecutionEngine owns everything (IR, native code etc.)
@@ -99,18 +97,19 @@ const ColumnDescriptor* get_column_descriptor(
 
 std::vector<ResultRow> Executor::executeSelectPlan(
     const Planner::Plan* plan,
+    const Planner::RootPlan* root_plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
-    return executeAggScanPlan(plan, device_type, opt_level, root_plan_->get_catalog());
+    return executeAggScanPlan(plan, device_type, opt_level, root_plan->get_catalog());
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
-    return executeResultPlan(result_plan, device_type, opt_level, root_plan_->get_catalog());
+    return executeResultPlan(result_plan, device_type, opt_level, root_plan->get_catalog());
   }
   const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
   if (sort_plan) {
-    return executeSortPlan(sort_plan, device_type, opt_level, root_plan_->get_catalog());
+    return executeSortPlan(sort_plan, root_plan, device_type, opt_level, root_plan->get_catalog());
   }
   CHECK(false);
 }
@@ -124,14 +123,15 @@ std::vector<ResultRow> Executor::executeSelectPlan(
  */
 
 std::vector<ResultRow> Executor::execute(
+    const Planner::RootPlan* root_plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
-  const auto stmt_type = root_plan_->get_stmt_type();
+  const auto stmt_type = root_plan->get_stmt_type();
   switch (stmt_type) {
   case kSELECT:
-    return executeSelectPlan(root_plan_->get_plan(), device_type, opt_level);
+    return executeSelectPlan(root_plan->get_plan(), root_plan, device_type, opt_level);
   case kINSERT: {
-    executeSimpleInsert();
+    executeSimpleInsert(root_plan);
     return {};
   }
   default:
@@ -142,10 +142,7 @@ std::vector<ResultRow> Executor::execute(
 StringDictionary* Executor::getStringDictionary() const {
   if (!str_dict_) {
     str_dict_.reset(new StringDictionary(MapDMeta::getStringDictFolder(
-      "/tmp",
-      root_plan_->get_catalog().get_currentDB().dbId,
-      -1,
-      -1)));
+      "/tmp", db_id_, -1, -1)));
   }
   return str_dict_.get();
 }
@@ -1237,10 +1234,11 @@ std::vector<ResultRow> Executor::executeResultPlan(
 
 std::vector<ResultRow> Executor::executeSortPlan(
     const Planner::Sort* sort_plan,
+    const Planner::RootPlan* root_plan,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog&) {
-  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), device_type, opt_level);
+  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), root_plan, device_type, opt_level);
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
   // TODO(alex): check the semantics for order by multiple columns
@@ -1277,7 +1275,7 @@ std::vector<ResultRow> Executor::executeSortPlan(
     };
     std::sort(rows_to_sort.begin(), rows_to_sort.end(), compare);
   }
-  int64_t limit = root_plan_->get_limit();
+  auto limit = root_plan->get_limit();
   if (limit) {
     limit = std::min(limit, static_cast<int64_t>(rows_to_sort.size()));
   }
@@ -1492,19 +1490,19 @@ void Executor::executePlanWithGroupBy(
   }
 }
 
-void Executor::executeSimpleInsert() {
-  const auto plan = root_plan_->get_plan();
+void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
+  const auto plan = root_plan->get_plan();
   CHECK(plan);
   const auto values_plan = dynamic_cast<const Planner::ValuesScan*>(plan);
   CHECK(values_plan);
   const auto& targets = values_plan->get_targetlist();
-  const int table_id = root_plan_->get_result_table_id();
-  const auto& col_id_list = root_plan_->get_result_col_list();
+  const int table_id = root_plan->get_result_table_id();
+  const auto& col_id_list = root_plan->get_result_col_list();
   std::vector<const ColumnDescriptor*> col_descriptors;
   std::vector<int> col_ids;
   std::unordered_map<int, int8_t*> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
-  auto& cat = root_plan_->get_catalog();
+  auto& cat = root_plan->get_catalog();
   for (const int col_id : col_id_list) {
     const auto cd = get_column_descriptor(col_id, table_id, cat);
     const auto col_type = cd->columnType.type;

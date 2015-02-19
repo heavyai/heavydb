@@ -63,8 +63,8 @@ public:
         Planner::Optimizer optimizer(query, *cat_);
         auto plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
-        Executor executor(plan);
-        const auto results = executor.execute();
+        Executor executor(plan->get_catalog().get_currentDB().dbId);
+        const auto results = executor.execute(plan);
         if (!results.empty()) {
           for (size_t i = 0; i < results.front().size(); ++i) {
             _return.proj_names.push_back(std::to_string(i));
