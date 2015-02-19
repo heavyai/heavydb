@@ -1256,10 +1256,17 @@ std::vector<ResultRow> Executor::executeSortPlan(
         return order_entry.is_desc ? *lhs_ip > *rhs_ip : *lhs_ip < *rhs_ip;
       } else {
         const auto lhs_fp = boost::get<double>(&lhs_v);
-        CHECK(lhs_fp);
-        const auto rhs_fp = boost::get<double>(&rhs_v);
-        CHECK(rhs_fp);
-        return order_entry.is_desc ? *lhs_fp > *rhs_fp : *lhs_fp < *rhs_fp;
+        if (lhs_fp) {
+          const auto rhs_fp = boost::get<double>(&rhs_v);
+          CHECK(rhs_fp);
+          return order_entry.is_desc ? *lhs_fp > *rhs_fp : *lhs_fp < *rhs_fp;
+        } else {
+          const auto lhs_sp = boost::get<std::string>(&lhs_v);
+          CHECK(lhs_sp);
+          const auto rhs_sp = boost::get<std::string>(&rhs_v);
+          CHECK(rhs_sp);
+          return order_entry.is_desc ? *lhs_sp > *rhs_sp : *lhs_sp < *rhs_sp;
+        }
       }
     };
     std::sort(rows_to_sort.begin(), rows_to_sort.end(), compare);

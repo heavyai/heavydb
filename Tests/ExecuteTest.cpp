@@ -409,6 +409,7 @@ TEST(Select, Strings) {
     c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING COUNT(*) > 5;", dt);
     c("SELECT str, COUNT(*) FROM test WHERE str = 'bar' GROUP BY str HAVING COUNT(*) > 4;", dt);
     c("SELECT str, COUNT(*) FROM test WHERE str = 'bar' GROUP BY str HAVING COUNT(*) > 5;", dt);
+    c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str;", dt);
   }
 }
 
