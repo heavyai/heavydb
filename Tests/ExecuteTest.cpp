@@ -44,7 +44,8 @@ Catalog_Namespace::Catalog g_cat(get_catalog());
 
 vector<ResultRow> run_multiple_agg(
     const string& query_str,
-    const ExecutorDeviceType device_type) {
+    const ExecutorDeviceType device_type,
+    std::shared_ptr<Executor>& executor) {
   SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
@@ -60,14 +61,15 @@ vector<ResultRow> run_multiple_agg(
   Planner::Optimizer optimizer(query, g_cat);
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
-  Executor executor(plan);
-  return executor.execute(device_type, ExecutorOptLevel::LoopStrengthReduction);
+  executor = std::make_shared<Executor>(plan);
+  return executor->execute(device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 
 AggResult run_simple_agg(
     const string& query_str,
-    const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type).front().agg_result(0);
+    const ExecutorDeviceType device_type,
+    std::shared_ptr<Executor>& executor) {
+  return run_multiple_agg(query_str, device_type, executor).front().agg_result(0);
 }
 
 template<class T>
@@ -109,7 +111,8 @@ public:
 
   void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
     connector_.query(query_string);
-    const auto mapd_results = run_multiple_agg(query_string, device_type);
+    std::shared_ptr<Executor> executor;
+    const auto mapd_results = run_multiple_agg(query_string, device_type, executor);
     ASSERT_EQ(connector_.getNumRows(), mapd_results.size());
     const int num_rows { static_cast<int>(connector_.getNumRows()) };
     if (mapd_results.empty()) {
@@ -137,6 +140,14 @@ public:
           ASSERT_NE(nullptr, mapd_as_double_p);
           const auto mapd_val = *mapd_as_double_p;
           ASSERT_TRUE(approx_eq(ref_val, mapd_val));
+          break;
+        }
+        case SQLITE_TEXT: {
+          const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
+          const auto mapd_as_str_p = boost::get<std::string>(&mapd_variant);
+          ASSERT_NE(nullptr, mapd_as_str_p);
+          const auto mapd_val = *mapd_as_str_p;
+          ASSERT_EQ(ref_val, mapd_val);
           break;
         }
         case SQLITE_NULL:
@@ -223,9 +234,10 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;", dt);
     c("SELECT AVG(y) FROM test WHERE z > 100 AND z < 102;", dt);
     c("SELECT AVG(y) FROM test WHERE t > 1000 AND t < 1002;", dt);
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)), numeric_limits<int64_t>::max());
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)), numeric_limits<int64_t>::max());
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)), numeric_limits<int64_t>::max());
+    std::shared_ptr<Executor> executor;
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt, executor)), numeric_limits<int64_t>::max());
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt, executor)), numeric_limits<int64_t>::max());
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt, executor)), numeric_limits<int64_t>::max());
   }
 }
 
@@ -325,9 +337,10 @@ TEST(Select, ScanNoAggregation) {
 TEST(Select, OrderBy) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
+    std::shared_ptr<Executor> executor;
     const auto rows = run_multiple_agg(
       "SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;",
-      dt);
+      dt, executor);
     CHECK_EQ(rows.size(), std::min(5, static_cast<int>(g_num_rows)));
     for (const auto& row : rows) {
       CHECK_EQ(row.size(), 4);
@@ -352,10 +365,11 @@ TEST(Select, ComplexQueries) {
       "GROUP BY x, y HAVING y > 2 * x AND MIN(y) > MAX(x) + 36;", dt);
     c("SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
       "WHERE z BETWEEN 100 AND 200 GROUP BY a, y;", dt);
+    std::shared_ptr<Executor> executor;
     const auto rows = run_multiple_agg(
       "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
       "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
-      dt);
+      dt, executor);
     ASSERT_EQ(rows.size(), 2);
     {
       const auto row = rows[0];
@@ -389,6 +403,15 @@ TEST(Select, Case) {
   }
 }
 
+TEST(Select, Strings) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING COUNT(*) > 5;", dt);
+    c("SELECT str, COUNT(*) FROM test WHERE str = 'bar' GROUP BY str HAVING COUNT(*) > 4;", dt);
+    c("SELECT str, COUNT(*) FROM test WHERE str = 'bar' GROUP BY str HAVING COUNT(*) > 5;", dt);
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
@@ -396,27 +419,32 @@ int main(int argc, char** argv)
     const std::string drop_old_test { "DROP TABLE IF EXISTS test;" };
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
-    const std::string create_test { "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double);" };
+    const std::string create_test {
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text encoding dict);" };
     run_ddl_statement(create_test);
-    g_sqlite_comparator.query(create_test);
+    g_sqlite_comparator.query(
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
   }
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2);" };
-    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2, 'foo');" };
+    std::shared_ptr<Executor> executor;
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU, executor);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4);" };
-    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4, 'bar');" };
+    std::shared_ptr<Executor> executor;
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU, executor);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6);" };
-    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6, 'baz');" };
+    std::shared_ptr<Executor> executor;
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU, executor);
     g_sqlite_comparator.query(insert_query);
   }
   int err { 0 };
@@ -428,5 +456,6 @@ int main(int argc, char** argv)
   const std::string drop_test { "DROP TABLE test;" };
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
+  boost::filesystem::remove_all("/tmp/mapd_strings_1");
   return err;
 }
