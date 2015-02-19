@@ -1122,31 +1122,36 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
   const auto target_exprs = get_agg_target_exprs(plan);
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
+    const auto target_type = target_expr->get_type_info().type;
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
-      result.emplace_back(IS_INTEGER(target_expr->get_type_info().type) ? "agg_id" : "agg_id_double",
+      result.emplace_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
                           target_expr, 0, nullptr);
       continue;
     }
+    CHECK(IS_INTEGER(target_type) || target_type == kFLOAT || target_type == kDOUBLE);
     const auto agg_type = agg_expr->get_aggtype();
-    const auto agg_init_val = init_agg_val(agg_type, target_expr->get_type_info().type);
+    const auto agg_init_val = init_agg_val(agg_type, target_type);
     switch (agg_type) {
-    case kAVG:
-      result.emplace_back(IS_INTEGER(agg_expr->get_arg()->get_type_info().type) ? "agg_sum" : "agg_sum_double",
+    case kAVG: {
+      const auto agg_arg_type = agg_expr->get_arg()->get_type_info().type;
+      CHECK(IS_INTEGER(agg_arg_type) || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
+      result.emplace_back(IS_INTEGER(agg_arg_type) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
-      result.emplace_back(IS_INTEGER(agg_expr->get_arg()->get_type_info().type) ? "agg_count" : "agg_count_double",
+      result.emplace_back(IS_INTEGER(agg_arg_type) ? "agg_count" : "agg_count_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
+   }
     case kMIN:
-      result.emplace_back(IS_INTEGER(target_expr->get_type_info().type) ? "agg_min" : "agg_min_double",
+      result.emplace_back(IS_INTEGER(target_type) ? "agg_min" : "agg_min_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kMAX:
-      result.emplace_back(IS_INTEGER(target_expr->get_type_info().type) ? "agg_max" : "agg_max_double",
+      result.emplace_back(IS_INTEGER(target_type) ? "agg_max" : "agg_max_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kSUM:
-      result.emplace_back(IS_INTEGER(target_expr->get_type_info().type) ? "agg_sum" : "agg_sum_double",
+      result.emplace_back(IS_INTEGER(target_type) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kCOUNT:
@@ -1185,8 +1190,9 @@ std::vector<ResultRow> Executor::executeResultPlan(
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
   for (auto target_entry : targets) {
+    const auto target_type = target_entry->get_expr()->get_type_info().type;
     agg_infos.emplace_back(
-      IS_INTEGER(target_entry->get_expr()->get_type_info().type) ? "agg_id" : "agg_id_double",
+      (target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
       target_entry->get_expr(), 0, nullptr);
   }
   const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
