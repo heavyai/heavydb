@@ -82,7 +82,7 @@ llvm::Function* pos_step(llvm::Module* mod) {
   return func_pos_step;
 }
 
-llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, const uint32_t query_id) {
+llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, const bool is_nested) {
   using namespace llvm;
 
   std::vector<Type*>FuncTy_5_args;
@@ -97,7 +97,7 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, cons
     /*Params=*/FuncTy_5_args,
     /*isVarArg=*/false);
 
-  auto row_process_name = unique_name("row_process", query_id);
+  auto row_process_name = unique_name("row_process", is_nested);
   auto func_row_process = mod->getFunction(row_process_name);
   CHECK(!func_row_process);
 
@@ -126,14 +126,14 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, cons
 
 }  // namespace
 
-llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count, const unsigned query_id) {
+llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count, const bool is_nested) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, aggr_col_count, query_id);
+  auto func_row_process = row_process(mod, aggr_col_count, is_nested);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -153,7 +153,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count, c
     /*Params=*/FuncTy_8_args,
     /*isVarArg=*/false);
 
-  auto query_template_name = unique_name("query_template", query_id);
+  auto query_template_name = unique_name("query_template", is_nested);
   auto func_query_template = mod->getFunction(query_template_name);
   CHECK(!func_query_template);
 
@@ -319,14 +319,14 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count, c
   return func_query_template;
 }
 
-llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count, const uint32_t query_id) {
+llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count, const bool is_nested) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, aggr_col_count, query_id);
+  auto func_row_process = row_process(mod, aggr_col_count, is_nested);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -345,7 +345,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
     /*Params=*/FuncTy_12_args,
     /*isVarArg=*/false);
 
-  auto query_group_by_template_name = unique_name("query_group_by_template", query_id);
+  auto query_group_by_template_name = unique_name("query_group_by_template", is_nested);
   auto func_query_group_by_template = mod->getFunction(query_group_by_template_name);
   CHECK(!func_query_group_by_template);
 
@@ -482,8 +482,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   return func_query_group_by_template;
 }
 
-std::string unique_name(const char* base_name, const uint32_t query_id) {
+std::string unique_name(const char* base_name, const bool is_nested) {
   char full_name[128] = { 0 };
-  snprintf(full_name, sizeof(full_name), "%s_%u", base_name, query_id);
+  snprintf(full_name, sizeof(full_name), "%s_%u", base_name, static_cast<unsigned>(is_nested));
   return full_name;
 }
