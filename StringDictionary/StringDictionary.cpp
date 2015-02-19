@@ -70,7 +70,6 @@ StringDictionary::StringDictionary(
       }
       getOrAddImpl(recovered.first, true);
     }
-    LOG(INFO) << "Recovered " << string_id << " strings from " << folder;
     if (bytes % sizeof(StringIdxEntry) != 0) {
       LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
     }
