@@ -86,10 +86,13 @@ Executor::~Executor() {
 
 namespace {
 
-SQLTypes get_column_type(const int col_id, const int table_id, const Catalog_Namespace::Catalog& cat) {
+const ColumnDescriptor* get_column_descriptor(
+    const int col_id,
+    const int table_id,
+    const Catalog_Namespace::Catalog& cat) {
   const auto col_desc = cat.getMetadataForColumn(table_id, col_id);
   CHECK(col_desc);
-  return col_desc->columnType.type;
+  return col_desc;
 }
 
 }
@@ -1484,22 +1487,36 @@ void Executor::executeSimpleInsert() {
   const auto& targets = values_plan->get_targetlist();
   const int table_id = root_plan_->get_result_table_id();
   const auto& col_id_list = root_plan_->get_result_col_list();
-  std::vector<SQLTypes> col_types;
+  std::vector<const ColumnDescriptor*> col_descriptors;
   std::vector<int> col_ids;
   std::unordered_map<int, int8_t*> col_buffers;
   std::unordered_map<int, std::vector<std::string>> str_col_buffers;
   auto& cat = root_plan_->get_catalog();
   for (const int col_id : col_id_list) {
-    const auto col_type = get_column_type(col_id, table_id, cat);
+    const auto cd = get_column_descriptor(col_id, table_id, cat);
+    const auto col_type = cd->columnType.type;
+    const auto col_enc = cd->compression;
     if (col_type == kTEXT) {
-      auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string> {}));
-      CHECK(it_ok.second);
+      switch (col_enc) {
+      case kENCODING_NONE: {
+        auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string> {}));
+        CHECK(it_ok.second);
+        break;
+      }
+      case kENCODING_DICT: {
+        auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
+        CHECK(it_ok.second);
+        break;
+      }
+      default:
+        CHECK(false);
+      }
     } else {
       CHECK(IS_INTEGER(col_type) || col_type == kFLOAT || col_type == kDOUBLE);
       auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
       CHECK(it_ok.second);
     }
-    col_types.push_back(col_type);
+    col_descriptors.push_back(cd);
     col_ids.push_back(col_id);
   }
   size_t col_idx = 0;
@@ -1509,9 +1526,9 @@ void Executor::executeSimpleInsert() {
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     CHECK(col_cv);
-    const auto col_type = col_types[col_idx];
+    const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
-    switch (col_type) {
+    switch (cd->columnType.type) {
     case kSMALLINT: {
       auto col_data = reinterpret_cast<int16_t*>(malloc(sizeof(int16_t)));
       *col_data = col_datum.smallintval;
@@ -1543,7 +1560,20 @@ void Executor::executeSimpleInsert() {
       break;
     }
     case kTEXT: {
-      str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
+      switch (cd->compression) {
+      case kENCODING_NONE:
+        str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
+        break;
+      case kENCODING_DICT: {
+        const int32_t str_id = getStringDictionary()->getOrAdd(*col_datum.stringval);
+        auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
+        *col_data = str_id;
+        col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
+        break;
+      }
+      default:
+        CHECK(false);
+      }
       break;
     }
     default:
