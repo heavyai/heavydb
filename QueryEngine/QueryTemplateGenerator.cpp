@@ -143,6 +143,9 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
   std::vector<Type*> FuncTy_8_args;
   FuncTy_8_args.push_back(PointerTy_9);
+  if (hoist_literals) {
+    FuncTy_8_args.push_back(PointerTy_1);
+  }
   FuncTy_8_args.push_back(PointerTy_6);
 
   FuncTy_8_args.push_back(PointerTy_6);
@@ -204,6 +207,10 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   Function::arg_iterator args = func_query_template->arg_begin();
   Value* ptr_byte_stream_119 = args++;
   ptr_byte_stream_119->setName("byte_stream");
+  if (hoist_literals) {
+    Value* literals = args++;
+    literals->setName("literals");
+  }
   Value* ptr_row_count_ptr = args++;
   ptr_row_count_ptr->setName("row_count_ptr");
   Value* ptr_agg_init_val = args++;
@@ -337,6 +344,9 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
 
   std::vector<Type*>FuncTy_12_args;
   FuncTy_12_args.push_back(PointerTy_9);
+  if (hoist_literals) {
+    FuncTy_12_args.push_back(PointerTy_1);
+  }
   FuncTy_12_args.push_back(PointerTy_6);
   FuncTy_12_args.push_back(PointerTy_6);
   PointerType* PointerTy_13 = PointerType::get(PointerTy_6, 0);
@@ -409,6 +419,10 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   Function::arg_iterator args = func_query_group_by_template->arg_begin();
   Value* ptr_byte_stream_143 = args++;
   ptr_byte_stream_143->setName("byte_stream");
+  if (hoist_literals) {
+    Value* literals = args++;
+    literals->setName("literals");
+  }
   Value* ptr_row_count_ptr_144 = args++;
   ptr_row_count_ptr_144->setName("row_count_ptr");
   Value* ptr_agg_init_val_145 = args++;

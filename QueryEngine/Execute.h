@@ -155,6 +155,7 @@ private:
     const Catalog_Namespace::Catalog&);
   void executePlanWithGroupBy(
     void* query_native_code,
+    const bool hoist_literals,
     const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
@@ -166,6 +167,7 @@ private:
     const int32_t db_id);
   void executePlanWithoutGroupBy(
     void* query_native_code,
+    const bool hoist_literals,
     const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
@@ -198,6 +200,7 @@ private:
                               const ExecutorOptLevel,
                               llvm::Module*);
   CUfunction optimizeAndCodegenGPU(llvm::Function*,
+                                   const bool hoist_literals,
                                    const ExecutorOptLevel,
                                    llvm::Module*,
                                    const bool is_group_by);
