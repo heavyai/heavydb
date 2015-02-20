@@ -126,7 +126,8 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, cons
 
 }  // namespace
 
-llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count, const bool is_nested) {
+llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
+                               const bool is_nested, const bool hoist_literals) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -319,7 +320,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count, c
   return func_query_template;
 }
 
-llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count, const bool is_nested) {
+llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count,
+                                        const bool is_nested, const bool hoist_literals) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);

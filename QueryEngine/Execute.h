@@ -109,42 +109,47 @@ public:
 
   std::vector<ResultRow> execute(
     const Planner::RootPlan* root_plan,
+    const bool hoist_literals = true,
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
     const ExecutorOptLevel = ExecutorOptLevel::Default);
 
   StringDictionary* getStringDictionary() const;
 private:
-  llvm::Value* codegen(const Analyzer::Expr*);
-  llvm::Value* codegen(const Analyzer::BinOper*);
-  llvm::Value* codegen(const Analyzer::UOper*);
-  llvm::Value* codegen(const Analyzer::ColumnVar*);
-  llvm::Value* codegen(const Analyzer::Constant*);
-  llvm::Value* codegen(const Analyzer::CaseExpr*);
-  llvm::Value* codegenCmp(const Analyzer::BinOper*);
-  llvm::Value* codegenLogical(const Analyzer::BinOper*);
-  llvm::Value* codegenArith(const Analyzer::BinOper*);
-  llvm::Value* codegenLogical(const Analyzer::UOper*);
-  llvm::Value* codegenCast(const Analyzer::UOper*);
-  llvm::Value* codegenUMinus(const Analyzer::UOper*);
-  llvm::Value* codegenIsNull(const Analyzer::UOper*);
+  llvm::Value* codegen(const Analyzer::Expr*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::ColumnVar*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::Constant*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
+  llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegenLogical(const Analyzer::UOper*, const bool hoist_literals);
+  llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
+  llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
+  llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
     const Planner::RootPlan* root_plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel);
   std::vector<ResultRow> executeAggScanPlan(
     const Planner::Plan* plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
   std::vector<ResultRow> executeResultPlan(
     const Planner::Result* result_plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
   std::vector<ResultRow> executeSortPlan(
     const Planner::Sort* sort_plan,
     const Planner::RootPlan* root_plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
@@ -183,10 +188,10 @@ private:
     const std::list<int>& scan_cols,
     const std::list<Analyzer::Expr*>& simple_quals,
     const std::list<Analyzer::Expr*>& quals,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const size_t groups_buffer_entry_count,
-    const bool hoist_literals);
+    const size_t groups_buffer_entry_count);
 
   void nukeOldState();
   void* optimizeAndCodegenCPU(llvm::Function*,
@@ -201,7 +206,8 @@ private:
     llvm::Value* filter_result,
     const std::list<Analyzer::Expr*>& group_by_cols,
     const int32_t groups_buffer_entry_count,
-    llvm::Module* module);
+    llvm::Module* module,
+    const bool hoist_literals);
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
 

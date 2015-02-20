@@ -101,18 +101,19 @@ const ColumnDescriptor* get_column_descriptor(
 std::vector<ResultRow> Executor::executeSelectPlan(
     const Planner::Plan* plan,
     const Planner::RootPlan* root_plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
-    return executeAggScanPlan(plan, device_type, opt_level, root_plan->get_catalog());
+    return executeAggScanPlan(plan, hoist_literals, device_type, opt_level, root_plan->get_catalog());
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
-    return executeResultPlan(result_plan, device_type, opt_level, root_plan->get_catalog());
+    return executeResultPlan(result_plan, hoist_literals, device_type, opt_level, root_plan->get_catalog());
   }
   const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
   if (sort_plan) {
-    return executeSortPlan(sort_plan, root_plan, device_type, opt_level, root_plan->get_catalog());
+    return executeSortPlan(sort_plan, root_plan, hoist_literals, device_type, opt_level, root_plan->get_catalog());
   }
   CHECK(false);
 }
@@ -127,12 +128,14 @@ std::vector<ResultRow> Executor::executeSelectPlan(
 
 std::vector<ResultRow> Executor::execute(
     const Planner::RootPlan* root_plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
   const auto stmt_type = root_plan->get_stmt_type();
   switch (stmt_type) {
   case kSELECT:
-    return executeSelectPlan(root_plan->get_plan(), root_plan, device_type, opt_level);
+    return executeSelectPlan(root_plan->get_plan(), root_plan,
+      hoist_literals, device_type, opt_level);
   case kINSERT: {
     executeSimpleInsert(root_plan);
     return {};
@@ -150,7 +153,7 @@ StringDictionary* Executor::getStringDictionary() const {
   return str_dict_.get();
 }
 
-llvm::Value* Executor::codegen(const Analyzer::Expr* expr) {
+llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_literals) {
   if (!expr) {
     llvm::Value* pos_arg { nullptr };
     auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
@@ -166,52 +169,52 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr) {
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
-    return codegen(bin_oper);
+    return codegen(bin_oper, hoist_literals);
   }
   auto u_oper = dynamic_cast<const Analyzer::UOper*>(expr);
   if (u_oper) {
-    return codegen(u_oper);
+    return codegen(u_oper, hoist_literals);
   }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
-    return codegen(col_var);
+    return codegen(col_var, hoist_literals);
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
-    return codegen(constant);
+    return codegen(constant, hoist_literals);
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
-    return codegen(case_expr);
+    return codegen(case_expr, hoist_literals);
   }
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper) {
+llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
   if (IS_ARITHMETIC(optype)) {
-    return codegenArith(bin_oper);
+    return codegenArith(bin_oper, hoist_literals);
   }
   if (IS_COMPARISON(optype)) {
-    return codegenCmp(bin_oper);
+    return codegenCmp(bin_oper, hoist_literals);
   }
   if (IS_LOGIC(optype)) {
-    return codegenLogical(bin_oper);
+    return codegenLogical(bin_oper, hoist_literals);
   }
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper) {
+llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const bool hoist_literals) {
   const auto optype = u_oper->get_optype();
   switch (optype) {
   case kNOT:
-    return codegenLogical(u_oper);
+    return codegenLogical(u_oper, hoist_literals);
   case kCAST:
-    return codegenCast(u_oper);
+    return codegenCast(u_oper, hoist_literals);
   case kUMINUS:
-    return codegenUMinus(u_oper);
+    return codegenUMinus(u_oper, hoist_literals);
   case kISNULL:
-    return codegenIsNull(u_oper);
+    return codegenIsNull(u_oper, hoist_literals);
   default:
     CHECK(false);
   }
@@ -303,7 +306,7 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 
 }  // namespace
 
-llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) {
+llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool hoist_literals) {
   // only generate the decoding code once; if a column has been previously
   // fetch in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
@@ -373,7 +376,7 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) {
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::Constant* constant) {
+llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool hoist_literals) {
   const auto& type_info = constant->get_type_info();
   switch (type_info.type) {
   case kBOOLEAN:
@@ -404,7 +407,7 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) {
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) {
+llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool hoist_literals) {
   // Generate a "projection" function which takes the case conditions and
   // values as arguments, interleaved. The 'else' expression is the last one.
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
@@ -458,10 +461,10 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) {
   // (code generation is easier this way because of how 'BasicBlock::Create' works).
   // Reverse the actual arguments to compensate for this, then call the function.
   for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
-    case_func_args.push_back(codegen(expr_pair.first));
-    case_func_args.push_back(codegen(expr_pair.second));
+    case_func_args.push_back(codegen(expr_pair.first, hoist_literals));
+    case_func_args.push_back(codegen(expr_pair.second, hoist_literals));
   }
-  case_func_args.push_back(codegen(else_expr));
+  case_func_args.push_back(codegen(else_expr, hoist_literals));
   return cgen_state_->ir_builder_.CreateCall(case_func, case_func_args);
 }
 
@@ -507,15 +510,15 @@ llvm::CmpInst::Predicate llvm_fcmp_pred(const SQLOps op_type) {
 
 }  // namespace
 
-llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) {
+llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_COMPARISON(optype));
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
-  const auto lhs_lv = codegen(lhs);
-  const auto rhs_lv = codegen(rhs);
+  const auto lhs_lv = codegen(lhs, hoist_literals);
+  const auto rhs_lv = codegen(rhs, hoist_literals);
   CHECK((lhs_type.type == rhs_type.type) ||
         (IS_STRING(lhs_type.type) && IS_STRING(rhs_type.type)));
   if (IS_INTEGER(lhs_type.type) || IS_STRING(lhs_type.type)) {
@@ -530,13 +533,13 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) {
   CHECK(false);
 }
 
-llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper) {
+llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_LOGIC(optype));
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  const auto lhs_lv = codegen(lhs);
-  const auto rhs_lv = codegen(rhs);
+  const auto lhs_lv = codegen(lhs, hoist_literals);
+  const auto rhs_lv = codegen(rhs, hoist_literals);
   switch (optype) {
   case kAND:
     return cgen_state_->ir_builder_.CreateAnd(lhs_lv, rhs_lv);
@@ -547,10 +550,10 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper) {
   }
 }
 
-llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) {
+llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hoist_literals) {
   CHECK_EQ(uoper->get_optype(), kCAST);
   const auto& ti = uoper->get_type_info();
-  const auto operand_lv = codegen(uoper->get_operand());
+  const auto operand_lv = codegen(uoper->get_operand(), hoist_literals);
   if (operand_lv->getType()->isIntegerTy()) {
     CHECK(IS_INTEGER(uoper->get_operand()->get_type_info().type));
     if (IS_INTEGER(ti.type)) {
@@ -576,18 +579,18 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) {
   }
 }
 
-llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper) {
+llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const bool hoist_literals) {
   CHECK_EQ(uoper->get_optype(), kUMINUS);
-  const auto operand_lv = codegen(uoper->get_operand());
+  const auto operand_lv = codegen(uoper->get_operand(), hoist_literals);
   CHECK(operand_lv->getType()->isIntegerTy());
   return cgen_state_->ir_builder_.CreateNeg(operand_lv);
 }
 
-llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper) {
+llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool hoist_literals) {
   const auto optype = uoper->get_optype();
   CHECK(optype == kNOT || optype == kUMINUS || optype == kISNULL);
   const auto operand = uoper->get_operand();
-  const auto operand_lv = codegen(operand);
+  const auto operand_lv = codegen(operand, hoist_literals);
   switch (optype) {
   case kNOT:
     return cgen_state_->ir_builder_.CreateNot(operand_lv);
@@ -596,21 +599,21 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper) {
   }
 }
 
-llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper) {
+llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool hoist_literals) {
   // TODO(alex): we don't have null support at the storage level yet,
   //             which means a value is never null
   return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
 }
 
-llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) {
+llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_ARITHMETIC(optype));
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
-  const auto lhs_lv = codegen(lhs);
-  const auto rhs_lv = codegen(rhs);
+  const auto lhs_lv = codegen(lhs, hoist_literals);
+  const auto rhs_lv = codegen(rhs, hoist_literals);
   CHECK_EQ(lhs_type.type, rhs_type.type);
   if (IS_INTEGER(lhs_type.type)) {
     switch (optype) {
@@ -1199,12 +1202,13 @@ Executor::ResultRows results_union(const std::vector<Executor::ResultRows>& resu
 
 std::vector<ResultRow> Executor::executeResultPlan(
     const Planner::Result* result_plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
-  auto result_rows = executeAggScanPlan(agg_plan, device_type, opt_level, cat);
+  auto result_rows = executeAggScanPlan(agg_plan, hoist_literals, device_type, opt_level, cat);
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
@@ -1227,7 +1231,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   llvm::Function* row_func;
   // Nested query, let the compiler know
   is_nested_ = true;
-  auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_);
+  auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals);
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
@@ -1240,8 +1244,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
     pseudo_scan_cols.push_back(pseudo_col);
   }
   auto query_code_and_literals = compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
-    result_plan->get_constquals(), result_plan->get_quals(),
-    ExecutorDeviceType::CPU, opt_level, groups_buffer_entry_count_, true);
+    result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
+    ExecutorDeviceType::CPU, opt_level, groups_buffer_entry_count_);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   const size_t groups_buffer_size { (target_exprs.size() + 1) * groups_buffer_entry_count_ * sizeof(int64_t) };
@@ -1257,10 +1261,12 @@ std::vector<ResultRow> Executor::executeResultPlan(
 std::vector<ResultRow> Executor::executeSortPlan(
     const Planner::Sort* sort_plan,
     const Planner::RootPlan* root_plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog&) {
-  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), root_plan, device_type, opt_level);
+  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), root_plan,
+    hoist_literals, device_type, opt_level);
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
   // TODO(alex): check the semantics for order by multiple columns
@@ -1308,6 +1314,7 @@ std::vector<ResultRow> Executor::executeSortPlan(
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
     const Planner::Plan* plan,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type_in,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
@@ -1328,8 +1335,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   }
   std::list<Analyzer::Expr*> groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<Analyzer::Expr*> { nullptr };
   auto query_code_and_literals = compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(),
-    scan_plan->get_simple_quals(), scan_plan->get_quals(), device_type, opt_level,
-    groups_buffer_entry_count_, true);
+    scan_plan->get_simple_quals(), scan_plan->get_quals(),
+    hoist_literals, device_type, opt_level, groups_buffer_entry_count_);
   const int table_id = scan_plan->get_table_id();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto fragmenter = table_descriptor->fragmenter;
@@ -1738,10 +1745,10 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
     const std::list<int>& scan_cols,
     const std::list<Analyzer::Expr*>& simple_quals,
     const std::list<Analyzer::Expr*>& quals,
+    const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const size_t groups_buffer_entry_count,
-    const bool hoist_literals) {
+    const size_t groups_buffer_entry_count) {
   nukeOldState();
 
   // Read the module template and target either CPU or GPU
@@ -1750,8 +1757,8 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
   cgen_state_->module_ = create_runtime_module(cgen_state_->context_);
   const bool is_group_by = !groupby_list.empty();
   auto query_func = is_group_by
-    ? query_group_by_template(cgen_state_->module_, 1, is_nested_)
-    : query_template(cgen_state_->module_, agg_infos.size(), is_nested_);
+    ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals)
+    : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", query_func, cgen_state_->module_);
 
@@ -1777,10 +1784,10 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, hoist_literals));
   }
   for (auto expr : quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, hoist_literals));
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
@@ -1789,8 +1796,8 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
       plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
     }
     call_aggregators(agg_infos, filter_lv,
-        groupby_list,
-        groups_buffer_entry_count, cgen_state_->module_);
+        groupby_list, groups_buffer_entry_count,
+        cgen_state_->module_, hoist_literals);
   }
 
   // iterate through all the instruction in the query template function and
@@ -1963,7 +1970,8 @@ void Executor::call_aggregators(
     llvm::Value* filter_result,
     const std::list<Analyzer::Expr*>& group_by_cols,
     const int32_t groups_buffer_entry_count,
-    llvm::Module* module) {
+    llvm::Module* module,
+    const bool hoist_literals) {
   auto& context = llvm::getGlobalContext();
 
   auto filter_true = llvm::BasicBlock::Create(context, "filter_true", cgen_state_->row_func_);
@@ -1980,7 +1988,7 @@ void Executor::call_aggregators(
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size()));
     size_t i = 0;
     for (const auto group_by_col : group_by_cols) {
-      auto group_key = codegen(group_by_col);
+      auto group_key = codegen(group_by_col, hoist_literals);
       cgen_state_->group_by_expr_cache_.push_back(group_key);
       auto group_key_ptr = cgen_state_->ir_builder_.CreateGEP(group_keys_buffer,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
@@ -2036,7 +2044,7 @@ void Executor::call_aggregators(
     auto aggr_col = std::get<1>(agg_info);
     llvm::Value* agg_expr_lv = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0);
     if (aggr_col) {
-      agg_expr_lv = codegen(aggr_col);
+      agg_expr_lv = codegen(aggr_col, hoist_literals);
       auto agg_col_type = agg_expr_lv->getType();
       if (agg_col_type->isIntegerTy()) {
         auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();

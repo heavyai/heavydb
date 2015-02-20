@@ -248,7 +248,7 @@ main(int argc, char* argv[])
 						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId);
 						{
 							auto ms = measure<>::execution([&]() {
-								results_cpu = executor->execute(plan, ExecutorDeviceType::CPU);
+								results_cpu = executor->execute(plan, true, ExecutorDeviceType::CPU);
 							});
 							if (timer) {
 								cout << "Query took " << ms << " ms to execute." << endl;
@@ -258,7 +258,7 @@ main(int argc, char* argv[])
 							std::vector<ResultRow> results_gpu;
 							{
 								auto ms = measure<>::execution([&]() {
-									results_gpu = executor->execute(plan, ExecutorDeviceType::GPU);
+									results_gpu = executor->execute(plan, true, ExecutorDeviceType::GPU);
 								});
 								if (timer) {
 									cout << "Query took " << ms << " ms to execute." << endl;

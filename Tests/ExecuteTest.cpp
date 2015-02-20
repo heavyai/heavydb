@@ -62,7 +62,7 @@ vector<ResultRow> run_multiple_agg(
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
   executor = std::make_shared<Executor>(g_cat.get_currentDB().dbId);
-  return executor->execute(plan, device_type, ExecutorOptLevel::LoopStrengthReduction);
+  return executor->execute(plan, true, device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 
 AggResult run_simple_agg(
