@@ -37,23 +37,51 @@ typedef boost::variant<int64_t, double, std::string> AggResult;
 
 class Executor;
 
+inline bool approx_eq(const double v, const double target, const double eps = 0.01) {
+  return target - eps < v && v < target + eps;
+}
+
 class ResultRow {
 public:
   ResultRow(const Executor* executor) : executor_(executor) {}
+
   AggResult agg_result(const size_t idx, const bool translate_strings = true) const;
+
   size_t size() const {
     return agg_results_idx_.size();
   }
+
   std::vector<int64_t> value_tuple() const {
     return value_tuple_;
   }
+
   bool operator==(const ResultRow& r) const {
-    return (value_tuple_ == r.value_tuple_ &&
-            agg_results_ == r.agg_results_ &&
-            agg_results_idx_ == r.agg_results_idx_ &&
-            agg_kinds_ == r.agg_kinds_ &&
-            agg_types_ == r.agg_types_);
+    if (size() != r.size()) {
+      return false;
+    }
+    for (size_t idx = 0; idx < size(); ++idx) {
+      const auto lhs_val = agg_result(idx);
+      const auto rhs_val = agg_result(idx);
+      {
+        const auto lhs_pd = boost::get<double>(&lhs_val);
+        if (lhs_pd) {
+          const auto rhs_pd = boost::get<double>(&rhs_val);
+          if (!rhs_pd) {
+            return false;
+          }
+          if (!approx_eq(*lhs_pd, *rhs_pd)) {
+            return false;
+          }
+        } else {
+          if (lhs_val < rhs_val || rhs_val < lhs_val) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
   }
+
 private:
   // TODO(alex): support for strings
   std::vector<int64_t> value_tuple_;

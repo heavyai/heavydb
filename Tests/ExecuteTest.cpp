@@ -97,10 +97,6 @@ bool skip_tests(const ExecutorDeviceType device_type) {
   return device_type == ExecutorDeviceType::GPU && !g_cat.get_dataMgr().gpusPresent();
 }
 
-bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  return target - eps < v && v < target + eps;
-}
-
 class SQLiteComparator {
 public:
   SQLiteComparator() : connector_("main", "") {}
