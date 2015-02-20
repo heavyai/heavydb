@@ -38,6 +38,7 @@ enum SQLTypes {
 #define IS_INTEGER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT))
 #define IS_NUMBER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
+#define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
 
 typedef union {
 	bool boolval;
@@ -97,9 +98,22 @@ struct SQLTypeInfo {
 	}
 };
 
+enum ExtractField {
+  kYEAR,
+  kMONTH,
+  kDAY,
+  kHOUR,
+  kMINUTE,
+  kSECOND,
+  kDOW,
+  kDOY,
+  kEPOCH
+};
+
 Datum
 StringToDatum(const std::string &s, SQLTypeInfo &ti);
 std::string
 DatumToString(Datum d, const SQLTypeInfo &ti);
-
+int64_t
+ExtractFromTime(ExtractField f, time_t t);
 #endif // SQLTYPES_H

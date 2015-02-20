@@ -146,6 +146,7 @@ TEST(ParseAnalyzePlan, Select) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by x, b having x > 10;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select distinct a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by x, b having x > 10;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fat where m < timestamp(0) '2015-02-18 13:15:55' and n >= time(0) '120000' and o <> date '05/06/2014';")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select extract(year from date '2015-02-28'), extract(month from date '2014-12-13'), extract(day from timestamp(0) '1998-10-24 03:14:55'), extract(dow from date '1936-02-09'), extract(doy from timestamp(0) '2015-02-18 01:02:11'), extract(hour from time(0) '111233'), extract(minute from m), extract(second from n) from fat where cast(timestamp(0) '2015-02-18 12:13:14' as int) > 1000;")); } );
 }
 
 TEST(ParseAnalyzePlan, Insert) {

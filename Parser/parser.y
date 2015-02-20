@@ -69,7 +69,7 @@ using namespace Parser;
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
-%token ELSE END ESCAPE EXISTS FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
+%token ELSE END ESCAPE EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF IN INSERT INTEGER INTO
 %token IS KEY LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
@@ -749,6 +749,12 @@ case_exp: CASE when_then_list opt_else_expr END
 	}
 	;
 
+extract_exp: EXTRACT '(' NAME FROM scalar_exp ')'
+  {
+    $<nodeval>$ = new ExtractExpr($<stringval>3, dynamic_cast<Expr*>($<nodeval>5));
+  }
+  ;
+
 	/* scalar expressions */
 
 scalar_exp:
@@ -765,6 +771,7 @@ scalar_exp:
 	| CAST '(' scalar_exp AS data_type ')'
 	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
 	| case_exp { $<nodeval>$ = $<nodeval>1; }
+  | extract_exp { $<nodeval>$ = $<nodeval>1; }
 	;
 
 select_entry: scalar_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }
