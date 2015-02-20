@@ -255,7 +255,7 @@ main(int argc, char* argv[])
 							}
 						}
 						std::unique_ptr<Executor> executor_gpu;
-						if (cat.get_dataMgr().gpusPresent()) {
+						if (cat.get_dataMgr().gpusPresent() && plan->get_stmt_type() == kSELECT) {
 							std::vector<ResultRow> results_gpu;
 							{
 								executor_gpu.reset(new Executor(plan->get_catalog().get_currentDB().dbId));
