@@ -127,7 +127,7 @@ TEST(StorageSmall, Strings) {
 
 TEST(StorageSmall, AllTypes) {
 	ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
-	ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, x varchar(10), y text);"););
+	ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, g timestamp(0), h time(0), i date, x varchar(10), y text);"););
 	EXPECT_TRUE(storage_test("alltypes", SMALL));
 	ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }
