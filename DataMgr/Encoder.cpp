@@ -39,6 +39,10 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
 								case kVARCHAR:
 								case kCHAR:
 									return new StringNoneEncoder(buffer);
+								case kTIME:
+								case kTIMESTAMP:
+								case kDATE:
+									return new NoneEncoder<time_t>(buffer);
                 default: {
                     return 0;
                 }
@@ -100,6 +104,11 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
                     }
                 break;
                 }
+								case kTIME:
+								case kTIMESTAMP:
+								case kDATE:
+									assert(false);
+									break;
                 default: {
                     return 0;
                     break;

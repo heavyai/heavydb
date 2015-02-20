@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <cstring>
 #include "../Catalog/Catalog.h"
+#include "../Shared/sqltypes.h"
 #include "Analyzer.h"
 
 namespace Analyzer {
@@ -559,6 +560,28 @@ namespace Analyzer {
 		type_info = new_type_info;
 	}
 
+	void
+	Constant::cast_from_string(const SQLTypeInfo &new_type_info)
+	{
+		std::string *s = constval.stringval;
+		SQLTypeInfo ti = new_type_info;
+		constval = StringToDatum(*s, ti);
+		delete s;
+		type_info = new_type_info;
+	}
+
+	void
+	Constant::cast_to_string(const SQLTypeInfo &str_type_info)
+	{
+		constval.stringval = new std::string();
+		*constval.stringval = DatumToString(constval, type_info);
+		if (str_type_info.type != kTEXT && constval.stringval->length() > str_type_info.dimension) {
+			// truncate the string
+			*constval.stringval = constval.stringval->substr(0, str_type_info.dimension);
+		}
+		type_info = str_type_info;
+	}
+
 	Expr *
 	Constant::add_cast(const SQLTypeInfo &new_type_info)
 	{
@@ -568,12 +591,15 @@ namespace Analyzer {
 		}
 		if (IS_NUMBER(new_type_info.type) && IS_NUMBER(type_info.type)) {
 			cast_number(new_type_info);
-			return this;
 		} else if (IS_STRING(new_type_info.type) && IS_STRING(type_info.type)) {
 			cast_string(new_type_info);
-			return this;
-		}
-		return Expr::add_cast(new_type_info);
+		} else if (IS_STRING(type_info.type)) {
+			cast_from_string(new_type_info);
+		} else if (IS_STRING(new_type_info.type)) {
+			cast_to_string(new_type_info);
+		} else
+			throw std::runtime_error("Invalid cast.");
+		return this;
 	}
 
 	Expr *
@@ -967,7 +993,7 @@ namespace Analyzer {
 				return val1.doubleval == val2.doubleval;
 			case kTIME:
 			case kTIMESTAMP:
-				assert(false); // not supported yet
+				return val1.timeval == val2.timeval;
 			default:
 				assert(false); 
 		}
@@ -1057,44 +1083,8 @@ namespace Analyzer {
 		std::cout << "(Const ";
 		if (is_null)
 			std::cout << "NULL) ";
-		else {
-			switch (type_info.type) {
-				case kBOOLEAN:
-					if (constval.boolval)
-						std::cout << "true) ";
-					else
-						std::cout << "false) ";
-					return;
-				case kCHAR:
-				case kVARCHAR:
-				case kTEXT:
-					std::cout << "'" << constval.stringval << "') ";
-					return;
-				case kNUMERIC:
-				case kDECIMAL:
-				case kBIGINT:
-					std::cout << constval.bigintval << ") ";
-					return;
-				case kINT:
-					std::cout << constval.intval << ") ";
-					return;
-				case kSMALLINT:
-					std::cout << constval.smallintval << ") ";
-					return;
-				case kFLOAT:
-					std::cout << constval.floatval << ") ";
-					return;
-				case kDOUBLE:
-					std::cout << constval.doubleval << ") ";
-					return;
-				case kTIME:
-				case kTIMESTAMP:
-					std::cout << "time) ";
-					return;
-				default:
-					std::cout << ") ";
-			}
-		}
+		else 
+			std::cout << DatumToString(constval, type_info) << ") ";
 	}
 
 	void

@@ -39,7 +39,7 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
   CHECK_EQ(agg_results_idx_.size(), agg_kinds_.size());
   CHECK_EQ(agg_results_idx_.size(), agg_types_.size());
   if (agg_kinds_[idx] == kAVG) {
-    CHECK_NE(kTEXT, agg_types_[idx]);
+    CHECK(!IS_STRING(agg_types_[idx]));
     CHECK_LT(idx, agg_results_.size() - 1);
     auto actual_idx = agg_results_idx_[idx];
     return IS_INTEGER(agg_types_[idx])
@@ -51,11 +51,11 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
           static_cast<double>(agg_results_[actual_idx + 1]));
   } else {
     CHECK_LT(idx, agg_results_.size());
-    CHECK(IS_NUMBER(agg_types_[idx]) || agg_types_[idx] == kTEXT);
+    CHECK(IS_NUMBER(agg_types_[idx]) || IS_STRING(agg_types_[idx]));
     auto actual_idx = agg_results_idx_[idx];
     if (IS_INTEGER(agg_types_[idx])) {
       return AggResult(agg_results_[actual_idx]);
-    } else if (agg_types_[idx] == kTEXT) {
+    } else if (IS_STRING(agg_types_[idx])) {
       CHECK(executor_);
       return translate_strings
         ? AggResult(executor_->getStringDictionary()->getString(agg_results_[actual_idx]))
@@ -253,11 +253,15 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       return std::make_shared<FixedWidthReal>(false);
     case kDOUBLE:
       return std::make_shared<FixedWidthReal>(true);
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return std::make_shared<FixedWidthInt>(sizeof(time_t));
     default:
       CHECK(false);
     }
   case kENCODING_DICT:
-    CHECK_EQ(kTEXT, type_info.type);
+    CHECK(IS_STRING(type_info.type));
     return std::make_shared<FixedWidthInt>(4);
   default:
     CHECK(false);
@@ -276,7 +280,13 @@ size_t get_bit_width(const SQLTypes type) {
       return 32;
     case kDOUBLE:
       return 64;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return sizeof(time_t)*8;
     case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
       return 32;
     default:
       CHECK(false);
@@ -379,6 +389,10 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
     const int32_t str_id = getStringDictionary()->get(*constant->get_constval().stringval);
     return llvm::ConstantInt::get(get_int_type(32, context_), str_id);
   }
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    return llvm::ConstantInt::get(get_int_type(sizeof(time_t)*8, context_), constant->get_constval().timeval);
   default:
     CHECK(false);
   }
@@ -498,9 +512,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
   const auto lhs_lv = codegen(lhs);
   const auto rhs_lv = codegen(rhs);
   CHECK((lhs_type.type == rhs_type.type) ||
-        (lhs_type.type == kVARCHAR && rhs_type.type == kTEXT) ||
-        (lhs_type.type == kTEXT && rhs_type.type == kVARCHAR));
-  if (IS_INTEGER(lhs_type.type) || lhs_type.type == kVARCHAR || lhs_type.type == kTEXT) {
+        IS_STRING(lhs_type.type) && IS_STRING(rhs_type.type));
+  if (IS_INTEGER(lhs_type.type) || IS_STRING(lhs_type.type)) {
     if (!IS_INTEGER(lhs_type.type)) {
       CHECK(optype == kEQ || optype == kNE);
     }
@@ -936,7 +949,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
           const auto agg_kind = row.agg_kinds_[agg_col_idx];
           const auto agg_type = row.agg_types_[agg_col_idx];
-          CHECK(IS_INTEGER(agg_type) || agg_type == kTEXT || agg_type == kFLOAT || agg_type == kDOUBLE);
+          CHECK(IS_INTEGER(agg_type) || IS_STRING(agg_type) || agg_type == kFLOAT || agg_type == kDOUBLE);
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
           switch (agg_kind) {
           case kSUM:
@@ -1024,7 +1037,7 @@ Executor::ResultRows Executor::groupBufferToResults(
         if (agg_type == kAVG) {
           CHECK(agg_expr->get_arg());
           result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
-          CHECK_NE(kTEXT, target_expr->get_type_info().type);
+          CHECK(!IS_STRING(target_expr->get_type_info().type));
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
@@ -1342,7 +1355,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           memory_level,
           fragment.deviceIds[static_cast<int>(memory_level)],
           chunk_meta_it->second.numBytes,
-					chunk_meta_it->second.numElements);
+          chunk_meta_it->second.numElements);
         auto ab = chunk.get_buffer();
         CHECK(ab->getMemoryPtr());
         auto it = global_to_local_col_ids_.find(col_id);
@@ -1413,7 +1426,7 @@ void Executor::executePlanWithoutGroupBy(
     if (agg_type == kAVG) {
       CHECK(agg_expr->get_arg());
       result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
-      CHECK_NE(kTEXT, target_expr->get_type_info().type);
+      CHECK(!IS_STRING(target_expr->get_type_info().type));
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
@@ -1429,7 +1442,7 @@ void Executor::executePlanWithoutGroupBy(
       out_vec_idx += 2;
     } else {
       result_row.agg_types_.push_back(target_expr->get_type_info().type);
-      CHECK_NE(kTEXT, target_expr->get_type_info().type);
+      CHECK(!IS_STRING(target_expr->get_type_info().type));
       result_row.agg_results_.push_back(reduce_results(
         agg_type,
         target_expr->get_type_info().type,
@@ -1507,7 +1520,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     const auto cd = get_column_descriptor(col_id, table_id, cat);
     const auto col_type = cd->columnType.type;
     const auto col_enc = cd->compression;
-    if (col_type == kTEXT) {
+    if (IS_STRING(col_type)) {
       switch (col_enc) {
       case kENCODING_NONE: {
         auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string> {}));
@@ -1523,7 +1536,6 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         CHECK(false);
       }
     } else {
-      CHECK(IS_INTEGER(col_type) || col_type == kFLOAT || col_type == kDOUBLE);
       auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
       CHECK(it_ok.second);
     }
@@ -1570,7 +1582,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
-    case kTEXT: {
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR: {
       switch (cd->compression) {
       case kENCODING_NONE:
         str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
@@ -1587,6 +1601,14 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       }
       break;
     }
+    case kTIME: 
+    case kTIMESTAMP:
+    case kDATE: {
+      auto col_data = reinterpret_cast<time_t*>(malloc(sizeof(time_t)));
+      *col_data = col_datum.timeval;
+      col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
+      break;
+    }
     default:
       CHECK(false);
     }
@@ -1594,8 +1616,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   }
   for (const auto kv : col_buffers) {
     insert_data.columnIds.push_back(kv.first);
-		DataBlockPtr p;
-		p.numbersPtr = kv.second;
+    DataBlockPtr p;
+    p.numbersPtr = kv.second;
     insert_data.data.push_back(p);
   }
   for (auto& kv : str_col_buffers){
@@ -1937,7 +1959,7 @@ void Executor::call_aggregators(
       auto group_key_ptr = ir_builder_.CreateGEP(group_keys_buffer,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
       const auto key_expr_type = group_by_col ? group_by_col->get_type_info().type : kBIGINT;
-      if (IS_INTEGER(key_expr_type) || key_expr_type == kTEXT) {
+      if (IS_INTEGER(key_expr_type) || IS_STRING(key_expr_type)) {
         CHECK(group_key->getType()->isIntegerTy());
         auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
         CHECK_LE(group_key_bitwidth, 64);

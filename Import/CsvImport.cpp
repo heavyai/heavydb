@@ -94,6 +94,11 @@ public:
         string_dict_buffer_ = new std::vector<int32_t>();
       }
       break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      time_buffer_ = new std::vector<time_t>();
+      break;
     default:
       CHECK(false);
     }
@@ -117,6 +122,11 @@ public:
         CHECK_EQ(kENCODING_DICT, encoding_);
         delete string_dict_buffer_;
       }
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      delete time_buffer_;
       break;
     default:
       CHECK(false);
@@ -143,6 +153,11 @@ public:
     string_buffer_->push_back(v);
   }
 
+  void addTime(const time_t v) {
+    CHECK(type_ == kTIME || type_ == kTIMESTAMP || type_ == kDATE);
+    time_buffer_->push_back(v);
+  }
+
   void addDictEncodedString(const std::string& v) {
     CHECK_EQ(kTEXT, type_);
     CHECK(string_dict_);
@@ -165,6 +180,10 @@ public:
       return reinterpret_cast<int8_t*>(&((*int_buffer_)[0]));
     case kBIGINT:
       return reinterpret_cast<int8_t*>(&((*bigint_buffer_)[0]));
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return reinterpret_cast<int8_t*>(&((*time_buffer_)[0]));
     default:
       CHECK(false);
     }
@@ -206,6 +225,13 @@ public:
       }
       break;
     }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE: {
+      std::vector<time_t> empty;
+      time_buffer_->swap(empty);
+      break;
+    }
     default:
       CHECK(false);
     }
@@ -215,6 +241,7 @@ private:
     std::vector<int16_t>* smallint_buffer_;
     std::vector<int32_t>* int_buffer_;
     std::vector<int64_t>* bigint_buffer_;
+    std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
     std::vector<int32_t>* string_dict_buffer_;
   };
@@ -339,6 +366,17 @@ void CsvImporter::import() {
       }
       break;
     }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      try {
+        SQLTypeInfo ti = col_desc->columnType;
+        Datum d = StringToDatum(std::string(row_fields[col_idx]), ti);
+        import_buffers[col_idx]->addTime(d.timeval);
+      } catch (std::exception &) {
+        import_buffers[col_idx]->addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+      }
+      break;
     default:
       CHECK(false);
     }

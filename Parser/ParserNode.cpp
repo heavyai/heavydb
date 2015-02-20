@@ -255,25 +255,11 @@ namespace Parser {
 	Analyzer::Expr *
 	FixedPtLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
 	{
-		assert(fixedptval->length() <= 20);
-		size_t dot = fixedptval->find_first_of('.', 0);
-		assert(dot != std::string::npos);
-		std::string before_dot = fixedptval->substr(0, dot);
-		std::string after_dot = fixedptval->substr(dot+1);
-		Datum d;
-		d.bigintval = std::stoll(before_dot);
-		int64_t fraction = std::stoll(after_dot);
 		SQLTypeInfo ti;
 		ti.type = kNUMERIC;
-		ti.scale = after_dot.length();
-		ti.dimension = before_dot.length() + ti.scale;
-		// the following loop can be made more efficient if needed
-		for (int i = 0; i < ti.scale; i++)
-			d.bigintval *= 10;
-		if (d.bigintval < 0)
-			d.bigintval -= fraction;
-		else
-			d.bigintval += fraction;
+		ti.dimension = 0; // to be filled in by StringToDatum()
+		ti.scale = 0;
+		Datum d = StringToDatum(*fixedptval, ti);
 		return new Analyzer::Constant(ti, false, d);
 	}
 
@@ -512,6 +498,7 @@ namespace Parser {
 	Analyzer::Expr *
 	CastExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const
 	{
+		target_type->check_type();
 		Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
 		SQLTypeInfo ti;
 		ti.type = target_type->get_type();

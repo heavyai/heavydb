@@ -36,6 +36,13 @@ struct ChunkMetadata {
                 chunkStats.max.bigintval = max;
                 break;
             }
+            case kTIME: 
+						case kTIMESTAMP:
+						case kDATE: {
+                chunkStats.min.timeval = min;
+                chunkStats.max.timeval = max;
+                break;
+            }
             case kFLOAT: {
                 chunkStats.min.floatval = min;
                 chunkStats.max.floatval = max;

@@ -147,6 +147,22 @@ random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems)
 		case kTEXT:
 			hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN);
 			break;
+		case kTIME:
+		case kTIMESTAMP:
+			if (cd->columnType.dimension == 0) {
+				if (sizeof(time_t) == 4)
+					hash = random_fill_int32(p.numbersPtr, num_elems);
+				else
+					hash = random_fill_int64(p.numbersPtr, num_elems);
+			} else
+				assert(false); // not supported yet
+			break;
+		case kDATE:
+			if (sizeof(time_t) == 4)
+				hash = random_fill_int32(p.numbersPtr, num_elems);
+			else
+				hash = random_fill_int64(p.numbersPtr, num_elems);
+			break;
 		default:
 			assert(false);
 	}

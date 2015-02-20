@@ -9,6 +9,7 @@
 #define SQLTYPES_H
 
 #include <cstdint>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,7 @@ typedef union {
 	int16_t smallintval;
 	int32_t intval;
 	int64_t bigintval;
+	std::time_t timeval;
 	float floatval;
 	double doubleval;
 	std::string *stringval; // string value
@@ -94,5 +96,10 @@ struct SQLTypeInfo {
 		notnull = rhs.notnull;
 	}
 };
+
+Datum
+StringToDatum(const std::string &s, SQLTypeInfo &ti);
+std::string
+DatumToString(Datum d, const SQLTypeInfo &ti);
 
 #endif // SQLTYPES_H

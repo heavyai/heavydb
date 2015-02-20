@@ -26,6 +26,7 @@ ADD_SUBDIRECTORY    (DataMgr)
 ADD_SUBDIRECTORY    (CudaMgr)
 ADD_SUBDIRECTORY    (Fragmenter)
 ADD_SUBDIRECTORY    (Chunk)
+ADD_SUBDIRECTORY    (Shared)
 ADD_SUBDIRECTORY    (Tests)
 
 set(mapd_source_files main.cpp)
@@ -52,6 +53,6 @@ target_link_libraries(csv_import CsvImport ${Boost_LIBRARIES})
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
-target_link_libraries (mapd_server Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
-target_link_libraries (initdb Catalog Fragmenter Chunk SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
+target_link_libraries (mapd Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (mapd_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
+target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )

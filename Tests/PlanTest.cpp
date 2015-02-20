@@ -100,7 +100,7 @@ namespace {
 }
 
 TEST(ParseAnalyzePlan, Create) {
-	ASSERT_NO_THROW(run_ddl("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) encoding fixed(8), e decimal(5,3) encoding sparse(16), f int encoding rl, g smallint, h real, i float, j double, k bigint encoding diff, l text not null encoding dict);"););
+	ASSERT_NO_THROW(run_ddl("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) encoding fixed(8), e decimal(5,3) encoding sparse(16), f int encoding rl, g smallint, h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m timestamp(0), n time(0), o date);"););
 	ASSERT_TRUE(gcat->getMetadataForTable("fat") != nullptr);
 	ASSERT_NO_THROW(run_ddl("create table if not exists skinny (a smallint, b int, c bigint);"););
 	ASSERT_TRUE(gcat->getMetadataForTable("skinny") != nullptr);
@@ -145,12 +145,14 @@ TEST(ParseAnalyzePlan, Select) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select cast(a+b as decimal(10,3)) as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by a, b order by x desc null first limit 10 offset 100000000;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by x, b having x > 10;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select distinct a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 group by x, b having x > 10;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fat where m < timestamp(0) '2015-02-18 13:15:55' and n >= time(0) '120000' and o <> date '05/06/2014';")); } );
 }
 
 TEST(ParseAnalyzePlan, Insert) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny values (12345, 100000000, 100000000000);")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny (b, c) values (22222, 33333333333333333);")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny select 2*a, 2*b, 2*c from skinny;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into fat (m, n, o) values ('2014-12-13T222315', '15:13:14', '1999-09-09');")); } );
 }
 
 TEST(ParseAnalyzePlan, Views) {

@@ -61,8 +61,6 @@ struct ColumnDescriptor {
 				case kBIGINT:
 				case kNUMERIC:
 				case kDECIMAL:
-				case kTIME:
-				case kTIMESTAMP:
 					switch (compression) {
 						case kENCODING_NONE:
 							return sizeof(int64_t);
@@ -93,6 +91,23 @@ struct ColumnDescriptor {
 					switch (compression) {
 						case kENCODING_NONE:
 							return sizeof(double);
+						case kENCODING_FIXED:
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_DICT:
+						case kENCODING_SPARSE:
+							assert(false);
+						break;
+					}
+					break;
+				case kTIME:
+				case kTIMESTAMP:
+					if (columnType.dimension > 0)
+						assert(false); // not supported yet
+				case kDATE:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(time_t);
 						case kENCODING_FIXED:
 						case kENCODING_RL:
 						case kENCODING_DIFF:

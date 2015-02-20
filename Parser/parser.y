@@ -809,6 +809,8 @@ literal:
 	|	FIXEDNUM { $<nodeval>$ = new FixedPtLiteral($<stringval>1); }
 	| FLOAT { $<nodeval>$ = new FloatLiteral($<floatval>1); }
 	| DOUBLE { $<nodeval>$ = new DoubleLiteral($<doubleval>1); }
+	| data_type STRING
+	{ $<nodeval>$ = new CastExpr(new StringLiteral($<stringval>2), dynamic_cast<SQLType*>($<nodeval>1)); }
 	;
 
 	/* miscellaneous */

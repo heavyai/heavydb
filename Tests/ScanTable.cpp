@@ -65,6 +65,22 @@ scan_chunk(const Chunk &chunk, size_t &hash)
 				// cout << "read string: " << string((char*)vd.pointer, vd.length) << endl;
 				boost::hash_combine(hash, string_hash(string((char*)vd.pointer, vd.length)));
 				break;
+			case kTIME:
+			case kTIMESTAMP:
+				if (cd->columnType.dimension == 0) {
+					if (sizeof(time_t) == 4)
+						boost::hash_combine(hash, *(int32_t*)vd.pointer);
+					else
+						boost::hash_combine(hash, *(int64_t*)vd.pointer);
+				} else
+					assert(false); // not supported yet
+				break;
+			case kDATE:
+				if (sizeof(time_t) == 4)
+					boost::hash_combine(hash, *(int32_t*)vd.pointer);
+				else
+					boost::hash_combine(hash, *(int64_t*)vd.pointer);
+				break;
 			default:
 				assert(false);
 		}

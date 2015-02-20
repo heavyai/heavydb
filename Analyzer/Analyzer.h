@@ -186,6 +186,8 @@ namespace Analyzer {
 			Datum constval; // the constant value
 			void cast_number(const SQLTypeInfo &new_type_info);
 			void cast_string(const SQLTypeInfo &new_type_info);
+			void cast_from_string(const SQLTypeInfo &new_type_info);
+			void cast_to_string(const SQLTypeInfo &new_type_info);
 	};
 
 	/*
