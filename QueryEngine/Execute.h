@@ -104,6 +104,8 @@ public:
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
   typedef std::vector<ResultRow> ResultRows;
+  typedef boost::variant<int16_t, int32_t, int64_t, float, double, std::string> LiteralValue;
+  typedef std::vector<Executor::LiteralValue> LiteralValues;
 
   std::vector<ResultRow> execute(
     const Planner::RootPlan* root_plan,
@@ -148,6 +150,7 @@ private:
     const Catalog_Namespace::Catalog&);
   void executePlanWithGroupBy(
     void* query_native_code,
+    const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
@@ -158,6 +161,7 @@ private:
     const int32_t db_id);
   void executePlanWithoutGroupBy(
     void* query_native_code,
+    const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
@@ -172,7 +176,8 @@ private:
     const std::list<Analyzer::Expr*>& target_exprs,
     const int32_t db_id);
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
-  void* compilePlan(
+
+  std::pair<void*, LiteralValues> compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
@@ -180,7 +185,9 @@ private:
     const std::list<Analyzer::Expr*>& quals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const size_t groups_buffer_entry_count);
+    const size_t groups_buffer_entry_count,
+    const bool hoist_literals);
+
   void nukeOldState();
   void* optimizeAndCodegenCPU(llvm::Function*,
                               const ExecutorOptLevel,

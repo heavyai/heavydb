@@ -245,22 +245,20 @@ main(int argc, char* argv[])
 					if (execute) {
 						std::vector<ResultRow> results;
 						std::vector<ResultRow> results_cpu;
-						std::unique_ptr<Executor> executor_cpu(new Executor(plan->get_catalog().get_currentDB().dbId));
+						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId);
 						{
 							auto ms = measure<>::execution([&]() {
-								results_cpu = executor_cpu->execute(plan, ExecutorDeviceType::CPU);
+								results_cpu = executor->execute(plan, ExecutorDeviceType::CPU);
 							});
 							if (timer) {
 								cout << "Query took " << ms << " ms to execute." << endl;
 							}
 						}
-						std::unique_ptr<Executor> executor_gpu;
 						if (cat.get_dataMgr().gpusPresent() && plan->get_stmt_type() == kSELECT) {
 							std::vector<ResultRow> results_gpu;
 							{
-								executor_gpu.reset(new Executor(plan->get_catalog().get_currentDB().dbId));
 								auto ms = measure<>::execution([&]() {
-									results_gpu = executor_gpu->execute(plan, ExecutorDeviceType::GPU);
+									results_gpu = executor->execute(plan, ExecutorDeviceType::GPU);
 								});
 								if (timer) {
 									cout << "Query took " << ms << " ms to execute." << endl;
