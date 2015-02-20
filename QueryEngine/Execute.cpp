@@ -69,17 +69,20 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
 }
 
 Executor::Executor(const int db_id)
-  : db_id_(db_id)
-  , context_(llvm::getGlobalContext())
-  , module_(nullptr)
-  , ir_builder_(context_)
-  , execution_engine_(nullptr)
-  , row_func_(nullptr)
-  , query_id_(0) {}
+  : cgen_state_(new CgenState())
+  , plan_state_(new PlanState)
+  , is_nested_(false)
+  , db_id_(db_id) {}
 
-Executor::~Executor() {
-  // looks like ExecutionEngine owns everything (IR, native code etc.)
-  delete execution_engine_;
+std::shared_ptr<Executor> Executor::getExecutor(const int db_id) {
+  auto it = executors_.find(db_id);
+  if (it != executors_.end()) {
+    return it->second;
+  }
+  auto executor = std::make_shared<Executor>(db_id);
+  auto it_ok = executors_.insert(std::make_pair(db_id, executor));
+  CHECK(it_ok.second);
+  return executor;
 }
 
 namespace {
@@ -93,7 +96,7 @@ const ColumnDescriptor* get_column_descriptor(
   return col_desc;
 }
 
-}
+}  // namespace
 
 std::vector<ResultRow> Executor::executeSelectPlan(
     const Planner::Plan* plan,
@@ -147,10 +150,10 @@ StringDictionary* Executor::getStringDictionary() const {
   return str_dict_.get();
 }
 
-llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
+llvm::Value* Executor::codegen(const Analyzer::Expr* expr) {
   if (!expr) {
     llvm::Value* pos_arg { nullptr };
-    auto& in_arg_list = row_func_->getArgumentList();
+    auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
     for (auto& arg : in_arg_list) {
       if (arg.getType()->isIntegerTy()) {
         pos_arg = &arg;
@@ -184,7 +187,7 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr) const {
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper) const {
+llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper) {
   const auto optype = bin_oper->get_optype();
   if (IS_ARITHMETIC(optype)) {
     return codegenArith(bin_oper);
@@ -198,7 +201,7 @@ llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper) const {
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper) const {
+llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper) {
   const auto optype = u_oper->get_optype();
   switch (optype) {
   case kNOT:
@@ -300,11 +303,11 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 
 }  // namespace
 
-llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
+llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) {
   // only generate the decoding code once; if a column has been previously
   // fetch in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
-  if (col_var->get_rte_idx() >= 0 && query_id_ == 0) {
+  if (col_var->get_rte_idx() >= 0 && !is_nested_) {
     CHECK_GT(col_id, 0);
   } else {
     CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
@@ -313,16 +316,16 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
     col_id = var->get_varno();
     CHECK_GE(col_id, 1);
     if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
-      CHECK_LE(col_id, group_by_expr_cache_.size());
-      return group_by_expr_cache_[col_id - 1];
+      CHECK_LE(col_id, cgen_state_->group_by_expr_cache_.size());
+      return cgen_state_->group_by_expr_cache_[col_id - 1];
     }
   }
   const int local_col_id = getLocalColumnId(col_id);
-  auto it = fetch_cache_.find(local_col_id);
-  if (it != fetch_cache_.end()) {
+  auto it = cgen_state_->fetch_cache_.find(local_col_id);
+  if (it != cgen_state_->fetch_cache_.end()) {
     return it->second;
   }
-  auto& in_arg_list = row_func_->getArgumentList();
+  auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
   CHECK_GE(in_arg_list.size(), 3);
   size_t arg_idx = 0;
   size_t pos_idx = 0;
@@ -336,19 +339,19 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
       auto dec_val = decoder->codegenDecode(
         &arg,
         pos_arg,
-        module_);
-      ir_builder_.Insert(dec_val);
+        cgen_state_->module_);
+      cgen_state_->ir_builder_.Insert(dec_val);
       auto dec_type = dec_val->getType();
       llvm::Value* dec_val_cast { nullptr };
       if (dec_type->isIntegerTy()) {
         auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
         auto col_width = get_col_bit_width(col_var);
-        dec_val_cast = ir_builder_.CreateCast(
+        dec_val_cast = cgen_state_->ir_builder_.CreateCast(
           static_cast<size_t>(col_width) > dec_width
             ? llvm::Instruction::CastOps::SExt
             : llvm::Instruction::CastOps::Trunc,
           dec_val,
-          get_int_type(col_width, context_));
+          get_int_type(col_width, cgen_state_->context_));
       } else {
         CHECK(dec_type->isFloatTy() || dec_type->isDoubleTy());
         if (dec_type->isDoubleTy()) {
@@ -359,7 +362,7 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
         dec_val_cast = dec_val;
       }
       CHECK(dec_val_cast);
-      auto it_ok = fetch_cache_.insert(std::make_pair(
+      auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
         local_col_id,
         dec_val_cast));
       CHECK(it_ok.second);
@@ -370,36 +373,38 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var) const {
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::Constant* constant) const {
+llvm::Value* Executor::codegen(const Analyzer::Constant* constant) {
   const auto& type_info = constant->get_type_info();
   switch (type_info.type) {
   case kBOOLEAN:
-    return llvm::ConstantInt::get(get_int_type(1, context_), constant->get_constval().boolval);
+    return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval);
   case kSMALLINT:
-    return llvm::ConstantInt::get(get_int_type(16, context_), constant->get_constval().smallintval);
+    return llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_), constant->get_constval().smallintval);
   case kINT:
-    return llvm::ConstantInt::get(get_int_type(32, context_), constant->get_constval().intval);
+    return llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), constant->get_constval().intval);
   case kBIGINT:
-    return llvm::ConstantInt::get(get_int_type(64, context_), constant->get_constval().bigintval);
+    return llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), constant->get_constval().bigintval);
   case kFLOAT:
-    return llvm::ConstantFP::get(llvm::Type::getFloatTy(context_), constant->get_constval().floatval);
+    return llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), constant->get_constval().floatval);
   case kDOUBLE:
-    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(context_), constant->get_constval().doubleval);
+    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), constant->get_constval().doubleval);
   case kVARCHAR: {
     const int32_t str_id = getStringDictionary()->get(*constant->get_constval().stringval);
-    return llvm::ConstantInt::get(get_int_type(32, context_), str_id);
+    return llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), str_id);
   }
   case kTIME:
   case kTIMESTAMP:
   case kDATE:
-    return llvm::ConstantInt::get(get_int_type(sizeof(time_t)*8, context_), constant->get_constval().timeval);
+    return llvm::ConstantInt::get(
+      get_int_type(sizeof(time_t)*8, cgen_state_->context_),
+      constant->get_constval().timeval);
   default:
     CHECK(false);
   }
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) const {
+llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) {
   // Generate a "projection" function which takes the case conditions and
   // values as arguments, interleaved. The 'else' expression is the last one.
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
@@ -408,10 +413,10 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) const {
   std::vector<llvm::Type*> case_arg_types;
   const auto case_type = case_expr->get_type_info().type;
   CHECK(IS_INTEGER(case_type));
-  const auto case_llvm_type = get_int_type(get_bit_width(case_type), context_);
+  const auto case_llvm_type = get_int_type(get_bit_width(case_type), cgen_state_->context_);
   for (const auto& expr_pair : expr_pair_list) {
     CHECK_EQ(expr_pair.first->get_type_info().type, kBOOLEAN);
-    case_arg_types.push_back(llvm::Type::getInt1Ty(context_));
+    case_arg_types.push_back(llvm::Type::getInt1Ty(cgen_state_->context_));
     CHECK_EQ(expr_pair.second->get_type_info().type, case_type);
     case_arg_types.push_back(case_llvm_type);
   }
@@ -421,8 +426,8 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) const {
     case_llvm_type,
     case_arg_types,
     false);
-  auto case_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "case_func", module_);
-  const auto end_case = llvm::BasicBlock::Create(context_, "end_case", case_func);
+  auto case_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "case_func", cgen_state_->module_);
+  const auto end_case = llvm::BasicBlock::Create(cgen_state_->context_, "end_case", case_func);
   size_t expr_idx = 0;
   auto& case_branch_exprs = case_func->getArgumentList();
   auto arg_it = case_branch_exprs.begin();
@@ -434,10 +439,10 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) const {
     llvm::Value* cond_lv = arg_it++;
     CHECK(arg_it != case_branch_exprs.end());
     llvm::Value* ret_lv = arg_it++;
-    auto ret_case = llvm::BasicBlock::Create(context_, "ret_case", case_func, next_cmp_branch);
+    auto ret_case = llvm::BasicBlock::Create(cgen_state_->context_, "ret_case", case_func, next_cmp_branch);
     case_func_builder.SetInsertPoint(ret_case);
     case_func_builder.CreateRet(ret_lv);
-    auto cmp_case = llvm::BasicBlock::Create(context_, "cmp_case", case_func, ret_case);
+    auto cmp_case = llvm::BasicBlock::Create(cgen_state_->context_, "cmp_case", case_func, ret_case);
     case_func_builder.SetInsertPoint(cmp_case);
     case_func_builder.CreateCondBr(cond_lv, ret_case, next_cmp_branch);
     next_cmp_branch = cmp_case;
@@ -457,7 +462,7 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr) const {
     case_func_args.push_back(codegen(expr_pair.second));
   }
   case_func_args.push_back(codegen(else_expr));
-  return ir_builder_.CreateCall(case_func, case_func_args);
+  return cgen_state_->ir_builder_.CreateCall(case_func, case_func_args);
 }
 
 namespace {
@@ -502,7 +507,7 @@ llvm::CmpInst::Predicate llvm_fcmp_pred(const SQLOps op_type) {
 
 }  // namespace
 
-llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
+llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_COMPARISON(optype));
   const auto lhs = bin_oper->get_left_operand();
@@ -512,20 +517,20 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper) const {
   const auto lhs_lv = codegen(lhs);
   const auto rhs_lv = codegen(rhs);
   CHECK((lhs_type.type == rhs_type.type) ||
-        IS_STRING(lhs_type.type) && IS_STRING(rhs_type.type));
+        (IS_STRING(lhs_type.type) && IS_STRING(rhs_type.type)));
   if (IS_INTEGER(lhs_type.type) || IS_STRING(lhs_type.type)) {
     if (!IS_INTEGER(lhs_type.type)) {
       CHECK(optype == kEQ || optype == kNE);
     }
-    return ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
+    return cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
   }
   if (lhs_type.type == kFLOAT || lhs_type.type == kDOUBLE) {
-    return ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lv, rhs_lv);
+    return cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lv, rhs_lv);
   }
   CHECK(false);
 }
 
-llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper) const {
+llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_LOGIC(optype));
   const auto lhs = bin_oper->get_left_operand();
@@ -534,15 +539,15 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper) const {
   const auto rhs_lv = codegen(rhs);
   switch (optype) {
   case kAND:
-    return ir_builder_.CreateAnd(lhs_lv, rhs_lv);
+    return cgen_state_->ir_builder_.CreateAnd(lhs_lv, rhs_lv);
   case kOR:
-    return ir_builder_.CreateOr(lhs_lv, rhs_lv);
+    return cgen_state_->ir_builder_.CreateOr(lhs_lv, rhs_lv);
   default:
     CHECK(false);
   }
 }
 
-llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) const {
+llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) {
   CHECK_EQ(uoper->get_optype(), kCAST);
   const auto& ti = uoper->get_type_info();
   const auto operand_lv = codegen(uoper->get_operand());
@@ -551,51 +556,53 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper) const {
     if (IS_INTEGER(ti.type)) {
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
       const auto target_width = get_bit_width(ti.type);
-      return ir_builder_.CreateCast(target_width > operand_width
+      return cgen_state_->ir_builder_.CreateCast(target_width > operand_width
             ? llvm::Instruction::CastOps::SExt
             : llvm::Instruction::CastOps::Trunc,
           operand_lv,
-          get_int_type(target_width, context_));
+          get_int_type(target_width, cgen_state_->context_));
     } else {
       CHECK(ti.type == kFLOAT || ti.type == kDOUBLE);
-      return ir_builder_.CreateSIToFP(operand_lv,
-        ti.type == kFLOAT ? llvm::Type::getFloatTy(context_) : llvm::Type::getDoubleTy(context_));
+      return cgen_state_->ir_builder_.CreateSIToFP(operand_lv, ti.type == kFLOAT
+        ? llvm::Type::getFloatTy(cgen_state_->context_)
+        : llvm::Type::getDoubleTy(cgen_state_->context_));
     }
   } else {
     CHECK_EQ(uoper->get_operand()->get_type_info().type, kFLOAT);
     CHECK(operand_lv->getType()->isFloatTy());
     CHECK_EQ(ti.type, kDOUBLE);
-    return ir_builder_.CreateFPExt(operand_lv, llvm::Type::getDoubleTy(context_));
+    return cgen_state_->ir_builder_.CreateFPExt(
+      operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
   }
 }
 
-llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper) const {
+llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper) {
   CHECK_EQ(uoper->get_optype(), kUMINUS);
   const auto operand_lv = codegen(uoper->get_operand());
   CHECK(operand_lv->getType()->isIntegerTy());
-  return ir_builder_.CreateNeg(operand_lv);
+  return cgen_state_->ir_builder_.CreateNeg(operand_lv);
 }
 
-llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper) const {
+llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper) {
   const auto optype = uoper->get_optype();
   CHECK(optype == kNOT || optype == kUMINUS || optype == kISNULL);
   const auto operand = uoper->get_operand();
   const auto operand_lv = codegen(operand);
   switch (optype) {
   case kNOT:
-    return ir_builder_.CreateNot(operand_lv);
+    return cgen_state_->ir_builder_.CreateNot(operand_lv);
   default:
     CHECK(false);
   }
 }
 
-llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper) const {
+llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper) {
   // TODO(alex): we don't have null support at the storage level yet,
   //             which means a value is never null
-  return llvm::ConstantInt::get(get_int_type(1, context_), 0);
+  return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
 }
 
-llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
+llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_ARITHMETIC(optype));
   const auto lhs = bin_oper->get_left_operand();
@@ -608,13 +615,13 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
   if (IS_INTEGER(lhs_type.type)) {
     switch (optype) {
     case kMINUS:
-      return ir_builder_.CreateSub(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv);
     case kPLUS:
-      return ir_builder_.CreateAdd(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv);
     case kMULTIPLY:
-      return ir_builder_.CreateMul(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
     case kDIVIDE:
-      return ir_builder_.CreateSDiv(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv);
     default:
       CHECK(false);
     }
@@ -622,13 +629,13 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper) const {
   if (lhs_type.type) {
     switch (optype) {
     case kMINUS:
-      return ir_builder_.CreateFSub(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateFSub(lhs_lv, rhs_lv);
     case kPLUS:
-      return ir_builder_.CreateFAdd(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateFAdd(lhs_lv, rhs_lv);
     case kMULTIPLY:
-      return ir_builder_.CreateFMul(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv);
     case kDIVIDE:
-      return ir_builder_.CreateFDiv(lhs_lv, rhs_lv);
+      return cgen_state_->ir_builder_.CreateFDiv(lhs_lv, rhs_lv);
     default:
       CHECK(false);
     }
@@ -693,6 +700,7 @@ void copy_from_gpu(
 // TODO(alex): wip, refactor
 std::vector<int64_t*> launch_query_gpu_code(
     CUfunction kernel,
+    const Executor::LiteralValues& hoisted_literals,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -798,6 +806,7 @@ std::vector<int64_t*> launch_query_gpu_code(
 
 std::vector<int64_t*> launch_query_cpu_code(
     void* fn_ptr,
+    const Executor::LiteralValues& hoisted_literals,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -1186,7 +1195,7 @@ Executor::ResultRows results_union(const std::vector<Executor::ResultRows>& resu
   return all_results;
 }
 
-}
+}  // namespace
 
 std::vector<ResultRow> Executor::executeResultPlan(
     const Planner::Result* result_plan,
@@ -1216,11 +1225,11 @@ std::vector<ResultRow> Executor::executeResultPlan(
   ColumnarResults result_columns(result_rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
   llvm::Function* row_func;
-  // Nested query, increment the query id
-  ++query_id_;
-  auto query_func = query_group_by_template(module_, 1, query_id_);
+  // Nested query, let the compiler know
+  is_nested_ = true;
+  auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_);
   std::tie(row_func, col_heads) = create_row_function(
-    in_col_count, in_agg_count, query_func, module_, context_);
+    in_col_count, in_agg_count, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
   std::list<Analyzer::Expr*> target_exprs;
   for (auto target_entry : targets) {
@@ -1230,17 +1239,17 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
-  compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
+  auto query_code_and_literals = compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(),
-    ExecutorDeviceType::CPU, opt_level, groups_buffer_entry_count_);
+    ExecutorDeviceType::CPU, opt_level, groups_buffer_entry_count_, true);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   const size_t groups_buffer_size { (target_exprs.size() + 1) * groups_buffer_entry_count_ * sizeof(int64_t) };
   auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
   init_groups(group_by_buffer, groups_buffer_entry_count_, target_exprs.size(), &init_agg_vals[0], 1);
   std::vector<int64_t*> group_by_buffers { group_by_buffer };
-  launch_query_cpu_code(query_cpu_code_, column_buffers, result_columns.size(),
-    init_agg_vals, group_by_buffers);
+  launch_query_cpu_code(query_code_and_literals.first, query_code_and_literals.second,
+    column_buffers, result_columns.size(), init_agg_vals, group_by_buffers);
   return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs,
     cat.get_currentDB().dbId);
 }
@@ -1318,8 +1327,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     }
   }
   std::list<Analyzer::Expr*> groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<Analyzer::Expr*> { nullptr };
-  compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(), scan_plan->get_simple_quals(),
-    scan_plan->get_quals(), device_type, opt_level, groups_buffer_entry_count_);
+  auto query_code_and_literals = compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(),
+    scan_plan->get_simple_quals(), scan_plan->get_quals(), device_type, opt_level,
+    groups_buffer_entry_count_, true);
   const int table_id = scan_plan->get_table_id();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto fragmenter = table_descriptor->fragmenter;
@@ -1336,10 +1346,10 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   // Play it POSIX.1 safe instead.
   const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
   for (size_t i = 0; i < fragments.size(); ++i) {
-    auto dispatch = [this, plan, current_dbid, device_type, i, table_id,
+    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, query_code_and_literals,
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
       const auto& fragment = fragments[i];
-      std::vector<const int8_t*> col_buffers(global_to_local_col_ids_.size());
+      std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
       ResultRows device_results;
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       for (const int col_id : col_global_ids) {
@@ -1358,17 +1368,19 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           chunk_meta_it->second.numElements);
         auto ab = chunk.get_buffer();
         CHECK(ab->getMemoryPtr());
-        auto it = global_to_local_col_ids_.find(col_id);
-        CHECK(it != global_to_local_col_ids_.end());
-        CHECK_LT(it->second, global_to_local_col_ids_.size());
+        auto it = plan_state_->global_to_local_col_ids_.find(col_id);
+        CHECK(it != plan_state_->global_to_local_col_ids_.end());
+        CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
         col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
       }
       // TODO(alex): multiple devices support
       if (groupby_exprs.empty()) {
-        executePlanWithoutGroupBy(device_results, get_agg_target_exprs(plan),
+        executePlanWithoutGroupBy(query_code_and_literals.first, query_code_and_literals.second,
+          device_results, get_agg_target_exprs(plan),
           device_type, col_buffers, num_rows, &cat.get_dataMgr());
       } else {
-        executePlanWithGroupBy(device_results, get_agg_target_exprs(plan),
+        executePlanWithGroupBy(query_code_and_literals.first, query_code_and_literals.second,
+          device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), device_type, col_buffers, num_rows,
           &cat.get_dataMgr(), cat.get_currentDB().dbId);
       }
@@ -1400,6 +1412,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
 }
 
 void Executor::executePlanWithoutGroupBy(
+    void* query_native_code,
+    const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
@@ -1409,11 +1423,11 @@ void Executor::executePlanWithoutGroupBy(
   std::vector<int64_t*> out_vec;
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
-      query_cpu_code_, col_buffers, num_rows, init_agg_vals_, {});
+      query_native_code, hoisted_literals, col_buffers, num_rows, plan_state_->init_agg_vals_, {});
   } else {
     out_vec = launch_query_gpu_code(
-      query_gpu_code_, col_buffers, num_rows, init_agg_vals_, {},
-        0, data_mgr, block_size_x_, grid_size_x_);
+      static_cast<CUfunction>(query_native_code), hoisted_literals, col_buffers, num_rows,
+        plan_state_->init_agg_vals_, {}, 0, data_mgr, block_size_x_, grid_size_x_);
   }
   size_t out_vec_idx = 0;
   ResultRow result_row(this);
@@ -1458,6 +1472,8 @@ void Executor::executePlanWithoutGroupBy(
 }
 
 void Executor::executePlanWithGroupBy(
+    void* query_native_code,
+    const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
@@ -1466,7 +1482,7 @@ void Executor::executePlanWithGroupBy(
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int32_t db_id) {
-  const size_t agg_col_count = init_agg_vals_.size();
+  const size_t agg_col_count = plan_state_->init_agg_vals_.size();
   CHECK_GT(group_by_col_count, 0);
   const size_t groups_buffer_size { (group_by_col_count + agg_col_count) * groups_buffer_entry_count_ * sizeof(int64_t) };
   // TODO(alex):
@@ -1477,18 +1493,21 @@ void Executor::executePlanWithGroupBy(
   const size_t num_buffers { device_type == ExecutorDeviceType::CPU ? 1 : block_size_x_ * grid_size_x_ };
   for (size_t i = 0; i < num_buffers; ++i) {
     auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
-    init_groups(group_by_buffer, groups_buffer_entry_count_, group_by_col_count, &init_agg_vals_[0], agg_col_count);
+    init_groups(group_by_buffer, groups_buffer_entry_count_, group_by_col_count,
+      &plan_state_->init_agg_vals_[0], agg_col_count);
     group_by_buffers.push_back(group_by_buffer);
   }
   // TODO(alex): get rid of std::list everywhere
   std::list<Analyzer::Expr*> target_exprs_list;
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
   if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(query_cpu_code_, col_buffers, num_rows, init_agg_vals_, group_by_buffers);
+    launch_query_cpu_code(query_native_code, hoisted_literals, col_buffers,
+      num_rows, plan_state_->init_agg_vals_, group_by_buffers);
     results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count,
       target_exprs_list, db_id);
   } else {
-    launch_query_gpu_code(query_gpu_code_, col_buffers, num_rows, init_agg_vals_, group_by_buffers,
+    launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoisted_literals, col_buffers,
+      num_rows, plan_state_->init_agg_vals_, group_by_buffers,
       groups_buffer_size, data_mgr, block_size_x_, grid_size_x_);
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
@@ -1709,33 +1728,11 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 }  // namespace
 
 void Executor::nukeOldState() {
-  {
-    decltype(fetch_cache_) empty;
-    fetch_cache_.swap(empty);
-  }
-  {
-    decltype(local_to_global_col_ids_) empty;
-    local_to_global_col_ids_.swap(empty);
-  }
-  {
-    decltype(global_to_local_col_ids_) empty;
-    global_to_local_col_ids_.swap(empty);
-  }
-  {
-    decltype(init_agg_vals_) empty;
-    init_agg_vals_.swap(empty);
-  }
-  {
-    decltype(group_by_expr_cache_) empty;
-    group_by_expr_cache_.swap(empty);
-  }
-  {
-    decltype(expr_cache_) empty;
-    expr_cache_.swap(empty);
-  }
+  cgen_state_.reset(new CgenState());
+  plan_state_.reset(new PlanState());
 }
 
-void Executor::compilePlan(
+std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
@@ -1743,54 +1740,57 @@ void Executor::compilePlan(
     const std::list<Analyzer::Expr*>& quals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const size_t groups_buffer_entry_count) {
-  // nuke the old state
-  // TODO(alex): separate the compiler from the executor instead
+    const size_t groups_buffer_entry_count,
+    const bool hoist_literals) {
   nukeOldState();
+
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
-  module_ = create_runtime_module(context_);
+  cgen_state_->module_ = create_runtime_module(cgen_state_->context_);
   const bool is_group_by = !groupby_list.empty();
   auto query_func = is_group_by
-    ? query_group_by_template(module_, 1, query_id_)
-    : query_template(module_, agg_infos.size(), query_id_);
-  bind_pos_placeholders("pos_start", query_func, module_);
-  bind_pos_placeholders("pos_step", query_func, module_);
+    ? query_group_by_template(cgen_state_->module_, 1, is_nested_)
+    : query_template(cgen_state_->module_, agg_infos.size(), is_nested_);
+  bind_pos_placeholders("pos_start", query_func, cgen_state_->module_);
+  bind_pos_placeholders("pos_step", query_func, cgen_state_->module_);
 
   std::vector<llvm::Value*> col_heads;
-  std::tie(row_func_, col_heads) = create_row_function(
-    scan_cols.size(), is_group_by ? 1 : agg_infos.size(), query_func, module_, context_);
-  CHECK(row_func_);
+  std::tie(cgen_state_->row_func_, col_heads) = create_row_function(
+    scan_cols.size(), is_group_by ? 1 : agg_infos.size(), query_func,
+    cgen_state_->module_, cgen_state_->context_);
+  CHECK(cgen_state_->row_func_);
 
   // Need to de-activate in-lining for group by queries on GPU until it's properly ported
   if (device_type != ExecutorDeviceType::GPU || !is_group_by) {
     // make sure it's in-lined, we don't want register spills in the inner loop
-    row_func_->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
+    cgen_state_->row_func_->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
   }
 
-  auto bb = llvm::BasicBlock::Create(context_, "entry", row_func_);
-  ir_builder_.SetInsertPoint(bb);
+  auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
+  cgen_state_->ir_builder_.SetInsertPoint(bb);
 
   // generate the code for the filter
   allocateLocalColumnIds(scan_cols);
 
-  llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(context_), true);
+  Executor::LiteralValues hoisted_literals;
+
+  llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
-    filter_lv = ir_builder_.CreateAnd(filter_lv, codegen(expr));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr));
   }
   for (auto expr : quals) {
-    filter_lv = ir_builder_.CreateAnd(filter_lv, codegen(expr));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr));
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   {
     for (const auto& agg_info : agg_infos) {
-      init_agg_vals_.push_back(std::get<2>(agg_info));
+      plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
     }
     call_aggregators(agg_infos, filter_lv,
         groupby_list,
-        groups_buffer_entry_count, module_);
+        groups_buffer_entry_count, cgen_state_->module_);
   }
 
   // iterate through all the instruction in the query template function and
@@ -1800,23 +1800,22 @@ void Executor::compilePlan(
       continue;
     }
     auto& filter_call = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", query_id_)) {
+    if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
       std::vector<llvm::Value*> args;
       for (size_t i = 0; i < filter_call.getNumArgOperands(); ++i) {
         args.push_back(filter_call.getArgOperand(i));
       }
       args.insert(args.end(), col_heads.begin(), col_heads.end());
-      llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(row_func_, args, ""));
+      llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
       break;
     }
   }
 
-  if (device_type == ExecutorDeviceType::CPU) {
-    query_cpu_code_ = optimizeAndCodegenCPU(query_func, opt_level, module_);
-  } else {
-    query_gpu_code_ = optimizeAndCodegenGPU(query_func, opt_level, module_, is_group_by);
-  }
-  CHECK(query_cpu_code_);
+  is_nested_ = false;
+
+  return (device_type == ExecutorDeviceType::CPU)
+    ? std::make_pair(optimizeAndCodegenCPU(query_func, opt_level, cgen_state_->module_), hoisted_literals)
+    : std::make_pair(optimizeAndCodegenGPU(query_func, opt_level, cgen_state_->module_, is_group_by), hoisted_literals);
 }
 
 namespace {
@@ -1839,9 +1838,44 @@ void optimizeIR(llvm::Function* query_func, llvm::Module* module, const Executor
   query_func->setAttributes(no_attributes);
 }
 
+template<class T>
+std::string serialize_llvm_object(const T* llvm_obj) {
+  std::stringstream ss;
+  llvm::raw_os_ostream os(ss);
+  llvm_obj->print(os);
+  return ss.str();
+}
+
+}  // namespace
+
+void* Executor::getCodeFromCache(
+    const CodeCacheKey& key,
+    const std::map<CodeCacheKey, CodeCacheVal>& cache) {
+  auto it = cache.find(key);
+  if (it != cache.end()) {
+    return it->second.first;
+  }
+  return nullptr;
+}
+
+void Executor::addCodeToCache(const CodeCacheKey& key,
+                              void* native_code,
+                              std::map<CodeCacheKey, CodeCacheVal>& cache,
+                              llvm::ExecutionEngine* execution_engine) {
+  CHECK(native_code);
+  auto it_ok = cache.insert(std::make_pair(key, std::make_pair(native_code, std::unique_ptr<llvm::ExecutionEngine>(execution_engine))));
+  CHECK(it_ok.second);
 }
 
 void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
+  const CodeCacheKey key { serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_) };
+  auto cached_code = getCodeFromCache(key, cpu_code_cache_);
+  if (cached_code) {
+    return cached_code;
+  }
+  // run optimizations
+  optimizeIR(query_func, module, opt_level);
+
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
   llvm::InitializeAllTargetMCs();
@@ -1856,19 +1890,20 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const Executor
   llvm::TargetOptions to;
   to.EnableFastISel = true;
   eb.setTargetOptions(to);
-  execution_engine_ = eb.create();
-  CHECK(execution_engine_);
-
-  // run optimizations
-  optimizeIR(query_func, module, opt_level);
+  auto execution_engine = eb.create();
+  CHECK(execution_engine);
 
   if (llvm::verifyFunction(*query_func)) {
     LOG(FATAL) << "Generated invalid code. ";
   }
 
-  execution_engine_->finalizeObject();
+  execution_engine->finalizeObject();
 
-  return execution_engine_->getPointerToFunction(query_func);
+  auto native_code = execution_engine->getPointerToFunction(query_func);
+  CHECK(native_code);
+  addCodeToCache(key, native_code, cpu_code_cache_, execution_engine);
+
+  return native_code;
 }
 
 namespace {
@@ -1893,7 +1928,7 @@ R"(
                       i64**)* @%s, metadata !"kernel", i32 1}
 )";
 
-}
+}  // namespace
 
 CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                                            const ExecutorOptLevel opt_level,
@@ -1907,8 +1942,8 @@ CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   if (is_group_by) {
     // need to do this since on GPU we're not inlining row_func_ for group by queries yet
     llvm::AttributeSet no_attributes;
-    row_func_->setAttributes(no_attributes);
-    row_func_->print(os);
+    cgen_state_->row_func_->setAttributes(no_attributes);
+    cgen_state_->row_func_->print(os);
   }
   query_func->print(os);
 
@@ -1926,10 +1961,10 @@ R"(
   auto cuda_llir = cuda_llir_prologue + ss.str() +
     std::string(nvvm_annotations);
 
-  if (!gpu_context_) {
-    gpu_context_.reset(new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a"));
+  if (!cgen_state_->gpu_context_) {
+    cgen_state_->gpu_context_.reset(new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a"));
   }
-  return gpu_context_->kernel();
+  return cgen_state_->gpu_context_->kernel();
 }
 
 void Executor::call_aggregators(
@@ -1940,23 +1975,23 @@ void Executor::call_aggregators(
     llvm::Module* module) {
   auto& context = llvm::getGlobalContext();
 
-  auto filter_true = llvm::BasicBlock::Create(context, "filter_true", row_func_);
-  auto filter_false = llvm::BasicBlock::Create(context, "filter_false", row_func_);
+  auto filter_true = llvm::BasicBlock::Create(context, "filter_true", cgen_state_->row_func_);
+  auto filter_false = llvm::BasicBlock::Create(context, "filter_false", cgen_state_->row_func_);
 
-  ir_builder_.CreateCondBr(filter_result, filter_true, filter_false);
-  ir_builder_.SetInsertPoint(filter_true);
+  cgen_state_->ir_builder_.CreateCondBr(filter_result, filter_true, filter_false);
+  cgen_state_->ir_builder_.SetInsertPoint(filter_true);
 
   std::vector<llvm::Value*> agg_out_vec;
 
   if (!group_by_cols.empty()) {
-    auto group_keys_buffer = ir_builder_.CreateAlloca(
+    auto group_keys_buffer = cgen_state_->ir_builder_.CreateAlloca(
       llvm::Type::getInt64Ty(context),
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size()));
     size_t i = 0;
     for (const auto group_by_col : group_by_cols) {
       auto group_key = codegen(group_by_col);
-      group_by_expr_cache_.push_back(group_key);
-      auto group_key_ptr = ir_builder_.CreateGEP(group_keys_buffer,
+      cgen_state_->group_by_expr_cache_.push_back(group_key);
+      auto group_key_ptr = cgen_state_->ir_builder_.CreateGEP(group_keys_buffer,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
       const auto key_expr_type = group_by_col ? group_by_col->get_type_info().type : kBIGINT;
       if (IS_INTEGER(key_expr_type) || IS_STRING(key_expr_type)) {
@@ -1964,19 +1999,20 @@ void Executor::call_aggregators(
         auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
         CHECK_LE(group_key_bitwidth, 64);
         if (group_key_bitwidth < 64) {
-          group_key = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+          group_key = cgen_state_->ir_builder_.CreateCast(
+            llvm::Instruction::CastOps::SExt,
             group_key,
-            get_int_type(64, context_));
+            get_int_type(64, cgen_state_->context_));
         }
-        ir_builder_.CreateStore(group_key, group_key_ptr);
+        cgen_state_->ir_builder_.CreateStore(group_key, group_key_ptr);
       } else {
         CHECK(key_expr_type == kFLOAT || key_expr_type == kDOUBLE);
         switch (key_expr_type) {
         case kFLOAT:
-          group_key = ir_builder_.CreateFPExt(group_key, llvm::Type::getDoubleTy(context_));
+          group_key = cgen_state_->ir_builder_.CreateFPExt(group_key, llvm::Type::getDoubleTy(cgen_state_->context_));
         case kDOUBLE:
-          group_key = ir_builder_.CreateBitCast(group_key, get_int_type(64, context_));
-          ir_builder_.CreateStore(group_key, group_key_ptr);
+          group_key = cgen_state_->ir_builder_.CreateBitCast(group_key, get_int_type(64, cgen_state_->context_));
+          cgen_state_->ir_builder_.CreateStore(group_key, group_key_ptr);
           break;
         default:
           CHECK(false);
@@ -1986,17 +2022,17 @@ void Executor::call_aggregators(
     }
     auto get_group_value_func = module->getFunction("get_group_value");
     CHECK(get_group_value_func);
-    auto& groups_buffer = row_func_->getArgumentList().front();
+    auto& groups_buffer = cgen_state_->row_func_->getArgumentList().front();
     std::vector<llvm::Value*> get_group_value_args {
       &groups_buffer,
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), groups_buffer_entry_count),
       group_keys_buffer,
       llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size()),
-      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), init_agg_vals_.size())
+      llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), plan_state_->init_agg_vals_.size())
     };
-    agg_out_vec.push_back(ir_builder_.CreateCall(get_group_value_func, get_group_value_args));
+    agg_out_vec.push_back(cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args));
   } else {
-    auto args = row_func_->arg_begin();
+    auto args = cgen_state_->row_func_->arg_begin();
     for (size_t i = 0; i < agg_infos.size(); ++i) {
       agg_out_vec.push_back(args++);
     }
@@ -2015,14 +2051,14 @@ void Executor::call_aggregators(
         auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();
         CHECK_LE(agg_col_width, 64);
         if (agg_col_width < 64) {
-          agg_expr_lv = ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+          agg_expr_lv = cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
             agg_expr_lv,
-            get_int_type(64, context_));
+            get_int_type(64, cgen_state_->context_));
         }
       } else {
         CHECK(agg_col_type->isFloatTy() || agg_col_type->isDoubleTy());
         if (agg_col_type->isFloatTy()) {
-          agg_expr_lv = ir_builder_.CreateFPExt(agg_expr_lv, llvm::Type::getDoubleTy(context_));
+          agg_expr_lv = cgen_state_->ir_builder_.CreateFPExt(agg_expr_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
         }
       }
     }
@@ -2032,7 +2068,7 @@ void Executor::call_aggregators(
     } else {
       CHECK_EQ(agg_out_vec.size(), 1);
       agg_args = {
-        ir_builder_.CreateGEP(
+        cgen_state_->ir_builder_.CreateGEP(
           agg_out_vec.front(),
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i)),
         agg_expr_lv
@@ -2044,36 +2080,38 @@ void Executor::call_aggregators(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
         reinterpret_cast<int64_t>(count_distinct_set)));
     }
-    ir_builder_.CreateCall(agg_func, agg_args);
+    cgen_state_->ir_builder_.CreateCall(agg_func, agg_args);
   }
-  ir_builder_.CreateBr(filter_false);
-  ir_builder_.SetInsertPoint(filter_false);
-  ir_builder_.CreateRetVoid();
+  cgen_state_->ir_builder_.CreateBr(filter_false);
+  cgen_state_->ir_builder_.SetInsertPoint(filter_false);
+  cgen_state_->ir_builder_.CreateRetVoid();
 }
 
 void Executor::allocateLocalColumnIds(const std::list<int>& global_col_ids) {
   for (const int col_id : global_col_ids) {
-    const auto local_col_id = global_to_local_col_ids_.size();
-    const auto it_ok = global_to_local_col_ids_.insert(std::make_pair(col_id, local_col_id));
-    local_to_global_col_ids_.push_back(col_id);
+    const auto local_col_id = plan_state_->global_to_local_col_ids_.size();
+    const auto it_ok = plan_state_->global_to_local_col_ids_.insert(std::make_pair(col_id, local_col_id));
+    plan_state_->local_to_global_col_ids_.push_back(col_id);
     // enforce uniqueness of the column ids in the scan plan
     CHECK(it_ok.second);
   }
 }
 
 int Executor::getLocalColumnId(const int global_col_id) const {
-  const auto it = global_to_local_col_ids_.find(global_col_id);
-  CHECK(it != global_to_local_col_ids_.end());
+  const auto it = plan_state_->global_to_local_col_ids_.find(global_col_id);
+  CHECK(it != plan_state_->global_to_local_col_ids_.end());
   return it->second;
 }
 
 llvm::Value* Executor::codegenOrGetCached(const Analyzer::Expr* expr) {
-  for (const auto cached_expr_kv : expr_cache_) {
+  for (const auto cached_expr_kv : cgen_state_->expr_cache_) {
     if (*expr == *cached_expr_kv.first) {
       return cached_expr_kv.second;
     }
   }
   auto expr_lv = codegen(expr);
-  expr_cache_.emplace_back(expr, expr_lv);
+  cgen_state_->expr_cache_.emplace_back(expr, expr_lv);
   return expr_lv;
 }
+
+std::unordered_map<int, std::shared_ptr<Executor>> Executor::executors_;

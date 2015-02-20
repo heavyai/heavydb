@@ -6,8 +6,8 @@
 
 #include <string>
 
-std::string unique_name(const char* base_name, const uint32_t query_id);
-llvm::Function* query_template(llvm::Module*, const size_t aggr_col_count, const uint32_t query_id);
-llvm::Function* query_group_by_template(llvm::Module*, const size_t aggr_col_count, const uint32_t query_id);
+std::string unique_name(const char* base_name, const bool is_nested);
+llvm::Function* query_template(llvm::Module*, const size_t aggr_col_count, const bool is_nested);
+llvm::Function* query_group_by_template(llvm::Module*, const size_t aggr_col_count, const bool is_nested);
 
 #endif  // QUERYENGINE_QUERYTEMPLATEGENERATOR_H

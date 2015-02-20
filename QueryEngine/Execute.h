@@ -19,6 +19,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <map>
 #include <unordered_map>
 
 
@@ -36,23 +37,51 @@ typedef boost::variant<int64_t, double, std::string> AggResult;
 
 class Executor;
 
+inline bool approx_eq(const double v, const double target, const double eps = 0.01) {
+  return target - eps < v && v < target + eps;
+}
+
 class ResultRow {
 public:
   ResultRow(const Executor* executor) : executor_(executor) {}
+
   AggResult agg_result(const size_t idx, const bool translate_strings = true) const;
+
   size_t size() const {
     return agg_results_idx_.size();
   }
+
   std::vector<int64_t> value_tuple() const {
     return value_tuple_;
   }
+
   bool operator==(const ResultRow& r) const {
-    return (value_tuple_ == r.value_tuple_ &&
-            agg_results_ == r.agg_results_ &&
-            agg_results_idx_ == r.agg_results_idx_ &&
-            agg_kinds_ == r.agg_kinds_ &&
-            agg_types_ == r.agg_types_);
+    if (size() != r.size()) {
+      return false;
+    }
+    for (size_t idx = 0; idx < size(); ++idx) {
+      const auto lhs_val = agg_result(idx);
+      const auto rhs_val = agg_result(idx);
+      {
+        const auto lhs_pd = boost::get<double>(&lhs_val);
+        if (lhs_pd) {
+          const auto rhs_pd = boost::get<double>(&rhs_val);
+          if (!rhs_pd) {
+            return false;
+          }
+          if (!approx_eq(*lhs_pd, *rhs_pd)) {
+            return false;
+          }
+        } else {
+          if (lhs_val < rhs_val || rhs_val < lhs_val) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
   }
+
 private:
   // TODO(alex): support for strings
   std::vector<int64_t> value_tuple_;
@@ -70,10 +99,13 @@ class Executor {
     "Host hardware not supported, unexpected size of float / double.");
 public:
   Executor(const int db_id);
-  ~Executor();
+
+  static std::shared_ptr<Executor> getExecutor(const int db_id);
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
   typedef std::vector<ResultRow> ResultRows;
+  typedef boost::variant<int16_t, int32_t, int64_t, float, double, std::string> LiteralValue;
+  typedef std::vector<Executor::LiteralValue> LiteralValues;
 
   std::vector<ResultRow> execute(
     const Planner::RootPlan* root_plan,
@@ -82,19 +114,19 @@ public:
 
   StringDictionary* getStringDictionary() const;
 private:
-  llvm::Value* codegen(const Analyzer::Expr*) const;
-  llvm::Value* codegen(const Analyzer::BinOper*) const;
-  llvm::Value* codegen(const Analyzer::UOper*) const;
-  llvm::Value* codegen(const Analyzer::ColumnVar*) const;
-  llvm::Value* codegen(const Analyzer::Constant*) const;
-  llvm::Value* codegen(const Analyzer::CaseExpr*) const;
-  llvm::Value* codegenCmp(const Analyzer::BinOper*) const;
-  llvm::Value* codegenLogical(const Analyzer::BinOper*) const;
-  llvm::Value* codegenArith(const Analyzer::BinOper*) const;
-  llvm::Value* codegenLogical(const Analyzer::UOper*) const;
-  llvm::Value* codegenCast(const Analyzer::UOper*) const;
-  llvm::Value* codegenUMinus(const Analyzer::UOper*) const;
-  llvm::Value* codegenIsNull(const Analyzer::UOper*) const;
+  llvm::Value* codegen(const Analyzer::Expr*);
+  llvm::Value* codegen(const Analyzer::BinOper*);
+  llvm::Value* codegen(const Analyzer::UOper*);
+  llvm::Value* codegen(const Analyzer::ColumnVar*);
+  llvm::Value* codegen(const Analyzer::Constant*);
+  llvm::Value* codegen(const Analyzer::CaseExpr*);
+  llvm::Value* codegenCmp(const Analyzer::BinOper*);
+  llvm::Value* codegenLogical(const Analyzer::BinOper*);
+  llvm::Value* codegenArith(const Analyzer::BinOper*);
+  llvm::Value* codegenLogical(const Analyzer::UOper*);
+  llvm::Value* codegenCast(const Analyzer::UOper*);
+  llvm::Value* codegenUMinus(const Analyzer::UOper*);
+  llvm::Value* codegenIsNull(const Analyzer::UOper*);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
     const Planner::RootPlan* root_plan,
@@ -117,6 +149,8 @@ private:
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
   void executePlanWithGroupBy(
+    void* query_native_code,
+    const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
@@ -126,6 +160,8 @@ private:
     Data_Namespace::DataMgr*,
     const int32_t db_id);
   void executePlanWithoutGroupBy(
+    void* query_native_code,
+    const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
@@ -140,7 +176,8 @@ private:
     const std::list<Analyzer::Expr*>& target_exprs,
     const int32_t db_id);
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
-  void compilePlan(
+
+  std::pair<void*, LiteralValues> compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
@@ -148,7 +185,9 @@ private:
     const std::list<Analyzer::Expr*>& quals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const size_t groups_buffer_entry_count);
+    const size_t groups_buffer_entry_count,
+    const bool hoist_literals);
+
   void nukeOldState();
   void* optimizeAndCodegenCPU(llvm::Function*,
                               const ExecutorOptLevel,
@@ -167,30 +206,57 @@ private:
   int getLocalColumnId(const int global_col_id) const;
   llvm::Value* codegenOrGetCached(const Analyzer::Expr*);
 
-  const int db_id_;
-  llvm::LLVMContext& context_;
-  llvm::Module* module_;
-  mutable llvm::IRBuilder<> ir_builder_;
-  llvm::ExecutionEngine* execution_engine_;
-  union {
-    void* query_cpu_code_;
-    CUfunction query_gpu_code_;
+  typedef std::pair<std::string, std::string> CodeCacheKey;
+  typedef std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> CodeCacheVal;
+  void* getCodeFromCache(
+    const CodeCacheKey&,
+    const std::map<CodeCacheKey, CodeCacheVal>&);
+  void addCodeToCache(
+    const CodeCacheKey&,
+    void* native_code,
+    std::map<CodeCacheKey, CodeCacheVal>&,
+    llvm::ExecutionEngine*);
+
+  struct CgenState {
+    CgenState()
+      : module_(nullptr)
+      , row_func_(nullptr)
+      , context_(llvm::getGlobalContext())
+      , ir_builder_(context_) {}
+
+    llvm::Module* module_;
+    llvm::Function* row_func_;
+    llvm::LLVMContext& context_;
+    llvm::IRBuilder<> ir_builder_;
+    std::unordered_map<int, llvm::Value*> fetch_cache_;
+    std::vector<llvm::Value*> group_by_expr_cache_;
+    std::vector<std::pair<const Analyzer::Expr*, llvm::Value*>> expr_cache_;
+    std::unique_ptr<GpuExecutionContext> gpu_context_;
   };
-  std::unique_ptr<GpuExecutionContext> gpu_context_;
-  mutable std::unordered_map<int, llvm::Value*> fetch_cache_;
-  mutable std::vector<llvm::Value*> group_by_expr_cache_;
-  mutable std::vector<std::pair<const Analyzer::Expr*, llvm::Value*>> expr_cache_;
-  llvm::Function* row_func_;
-  std::vector<int64_t> init_agg_vals_;
-  std::unordered_map<int, int> global_to_local_col_ids_;
-  std::vector<int> local_to_global_col_ids_;
-  const size_t groups_buffer_entry_count_ { 2048 };
+  std::unique_ptr<CgenState> cgen_state_;
+
+  struct PlanState {
+    std::vector<int64_t> init_agg_vals_;
+    std::unordered_map<int, int> global_to_local_col_ids_;
+    std::vector<int> local_to_global_col_ids_;
+  };
+  std::unique_ptr<PlanState> plan_state_;
+
+  bool is_nested_;
+
   boost::mutex reduce_mutex_;
-  std::atomic<int32_t> query_id_;
+
   mutable std::unique_ptr<StringDictionary> str_dict_;
 
+  std::map<CodeCacheKey, CodeCacheVal> cpu_code_cache_;
+
+  const size_t groups_buffer_entry_count_ { 2048 };
   const unsigned block_size_x_ { 16 };
   const unsigned grid_size_x_ { 16 };
+
+  const int db_id_;
+
+  static std::unordered_map<int, std::shared_ptr<Executor>> executors_;
 };
 
 template<typename TimeT = std::chrono::milliseconds>
