@@ -104,8 +104,6 @@ public:
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
   typedef std::vector<ResultRow> ResultRows;
-  typedef boost::variant<int16_t, int32_t, int64_t, float, double, std::string> LiteralValue;
-  typedef std::vector<Executor::LiteralValue> LiteralValues;
 
   std::vector<ResultRow> execute(
     const Planner::RootPlan* root_plan,
@@ -114,6 +112,10 @@ public:
     const ExecutorOptLevel = ExecutorOptLevel::Default);
 
   StringDictionary* getStringDictionary() const;
+
+  typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double, std::string> LiteralValue;
+  typedef std::vector<Executor::LiteralValue> LiteralValues;
+
 private:
   llvm::Value* codegen(const Analyzer::Expr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
@@ -197,6 +199,7 @@ private:
 
   void nukeOldState();
   void* optimizeAndCodegenCPU(llvm::Function*,
+                              const bool hoist_literals,
                               const ExecutorOptLevel,
                               llvm::Module*);
   CUfunction optimizeAndCodegenGPU(llvm::Function*,
@@ -225,12 +228,71 @@ private:
     std::map<CodeCacheKey, CodeCacheVal>&,
     llvm::ExecutionEngine*);
 
+  std::vector<int8_t> serializeLiterals(const Executor::LiteralValues& literals);
+
+  static size_t literalBytes(const LiteralValue& lit) {
+    switch (lit.which()) {
+      case 0:
+        return 1;
+      case 1:
+        return 2;
+      case 2:
+        return 4;
+      case 3:
+        return 8;
+      case 4:
+        return 4;
+      case 5:
+        return 8;
+      case 6:
+        return 4;
+      default:
+        CHECK(false);
+    }
+  }
+
+  static size_t addAligned(const size_t off_in, const size_t alignment) {
+    size_t off = off_in;
+    if (off % alignment != 0) {
+      off += (alignment - off % alignment);
+    }
+    return off + alignment;
+  }
+
   struct CgenState {
+  public:
     CgenState()
       : module_(nullptr)
       , row_func_(nullptr)
       , context_(llvm::getGlobalContext())
-      , ir_builder_(context_) {}
+      , ir_builder_(context_)
+      , literal_bytes_(0) {}
+
+    size_t getOrAddLiteral(const Analyzer::Constant* constant) {
+      const auto& type_info = constant->get_type_info();
+      switch (type_info.type) {
+      case kBOOLEAN:
+        return getOrAddLiteral(constant->get_constval().boolval);
+      case kSMALLINT:
+        return getOrAddLiteral(constant->get_constval().smallintval);
+      case kINT:
+        return getOrAddLiteral(constant->get_constval().intval);
+      case kBIGINT:
+        return getOrAddLiteral(constant->get_constval().bigintval);
+      case kFLOAT:
+        return getOrAddLiteral(constant->get_constval().floatval);
+      case kDOUBLE:
+        return getOrAddLiteral(constant->get_constval().doubleval);
+      case kVARCHAR:
+        return getOrAddLiteral(*constant->get_constval().stringval);
+      default:
+        CHECK(false);
+      }
+    }
+
+    const LiteralValues& getLiterals() const {
+      return literals_;
+    }
 
     llvm::Module* module_;
     llvm::Function* row_func_;
@@ -239,6 +301,26 @@ private:
     std::unordered_map<int, llvm::Value*> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::unique_ptr<GpuExecutionContext> gpu_context_;
+  private:
+    template<class T>
+    size_t getOrAddLiteral(const T& val) {
+      const Executor::LiteralValue var_val(val);
+      size_t literal_found_off { 0 };
+      for (const auto& literal : literals_) {
+        const auto lit_bytes = literalBytes(literal);
+        literal_found_off = addAligned(literal_found_off, lit_bytes);
+        if (literal == var_val) {
+          return literal_found_off - lit_bytes;
+        }
+      }
+      literals_.emplace_back(val);
+      const auto lit_bytes = literalBytes(var_val);
+      literal_bytes_ = addAligned(literal_bytes_, lit_bytes);
+      return literal_bytes_ - lit_bytes;
+    }
+
+    LiteralValues literals_;
+    size_t literal_bytes_;
   };
   std::unique_ptr<CgenState> cgen_state_;
 

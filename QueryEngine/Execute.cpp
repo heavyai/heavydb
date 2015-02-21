@@ -153,6 +153,67 @@ StringDictionary* Executor::getStringDictionary() const {
   return str_dict_.get();
 }
 
+std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& literals) {
+  size_t lit_buf_size { 0 };
+  for (const auto& lit : literals) {
+    lit_buf_size = addAligned(lit_buf_size, Executor::literalBytes(lit));
+  }
+  std::vector<int8_t> serialized(lit_buf_size);
+  size_t off { 0 };
+  for (const auto& lit : literals) {
+    const auto lit_bytes = Executor::literalBytes(lit);
+    off = addAligned(off, lit_bytes);
+    switch (lit.which()) {
+      case 0: {
+        const auto p = boost::get<bool>(&lit);
+        CHECK(p);
+        serialized[off - lit_bytes] = *p;
+        break;
+      }
+      case 1: {
+        const auto p = boost::get<int16_t>(&lit);
+        CHECK(p);
+        memcpy(&serialized[off - lit_bytes], p, lit_bytes);
+        break;
+      }
+      case 2: {
+        const auto p = boost::get<int32_t>(&lit);
+        CHECK(p);
+        memcpy(&serialized[off - lit_bytes], p, lit_bytes);
+        break;
+      }
+      case 3: {
+        const auto p = boost::get<int64_t>(&lit);
+        CHECK(p);
+        memcpy(&serialized[off - lit_bytes], p, lit_bytes);
+        break;
+      }
+      case 4: {
+        const auto p = boost::get<float>(&lit);
+        CHECK(p);
+        memcpy(&serialized[off - lit_bytes], p, lit_bytes);
+        break;
+      }
+      case 5: {
+        const auto p = boost::get<double>(&lit);
+        CHECK(p);
+        memcpy(&serialized[off - lit_bytes], p, lit_bytes);
+        break;
+      }
+      case 6: {
+        const auto p = boost::get<std::string>(&lit);
+        CHECK(p);
+        const auto str_id = getStringDictionary()->getOrAdd(*p);
+        memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
+        break;
+      }
+      default:
+        CHECK(false);
+    }
+  }
+  return serialized;
+}
+
 llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_literals) {
   if (!expr) {
     llvm::Value* pos_arg { nullptr };
@@ -378,6 +439,38 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
 
 llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool hoist_literals) {
   const auto& type_info = constant->get_type_info();
+  if (hoist_literals) {
+    auto arg_it = cgen_state_->row_func_->arg_begin();
+    while (arg_it != cgen_state_->row_func_->arg_end()) {
+      if (arg_it->getType()->isIntegerTy()) {
+        ++arg_it;
+        break;
+      }
+      ++arg_it;
+    }
+    CHECK(arg_it != cgen_state_->row_func_->arg_end());
+    const auto val_bits = get_bit_width(type_info.type);
+    CHECK_EQ(0, val_bits % 8);
+    llvm::Type* val_ptr_type { nullptr };
+    if (IS_INTEGER(type_info.type) || IS_STRING(type_info.type)) {
+      val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
+    } else {
+      CHECK(type_info.type == kFLOAT || type_info.type == kDOUBLE);
+      val_ptr_type = (type_info.type == kFLOAT)
+        ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
+        : llvm::Type::getDoublePtrTy(cgen_state_->context_);
+    }
+    const size_t lit_off = cgen_state_->getOrAddLiteral(constant);
+    const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(
+      arg_it, llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_), lit_off));
+    auto lit_lv = cgen_state_->ir_builder_.CreateLoad(
+      cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
+    if (type_info.type == kBOOLEAN) {
+      return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
+        lit_lv, llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), 0));
+    }
+    return lit_lv;
+  }
   switch (type_info.type) {
   case kBOOLEAN:
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval);
@@ -704,7 +797,7 @@ void copy_from_gpu(
 std::vector<int64_t*> launch_query_gpu_code(
     CUfunction kernel,
     const bool hoist_literals,
-    const Executor::LiteralValues& hoisted_literals,
+    const std::vector<int8_t>& hoisted_literals,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -729,7 +822,12 @@ std::vector<int64_t*> launch_query_gpu_code(
         col_count * sizeof(CUdeviceptr), device_id);
     }
   }
-  CUdeviceptr literals_dev_ptr;
+  CUdeviceptr literals_dev_ptr { 0 };
+  if (!hoisted_literals.empty()) {
+    CHECK(hoist_literals);
+    literals_dev_ptr = alloc_gpu_mem(data_mgr, hoisted_literals.size(), device_id);
+    copy_to_gpu(data_mgr, literals_dev_ptr, &hoisted_literals[0], hoisted_literals.size(), device_id);
+  }
   CUdeviceptr num_rows_dev_ptr;
   {
     num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
@@ -838,7 +936,7 @@ std::vector<int64_t*> launch_query_gpu_code(
 std::vector<int64_t*> launch_query_cpu_code(
     void* fn_ptr,
     const bool hoist_literals,
-    const Executor::LiteralValues& hoisted_literals,
+    const std::vector<int8_t>& hoisted_literals,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -859,9 +957,9 @@ std::vector<int64_t*> launch_query_cpu_code(
       const int64_t* init_agg_value,
       int64_t** out);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], nullptr, &num_rows, &init_agg_vals[0], &out_vec[0]);
+      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0], &out_vec[0]);
     } else {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], nullptr, &num_rows, &init_agg_vals[0], &group_by_buffers[0]);
+      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0], &group_by_buffers[0]);
     }
   } else {
     typedef void (*agg_query)(
@@ -1296,7 +1394,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
   auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
   init_groups(group_by_buffer, groups_buffer_entry_count_, target_exprs.size(), &init_agg_vals[0], 1);
   std::vector<int64_t*> group_by_buffers { group_by_buffer };
-  launch_query_cpu_code(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
+  const auto hoist_buf = serializeLiterals(query_code_and_literals.second);
+  launch_query_cpu_code(query_code_and_literals.first, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals, group_by_buffers);
   return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs,
     cat.get_currentDB().dbId);
@@ -1472,13 +1571,14 @@ void Executor::executePlanWithoutGroupBy(
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr) {
   std::vector<int64_t*> out_vec;
+  const auto hoist_buf = serializeLiterals(hoisted_literals);
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
-      query_native_code, hoist_literals, hoisted_literals,
+      query_native_code, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {});
   } else {
     out_vec = launch_query_gpu_code(
-      static_cast<CUfunction>(query_native_code), hoist_literals, hoisted_literals,
+      static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, data_mgr, block_size_x_, grid_size_x_);
   }
   size_t out_vec_idx = 0;
@@ -1553,13 +1653,14 @@ void Executor::executePlanWithGroupBy(
   // TODO(alex): get rid of std::list everywhere
   std::list<Analyzer::Expr*> target_exprs_list;
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
+  const auto hoist_buf = serializeLiterals(hoisted_literals);
   if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(query_native_code, hoist_literals, hoisted_literals, col_buffers,
+    launch_query_cpu_code(query_native_code, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers);
     results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count,
       target_exprs_list, db_id);
   } else {
-    launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoisted_literals,
+    launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, group_by_buffers, groups_buffer_size, data_mgr,
       block_size_x_, grid_size_x_);
     std::vector<Executor::ResultRows> results_per_sm;
@@ -1837,8 +1938,6 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
   // generate the code for the filter
   allocateLocalColumnIds(scan_cols);
 
-  Executor::LiteralValues hoisted_literals;
-
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, hoist_literals));
@@ -1878,19 +1977,24 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
   is_nested_ = false;
 
   return (device_type == ExecutorDeviceType::CPU)
-    ? std::make_pair(optimizeAndCodegenCPU(query_func, opt_level, cgen_state_->module_), hoisted_literals)
+    ? std::make_pair(optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_),
+                                           cgen_state_->getLiterals())
     : std::make_pair(optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_, is_group_by),
-                     hoisted_literals);
+                                           cgen_state_->getLiterals());
 }
 
 namespace {
 
-void optimizeIR(llvm::Function* query_func, llvm::Module* module, const ExecutorOptLevel opt_level) {
+void optimizeIR(llvm::Function* query_func, llvm::Module* module,
+                const bool hoist_literals, const ExecutorOptLevel opt_level) {
   llvm::legacy::PassManager pass_manager;
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createInstructionSimplifierPass());
   pass_manager.add(llvm::createInstructionCombiningPass());
+  if (hoist_literals) {
+    pass_manager.add(llvm::createLICMPass());
+  }
   if (opt_level == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
@@ -1932,14 +2036,17 @@ void Executor::addCodeToCache(const CodeCacheKey& key,
   CHECK(it_ok.second);
 }
 
-void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func, const ExecutorOptLevel opt_level, llvm::Module* module) {
+void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
+                                      const bool hoist_literals,
+                                      const ExecutorOptLevel opt_level,
+                                      llvm::Module* module) {
   const CodeCacheKey key { serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_) };
   auto cached_code = getCodeFromCache(key, cpu_code_cache_);
   if (cached_code) {
     return cached_code;
   }
   // run optimizations
-  optimizeIR(query_func, module, opt_level);
+  optimizeIR(query_func, module, hoist_literals, opt_level);
 
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
@@ -1992,7 +2099,7 @@ CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                                            llvm::Module* module,
                                            const bool is_group_by) {
   // run optimizations
-  optimizeIR(query_func, module, opt_level);
+  optimizeIR(query_func, module, hoist_literals, opt_level);
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
