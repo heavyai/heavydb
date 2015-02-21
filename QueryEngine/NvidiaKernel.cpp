@@ -46,6 +46,10 @@ GpuExecutionContext::GpuExecutionContext(const std::string& llir_module,
 
 GpuExecutionContext::~GpuExecutionContext() {
   auto status = cuModuleUnload(module_);
+  // TODO(alex): handle this race better
+  if (status == CUDA_ERROR_DEINITIALIZED) {
+    return;
+  }
   checkCudaErrors(status);
   checkCudaErrors(cuLinkDestroy(link_state));
   free(ptx);

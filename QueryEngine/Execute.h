@@ -218,7 +218,7 @@ private:
   int getLocalColumnId(const int global_col_id) const;
 
   typedef std::pair<std::string, std::string> CodeCacheKey;
-  typedef std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> CodeCacheVal;
+  typedef std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuExecutionContext>> CodeCacheVal;
   void* getCodeFromCache(
     const CodeCacheKey&,
     const std::map<CodeCacheKey, CodeCacheVal>&);
@@ -226,7 +226,8 @@ private:
     const CodeCacheKey&,
     void* native_code,
     std::map<CodeCacheKey, CodeCacheVal>&,
-    llvm::ExecutionEngine*);
+    llvm::ExecutionEngine*,
+    GpuExecutionContext*);
 
   std::vector<int8_t> serializeLiterals(const Executor::LiteralValues& literals);
 
@@ -300,7 +301,6 @@ private:
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, llvm::Value*> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
-    std::unique_ptr<GpuExecutionContext> gpu_context_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {
@@ -338,6 +338,7 @@ private:
   mutable std::unique_ptr<StringDictionary> str_dict_;
 
   std::map<CodeCacheKey, CodeCacheVal> cpu_code_cache_;
+  std::map<CodeCacheKey, CodeCacheVal> gpu_code_cache_;
 
   const size_t groups_buffer_entry_count_ { 2048 };
   const unsigned block_size_x_ { 16 };

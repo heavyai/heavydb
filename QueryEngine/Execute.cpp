@@ -2022,7 +2022,7 @@ void* Executor::getCodeFromCache(
     const std::map<CodeCacheKey, CodeCacheVal>& cache) {
   auto it = cache.find(key);
   if (it != cache.end()) {
-    return it->second.first;
+    return std::get<0>(it->second);
   }
   return nullptr;
 }
@@ -2030,9 +2030,12 @@ void* Executor::getCodeFromCache(
 void Executor::addCodeToCache(const CodeCacheKey& key,
                               void* native_code,
                               std::map<CodeCacheKey, CodeCacheVal>& cache,
-                              llvm::ExecutionEngine* execution_engine) {
+                              llvm::ExecutionEngine* execution_engine,
+                              GpuExecutionContext* gpu_execution_context) {
   CHECK(native_code);
-  auto it_ok = cache.insert(std::make_pair(key, std::make_pair(native_code, std::unique_ptr<llvm::ExecutionEngine>(execution_engine))));
+  auto it_ok = cache.insert(std::make_pair(key, std::make_tuple(native_code,
+    std::unique_ptr<llvm::ExecutionEngine>(execution_engine),
+    std::unique_ptr<GpuExecutionContext>(gpu_execution_context))));
   CHECK(it_ok.second);
 }
 
@@ -2073,7 +2076,7 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
 
   auto native_code = execution_engine->getPointerToFunction(query_func);
   CHECK(native_code);
-  addCodeToCache(key, native_code, cpu_code_cache_, execution_engine);
+  addCodeToCache(key, native_code, cpu_code_cache_, execution_engine, nullptr);
 
   return native_code;
 }
@@ -2098,6 +2101,11 @@ CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                                            const ExecutorOptLevel opt_level,
                                            llvm::Module* module,
                                            const bool is_group_by) {
+  const CodeCacheKey key { serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_) };
+  auto cached_code = getCodeFromCache(key, gpu_code_cache_);
+  if (cached_code) {
+    return static_cast<CUfunction>(cached_code);
+  }
   // run optimizations
   optimizeIR(query_func, module, hoist_literals, opt_level);
 
@@ -2133,10 +2141,11 @@ R"(
   auto cuda_llir = cuda_llir_prologue + ss.str() +
     std::string(nvvm_annotations);
 
-  if (!cgen_state_->gpu_context_) {
-    cgen_state_->gpu_context_.reset(new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a"));
-  }
-  return cgen_state_->gpu_context_->kernel();
+  auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a");
+  auto native_code = gpu_context->kernel();
+  CHECK(native_code);
+  addCodeToCache(key, native_code, gpu_code_cache_, nullptr, gpu_context);
+  return native_code;
 }
 
 void Executor::call_aggregators(
