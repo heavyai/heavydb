@@ -82,7 +82,8 @@ llvm::Function* pos_step(llvm::Module* mod) {
   return func_pos_step;
 }
 
-llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, const bool is_nested) {
+llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
+                            const bool is_nested, const bool hoist_literals) {
   using namespace llvm;
 
   std::vector<Type*>FuncTy_5_args;
@@ -92,6 +93,9 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count, cons
     FuncTy_5_args.push_back(PointerTy_6);
   }
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
+  if (hoist_literals) {
+    FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
+  }
   FunctionType* FuncTy_5 = FunctionType::get(
     /*Result=*/Type::getVoidTy(mod->getContext()),
     /*Params=*/FuncTy_5_args,
@@ -134,7 +138,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, aggr_col_count, is_nested);
+  auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -207,8 +211,9 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   Function::arg_iterator args = func_query_template->arg_begin();
   Value* ptr_byte_stream_119 = args++;
   ptr_byte_stream_119->setName("byte_stream");
+  Value* literals { nullptr };
   if (hoist_literals) {
-    Value* literals = args++;
+    literals = args++;
     literals->setName("literals");
   }
   Value* ptr_row_count_ptr = args++;
@@ -275,6 +280,10 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   std::vector<Value*> void_134_params;
   void_134_params.insert(void_134_params.end(), ptr_result_vec.begin(), ptr_result_vec.end());
   void_134_params.push_back(int64_pos_01);
+  if (hoist_literals) {
+    CHECK(literals);
+    void_134_params.push_back(literals);
+  }
   CallInst* void_134 = CallInst::Create(func_row_process, void_134_params, "", label_121);
   void_134->setCallingConv(CallingConv::C);
   void_134->setTailCall(false);
@@ -335,7 +344,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, aggr_col_count, is_nested);
+  auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
@@ -419,8 +428,9 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   Function::arg_iterator args = func_query_group_by_template->arg_begin();
   Value* ptr_byte_stream_143 = args++;
   ptr_byte_stream_143->setName("byte_stream");
+  Value* literals { nullptr };
   if (hoist_literals) {
-    Value* literals = args++;
+    literals = args++;
     literals->setName("literals");
   }
   Value* ptr_row_count_ptr_144 = args++;
@@ -471,6 +481,10 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   std::vector<Value*> void_162_params;
   void_162_params.push_back(ptr_155);
   void_162_params.push_back(int64_pos_01_160);
+  if (hoist_literals) {
+    CHECK(literals);
+    void_162_params.push_back(literals);
+  }
   CallInst* void_162 = CallInst::Create(func_row_process, void_162_params, "", label_148);
   void_162->setCallingConv(CallingConv::C);
   void_162->setTailCall(true);

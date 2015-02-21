@@ -337,7 +337,7 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
     if (arg.getType()->isIntegerTy()) {
       pos_arg = &arg;
       pos_idx = arg_idx;
-    } else if (pos_arg && arg_idx == pos_idx + 1 + static_cast<size_t>(local_col_id)) {
+    } else if (pos_arg && arg_idx == pos_idx + 1 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
       const auto decoder = get_col_decoder(col_var);
       auto dec_val = decoder->codegenDecode(
         &arg,
@@ -1178,6 +1178,7 @@ private:
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     const size_t in_col_count,
     const size_t agg_col_count,
+    const bool hoist_literals,
     llvm::Function* query_func,
     llvm::Module* module,
     llvm::LLVMContext& context);
@@ -1276,7 +1277,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   is_nested_ = true;
   auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals);
   std::tie(row_func, col_heads) = create_row_function(
-    in_col_count, in_agg_count, query_func, cgen_state_->module_, cgen_state_->context_);
+    in_col_count, in_agg_count, hoist_literals, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
   std::list<Analyzer::Expr*> target_exprs;
   for (auto target_entry : targets) {
@@ -1750,24 +1751,35 @@ std::vector<llvm::Value*> generate_column_heads_load(
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     const size_t in_col_count,
     const size_t agg_col_count,
+    const bool hoist_literals,
     llvm::Function* query_func,
     llvm::Module* module,
     llvm::LLVMContext& context) {
+  std::vector<llvm::Type*> row_process_arg_types;
+
+  // output (aggregate) arguments
+  for (size_t i = 0; i < agg_col_count; ++i) {
+    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  }
+
+  // position argument
+  row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+
+  // literals buffer argument
+  if (hoist_literals) {
+    row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
+  }
+
   // Generate the function signature and column head fetches s.t.
   // double indirection isn't needed in the inner loop
   auto col_heads = generate_column_heads_load(in_col_count, query_func);
 
-  std::vector<llvm::Type*> row_process_arg_types;
-  for (size_t i = 0; i < agg_col_count; ++i) {
-    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
-  }
-  row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
-
+  // column buffer arguments
   for (size_t i = 0; i < col_heads.size(); ++i) {
     row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
   }
 
-  // generate the filter
+  // generate the function
   auto ft = llvm::FunctionType::get(
     llvm::Type::getVoidTy(context),
     row_process_arg_types,
@@ -1809,7 +1821,7 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
 
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) = create_row_function(
-    scan_cols.size(), is_group_by ? 1 : agg_infos.size(), query_func,
+    scan_cols.size(), is_group_by ? 1 : agg_infos.size(), hoist_literals, query_func,
     cgen_state_->module_, cgen_state_->context_);
   CHECK(cgen_state_->row_func_);
 
