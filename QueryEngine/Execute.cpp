@@ -1919,15 +1919,6 @@ declare i64* @get_group_value(i64*, i32, i64*, i32, i32);
 
 )";
 
-const std::string nvvm_annotations_template =
-R"(
-!nvvm.annotations = !{!0}
-!0 = metadata !{void (i8**,
-                      i64*,
-                      i64*,
-                      i64**)* @%s, metadata !"kernel", i32 1}
-)";
-
 }  // namespace
 
 CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
