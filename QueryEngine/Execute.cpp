@@ -2094,15 +2094,4 @@ int Executor::getLocalColumnId(const int global_col_id) const {
   return it->second;
 }
 
-llvm::Value* Executor::codegenOrGetCached(const Analyzer::Expr* expr) {
-  for (const auto cached_expr_kv : cgen_state_->expr_cache_) {
-    if (*expr == *cached_expr_kv.first) {
-      return cached_expr_kv.second;
-    }
-  }
-  auto expr_lv = codegen(expr);
-  cgen_state_->expr_cache_.emplace_back(expr, expr_lv);
-  return expr_lv;
-}
-
 std::unordered_map<int, std::shared_ptr<Executor>> Executor::executors_;

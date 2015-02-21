@@ -204,7 +204,6 @@ private:
     llvm::Module* module);
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
-  llvm::Value* codegenOrGetCached(const Analyzer::Expr*);
 
   typedef std::pair<std::string, std::string> CodeCacheKey;
   typedef std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> CodeCacheVal;
@@ -230,7 +229,6 @@ private:
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, llvm::Value*> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
-    std::vector<std::pair<const Analyzer::Expr*, llvm::Value*>> expr_cache_;
     std::unique_ptr<GpuExecutionContext> gpu_context_;
   };
   std::unique_ptr<CgenState> cgen_state_;
