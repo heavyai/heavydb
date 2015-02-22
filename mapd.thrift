@@ -18,10 +18,15 @@ struct ColumnValue {
   2: TDatum datum
 }
 
+struct ColumnType {
+  1: TDatumType type,
+  2: bool nullable
+}
+
 typedef list<ColumnValue> TResultRow
 typedef list<TResultRow> TResultRowSet
 typedef list<string> TResultProjNames
-typedef map<string, TDatumType> ColumnTypes
+typedef map<string, ColumnType> ColumnTypes
 
 struct QueryResult {
   1: TResultProjNames proj_names

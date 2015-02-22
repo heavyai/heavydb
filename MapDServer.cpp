@@ -123,7 +123,10 @@ public:
     }
     const auto col_descriptors = cat_->getAllColumnMetadataForTable(td->tableId);
     for (const auto cd : col_descriptors) {
-      _return.insert(std::make_pair(cd->columnName, type_to_thrift(cd->columnType.type)));
+      ColumnType col_type;
+      col_type.type = type_to_thrift(cd->columnType.type);
+      col_type.nullable = !cd->columnType.notnull;
+      _return.insert(std::make_pair(cd->columnName, col_type));
     }
   }
 
