@@ -31,4 +31,5 @@ $client = new mapd\MapDClient($protocol);
 // Open up the connection
 $transport->open();
 
+var_dump($client->getColumnTypes("test"));
 var_dump($client->select("SELECT COUNT(*) FROM test;"));
