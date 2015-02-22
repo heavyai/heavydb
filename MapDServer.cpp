@@ -21,6 +21,25 @@ using namespace ::apache::thrift::server;
 
 using boost::shared_ptr;
 
+namespace {
+
+TDatumType::type type_to_thrift(const SQLTypes type) {
+  if (IS_INTEGER(type)) {
+    return TDatumType::INT;
+  }
+  if (IS_STRING(type)) {
+    return TDatumType::STR;
+  }
+  if (type == kFLOAT || type == kDOUBLE) {
+    return TDatumType::REAL;
+  }
+  if (IS_TIME(type)) {
+    return TDatumType::TIME;
+  }
+  CHECK(false);
+}
+
+}
 class MapDHandler : virtual public MapDIf {
 public:
   MapDHandler() {
@@ -45,7 +64,7 @@ public:
     std::string last_parsed;
     int num_errors = parser.parse(query_str, parse_trees, last_parsed);
     if (num_errors > 0) {
-      InvalidQueryException ex;
+      MapDException ex;
       ex.error_msg = "Syntax error at: " + last_parsed;
       throw ex;
     }
@@ -53,7 +72,7 @@ public:
       std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
       Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
       if (ddl != nullptr) {
-        InvalidQueryException ex;
+        MapDException ex;
         ex.error_msg = "Query not allowed";
         throw ex;
       } else {
@@ -73,27 +92,41 @@ public:
         for (const auto& row : results) {
           TResultRow trow;
           for (size_t i = 0; i < row.size(); ++i) {
-            TDatum datum;
+            ColumnValue col_val;
             const auto agg_result = row.agg_result(i);
             if (boost::get<int64_t>(&agg_result)) {
-              datum.type = TDatumType::INT;
-              datum.int_val = *(boost::get<int64_t>(&agg_result));
+              col_val.type = TDatumType::INT;
+              col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
             } else if (boost::get<double>(&agg_result)) {
-              datum.type = TDatumType::REAL;
-              datum.real_val = *(boost::get<double>(&agg_result));
+              col_val.type = TDatumType::REAL;
+              col_val.datum.real_val = *(boost::get<double>(&agg_result));
             } else {
               auto s = boost::get<std::string>(&agg_result);
               CHECK(s);
-              datum.type = TDatumType::STR;
-              datum.str_val = *s;
+              col_val.type = TDatumType::STR;
+              col_val.datum.str_val = *s;
             }
-            trow.push_back(datum);
+            trow.push_back(col_val);
           }
           _return.rows.push_back(trow);
         }
       }
     }
   }
+
+  void getColumnTypes(ColumnTypes& _return, const std::string& table_name) {
+    auto td = cat_->getMetadataForTable(table_name);
+    if (!td) {
+      MapDException ex;
+      ex.error_msg = "Table doesn't exist";
+      throw ex;
+    }
+    const auto col_descriptors = cat_->getAllColumnMetadataForTable(td->tableId);
+    for (const auto cd : col_descriptors) {
+      _return.insert(std::make_pair(cd->columnName, type_to_thrift(cd->columnType.type)));
+    }
+  }
+
 private:
   std::unique_ptr<Catalog_Namespace::Catalog> cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;

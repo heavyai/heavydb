@@ -3,29 +3,36 @@ namespace php mapd
 enum TDatumType {
   INT,
   REAL,
-  STR
+  STR,
+  TIME
 }
 
 union TDatum {
-  1: TDatumType type,
-  2: i64 int_val,
-  3: double real_val,
-  4: string str_val
+  1: i64 int_val,
+  2: double real_val,
+  3: string str_val
 }
 
-typedef list<TDatum> TResultRow
+struct ColumnValue {
+  1: TDatumType type,
+  2: TDatum datum
+}
+
+typedef list<ColumnValue> TResultRow
 typedef list<TResultRow> TResultRowSet
 typedef list<string> TResultProjNames
+typedef map<string, TDatumType> ColumnTypes
 
 struct QueryResult {
   1: TResultProjNames proj_names
   2: TResultRowSet rows
 }
 
-exception InvalidQueryException {
+exception MapDException {
   1: string error_msg
 }
 
 service MapD {
-  QueryResult select(1: string query) throws (1: InvalidQueryException e)
+  QueryResult select(1: string query) throws (1: MapDException e)
+  ColumnTypes getColumnTypes(1: string table_name) throws (1: MapDException e)
 }

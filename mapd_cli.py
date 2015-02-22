@@ -52,9 +52,9 @@ class SimpleCompleter(object):
 
 def str_row(row):
     return '|'.join([
-        str(datum.int_val) if datum.type == TDatumType.INT else
-        str(datum.real_val) if datum.type == TDatumType.REAL else
-        datum.str_val for datum in row ])
+        str(col_val.datum.int_val) if col_val.type == TDatumType.INT else
+        str(col_val.datum.real_val) if col_val.type == TDatumType.REAL else
+        col_val.datum.str_val for col_val in row ])
 
 
 def input_loop(client):
@@ -64,7 +64,7 @@ def input_loop(client):
             if line == 'quit':
                 return
             query_result = client.select(line)
-        except InvalidQueryException as ex:
+        except MapDException as ex:
             print ex.error_msg
             continue
         for row in query_result.rows:
