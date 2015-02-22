@@ -51,9 +51,9 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
           static_cast<double>(agg_results_[actual_idx + 1]));
   } else {
     CHECK_LT(idx, agg_results_.size());
-    CHECK(IS_NUMBER(agg_types_[idx]) || IS_STRING(agg_types_[idx]));
+    CHECK(IS_NUMBER(agg_types_[idx]) || IS_STRING(agg_types_[idx]) || IS_TIME(agg_types_[idx]));
     auto actual_idx = agg_results_idx_[idx];
-    if (IS_INTEGER(agg_types_[idx])) {
+    if (IS_INTEGER(agg_types_[idx]) || IS_TIME(agg_types_[idx])) {
       return AggResult(agg_results_[actual_idx]);
     } else if (IS_STRING(agg_types_[idx])) {
       CHECK(executor_);
@@ -66,6 +66,10 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
     }
   }
   return agg_results_[idx];
+}
+
+SQLTypes ResultRow::agg_type(const size_t idx) const {
+  return agg_types_[idx];
 }
 
 Executor::Executor(const int db_id)
@@ -248,6 +252,10 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_lite
   if (case_expr) {
     return codegen(case_expr, hoist_literals);
   }
+  auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
+  if (extract_expr) {
+    return codegen(extract_expr, hoist_literals);
+  }
   CHECK(false);
 }
 
@@ -350,7 +358,7 @@ size_t get_bit_width(const SQLTypes type) {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      return sizeof(time_t)*8;
+      return sizeof(time_t) * 8;
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
@@ -452,7 +460,7 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
     const auto val_bits = get_bit_width(type_info.type);
     CHECK_EQ(0, val_bits % 8);
     llvm::Type* val_ptr_type { nullptr };
-    if (IS_INTEGER(type_info.type) || IS_STRING(type_info.type)) {
+    if (IS_INTEGER(type_info.type) || IS_TIME(type_info.type) || IS_STRING(type_info.type)) {
       val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
     } else {
       CHECK(type_info.type == kFLOAT || type_info.type == kDOUBLE);
@@ -492,7 +500,7 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
   case kTIMESTAMP:
   case kDATE:
     return llvm::ConstantInt::get(
-      get_int_type(sizeof(time_t)*8, cgen_state_->context_),
+      get_int_type(sizeof(time_t) * 8, cgen_state_->context_),
       constant->get_constval().timeval);
   default:
     CHECK(false);
@@ -561,6 +569,16 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
   return cgen_state_->ir_builder_.CreateCall(case_func, case_func_args);
 }
 
+llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const bool hoist_literals) {
+  switch (extract_expr->get_field()) {
+  case kEPOCH:
+    CHECK_EQ(kTIMESTAMP, extract_expr->get_from_expr()->get_type_info().type);
+    return codegen(extract_expr->get_from_expr(), hoist_literals);
+  default:
+    CHECK(false);
+  }
+}
+
 namespace {
 
 llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
@@ -614,8 +632,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   const auto rhs_lv = codegen(rhs, hoist_literals);
   CHECK((lhs_type.type == rhs_type.type) ||
         (IS_STRING(lhs_type.type) && IS_STRING(rhs_type.type)));
-  if (IS_INTEGER(lhs_type.type) || IS_STRING(lhs_type.type)) {
-    if (!IS_INTEGER(lhs_type.type)) {
+  if (IS_INTEGER(lhs_type.type) || IS_TIME(lhs_type.type) || IS_STRING(lhs_type.type)) {
+    if (IS_STRING(lhs_type.type)) {
       CHECK(optype == kEQ || optype == kNE);
     }
     return cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);

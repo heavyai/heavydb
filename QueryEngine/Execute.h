@@ -47,6 +47,8 @@ public:
 
   AggResult agg_result(const size_t idx, const bool translate_strings = true) const;
 
+  SQLTypes agg_type(const size_t idx) const;
+
   size_t size() const {
     return agg_results_idx_.size();
   }
@@ -123,6 +125,7 @@ private:
   llvm::Value* codegen(const Analyzer::ColumnVar*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::Constant*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
@@ -286,6 +289,10 @@ private:
         return getOrAddLiteral(constant->get_constval().doubleval);
       case kVARCHAR:
         return getOrAddLiteral(*constant->get_constval().stringval);
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE:
+        return getOrAddLiteral(constant->get_constval().timeval);
       default:
         CHECK(false);
       }

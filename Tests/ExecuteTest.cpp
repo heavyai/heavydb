@@ -7,6 +7,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../SqliteConnector/SqliteConnector.h"
 
+#include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
 
@@ -120,6 +121,7 @@ public:
         const auto mapd_variant = mapd_results[row_idx].agg_result(col_idx);
         switch (ref_col_type) {
         case SQLITE_INTEGER: {
+          ASSERT_TRUE(IS_INTEGER(mapd_results[row_idx].agg_type(col_idx)));
           const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
           const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
           ASSERT_NE(nullptr, mapd_as_int_p);
@@ -128,6 +130,9 @@ public:
           break;
         }
         case SQLITE_FLOAT: {
+          ASSERT_TRUE(IS_INTEGER(mapd_results[row_idx].agg_type(col_idx)) ||
+                      mapd_results[row_idx].agg_type(col_idx) == kFLOAT ||
+                      mapd_results[row_idx].agg_type(col_idx) == kDOUBLE);
           const auto ref_val = connector_.getData<double>(row_idx, col_idx);
           const auto mapd_as_double_p = boost::get<double>(&mapd_variant);
           ASSERT_NE(nullptr, mapd_as_double_p);
@@ -136,11 +141,47 @@ public:
           break;
         }
         case SQLITE_TEXT: {
+          ASSERT_TRUE(IS_STRING(mapd_results[row_idx].agg_type(col_idx)) ||
+                      IS_TIME(mapd_results[row_idx].agg_type(col_idx)));
           const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-          const auto mapd_as_str_p = boost::get<std::string>(&mapd_variant);
-          ASSERT_NE(nullptr, mapd_as_str_p);
-          const auto mapd_val = *mapd_as_str_p;
-          ASSERT_EQ(ref_val, mapd_val);
+          if (IS_STRING(mapd_results[row_idx].agg_type(col_idx))) {
+            const auto mapd_as_str_p = boost::get<std::string>(&mapd_variant);
+            ASSERT_NE(nullptr, mapd_as_str_p);
+            const auto mapd_val = *mapd_as_str_p;
+            ASSERT_EQ(ref_val, mapd_val);
+          } else {
+            const auto mapd_type = mapd_results[row_idx].agg_type(col_idx);
+            switch (mapd_type) {
+              case kTIMESTAMP:
+              case kDATE: {
+                struct tm tm_struct { 0 };
+                const auto end_str = strptime(
+                  ref_val.c_str(),
+                  mapd_type == kTIMESTAMP ? "%Y-%m-%dT%H%M%S" : "%Y-%m-%d",
+                  &tm_struct);
+                if (end_str != nullptr) {
+                  ASSERT_EQ(0, *end_str);
+                  ASSERT_EQ(ref_val.size(), end_str - ref_val.c_str());
+                }
+                const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
+                ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
+                break;
+              }
+              case kTIME: {
+                std::vector<std::string> time_tokens;
+                boost::split(time_tokens, ref_val, boost::is_any_of(":"));
+                ASSERT_EQ(3, time_tokens.size());
+                const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
+                ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
+                          boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
+                          boost::lexical_cast<int64_t>(time_tokens[2]),
+                          *mapd_as_int_p);
+                break;
+              }
+              default:
+                CHECK(false);
+            }
+          }
           break;
         }
         case SQLITE_NULL:
@@ -402,6 +443,14 @@ TEST(Select, Strings) {
   }
 }
 
+TEST(Select, Time) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m > timestamp(0) '2014-12-13T000000';", dt)));
+    ASSERT_EQ(14185093950L, v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(epoch from m) * 10) FROM test;", dt)));
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
@@ -410,27 +459,27 @@ int main(int argc, char** argv)
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test {
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text encoding dict);" };
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text encoding dict, m timestamp(0), n time(0), o date);" };
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text);");
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text, m timestamp(0), n time(0), o date);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
   }
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2, 'foo');" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2, 'foo', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4, 'bar');" };
+    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4, 'bar', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6, 'baz');" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6, 'baz', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
