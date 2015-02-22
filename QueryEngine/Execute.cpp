@@ -711,9 +711,30 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool h
 }
 
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool hoist_literals) {
-  // TODO(alex): we don't have null support at the storage level yet,
-  //             which means a value is never null
-  return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
+  const auto operand = uoper->get_operand();
+  const auto operand_lv = codegen(operand, hoist_literals);
+  llvm::Value* null_lv { nullptr };
+  switch (operand->get_type_info().type) {
+  case kSMALLINT: {
+    null_lv = llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_),
+      std::numeric_limits<int16_t>::min());
+    break;
+  }
+  case kINT: {
+    null_lv = llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_),
+      std::numeric_limits<int32_t>::min());
+    break;
+  }
+  case kBIGINT: {
+    null_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+      std::numeric_limits<int64_t>::min());
+    break;
+  }
+  default:
+    CHECK(false);
+  }
+  return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
+    operand_lv, null_lv);
 }
 
 llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
