@@ -292,7 +292,7 @@ private:
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
-        return getOrAddLiteral(constant->get_constval().timeval);
+        return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval));
       default:
         CHECK(false);
       }
