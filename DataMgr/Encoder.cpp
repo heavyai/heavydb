@@ -117,7 +117,7 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
             break;
         } // Case: kENCODING_FIXED
         case kENCODING_DICT: {
-          CHECK_EQ(kTEXT, sqlType.type);
+          CHECK(IS_STRING(sqlType.type));
           return new NoneEncoder <int32_t> (buffer);
           break;
         }

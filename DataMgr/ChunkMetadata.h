@@ -53,6 +53,14 @@ struct ChunkMetadata {
                 chunkStats.max.doubleval = max;
                 break;
             }
+            case kVARCHAR:
+            case kCHAR:
+            case kTEXT:
+              if (encodingType == kENCODING_DICT) {
+                chunkStats.min.intval = min;
+                chunkStats.max.intval = max;
+              }
+              break;
             default: {
                 break;
             }

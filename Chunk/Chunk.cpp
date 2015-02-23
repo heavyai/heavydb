@@ -114,11 +114,11 @@ namespace Chunk_NS {
             break;
           case kENCODING_RL:
           case kENCODING_DIFF:
-          case kENCODING_DICT:
           case kENCODING_SPARSE:
-          case kENCODING_NONE:
             assert(false);
-          break;
+            break;
+          default:
+            assert(false);
         }
         break;
       case kINT:
@@ -139,11 +139,11 @@ namespace Chunk_NS {
             break;
           case kENCODING_RL:
           case kENCODING_DIFF:
-          case kENCODING_DICT:
           case kENCODING_SPARSE:
-          case kENCODING_NONE:
             assert(false);
-          break;
+            break;
+          default:
+            assert(false);
         }
         break;
       case kBIGINT:
@@ -169,11 +169,11 @@ namespace Chunk_NS {
             break;
           case kENCODING_RL:
           case kENCODING_DIFF:
-          case kENCODING_DICT:
           case kENCODING_SPARSE:
-          case kENCODING_NONE:
             assert(false);
-          break;
+            break;
+          default:
+            assert(false);
         }
         break;
         case kTIME:
@@ -186,6 +186,7 @@ namespace Chunk_NS {
             case kENCODING_RL:
             case kENCODING_DIFF:
             case kENCODING_DICT:
+            case kENCODING_TOKDICT:
             case kENCODING_SPARSE:
             case kENCODING_NONE:
               assert(false);
