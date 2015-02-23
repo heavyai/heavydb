@@ -92,6 +92,34 @@ void agg_id(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
+extern "C" __attribute__((always_inline))
+void agg_count_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {
+  if (val != skip_val) {
+    ++*agg;
+  }
+}
+
+extern "C" __attribute__((always_inline))
+void agg_count_distinct_skip_val(int64_t* agg, const int64_t val, int64_t unique_set_handle, const int64_t skip_val) {
+  if (val != skip_val) {
+    agg_count_distinct(agg, val, unique_set_handle);
+  }
+}
+
+#define DEF_SKIP_AGG(base_agg_func)                                                       \
+extern "C" __attribute__((always_inline))                                                 \
+void base_agg_func##_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
+  if (val != skip_val) {                                                                  \
+    base_agg_func(agg, val);                                                              \
+  }                                                                                       \
+}
+
+DEF_SKIP_AGG(agg_sum)
+DEF_SKIP_AGG(agg_max)
+DEF_SKIP_AGG(agg_min)
+
+#undef DEF_SKIP_AGG
+
 // TODO(alex): fix signature, implement the rest
 
 extern "C" __attribute__((always_inline))

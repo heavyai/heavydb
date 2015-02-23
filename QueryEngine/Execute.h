@@ -133,6 +133,7 @@ private:
   llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
+  llvm::Value* inlineIntNull(const SQLTypes);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
     const Planner::RootPlan* root_plan,

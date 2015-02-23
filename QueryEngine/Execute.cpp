@@ -717,28 +717,22 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, hoist_literals);
-  llvm::Value* null_lv { nullptr };
-  switch (operand->get_type_info().type) {
-  case kSMALLINT: {
-    null_lv = llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_),
-      std::numeric_limits<int16_t>::min());
-    break;
-  }
-  case kINT: {
-    null_lv = llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_),
-      std::numeric_limits<int32_t>::min());
-    break;
-  }
-  case kBIGINT: {
-    null_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
-      std::numeric_limits<int64_t>::min());
-    break;
-  }
+  CHECK(IS_INTEGER(operand->get_type_info().type));
+  return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+    operand_lv, inlineIntNull(operand->get_type_info().type));
+}
+
+llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
+  switch (type) {
+  case kSMALLINT:
+    return llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_), std::numeric_limits<int16_t>::min());
+  case kINT:
+    return llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), std::numeric_limits<int32_t>::min());
+  case kBIGINT:
+    return llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), std::numeric_limits<int64_t>::min());
   default:
     CHECK(false);
   }
-  return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
-    operand_lv, null_lv);
 }
 
 llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
@@ -2305,7 +2299,26 @@ void Executor::call_aggregators(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
         reinterpret_cast<int64_t>(count_distinct_set)));
     }
-    cgen_state_->ir_builder_.CreateCall(agg_func, agg_args);
+    // Skip null values from aggregate value.
+    // TODO(alex): handle non-integer columns as well
+    if (std::get<0>(agg_info) != "agg_id" &&
+        aggr_col &&
+        IS_INTEGER(aggr_col->get_type_info().type) &&
+        !aggr_col->get_type_info().notnull) {
+      auto agg_func_skip_val = module->getFunction(std::get<0>(agg_info) + "_skip_val");
+      CHECK(agg_func_skip_val);
+      auto null_lv = inlineIntNull(aggr_col->get_type_info().type);
+      if (aggr_col->get_type_info().type != kBIGINT) {
+        null_lv = cgen_state_->ir_builder_.CreateCast(
+          llvm::Instruction::CastOps::SExt,
+          null_lv,
+          get_int_type(64, cgen_state_->context_));
+      }
+      agg_args.push_back(null_lv);
+      cgen_state_->ir_builder_.CreateCall(agg_func_skip_val, agg_args);
+    } else {
+      cgen_state_->ir_builder_.CreateCall(agg_func, agg_args);
+    }
   }
   cgen_state_->ir_builder_.CreateBr(filter_false);
   cgen_state_->ir_builder_.SetInsertPoint(filter_false);
