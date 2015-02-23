@@ -570,13 +570,31 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
 }
 
 llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const bool hoist_literals) {
-  switch (extract_expr->get_field()) {
-  case kEPOCH:
+  auto from_expr = codegen(extract_expr->get_from_expr(), hoist_literals);
+  const int32_t extract_field { extract_expr->get_field() };
+  if (extract_field == kEPOCH) {
     CHECK_EQ(kTIMESTAMP, extract_expr->get_from_expr()->get_type_info().type);
-    return codegen(extract_expr->get_from_expr(), hoist_literals);
-  default:
-    CHECK(false);
+    if (from_expr->getType()->isIntegerTy(32)) {
+      from_expr = cgen_state_->ir_builder_.CreateCast(
+        llvm::Instruction::CastOps::SExt, from_expr, get_int_type(64, cgen_state_->context_));
+    }
+    return from_expr;
   }
+  CHECK(from_expr->getType()->isIntegerTy(32) || from_expr->getType()->isIntegerTy(64));
+  const auto extract_func = cgen_state_->module_->getFunction("ExtractFromTime");
+  auto arg_it = extract_func->arg_begin();
+  ++arg_it;
+  CHECK(arg_it->getType()->isIntegerTy(32) || arg_it->getType()->isIntegerTy(64));
+  if (arg_it->getType()->isIntegerTy(32) && from_expr->getType()->isIntegerTy(64)) {
+    from_expr = cgen_state_->ir_builder_.CreateCast(
+      llvm::Instruction::CastOps::Trunc, from_expr, get_int_type(32, cgen_state_->context_));
+  }
+  CHECK(extract_func);
+  std::vector<llvm::Value*> extract_func_args {
+    llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), static_cast<int32_t>(extract_expr->get_field())),
+    from_expr
+  };
+  return cgen_state_->ir_builder_.CreateCall(extract_func, extract_func_args);
 }
 
 namespace {
@@ -2128,6 +2146,7 @@ target triple = "nvptx64-nvidia-cuda"
 declare i32 @pos_start_impl();
 declare i32 @pos_step_impl();
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32);
+declare i64 @ExtractFromTime(i32, i64);
 
 )";
 

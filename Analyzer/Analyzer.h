@@ -17,6 +17,7 @@
 #include "../Shared/sqltypes.h"
 #include "../Shared/sqldefs.h"
 #include "../Catalog/Catalog.h"
+#include "../QueryEngine/RuntimeFunctions.h"
 
 namespace Analyzer {
 

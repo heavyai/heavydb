@@ -99,22 +99,8 @@ struct SQLTypeInfo {
 	}
 };
 
-enum ExtractField {
-  kYEAR,
-  kMONTH,
-  kDAY,
-  kHOUR,
-  kMINUTE,
-  kSECOND,
-  kDOW,
-  kDOY,
-  kEPOCH
-};
-
 Datum
 StringToDatum(const std::string &s, SQLTypeInfo &ti);
 std::string
 DatumToString(Datum d, const SQLTypeInfo &ti);
-int64_t
-ExtractFromTime(ExtractField f, time_t t);
 #endif // SQLTYPES_H

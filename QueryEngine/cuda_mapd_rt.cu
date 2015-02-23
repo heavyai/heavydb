@@ -196,3 +196,55 @@ __device__  tm* gmtime_r_cuda(const time_t *tim_p, tm* res) {
 
   return (res);
 }
+
+// TODO(alex): unify GPU and CPU paths
+
+enum ExtractField {
+  kYEAR,
+  kMONTH,
+  kDAY,
+  kHOUR,
+  kMINUTE,
+  kSECOND,
+  kDOW,
+  kDOY,
+  kEPOCH
+};
+
+extern "C" __attribute__((noinline))
+__device__ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
+  int64_t result;
+  if (field == kEPOCH)
+    return timeval;
+  tm tm_struct;
+  gmtime_r_cuda(&timeval, &tm_struct);
+  switch (field) {
+    case kYEAR:
+      result = 1900 + tm_struct.tm_year;
+      break;
+    case kMONTH:
+      result = tm_struct.tm_mon + 1;
+      break;
+    case kDAY:
+      result = tm_struct.tm_mday;
+      break;
+    case kHOUR:
+      result = tm_struct.tm_hour;
+      break;
+    case kMINUTE:
+      result = tm_struct.tm_min;
+      break;
+    case kSECOND:
+      result = tm_struct.tm_sec;
+      break;
+    case kDOW:
+      result = tm_struct.tm_wday;
+      break;
+    case kDOY:
+      result = tm_struct.tm_yday + 1;
+      break;
+    default:
+      return 0;
+  }
+  return result;
+}

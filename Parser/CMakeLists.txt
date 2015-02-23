@@ -51,6 +51,7 @@ set(CMAKE_CXX_FLAGS "-Wno-deprecated-register -std=c++0x -g")
 SET (parser_source_files
 	ParserNode.cpp
 	ParserNode.h
+	${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/RuntimeFunctions.cpp
 )
 
 ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
