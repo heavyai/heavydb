@@ -1230,9 +1230,25 @@ namespace Parser {
       } else {
         const std::string &comp = *compression->get_encoding_name();
         if (boost::iequals(comp, "fixed")) {
+          if (!IS_INTEGER(cd.columnType.type))
+            throw std::runtime_error("Fixed encoding is only supported for integer columns.");
           // fixed-bits encoding
-          if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 || compression->get_encoding_param() > 48)
-            throw std::runtime_error("Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to fixed-bits encoding.");
+          switch (cd.columnType.type) {
+            case kSMALLINT:
+              if (compression->get_encoding_param() != 8)
+                throw std::runtime_error("Compression parameter for Fixed encoding on SMALLINT must be 8.");
+              break;
+            case kINT:
+              if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16)
+                throw std::runtime_error("Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
+              break;
+            case kBIGINT:
+              if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16 && compression->get_encoding_param() != 32)
+                throw std::runtime_error("Compression parameter for Fixed encoding on BIGINT must be 8 or 16 or 32.");
+              break;
+            default:
+              break;
+          }
           cd.compression = kENCODING_FIXED;
           cd.comp_param = compression->get_encoding_param();
         } else if (boost::iequals(comp, "rl")) {
@@ -1244,8 +1260,16 @@ namespace Parser {
           cd.compression = kENCODING_DIFF;
           cd.comp_param = 0;
         } else if (boost::iequals(comp, "dict")) {
+          if (!IS_STRING(cd.columnType.type))
+            throw std::runtime_error("Dictionary encoding is only supported on string columns.");
           // diciontary encoding
           cd.compression = kENCODING_DICT;
+          cd.comp_param = 0;
+        } else if (boost::iequals(comp, "token_dict")) {
+          if (!IS_STRING(cd.columnType.type))
+            throw std::runtime_error("Tokenized-Dictionary encoding is only supported on string columns.");
+          // tokenized diciontary encoding
+          cd.compression = kENCODING_TOKDICT;
           cd.comp_param = 0;
         } else if (boost::iequals(comp, "sparse")) {
           // sparse column encoding with mostly NULL values

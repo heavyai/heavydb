@@ -38,10 +38,11 @@ struct ColumnDescriptor {
 							return comp_param/8;
 						case kENCODING_RL:
 						case kENCODING_DIFF:
-						case kENCODING_DICT:
 						case kENCODING_SPARSE:
 							assert(false);
-						break;
+						  break;
+            default:
+              assert(false);
 					}
 					break;
 				case kINT:
@@ -52,10 +53,11 @@ struct ColumnDescriptor {
 							return comp_param/8;
 						case kENCODING_RL:
 						case kENCODING_DIFF:
-						case kENCODING_DICT:
 						case kENCODING_SPARSE:
 							assert(false);
-						break;
+              break;
+            default:
+              assert(false);
 					}
 					break;
 				case kBIGINT:
@@ -68,10 +70,11 @@ struct ColumnDescriptor {
 							return comp_param/8;
 						case kENCODING_RL:
 						case kENCODING_DIFF:
-						case kENCODING_DICT:
 						case kENCODING_SPARSE:
 							assert(false);
-						break;
+              break;
+            default:
+              assert(false);
 					}
 					break;
 				case kFLOAT:
@@ -81,10 +84,11 @@ struct ColumnDescriptor {
 						case kENCODING_FIXED:
 						case kENCODING_RL:
 						case kENCODING_DIFF:
-						case kENCODING_DICT:
 						case kENCODING_SPARSE:
 							assert(false);
-						break;
+              break;
+            default:
+              assert(false);
 					}
 					break;
 				case kDOUBLE:
@@ -94,10 +98,11 @@ struct ColumnDescriptor {
 						case kENCODING_FIXED:
 						case kENCODING_RL:
 						case kENCODING_DIFF:
-						case kENCODING_DICT:
 						case kENCODING_SPARSE:
 							assert(false);
-						break;
+              break;
+            default:
+              assert(false);
 					}
 					break;
 				case kTIME:
@@ -111,10 +116,11 @@ struct ColumnDescriptor {
 						case kENCODING_FIXED:
 						case kENCODING_RL:
 						case kENCODING_DIFF:
-						case kENCODING_DICT:
 						case kENCODING_SPARSE:
 							assert(false);
-						break;
+              break;
+            default:
+              assert(false);
 					}
 					break;
 				default:

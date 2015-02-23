@@ -72,7 +72,8 @@ enum EncodingType {
 	kENCODING_RL = 2, // Run Length encoding
 	kENCODING_DIFF = 3, // Differential encoding
 	kENCODING_DICT = 4, // Dictionary encoding
-	kENCODING_SPARSE = 5 // Null encoding for sparse columns
+	kENCODING_SPARSE = 5, // Null encoding for sparse columns
+	kENCODING_TOKDICT = 6 // Tokenized-Dictionary encoding
 };
 
 // @type SQLTypeInfo
