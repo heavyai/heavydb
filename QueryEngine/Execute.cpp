@@ -406,7 +406,7 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
     if (arg.getType()->isIntegerTy()) {
       pos_arg = &arg;
       pos_idx = arg_idx;
-    } else if (pos_arg && arg_idx == pos_idx + 1 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
+    } else if (pos_arg && arg_idx == pos_idx + 2 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
       const auto decoder = get_col_decoder(col_var);
       auto dec_val = decoder->codegenDecode(
         &arg,
@@ -855,7 +855,8 @@ std::vector<int64_t*> launch_query_gpu_code(
     CUfunction kernel,
     const bool hoist_literals,
     const std::vector<int8_t>& hoisted_literals,
-    std::vector<const int8_t*> col_buffers,
+    std::vector<const int8_t*>& col_buffers,
+    const std::vector<ChunkStats>& col_stats,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
     std::vector<int64_t*> group_by_buffers,
@@ -879,6 +880,7 @@ std::vector<int64_t*> launch_query_gpu_code(
         col_count * sizeof(CUdeviceptr), device_id);
     }
   }
+  CUdeviceptr stats_dev_ptr { 0 };
   CUdeviceptr literals_dev_ptr { 0 };
   if (!hoisted_literals.empty()) {
     CHECK(hoist_literals);
@@ -921,6 +923,7 @@ std::vector<int64_t*> launch_query_gpu_code(
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
+          &stats_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
@@ -932,6 +935,7 @@ std::vector<int64_t*> launch_query_gpu_code(
       } else {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
+          &stats_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
           &group_by_dev_ptr
@@ -958,6 +962,7 @@ std::vector<int64_t*> launch_query_gpu_code(
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
+          &stats_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
@@ -969,6 +974,7 @@ std::vector<int64_t*> launch_query_gpu_code(
       } else {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
+          &stats_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
           &out_vec_dev_ptr
@@ -994,7 +1000,8 @@ std::vector<int64_t*> launch_query_cpu_code(
     void* fn_ptr,
     const bool hoist_literals,
     const std::vector<int8_t>& hoisted_literals,
-    std::vector<const int8_t*> col_buffers,
+    std::vector<const int8_t*>& col_buffers,
+    const std::vector<ChunkStats>& col_stats,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
     std::vector<int64_t*> group_by_buffers) {
@@ -1009,25 +1016,29 @@ std::vector<int64_t*> launch_query_cpu_code(
   if (hoist_literals) {
     typedef void (*agg_query)(
       const int8_t** col_buffers,
+      const int8_t* col_stats,
       const int8_t* literals,
       const int64_t* num_rows,
       const int64_t* init_agg_value,
       int64_t** out);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0], &out_vec[0]);
+      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], nullptr, &hoisted_literals[0],
+        &num_rows, &init_agg_vals[0], &out_vec[0]);
     } else {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0], &group_by_buffers[0]);
+      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], nullptr, &hoisted_literals[0],
+        &num_rows, &init_agg_vals[0], &group_by_buffers[0]);
     }
   } else {
     typedef void (*agg_query)(
       const int8_t** col_buffers,
+      const int8_t* col_stats,
       const int64_t* num_rows,
       const int64_t* init_agg_value,
       int64_t** out);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0]);
+      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], nullptr, &num_rows, &init_agg_vals[0], &out_vec[0]);
     } else {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &num_rows, &init_agg_vals[0], &group_by_buffers[0]);
+      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], nullptr, &num_rows, &init_agg_vals[0], &group_by_buffers[0]);
     }
   }
   return out_vec;
@@ -1453,7 +1464,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   std::vector<int64_t*> group_by_buffers { group_by_buffer };
   const auto hoist_buf = serializeLiterals(query_code_and_literals.second);
   launch_query_cpu_code(query_code_and_literals.first, hoist_literals, hoist_buf,
-    column_buffers, result_columns.size(), init_agg_vals, group_by_buffers);
+    column_buffers, {}, result_columns.size(), init_agg_vals, group_by_buffers);
   return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs,
     cat.get_currentDB().dbId);
 }
@@ -1557,6 +1568,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
       const auto& fragment = fragments[i];
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
+      std::vector<ChunkStats> col_stats(plan_state_->global_to_local_col_ids_.size());
       ResultRows device_results;
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       for (const int col_id : col_global_ids) {
@@ -1579,6 +1591,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         CHECK(it != plan_state_->global_to_local_col_ids_.end());
         CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
         col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
+        col_stats[it->second] = chunk_meta_it->second.chunkStats;
       }
       // TODO(alex): multiple devices support
       if (groupby_exprs.empty()) {
@@ -1587,7 +1600,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       } else {
         executePlanWithGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
           device_results, get_agg_target_exprs(plan),
-          groupby_exprs.size(), device_type, col_buffers, num_rows,
+          groupby_exprs.size(), device_type, col_buffers, col_stats, num_rows,
           &cat.get_dataMgr(), cat.get_currentDB().dbId);
       }
       reduce_mutex_.lock();
@@ -1632,11 +1645,11 @@ void Executor::executePlanWithoutGroupBy(
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
       query_native_code, hoist_literals, hoist_buf,
-      col_buffers, num_rows, plan_state_->init_agg_vals_, {});
+      col_buffers, {}, num_rows, plan_state_->init_agg_vals_, {});
   } else {
     out_vec = launch_query_gpu_code(
       static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
-      col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, data_mgr, block_size_x_, grid_size_x_);
+      col_buffers, {}, num_rows, plan_state_->init_agg_vals_, {}, 0, data_mgr, block_size_x_, grid_size_x_);
   }
   size_t out_vec_idx = 0;
   ResultRow result_row(this);
@@ -1689,9 +1702,11 @@ void Executor::executePlanWithGroupBy(
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
+    const std::vector<ChunkStats>& col_stats,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int32_t db_id) {
+  CHECK_EQ(col_buffers.size(), col_stats.size());
   const size_t agg_col_count = plan_state_->init_agg_vals_.size();
   CHECK_GT(group_by_col_count, 0);
   const size_t groups_buffer_size { (group_by_col_count + agg_col_count) * groups_buffer_entry_count_ * sizeof(int64_t) };
@@ -1712,13 +1727,13 @@ void Executor::executePlanWithGroupBy(
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
   const auto hoist_buf = serializeLiterals(hoisted_literals);
   if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(query_native_code, hoist_literals, hoist_buf, col_buffers,
+    launch_query_cpu_code(query_native_code, hoist_literals, hoist_buf, col_buffers, col_stats,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers);
     results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count,
       target_exprs_list, db_id);
   } else {
     launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
-      col_buffers, num_rows, plan_state_->init_agg_vals_, group_by_buffers, groups_buffer_size, data_mgr,
+      col_buffers, col_stats, num_rows, plan_state_->init_agg_vals_, group_by_buffers, groups_buffer_size, data_mgr,
       block_size_x_, grid_size_x_);
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
@@ -1922,6 +1937,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
   // position argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+
+  // stats buffer argument
+  row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
 
   // literals buffer argument
   if (hoist_literals) {
@@ -2148,6 +2166,7 @@ target triple = "nvptx64-nvidia-cuda"
 declare i32 @pos_start_impl();
 declare i32 @pos_step_impl();
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32);
+declare i64* @get_group_value_fast(i64*, i64, i64);
 declare i64 @ExtractFromTime(i32, i64);
 
 )";
@@ -2184,6 +2203,7 @@ R"(
 !nvvm.annotations = !{!0}
 !0 = metadata !{void (i8**,
                       i8*,
+                      i8*,
                       i64*,
                       i64*,
                       i64**)* @%s, metadata !"kernel", i32 1}
@@ -2191,6 +2211,7 @@ R"(
 R"(
 !nvvm.annotations = !{!0}
 !0 = metadata !{void (i8**,
+                      i8*,
                       i64*,
                       i64*,
                       i64**)* @%s, metadata !"kernel", i32 1}
