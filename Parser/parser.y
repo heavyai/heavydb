@@ -805,7 +805,7 @@ parameter_ref:
 
 function_ref:
 		NAME '(' '*' ')' { $<nodeval>$ = new FunctionRef($<stringval>1); }
-	|	NAME '(' DISTINCT column_ref ')' { $<nodeval>$ = new FunctionRef($<stringval>1, true, dynamic_cast<Expr*>($<nodeval>4)); }
+	|	NAME '(' DISTINCT scalar_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, true, dynamic_cast<Expr*>($<nodeval>4)); }
 	|	NAME '(' ALL scalar_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, dynamic_cast<Expr*>($<nodeval>4)); }
 	|	NAME '(' scalar_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, dynamic_cast<Expr*>($<nodeval>3)); }
 	;
