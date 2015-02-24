@@ -616,10 +616,6 @@ namespace Parser {
         if (fieldno != kHOUR && fieldno != kMINUTE && fieldno != kSECOND)
           throw std::runtime_error("Cannot EXTRACT " + *field + " from TIME.");
         break;
-      case kDATE:
-        if (fieldno != kYEAR && fieldno != kMONTH && fieldno != kDAY && fieldno != kDOW && fieldno != kDOY)
-          throw std::runtime_error("Cannot EXTRACT " + *field + " from DATE.");
-        break;
       default:
         break;
     }
