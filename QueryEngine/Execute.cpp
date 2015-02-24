@@ -573,7 +573,8 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
   auto from_expr = codegen(extract_expr->get_from_expr(), hoist_literals);
   const int32_t extract_field { extract_expr->get_field() };
   if (extract_field == kEPOCH) {
-    CHECK_EQ(kTIMESTAMP, extract_expr->get_from_expr()->get_type_info().type);
+    CHECK(extract_expr->get_from_expr()->get_type_info().type == kTIMESTAMP ||
+          extract_expr->get_from_expr()->get_type_info().type == kDATE);
     if (from_expr->getType()->isIntegerTy(32)) {
       from_expr = cgen_state_->ir_builder_.CreateCast(
         llvm::Instruction::CastOps::SExt, from_expr, get_int_type(64, cgen_state_->context_));
