@@ -18,6 +18,7 @@ using namespace std;
 using namespace Catalog_Namespace;
 using namespace Analyzer;
 using namespace Planner;
+using namespace Fragmenter_Namespace;
 
 void
 process_backslash_commands(const string &command, const Catalog &cat, SysCatalog &syscat)
@@ -25,6 +26,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
 	switch (command[1]) {
 		case 'h':
 			cout << "\\d <table> List all columns of table.\n";
+      cout << "\\d <table>.<column> dump all chunk stats for column.\n";
 			cout << "\\t List all tables.\n";
 			cout << "\\u List all users. \n";
 			cout << "\\l List all databases.\n";
@@ -33,31 +35,92 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
 		case 'd':
 			{
 				if (command[2] != ' ')
-					throw runtime_error("Correct use is \\d <table>.");
-				string table_name = command.substr(3);
-				const TableDescriptor *td = cat.getMetadataForTable(table_name);
-				if (td == nullptr)
-					throw runtime_error("Table " + table_name + " does not exist.");
-				list <const ColumnDescriptor *> col_list = cat.getAllColumnMetadataForTable(td->tableId);
-				cout << "TableId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
-				std::string SQLTypeName[] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT", "DATE" };
-				std::string compression[] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "TOKEN_DICT" };
+					throw runtime_error("Correct use is \\d <table> or \\d <table>.<column>.");
+        size_t dot = command.find_first_of('.');
+        if (dot == string::npos) {
+          string table_name = command.substr(3);
+          const TableDescriptor *td = cat.getMetadataForTable(table_name);
+          if (td == nullptr)
+            throw runtime_error("Table " + table_name + " does not exist.");
+          list <const ColumnDescriptor *> col_list = cat.getAllColumnMetadataForTable(td->tableId);
+          cout << "TableId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
+          std::string SQLTypeName[] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT", "DATE" };
+          std::string compression[] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "TOKEN_DICT" };
 
-				for (auto cd : col_list) {
-					cout << cd->tableId << "|";
-					cout << cd->columnId << "|";
-					cout << cd->columnName << "|";
-					cout << SQLTypeName[cd->columnType.type] << "|";
-					cout << cd->columnType.dimension << "|";
-					cout << cd->columnType.scale << "|";
-					if (cd->columnType.notnull)
-						cout << "true|";
-					else
-						cout << "false|";
-					cout << compression[cd->compression] << "|";
-					cout << cd->comp_param << "|";
-					cout << cd->chunks << "\n";
-				}
+          for (auto cd : col_list) {
+            cout << cd->tableId << "|";
+            cout << cd->columnId << "|";
+            cout << cd->columnName << "|";
+            cout << SQLTypeName[cd->columnType.type] << "|";
+            cout << cd->columnType.dimension << "|";
+            cout << cd->columnType.scale << "|";
+            if (cd->columnType.notnull)
+              cout << "true|";
+            else
+              cout << "false|";
+            cout << compression[cd->compression] << "|";
+            cout << cd->comp_param << "|";
+            cout << cd->chunks << "\n";
+          }
+        } else {
+          string table_name = command.substr(3, dot - 3);
+          string col_name = command.substr(dot+1);
+          const TableDescriptor *td = cat.getMetadataForTable(table_name);
+          if (td == nullptr)
+            throw runtime_error("Table " + table_name + " does not exist.");
+          const ColumnDescriptor *cd = cat.getMetadataForColumn(td->tableId, col_name);
+          if (cd == nullptr)
+            throw runtime_error("Column " + col_name + " does not exist.");
+          QueryInfo query_info;
+          td->fragmenter->getFragmentsForQuery(query_info);
+          cout << "Chunk Stats for " + table_name + "." + col_name << ":" << std::endl;
+          for (int i = 0; i < query_info.fragments.size(); i++) {
+            const auto& frag = query_info.fragments[i];
+            auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
+            const ChunkMetadata &chunkMetadata = chunk_meta_it->second;
+            cout << "(" << cat.get_currentDB().dbId << "," << td->tableId << "," << cd->columnId << "," << frag.fragmentId << ") ";
+            cout << "numBytes:" << chunkMetadata.numBytes;
+            cout << " numElements:" << chunkMetadata.numElements;
+            switch (cd->columnType.type) {
+              case kSMALLINT:
+                cout << " min:" << chunkMetadata.chunkStats.min.smallintval;
+                cout << " max:" << chunkMetadata.chunkStats.max.smallintval;
+                break;
+              case kINT:
+              case kTEXT:
+              case kVARCHAR:
+              case kCHAR:
+                if (IS_STRING(cd->columnType.type) && cd->compression != kENCODING_DICT)
+                  break;
+                cout << " min:" << chunkMetadata.chunkStats.min.intval;
+                cout << " max:" << chunkMetadata.chunkStats.max.intval;
+                break;
+              case kBIGINT:
+              case kNUMERIC:
+              case kDECIMAL:
+                cout << " min:" << chunkMetadata.chunkStats.min.bigintval;
+                cout << " max:" << chunkMetadata.chunkStats.max.bigintval;
+                break;
+              case kFLOAT:
+                cout << " min:" << chunkMetadata.chunkStats.min.floatval;
+                cout << " max:" << chunkMetadata.chunkStats.max.floatval;
+                break;
+              case kDOUBLE:
+                cout << " min:" << chunkMetadata.chunkStats.min.doubleval;
+                cout << " max:" << chunkMetadata.chunkStats.max.doubleval;
+                break;
+              case kTIME:
+              case kTIMESTAMP:
+              case kDATE:
+                cout << " min:" << chunkMetadata.chunkStats.min.timeval;
+                cout << " max:" << chunkMetadata.chunkStats.max.timeval;
+                break;
+              default:
+                break;
+            }
+            cout << std::endl;
+          }
+        }
 			}
 			break;
 		case 't':
