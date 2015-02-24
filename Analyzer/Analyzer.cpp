@@ -172,10 +172,69 @@ namespace Analyzer {
           ||
           (!IS_NUMBER(left_type.type) && IS_NUMBER(right_type.type)))
         throw std::runtime_error("cannot compare between numeric and non-numeric types.");
+      if ((IS_TIME(left_type.type) && !IS_TIME(right_type.type)) ||
+          (!IS_TIME(left_type.type) && IS_TIME(right_type.type)))
+        throw std::runtime_error("cannot compare between time and non-time types.");
       if (IS_NUMBER(left_type.type) && IS_NUMBER(right_type.type)) {
         common_type = common_numeric_type(left_type, right_type);
         *new_left_type = common_type;
         *new_right_type = common_type;
+      }
+      if (IS_TIME(left_type.type) && IS_TIME(right_type.type)) {
+        switch (left_type.type) {
+          case kTIMESTAMP:
+            switch (right_type.type) {
+              case kTIME:
+                throw std::runtime_error("Cannont compare between TIMESTAMP and TIME.");
+                break;
+              case kDATE:
+                *new_left_type = left_type;
+                *new_right_type = left_type;
+                break;
+              case kTIMESTAMP:
+                new_left_type->type = new_right_type->type = kTIMESTAMP;
+                new_left_type->dimension = new_right_type->dimension = std::max(left_type.dimension, right_type.dimension);
+                break;
+              default:
+                assert(false);
+            }
+            break;
+          case kTIME:
+            switch (right_type.type) {
+              case kTIMESTAMP:
+                throw std::runtime_error("Cannont compare between TIME and TIMESTAMP.");
+                break;
+              case kDATE:
+                throw std::runtime_error("Cannont compare between TIME and DATE.");
+                break;
+              case kTIME:
+                new_left_type->type = new_right_type->type = kTIME;
+                new_left_type->dimension = new_right_type->dimension = std::max(left_type.dimension, right_type.dimension);
+                break;
+              default:
+                assert(false);
+            }
+            break;
+          case kDATE:
+            switch (right_type.type) {
+              case kTIMESTAMP:
+                *new_left_type = right_type;
+                *new_right_type = right_type;
+                break;
+              case kDATE:
+                *new_left_type =  left_type;
+                *new_right_type = left_type;
+                break;
+              case kTIME:
+                throw std::runtime_error("Cannont compare between DATE and TIME.");
+                break;
+              default:
+                assert(false);
+            }
+            break;
+          default:
+            assert(false);
+        }
       }
       result_type.type = kBOOLEAN;
     } else if (IS_ARITHMETIC(op)) {
@@ -372,7 +431,8 @@ namespace Analyzer {
       return this;
     if (!IS_STRING(type_info.type) && !IS_STRING(new_type_info.type) &&
         (!IS_NUMBER(type_info.type) || !IS_NUMBER(new_type_info.type)) &&
-        (type_info.type != kTIMESTAMP || !IS_NUMBER(new_type_info.type)))
+        (type_info.type != kTIMESTAMP || !IS_NUMBER(new_type_info.type)) &&
+        (type_info.type != kDATE || new_type_info.type != kTIMESTAMP))
       throw std::runtime_error("Invalid CAST: incompatible types.");
     return new UOper(new_type_info, contains_agg, kCAST, this);
   }
