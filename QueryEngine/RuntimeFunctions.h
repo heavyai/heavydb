@@ -41,19 +41,4 @@ int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t key_qw_count,
                          const int32_t agg_col_count);
 
-enum ExtractField : int32_t {
-  kYEAR,
-  kMONTH,
-  kDAY,
-  kHOUR,
-  kMINUTE,
-  kSECOND,
-  kDOW,
-  kDOY,
-  kEPOCH
-};
-
-extern "C" __attribute__((noinline))
-int64_t ExtractFromTime(ExtractField f, time_t t);
-
 #endif  // QUERYENGINE_RUNTIMEFUNCTIONS_H

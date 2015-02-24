@@ -103,4 +103,7 @@ Datum
 StringToDatum(const std::string &s, SQLTypeInfo &ti);
 std::string
 DatumToString(Datum d, const SQLTypeInfo &ti);
+
+#include "../QueryEngine/ExtractFromTime.h"
+
 #endif // SQLTYPES_H
