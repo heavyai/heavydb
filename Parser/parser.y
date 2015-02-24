@@ -71,7 +71,7 @@ using namespace Parser;
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END ESCAPE EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF IN INSERT INTEGER INTO
-%token IS KEY LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
+%token IS LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
 %token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
@@ -240,7 +240,12 @@ opt_compression:
 column_constraint_def:
 		NOT NULLX { $<nodeval>$ = new ColumnConstraintDef(true, false, false, nullptr); }
 	|	NOT NULLX UNIQUE { $<nodeval>$ = new ColumnConstraintDef(true, true, false, nullptr); }
-	|	NOT NULLX PRIMARY KEY { $<nodeval>$ = new ColumnConstraintDef(true, true, true, nullptr); }
+	|	NOT NULLX PRIMARY NAME 
+  { 
+    if (!boost::iequals(*$<stringval>4, "key"))
+      throw std::runtime_error("Syntax error at " + *$<stringval>4);
+    $<nodeval>$ = new ColumnConstraintDef(true, true, true, nullptr);
+  }
 	|	DEFAULT literal { $<nodeval>$ = new ColumnConstraintDef(false, false, false, dynamic_cast<Literal*>($<nodeval>2)); }
 	|	DEFAULT NULLX { $<nodeval>$ = new ColumnConstraintDef(false, false, false, new NullLiteral()); }
 	|	DEFAULT USER { $<nodeval>$ = new ColumnConstraintDef(false, false, false, new UserLiteral()); }
@@ -252,14 +257,25 @@ column_constraint_def:
 table_constraint_def:
 		UNIQUE '(' column_commalist ')'
 	{ $<nodeval>$ = new UniqueDef(false, $<slistval>3); }
-	|	PRIMARY KEY '(' column_commalist ')'
-	{ $<nodeval>$ = new UniqueDef(true, $<slistval>4); }
-	|	FOREIGN KEY '(' column_commalist ')'
+	|	PRIMARY NAME '(' column_commalist ')'
+	{ 
+    if (!boost::iequals(*$<stringval>2, "key"))
+      throw std::runtime_error("Syntax error at " + *$<stringval>2);
+    $<nodeval>$ = new UniqueDef(true, $<slistval>4);
+  }
+	|	FOREIGN NAME '(' column_commalist ')'
 			REFERENCES table 
-	{ $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, nullptr); }
-	|	FOREIGN KEY '(' column_commalist ')'
+	{ 
+    if (!boost::iequals(*$<stringval>2, "key"))
+      throw std::runtime_error("Syntax error at " + *$<stringval>2);
+    $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, nullptr);
+  }
+	|	FOREIGN NAME '(' column_commalist ')'
 			REFERENCES table '(' column_commalist ')'
-	{ $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, $<slistval>9); }
+	{ 
+    if (!boost::iequals(*$<stringval>2, "key"))
+      throw std::runtime_error("Syntax error at " + *$<stringval>2);
+    $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, $<slistval>9);   }
 	|	CHECK '(' search_condition ')'
 	{ $<nodeval>$ = new CheckDef(dynamic_cast<Expr*>($<nodeval>3)); }
 	;
