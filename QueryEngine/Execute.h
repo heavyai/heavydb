@@ -199,7 +199,8 @@ private:
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const size_t groups_buffer_entry_count);
+    const size_t groups_buffer_entry_count,
+    const std::pair<bool, int64_t> fast_group_by);
 
   void nukeOldState();
   void* optimizeAndCodegenCPU(llvm::Function*,
@@ -217,7 +218,14 @@ private:
     const std::list<Analyzer::Expr*>& group_by_cols,
     const int32_t groups_buffer_entry_count,
     llvm::Module* module,
-    const bool hoist_literals);
+    const bool hoist_literals,
+    std::pair<bool, int64_t> fast_group_by);
+  llvm::Value* fastGroupByCodegen(
+    Analyzer::Expr* group_by_col,
+    const size_t agg_col_count,
+    const bool hoist_literals,
+    llvm::Module* module,
+    const int64_t min_val);
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
 
@@ -303,6 +311,19 @@ private:
       return literals_;
     }
 
+    template<class T>
+    size_t addStat(const T stat) {
+      const Executor::LiteralValue stat_val(stat);
+      stats_.emplace_back(stat);
+      const auto stat_bytes = literalBytes(stat_val);
+      stats_bytes_ = addAligned(stats_bytes_, stat_bytes);
+      return stats_bytes_ - stat_bytes;
+    }
+
+    const LiteralValues& getStats() const {
+      return stats_;
+    }
+
     llvm::Module* module_;
     llvm::Function* row_func_;
     llvm::LLVMContext& context_;
@@ -329,6 +350,8 @@ private:
 
     LiteralValues literals_;
     size_t literal_bytes_;
+    LiteralValues stats_;
+    size_t stats_bytes_;
   };
   std::unique_ptr<CgenState> cgen_state_;
 

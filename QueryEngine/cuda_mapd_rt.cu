@@ -67,6 +67,18 @@ __device__ int64_t* get_group_value(int64_t* groups_buffer,
   return NULL;
 }
 
+extern "C" __attribute__((always_inline)) inline
+__device__ int64_t* get_group_value_fast(int64_t* groups_buffer,
+                                         const int64_t key,
+                                         const int64_t min_key,
+                                         const int32_t agg_col_count) {
+  int64_t off = (key - min_key) * (1 + agg_col_count);
+  if (groups_buffer[off] == EMPTY_KEY) {
+    groups_buffer[off] = key;
+  }
+  return groups_buffer + off + 1;
+}
+
 #define SECSPERMIN	60L
 #define MINSPERHOUR	60L
 #define HOURSPERDAY	24L

@@ -226,6 +226,18 @@ int64_t* get_group_value(int64_t* groups_buffer,
   return nullptr;
 }
 
+extern "C" __attribute__((always_inline))
+int64_t* get_group_value_fast(int64_t* groups_buffer,
+                              const int64_t key,
+                              const int64_t min_key,
+                              const int32_t agg_col_count) {
+  auto off = (key - min_key) * (1 + agg_col_count);
+  if (groups_buffer[off] == EMPTY_KEY) {
+    groups_buffer[off] = key;
+  }
+  return groups_buffer + off + 1;
+}
+
 #ifdef __clang__
 #include "ExtractFromTime.cpp"
 #endif
