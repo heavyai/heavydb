@@ -80,13 +80,26 @@ public:
         Analyzer::Query query;
         dml->analyze(*cat_, query);
         Planner::Optimizer optimizer(query, *cat_);
-        auto plan = optimizer.optimize();
-        std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
-        auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId);
-        const auto results = executor->execute(plan);
-        if (!results.empty()) {
-          for (size_t i = 0; i < results.front().size(); ++i) {
-            _return.proj_names.push_back(std::to_string(i));
+        auto root_plan = optimizer.optimize();
+        std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
+        const auto results = executor->execute(root_plan);
+        {
+          const auto plan = root_plan->get_plan();
+          CHECK(plan);
+          const auto& targets = plan->get_targetlist();
+          ProjInfo proj_info;
+          size_t i = 0;
+          for (const auto target : targets) {
+            proj_info.proj_name = target->get_resname();
+            if (proj_info.proj_name.empty()) {
+              proj_info.proj_name = std::to_string(i);
+            }
+            const auto& target_type = target->get_expr()->get_type_info();
+            proj_info.proj_type.type = type_to_thrift(target_type.type);
+            proj_info.proj_type.nullable = !target_type.notnull;
+            _return.proj_info.push_back(proj_info);
+            ++i;
           }
         }
         for (const auto& row : results) {

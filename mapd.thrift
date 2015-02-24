@@ -23,13 +23,18 @@ struct ColumnType {
   2: bool nullable
 }
 
+struct ProjInfo {
+  1: string proj_name,
+  2: ColumnType proj_type
+}
+
 typedef list<ColumnValue> TResultRow
 typedef list<TResultRow> TResultRowSet
-typedef list<string> TResultProjNames
+typedef list<ProjInfo> TResultProjInfo
 typedef map<string, ColumnType> ColumnTypes
 
 struct QueryResult {
-  1: TResultProjNames proj_names
+  1: TResultProjInfo proj_info
   2: TResultRowSet rows
 }
 
