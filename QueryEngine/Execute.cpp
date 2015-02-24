@@ -685,8 +685,9 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   const auto& ti = uoper->get_type_info();
   const auto operand_lv = codegen(uoper->get_operand(), hoist_literals);
   if (operand_lv->getType()->isIntegerTy()) {
-    CHECK(IS_INTEGER(uoper->get_operand()->get_type_info().type));
-    if (IS_INTEGER(ti.type)) {
+    CHECK(IS_INTEGER(uoper->get_operand()->get_type_info().type) ||
+          IS_TIME(uoper->get_operand()->get_type_info().type));
+    if (IS_INTEGER(ti.type) || IS_TIME(ti.type)) {
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
       const auto target_width = get_bit_width(ti.type);
       return cgen_state_->ir_builder_.CreateCast(target_width > operand_width
