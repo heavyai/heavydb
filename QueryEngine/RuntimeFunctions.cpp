@@ -226,43 +226,6 @@ int64_t* get_group_value(int64_t* groups_buffer,
   return nullptr;
 }
 
-/*
- * @brief support the SQL EXTRACT function
- */
-extern "C" __attribute__((noinline))
-int64_t ExtractFromTime(ExtractField field, time_t timeval) {
-  int64_t result;
-  if (field == kEPOCH)
-    return timeval;
-  std::tm tm_struct;
-  gmtime_r(&timeval, &tm_struct);
-  switch (field) {
-    case kYEAR:
-      result = 1900 + tm_struct.tm_year;
-      break;
-    case kMONTH:
-      result = tm_struct.tm_mon + 1;
-      break;
-    case kDAY:
-      result = tm_struct.tm_mday;
-      break;
-    case kHOUR:
-      result = tm_struct.tm_hour;
-      break;
-    case kMINUTE:
-      result = tm_struct.tm_min;
-      break;
-    case kSECOND:
-      result = tm_struct.tm_sec;
-      break;
-    case kDOW:
-      result = tm_struct.tm_wday;
-      break;
-    case kDOY:
-      result = tm_struct.tm_yday + 1;
-      break;
-    default:
-      assert(false);
-  }
-  return result;
-}
+#ifdef __clang__
+#include "ExtractFromTime.cpp"
+#endif
