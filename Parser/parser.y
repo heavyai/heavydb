@@ -829,7 +829,12 @@ function_ref:
 literal:
 		STRING { $<nodeval>$ = new StringLiteral($<stringval>1); }
 	|	INTNUM { $<nodeval>$ = new IntLiteral($<intval>1); }
-	|	FIXEDNUM { $<nodeval>$ = new FixedPtLiteral($<stringval>1); }
+	|	FIXEDNUM 
+  { 
+    // @TODO(wei) remove temporary hack and re-enable Fixed Pointer numbers
+    // $<nodeval>$ = new FixedPtLiteral($<stringval>1);
+    $<nodeval>$ = new DoubleLiteral(std::stod(*$<stringval>1));
+  }
 	| FLOAT { $<nodeval>$ = new FloatLiteral($<floatval>1); }
 	| DOUBLE { $<nodeval>$ = new DoubleLiteral($<doubleval>1); }
 	| data_type STRING
