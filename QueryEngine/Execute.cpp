@@ -1173,13 +1173,14 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
           const auto agg_kind = row.agg_kinds_[agg_col_idx];
           const auto agg_type = row.agg_types_[agg_col_idx];
-          CHECK(IS_INTEGER(agg_type) || IS_STRING(agg_type) || agg_type == kFLOAT || agg_type == kDOUBLE);
+          CHECK(IS_INTEGER(agg_type) || IS_TIME(agg_type) || IS_STRING(agg_type) ||
+                agg_type == kFLOAT || agg_type == kDOUBLE);
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
           switch (agg_kind) {
           case kSUM:
           case kCOUNT:
           case kAVG:
-            if (IS_INTEGER(agg_type)) {
+            if (IS_INTEGER(agg_type) || IS_TIME(agg_type)) {
               agg_sum(
                 &old_agg_results[actual_col_idx],
                 row.agg_results_[actual_col_idx]);
@@ -1193,7 +1194,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
             }
             break;
           case kMIN:
-            if (IS_INTEGER(agg_type)) {
+            if (IS_INTEGER(agg_type) || IS_TIME(agg_type)) {
               agg_min(
                 &old_agg_results[actual_col_idx],
                 row.agg_results_[actual_col_idx]);
@@ -1204,7 +1205,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
             }
             break;
           case kMAX:
-            if (IS_INTEGER(agg_type)) {
+            if (IS_INTEGER(agg_type) || IS_TIME(agg_type)) {
               agg_max(
                 &old_agg_results[actual_col_idx],
                 row.agg_results_[actual_col_idx]);
