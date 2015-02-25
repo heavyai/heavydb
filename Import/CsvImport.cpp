@@ -277,7 +277,7 @@ void do_import(
   insert_data.numRows = row_count;
   for (const auto& import_buff : import_buffers) {
     DataBlockPtr p;
-    if (IS_INTEGER(import_buff->getType())) {
+    if (IS_INTEGER(import_buff->getType()) || IS_TIME(import_buff->getType())) {
       p.numbersPtr = import_buff->getIntBytes();
     } else {
       CHECK_EQ(kTEXT, import_buff->getType());
