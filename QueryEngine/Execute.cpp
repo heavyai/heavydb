@@ -760,6 +760,9 @@ llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
   case kINT:
     return llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), std::numeric_limits<int32_t>::min());
   case kBIGINT:
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
     return llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), std::numeric_limits<int64_t>::min());
   default:
     CHECK(false);
@@ -1059,17 +1062,17 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypes target_type) {
   case kSUM:
   case kCOUNT: {
     const double zero_double { 0. };
-    return IS_INTEGER(target_type) ? 0L : *reinterpret_cast<const int64_t*>(&zero_double);
+    return (IS_INTEGER(target_type) || IS_TIME(target_type)) ? 0L : *reinterpret_cast<const int64_t*>(&zero_double);
   }
   case kMIN: {
     const double max_double { std::numeric_limits<double>::max() };
-    return IS_INTEGER(target_type)
+    return (IS_INTEGER(target_type) || IS_TIME(target_type))
       ? std::numeric_limits<int64_t>::max()
       : *reinterpret_cast<const int64_t*>(&max_double);
   }
   case kMAX: {
     const auto min_double { std::numeric_limits<double>::min() };
-    return IS_INTEGER(target_type)
+    return (IS_INTEGER(target_type) || IS_TIME(target_type))
       ? std::numeric_limits<int64_t>::min()
       : *reinterpret_cast<const int64_t*>(&min_double);
   }
@@ -1083,7 +1086,7 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64
   case kAVG:
   case kSUM:
   case kCOUNT:
-    if (IS_INTEGER(target_type)) {
+    if (IS_INTEGER(target_type) || IS_TIME(target_type)) {
       return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg, target_type));
     } else {
       CHECK(target_type == kDOUBLE || target_type == kFLOAT);
@@ -1095,7 +1098,7 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64
       return *reinterpret_cast<const int64_t*>(&r);
     }
   case kMIN: {
-    if (IS_INTEGER(target_type)) {
+    if (IS_INTEGER(target_type) || IS_TIME(target_type)) {
       const int64_t& (*f)(const int64_t&, const int64_t&) = std::min<int64_t>;
       return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg, target_type), f);
     } else {
@@ -1109,7 +1112,7 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64
     }
   }
   case kMAX: {
-    if (IS_INTEGER(target_type)) {
+    if (IS_INTEGER(target_type) || IS_TIME(target_type)) {
       const int64_t& (*f)(const int64_t&, const int64_t&) = std::max<int64_t>;
       return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg, target_type), f);
     } else {
@@ -1361,29 +1364,29 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
                           target_expr, 0, nullptr);
       continue;
     }
-    CHECK(IS_INTEGER(target_type) || target_type == kFLOAT || target_type == kDOUBLE);
+    CHECK(IS_INTEGER(target_type) || IS_TIME(target_type) || target_type == kFLOAT || target_type == kDOUBLE);
     const auto agg_type = agg_expr->get_aggtype();
     const auto agg_init_val = init_agg_val(agg_type, target_type);
     switch (agg_type) {
     case kAVG: {
       const auto agg_arg_type = agg_expr->get_arg()->get_type_info().type;
       CHECK(IS_INTEGER(agg_arg_type) || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
-      result.emplace_back(IS_INTEGER(agg_arg_type) ? "agg_sum" : "agg_sum_double",
+      result.emplace_back((IS_INTEGER(agg_arg_type) || IS_TIME(agg_arg_type)) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
-      result.emplace_back(IS_INTEGER(agg_arg_type) ? "agg_count" : "agg_count_double",
+      result.emplace_back((IS_INTEGER(agg_arg_type) || IS_TIME(agg_arg_type)) ? "agg_count" : "agg_count_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
    }
     case kMIN:
-      result.emplace_back(IS_INTEGER(target_type) ? "agg_min" : "agg_min_double",
+      result.emplace_back((IS_INTEGER(target_type) || IS_TIME(target_type)) ? "agg_min" : "agg_min_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kMAX:
-      result.emplace_back(IS_INTEGER(target_type) ? "agg_max" : "agg_max_double",
+      result.emplace_back((IS_INTEGER(target_type) || IS_TIME(target_type)) ? "agg_max" : "agg_max_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kSUM:
-      result.emplace_back(IS_INTEGER(target_type) ? "agg_sum" : "agg_sum_double",
+      result.emplace_back((IS_INTEGER(target_type) || IS_TIME(target_type)) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kCOUNT:
@@ -2438,7 +2441,7 @@ void Executor::call_aggregators(
     // TODO(alex): handle non-integer columns as well
     if (std::get<0>(agg_info) != "agg_id" &&
         aggr_col &&
-        IS_INTEGER(aggr_col->get_type_info().type) &&
+        (IS_INTEGER(aggr_col->get_type_info().type) || IS_TIME(aggr_col->get_type_info().type)) &&
         !aggr_col->get_type_info().notnull) {
       auto agg_func_skip_val = module->getFunction(std::get<0>(agg_info) + "_skip_val");
       CHECK(agg_func_skip_val);
