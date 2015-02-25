@@ -702,11 +702,18 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
         : llvm::Type::getDoubleTy(cgen_state_->context_));
     }
   } else {
-    CHECK_EQ(uoper->get_operand()->get_type_info().type, kFLOAT);
-    CHECK(operand_lv->getType()->isFloatTy());
-    CHECK_EQ(ti.type, kDOUBLE);
-    return cgen_state_->ir_builder_.CreateFPExt(
-      operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
+    CHECK(uoper->get_operand()->get_type_info().type == kFLOAT ||
+          uoper->get_operand()->get_type_info().type == kDOUBLE);
+    CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
+    if (ti.type == kDOUBLE) {
+      return cgen_state_->ir_builder_.CreateFPExt(
+        operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
+    } else if (IS_INTEGER(ti.type)) {
+      return cgen_state_->ir_builder_.CreateFPToSI(operand_lv,
+        get_int_type(get_bit_width(ti.type), cgen_state_->context_));
+    } else {
+      CHECK(false);
+    }
   }
 }
 
