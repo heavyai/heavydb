@@ -93,7 +93,6 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
     FuncTy_5_args.push_back(PointerTy_6);
   }
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
-  FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
   if (hoist_literals) {
     FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
   }
@@ -147,11 +146,10 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   PointerType* PointerTy_9 = PointerType::get(PointerTy_1, 0);
 
   std::vector<Type*> FuncTy_8_args;
-  FuncTy_8_args.push_back(PointerTy_9);  // column buffers
+  FuncTy_8_args.push_back(PointerTy_9);
   if (hoist_literals) {
     FuncTy_8_args.push_back(PointerTy_1);
   }
-  FuncTy_8_args.push_back(PointerTy_1);  // column stats
   FuncTy_8_args.push_back(PointerTy_6);
 
   FuncTy_8_args.push_back(PointerTy_6);
@@ -204,12 +202,6 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
       Attrs.push_back(AttributeSet::get(mod->getContext(), 4U, B));
     }
 
-    {
-      AttrBuilder B;
-      B.addAttribute(Attribute::NoCapture);
-      Attrs.push_back(AttributeSet::get(mod->getContext(), 5U, B));
-    }
-
     Attrs.push_back(PAS);
 
     func_query_template_PAL = AttributeSet::get(mod->getContext(), Attrs);
@@ -219,8 +211,6 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   Function::arg_iterator args = func_query_template->arg_begin();
   Value* ptr_byte_stream_119 = args++;
   ptr_byte_stream_119->setName("byte_stream");
-  auto col_stats = args++;
-  col_stats->setName("col_stats");
   Value* literals { nullptr };
   if (hoist_literals) {
     literals = args++;
@@ -294,7 +284,6 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
     CHECK(literals);
     void_134_params.push_back(literals);
   }
-  void_134_params.push_back(col_stats);
   CallInst* void_134 = CallInst::Create(func_row_process, void_134_params, "", label_121);
   void_134->setCallingConv(CallingConv::C);
   void_134->setTailCall(false);
@@ -363,11 +352,10 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   PointerType* PointerTy_9 = PointerType::get(PointerTy_1, 0);
 
   std::vector<Type*>FuncTy_12_args;
-  FuncTy_12_args.push_back(PointerTy_9);  // column buffers
+  FuncTy_12_args.push_back(PointerTy_9);
   if (hoist_literals) {
     FuncTy_12_args.push_back(PointerTy_1);
   }
-  FuncTy_12_args.push_back(PointerTy_1);  // column stats
   FuncTy_12_args.push_back(PointerTy_6);
   FuncTy_12_args.push_back(PointerTy_6);
   PointerType* PointerTy_13 = PointerType::get(PointerTy_6, 0);
@@ -427,14 +415,6 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
     Attrs.push_back(PAS);
     {
       AttrBuilder B;
-      B.addAttribute(Attribute::ReadOnly);
-      B.addAttribute(Attribute::NoCapture);
-      PAS = AttributeSet::get(mod->getContext(), 5U, B);
-    }
-
-    Attrs.push_back(PAS);
-    {
-      AttrBuilder B;
       B.addAttribute(Attribute::UWTable);
       PAS = AttributeSet::get(mod->getContext(), ~0U, B);
     }
@@ -449,8 +429,6 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   Value* ptr_byte_stream_143 = args++;
   ptr_byte_stream_143->setName("byte_stream");
   Value* literals { nullptr };
-  auto col_stats = args++;
-  col_stats->setName("col_stats");
   if (hoist_literals) {
     literals = args++;
     literals->setName("literals");
@@ -507,7 +485,6 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
     CHECK(literals);
     void_162_params.push_back(literals);
   }
-  void_162_params.push_back(col_stats);
   CallInst* void_162 = CallInst::Create(func_row_process, void_162_params, "", label_148);
   void_162->setCallingConv(CallingConv::C);
   void_162->setTailCall(true);

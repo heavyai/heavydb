@@ -168,7 +168,6 @@ private:
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
-    const std::vector<ChunkStats>& col_stats,
     const int64_t num_rows,
     Data_Namespace::DataMgr*,
     const int32_t db_id);
