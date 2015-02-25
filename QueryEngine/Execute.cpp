@@ -333,6 +333,10 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
     case kDATE:
       return std::make_shared<FixedWidthInt>(sizeof(time_t));
     default:
+      // TODO(alex): make columnar results write the correct encoding
+      if (IS_STRING(type_info.type)) {
+        return std::make_shared<FixedWidthInt>(4);
+      }
       CHECK(false);
     }
   case kENCODING_DICT:
@@ -744,9 +748,9 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, hoist_literals);
-  CHECK(IS_INTEGER(operand->get_type_info().type));
+  CHECK(IS_INTEGER(operand->get_type_info().type) || IS_STRING(operand->get_type_info().type));
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-    operand_lv, inlineIntNull(operand->get_type_info().type));
+    operand_lv, inlineIntNull(IS_STRING(operand->get_type_info().type) ? kINT : operand->get_type_info().type));
 }
 
 llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
