@@ -108,7 +108,7 @@ public:
             ColumnValue col_val;
             const auto agg_result = row.agg_result(i);
             if (boost::get<int64_t>(&agg_result)) {
-              col_val.type = TDatumType::INT;
+              col_val.type = type_to_thrift(row.agg_type(i));
               col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
             } else if (boost::get<double>(&agg_result)) {
               col_val.type = TDatumType::REAL;
