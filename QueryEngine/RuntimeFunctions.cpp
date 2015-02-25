@@ -200,7 +200,7 @@ int32_t key_hash(const int64_t* key, const int32_t key_qw_count, const int32_t g
   for (int32_t i = 0; i < key_qw_count; ++i) {
     hash = ((hash << 5) - hash + key[i]) % groups_buffer_entry_count;
   }
-  return hash;
+  return static_cast<uint32_t>(hash) % groups_buffer_entry_count;
 }
 
 extern "C"
