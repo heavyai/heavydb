@@ -288,8 +288,8 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT SUM(f + d) FROM test;", dt);
     c("SELECT AVG(x * f) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2;", dt);
-    c("SELECT COUNT(*) FROM test WHERE f > 1.1 AND f < 1.3;", dt);
-    c("SELECT COUNT(*) FROM test WHERE f > 1.2 AND f < 1.4;", dt);
+    c("SELECT COUNT(*) FROM test WHERE f > 1.101 AND f < 1.299;", dt);
+    c("SELECT COUNT(*) FROM test WHERE f > 1.201 AND f < 1.4;", dt);
     c("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2 AND d > 2.0 AND d < 2.4;", dt);
     c("SELECT COUNT(*) FROM test WHERE f > 1.0 AND f < 1.2 OR (d > 2.0 AND d < 3.0);", dt);
     c("SELECT SUM(x + y) FROM test WHERE f > 1.0 AND f < 1.2;", dt);
