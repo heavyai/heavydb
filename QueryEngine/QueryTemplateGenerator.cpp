@@ -92,6 +92,7 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
   for (size_t i = 0; i < aggr_col_count; ++i) {
     FuncTy_5_args.push_back(PointerTy_6);
   }
+  FuncTy_5_args.push_back(PointerTy_6);
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
   if (hoist_literals) {
     FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
@@ -154,6 +155,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
   FuncTy_8_args.push_back(PointerTy_6);
   PointerType* PointerTy_10 = PointerType::get(PointerTy_6, 0);
+  FuncTy_8_args.push_back(PointerTy_10);
   FuncTy_8_args.push_back(PointerTy_10);
 
   FunctionType* FuncTy_8 = FunctionType::get(
@@ -222,6 +224,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   ptr_agg_init_val->setName("agg_init_val");
   Value* ptr_out = args++;
   ptr_out->setName("out");
+  Value* ptr_unused = args++;
+  ptr_unused->setName("unused");
 
   BasicBlock* label_120 = BasicBlock::Create(mod->getContext(), "", func_query_template, 0);
   BasicBlock* label__lr_ph = BasicBlock::Create(mod->getContext(), ".lr.ph", func_query_template, 0);
@@ -279,6 +283,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
   std::vector<Value*> void_134_params;
   void_134_params.insert(void_134_params.end(), ptr_result_vec.begin(), ptr_result_vec.end());
+  void_134_params.push_back(ConstantPointerNull::get(PointerTy_6));
   void_134_params.push_back(int64_pos_01);
   if (hoist_literals) {
     CHECK(literals);
@@ -361,6 +366,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   PointerType* PointerTy_13 = PointerType::get(PointerTy_6, 0);
 
   FuncTy_12_args.push_back(PointerTy_13);
+  FuncTy_12_args.push_back(PointerTy_13);
   FunctionType* FuncTy_12 = FunctionType::get(
     /*Result=*/Type::getVoidTy(mod->getContext()),
     /*Params=*/FuncTy_12_args,
@@ -439,6 +445,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   ptr_agg_init_val_145->setName("agg_init_val");
   Value* ptr_group_by_buffers = args++;
   ptr_group_by_buffers->setName("group_by_buffers");
+  Value* ptr_small_groups_buffer = args++;
+  ptr_small_groups_buffer->setName("small_groups_buffer");
 
   BasicBlock* label_146 = BasicBlock::Create(mod->getContext(), "", func_query_group_by_template, 0);
   BasicBlock* label__lr_ph_147 = BasicBlock::Create(mod->getContext(), ".lr.ph", func_query_group_by_template, 0);
@@ -465,6 +473,9 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   GetElementPtrInst* ptr_154 = GetElementPtrInst::Create(ptr_group_by_buffers, int64_153, "", label_146);
   LoadInst* ptr_155 = new LoadInst(ptr_154, "", false, label_146);
   ptr_155->setAlignment(8);
+  auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, int64_153, "", label_146);
+  auto small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
+  small_ptr_155->setAlignment(8);
   ICmpInst* int1_156 = new ICmpInst(*label_146, ICmpInst::ICMP_SLT, int64_153, int64_150, "");
   BranchInst::Create(label__lr_ph_147, label___crit_edge_149, int1_156, label_146);
 
@@ -480,6 +491,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
 
   std::vector<Value*> void_162_params;
   void_162_params.push_back(ptr_155);
+  void_162_params.push_back(small_ptr_155);
   void_162_params.push_back(int64_pos_01_160);
   if (hoist_literals) {
     CHECK(literals);
