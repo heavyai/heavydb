@@ -694,6 +694,11 @@ namespace Parser {
           Analyzer::Var *v = dynamic_cast<Analyzer::Var*>(gexpr);
           int n = v->get_varno();
           gexpr = tlist[n - 1]->get_expr();
+          Analyzer::ColumnVar *cv = dynamic_cast<Analyzer::ColumnVar*>(gexpr);
+          if (cv != nullptr) {
+            // inherit all ColumnVar info for lineage.
+            *dynamic_cast<Analyzer::ColumnVar*>(v) = *cv;
+          }
           v->set_which_row(Analyzer::Var::kGROUPBY);
           v->set_varno(gexpr_no);
           tlist[n - 1]->set_expr(v);

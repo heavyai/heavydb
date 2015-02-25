@@ -771,7 +771,7 @@ namespace Analyzer {
   Var::check_group_by(const std::list<Expr*> *groupby) const
   {
     if (which_row != kGROUPBY)
-      throw std::runtime_error("Intern error: invalid VAR in GROUP BY or HAVING.");
+      throw std::runtime_error("Internal error: invalid VAR in GROUP BY or HAVING.");
   }
 
   void
@@ -927,7 +927,7 @@ namespace Analyzer {
           return colvar->deep_copy();
       }
     }
-    throw std::runtime_error("Intern error: cannot find ColumnVar in targetlist.");
+    throw std::runtime_error("Internal error: cannot find ColumnVar in targetlist.");
   }
 
   Expr *
@@ -943,7 +943,7 @@ namespace Analyzer {
         return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), Var::kINPUT_OUTER, varno);
       varno++;
     }
-    throw std::runtime_error("Intern error: cannot find ColumnVar in child targetlist.");
+    throw std::runtime_error("Internal error: cannot find ColumnVar in child targetlist.");
   }
 
   Expr *
@@ -961,7 +961,7 @@ namespace Analyzer {
       }
       varno++;
     }
-    throw std::runtime_error("Intern error: cannot find ColumnVar from having clause in targetlist.");
+    throw std::runtime_error("Internal error: cannot find ColumnVar from having clause in targetlist.");
   }
 
   Expr *
@@ -974,7 +974,7 @@ namespace Analyzer {
         return new Var(e->get_type_info(), Var::kINPUT_OUTER, varno);
       varno++;
     }
-    throw std::runtime_error("Intern error: cannot find Var from having clause in targetlist.");
+    throw std::runtime_error("Internal error: cannot find Var from having clause in targetlist.");
   }
 
   Expr *
@@ -1014,7 +1014,7 @@ namespace Analyzer {
           return agg->deep_copy();
       }
     }
-    throw std::runtime_error("Intern error: cannot find AggExpr in targetlist.");
+    throw std::runtime_error("Internal error: cannot find AggExpr in targetlist.");
   }
 
   Expr *
@@ -1036,7 +1036,7 @@ namespace Analyzer {
       }
       varno++;
     }
-    throw std::runtime_error("Intern error: cannot find AggExpr from having clause in targetlist.");
+    throw std::runtime_error("Internal error: cannot find AggExpr from having clause in targetlist.");
   }
 
   Expr *
