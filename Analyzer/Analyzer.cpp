@@ -164,23 +164,13 @@ namespace Analyzer {
         throw std::runtime_error("non-boolean operands cannot be used in logic operations.");
       result_type.set_type(kBOOLEAN);
     } else if (IS_COMPARISON(op)) {
-      if ((left_type.is_string() && !right_type.is_string())
-          ||
-          (!left_type.is_string() && right_type.is_string()))
-        throw std::runtime_error("cannot compare between string and non-string types.");
-      if ((left_type.is_number() && !right_type.is_number())
-          ||
-          (!left_type.is_number() && right_type.is_number()))
-        throw std::runtime_error("cannot compare between numeric and non-numeric types.");
-      if ((left_type.is_time() && !right_type.is_time()) ||
-          (!left_type.is_time() && right_type.is_time()))
-        throw std::runtime_error("cannot compare between time and non-time types.");
       if (left_type.is_number() && right_type.is_number()) {
         common_type = common_numeric_type(left_type, right_type);
         *new_left_type = common_type;
+        new_left_type->set_notnull(left_type.get_notnull());
         *new_right_type = common_type;
-      }
-      if (left_type.is_time() && right_type.is_time()) {
+        new_right_type->set_notnull(right_type.get_notnull());
+      } else if (left_type.is_time() && right_type.is_time()) {
         switch (left_type.get_type()) {
           case kTIMESTAMP:
             switch (right_type.get_type()) {
@@ -235,14 +225,28 @@ namespace Analyzer {
           default:
             assert(false);
         }
-      }
+      } else if (left_type.is_string() && right_type.is_time()) {
+        *new_left_type = right_type;
+        new_left_type->set_notnull(left_type.get_notnull());
+        *new_right_type = right_type;
+      } else if (left_type.is_time() && right_type.is_string()) {
+        *new_left_type = left_type;
+        *new_right_type = left_type;
+        new_right_type->set_notnull(right_type.get_notnull());
+      } else if (left_type.is_string() && right_type.is_string()) {
+        *new_left_type = left_type;
+        *new_right_type = right_type;
+      } else
+        throw std::runtime_error("Cannot compare between " + left_type.get_type_name() + " and " + right_type.get_type_name());
       result_type.set_type(kBOOLEAN);
     } else if (IS_ARITHMETIC(op)) {
       if (!left_type.is_number() || !right_type.is_number())
         throw std::runtime_error("non-numeric operands in arithmetic operations.");
       common_type = common_numeric_type(left_type, right_type);
       *new_left_type = common_type;
+      new_left_type->set_notnull(left_type.get_notnull());
       *new_right_type = common_type;
+      new_right_type->set_notnull(right_type.get_notnull());
       result_type = common_type;
     } else {
       throw std::runtime_error("invalid binary operator type.");
