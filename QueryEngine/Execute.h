@@ -186,8 +186,7 @@ private:
     const int64_t* group_by_buffer,
     const size_t group_by_col_count,
     const size_t agg_col_count,
-    const std::list<Analyzer::Expr*>& target_exprs,
-    const int32_t db_id);
+    const std::list<Analyzer::Expr*>& target_exprs);
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   std::pair<void*, LiteralValues> compilePlan(

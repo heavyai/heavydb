@@ -1239,8 +1239,7 @@ Executor::ResultRows Executor::groupBufferToResults(
     const int64_t* group_by_buffer,
     const size_t group_by_col_count,
     const size_t agg_col_count,
-    const std::list<Analyzer::Expr*>& target_exprs,
-    const int32_t db_id) {
+    const std::list<Analyzer::Expr*>& target_exprs) {
   std::vector<ResultRow> results;
   for (size_t i = 0; i < groups_buffer_entry_count_; ++i) {
     const size_t key_off = (group_by_col_count + agg_col_count) * i;
@@ -1469,8 +1468,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   const auto hoist_buf = serializeLiterals(query_code_and_literals.second);
   launch_query_cpu_code(query_code_and_literals.first, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals, group_by_buffers);
-  return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs,
-    cat.get_currentDB().dbId);
+  return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs);
 }
 
 std::vector<ResultRow> Executor::executeSortPlan(
@@ -1791,7 +1789,7 @@ void Executor::executePlanWithGroupBy(
     launch_query_cpu_code(query_native_code, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers);
     results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count,
-      target_exprs_list, db_id);
+      target_exprs_list);
   } else {
     launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, group_by_buffers, groups_buffer_size, data_mgr,
@@ -1800,7 +1798,7 @@ void Executor::executePlanWithGroupBy(
     for (size_t i = 0; i < num_buffers; ++i) {
       results_per_sm.push_back(groupBufferToResults(
         group_by_buffers[i], group_by_col_count, agg_col_count, 
-        target_exprs_list, db_id));
+        target_exprs_list));
     }
     results = reduceMultiDeviceResults(results_per_sm);
   }
