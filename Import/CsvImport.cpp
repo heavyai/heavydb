@@ -73,8 +73,8 @@ public:
   TypedImportBuffer(
     const ColumnDescriptor* col_desc,
     StringDictionary* string_dict)
-    : type_(col_desc->columnType.type)
-    , encoding_(col_desc->compression)
+    : type_(col_desc->columnType.get_type())
+    , encoding_(col_desc->columnType.get_compression())
     , string_dict_(string_dict) {
     switch (type_) {
     case kSMALLINT:
@@ -336,7 +336,7 @@ void CsvImporter::import() {
     CHECK_EQ(CsvParser_getNumFields(row), col_descriptors.size());
     int col_idx = 0;
     for (const auto col_desc : col_descriptors) {
-    switch (col_desc->columnType.type) {
+    switch (col_desc->columnType.get_type()) {
     case kSMALLINT:
       try {
         import_buffers[col_idx]->addSmallint(boost::lexical_cast<int16_t>(row_fields[col_idx]));
@@ -359,7 +359,7 @@ void CsvImporter::import() {
       }
       break;
     case kTEXT: {
-      if (col_desc->compression == kENCODING_DICT) {
+      if (col_desc->columnType.get_compression() == kENCODING_DICT) {
         import_buffers[col_idx]->addDictEncodedString(row_fields[col_idx]);
       } else {
         import_buffers[col_idx]->addString(row_fields[col_idx]);

@@ -223,12 +223,12 @@ void Catalog::buildMaps() {
 				cd->tableId = sqliteConnector_.getData<int>(r,0);
 				cd->columnId = sqliteConnector_.getData<int>(r,1);
         cd->columnName = sqliteConnector_.getData<string>(r,2);
-				cd->columnType.type = (SQLTypes)sqliteConnector_.getData<int>(r,3);
-				cd->columnType.dimension = sqliteConnector_.getData<int>(r,4);
-				cd->columnType.scale = sqliteConnector_.getData<int>(r,5);
-				cd->columnType.notnull = sqliteConnector_.getData<bool>(r,6);
-				cd->compression = (EncodingType)sqliteConnector_.getData<int>(r,7);
-				cd->comp_param = sqliteConnector_.getData<int>(r,8);
+				cd->columnType.set_type((SQLTypes)sqliteConnector_.getData<int>(r,3));
+				cd->columnType.set_dimension(sqliteConnector_.getData<int>(r,4));
+				cd->columnType.set_scale(sqliteConnector_.getData<int>(r,5));
+				cd->columnType.set_notnull(sqliteConnector_.getData<bool>(r,6));
+				cd->columnType.set_compression((EncodingType)sqliteConnector_.getData<int>(r,7));
+				cd->columnType.set_comp_param(sqliteConnector_.getData<int>(r,8));
 				cd->chunks = sqliteConnector_.getData<string>(r,9);
         ColumnKey columnKey(cd->tableId, cd->columnName);
         columnDescriptorMap_[columnKey] = cd;
@@ -384,7 +384,7 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
 		td.tableId = sqliteConnector_.getData<int>(0, 0);
 		int colId = 1;
 		for (auto cd : columns) {
-			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(td.tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd.columnName + "', " + boost::lexical_cast<string>(cd.columnType.type) + ", " + boost::lexical_cast<string>(cd.columnType.dimension) + ", " + boost::lexical_cast<string>(cd.columnType.scale) + ", " + boost::lexical_cast<string>(cd.columnType.notnull) + ", " + boost::lexical_cast<string>(cd.compression) + ", " + boost::lexical_cast<string>(cd.comp_param) + ", '')");
+			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(td.tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd.columnName + "', " + boost::lexical_cast<string>(cd.columnType.get_type()) + ", " + boost::lexical_cast<string>(cd.columnType.get_dimension()) + ", " + boost::lexical_cast<string>(cd.columnType.get_scale()) + ", " + boost::lexical_cast<string>(cd.columnType.get_notnull()) + ", " + boost::lexical_cast<string>(cd.columnType.get_compression()) + ", " + boost::lexical_cast<string>(cd.columnType.get_comp_param()) + ", '')");
 			cd.tableId = td.tableId;
 			cd.columnId = colId++;
 			cds.push_back(cd);

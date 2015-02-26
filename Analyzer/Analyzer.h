@@ -29,9 +29,9 @@ namespace Analyzer {
    */
   class Expr {
     public:
-      Expr(SQLTypes t) : contains_agg(false) { type_info.type = t; type_info.dimension = 0; type_info.scale = 0; }
-      Expr(SQLTypes t, int d) : contains_agg(false) { type_info.type = t; type_info.dimension = d; type_info.scale = 0; }
-      Expr(SQLTypes t, int d, int s) : contains_agg(false) { type_info.type = t; type_info.dimension = d; type_info.scale = s; }
+      Expr(SQLTypes t) : type_info(t), contains_agg(false) { }
+      Expr(SQLTypes t, int d) : type_info(t, d, 0, false), contains_agg(false) {}
+      Expr(SQLTypes t, int d, int s) : type_info(t, d, s, false), contains_agg(false) {}
       Expr(const SQLTypeInfo &ti, bool has_agg = false) : type_info(ti), contains_agg(has_agg) {}
       virtual ~Expr() {}
       const SQLTypeInfo &get_type_info() const { return type_info; }
@@ -109,12 +109,12 @@ namespace Analyzer {
    */
   class ColumnVar : public Expr {
     public:
-      ColumnVar(const SQLTypeInfo &ti, int r, int c, int i, EncodingType e, int p) : Expr(ti), table_id(r), column_id(c), rte_idx(i), compression(e), comp_param(p) {}
+      ColumnVar(const SQLTypeInfo &ti, int r, int c, int i) : Expr(ti), table_id(r), column_id(c), rte_idx(i) {}
       int get_table_id() const { return table_id; }
       int get_column_id() const { return column_id; }
       int get_rte_idx() const { return rte_idx; }
-      EncodingType get_compression() const { return compression; }
-      int get_comp_param() const { return comp_param; }
+      EncodingType get_compression() const { return type_info.get_compression(); }
+      int get_comp_param() const { return type_info.get_comp_param(); }
       virtual void check_group_by(const std::list<Expr*> *groupby) const;
       virtual Expr *deep_copy() const;
       virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
@@ -130,8 +130,6 @@ namespace Analyzer {
       int table_id; // the global table id
       int column_id; // the column id
       int rte_idx; // 0-based range table index. only used by the analyzer and planner.
-      EncodingType compression; // compression scheme
-      int comp_param; // parameter to compression scheme
   };
 
   /*
@@ -145,8 +143,8 @@ namespace Analyzer {
   class Var : public ColumnVar {
     public:
       enum WhichRow { kINPUT_OUTER, kINPUT_INNER, kOUTPUT, kGROUPBY };
-      Var(const SQLTypeInfo &ti, int r, int c, int i, EncodingType e, int p, WhichRow o, int v) : ColumnVar(ti, r, c, i, e, p), which_row(o), varno(v) {}
-      Var(const SQLTypeInfo &ti, WhichRow o, int v) : ColumnVar(ti, 0, 0, -1, kENCODING_NONE, 0), which_row(o), varno(v) {}
+      Var(const SQLTypeInfo &ti, int r, int c, int i, WhichRow o, int v) : ColumnVar(ti, r, c, i), which_row(o), varno(v) {}
+      Var(const SQLTypeInfo &ti, WhichRow o, int v) : ColumnVar(ti, 0, 0, -1), which_row(o), varno(v) {}
       WhichRow get_which_row() const { return which_row; }
       void set_which_row(WhichRow r) { which_row = r; }
       int get_varno() const { return varno; }
@@ -346,7 +344,7 @@ namespace Analyzer {
   class AggExpr : public Expr {
     public:
       AggExpr(const SQLTypeInfo &ti, SQLAgg a, Expr *g, bool d) : Expr(ti, true), aggtype(a), arg(g), is_distinct(d) {}
-      AggExpr(SQLTypes t, SQLAgg a, Expr *g, bool d, int idx) : Expr(t, true), aggtype(a), arg(g), is_distinct(d) {}
+      AggExpr(SQLTypes t, SQLAgg a, Expr *g, bool d, int idx) : Expr(SQLTypeInfo(t), true), aggtype(a), arg(g), is_distinct(d) {}
       virtual ~AggExpr() { delete arg; }
       SQLAgg get_aggtype() const { return aggtype; }
       const Expr *get_arg() const { return arg; }

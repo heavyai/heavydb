@@ -12,6 +12,7 @@
 #include <ctime>
 #include <string>
 #include <vector>
+#include <cassert>
 
 // must not change because these values persist in catalogs.
 enum SQLTypes {
@@ -29,16 +30,12 @@ enum SQLTypes {
 	kTIMESTAMP = 11,
 	kBIGINT = 12,
 	kTEXT = 13,
-	kDATE = 14
+	kDATE = 14,
+  kSQLTYPE_LAST = 15
 };
 
 
 
-
-#define IS_INTEGER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT))
-#define IS_NUMBER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL))
-#define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
-#define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
 
 typedef union {
 	bool boolval;
@@ -73,30 +70,174 @@ enum EncodingType {
 	kENCODING_DIFF = 3, // Differential encoding
 	kENCODING_DICT = 4, // Dictionary encoding
 	kENCODING_SPARSE = 5, // Null encoding for sparse columns
-	kENCODING_TOKDICT = 6 // Tokenized-Dictionary encoding
+	kENCODING_TOKDICT = 6, // Tokenized-Dictionary encoding
+  kENCODING_LAST = 7
 };
+
+#define IS_INTEGER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT))
+#define IS_NUMBER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL))
+#define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
+#define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
 
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
 // length, precision, scale, etc.
-struct SQLTypeInfo {
-	SQLTypes type = kNULLT; // type id
-	int dimension = 0; // VARCHAR/CHAR length or NUMERIC/DECIMAL precision
-	int scale = 0; // NUMERIC/DECIMAL scale
-	bool notnull = false; // nullable?  a hint, not used for type checking
+class SQLTypeInfo {
+  public:
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p) : type(t), dimension(d), scale(s), notnull(n), compression(c), comp_param(p) {}
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0) {}
+    SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0) {}
+    SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0) {}
 
-	bool operator!=(const SQLTypeInfo &rhs) const {
-		return type != rhs.type || dimension != rhs.dimension || scale != rhs.scale;
-	}
-	bool operator==(const SQLTypeInfo &rhs) const {
-		return type == rhs.type && dimension == rhs.dimension && scale == rhs.scale;
-	}
-	void operator=(const SQLTypeInfo &rhs) {
-		type = rhs.type;
-		dimension = rhs.dimension;
-		scale = rhs.scale;
-		notnull = rhs.notnull;
-	}
+    SQLTypes get_type() const { return type; }
+    int get_dimension() const { return dimension; }
+    int get_precision() const { return dimension; }
+    int get_scale() const { return scale; }
+    bool get_notnull() const { return notnull; }
+    EncodingType get_compression() const { return compression; }
+    int get_comp_param() const { return comp_param; }
+    void set_type(SQLTypes t) { type = t; }
+    void set_dimension(int d) { dimension = d; }
+    void set_precision(int d) { dimension = d; }
+    void set_scale(int s) { scale = s; }
+    void set_notnull(bool n) { notnull = n; }
+    void set_compression(EncodingType c) { compression = c; }
+    void set_comp_param(int p) { comp_param = p; }
+    std::string get_type_name() const { return type_name[(int)type]; }
+    std::string get_compression_name() const { return comp_name[(int)compression]; }
+    inline bool is_string() const { return IS_STRING(type); }
+    inline bool is_integer() const { return IS_INTEGER(type); }
+    inline bool is_number() const { return IS_NUMBER(type); }
+    inline bool is_time() const { return IS_TIME(type); }
+
+		inline bool is_varlen() const { return IS_STRING(type) && compression != kENCODING_DICT; }
+
+		int get_storage_size() const {
+			switch (type) {
+				case kBOOLEAN:
+					return sizeof(int8_t);
+				case kSMALLINT:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(int16_t);
+						case kENCODING_FIXED:
+							return comp_param/8;
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+							assert(false);
+						  break;
+            default:
+              assert(false);
+					}
+					break;
+				case kINT:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(int32_t);
+						case kENCODING_FIXED:
+							return comp_param/8;
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+							assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kBIGINT:
+				case kNUMERIC:
+				case kDECIMAL:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(int64_t);
+						case kENCODING_FIXED:
+							return comp_param/8;
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+							assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kFLOAT:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(float);
+						case kENCODING_FIXED:
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+							assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kDOUBLE:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(double);
+						case kENCODING_FIXED:
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+							assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kTIME:
+				case kTIMESTAMP:
+					if (dimension > 0)
+						assert(false); // not supported yet
+				case kDATE:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(time_t);
+						case kENCODING_FIXED:
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+							assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				default:
+					break;
+			}
+			return -1;
+		}
+
+    bool operator!=(const SQLTypeInfo &rhs) const {
+      return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || comp_param != rhs.get_comp_param();
+    }
+    bool operator==(const SQLTypeInfo &rhs) const {
+      return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && comp_param == rhs.get_comp_param();
+    }
+    void operator=(const SQLTypeInfo &rhs) {
+      type = rhs.get_type();
+      dimension = rhs.get_dimension();
+      scale = rhs.get_scale();
+      notnull = rhs.get_notnull();
+      compression = rhs.get_compression();
+      comp_param = rhs.get_comp_param();
+    }
+  private:
+    SQLTypes type; // type id
+    int dimension; // VARCHAR/CHAR length or NUMERIC/DECIMAL precision
+    int scale; // NUMERIC/DECIMAL scale
+    bool notnull; // nullable?  a hint, not used for type checking
+    EncodingType compression; // compression scheme
+    int comp_param; // compression parameter when applicable for certain schemes
+    std::string type_name[kSQLTYPE_LAST] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT", "DATE" };
+    std::string comp_name[kENCODING_LAST] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "TOKEN_DICT" };
 };
 
 Datum

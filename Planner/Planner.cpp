@@ -236,7 +236,7 @@ namespace Planner {
 			Analyzer::Expr *expr;
 			Analyzer::ColumnVar *c = dynamic_cast<Analyzer::ColumnVar*>(e);
 			if (c != nullptr) {
-				expr = new Analyzer::Var(c->get_type_info(), c->get_table_id(), c->get_column_id(), c->get_rte_idx(), c->get_compression(), c->get_comp_param(), Analyzer::Var::kGROUPBY, varno);
+				expr = new Analyzer::Var(c->get_type_info(), c->get_table_id(), c->get_column_id(), c->get_rte_idx(), Analyzer::Var::kGROUPBY, varno);
 			} else
 				expr = new Analyzer::Var(e->get_type_info(), Analyzer::Var::kGROUPBY, varno);
 			new_tle = new Analyzer::TargetEntry("", expr);

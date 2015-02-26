@@ -16,13 +16,8 @@ namespace Data_Namespace {
 
 class Encoder {
     public: 
-        static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits);
+        static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypeInfo sqlType);
         Encoder(Data_Namespace::AbstractBuffer * buffer): numElems(0), buffer_(buffer) {
-            /*
-            metadataTemplate_.sqlType = buffer_ -> sqlType;
-            metadataTemplate_.encodingType = buffer_ -> encodingType;
-            metadataTemplate_.encodingBits = buffer_ -> encodingBits;
-            */
         }
         virtual ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) = 0;
         virtual void getMetadata (ChunkMetadata &chunkMetadata); 

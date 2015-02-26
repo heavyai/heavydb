@@ -11,14 +11,12 @@ struct ChunkStats {
 
 struct ChunkMetadata {
     SQLTypeInfo sqlType;
-    EncodingType encodingType;
-    int encodingBits;
     size_t numBytes;
     size_t numElements;
     ChunkStats chunkStats;
 
     template <typename T> void fillChunkStats (const T min, const T max) {
-        switch (sqlType.type) {
+        switch (sqlType.get_type()) {
             case kSMALLINT: {
                 chunkStats.min.smallintval = min;
                 chunkStats.max.smallintval = max;
@@ -56,7 +54,7 @@ struct ChunkMetadata {
             case kVARCHAR:
             case kCHAR:
             case kTEXT:
-              if (encodingType == kENCODING_DICT) {
+              if (sqlType.get_compression() == kENCODING_DICT) {
                 chunkStats.min.intval = min;
                 chunkStats.max.intval = max;
               }

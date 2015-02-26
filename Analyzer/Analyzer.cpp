@@ -18,7 +18,7 @@ namespace Analyzer {
 
   Constant::~Constant() 
   {
-    if (IS_STRING(type_info.type) && !is_null)
+    if (type_info.is_string() && !is_null)
       delete constval.stringval;
   }
 
@@ -76,20 +76,20 @@ namespace Analyzer {
   Expr *
   ColumnVar::deep_copy() const
   {
-    return new ColumnVar(type_info, table_id, column_id, rte_idx, compression, comp_param);
+    return new ColumnVar(type_info, table_id, column_id, rte_idx);
   }
 
   Expr *
   Var::deep_copy() const
   {
-    return new Var(type_info, table_id, column_id, rte_idx, compression, comp_param, which_row, varno);
+    return new Var(type_info, table_id, column_id, rte_idx, which_row, varno);
   }
 
   Expr *
   Constant::deep_copy() const
   {
     Datum d = constval;
-    if (IS_STRING(type_info.type) && !is_null) {
+    if (type_info.is_string() && !is_null) {
       d.stringval = new std::string(*constval.stringval);
     }
     return new Constant(type_info, is_null, d);
@@ -160,30 +160,30 @@ namespace Analyzer {
     *new_left_type = left_type;
     *new_right_type = right_type;
     if (IS_LOGIC(op)) {
-      if (left_type.type != kBOOLEAN || right_type.type != kBOOLEAN)
+      if (left_type.get_type() != kBOOLEAN || right_type.get_type() != kBOOLEAN)
         throw std::runtime_error("non-boolean operands cannot be used in logic operations.");
-      result_type.type = kBOOLEAN;
+      result_type.set_type(kBOOLEAN);
     } else if (IS_COMPARISON(op)) {
-      if ((IS_STRING(left_type.type) && !IS_STRING(right_type.type))
+      if ((left_type.is_string() && !right_type.is_string())
           ||
-          (!IS_STRING(left_type.type) && IS_STRING(right_type.type)))
+          (!left_type.is_string() && right_type.is_string()))
         throw std::runtime_error("cannot compare between string and non-string types.");
-      if ((IS_NUMBER(left_type.type) && !IS_NUMBER(right_type.type))
+      if ((left_type.is_number() && !right_type.is_number())
           ||
-          (!IS_NUMBER(left_type.type) && IS_NUMBER(right_type.type)))
+          (!left_type.is_number() && right_type.is_number()))
         throw std::runtime_error("cannot compare between numeric and non-numeric types.");
-      if ((IS_TIME(left_type.type) && !IS_TIME(right_type.type)) ||
-          (!IS_TIME(left_type.type) && IS_TIME(right_type.type)))
+      if ((left_type.is_time() && !right_type.is_time()) ||
+          (!left_type.is_time() && right_type.is_time()))
         throw std::runtime_error("cannot compare between time and non-time types.");
-      if (IS_NUMBER(left_type.type) && IS_NUMBER(right_type.type)) {
+      if (left_type.is_number() && right_type.is_number()) {
         common_type = common_numeric_type(left_type, right_type);
         *new_left_type = common_type;
         *new_right_type = common_type;
       }
-      if (IS_TIME(left_type.type) && IS_TIME(right_type.type)) {
-        switch (left_type.type) {
+      if (left_type.is_time() && right_type.is_time()) {
+        switch (left_type.get_type()) {
           case kTIMESTAMP:
-            switch (right_type.type) {
+            switch (right_type.get_type()) {
               case kTIME:
                 throw std::runtime_error("Cannont compare between TIMESTAMP and TIME.");
                 break;
@@ -192,15 +192,15 @@ namespace Analyzer {
                 *new_right_type = left_type;
                 break;
               case kTIMESTAMP:
-                new_left_type->type = new_right_type->type = kTIMESTAMP;
-                new_left_type->dimension = new_right_type->dimension = std::max(left_type.dimension, right_type.dimension);
+                *new_left_type = SQLTypeInfo(kTIMESTAMP, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, left_type.get_notnull());
+                *new_right_type = SQLTypeInfo(kTIMESTAMP, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
                 break;
               default:
                 assert(false);
             }
             break;
           case kTIME:
-            switch (right_type.type) {
+            switch (right_type.get_type()) {
               case kTIMESTAMP:
                 throw std::runtime_error("Cannont compare between TIME and TIMESTAMP.");
                 break;
@@ -208,15 +208,15 @@ namespace Analyzer {
                 throw std::runtime_error("Cannont compare between TIME and DATE.");
                 break;
               case kTIME:
-                new_left_type->type = new_right_type->type = kTIME;
-                new_left_type->dimension = new_right_type->dimension = std::max(left_type.dimension, right_type.dimension);
+                *new_left_type = SQLTypeInfo(kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, left_type.get_notnull());
+                *new_right_type = SQLTypeInfo(kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
                 break;
               default:
                 assert(false);
             }
             break;
           case kDATE:
-            switch (right_type.type) {
+            switch (right_type.get_type()) {
               case kTIMESTAMP:
                 *new_left_type = right_type;
                 *new_right_type = right_type;
@@ -236,9 +236,9 @@ namespace Analyzer {
             assert(false);
         }
       }
-      result_type.type = kBOOLEAN;
+      result_type.set_type(kBOOLEAN);
     } else if (IS_ARITHMETIC(op)) {
-      if (!IS_NUMBER(left_type.type) || !IS_NUMBER(right_type.type))
+      if (!left_type.is_number() || !right_type.is_number())
         throw std::runtime_error("non-numeric operands in arithmetic operations.");
       common_type = common_numeric_type(left_type, right_type);
       *new_left_type = common_type;
@@ -247,6 +247,7 @@ namespace Analyzer {
     } else {
       throw std::runtime_error("invalid binary operator type.");
     }
+    result_type.set_notnull(left_type.get_notnull() && right_type.get_notnull());
     return result_type;
   }
 
@@ -254,13 +255,13 @@ namespace Analyzer {
   BinOper::common_string_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
   {
     SQLTypeInfo common_type;
-    assert(IS_STRING(type1.type) && IS_STRING(type2.type));
-    if (type1.type == kTEXT || type2.type == kTEXT) {
-      common_type.type = kTEXT;
+    assert(type1.is_string() && type2.is_string());
+    if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
+      common_type.set_type(kTEXT);
       return common_type;
     }
-    common_type.type = kVARCHAR;
-    common_type.dimension = std::max(type1.dimension, type2.dimension);
+    common_type.set_type(kVARCHAR);
+    common_type.set_dimension(std::max(type1.get_dimension(), type2.get_dimension()));
     return common_type;
   }
 
@@ -268,117 +269,117 @@ namespace Analyzer {
   BinOper::common_numeric_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
   {
     SQLTypeInfo common_type;
-    assert(IS_NUMBER(type1.type) && IS_NUMBER(type2.type));
-    if (type1.type == type2.type) {
-      common_type.type = type1.type;
-      common_type.dimension = std::max(type1.dimension, type2.dimension);
-      common_type.scale = std::max(type1.scale, type2.scale);
+    assert(type1.is_number() && type2.is_number());
+    if (type1.get_type() == type2.get_type()) {
+      common_type.set_type(type1.get_type());
+      common_type.set_dimension(std::max(type1.get_dimension(), type2.get_dimension()));
+      common_type.set_scale(std::max(type1.get_scale(), type2.get_scale()));
       return common_type;
     }
-    switch (type1.type) {
+    switch (type1.get_type()) {
       case kSMALLINT:
-        switch (type2.type) {
+        switch (type2.get_type()) {
         case kINT:
-          common_type.type = kINT;
+          common_type.set_type(kINT);
           break;
         case kBIGINT:
-          common_type.type = kBIGINT;
+          common_type.set_type(kBIGINT);
           break;
         case kFLOAT:
-          common_type.type = kFLOAT;
+          common_type.set_type(kFLOAT);
           break;
         case kDOUBLE:
-          common_type.type = kDOUBLE;
+          common_type.set_type(kDOUBLE);
           break;
         case kNUMERIC:
         case kDECIMAL:
-          common_type.type = kNUMERIC;
-          common_type.dimension = std::max(5+type2.scale, type2.dimension);
-          common_type.scale = type2.scale;
+          common_type.set_type(kNUMERIC);
+          common_type.set_dimension(std::max(5+type2.get_scale(), type2.get_dimension()));
+          common_type.set_scale(type2.get_scale());
           break;
         default:
           assert(false);
         }
         break;
       case kINT:
-        switch (type2.type) {
+        switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.type = kINT;
+            common_type.set_type(kINT);
             break;
           case kBIGINT:
-            common_type.type = kBIGINT;
+            common_type.set_type(kBIGINT);
             break;
           case kFLOAT:
-            common_type.type = kFLOAT;
+            common_type.set_type(kFLOAT);
             break;
           case kDOUBLE:
-            common_type.type = kDOUBLE;
+            common_type.set_type(kDOUBLE);
             break;
           case kNUMERIC:
           case kDECIMAL:
-            common_type.type = kNUMERIC;
-            common_type.dimension = std::max(std::min(19, 10+type2.scale), type2.dimension);
-            common_type.scale = type2.scale;
+            common_type.set_type(kNUMERIC);
+            common_type.set_dimension(std::max(std::min(19, 10+type2.get_scale()), type2.get_dimension()));
+            common_type.set_scale(type2.get_scale());
             break;
           default:
             assert(false);
         }
         break;
       case kBIGINT:
-        switch (type2.type) {
+        switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.type = kBIGINT;
+            common_type.set_type(kBIGINT);
             break;
           case kINT:
-            common_type.type = kBIGINT;
+            common_type.set_type(kBIGINT);
             break;
           case kFLOAT:
-            common_type.type = kFLOAT;
+            common_type.set_type(kFLOAT);
             break;
           case kDOUBLE:
-            common_type.type = kDOUBLE;
+            common_type.set_type(kDOUBLE);
             break;
           case kNUMERIC:
           case kDECIMAL:
-            common_type.type = kNUMERIC;
-            common_type.dimension = 19; // maximum precision of BIGINT
-            common_type.scale = type2.scale;
+            common_type.set_type(kNUMERIC);
+            common_type.set_dimension(19); // maximum precision of BIGINT
+            common_type.set_scale(type2.get_scale());
             break;
           default:
             assert(false);
         }
         break;
       case kFLOAT:
-        switch (type2.type) {
+        switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.type = kFLOAT;
+            common_type.set_type(kFLOAT);
             break;
           case kINT:
-            common_type.type = kFLOAT;
+            common_type.set_type(kFLOAT);
             break;
           case kBIGINT:
-            common_type.type = kFLOAT;
+            common_type.set_type(kFLOAT);
             break;
           case kDOUBLE:
-            common_type.type = kDOUBLE;
+            common_type.set_type(kDOUBLE);
             break;
           case kNUMERIC:
           case kDECIMAL:
-            common_type.type = kFLOAT;
+            common_type.set_type(kFLOAT);
             break;
           default:
             assert(false);
         }
         break;
       case kDOUBLE:
-        switch (type2.type) {
+        switch (type2.get_type()) {
           case kSMALLINT:
           case kINT:
           case kBIGINT:
           case kFLOAT:
           case kNUMERIC:
           case kDECIMAL:
-            common_type.type = kDOUBLE;
+            common_type.set_type(kDOUBLE);
             break;
           default:
             assert(false);
@@ -386,33 +387,33 @@ namespace Analyzer {
         break;
       case kNUMERIC:
       case kDECIMAL:
-        switch (type2.type) {
+        switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.type = kNUMERIC;
-            common_type.dimension = std::max(5+type2.scale, type2.dimension);
-            common_type.scale = type2.scale;
+            common_type.set_type(kNUMERIC);
+            common_type.set_dimension(std::max(5+type2.get_scale(), type2.get_dimension()));
+            common_type.set_scale(type2.get_scale());
             break;
           case kINT:
-            common_type.type = kNUMERIC;
-            common_type.dimension = std::max(std::min(19, 10+type2.scale), type2.dimension);
-            common_type.scale = type2.scale;
+            common_type.set_type(kNUMERIC);
+            common_type.set_dimension(std::max(std::min(19, 10+type2.get_scale()), type2.get_dimension()));
+            common_type.set_scale(type2.get_scale());
             break;
           case kBIGINT:
-            common_type.type = kNUMERIC;
-            common_type.dimension = 19; // maximum precision of BIGINT
-            common_type.scale = type2.scale;
+            common_type.set_type(kNUMERIC);
+            common_type.set_dimension(19); // maximum precision of BIGINT
+            common_type.set_scale(type2.get_scale());
             break;
           case kFLOAT:
-            common_type.type = kFLOAT;
+            common_type.set_type(kFLOAT);
             break;
           case kDOUBLE:
-            common_type.type = kDOUBLE;
+            common_type.set_type(kDOUBLE);
             break;
           case kNUMERIC:
           case kDECIMAL:
-            common_type.type = kNUMERIC;
-            common_type.scale = std::max(type1.scale, type2.scale);
-            common_type.dimension = std::max(type1.dimension - type1.scale, type2.dimension - type2.scale) + common_type.scale;
+            common_type.set_type(kNUMERIC);
+            common_type.set_scale(std::max(type1.get_scale(), type2.get_scale()));
+            common_type.set_dimension(std::max(type1.get_dimension() - type1.get_scale(), type2.get_dimension() - type2.get_scale()) + common_type.get_scale());
             break;
           default:
             assert(false);
@@ -429,10 +430,11 @@ namespace Analyzer {
   {
     if (new_type_info == type_info)
       return this;
-    if (!IS_STRING(type_info.type) && !IS_STRING(new_type_info.type) &&
-        (!IS_NUMBER(type_info.type) || !IS_NUMBER(new_type_info.type)) &&
-        (type_info.type != kTIMESTAMP || !IS_NUMBER(new_type_info.type)) &&
-        (type_info.type != kDATE || new_type_info.type != kTIMESTAMP))
+    //@TODO(wei) add check for different encoding
+    if (!type_info.is_string() && !new_type_info.is_string() &&
+        (!type_info.is_number() || !new_type_info.is_number()) &&
+        (type_info.get_type() != kTIMESTAMP || !new_type_info.is_number()) &&
+        (type_info.get_type() != kDATE || new_type_info.get_type() != kTIMESTAMP))
       throw std::runtime_error("Invalid CAST: incompatible types.");
     return new UOper(new_type_info, contains_agg, kCAST, this);
   }
@@ -440,9 +442,9 @@ namespace Analyzer {
   void
   Constant::cast_number(const SQLTypeInfo &new_type_info)
   {
-    switch (type_info.type) {
+    switch (type_info.get_type()) {
       case kINT:
-        switch (new_type_info.type) {
+        switch (new_type_info.get_type()) {
           case kINT:
             break;
           case kSMALLINT:
@@ -460,7 +462,7 @@ namespace Analyzer {
           case kNUMERIC:
           case kDECIMAL:
             constval.bigintval = (int64_t)constval.intval;
-            for (int i = 0; i < new_type_info.scale; i++)
+            for (int i = 0; i < new_type_info.get_scale(); i++)
               constval.bigintval *= 10;
             break;
           default:
@@ -468,7 +470,7 @@ namespace Analyzer {
         }
         break;
       case kSMALLINT:
-        switch (new_type_info.type) {
+        switch (new_type_info.get_type()) {
           case kINT:
             constval.intval = (int32_t)constval.smallintval;
             break;
@@ -486,7 +488,7 @@ namespace Analyzer {
           case kNUMERIC:
           case kDECIMAL:
             constval.bigintval = (int64_t)constval.smallintval;
-            for (int i = 0; i < new_type_info.scale; i++)
+            for (int i = 0; i < new_type_info.get_scale(); i++)
               constval.bigintval *= 10;
             break;
           default:
@@ -494,7 +496,7 @@ namespace Analyzer {
         }
         break;
       case kBIGINT:
-        switch (new_type_info.type) {
+        switch (new_type_info.get_type()) {
           case kINT:
             constval.intval = (int32_t)constval.bigintval;
             break;
@@ -511,7 +513,7 @@ namespace Analyzer {
             break;
           case kNUMERIC:
           case kDECIMAL:
-            for (int i = 0; i < new_type_info.scale; i++)
+            for (int i = 0; i < new_type_info.get_scale(); i++)
               constval.bigintval *= 10;
             break;
           default:
@@ -519,7 +521,7 @@ namespace Analyzer {
         }
         break;
       case kDOUBLE:
-        switch (new_type_info.type) {
+        switch (new_type_info.get_type()) {
           case kINT:
             constval.intval = (int32_t)constval.doubleval;
             break;
@@ -536,7 +538,7 @@ namespace Analyzer {
             break;
           case kNUMERIC:
           case kDECIMAL:
-            for (int i = 0; i < new_type_info.scale; i++)
+            for (int i = 0; i < new_type_info.get_scale(); i++)
               constval.doubleval *= 10;
             constval.bigintval = (int64_t)constval.doubleval;
             break;
@@ -545,7 +547,7 @@ namespace Analyzer {
         }
         break;
       case kFLOAT:
-        switch (new_type_info.type) {
+        switch (new_type_info.get_type()) {
           case kINT:
             constval.intval = (int32_t)constval.floatval;
             break;
@@ -562,7 +564,7 @@ namespace Analyzer {
             break;
           case kNUMERIC:
           case kDECIMAL:
-            for (int i = 0; i < new_type_info.scale; i++)
+            for (int i = 0; i < new_type_info.get_scale(); i++)
               constval.floatval *= 10;
             constval.bigintval = (int64_t)constval.floatval;
             break;
@@ -572,38 +574,38 @@ namespace Analyzer {
         break;
       case kNUMERIC:
       case kDECIMAL:
-        switch (new_type_info.type) {
+        switch (new_type_info.get_type()) {
           case kINT:
-            for (int i = 0; i < type_info.scale; i++)
+            for (int i = 0; i < type_info.get_scale(); i++)
               constval.bigintval /= 10;
             constval.intval = (int32_t)constval.bigintval;
             break;
           case kSMALLINT:
-            for (int i = 0; i < type_info.scale; i++)
+            for (int i = 0; i < type_info.get_scale(); i++)
               constval.bigintval /= 10;
             constval.smallintval = (int16_t)constval.bigintval;
             break;
           case kBIGINT:
-            for (int i = 0; i < type_info.scale; i++)
+            for (int i = 0; i < type_info.get_scale(); i++)
               constval.bigintval /= 10;
             break;
           case kDOUBLE:
             constval.doubleval = (double)constval.bigintval;
-            for (int i = 0; i < type_info.scale; i++)
+            for (int i = 0; i < type_info.get_scale(); i++)
               constval.doubleval /= 10;
             break;
           case kFLOAT:
             constval.floatval = (float)constval.bigintval;
-            for (int i = 0; i < type_info.scale; i++)
+            for (int i = 0; i < type_info.get_scale(); i++)
               constval.floatval /= 10;
             break;
           case kNUMERIC:
           case kDECIMAL:
-            if (new_type_info.scale > type_info.scale) {
-              for (int i = 0; i < new_type_info.scale - type_info.scale; i++)
+            if (new_type_info.get_scale() > type_info.get_scale()) {
+              for (int i = 0; i < new_type_info.get_scale() - type_info.get_scale(); i++)
                 constval.bigintval *= 10;
-            } else if (new_type_info.scale < type_info.scale) {
-              for (int i = 0; i < type_info.scale - new_type_info.scale; i++)
+            } else if (new_type_info.get_scale() < type_info.get_scale()) {
+              for (int i = 0; i < type_info.get_scale() - new_type_info.get_scale(); i++)
                 constval.bigintval /= 10;
             }
             break;
@@ -612,7 +614,7 @@ namespace Analyzer {
         }
         break;
       case kTIMESTAMP:
-        switch (new_type_info.type) {
+        switch (new_type_info.get_type()) {
           case kINT:
             constval.intval = (int32_t)constval.timeval;
             break;
@@ -631,7 +633,7 @@ namespace Analyzer {
           case kNUMERIC:
           case kDECIMAL:
             constval.bigintval = (int64_t)constval.timeval;
-            for (int i = 0; i < new_type_info.scale; i++)
+            for (int i = 0; i < new_type_info.get_scale(); i++)
               constval.bigintval *= 10;
             break;
           default:
@@ -648,9 +650,9 @@ namespace Analyzer {
   Constant::cast_string(const SQLTypeInfo &new_type_info)
   {
     std::string *s = constval.stringval;
-    if (s != nullptr && new_type_info.type != kTEXT && new_type_info.dimension < s->length()) {
+    if (s != nullptr && new_type_info.get_type() != kTEXT && new_type_info.get_dimension() < s->length()) {
       // truncate string
-      constval.stringval = new std::string(s->substr(0, new_type_info.dimension));
+      constval.stringval = new std::string(s->substr(0, new_type_info.get_dimension()));
       delete s;
     }
     type_info = new_type_info;
@@ -671,9 +673,9 @@ namespace Analyzer {
   {
     constval.stringval = new std::string();
     *constval.stringval = DatumToString(constval, type_info);
-    if (str_type_info.type != kTEXT && constval.stringval->length() > str_type_info.dimension) {
+    if (str_type_info.get_type() != kTEXT && constval.stringval->length() > str_type_info.get_dimension()) {
       // truncate the string
-      *constval.stringval = constval.stringval->substr(0, str_type_info.dimension);
+      *constval.stringval = constval.stringval->substr(0, str_type_info.get_dimension());
     }
     type_info = str_type_info;
   }
@@ -685,13 +687,13 @@ namespace Analyzer {
       type_info = new_type_info;
       return this;
     }
-    if (IS_NUMBER(new_type_info.type) && (IS_NUMBER(type_info.type) || type_info.type == kTIMESTAMP)) {
+    if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP)) {
       cast_number(new_type_info);
-    } else if (IS_STRING(new_type_info.type) && IS_STRING(type_info.type)) {
+    } else if (new_type_info.is_string() && type_info.is_string()) {
       cast_string(new_type_info);
-    } else if (IS_STRING(type_info.type)) {
+    } else if (type_info.is_string()) {
       cast_from_string(new_type_info);
-    } else if (IS_STRING(new_type_info.type)) {
+    } else if (new_type_info.is_string()) {
       cast_to_string(new_type_info);
     } else
       throw std::runtime_error("Invalid cast.");
@@ -717,7 +719,7 @@ namespace Analyzer {
   {
     column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
     for (auto col_desc : column_descs) {
-      ColumnVar *cv = new ColumnVar(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx, col_desc->compression, col_desc->comp_param);
+      ColumnVar *cv = new ColumnVar(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
       TargetEntry *tle = new TargetEntry(col_desc->columnName, cv);
       tlist.push_back(tle);
     }
@@ -809,7 +811,7 @@ namespace Analyzer {
   void
   ColumnVar::group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const
   {
-    if (type_info.type == kBOOLEAN)
+    if (type_info.get_type() == kBOOLEAN)
       scan_predicates.push_back(this);
   }
 
@@ -940,7 +942,7 @@ namespace Analyzer {
       if (colvar == nullptr)
         throw std::runtime_error("Internal Error: targetlist in rewrite_with_child_targetlist is not all columns.");
       if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
-        return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), Var::kINPUT_OUTER, varno);
+        return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
       varno++;
     }
     throw std::runtime_error("Internal error: cannot find ColumnVar in child targetlist.");
@@ -957,7 +959,7 @@ namespace Analyzer {
         if (colvar == nullptr)
           throw std::runtime_error("Internal Error: targetlist in rewrite_agg_to_var is not all columns and aggregates.");
         if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
-          return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), colvar->get_compression(), colvar->get_comp_param(), Var::kINPUT_OUTER, varno);
+          return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
       }
       varno++;
     }
@@ -1099,7 +1101,7 @@ namespace Analyzer {
   bool
   Datum_equal(const SQLTypeInfo &ti, Datum val1, Datum val2)
   {
-    switch (ti.type) {
+    switch (ti.get_type()) {
       case kBOOLEAN:
         return val1.boolval == val2.boolval;
       case kCHAR:

@@ -31,8 +31,8 @@ namespace Data_Namespace {
     public:
 
         AbstractBuffer (const int deviceId): encoder(0), hasEncoder(0), size_(0), isDirty_(false), isAppended_(false),isUpdated_(false), deviceId_(deviceId) {}
-        AbstractBuffer (const int deviceId, const SQLTypeInfo sqlType, const EncodingType encodingType=kENCODING_NONE, const int numEncodingBits=0): size_(0),isDirty_(false), isAppended_(false),isUpdated_(false), deviceId_(deviceId){
-        initEncoder(sqlType, encodingType, numEncodingBits);
+        AbstractBuffer (const int deviceId, const SQLTypeInfo sqlType): size_(0),isDirty_(false), isAppended_(false),isUpdated_(false), deviceId_(deviceId){
+        initEncoder(sqlType);
         }
         virtual ~AbstractBuffer() { if (hasEncoder) delete encoder; }
         
@@ -82,19 +82,17 @@ namespace Data_Namespace {
             isUpdated_ = false;
             isDirty_ = false;
         }
-        void initEncoder(const SQLTypeInfo tmpSqlType, const EncodingType tmpEncodingType = kENCODING_NONE, const int tmpEncodingBits = 0) {
+        void initEncoder(const SQLTypeInfo tmpSqlType) {
             hasEncoder = true;
             sqlType = tmpSqlType;
-            encodingType = tmpEncodingType;
-            encodingBits = tmpEncodingBits;
-            encoder = Encoder::Create(this,sqlType,encodingType,encodingBits);
+            encoder = Encoder::Create(this,sqlType);
         }
 
         void syncEncoder(const AbstractBuffer *srcBuffer) {
             hasEncoder = srcBuffer->hasEncoder;
             if (hasEncoder) {
                 if (encoder == 0) { // Encoder not initialized
-                    initEncoder(srcBuffer->sqlType,srcBuffer->encodingType,srcBuffer->encodingBits);
+                    initEncoder(srcBuffer->sqlType);
                 }
                 encoder->copyMetadata(srcBuffer->encoder);
             }
@@ -105,9 +103,6 @@ namespace Data_Namespace {
         Encoder * encoder;
         bool hasEncoder;
         SQLTypeInfo sqlType;
-        EncodingType encodingType;
-        int encodingBits;
-        //EncodedDataType encodedDataType;
 
     protected:
 

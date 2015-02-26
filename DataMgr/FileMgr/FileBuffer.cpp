@@ -36,7 +36,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits,  const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType,encodingType,encodingBits), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
         assert(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
@@ -224,13 +224,13 @@ namespace File_Namespace {
         fread((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         hasEncoder = static_cast <bool> (typeData[0]);
         if (hasEncoder) {
-            sqlType.type = static_cast<SQLTypes> (typeData[1]);
-						sqlType.dimension = typeData[2];
-						sqlType.scale = typeData[3];
-						sqlType.notnull = static_cast<bool>(typeData[4]);
-            encodingType = static_cast<EncodingType> (typeData[5]);
-            encodingBits = typeData[6]; 
-            initEncoder(sqlType,encodingType,encodingBits);
+            sqlType.set_type(static_cast<SQLTypes> (typeData[1]));
+						sqlType.set_dimension(typeData[2]);
+						sqlType.set_scale(typeData[3]);
+						sqlType.set_notnull(static_cast<bool>(typeData[4]));
+            sqlType.set_compression(static_cast<EncodingType> (typeData[5]));
+            sqlType.set_comp_param(typeData[6]);
+            initEncoder(sqlType);
             encoder->readMetadata(f);
         }
     }
@@ -248,12 +248,12 @@ namespace File_Namespace {
         vector <int> typeData (7); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         typeData[0] = static_cast<int>(hasEncoder); 
         if (hasEncoder) {
-            typeData[1] = static_cast<int>(sqlType.type); 
-            typeData[2] = sqlType.dimension; 
-            typeData[3] = sqlType.scale; 
-            typeData[4] = static_cast<int>(sqlType.notnull); 
-            typeData[5] = static_cast<int>(encodingType); 
-            typeData[6] = encodingBits; 
+            typeData[1] = static_cast<int>(sqlType.get_type()); 
+            typeData[2] = sqlType.get_dimension(); 
+            typeData[3] = sqlType.get_scale(); 
+            typeData[4] = static_cast<int>(sqlType.get_notnull()); 
+            typeData[5] = static_cast<int>(sqlType.get_compression()); 
+            typeData[6] = sqlType.get_comp_param(); 
         }
         numBytesWritten = fwrite((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         if (hasEncoder) { // redundant

@@ -41,7 +41,7 @@ scan_chunk(const Chunk &chunk, size_t &hash)
 		if (is_end)
 			break;
 		assert(!vd.is_null);
-		switch (cd->columnType.type) {
+		switch (cd->columnType.get_type()) {
 			case kSMALLINT:
 				boost::hash_combine(hash, *(int16_t*)vd.pointer);
 				break;
@@ -67,7 +67,7 @@ scan_chunk(const Chunk &chunk, size_t &hash)
 				break;
 			case kTIME:
 			case kTIMESTAMP:
-				if (cd->columnType.dimension == 0) {
+				if (cd->columnType.get_dimension() == 0) {
 					if (sizeof(time_t) == 4)
 						boost::hash_combine(hash, *(int32_t*)vd.pointer);
 					else

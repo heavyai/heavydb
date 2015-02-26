@@ -42,7 +42,7 @@ namespace File_Namespace {
              */
             FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize = 0);
 
-            FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits, const size_t initialSize = 0);
+            FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const size_t initialSize = 0);
 
             FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt);
             

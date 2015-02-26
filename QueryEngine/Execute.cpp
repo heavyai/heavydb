@@ -317,7 +317,7 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   const auto& type_info = col_var->get_type_info();
   switch (enc_type) {
   case kENCODING_NONE:
-    switch (type_info.type) {
+    switch (type_info.get_type()) {
     case kSMALLINT:
       return std::make_shared<FixedWidthInt>(2);
     case kINT:
@@ -334,13 +334,13 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       return std::make_shared<FixedWidthInt>(sizeof(time_t));
     default:
       // TODO(alex): make columnar results write the correct encoding
-      if (IS_STRING(type_info.type)) {
+      if (type_info.is_string()) {
         return std::make_shared<FixedWidthInt>(4);
       }
       CHECK(false);
     }
   case kENCODING_DICT:
-    CHECK(IS_STRING(type_info.type));
+    CHECK(type_info.is_string());
     return std::make_shared<FixedWidthInt>(4);
   default:
     CHECK(false);
@@ -374,7 +374,7 @@ size_t get_bit_width(const SQLTypes type) {
 
 size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
   const auto& type_info = col_var->get_type_info();
-  return get_bit_width(type_info.type);
+  return get_bit_width(type_info.get_type());
 }
 
 }  // namespace
@@ -431,9 +431,9 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
       } else {
         CHECK(dec_type->isFloatTy() || dec_type->isDoubleTy());
         if (dec_type->isDoubleTy()) {
-          CHECK(col_var->get_type_info().type == kDOUBLE);
+          CHECK(col_var->get_type_info().get_type() == kDOUBLE);
         } else if (dec_type->isFloatTy()) {
-          CHECK(col_var->get_type_info().type == kFLOAT);
+          CHECK(col_var->get_type_info().get_type() == kFLOAT);
         }
         dec_val_cast = dec_val;
       }
@@ -461,14 +461,14 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
       ++arg_it;
     }
     CHECK(arg_it != cgen_state_->row_func_->arg_end());
-    const auto val_bits = get_bit_width(type_info.type);
+    const auto val_bits = get_bit_width(type_info.get_type());
     CHECK_EQ(0, val_bits % 8);
     llvm::Type* val_ptr_type { nullptr };
-    if (IS_INTEGER(type_info.type) || IS_TIME(type_info.type) || IS_STRING(type_info.type)) {
+    if (type_info.is_integer() || type_info.is_time() || type_info.is_string()) {
       val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
     } else {
-      CHECK(type_info.type == kFLOAT || type_info.type == kDOUBLE);
-      val_ptr_type = (type_info.type == kFLOAT)
+      CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
+      val_ptr_type = (type_info.get_type() == kFLOAT)
         ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
         : llvm::Type::getDoublePtrTy(cgen_state_->context_);
     }
@@ -477,13 +477,13 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
       arg_it, llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_), lit_off));
     auto lit_lv = cgen_state_->ir_builder_.CreateLoad(
       cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
-    if (type_info.type == kBOOLEAN) {
+    if (type_info.get_type() == kBOOLEAN) {
       return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
         lit_lv, llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), 0));
     }
     return lit_lv;
   }
-  switch (type_info.type) {
+  switch (type_info.get_type()) {
   case kBOOLEAN:
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval);
   case kSMALLINT:
@@ -519,16 +519,16 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
   std::vector<llvm::Type*> case_arg_types;
-  const auto case_type = case_expr->get_type_info().type;
+  const auto case_type = case_expr->get_type_info().get_type();
   CHECK(IS_INTEGER(case_type));
   const auto case_llvm_type = get_int_type(get_bit_width(case_type), cgen_state_->context_);
   for (const auto& expr_pair : expr_pair_list) {
-    CHECK_EQ(expr_pair.first->get_type_info().type, kBOOLEAN);
+    CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
     case_arg_types.push_back(llvm::Type::getInt1Ty(cgen_state_->context_));
-    CHECK_EQ(expr_pair.second->get_type_info().type, case_type);
+    CHECK_EQ(expr_pair.second->get_type_info().get_type(), case_type);
     case_arg_types.push_back(case_llvm_type);
   }
-  CHECK_EQ(else_expr->get_type_info().type, case_type);
+  CHECK_EQ(else_expr->get_type_info().get_type(), case_type);
   case_arg_types.push_back(case_llvm_type);
   auto ft = llvm::FunctionType::get(
     case_llvm_type,
@@ -577,8 +577,8 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
   auto from_expr = codegen(extract_expr->get_from_expr(), hoist_literals);
   const int32_t extract_field { extract_expr->get_field() };
   if (extract_field == kEPOCH) {
-    CHECK(extract_expr->get_from_expr()->get_type_info().type == kTIMESTAMP ||
-          extract_expr->get_from_expr()->get_type_info().type == kDATE);
+    CHECK(extract_expr->get_from_expr()->get_type_info().get_type() == kTIMESTAMP ||
+          extract_expr->get_from_expr()->get_type_info().get_type() == kDATE);
     if (from_expr->getType()->isIntegerTy(32)) {
       from_expr = cgen_state_->ir_builder_.CreateCast(
         llvm::Instruction::CastOps::SExt, from_expr, get_int_type(64, cgen_state_->context_));
@@ -653,15 +653,15 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   const auto& rhs_type = rhs->get_type_info();
   const auto lhs_lv = codegen(lhs, hoist_literals);
   const auto rhs_lv = codegen(rhs, hoist_literals);
-  CHECK((lhs_type.type == rhs_type.type) ||
-        (IS_STRING(lhs_type.type) && IS_STRING(rhs_type.type)));
-  if (IS_INTEGER(lhs_type.type) || IS_TIME(lhs_type.type) || IS_STRING(lhs_type.type)) {
-    if (IS_STRING(lhs_type.type)) {
+  CHECK((lhs_type.get_type() == rhs_type.get_type()) ||
+        (lhs_type.is_string() && rhs_type.is_string()));
+  if (lhs_type.is_integer() || lhs_type.is_time() || lhs_type.is_string()) {
+    if (lhs_type.is_string()) {
       CHECK(optype == kEQ || optype == kNE);
     }
     return cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
   }
-  if (lhs_type.type == kFLOAT || lhs_type.type == kDOUBLE) {
+  if (lhs_type.get_type() == kFLOAT || lhs_type.get_type() == kDOUBLE) {
     return cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lv, rhs_lv);
   }
   CHECK(false);
@@ -689,32 +689,32 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   const auto& ti = uoper->get_type_info();
   const auto operand_lv = codegen(uoper->get_operand(), hoist_literals);
   if (operand_lv->getType()->isIntegerTy()) {
-    CHECK(IS_INTEGER(uoper->get_operand()->get_type_info().type) ||
-          IS_TIME(uoper->get_operand()->get_type_info().type));
-    if (IS_INTEGER(ti.type) || IS_TIME(ti.type)) {
+    CHECK(uoper->get_operand()->get_type_info().is_integer() ||
+          uoper->get_operand()->get_type_info().is_time());
+    if (ti.is_integer() || ti.is_time()) {
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
-      const auto target_width = get_bit_width(ti.type);
+      const auto target_width = get_bit_width(ti.get_type());
       return cgen_state_->ir_builder_.CreateCast(target_width > operand_width
             ? llvm::Instruction::CastOps::SExt
             : llvm::Instruction::CastOps::Trunc,
           operand_lv,
           get_int_type(target_width, cgen_state_->context_));
     } else {
-      CHECK(ti.type == kFLOAT || ti.type == kDOUBLE);
-      return cgen_state_->ir_builder_.CreateSIToFP(operand_lv, ti.type == kFLOAT
+      CHECK(ti.get_type() == kFLOAT || ti.get_type() == kDOUBLE);
+      return cgen_state_->ir_builder_.CreateSIToFP(operand_lv, ti.get_type() == kFLOAT
         ? llvm::Type::getFloatTy(cgen_state_->context_)
         : llvm::Type::getDoubleTy(cgen_state_->context_));
     }
   } else {
-    CHECK(uoper->get_operand()->get_type_info().type == kFLOAT ||
-          uoper->get_operand()->get_type_info().type == kDOUBLE);
+    CHECK(uoper->get_operand()->get_type_info().get_type() == kFLOAT ||
+          uoper->get_operand()->get_type_info().get_type() == kDOUBLE);
     CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
-    if (ti.type == kDOUBLE) {
+    if (ti.get_type() == kDOUBLE) {
       return cgen_state_->ir_builder_.CreateFPExt(
         operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
-    } else if (IS_INTEGER(ti.type)) {
+    } else if (ti.is_integer()) {
       return cgen_state_->ir_builder_.CreateFPToSI(operand_lv,
-        get_int_type(get_bit_width(ti.type), cgen_state_->context_));
+        get_int_type(get_bit_width(ti.get_type()), cgen_state_->context_));
     } else {
       CHECK(false);
     }
@@ -744,13 +744,13 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool h
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool hoist_literals) {
   const auto operand = uoper->get_operand();
   // if the type is inferred as non null, short-circuit to false
-  if (operand->get_type_info().notnull) {
+  if (operand->get_type_info().get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, hoist_literals);
-  CHECK(IS_INTEGER(operand->get_type_info().type) || IS_STRING(operand->get_type_info().type));
+  CHECK(operand->get_type_info().is_integer() || operand->get_type_info().is_string());
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-    operand_lv, inlineIntNull(IS_STRING(operand->get_type_info().type) ? kINT : operand->get_type_info().type));
+    operand_lv, inlineIntNull(operand->get_type_info().is_string() ? kINT : operand->get_type_info().get_type()));
 }
 
 llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
@@ -778,8 +778,8 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
   const auto& rhs_type = rhs->get_type_info();
   const auto lhs_lv = codegen(lhs, hoist_literals);
   const auto rhs_lv = codegen(rhs, hoist_literals);
-  CHECK_EQ(lhs_type.type, rhs_type.type);
-  if (IS_INTEGER(lhs_type.type)) {
+  CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
+  if (lhs_type.is_integer()) {
     switch (optype) {
     case kMINUS:
       return cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv);
@@ -793,7 +793,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
       CHECK(false);
     }
   }
-  if (lhs_type.type) {
+  if (lhs_type.get_type()) {
     switch (optype) {
     case kMINUS:
       return cgen_state_->ir_builder_.CreateFSub(lhs_lv, rhs_lv);
@@ -1261,13 +1261,13 @@ Executor::ResultRows Executor::groupBufferToResults(
         result_row.agg_kinds_.push_back(agg_type);
         if (agg_type == kAVG) {
           CHECK(agg_expr->get_arg());
-          result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
-          CHECK(!IS_STRING(target_expr->get_type_info().type));
+          result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().get_type());
+          CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
         } else {
-          result_row.agg_types_.push_back(target_expr->get_type_info().type);
+          result_row.agg_types_.push_back(target_expr->get_type_info().get_type());
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           ++out_vec_idx;
         }
@@ -1358,7 +1358,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
   const auto target_exprs = get_agg_target_exprs(plan);
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
-    const auto target_type = target_expr->get_type_info().type;
+    const auto target_type = target_expr->get_type_info().get_type();
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
       result.emplace_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
@@ -1370,7 +1370,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
     const auto agg_init_val = init_agg_val(agg_type, target_type);
     switch (agg_type) {
     case kAVG: {
-      const auto agg_arg_type = agg_expr->get_arg()->get_type_info().type;
+      const auto agg_arg_type = agg_expr->get_arg()->get_type_info().get_type();
       CHECK(IS_INTEGER(agg_arg_type) || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
       result.emplace_back((IS_INTEGER(agg_arg_type) || IS_TIME(agg_arg_type)) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
@@ -1427,7 +1427,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
   for (auto target_entry : targets) {
-    const auto target_type = target_entry->get_expr()->get_type_info().type;
+    const auto target_type = target_entry->get_expr()->get_type_info().get_type();
     agg_infos.emplace_back(
       (target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
       target_entry->get_expr(), 0, nullptr);
@@ -1438,7 +1438,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   std::vector<int64_t> init_agg_vals(in_col_count);
   for (auto in_col : agg_plan->get_targetlist()) {
     // TODO(alex): make sure the compression is going to be set properly
-    target_types.push_back(in_col->get_expr()->get_type_info().type);
+    target_types.push_back(in_col->get_expr()->get_type_info().get_type());
   }
   ColumnarResults result_columns(result_rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
@@ -1545,7 +1545,7 @@ canUseFastGroupBy(const Planner::AggPlan* agg_plan,
     return std::make_pair(false, 0L);
   }
   const int group_col_id = group_col_expr->get_column_id();
-  switch (group_col_expr->get_type_info().type) {
+  switch (group_col_expr->get_type_info().get_type()) {
   case kTEXT:
   case kCHAR:
   case kVARCHAR:
@@ -1724,27 +1724,27 @@ void Executor::executePlanWithoutGroupBy(
     result_row.agg_kinds_.push_back(agg_type);
     if (agg_type == kAVG) {
       CHECK(agg_expr->get_arg());
-      result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().type);
-      CHECK(!IS_STRING(target_expr->get_type_info().type));
+      result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().get_type());
+      CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
-          target_expr->get_type_info().type,
+          target_expr->get_type_info().get_type(),
           out_vec[out_vec_idx],
           device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
-          target_expr->get_type_info().type,
+          target_expr->get_type_info().get_type(),
           out_vec[out_vec_idx + 1],
           device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       out_vec_idx += 2;
     } else {
-      result_row.agg_types_.push_back(target_expr->get_type_info().type);
-      CHECK(!IS_STRING(target_expr->get_type_info().type));
+      result_row.agg_types_.push_back(target_expr->get_type_info().get_type());
+      CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
       result_row.agg_results_.push_back(reduce_results(
         agg_type,
-        target_expr->get_type_info().type,
+        target_expr->get_type_info().get_type(),
         out_vec[out_vec_idx],
         device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       ++out_vec_idx;
@@ -1824,8 +1824,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   auto& cat = root_plan->get_catalog();
   for (const int col_id : col_id_list) {
     const auto cd = get_column_descriptor(col_id, table_id, cat);
-    const auto col_type = cd->columnType.type;
-    const auto col_enc = cd->compression;
+    const auto col_type = cd->columnType.get_type();
+    const auto col_enc = cd->columnType.get_compression();
     if (IS_STRING(col_type)) {
       switch (col_enc) {
       case kENCODING_NONE: {
@@ -1857,7 +1857,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     CHECK(col_cv);
     const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
-    switch (cd->columnType.type) {
+    switch (cd->columnType.get_type()) {
     case kSMALLINT: {
       auto col_data = reinterpret_cast<int16_t*>(malloc(sizeof(int16_t)));
       *col_data = col_datum.smallintval;
@@ -1891,7 +1891,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     case kTEXT:
     case kVARCHAR:
     case kCHAR: {
-      switch (cd->compression) {
+      switch (cd->columnType.get_compression()) {
       case kENCODING_NONE:
         str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
         break;
@@ -2290,7 +2290,7 @@ llvm::Value* Executor::fastGroupByCodegen(
     llvm::Module* module,
     const int64_t min_val) {
   auto& context = llvm::getGlobalContext();
-  const auto key_expr_type = group_by_col->get_type_info().type;
+  const auto key_expr_type = group_by_col->get_type_info().get_type();
   CHECK(IS_INTEGER(key_expr_type) || IS_STRING(key_expr_type));
   auto group_key = codegen(group_by_col, hoist_literals);
   cgen_state_->group_by_expr_cache_.push_back(group_key);
@@ -2350,7 +2350,7 @@ void Executor::call_aggregators(
         cgen_state_->group_by_expr_cache_.push_back(group_key);
         auto group_key_ptr = cgen_state_->ir_builder_.CreateGEP(group_keys_buffer,
             llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
-        const auto key_expr_type = group_by_col ? group_by_col->get_type_info().type : kBIGINT;
+        const auto key_expr_type = group_by_col ? group_by_col->get_type_info().get_type() : kBIGINT;
         if (IS_INTEGER(key_expr_type) || IS_STRING(key_expr_type)) {
           CHECK(group_key->getType()->isIntegerTy());
           auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
@@ -2442,12 +2442,12 @@ void Executor::call_aggregators(
     // TODO(alex): handle non-integer columns as well
     if (std::get<0>(agg_info) != "agg_id" &&
         aggr_col &&
-        (IS_INTEGER(aggr_col->get_type_info().type) || IS_TIME(aggr_col->get_type_info().type)) &&
-        !aggr_col->get_type_info().notnull) {
+        (aggr_col->get_type_info().is_integer() || aggr_col->get_type_info().is_time()) &&
+        !aggr_col->get_type_info().get_notnull()) {
       auto agg_func_skip_val = module->getFunction(std::get<0>(agg_info) + "_skip_val");
       CHECK(agg_func_skip_val);
-      auto null_lv = inlineIntNull(aggr_col->get_type_info().type);
-      if (aggr_col->get_type_info().type != kBIGINT) {
+      auto null_lv = inlineIntNull(aggr_col->get_type_info().get_type());
+      if (aggr_col->get_type_info().get_type() != kBIGINT) {
         null_lv = cgen_state_->ir_builder_.CreateCast(
           llvm::Instruction::CastOps::SExt,
           null_lv,

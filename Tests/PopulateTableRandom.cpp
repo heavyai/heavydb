@@ -122,7 +122,7 @@ size_t
 random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems)
 {
 	size_t hash;
-	switch (cd->columnType.type) {
+	switch (cd->columnType.get_type()) {
 		case kSMALLINT:
 			hash = random_fill_int16(p.numbersPtr, num_elems);
 			break;
@@ -142,14 +142,14 @@ random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems)
 			break;
 		case kVARCHAR:
 		case kCHAR:
-			hash = random_fill_string(*p.stringsPtr, num_elems, cd->columnType.dimension);
+			hash = random_fill_string(*p.stringsPtr, num_elems, cd->columnType.get_dimension());
 			break;
 		case kTEXT:
 			hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN);
 			break;
 		case kTIME:
 		case kTIMESTAMP:
-			if (cd->columnType.dimension == 0) {
+			if (cd->columnType.get_dimension() == 0) {
 				if (sizeof(time_t) == 4)
 					hash = random_fill_int32(p.numbersPtr, num_elems);
 				else
@@ -186,12 +186,12 @@ populate_table_random(const string &table_name, const size_t num_rows, const Cat
 	DataBlockPtr p;
 	// now allocate space for insert data
 	for (auto cd : cds) {
-		if (cd->is_varlen()) {
+		if (cd->columnType.is_varlen()) {
 			vector<string> *col_vec = new vector<string>(num_rows);
 			gc_strings.push_back(unique_ptr<vector<string>>(col_vec)); // add to gc list
 			p.stringsPtr = col_vec;
 		} else {
-			int8_t *col_buf = static_cast<int8_t*>(malloc(num_rows * cd->getStorageSize()));
+			int8_t *col_buf = static_cast<int8_t*>(malloc(num_rows * cd->columnType.get_storage_size()));
 			gc_numbers.push_back(unique_ptr<int8_t>(col_buf)); // add to gc list
 			p.numbersPtr = col_buf;
 		}

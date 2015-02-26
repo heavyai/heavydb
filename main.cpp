@@ -44,22 +44,20 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
             throw runtime_error("Table " + table_name + " does not exist.");
           list <const ColumnDescriptor *> col_list = cat.getAllColumnMetadataForTable(td->tableId);
           cout << "TableId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
-          std::string SQLTypeName[] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT", "DATE" };
-          std::string compression[] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "TOKEN_DICT" };
 
           for (auto cd : col_list) {
             cout << cd->tableId << "|";
             cout << cd->columnId << "|";
             cout << cd->columnName << "|";
-            cout << SQLTypeName[cd->columnType.type] << "|";
-            cout << cd->columnType.dimension << "|";
-            cout << cd->columnType.scale << "|";
-            if (cd->columnType.notnull)
+            cout << cd->columnType.get_type_name() << "|";
+            cout << cd->columnType.get_dimension() << "|";
+            cout << cd->columnType.get_scale() << "|";
+            if (cd->columnType.get_notnull())
               cout << "true|";
             else
               cout << "false|";
-            cout << compression[cd->compression] << "|";
-            cout << cd->comp_param << "|";
+            cout << cd->columnType.get_compression_name() << "|";
+            cout << cd->columnType.get_comp_param() << "|";
             cout << cd->chunks << "\n";
           }
         } else {
@@ -81,7 +79,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
             cout << "(" << cat.get_currentDB().dbId << "," << td->tableId << "," << cd->columnId << "," << frag.fragmentId << ") ";
             cout << "numBytes:" << chunkMetadata.numBytes;
             cout << " numElements:" << chunkMetadata.numElements;
-            switch (cd->columnType.type) {
+            switch (cd->columnType.get_type()) {
               case kSMALLINT:
                 cout << " min:" << chunkMetadata.chunkStats.min.smallintval;
                 cout << " max:" << chunkMetadata.chunkStats.max.smallintval;
@@ -90,7 +88,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
               case kTEXT:
               case kVARCHAR:
               case kCHAR:
-                if (IS_STRING(cd->columnType.type) && cd->compression != kENCODING_DICT)
+                if (cd->columnType.is_string() && cd->columnType.get_compression() != kENCODING_DICT)
                   break;
                 cout << " min:" << chunkMetadata.chunkStats.min.intval;
                 cout << " max:" << chunkMetadata.chunkStats.max.intval;

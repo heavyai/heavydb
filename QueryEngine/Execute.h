@@ -283,7 +283,7 @@ private:
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant) {
       const auto& type_info = constant->get_type_info();
-      switch (type_info.type) {
+      switch (type_info.get_type()) {
       case kBOOLEAN:
         return getOrAddLiteral(constant->get_constval().boolval);
       case kSMALLINT:

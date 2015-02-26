@@ -225,9 +225,9 @@ namespace Parser {
   StringLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
   {
     SQLTypeInfo ti;
-    ti.type = kVARCHAR;
-    ti.dimension = stringval->length();
-    ti.scale = 0;
+    ti.set_type(kVARCHAR);
+    ti.set_dimension(stringval->length());
+    ti.set_scale(0);
     Datum d;
     d.stringval = new std::string(*stringval);
     return new Analyzer::Constant(ti, false, d);
@@ -256,9 +256,9 @@ namespace Parser {
   FixedPtLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
   {
     SQLTypeInfo ti;
-    ti.type = kNUMERIC;
-    ti.dimension = 0; // to be filled in by StringToDatum()
-    ti.scale = 0;
+    ti.set_type(kNUMERIC);
+    ti.set_dimension(0); // to be filled in by StringToDatum()
+    ti.set_scale(0);
     Datum d = StringToDatum(*fixedptval, ti);
     return new Analyzer::Constant(ti, false, d);
   }
@@ -373,11 +373,11 @@ namespace Parser {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     Analyzer::Expr *like_expr = like_string->analyze(catalog, query, allow_tlist_ref);
     Analyzer::Expr *escape_expr = escape_string == nullptr ? nullptr: escape_string->analyze(catalog, query, allow_tlist_ref);
-    if (!IS_STRING(arg_expr->get_type_info().type))
+    if (!arg_expr->get_type_info().is_string())
       throw std::runtime_error("expression before LIKE must be of a string type.");
-    if (!IS_STRING(like_expr->get_type_info().type))
+    if (!like_expr->get_type_info().is_string())
       throw std::runtime_error("expression after LIKE must be of a string type.");
-    if (escape_expr != nullptr && !IS_STRING(escape_expr->get_type_info().type))
+    if (escape_expr != nullptr && !escape_expr->get_type_info().is_string())
       throw std::runtime_error("expression after ESCAPE must be of a string type.");
     Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr, like_expr, escape_expr);
     if (is_not)
@@ -449,7 +449,7 @@ namespace Parser {
       if (cd == nullptr)
         throw std::runtime_error("Column name " + *column + " does not exist.");
     }
-    return new Analyzer::ColumnVar(cd->columnType, table_id, cd->columnId, rte_idx, cd->compression, cd->comp_param);
+    return new Analyzer::ColumnVar(cd->columnType, table_id, cd->columnId, rte_idx);
   }
 
   Analyzer::Expr *
@@ -460,7 +460,7 @@ namespace Parser {
     Analyzer::Expr *arg_expr;
     bool is_distinct = false;
     if (boost::iequals(*name, "count")) {
-      result_type.type = kBIGINT;
+      result_type.set_type(kBIGINT);
       agg_type = kCOUNT;
       if (arg == nullptr)
         arg_expr = nullptr;
@@ -481,7 +481,7 @@ namespace Parser {
     else if (boost::iequals(*name, "avg")) {
       agg_type = kAVG;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-      result_type.type = kDOUBLE;
+      result_type.set_type(kDOUBLE);
     }
     else if (boost::iequals(*name, "sum")) {
       agg_type = kSUM;
@@ -501,10 +501,10 @@ namespace Parser {
     target_type->check_type();
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     SQLTypeInfo ti;
-    ti.type = target_type->get_type();
-    ti.dimension = target_type->get_param1();
-    ti.scale = target_type->get_param2();
-    ti.notnull = arg_expr->get_type_info().notnull;
+    ti.set_type(target_type->get_type());
+    ti.set_dimension(target_type->get_param1());
+    ti.set_scale(target_type->get_param2());
+    ti.set_notnull(arg_expr->get_type_info().get_notnull());
     return arg_expr->add_cast(ti);
   }
 
@@ -521,23 +521,22 @@ namespace Parser {
   CaseExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const
   {
     SQLTypeInfo ti;
-    ti.type = kNULLT;
     std::list<std::pair<Analyzer::Expr*, Analyzer::Expr*>> expr_pair_list;
     bool has_agg = false;
     for (auto p : *when_then_list) {
       Analyzer::Expr *e1, *e2;
       e1 = p->get_expr1()->analyze(catalog, query, allow_tlist_ref);
-      if (e1->get_type_info().type != kBOOLEAN)
+      if (e1->get_type_info().get_type() != kBOOLEAN)
         throw std::runtime_error("Only boolean expressions can be used after WHEN.");
       e2 = p->get_expr2()->analyze(catalog, query, allow_tlist_ref);
-      if (ti.type == kNULLT)
+      if (ti.get_type() == kNULLT)
         ti = e2->get_type_info();
-      else if (e2->get_type_info().type == kNULLT)
+      else if (e2->get_type_info().get_type() == kNULLT)
         e2->set_type_info(ti);
       else if (ti != e2->get_type_info()) {
-        if (IS_STRING(ti.type) && IS_STRING(e2->get_type_info().type))
+        if (ti.is_string() && e2->get_type_info().is_string())
           ti = Analyzer::BinOper::common_string_type(ti, e2->get_type_info());
-        else if (IS_NUMBER(ti.type) && IS_NUMBER(e2->get_type_info().type))
+        else if (ti.is_number() && e2->get_type_info().is_number())
           ti = Analyzer::BinOper::common_numeric_type(ti, e2->get_type_info());
         else
           throw std::runtime_error("expressions in THEN clause must be of the same or compatible types.");
@@ -551,12 +550,12 @@ namespace Parser {
       else_e = else_expr->analyze(catalog, query, allow_tlist_ref);
       if (else_e->get_contains_agg())
         has_agg = true;
-      if (else_e->get_type_info().type == kNULLT)
+      if (else_e->get_type_info().get_type() == kNULLT)
         else_e->set_type_info(ti);
       else if (ti != else_e->get_type_info()) {
-        if (IS_STRING(ti.type) && IS_STRING(else_e->get_type_info().type))
+        if (ti.is_string() && else_e->get_type_info().is_string())
           ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
-        else if (IS_NUMBER(ti.type) && IS_NUMBER(else_e->get_type_info().type))
+        else if (ti.is_number() && else_e->get_type_info().is_number())
           ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
         else
           throw std::runtime_error("expressions in ELSE clause must be of the same or compatible types as those in the THEN clauses.");
@@ -609,9 +608,9 @@ namespace Parser {
     else
       throw std::runtime_error("Invalid field in EXTRACT function " + *field);
     Analyzer::Expr *from_expr = from_arg->analyze(catalog, query, allow_tlist_ref);
-    if (!IS_TIME(from_expr->get_type_info().type))
+    if (!from_expr->get_type_info().is_time())
       throw std::runtime_error("Only TIME, TIMESTAMP and DATE types can be in EXTRACT function.");
-    switch (from_expr->get_type_info().type) {
+    switch (from_expr->get_type_info().get_type()) {
       case kTIME:
         if (fieldno != kHOUR && fieldno != kMINUTE && fieldno != kSECOND)
           throw std::runtime_error("Cannot EXTRACT " + *field + " from TIME.");
@@ -619,11 +618,7 @@ namespace Parser {
       default:
         break;
     }
-    SQLTypeInfo ti;
-    ti.type = kBIGINT; // standard says DOUBLE but int is much more efficient
-    ti.dimension = 0;
-    ti.scale = 0;
-    ti.notnull = from_expr->get_type_info().notnull;
+    SQLTypeInfo ti(kBIGINT, 0, 0, from_expr->get_type_info().get_notnull());
     Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(from_expr);
     if (c != nullptr) {
       c->set_type_info(ti);
@@ -659,7 +654,7 @@ namespace Parser {
     Analyzer::Expr *p = nullptr;
     if (having_clause != nullptr) {
       p = having_clause->analyze(catalog, query, true);
-      if (p->get_type_info().type != kBOOLEAN)
+      if (p->get_type_info().get_type() != kBOOLEAN)
         throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
       p->check_group_by(query.get_group_by());
     }
@@ -724,7 +719,7 @@ namespace Parser {
       return;
     }
     Analyzer::Expr *p = where_clause->analyze(catalog, query);
-    if (p->get_type_info().type != kBOOLEAN)
+    if (p->get_type_info().get_type() != kBOOLEAN)
       throw std::runtime_error("Only boolean expressions can be in WHERE clause.");
     query.set_where_predicate(p);
   }
@@ -1215,26 +1210,26 @@ namespace Parser {
       cd.columnName = *coldef->get_column_name();
       SQLType *t = coldef->get_column_type();
       t->check_type();
-      cd.columnType.type = t->get_type();
-      cd.columnType.dimension = t->get_param1();
-      cd.columnType.scale = t->get_param2();
+      cd.columnType.set_type(t->get_type());
+      cd.columnType.set_dimension(t->get_param1());
+      cd.columnType.set_scale(t->get_param2());
       const ColumnConstraintDef *cc = coldef->get_column_constraint();
       if (cc == nullptr)
-        cd.columnType.notnull = false;
+        cd.columnType.set_notnull(false);
       else {
-        cd.columnType.notnull = cc->get_notnull();
+        cd.columnType.set_notnull(cc->get_notnull());
       }
       const CompressDef *compression = coldef->get_compression();
       if (compression == nullptr) {
-        cd.compression = kENCODING_NONE;
-        cd.comp_param = 0;
+        cd.columnType.set_compression(kENCODING_NONE);
+        cd.columnType.set_comp_param(0);
       } else {
         const std::string &comp = *compression->get_encoding_name();
         if (boost::iequals(comp, "fixed")) {
-          if (!IS_INTEGER(cd.columnType.type))
+          if (!cd.columnType.is_integer())
             throw std::runtime_error("Fixed encoding is only supported for integer columns.");
           // fixed-bits encoding
-          switch (cd.columnType.type) {
+          switch (cd.columnType.get_type()) {
             case kSMALLINT:
               if (compression->get_encoding_param() != 8)
                 throw std::runtime_error("Compression parameter for Fixed encoding on SMALLINT must be 8.");
@@ -1250,36 +1245,36 @@ namespace Parser {
             default:
               break;
           }
-          cd.compression = kENCODING_FIXED;
-          cd.comp_param = compression->get_encoding_param();
+          cd.columnType.set_compression(kENCODING_FIXED);
+          cd.columnType.set_comp_param(compression->get_encoding_param());
         } else if (boost::iequals(comp, "rl")) {
           // run length encoding
-          cd.compression = kENCODING_RL;
-          cd.comp_param = 0;
+          cd.columnType.set_compression(kENCODING_RL);
+          cd.columnType.set_comp_param(0);
         } else if (boost::iequals(comp, "diff")) {
           // differential encoding
-          cd.compression = kENCODING_DIFF;
-          cd.comp_param = 0;
+          cd.columnType.set_compression(kENCODING_DIFF);
+          cd.columnType.set_comp_param(0);
         } else if (boost::iequals(comp, "dict")) {
-          if (!IS_STRING(cd.columnType.type))
+          if (!cd.columnType.is_string())
             throw std::runtime_error("Dictionary encoding is only supported on string columns.");
           // diciontary encoding
-          cd.compression = kENCODING_DICT;
-          cd.comp_param = 0;
+          cd.columnType.set_compression(kENCODING_DICT);
+          cd.columnType.set_comp_param(0);
         } else if (boost::iequals(comp, "token_dict")) {
-          if (!IS_STRING(cd.columnType.type))
+          if (!cd.columnType.is_string())
             throw std::runtime_error("Tokenized-Dictionary encoding is only supported on string columns.");
           // tokenized diciontary encoding
-          cd.compression = kENCODING_TOKDICT;
-          cd.comp_param = 0;
+          cd.columnType.set_compression(kENCODING_TOKDICT);
+          cd.columnType.set_comp_param(0);
         } else if (boost::iequals(comp, "sparse")) {
           // sparse column encoding with mostly NULL values
-          if (cd.columnType.notnull)
+          if (cd.columnType.get_notnull())
             throw std::runtime_error("Cannot do sparse column encoding on a NOT NULL column.");
           if (compression->get_encoding_param() == 0 || compression->get_encoding_param() % 8 != 0 || compression->get_encoding_param() > 48)
             throw std::runtime_error("Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to sparse-column encoding.");
-          cd.compression = kENCODING_SPARSE;
-          cd.comp_param = compression->get_encoding_param();
+          cd.columnType.set_compression(kENCODING_SPARSE);
+          cd.columnType.set_comp_param(compression->get_encoding_param());
         } else
           throw std::runtime_error("Invalid column compression scheme " + comp);
       }
@@ -1395,8 +1390,8 @@ namespace Parser {
         throw std::runtime_error("Must specify a column name for expression.");
       cd.columnName = tle->get_resname();
       cd.columnType = tle->get_expr()->get_type_info();
-      cd.compression = kENCODING_NONE;
-      cd.comp_param = 0;
+      cd.columnType.set_compression(kENCODING_NONE);
+      cd.columnType.set_comp_param(0);
       columns.push_back(cd);
     }
     TableDescriptor td;

@@ -24,19 +24,19 @@ parse_numeric(const std::string &s, SQLTypeInfo &ti)
 	int64_t result;
 	result = std::stoll(before_dot);
 	int64_t fraction = std::stoll(after_dot);
-	if (ti.dimension == 0) {
+	if (ti.get_dimension() == 0) {
 		// set the type info based on the literal string
-		ti.scale = after_dot.length();
-		ti.dimension = before_dot.length() + ti.scale;
-		ti.notnull = false;
+		ti.set_scale(after_dot.length());
+		ti.set_dimension(before_dot.length() + ti.get_scale());
+		ti.set_notnull(false);
 	} else {
-		if (before_dot.length() + ti.scale > ti.dimension)
-			throw std::runtime_error("numeric value " + s + " exceeds the maximum precision of " + std::to_string(ti.dimension));
-		for (int i = 0; i < after_dot.length() - ti.scale; i++)
+		if (before_dot.length() + ti.get_scale() > ti.get_dimension())
+			throw std::runtime_error("numeric value " + s + " exceeds the maximum precision of " + std::to_string(ti.get_dimension()));
+		for (int i = 0; i < after_dot.length() - ti.get_scale(); i++)
 			fraction /= 10; // truncate the digits after decimal point.
 	}
 	// the following loop can be made more efficient if needed
-	for (int i = 0; i < ti.scale; i++)
+	for (int i = 0; i < ti.get_scale(); i++)
 		result *= 10;
 	if (result < 0)
 		result -= fraction;
@@ -52,7 +52,7 @@ Datum
 StringToDatum(const std::string &s, SQLTypeInfo &ti)
 {
 	Datum d;
-	switch (ti.type) {
+	switch (ti.get_type()) {
 		case kBOOLEAN:
 			if (s == "t" || s == "true" || s == "T" || s == "True")
 				d.boolval = true;
@@ -139,7 +139,7 @@ StringToDatum(const std::string &s, SQLTypeInfo &ti)
 std::string
 DatumToString(Datum d, const SQLTypeInfo &ti)
 {
-	switch (ti.type) {
+	switch (ti.get_type()) {
 		case kBOOLEAN:
 			if (d.boolval)
 				return "t";
@@ -147,9 +147,9 @@ DatumToString(Datum d, const SQLTypeInfo &ti)
 		case kNUMERIC:
 		case kDECIMAL:
 			{
-				char str[ti.dimension + 1];
-				double v = (double)d.bigintval/pow(10, ti.scale);
-				sprintf(str, "%*.*f", ti.dimension, ti.scale, v);
+				char str[ti.get_dimension() + 1];
+				double v = (double)d.bigintval/pow(10, ti.get_scale());
+				sprintf(str, "%*.*f", ti.get_dimension(), ti.get_scale(), v);
 				return std::string(str);
 			}
 		case kINT:

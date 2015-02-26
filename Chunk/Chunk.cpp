@@ -17,7 +17,7 @@ namespace Chunk_NS {
   void 
   Chunk::getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id, const size_t num_bytes, const size_t num_elems)
   {
-    if (column_desc->is_varlen()) {
+    if (column_desc->columnType.is_varlen()) {
       ChunkKey subKey = key;
       subKey.push_back(1); // 1 for the main buffer
       buffer = data_mgr->getChunkBuffer(subKey, mem_level, device_id, num_bytes);
@@ -33,7 +33,7 @@ namespace Chunk_NS {
   void
   Chunk::createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id)
   {
-    if (column_desc->is_varlen()) {
+    if (column_desc->columnType.is_varlen()) {
       ChunkKey subKey = key;
       subKey.push_back(1); // 1 for the main buffer
       buffer = data_mgr->createChunkBuffer(subKey, mem_level, device_id);
@@ -47,7 +47,7 @@ namespace Chunk_NS {
   ChunkMetadata
   Chunk::appendData(DataBlockPtr &src_data, const size_t num_elems, const size_t start_idx)
   {
-    if (column_desc->is_varlen()) {
+    if (column_desc->columnType.is_varlen()) {
       StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
       return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
 
@@ -75,8 +75,8 @@ namespace Chunk_NS {
   void
   Chunk::init_encoder()
   {
-    buffer->initEncoder(column_desc->columnType, column_desc->compression, column_desc->comp_param);
-    if (column_desc->is_varlen()) {
+    buffer->initEncoder(column_desc->columnType);
+    if (column_desc->columnType.is_varlen()) {
       StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
       str_encoder->set_index_buf(index_buf);
     }
@@ -88,7 +88,7 @@ namespace Chunk_NS {
     ChunkIter it;
     it.chunk = this;
     it.skip = skip;
-    it.skip_size = column_desc->getStorageSize();
+    it.skip_size = column_desc->columnType.get_storage_size();
     if (it.skip_size < 0) { // if it's variable length
       it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(StringOffsetT);
       it.end_pos = index_buf->getMemoryPtr() + index_buf->size() - sizeof(StringOffsetT);;
@@ -103,13 +103,13 @@ namespace Chunk_NS {
   Chunk::decompress(int8_t *compressed, VarlenDatum *result, Datum *datum) const
   {
     result->is_null = false;
-    switch (column_desc->columnType.type) {
+    switch (column_desc->columnType.get_type()) {
       case kSMALLINT:
         result->length = sizeof(int16_t);
         result->pointer = (int8_t*)&datum->smallintval;
-        switch (column_desc->compression) {
+        switch (column_desc->columnType.get_compression()) {
           case kENCODING_FIXED:
-            assert(column_desc->comp_param == 8);
+            assert(column_desc->columnType.get_comp_param() == 8);
             datum->smallintval = (int16_t)*(int8_t*)compressed;
             break;
           case kENCODING_RL:
@@ -124,9 +124,9 @@ namespace Chunk_NS {
       case kINT:
         result->length = sizeof(int32_t);
         result->pointer = (int8_t*)&datum->intval;
-        switch (column_desc->compression) {
+        switch (column_desc->columnType.get_compression()) {
           case kENCODING_FIXED:
-            switch (column_desc->comp_param) {
+            switch (column_desc->columnType.get_comp_param()) {
               case 8:
                 datum->intval = (int32_t)*(int8_t*)compressed;
                 break;
@@ -151,9 +151,9 @@ namespace Chunk_NS {
       case kDECIMAL:
         result->length = sizeof(int64_t);
         result->pointer = (int8_t*)&datum->bigintval;
-        switch (column_desc->compression) {
+        switch (column_desc->columnType.get_compression()) {
           case kENCODING_FIXED:
-            switch (column_desc->comp_param) {
+            switch (column_desc->columnType.get_comp_param()) {
               case 8:
                 datum->bigintval = (int64_t)*(int8_t*)compressed;
                 break;
@@ -181,7 +181,7 @@ namespace Chunk_NS {
         case kDATE:
           result->length = sizeof(time_t);
           result->pointer = (int8_t*)&datum->timeval;
-          switch (column_desc->compression) {
+          switch (column_desc->columnType.get_compression()) {
             case kENCODING_FIXED:
             case kENCODING_RL:
             case kENCODING_DIFF:
@@ -190,7 +190,9 @@ namespace Chunk_NS {
             case kENCODING_SPARSE:
             case kENCODING_NONE:
               assert(false);
-            break;
+              break;
+            default:
+              assert(false);
           }
           break;
       default:
@@ -219,7 +221,7 @@ ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is
     
   if (it->skip_size > 0) {
     // for fixed-size
-    if (uncompress && it->chunk->get_column_desc()->compression != kENCODING_NONE) {
+    if (uncompress && it->chunk->get_column_desc()->columnType.get_compression() != kENCODING_NONE) {
       it->chunk->decompress(it->current_pos, result, &it->datum);
     } else {
       result->length = it->skip_size;

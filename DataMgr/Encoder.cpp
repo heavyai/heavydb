@@ -5,10 +5,10 @@
 #include <glog/logging.h>
 
 
-Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeInfo sqlType, const EncodingType encodingType, const int encodingBits) {
-    switch (encodingType) {
+Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeInfo sqlType) {
+    switch (sqlType.get_compression()) {
         case kENCODING_NONE: {
-            switch (sqlType.type) {
+            switch (sqlType.get_type()) {
                 case kBOOLEAN: {
                     return new NoneEncoder <int8_t>  (buffer);
                     break;
@@ -50,9 +50,9 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
             break;
          }
         case kENCODING_FIXED: {
-            switch (sqlType.type) {
+            switch (sqlType.get_type()) {
                 case kSMALLINT: {
-                    switch(encodingBits) {
+                    switch(sqlType.get_comp_param()) {
                         case 8:
                             return new FixedLengthEncoder <int16_t,int8_t>  (buffer);
                             break;
@@ -66,7 +66,7 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
                 break;
                 }
                 case kINT: {
-                    switch(encodingBits) {
+                    switch(sqlType.get_comp_param()) {
                         case 8:
                             return new FixedLengthEncoder <int32_t,int8_t> (buffer);
                             break;
@@ -85,7 +85,7 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
                 case kBIGINT: 
 								case kNUMERIC:
 								case kDECIMAL: {
-                    switch(encodingBits) {
+                    switch(sqlType.get_comp_param()) {
                         case 8:
                             return new FixedLengthEncoder <int64_t,int8_t> (buffer);
                             break;
@@ -117,7 +117,7 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
             break;
         } // Case: kENCODING_FIXED
         case kENCODING_DICT: {
-          CHECK(IS_STRING(sqlType.type));
+          CHECK(IS_STRING(sqlType.get_type()));
           return new NoneEncoder <int32_t> (buffer);
           break;
         }
@@ -133,8 +133,6 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
 void Encoder::getMetadata(ChunkMetadata &chunkMetadata) {
     //chunkMetadata = metadataTemplate_; // invoke copy constructor
     chunkMetadata.sqlType = buffer_ -> sqlType; 
-    chunkMetadata.encodingType = buffer_ -> encodingType; 
-    chunkMetadata.encodingBits = buffer_ -> encodingBits; 
     chunkMetadata.numBytes = buffer_ -> size();
     chunkMetadata.numElements = numElems;
 }

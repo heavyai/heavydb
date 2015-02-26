@@ -96,8 +96,8 @@ public:
               proj_info.proj_name = std::to_string(i);
             }
             const auto& target_type = target->get_expr()->get_type_info();
-            proj_info.proj_type.type = type_to_thrift(target_type.type);
-            proj_info.proj_type.nullable = !target_type.notnull;
+            proj_info.proj_type.type = type_to_thrift(target_type.get_type());
+            proj_info.proj_type.nullable = !target_type.get_notnull();
             _return.proj_info.push_back(proj_info);
             ++i;
           }
@@ -137,8 +137,8 @@ public:
     const auto col_descriptors = cat_->getAllColumnMetadataForTable(td->tableId);
     for (const auto cd : col_descriptors) {
       ColumnType col_type;
-      col_type.type = type_to_thrift(cd->columnType.type);
-      col_type.nullable = !cd->columnType.notnull;
+      col_type.type = type_to_thrift(cd->columnType.get_type());
+      col_type.nullable = !cd->columnType.get_notnull();
       _return.insert(std::make_pair(cd->columnName, col_type));
     }
   }
