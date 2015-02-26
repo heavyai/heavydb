@@ -1732,7 +1732,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       all_fragment_results.push_back(device_results);
       reduce_mutex_.unlock();
     };
-    if (device_type == ExecutorDeviceType::GPU) {
+    if (device_type == ExecutorDeviceType::GPU ||
+        device_type == ExecutorDeviceType::CPU) {
       dispatch();
     } else {
       query_threads.push_back(std::thread(dispatch));
