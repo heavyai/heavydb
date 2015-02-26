@@ -112,7 +112,7 @@ TEST(ParseAnalyzePlan, Create) {
 TEST(ParseAnalyzePlan, Select) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fat;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select f.* from fat f;")); } );
-	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, d, l from fat;")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select cast(a as int), d, l from fat;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select -1, -1.1, -1e-3, -a from fat;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, d, l from fat where not 1=0;")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select b, d+e, f*g as y from fat;")); } );

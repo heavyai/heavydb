@@ -209,6 +209,12 @@ class SQLTypeInfo {
               assert(false);
 					}
 					break;
+        case kTEXT:
+        case kVARCHAR:
+        case kCHAR:
+          if (compression == kENCODING_DICT)
+            return sizeof(int32_t);
+          break;
 				default:
 					break;
 			}
@@ -245,7 +251,9 @@ class SQLTypeInfo {
       // can cast from date to timestamp
       else if (type == kDATE && new_type_info.get_type() == kTIMESTAMP)
         return true;
-      else 
+      else if (type == kBOOLEAN && new_type_info.is_number())
+        return true;
+      else
         return false;
     }
   private:

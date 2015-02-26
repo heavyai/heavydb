@@ -640,6 +640,33 @@ namespace Analyzer {
             assert(false);
         }
         break;
+      case kBOOLEAN:
+        switch (new_type_info.get_type()) {
+          case kINT:
+            constval.intval = constval.boolval ? 1 : 0;
+            break;
+          case kSMALLINT:
+            constval.smallintval = constval.boolval ? 1 : 0;
+            break;
+          case kBIGINT:
+            constval.bigintval = constval.boolval ? 1 : 0;
+            break;
+          case kDOUBLE:
+            constval.doubleval = constval.boolval ? 1 : 0;
+            break;
+          case kFLOAT:
+            constval.floatval = constval.boolval ? 1 : 0;
+            break;
+          case kNUMERIC:
+          case kDECIMAL:
+            constval.bigintval = constval.boolval ? 1 : 0;
+            for (int i = 0; i < new_type_info.get_scale(); i++)
+              constval.bigintval *= 10;
+            break;
+          default:
+            assert(false);
+        }
+        break;
       default:
         assert(false);
     }
@@ -687,7 +714,7 @@ namespace Analyzer {
       type_info = new_type_info;
       return this;
     }
-    if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP)) {
+    if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP || type_info.get_type() == kBOOLEAN)) {
       cast_number(new_type_info);
     } else if (new_type_info.is_string() && type_info.is_string()) {
       cast_string(new_type_info);
