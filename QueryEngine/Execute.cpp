@@ -1732,9 +1732,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       all_fragment_results.push_back(device_results);
       reduce_mutex_.unlock();
     };
-    if (cat.get_dataMgr().gpusPresent()) {
-      // TODO(alex): figure out why CudaMgr constructor / destructor
-      //             hates threads; for now, we just serialize
+    if (device_type == ExecutorDeviceType::GPU) {
       dispatch();
     } else {
       query_threads.push_back(std::thread(dispatch));
