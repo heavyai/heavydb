@@ -86,6 +86,12 @@ public:
     case kBIGINT:
       bigint_buffer_ = new std::vector<int64_t>();
       break;
+    case kFLOAT:
+      float_buffer_ = new std::vector<float>();
+      break;
+    case kDOUBLE:
+      double_buffer_ = new std::vector<double>();
+      break;
     case kTEXT:
       if (encoding_ == kENCODING_NONE) {
         string_buffer_ = new std::vector<std::string>();
@@ -114,6 +120,12 @@ public:
       break;
     case kBIGINT:
       delete bigint_buffer_;
+      break;
+    case kFLOAT:
+      delete float_buffer_;
+      break;
+    case kDOUBLE:
+      delete double_buffer_;
       break;
     case kTEXT:
       if (encoding_ == kENCODING_NONE) {
@@ -148,6 +160,16 @@ public:
     bigint_buffer_->push_back(v);
   }
 
+  void addFloat(const float v) {
+    CHECK_EQ(kFLOAT, type_);
+    float_buffer_->push_back(v);
+  }
+
+  void addDouble(const double v) {
+    CHECK_EQ(kDOUBLE, type_);
+    double_buffer_->push_back(v);
+  }
+
   void addString(const std::string& v) {
     CHECK_EQ(kTEXT, type_);
     string_buffer_->push_back(v);
@@ -172,7 +194,7 @@ public:
     return encoding_;
   }
 
-  int8_t* getIntBytes() const {
+  int8_t* getAsBytes() const {
     switch (type_) {
     case kSMALLINT:
       return reinterpret_cast<int8_t*>(&((*smallint_buffer_)[0]));
@@ -180,6 +202,10 @@ public:
       return reinterpret_cast<int8_t*>(&((*int_buffer_)[0]));
     case kBIGINT:
       return reinterpret_cast<int8_t*>(&((*bigint_buffer_)[0]));
+    case kFLOAT:
+      return reinterpret_cast<int8_t*>(&((*float_buffer_)[0]));
+    case kDOUBLE:
+      return reinterpret_cast<int8_t*>(&((*double_buffer_)[0]));
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
@@ -214,6 +240,16 @@ public:
       bigint_buffer_->swap(empty);
       break;
     }
+    case kFLOAT: {
+      std::vector<float> empty;
+      float_buffer_->swap(empty);
+      break;
+    }
+    case kDOUBLE: {
+      std::vector<double> empty;
+      double_buffer_->swap(empty);
+      break;
+    }
     case kTEXT: {
       if (encoding_ == kENCODING_NONE) {
         std::vector<std::string> empty;
@@ -241,6 +277,8 @@ private:
     std::vector<int16_t>* smallint_buffer_;
     std::vector<int32_t>* int_buffer_;
     std::vector<int64_t>* bigint_buffer_;
+    std::vector<float>* float_buffer_;
+    std::vector<double>* double_buffer_;
     std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
     std::vector<int32_t>* string_dict_buffer_;
@@ -277,8 +315,9 @@ void do_import(
   insert_data.numRows = row_count;
   for (const auto& import_buff : import_buffers) {
     DataBlockPtr p;
-    if (IS_INTEGER(import_buff->getType()) || IS_TIME(import_buff->getType())) {
-      p.numbersPtr = import_buff->getIntBytes();
+    if (IS_NUMBER(import_buff->getType()) ||
+        IS_TIME(import_buff->getType())) {
+      p.numbersPtr = import_buff->getAsBytes();
     } else {
       CHECK_EQ(kTEXT, import_buff->getType());
       if (import_buff->getEncoding() == kENCODING_NONE) {
@@ -300,6 +339,8 @@ void do_import(
 const auto NULL_SMALLINT = std::numeric_limits<int16_t>::min();
 const auto NULL_INT = std::numeric_limits<int32_t>::min();
 const auto NULL_BIGINT = std::numeric_limits<int64_t>::min();
+const auto NULL_FLOAT = std::numeric_limits<float>::min();
+const auto NULL_DOUBLE = std::numeric_limits<double>::min();
 
 }
 
@@ -356,6 +397,20 @@ void CsvImporter::import() {
         import_buffers[col_idx]->addBigint(boost::lexical_cast<int64_t>(row_fields[col_idx]));
       } catch (boost::bad_lexical_cast&) {
         import_buffers[col_idx]->addBigint(NULL_BIGINT);
+      }
+      break;
+    case kFLOAT:
+      try {
+        import_buffers[col_idx]->addFloat(boost::lexical_cast<float>(row_fields[col_idx]));
+      } catch (boost::bad_lexical_cast&) {
+        import_buffers[col_idx]->addFloat(NULL_FLOAT);
+      }
+      break;
+    case kDOUBLE:
+      try {
+        import_buffers[col_idx]->addDouble(boost::lexical_cast<double>(row_fields[col_idx]));
+      } catch (boost::bad_lexical_cast&) {
+        import_buffers[col_idx]->addDouble(NULL_DOUBLE);
       }
       break;
     case kTEXT: {
