@@ -1239,8 +1239,7 @@ Executor::ResultRows Executor::groupBufferToResults(
     const int64_t* group_by_buffer,
     const size_t group_by_col_count,
     const size_t agg_col_count,
-    const std::list<Analyzer::Expr*>& target_exprs,
-    const int32_t db_id) {
+    const std::list<Analyzer::Expr*>& target_exprs) {
   std::vector<ResultRow> results;
   for (size_t i = 0; i < groups_buffer_entry_count_; ++i) {
     const size_t key_off = (group_by_col_count + agg_col_count) * i;
@@ -1469,8 +1468,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   const auto hoist_buf = serializeLiterals(query_code_and_literals.second);
   launch_query_cpu_code(query_code_and_literals.first, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals, group_by_buffers);
-  return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs,
-    cat.get_currentDB().dbId);
+  return groupBufferToResults(group_by_buffer, 1, target_exprs.size(), target_exprs);
 }
 
 std::vector<ResultRow> Executor::executeSortPlan(
@@ -1791,7 +1789,7 @@ void Executor::executePlanWithGroupBy(
     launch_query_cpu_code(query_native_code, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers);
     results = groupBufferToResults(group_by_buffers.front(), group_by_col_count, agg_col_count,
-      target_exprs_list, db_id);
+      target_exprs_list);
   } else {
     launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, group_by_buffers, groups_buffer_size, data_mgr,
@@ -1800,7 +1798,7 @@ void Executor::executePlanWithGroupBy(
     for (size_t i = 0; i < num_buffers; ++i) {
       results_per_sm.push_back(groupBufferToResults(
         group_by_buffers[i], group_by_col_count, agg_col_count, 
-        target_exprs_list, db_id));
+        target_exprs_list));
     }
     results = reduceMultiDeviceResults(results_per_sm);
   }
@@ -1964,7 +1962,8 @@ void bind_pos_placeholders(const std::string& pos_fn_name, llvm::Function* query
 
 std::vector<llvm::Value*> generate_column_heads_load(
     const int num_columns,
-    llvm::Function* query_func) {
+    llvm::Function* query_func,
+    llvm::LLVMContext& context) {
   auto max_col_local_id = num_columns - 1;
   auto& fetch_bb = query_func->front();
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
@@ -1972,7 +1971,6 @@ std::vector<llvm::Value*> generate_column_heads_load(
   auto& in_arg_list = query_func->getArgumentList();
   CHECK_GE(in_arg_list.size(), 4);
   auto& byte_stream_arg = in_arg_list.front();
-  auto& context = llvm::getGlobalContext();
   std::vector<llvm::Value*> col_heads;
   for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
     col_heads.emplace_back(fetch_ir_builder.CreateLoad(fetch_ir_builder.CreateGEP(
@@ -2006,7 +2004,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
   // Generate the function signature and column head fetches s.t.
   // double indirection isn't needed in the inner loop
-  auto col_heads = generate_column_heads_load(in_col_count, query_func);
+  auto col_heads = generate_column_heads_load(in_col_count, query_func, context);
 
   // column buffer arguments
   for (size_t i = 0; i < col_heads.size(); ++i) {
@@ -2289,7 +2287,6 @@ llvm::Value* Executor::fastGroupByCodegen(
     const bool hoist_literals,
     llvm::Module* module,
     const int64_t min_val) {
-  auto& context = llvm::getGlobalContext();
   const auto key_expr_type = group_by_col->get_type_info().get_type();
   CHECK(IS_INTEGER(key_expr_type) || IS_STRING(key_expr_type));
   auto group_key = codegen(group_by_col, hoist_literals);
@@ -2309,8 +2306,8 @@ llvm::Value* Executor::fastGroupByCodegen(
   std::vector<llvm::Value*> get_group_value_args {
     &groups_buffer,
     group_key,
-    llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), min_val),
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), agg_col_count)
+    llvm::ConstantInt::get(llvm::Type::getInt64Ty(cgen_state_->context_), min_val),
+    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), agg_col_count)
   };
   return cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
 }
@@ -2323,10 +2320,8 @@ void Executor::call_aggregators(
     llvm::Module* module,
     const bool hoist_literals,
     std::pair<bool, int64_t> fast_group_by) {
-  auto& context = llvm::getGlobalContext();
-
-  auto filter_true = llvm::BasicBlock::Create(context, "filter_true", cgen_state_->row_func_);
-  auto filter_false = llvm::BasicBlock::Create(context, "filter_false", cgen_state_->row_func_);
+  auto filter_true = llvm::BasicBlock::Create(cgen_state_->context_, "filter_true", cgen_state_->row_func_);
+  auto filter_false = llvm::BasicBlock::Create(cgen_state_->context_, "filter_false", cgen_state_->row_func_);
 
   cgen_state_->ir_builder_.CreateCondBr(filter_result, filter_true, filter_false);
   cgen_state_->ir_builder_.SetInsertPoint(filter_true);
@@ -2342,14 +2337,14 @@ void Executor::call_aggregators(
       agg_out_vec.push_back(fastGroupByCodegen(group_by_col, agg_infos.size(), hoist_literals, module, min_val));
     } else {
       auto group_keys_buffer = cgen_state_->ir_builder_.CreateAlloca(
-        llvm::Type::getInt64Ty(context),
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size()));
+        llvm::Type::getInt64Ty(cgen_state_->context_),
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), group_by_cols.size()));
       size_t i = 0;
       for (const auto group_by_col : group_by_cols) {
         auto group_key = codegen(group_by_col, hoist_literals);
         cgen_state_->group_by_expr_cache_.push_back(group_key);
         auto group_key_ptr = cgen_state_->ir_builder_.CreateGEP(group_keys_buffer,
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i));
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), i));
         const auto key_expr_type = group_by_col ? group_by_col->get_type_info().get_type() : kBIGINT;
         if (IS_INTEGER(key_expr_type) || IS_STRING(key_expr_type)) {
           CHECK(group_key->getType()->isIntegerTy());
@@ -2382,10 +2377,10 @@ void Executor::call_aggregators(
       auto& groups_buffer = cgen_state_->row_func_->getArgumentList().front();
       std::vector<llvm::Value*> get_group_value_args {
         &groups_buffer,
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), groups_buffer_entry_count),
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), groups_buffer_entry_count),
         group_keys_buffer,
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), group_by_cols.size()),
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), plan_state_->init_agg_vals_.size())
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), group_by_cols.size()),
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), plan_state_->init_agg_vals_.size())
       };
       agg_out_vec.push_back(cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args));
     }
@@ -2401,7 +2396,7 @@ void Executor::call_aggregators(
     auto agg_func = module->getFunction(std::get<0>(agg_info));
     CHECK(agg_func);
     auto aggr_col = std::get<1>(agg_info);
-    llvm::Value* agg_expr_lv = llvm::ConstantInt::get(llvm::Type::getInt64Ty(context), 0);
+    llvm::Value* agg_expr_lv = llvm::ConstantInt::get(llvm::Type::getInt64Ty(cgen_state_->context_), 0);
     if (aggr_col) {
       agg_expr_lv = codegen(aggr_col, hoist_literals);
       auto agg_col_type = agg_expr_lv->getType();
@@ -2428,14 +2423,14 @@ void Executor::call_aggregators(
       agg_args = {
         cgen_state_->ir_builder_.CreateGEP(
           agg_out_vec.front(),
-          llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), i)),
+          llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), i)),
         agg_expr_lv
       };
     }
     auto count_distinct_set = std::get<3>(agg_info);
     if (count_distinct_set) {
       agg_args.push_back(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(context),
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(cgen_state_->context_),
         reinterpret_cast<int64_t>(count_distinct_set)));
     }
     // Skip null values from aggregate value.
