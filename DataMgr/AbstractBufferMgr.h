@@ -32,13 +32,13 @@ namespace Data_Namespace {
         AbstractBufferMgr(const int deviceId): deviceId_(deviceId) {}
         
         // Chunk API
-        virtual AbstractBuffer* createChunk(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0) = 0;
-        virtual void deleteChunk(const ChunkKey &key, const bool purge = true) = 0; // purge param only used in FileMgr
-        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge = true) = 0;
-        virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0) = 0;
-        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes = 0) = 0;
-        //virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;
-        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;
+        virtual AbstractBuffer* createBuffer(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0) = 0;
+        virtual void deleteBuffer(const ChunkKey &key, const bool purge = true) = 0; // purge param only used in FileMgr
+        virtual void deleteBuffersWithPrefix(const ChunkKey &keyPrefix, const bool purge = true) = 0;
+        virtual AbstractBuffer* getBuffer(const ChunkKey &key, const size_t numBytes = 0) = 0;
+        virtual void fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes = 0) = 0;
+        //virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;
+        virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes = 0) = 0;
         virtual void getChunkMetadataVec(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadata) = 0;
         virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) = 0;
 

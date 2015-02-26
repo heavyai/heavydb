@@ -238,7 +238,7 @@ namespace File_Namespace {
     }
 
 
-    AbstractBuffer* FileMgr::createChunk(const ChunkKey &key, const size_t pageSize, const size_t numBytes) {
+    AbstractBuffer* FileMgr::createBuffer(const ChunkKey &key, const size_t pageSize, const size_t numBytes) {
         size_t actualPageSize = pageSize;
         if (actualPageSize == 0) {
             actualPageSize = defaultPageSize_; 
@@ -253,7 +253,7 @@ namespace File_Namespace {
         return (chunkIndex_[key]);
     }
 
-    void FileMgr::deleteChunk(const ChunkKey &key, const bool purge) {
+    void FileMgr::deleteBuffer(const ChunkKey &key, const bool purge) {
         auto chunkIt = chunkIndex_.find(key);
         // ensure the Chunk exists
         if (chunkIt == chunkIndex_.end()) {
@@ -268,7 +268,7 @@ namespace File_Namespace {
         chunkIndex_.erase(chunkIt);
     }
 
-    void FileMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge) {
+    void FileMgr::deleteBuffersWithPrefix(const ChunkKey &keyPrefix, const bool purge) {
         auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
         if (chunkIt == chunkIndex_.end()) {
             return; // should we throw?
@@ -291,7 +291,7 @@ namespace File_Namespace {
         }
     }
 
-    AbstractBuffer* FileMgr::getChunk(const ChunkKey &key, const size_t numBytes) {
+    AbstractBuffer* FileMgr::getBuffer(const ChunkKey &key, const size_t numBytes) {
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
@@ -299,7 +299,7 @@ namespace File_Namespace {
     }
 
 
-    void FileMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
+    void FileMgr::fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
         
@@ -329,12 +329,12 @@ namespace File_Namespace {
         destBuffer->syncEncoder(chunk);
     }
 
-    AbstractBuffer* FileMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
+    AbstractBuffer* FileMgr::putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
         // obtain a pointer to the Chunk
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer *chunk;
         if (chunkIt == chunkIndex_.end()) {
-            chunk = createChunk(key,defaultPageSize_);
+            chunk = createBuffer(key,defaultPageSize_);
         }
         else {
             chunk = chunkIt->second;
