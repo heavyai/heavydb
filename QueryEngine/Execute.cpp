@@ -1744,6 +1744,18 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       }
       query_threads.clear();
     }
+
+    // TODO(alex): remove, make multi-threaded
+    if (i < fragments.size() - 1) {
+      for (auto group_by_buffer : plan_state_->group_by_buffers_) {
+        init_groups(group_by_buffer, groups_buffer_entry_count_,
+          groupby_exprs.size(), &plan_state_->init_agg_vals_[0], agg_infos.size());
+      }
+      for (auto small_group_by_buffer : plan_state_->small_group_by_buffers_) {
+        init_groups(small_group_by_buffer, small_groups_buffer_entry_count_,
+          groupby_exprs.size(), &plan_state_->init_agg_vals_[0], agg_infos.size());
+      }
+    }
   }
   for (auto& child : query_threads) {
     child.join();
@@ -1829,6 +1841,7 @@ void Executor::executePlanWithGroupBy(
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr) {
+  CHECK(results.empty());
   const size_t agg_col_count = plan_state_->init_agg_vals_.size();
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
