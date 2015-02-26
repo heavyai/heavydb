@@ -169,8 +169,12 @@ private:
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows,
-    Data_Namespace::DataMgr*,
-    const int32_t db_id);
+    Data_Namespace::DataMgr*);
+  std::vector<int64_t*> allocateGroupByHostBuffers(
+    const size_t num_buffers,
+    const size_t group_by_col_count,
+    const size_t groups_buffer_entry_count,
+    const size_t groups_buffer_size);
   void executePlanWithoutGroupBy(
     void* query_native_code,
     const bool hoist_literals,
@@ -184,6 +188,7 @@ private:
   ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
   ResultRows groupBufferToResults(
     const int64_t* group_by_buffer,
+    const size_t groups_buffer_entry_count,
     const size_t group_by_col_count,
     const size_t agg_col_count,
     const std::list<Analyzer::Expr*>& target_exprs);
@@ -211,13 +216,14 @@ private:
                                    const ExecutorOptLevel,
                                    llvm::Module*,
                                    const bool is_group_by);
-  void call_aggregators(
+  void codegenAggrCalls(
     const std::vector<AggInfo>& agg_infos,
     llvm::Value* filter_result,
     const std::list<Analyzer::Expr*>& group_by_cols,
     const int32_t groups_buffer_entry_count,
     llvm::Module* module,
     const bool hoist_literals,
+    const ExecutorDeviceType device_type,
     std::pair<bool, int64_t> fast_group_by);
   llvm::Value* fastGroupByCodegen(
     Analyzer::Expr* group_by_col,
@@ -225,6 +231,18 @@ private:
     const bool hoist_literals,
     llvm::Module* module,
     const int64_t min_val);
+  llvm::Value* slowGroupByCodegen(
+    const std::list<Analyzer::Expr*>& group_by_cols,
+    const int32_t groups_buffer_entry_count,
+    const bool hoist_literals,
+    llvm::Module* module);
+  llvm::Value* groupByOneColumnCodegen(
+    Analyzer::Expr* group_by_col,
+    const size_t agg_col_count,
+    const bool hoist_literals,
+    llvm::Module* module,
+    const int64_t min_val);
+  llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col, const bool hoist_literals);
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
 
@@ -355,9 +373,19 @@ private:
   std::unique_ptr<CgenState> cgen_state_;
 
   struct PlanState {
+    ~PlanState() {
+      for (const auto group_by_buffer : group_by_buffers_) {
+        free(group_by_buffer);
+      }
+      for (const auto small_group_by_buffer : small_group_by_buffers_) {
+        free(small_group_by_buffer);
+      }
+    }
     std::vector<int64_t> init_agg_vals_;
     std::unordered_map<int, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
+    std::vector<int64_t*> group_by_buffers_;
+    std::vector<int64_t*> small_group_by_buffers_;
   };
   std::unique_ptr<PlanState> plan_state_;
 
@@ -371,6 +399,7 @@ private:
   std::map<CodeCacheKey, CodeCacheVal> gpu_code_cache_;
 
   const size_t groups_buffer_entry_count_ { 2048 };
+  const size_t small_groups_buffer_entry_count_ { 512 };
   const unsigned block_size_x_ { 16 };
   const unsigned grid_size_x_ { 16 };
 
