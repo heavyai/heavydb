@@ -434,12 +434,8 @@ namespace Analyzer {
   {
     if (new_type_info == type_info)
       return this;
-    //@TODO(wei) add check for different encoding
-    if (!type_info.is_string() && !new_type_info.is_string() &&
-        (!type_info.is_number() || !new_type_info.is_number()) &&
-        (type_info.get_type() != kTIMESTAMP || !new_type_info.is_number()) &&
-        (type_info.get_type() != kDATE || new_type_info.get_type() != kTIMESTAMP))
-      throw std::runtime_error("Invalid CAST: incompatible types.");
+    if (!type_info.is_castable(new_type_info))
+      throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " + new_type_info.get_type_name());
     return new UOper(new_type_info, contains_agg, kCAST, this);
   }
 
@@ -1247,7 +1243,7 @@ namespace Analyzer {
         op = "EXISTS ";
         break;
       case kCAST:
-        op = "CAST ";
+        op = "CAST " + type_info.get_type_name() + " " + type_info.get_compression_name() + " ";
         break;
       default:
         break;

@@ -89,22 +89,22 @@ class SQLTypeInfo {
     SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0) {}
     SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0) {}
 
-    SQLTypes get_type() const { return type; }
-    int get_dimension() const { return dimension; }
-    int get_precision() const { return dimension; }
-    int get_scale() const { return scale; }
-    bool get_notnull() const { return notnull; }
-    EncodingType get_compression() const { return compression; }
-    int get_comp_param() const { return comp_param; }
-    void set_type(SQLTypes t) { type = t; }
-    void set_dimension(int d) { dimension = d; }
-    void set_precision(int d) { dimension = d; }
-    void set_scale(int s) { scale = s; }
-    void set_notnull(bool n) { notnull = n; }
-    void set_compression(EncodingType c) { compression = c; }
-    void set_comp_param(int p) { comp_param = p; }
-    std::string get_type_name() const { return type_name[(int)type]; }
-    std::string get_compression_name() const { return comp_name[(int)compression]; }
+    inline SQLTypes get_type() const { return type; }
+    inline int get_dimension() const { return dimension; }
+    inline int get_precision() const { return dimension; }
+    inline int get_scale() const { return scale; }
+    inline bool get_notnull() const { return notnull; }
+    inline EncodingType get_compression() const { return compression; }
+    inline int get_comp_param() const { return comp_param; }
+    inline void set_type(SQLTypes t) { type = t; }
+    inline void set_dimension(int d) { dimension = d; }
+    inline void set_precision(int d) { dimension = d; }
+    inline void set_scale(int s) { scale = s; }
+    inline void set_notnull(bool n) { notnull = n; }
+    inline void set_compression(EncodingType c) { compression = c; }
+    inline void set_comp_param(int p) { comp_param = p; }
+    inline std::string get_type_name() const { return type_name[(int)type]; }
+    inline std::string get_compression_name() const { return comp_name[(int)compression]; }
     inline bool is_string() const { return IS_STRING(type); }
     inline bool is_integer() const { return IS_INTEGER(type); }
     inline bool is_number() const { return IS_NUMBER(type); }
@@ -112,7 +112,7 @@ class SQLTypeInfo {
 
 		inline bool is_varlen() const { return IS_STRING(type) && compression != kENCODING_DICT; }
 
-		int get_storage_size() const {
+		inline int get_storage_size() const {
 			switch (type) {
 				case kBOOLEAN:
 					return sizeof(int8_t);
@@ -215,19 +215,38 @@ class SQLTypeInfo {
 			return -1;
 		}
 
-    bool operator!=(const SQLTypeInfo &rhs) const {
+    inline bool operator!=(const SQLTypeInfo &rhs) const {
       return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || comp_param != rhs.get_comp_param();
     }
-    bool operator==(const SQLTypeInfo &rhs) const {
+    inline bool operator==(const SQLTypeInfo &rhs) const {
       return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && comp_param == rhs.get_comp_param();
     }
-    void operator=(const SQLTypeInfo &rhs) {
+    inline void operator=(const SQLTypeInfo &rhs) {
       type = rhs.get_type();
       dimension = rhs.get_dimension();
       scale = rhs.get_scale();
       notnull = rhs.get_notnull();
       compression = rhs.get_compression();
       comp_param = rhs.get_comp_param();
+    }
+    inline bool is_castable(const SQLTypeInfo &new_type_info) const {
+      // can always cast between the same type but different precision/scale/encodings
+      if (type == new_type_info.get_type())
+        return true;
+      // can always cast from or to string
+      else if (is_string() || new_type_info.is_string())
+        return true;
+      // can cast between numbers
+      else if (is_number() && new_type_info.is_number())
+        return true;
+      // can cast from timestamp or date to number (epoch)
+      else if ((type == kTIMESTAMP || type == kDATE) && new_type_info.is_number())
+        return true;
+      // can cast from date to timestamp
+      else if (type == kDATE && new_type_info.get_type() == kTIMESTAMP)
+        return true;
+      else 
+        return false;
     }
   private:
     SQLTypes type; // type id
