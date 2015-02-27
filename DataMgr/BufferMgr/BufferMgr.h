@@ -96,7 +96,9 @@ namespace Buffer_Namespace {
         virtual void addSlab(const size_t slabSize) = 0;
         virtual void freeAllMem() = 0;
         virtual void allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t numBytes) = 0;
-        std::recursive_mutex globalMutex_;  // hack for now - lets profile this to see impact on performance - may not matter given the workload
+        //std::recursive_mutex globalMutex_;  // hack for now - lets profile this to see impact on performance - may not matter given the workload
+        std::mutex chunkIndexMutex_;  
+        std::mutex findFreeMutex__;  
         std::mutex bufferIdMutex_;  
         
         //std::map<ChunkKey, Buffer*> chunkIndex_;

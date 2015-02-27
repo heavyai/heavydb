@@ -44,7 +44,6 @@ namespace Buffer_Namespace {
     
     /// Throws a runtime_error if the Chunk already exists
     AbstractBuffer * BufferMgr::createChunk(const ChunkKey &chunkKey, const size_t chunkPageSize, const size_t initialSize) {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
 
         size_t actualChunkPageSize = chunkPageSize;
         if (actualChunkPageSize == 0) {
@@ -52,17 +51,21 @@ namespace Buffer_Namespace {
         }
 
         // ChunkPageSize here is just for recording dirty pages
-        if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
-            throw std::runtime_error("Chunk already exists");
+        {
+        std::unique_lock < std::mutex > lock (chunkIndexMutex_);
+            if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
+                throw std::runtime_error("Chunk already exists");
+            }
+            BufferSeg bufferSeg(BufferSeg(-1,0,USED));
+            bufferSeg.chunkKey = chunkKey;
+            unsizedSegs_.push_back(bufferSeg);
+            chunkIndex_[chunkKey] = std::prev(unsizedSegs_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
         }
-        BufferSeg bufferSeg(BufferSeg(-1,0,USED));
-        bufferSeg.chunkKey = chunkKey;
-        unsizedSegs_.push_back(bufferSeg);
-        chunkIndex_[chunkKey] = std::prev(unsizedSegs_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
+        // following should be safe outside the lock b/c first thing Buffer
+        // constructor does is pin (and its still in unsized segs at this point
+        // so can't be evicted)
         allocateBuffer(chunkIndex_[chunkKey],actualChunkPageSize,initialSize); 
-        //slabSegments_.back().buffer =  new Buffer(this, chunkKey, std::prev(slabSegments_.end(),1), chunkPageSize, initialSize); 
-        //new Buffer(this, chunkIndex_[chunkKey], chunkPageSize, initialSize); // this line is admittedly a bit weird but the segment iterator passed into buffer takes the address of the new Buffer in its buffer member
-        chunkIndex_[chunkKey]->buffer->pin();
+        //chunkIndex_[chunkKey]->buffer->pin();
         return chunkIndex_[chunkKey]->buffer;
     }
 
@@ -101,22 +104,7 @@ namespace Buffer_Namespace {
         return dataSegIt;
     }
 
-    BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator &segIt, const size_t numBytes) {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        /*
-        ChunkKey debugKey = segIt->chunkKey;
-        int debugKeySize = debugKey.size();
-        int dbKey = -1;
-        int tableKey = 0;
-        int colKey = 0;
-        int fragKey = 0;
-        if (debugKeySize >= 4) {
-            dbKey = debugKey[0];
-            tableKey = debugKey[1];
-            colKey = debugKey[2];
-            fragKey = debugKey[3];
-        }
-        */
+    BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator &segIt, const size_t numBytes) { // assumes buffer is already pinned
 
         // doesn't resize to be smaller - like std::reserve
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
