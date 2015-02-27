@@ -1690,9 +1690,16 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
   const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
+  const size_t num_buffers { device_type == ExecutorDeviceType::CPU ? 1 : block_size_x_ * grid_size_x_ };
+  const size_t groups_buffer_size {
+    (groupby_exprs.size() + agg_infos.size()) * groups_buffer_entry_count_ * sizeof(int64_t) };
+  const size_t small_groups_buffer_size {
+    (groupby_exprs.size() + agg_infos.size()) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
   for (size_t i = 0; i < fragments.size(); ++i) {
-    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, query_code_and_literals, hoist_literals,
-        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
+    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, query_code_and_literals,
+        hoist_literals, num_buffers, groups_buffer_size, small_groups_buffer_size,
+        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs, &agg_infos]() {
+      FragmentState frag_state(this, device_type, groupby_exprs.size(), agg_infos.size());
       const auto& fragment = fragments[i];
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
       ResultRows device_results;
@@ -1725,15 +1732,15 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       } else {
         executePlanWithGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
           device_results, get_agg_target_exprs(plan),
-          groupby_exprs.size(), device_type, col_buffers, num_rows,
+          groupby_exprs.size(), device_type, col_buffers,
+          frag_state.group_by_buffers_, frag_state.small_group_by_buffers_, num_rows,
           &cat.get_dataMgr());
       }
       reduce_mutex_.lock();
       all_fragment_results.push_back(device_results);
       reduce_mutex_.unlock();
     };
-    if (device_type == ExecutorDeviceType::GPU ||
-        device_type == ExecutorDeviceType::CPU) {
+    if (device_type == ExecutorDeviceType::GPU) {
       dispatch();
     } else {
       query_threads.push_back(std::thread(dispatch));
@@ -1743,18 +1750,6 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         child.join();
       }
       query_threads.clear();
-    }
-
-    // TODO(alex): remove, make multi-threaded
-    if (i < fragments.size() - 1) {
-      for (auto group_by_buffer : plan_state_->group_by_buffers_) {
-        init_groups(group_by_buffer, groups_buffer_entry_count_,
-          groupby_exprs.size(), &plan_state_->init_agg_vals_[0], agg_infos.size());
-      }
-      for (auto small_group_by_buffer : plan_state_->small_group_by_buffers_) {
-        init_groups(small_group_by_buffer, small_groups_buffer_entry_count_,
-          groupby_exprs.size(), &plan_state_->init_agg_vals_[0], agg_infos.size());
-      }
     }
   }
   for (auto& child : query_threads) {
@@ -1839,6 +1834,8 @@ void Executor::executePlanWithGroupBy(
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
+    std::vector<int64_t*>& group_by_buffers,
+    std::vector<int64_t*>& small_group_by_buffers,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr) {
   CHECK(results.empty());
@@ -1855,13 +1852,13 @@ void Executor::executePlanWithGroupBy(
   const auto hoist_buf = serializeLiterals(hoisted_literals);
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(query_native_code, hoist_literals, hoist_buf, col_buffers,
-      num_rows, plan_state_->init_agg_vals_, plan_state_->group_by_buffers_, plan_state_->small_group_by_buffers_);
-    if (!plan_state_->small_group_by_buffers_.empty()) {
-      CHECK_EQ(plan_state_->group_by_buffers_.size(), plan_state_->small_group_by_buffers_.size());
-      results = groupBufferToResults(plan_state_->small_group_by_buffers_.front(), small_groups_buffer_entry_count_,
+      num_rows, plan_state_->init_agg_vals_, group_by_buffers, small_group_by_buffers);
+    if (plan_state_->allocate_small_buffers_) {
+      CHECK_EQ(group_by_buffers.size(), small_group_by_buffers.size());
+      results = groupBufferToResults(small_group_by_buffers.front(), small_groups_buffer_entry_count_,
         group_by_col_count, agg_col_count, target_exprs_list);
     }
-    auto more_results = groupBufferToResults(plan_state_->group_by_buffers_.front(), groups_buffer_entry_count_,
+    auto more_results = groupBufferToResults(group_by_buffers.front(), groups_buffer_entry_count_,
       group_by_col_count, agg_col_count, target_exprs_list);
     results.insert(results.end(), more_results.begin(), more_results.end());
   } else {
@@ -1871,18 +1868,18 @@ void Executor::executePlanWithGroupBy(
       (group_by_col_count + agg_col_count) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
     launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_,
-      plan_state_->group_by_buffers_, groups_buffer_size,
-      plan_state_->small_group_by_buffers_, small_groups_buffer_size,
+      group_by_buffers, groups_buffer_size,
+      small_group_by_buffers, small_groups_buffer_size,
       data_mgr, block_size_x_, grid_size_x_);
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
       Executor::ResultRows small_results;
-      if (!plan_state_->small_group_by_buffers_.empty()) {
-        CHECK_EQ(plan_state_->group_by_buffers_.size(), plan_state_->small_group_by_buffers_.size());
-        small_results = groupBufferToResults(plan_state_->small_group_by_buffers_[i],
+      if (plan_state_->allocate_small_buffers_) {
+        CHECK_EQ(group_by_buffers.size(), small_group_by_buffers.size());
+        small_results = groupBufferToResults(small_group_by_buffers[i],
           small_groups_buffer_entry_count_, group_by_col_count, agg_col_count, target_exprs_list);
       }
-      auto big_results = groupBufferToResults(plan_state_->group_by_buffers_[i],
+      auto big_results = groupBufferToResults(group_by_buffers[i],
         groups_buffer_entry_count_, group_by_col_count, agg_col_count, target_exprs_list);
       small_results.insert(small_results.end(), big_results.begin(), big_results.end());
       results_per_sm.push_back(small_results);
@@ -2532,16 +2529,13 @@ void Executor::codegenAggrCalls(
     const size_t small_groups_buffer_size {
       (group_by_cols.size() + agg_col_count) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
     const size_t num_buffers { device_type == ExecutorDeviceType::CPU ? 1 : block_size_x_ * grid_size_x_ };
-    plan_state_->group_by_buffers_ = allocateGroupByHostBuffers(
-      num_buffers, group_by_col_count, groups_buffer_entry_count_, groups_buffer_size);
     if (group_by_cols.size() == 1) {
       const auto min_val = fast_group_by.second;
       const auto group_by_col = group_by_cols.front();
       if (fast_group_by.first) {
         agg_out_vec.push_back(fastGroupByCodegen(group_by_col, agg_infos.size(), hoist_literals, module, min_val));
       } else {
-        plan_state_->small_group_by_buffers_ = allocateGroupByHostBuffers(
-          num_buffers, group_by_col_count, small_groups_buffer_entry_count_, small_groups_buffer_size);
+        plan_state_->allocate_small_buffers_ = true;
         agg_out_vec.push_back(groupByOneColumnCodegen(group_by_col, agg_infos.size(), hoist_literals, module, min_val));
       }
     } else {

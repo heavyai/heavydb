@@ -168,6 +168,8 @@ private:
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
+    std::vector<int64_t*>& group_by_buffers,
+    std::vector<int64_t*>& small_group_by_buffers,
     const int64_t num_rows,
     Data_Namespace::DataMgr*);
   std::vector<int64_t*> allocateGroupByHostBuffers(
@@ -373,21 +375,45 @@ private:
   std::unique_ptr<CgenState> cgen_state_;
 
   struct PlanState {
-    ~PlanState() {
-      for (const auto group_by_buffer : group_by_buffers_) {
-        free(group_by_buffer);
-      }
-      for (const auto small_group_by_buffer : small_group_by_buffers_) {
-        free(small_group_by_buffer);
-      }
-    }
+    PlanState() : allocate_small_buffers_(false) {}
+
     std::vector<int64_t> init_agg_vals_;
     std::unordered_map<int, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
+    bool allocate_small_buffers_;
+  };
+  std::unique_ptr<PlanState> plan_state_;
+
+  struct FragmentState {
+    FragmentState(Executor* executor,
+                  const ExecutorDeviceType device_type,
+                  const size_t group_col_count,
+                  const size_t agg_col_count) {
+      const size_t num_buffers { device_type == ExecutorDeviceType::CPU
+        ? 1
+        : executor->block_size_x_ * executor->grid_size_x_ };
+      const size_t groups_buffer_size {
+        (group_col_count + agg_col_count) * executor->groups_buffer_entry_count_ * sizeof(int64_t) };
+      const size_t small_groups_buffer_size {
+        (group_col_count + agg_col_count) * executor->small_groups_buffer_entry_count_ * sizeof(int64_t) };
+      group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
+          executor->groups_buffer_entry_count_, groups_buffer_size);
+      if (executor->plan_state_->allocate_small_buffers_) {
+        small_group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
+          executor->small_groups_buffer_entry_count_, small_groups_buffer_size);
+      }
+    }
+  ~FragmentState() {
+    for (auto group_by_buffer : group_by_buffers_) {
+        free(group_by_buffer);
+      }
+      for (auto small_group_by_buffer : small_group_by_buffers_) {
+        free(small_group_by_buffer);
+      }
+    }
     std::vector<int64_t*> group_by_buffers_;
     std::vector<int64_t*> small_group_by_buffers_;
   };
-  std::unique_ptr<PlanState> plan_state_;
 
   bool is_nested_;
 
