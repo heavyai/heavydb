@@ -330,19 +330,6 @@ private:
       return literals_;
     }
 
-    template<class T>
-    size_t addStat(const T stat) {
-      const Executor::LiteralValue stat_val(stat);
-      stats_.emplace_back(stat);
-      const auto stat_bytes = literalBytes(stat_val);
-      stats_bytes_ = addAligned(stats_bytes_, stat_bytes);
-      return stats_bytes_ - stat_bytes;
-    }
-
-    const LiteralValues& getStats() const {
-      return stats_;
-    }
-
     llvm::Module* module_;
     llvm::Function* row_func_;
     llvm::LLVMContext& context_;
@@ -369,8 +356,6 @@ private:
 
     LiteralValues literals_;
     size_t literal_bytes_;
-    LiteralValues stats_;
-    size_t stats_bytes_;
   };
   std::unique_ptr<CgenState> cgen_state_;
 

@@ -2522,13 +2522,6 @@ void Executor::codegenAggrCalls(
   std::vector<llvm::Value*> agg_out_vec;
 
   if (!group_by_cols.empty()) {
-    const size_t group_by_col_count { group_by_cols.size() };
-    const size_t agg_col_count { plan_state_->init_agg_vals_.size() };
-    const size_t groups_buffer_size {
-      (group_by_cols.size() + agg_col_count) * groups_buffer_entry_count_ * sizeof(int64_t) };
-    const size_t small_groups_buffer_size {
-      (group_by_cols.size() + agg_col_count) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
-    const size_t num_buffers { device_type == ExecutorDeviceType::CPU ? 1 : block_size_x_ * grid_size_x_ };
     if (group_by_cols.size() == 1) {
       const auto min_val = fast_group_by.second;
       const auto group_by_col = group_by_cols.front();
