@@ -1702,6 +1702,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       FragmentState frag_state(this, device_type, groupby_exprs.size(), agg_infos.size());
       const auto& fragment = fragments[i];
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks(plan_state_->global_to_local_col_ids_.size());
       ResultRows device_results;
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       for (const int col_id : col_global_ids) {
@@ -1712,17 +1713,17 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           ? Data_Namespace::GPU_LEVEL
           : Data_Namespace::CPU_LEVEL;
         const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
-        Chunk_NS::Chunk chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
+        auto it = plan_state_->global_to_local_col_ids_.find(col_id);
+        CHECK(it != plan_state_->global_to_local_col_ids_.end());
+        CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+        chunks[it->second] = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
           chunk_key,
           memory_level,
           fragment.deviceIds[static_cast<int>(memory_level)],
           chunk_meta_it->second.numBytes,
           chunk_meta_it->second.numElements);
-        auto ab = chunk.get_buffer();
+        auto ab = chunks[it->second]->get_buffer();
         CHECK(ab->getMemoryPtr());
-        auto it = plan_state_->global_to_local_col_ids_.find(col_id);
-        CHECK(it != plan_state_->global_to_local_col_ids_.end());
-        CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
         col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
       }
       // TODO(alex): multiple devices support

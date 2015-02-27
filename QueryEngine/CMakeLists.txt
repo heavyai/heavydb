@@ -29,7 +29,7 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_l
 include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/")
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.ll
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp
     COMMAND llc
     ARGS -march=cpp -cppgen=contents RuntimeFunctions.ll -o ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp)
