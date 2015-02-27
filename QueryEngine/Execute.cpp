@@ -310,7 +310,7 @@ llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   default:
     LOG(FATAL) << "Unsupported integer width: " << width;
   }
-}  // namespace
+}
 
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   const auto enc_type = col_var->get_compression();
@@ -378,6 +378,11 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 }
 
 }  // namespace
+
+template<class T>
+llvm::Constant* Executor::ll_int(const T v) {
+  return llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, cgen_state_->context_), v);
+}
 
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool hoist_literals) {
   // only generate the decoding code once; if a column has been previously
@@ -472,14 +477,14 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
         ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
         : llvm::Type::getDoublePtrTy(cgen_state_->context_);
     }
-    const size_t lit_off = cgen_state_->getOrAddLiteral(constant);
+    const int16_t lit_off = cgen_state_->getOrAddLiteral(constant);
     const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(
-      arg_it, llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_), lit_off));
+      arg_it, ll_int(lit_off));
     auto lit_lv = cgen_state_->ir_builder_.CreateLoad(
       cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
     if (type_info.get_type() == kBOOLEAN) {
       return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
-        lit_lv, llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), 0));
+        lit_lv, ll_int(int8_t(0)));
     }
     return lit_lv;
   }
@@ -487,25 +492,22 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
   case kBOOLEAN:
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval);
   case kSMALLINT:
-    return llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_), constant->get_constval().smallintval);
+    return ll_int(constant->get_constval().smallintval);
   case kINT:
-    return llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), constant->get_constval().intval);
+    return ll_int(constant->get_constval().intval);
   case kBIGINT:
-    return llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), constant->get_constval().bigintval);
+    return ll_int(constant->get_constval().bigintval);
   case kFLOAT:
     return llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), constant->get_constval().floatval);
   case kDOUBLE:
     return llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), constant->get_constval().doubleval);
   case kVARCHAR: {
-    const int32_t str_id = getStringDictionary()->get(*constant->get_constval().stringval);
-    return llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), str_id);
+    return ll_int(getStringDictionary()->get(*constant->get_constval().stringval));
   }
   case kTIME:
   case kTIMESTAMP:
   case kDATE:
-    return llvm::ConstantInt::get(
-      get_int_type(sizeof(time_t) * 8, cgen_state_->context_),
-      constant->get_constval().timeval);
+    return ll_int(constant->get_constval().timeval);
   default:
     CHECK(false);
   }
@@ -596,7 +598,7 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
   }
   CHECK(extract_func);
   std::vector<llvm::Value*> extract_func_args {
-    llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), static_cast<int32_t>(extract_expr->get_field())),
+    ll_int(static_cast<int32_t>(extract_expr->get_field())),
     from_expr
   };
   return cgen_state_->ir_builder_.CreateCall(extract_func, extract_func_args);
@@ -756,14 +758,14 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
 llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
   switch (type) {
   case kSMALLINT:
-    return llvm::ConstantInt::get(get_int_type(16, cgen_state_->context_), std::numeric_limits<int16_t>::min());
+    return ll_int(std::numeric_limits<int16_t>::min());
   case kINT:
-    return llvm::ConstantInt::get(get_int_type(32, cgen_state_->context_), std::numeric_limits<int32_t>::min());
+    return ll_int(std::numeric_limits<int32_t>::min());
   case kBIGINT:
   case kTIME:
   case kTIMESTAMP:
   case kDATE:
-    return llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), std::numeric_limits<int64_t>::min());
+    return ll_int(std::numeric_limits<int64_t>::min());
   default:
     CHECK(false);
   }
@@ -2415,8 +2417,8 @@ llvm::Value* Executor::fastGroupByCodegen(
   std::vector<llvm::Value*> get_group_value_args {
     &groups_buffer,
     group_key,
-    llvm::ConstantInt::get(llvm::Type::getInt64Ty(cgen_state_->context_), min_val),
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), agg_col_count)
+    ll_int(min_val),
+    ll_int(static_cast<int32_t>(agg_col_count))
   };
   return cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
 }
@@ -2428,8 +2430,8 @@ llvm::Value* Executor::slowGroupByCodegen(
     llvm::Module* module) {
   auto group_keys_buffer = cgen_state_->ir_builder_.CreateAlloca(
     llvm::Type::getInt64Ty(cgen_state_->context_),
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), group_by_cols.size()));
-  size_t i = 0;
+    ll_int(static_cast<int32_t>(group_by_cols.size())));
+  int32_t i = 0;
   for (const auto group_by_col : group_by_cols) {
     auto group_key = groupByColumnCodegen(group_by_col, hoist_literals);
     auto group_key_ptr = cgen_state_->ir_builder_.CreateGEP(group_keys_buffer,
@@ -2442,10 +2444,10 @@ llvm::Value* Executor::slowGroupByCodegen(
   auto& groups_buffer = cgen_state_->row_func_->getArgumentList().front();
   std::vector<llvm::Value*> get_group_value_args {
     &groups_buffer,
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), groups_buffer_entry_count),
+    ll_int(groups_buffer_entry_count),
     group_keys_buffer,
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), group_by_cols.size()),
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), plan_state_->init_agg_vals_.size())
+    ll_int(static_cast<int32_t>(group_by_cols.size())),
+    ll_int(static_cast<int32_t>(plan_state_->init_agg_vals_.size()))
   };
   return cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
 }
@@ -2464,12 +2466,12 @@ llvm::Value* Executor::groupByOneColumnCodegen(
   auto small_groups_buffer = arg_it;
   std::vector<llvm::Value*> get_group_value_args {
     groups_buffer,
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), groups_buffer_entry_count_),
+    ll_int(static_cast<int32_t>(groups_buffer_entry_count_)),
     small_groups_buffer,
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), small_groups_buffer_entry_count_),
+    ll_int(static_cast<int32_t>(small_groups_buffer_entry_count_)),
     group_key,
-    llvm::ConstantInt::get(llvm::Type::getInt64Ty(cgen_state_->context_), min_val),
-    llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), agg_col_count)
+    ll_int(min_val),
+    ll_int(static_cast<int32_t>(agg_col_count))
   };
   return cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
 }
@@ -2547,7 +2549,7 @@ void Executor::codegenAggrCalls(
     auto agg_func = module->getFunction(std::get<0>(agg_info));
     CHECK(agg_func);
     auto aggr_col = std::get<1>(agg_info);
-    llvm::Value* agg_expr_lv = llvm::ConstantInt::get(llvm::Type::getInt64Ty(cgen_state_->context_), 0);
+    llvm::Value* agg_expr_lv = ll_int(0L);
     if (aggr_col) {
       agg_expr_lv = codegen(aggr_col, hoist_literals);
       auto agg_col_type = agg_expr_lv->getType();
@@ -2580,9 +2582,7 @@ void Executor::codegenAggrCalls(
     }
     auto count_distinct_set = std::get<3>(agg_info);
     if (count_distinct_set) {
-      agg_args.push_back(
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(cgen_state_->context_),
-        reinterpret_cast<int64_t>(count_distinct_set)));
+      agg_args.push_back(ll_int(reinterpret_cast<int64_t>(count_distinct_set)));
     }
     // Skip null values from aggregate value.
     // TODO(alex): handle non-integer columns as well
