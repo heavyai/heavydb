@@ -2080,6 +2080,34 @@ std::vector<llvm::Value*> generate_column_heads_load(
   return col_heads;
 }
 
+void set_row_func_argnames(llvm::Function* row_func,
+                           const size_t in_col_count,
+                           const size_t agg_col_count,
+                           const bool hoist_literals) {
+  auto arg_it = row_func->arg_begin();
+
+  for (size_t i = 0; i < agg_col_count; ++i) {
+    arg_it->setName("out");
+    ++arg_it;
+  }
+
+  arg_it->setName("small_out");
+  ++arg_it;
+
+  arg_it->setName("pos");
+  ++arg_it;
+
+  if (hoist_literals) {
+    arg_it->setName("literals");
+    ++arg_it;
+  }
+
+  for (size_t i = 0; i < in_col_count; ++i) {
+    arg_it->setName("col_buf");
+    ++arg_it;
+  }
+}
+
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     const size_t in_col_count,
     const size_t agg_col_count,
@@ -2108,9 +2136,10 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
   // Generate the function signature and column head fetches s.t.
   // double indirection isn't needed in the inner loop
   auto col_heads = generate_column_heads_load(in_col_count, query_func, context);
+  CHECK_EQ(in_col_count, col_heads.size());
 
   // column buffer arguments
-  for (size_t i = 0; i < col_heads.size(); ++i) {
+  for (size_t i = 0; i < in_col_count; ++i) {
     row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
   }
 
@@ -2119,9 +2148,13 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     llvm::Type::getVoidTy(context),
     row_process_arg_types,
     false);
-  return std::make_pair(
-    llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "row_func", module),
-    col_heads);
+
+  auto row_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "row_func", module);
+
+  // set the row function argument names; for debugging purposes only
+  set_row_func_argnames(row_func, in_col_count, agg_col_count, hoist_literals);
+
+  return std::make_pair(row_func, col_heads);
 }
 
 }  // namespace
