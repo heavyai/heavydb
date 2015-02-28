@@ -61,7 +61,7 @@ vector<ResultRow> run_multiple_agg(
   Planner::Optimizer optimizer(query, g_cat);
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
-  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId);
+  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId, 8, 8);
   return executor->execute(plan, true, device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 

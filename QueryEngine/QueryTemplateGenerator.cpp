@@ -342,7 +342,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 }
 
 llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count,
-                                        const bool is_nested, const bool hoist_literals) {
+                                        const bool is_nested, const bool hoist_literals,
+                                        const bool use_fast_path, const size_t groups_buffer_size) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -351,6 +352,14 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   CHECK(func_pos_step);
   auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
+  auto func_init_shared_mem = should_use_shared_memory(use_fast_path, groups_buffer_size)
+    ? mod->getFunction("init_shared_mem")
+    : mod->getFunction("init_shared_mem_nop");
+  CHECK(func_init_shared_mem);
+  auto func_write_back = should_use_shared_memory(use_fast_path, groups_buffer_size)
+    ? mod->getFunction("write_back")
+    : mod->getFunction("write_back_nop");
+  CHECK(func_write_back);
 
   PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
   PointerType* PointerTy_6 = PointerType::get(IntegerType::get(mod->getContext(), 64), 0);
@@ -476,6 +485,13 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, int64_153, "", label_146);
   auto small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
   small_ptr_155->setAlignment(8);
+  auto small_groups_buff_sz = ConstantInt::get(IntegerType::get(mod->getContext(), 32), groups_buffer_size);
+  auto ptr_156 = CallInst::Create(
+    func_init_shared_mem,
+    std::vector<llvm::Value*> {
+      ptr_155,
+      small_groups_buff_sz
+    }, "", label_146);
   ICmpInst* int1_156 = new ICmpInst(*label_146, ICmpInst::ICMP_SLT, int64_153, int64_150, "");
   BranchInst::Create(label__lr_ph_147, label___crit_edge_149, int1_156, label_146);
 
@@ -490,7 +506,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   int64_pos_01_160->addIncoming(fwdref_161, label_148);
 
   std::vector<Value*> void_162_params;
-  void_162_params.push_back(ptr_155);
+  void_162_params.push_back(ptr_156);
   void_162_params.push_back(small_ptr_155);
   void_162_params.push_back(int64_pos_01_160);
   if (hoist_literals) {
@@ -511,6 +527,13 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   BranchInst::Create(label___crit_edge_149, label___crit_edge_loopexit);
 
   // Block ._crit_edge (label___crit_edge_149)
+  CallInst::Create(
+    func_write_back,
+    std::vector<Value*> {
+      ptr_155,
+      ptr_156,
+      small_groups_buff_sz
+    }, "", label___crit_edge_149);
   ReturnInst::Create(mod->getContext(), label___crit_edge_149);
 
   // Resolve Forward References

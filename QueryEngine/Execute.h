@@ -100,9 +100,12 @@ class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
     "Host hardware not supported, unexpected size of float / double.");
 public:
-  Executor(const int db_id);
+  Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x);
 
-  static std::shared_ptr<Executor> getExecutor(const int db_id);
+  static std::shared_ptr<Executor> getExecutor(
+    const int db_id,
+    const size_t block_size_x = 128,
+    const size_t grid_size_x = 16);
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
   typedef std::vector<ResultRow> ResultRows;
@@ -117,6 +120,20 @@ public:
 
   typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double, std::string> LiteralValue;
   typedef std::vector<Executor::LiteralValue> LiteralValues;
+
+  typedef std::tuple<bool, int64_t, int64_t> FastGroupByInfo;
+
+  static bool enabled(const FastGroupByInfo& fast_group_by) {
+    return std::get<0>(fast_group_by);
+  }
+
+  static int64_t minBin(const FastGroupByInfo& fast_group_by) {
+    return std::get<1>(fast_group_by);
+  }
+
+  static int64_t maxBin(const FastGroupByInfo& fast_group_by) {
+    return std::get<2>(fast_group_by);
+  }
 
 private:
   template<class T>
@@ -208,7 +225,7 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const size_t groups_buffer_entry_count,
-    const std::pair<bool, int64_t> fast_group_by);
+    const FastGroupByInfo& fast_group_by);
 
   void nukeOldState();
   void* optimizeAndCodegenCPU(llvm::Function*,
@@ -227,8 +244,7 @@ private:
     const int32_t groups_buffer_entry_count,
     llvm::Module* module,
     const bool hoist_literals,
-    const ExecutorDeviceType device_type,
-    std::pair<bool, int64_t> fast_group_by);
+    const ExecutorDeviceType device_type);
   llvm::Value* fastGroupByCodegen(
     Analyzer::Expr* group_by_col,
     const size_t agg_col_count,
@@ -300,6 +316,7 @@ private:
       , row_func_(nullptr)
       , context_(llvm::getGlobalContext())
       , ir_builder_(context_)
+      , fast_group_by_ { false, 0L, 0L }
       , literal_bytes_(0) {}
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant) {
@@ -338,6 +355,7 @@ private:
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, llvm::Value*> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
+    FastGroupByInfo fast_group_by_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {
@@ -379,12 +397,18 @@ private:
       const size_t num_buffers { device_type == ExecutorDeviceType::CPU
         ? 1
         : executor->block_size_x_ * executor->grid_size_x_ };
+      const bool use_fast_path {
+        device_type == ExecutorDeviceType::GPU && enabled(executor->cgen_state_->fast_group_by_) };
+      const size_t groups_buffer_entry_count { use_fast_path
+        ? (maxBin(executor->cgen_state_->fast_group_by_) - minBin(executor->cgen_state_->fast_group_by_) + 1)
+        : executor->max_groups_buffer_entry_count_
+      };
       const size_t groups_buffer_size {
-        (group_col_count + agg_col_count) * executor->groups_buffer_entry_count_ * sizeof(int64_t) };
+        (group_col_count + agg_col_count) * groups_buffer_entry_count * sizeof(int64_t) };
       const size_t small_groups_buffer_size {
         (group_col_count + agg_col_count) * executor->small_groups_buffer_entry_count_ * sizeof(int64_t) };
       group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
-          executor->groups_buffer_entry_count_, groups_buffer_size);
+          groups_buffer_entry_count, groups_buffer_size);
       if (executor->plan_state_->allocate_small_buffers_) {
         small_group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
           executor->small_groups_buffer_entry_count_, small_groups_buffer_size);
@@ -411,14 +435,14 @@ private:
   std::map<CodeCacheKey, CodeCacheVal> cpu_code_cache_;
   std::map<CodeCacheKey, CodeCacheVal> gpu_code_cache_;
 
-  const size_t groups_buffer_entry_count_ { 2048 };
+  const size_t max_groups_buffer_entry_count_ { 2048 };
   const size_t small_groups_buffer_entry_count_ { 512 };
-  const unsigned block_size_x_ { 16 };
-  const unsigned grid_size_x_ { 16 };
+  const unsigned block_size_x_;
+  const unsigned grid_size_x_;
 
   const int db_id_;
 
-  static std::unordered_map<int, std::shared_ptr<Executor>> executors_;
+  static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
 };
 
 template<typename TimeT = std::chrono::milliseconds>

@@ -11,9 +11,34 @@ __device__ int32_t pos_step_impl() {
   return blockDim.x * gridDim.x;
 }
 
+extern "C"
+__device__ const int64_t* init_shared_mem_nop(const int64_t* groups_buffer,
+                                              const int32_t groups_buffer_size) {
+  return groups_buffer;
+}
+
+extern "C"
+__device__ void write_back_nop(int64_t* dest, int64_t* src, const int32_t sz) {
+}
+
+extern "C"
+__device__ const int64_t* init_shared_mem(const int64_t* groups_buffer,
+                                          const int32_t groups_buffer_size) {
+  extern __shared__ int64_t fast_bins[];
+  memcpy(fast_bins, groups_buffer, groups_buffer_size);
+  __syncthreads();
+  return fast_bins;
+}
+
+extern "C"
+__device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
+  __syncthreads();
+  memcpy(dest, src, sz);
+}
+
 #define EMPTY_KEY -9223372036854775808L
 
-extern "C" __attribute__((noinline))
+extern "C"
 __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
                                   const int32_t h,
                                   const int64_t* key,
@@ -34,7 +59,7 @@ __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
   return match ? groups_buffer + off + key_qw_count : NULL;
 }
 
-extern "C" __attribute__((noinline))
+extern "C"
 __device__ int32_t key_hash(const int64_t* key, const int32_t key_qw_count,
                             const int32_t groups_buffer_entry_count) {
   int32_t hash = 0;
@@ -44,7 +69,7 @@ __device__ int32_t key_hash(const int64_t* key, const int32_t key_qw_count,
   return hash;
 }
 
-extern "C" __attribute__((noinline))
+extern "C"
 __device__ int64_t* get_group_value(int64_t* groups_buffer,
                                     const int32_t groups_buffer_entry_count,
                                     const int64_t* key,
@@ -67,7 +92,7 @@ __device__ int64_t* get_group_value(int64_t* groups_buffer,
   return NULL;
 }
 
-extern "C" __attribute__((always_inline)) inline
+extern "C"
 __device__ int64_t* get_group_value_fast(int64_t* groups_buffer,
                                          const int64_t key,
                                          const int64_t min_key,
@@ -79,7 +104,7 @@ __device__ int64_t* get_group_value_fast(int64_t* groups_buffer,
   return groups_buffer + off + 1;
 }
 
-extern "C" __attribute__((noinline))
+extern "C"
 __device__ int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                  const int32_t groups_buffer_entry_count,
                                  int64_t* small_groups_buffer,
@@ -93,6 +118,159 @@ __device__ int64_t* get_group_value_one_key(int64_t* groups_buffer,
   }
   return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count);
 }
+
+__device__ int64_t atomicMax64(int64_t* address, int64_t val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        max((long long) val, (long long) assumed));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+
+    return old;
+}
+
+__device__ int64_t atomicMin64(int64_t* address, int64_t val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        min((long long) val, (long long) assumed));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+
+    return old;
+}
+
+__device__ double atomicAdd(double* address, double val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        __double_as_longlong(val +
+                               __longlong_as_double(assumed)));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+__device__ double atomicMax(double* address, double val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        __double_as_longlong(max(val,
+                               __longlong_as_double(assumed))));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+__device__ double atomicMin(double* address, double val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        __double_as_longlong(min(val,
+                               __longlong_as_double(assumed))));
+
+    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+extern "C"
+__device__ void agg_count_shared(int64_t* agg, const int64_t val) {
+  atomicAdd(reinterpret_cast<unsigned long long*>(agg), 1L);
+}
+
+extern "C"
+__device__ void agg_count_double_shared(int64_t* agg, const double val) {
+  agg_count_shared(agg, val);
+}
+
+extern "C"
+__device__ void agg_sum_shared(int64_t* agg, const int64_t val) {
+  atomicAdd(reinterpret_cast<unsigned long long*>(agg), val);
+}
+
+extern "C"
+__device__ void agg_sum_double_shared(int64_t* agg, const double val) {
+  atomicAdd(reinterpret_cast<double*>(agg), val);
+}
+
+extern "C"
+__device__ void agg_max_shared(int64_t* agg, const int64_t val) {
+  atomicMax64(agg, val);
+}
+
+extern "C"
+__device__ void agg_max_double_shared(int64_t* agg, const double val) {
+  atomicMax(reinterpret_cast<double*>(agg), val);
+}
+
+extern "C"
+__device__ void agg_min_shared(int64_t* agg, const int64_t val) {
+  atomicMin64(agg, val);
+}
+
+extern "C"
+__device__ void agg_min_double_shared(int64_t* agg, const double val) {
+  atomicMin(reinterpret_cast<double*>(agg), val);
+}
+
+extern "C"
+__device__ void agg_id_shared(int64_t* agg, const int64_t val) {
+  *agg = val;
+}
+
+extern "C"
+__device__ void agg_id_double_shared(int64_t* agg, const double val) {
+  *agg = *(reinterpret_cast<const int64_t*>(&val));
+}
+
+#define DEF_SKIP_AGG(base_agg_func)                                                                         \
+extern "C"                                                                                                  \
+__device__ void base_agg_func##_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
+  if (val != skip_val) {                                                                                    \
+    base_agg_func##_shared(agg, val);                                                                       \
+  }                                                                                                         \
+}
+
+DEF_SKIP_AGG(agg_count)
+DEF_SKIP_AGG(agg_sum)
+DEF_SKIP_AGG(agg_max)
+DEF_SKIP_AGG(agg_min)
+
+#undef DEF_SKIP_AGG
 
 #define SECSPERMIN	60L
 #define MINSPERHOUR	60L
