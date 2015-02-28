@@ -107,6 +107,12 @@ TEST(ParseAnalyzePlan, Create) {
 	ASSERT_NO_THROW(run_ddl("create table if not exists smallfrag (a int, b text, c bigint) with (fragment_size = 1000, page_size = 512);"););
 	const TableDescriptor *td = gcat->getMetadataForTable("smallfrag");
 	EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
+	ASSERT_NO_THROW(run_ddl("create table if not exists testdict (a varchar(100) encoding dict(8), b text encoding token_dict(16), c text encoding dict);"););
+	td = gcat->getMetadataForTable("testdict");
+  const ColumnDescriptor *cd = gcat->getMetadataForColumn(td->tableId, "a");
+  const DictDescriptor *dd = gcat->getMetadataForDict(cd->columnType.get_comp_param());
+  ASSERT_TRUE(dd != nullptr);
+  EXPECT_EQ(dd->dictNBits, 8);
 }
 
 TEST(ParseAnalyzePlan, Select) {
@@ -176,6 +182,7 @@ TEST(ParseAnalyzePlan, Drop) {
 	EXPECT_NO_THROW(run_ddl("drop table if exists fat;"));
 	EXPECT_NO_THROW(run_ddl("drop table if exists skinny;"));
 	EXPECT_NO_THROW(run_ddl("drop table if exists smallfrag;"));
+	EXPECT_NO_THROW(run_ddl("drop table if exists testdict;"));
 }
 
 int
