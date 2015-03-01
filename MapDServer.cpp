@@ -143,6 +143,13 @@ public:
     }
   }
 
+  void getTables(std::vector<std::string> & table_names) {
+    const auto tables = cat_->getAllTableMetadata();
+    for (const auto td : tables) {
+      table_names.push_back(td->tableName);
+    }
+  }
+
 private:
   std::unique_ptr<Catalog_Namespace::Catalog> cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;

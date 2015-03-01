@@ -66,13 +66,10 @@ namespace Buffer_Namespace {
         boost::shared_lock < boost::shared_mutex > readLock (readWriteMutex_);
 #endif
 
-        //std::cout << "Buffer size: " << size_ << std::endl;
-        //std::cout << "Bytes to read: " << numBytes << std::endl;
         if (numBytes + offset > size_) {
             throw std::runtime_error("Buffer: Out of bounds read error");
         }
         readData(dst,numBytes,offset, dstBufferType,dstDeviceId);
-        //memcpy(dst, mem_ + offset, numBytes);
     }
 
     void Buffer::write(int8_t * src, const size_t numBytes, const size_t offset, const MemoryLevel srcBufferType, const int srcDeviceId) {
@@ -82,13 +79,9 @@ namespace Buffer_Namespace {
 #endif
         if (numBytes + offset > reservedSize()) {
             reserve(numBytes+offset);
-            //bm_->reserveBuffer(segIt_,numBytes + offset);
         }
-        //std::cout << "Size at beginning of write: " << size_ << std::endl;
         // write source contents to buffer
-        //assert(mem_ && src);
         writeData(src,numBytes,offset,srcBufferType,srcDeviceId);
-        //memcpy(mem_ + offset, src, numBytes);
         
         // update dirty flags for buffer and each affected page
         isDirty_ = true;

@@ -93,10 +93,8 @@ public:
       double_buffer_ = new std::vector<double>();
       break;
     case kTEXT:
-      if (encoding_ == kENCODING_NONE) {
-        string_buffer_ = new std::vector<std::string>();
-      } else {
-        CHECK_EQ(kENCODING_DICT, encoding_);
+      string_buffer_ = new std::vector<std::string>();
+      if (encoding_ == kENCODING_DICT) {
         string_dict_buffer_ = new std::vector<int32_t>();
       }
       break;
@@ -128,10 +126,8 @@ public:
       delete double_buffer_;
       break;
     case kTEXT:
-      if (encoding_ == kENCODING_NONE) {
-        delete string_buffer_;
-      } else {
-        CHECK_EQ(kENCODING_DICT, encoding_);
+      delete string_buffer_;
+      if (encoding_ == kENCODING_DICT) {
         delete string_dict_buffer_;
       }
       break;
@@ -251,11 +247,9 @@ public:
       break;
     }
     case kTEXT: {
-      if (encoding_ == kENCODING_NONE) {
-        std::vector<std::string> empty;
-        string_buffer_->swap(empty);
-      } else {
-        CHECK_EQ(kENCODING_DICT, encoding_);
+      std::vector<std::string> empty;
+      string_buffer_->swap(empty);
+      if (encoding_ == kENCODING_DICT) {
         std::vector<int32_t> empty;
         string_dict_buffer_->swap(empty);
       }
@@ -281,8 +275,8 @@ private:
     std::vector<double>* double_buffer_;
     std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
-    std::vector<int32_t>* string_dict_buffer_;
   };
+  std::vector<int32_t>* string_dict_buffer_;
   SQLTypes type_;
   EncodingType encoding_;
   StringDictionary* string_dict_;
@@ -320,10 +314,14 @@ void do_import(
       p.numbersPtr = import_buff->getAsBytes();
     } else {
       CHECK_EQ(kTEXT, import_buff->getType());
+      auto string_payload_ptr = import_buff->getStringBuffer();
       if (import_buff->getEncoding() == kENCODING_NONE) {
-        p.stringsPtr = import_buff->getStringBuffer();
+        p.stringsPtr = string_payload_ptr;
       } else {
         CHECK_EQ(kENCODING_DICT, import_buff->getEncoding());
+        for (const auto& str : *string_payload_ptr) {
+          import_buff->addDictEncodedString(str);
+        }
         p.numbersPtr = import_buff->getStringDictBuffer();
       }
     }
@@ -345,7 +343,7 @@ const auto NULL_DOUBLE = std::numeric_limits<double>::min();
 }
 
 void CsvImporter::import() {
-  const size_t row_buffer_size { 50000 };
+  const size_t row_buffer_size { 1000000 };
   const auto col_descriptors = table_meta_.getColumnDescriptors();
   if (has_header_) {
     auto header = CsvParser_getHeader(csv_parser_);
@@ -414,11 +412,7 @@ void CsvImporter::import() {
       }
       break;
     case kTEXT: {
-      if (col_desc->columnType.get_compression() == kENCODING_DICT) {
-        import_buffers[col_idx]->addDictEncodedString(row_fields[col_idx]);
-      } else {
-        import_buffers[col_idx]->addString(row_fields[col_idx]);
-      }
+      import_buffers[col_idx]->addString(row_fields[col_idx]);
       break;
     }
     case kTIME:

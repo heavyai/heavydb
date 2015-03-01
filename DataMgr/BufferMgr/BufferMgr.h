@@ -49,14 +49,14 @@ namespace Buffer_Namespace {
         void printSeg(BufferList::iterator &segIt);
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0);
+        virtual AbstractBuffer * createBuffer(const ChunkKey &key, const size_t pageSize = 0, const size_t initialSize = 0);
         
         /// Deletes the chunk with the specified key
-        virtual void deleteChunk(const ChunkKey &key, const bool purge=true);
-        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge=true);
+        virtual void deleteBuffer(const ChunkKey &key, const bool purge=true);
+        virtual void deleteBuffersWithPrefix(const ChunkKey &keyPrefix, const bool purge=true);
         
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0);
+        virtual AbstractBuffer* getBuffer(const ChunkKey &key, const size_t numBytes = 0);
         
         /**
          * @brief Puts the contents of d into the Buffer with ChunkKey key.
@@ -64,8 +64,8 @@ namespace Buffer_Namespace {
          * @param d - An object representing the source data for the Chunk.
          * @return AbstractBuffer*
          */
-        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes = 0);
-        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
+        virtual void fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes = 0);
+        virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
         void checkpoint();
 
         // Buffer API
@@ -98,7 +98,8 @@ namespace Buffer_Namespace {
         virtual void allocateBuffer(BufferList::iterator segIt, const size_t pageSize, const size_t numBytes) = 0;
         //std::recursive_mutex globalMutex_;  // hack for now - lets profile this to see impact on performance - may not matter given the workload
         std::mutex chunkIndexMutex_;  
-        std::mutex findFreeMutex__;  
+        std::mutex sizedSegsMutex_;  
+        std::mutex unsizedSegsMutex_;  
         std::mutex bufferIdMutex_;  
         
         //std::map<ChunkKey, Buffer*> chunkIndex_;

@@ -410,6 +410,12 @@ Catalog::dropTable(const TableDescriptor *td)
 		sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
 		if (td->isView)
 			sqliteConnector_.query("DELETE FROM mapd_views WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+    // must destroy fragmenter before deleteChunks is called.
+    if (td->fragmenter != nullptr) {
+      auto tableDescIt = tableDescriptorMapById_.find(td->tableId);
+      delete td->fragmenter;
+      tableDescIt->second->fragmenter = nullptr; // get around const-ness
+    }
 		ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
 		// assuming deleteChunksWithPrefix is atomic
 		dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);

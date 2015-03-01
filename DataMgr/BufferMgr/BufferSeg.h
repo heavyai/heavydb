@@ -19,7 +19,6 @@ namespace Buffer_Namespace {
         unsigned int pinCount;
         int slabNum;
         unsigned int lastTouched;
-        std::mutex segMutex;  
         
 
         BufferSeg(): memStatus (FREE), buffer(0),pinCount(0),slabNum(-1),lastTouched(0) {}

@@ -101,9 +101,11 @@ scan_table_return_hash(const string &table_name, const Catalog &cat)
 			auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
 			ChunkKey chunk_key { cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId };
             //cout << "Chunk: " << cat.get_currentDB().dbId << " " <<  td->tableId << " " <<  cd->columnId << " " << frag.fragmentId << endl;
-			Chunk chunk = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
-			scan_chunk(chunk, col_hashs[i]);
-            chunk.unpin_buffer();
+      {
+			std::shared_ptr<Chunk> chunkp = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
+			scan_chunk(*chunkp, col_hashs[i]);
+      // call Chunk destructor here
+      }
 			i++;
 		}
 	}

@@ -7,11 +7,11 @@
 #include "../DataMgr/StringNoneEncoder.h"
 
 namespace Chunk_NS {
-  Chunk
+  std::shared_ptr<Chunk>
   Chunk::getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes, const size_t numElems) {
-      Chunk chunk(cd);
-      chunk.getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes, numElems);
-      return chunk;
+      std::shared_ptr<Chunk> chunkp = std::make_shared<Chunk>(Chunk(cd));
+      chunkp->getChunkBuffer(data_mgr, key, memoryLevel, deviceId, numBytes, numElems);
+      return chunkp;
     }
 
   void 
@@ -62,14 +62,6 @@ namespace Chunk_NS {
       buffer->unPin();
     if (index_buf != nullptr)
       index_buf->unPin();
-  }
-
-  void
-  Chunk::pin_buffer()
-  {
-    buffer->pin();
-    if (index_buf != nullptr)
-      index_buf->pin();
   }
 
   void

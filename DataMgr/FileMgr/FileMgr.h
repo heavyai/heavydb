@@ -74,20 +74,20 @@ namespace File_Namespace {
         virtual ~FileMgr();
         
         /// Creates a chunk with the specified key and page size.
-        virtual AbstractBuffer * createChunk(const ChunkKey &key, size_t pageSize = 0, const size_t numBytes = 0);
+        virtual AbstractBuffer * createBuffer(const ChunkKey &key, size_t pageSize = 0, const size_t numBytes = 0);
         
         /// Deletes the chunk with the specified key
         // Purge == true means delete the data chunks - 
         // can't undelete and revert to previous
         // state - reclaims disk space for chunk
-        virtual void deleteChunk(const ChunkKey &key, const bool purge = true); 
+        virtual void deleteBuffer(const ChunkKey &key, const bool purge = true); 
 
-        virtual void deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge = true);
+        virtual void deleteBuffersWithPrefix(const ChunkKey &keyPrefix, const bool purge = true);
 
         /// Returns the a pointer to the chunk with the specified key.
-        virtual AbstractBuffer* getChunk(const ChunkKey &key, const size_t numBytes = 0);
+        virtual AbstractBuffer* getBuffer(const ChunkKey &key, const size_t numBytes = 0);
 
-        virtual void fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes);
+        virtual void fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes);
 
         /**
          * @brief Puts the contents of d into the Chunk with the given key.
@@ -95,7 +95,7 @@ namespace File_Namespace {
          * @param d - An object representing the source data for the Chunk.
          * @return AbstractBuffer*
          */
-        virtual AbstractBuffer* putChunk(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
+        virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
         
         // Buffer API
         virtual AbstractBuffer* alloc(const size_t numBytes);

@@ -29,9 +29,11 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::clear() {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            delete chunkIt->second->buffer;
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        std::lock_guard < std::mutex > unsizedSegsLock (unsizedSegsMutex_);
+        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_);
+        for (auto bufferIt = chunkIndex_.begin(); bufferIt != chunkIndex_.end(); ++bufferIt) {
+            delete bufferIt->second->buffer;
         }
         chunkIndex_.clear();
         //size_t numBufferSlabs = slabSegments_.size();
@@ -43,8 +45,7 @@ namespace Buffer_Namespace {
     }
     
     /// Throws a runtime_error if the Chunk already exists
-    AbstractBuffer * BufferMgr::createChunk(const ChunkKey &chunkKey, const size_t chunkPageSize, const size_t initialSize) {
-
+    AbstractBuffer * BufferMgr::createBuffer(const ChunkKey &chunkKey, const size_t chunkPageSize, const size_t initialSize) {
         size_t actualChunkPageSize = chunkPageSize;
         if (actualChunkPageSize == 0) {
             actualChunkPageSize = pageSize_;
@@ -52,13 +53,14 @@ namespace Buffer_Namespace {
 
         // ChunkPageSize here is just for recording dirty pages
         {
-        std::unique_lock < std::mutex > lock (chunkIndexMutex_);
+            std::lock_guard < std::mutex > lock (chunkIndexMutex_);
             if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
                 throw std::runtime_error("Chunk already exists");
             }
             BufferSeg bufferSeg(BufferSeg(-1,0,USED));
             bufferSeg.chunkKey = chunkKey;
-            unsizedSegs_.push_back(bufferSeg);
+            std::lock_guard < std::mutex > unsizedSegsLock (unsizedSegsMutex_);
+            unsizedSegs_.push_back(bufferSeg); // race condition?
             chunkIndex_[chunkKey] = std::prev(unsizedSegs_.end(),1); // need to do this before allocating Buffer because doing so could change the segment used
         }
         // following should be safe outside the lock b/c first thing Buffer
@@ -66,6 +68,7 @@ namespace Buffer_Namespace {
         // so can't be evicted)
         allocateBuffer(chunkIndex_[chunkKey],actualChunkPageSize,initialSize); 
         //chunkIndex_[chunkKey]->buffer->pin();
+        std::lock_guard < std::mutex > lock (chunkIndexMutex_);
         return chunkIndex_[chunkKey]->buffer;
     }
 
@@ -78,7 +81,7 @@ namespace Buffer_Namespace {
         size_t startPage = evictStart->startPage;
         while (numPages < numPagesRequested) {
             if (evictIt->memStatus == USED) {
-                assert (evictIt->buffer->getPinCount() == 0);
+                assert (evictIt->buffer->getPinCount() < 1);
             }
             numPages += evictIt->numPages;
             if (evictIt->memStatus == USED && evictIt->chunkKey.size() > 0) {
@@ -105,6 +108,7 @@ namespace Buffer_Namespace {
     }
 
     BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator &segIt, const size_t numBytes) { // assumes buffer is already pinned
+        std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); // inefficient but should be ok for now - particularly if different gpus are feeding from different cpu buffer pools
 
         // doesn't resize to be smaller - like std::reserve
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
@@ -159,8 +163,11 @@ namespace Buffer_Namespace {
             //@todo - need to delete chunks around it
         }
         */
-        chunkIndex_[newSegIt->chunkKey] = newSegIt; 
-        //newSegIt->pinCount = 0;
+        sizedSegsLock.unlock();
+        {
+            std::lock_guard < std::mutex > lock (chunkIndexMutex_); 
+            chunkIndex_[newSegIt->chunkKey] = newSegIt; 
+        }
 
         return newSegIt;
     }
@@ -245,7 +252,7 @@ namespace Buffer_Namespace {
                         // pinCount should never go up - only down because we have
                         // global lock on buffer pool and pin count only increments
                         // on getChunk
-                        if (evictIt->memStatus == USED && evictIt->buffer->getPinCount() != 0) {
+                        if (evictIt->memStatus == USED && evictIt->buffer->getPinCount() > 0) {
                            break;
                         }
                         pageCount += evictIt->numPages;
@@ -284,7 +291,6 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::printSeg(BufferList::iterator &segIt) {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
 
         std::cout << "Start page: " << segIt->startPage << std::endl;
         std::cout << "Num Pages: " << segIt->numPages << std::endl;
@@ -308,7 +314,6 @@ namespace Buffer_Namespace {
 
 
     void BufferMgr::printSegs() {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         int segNum = 1;
         int slabNum = 1;
         std::cout << std::endl << std::endl;
@@ -324,7 +329,6 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::printMap() {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         int segNum = 1;
         std::cout << std::endl << "Map Contents: " <<  std::endl;
         for (auto segIt = chunkIndex_.begin(); segIt != chunkIndex_.end(); ++segIt,++segNum) {
@@ -339,55 +343,45 @@ namespace Buffer_Namespace {
     }
 
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
-    void BufferMgr::deleteChunk(const ChunkKey &key, const bool purge) { 
-        // Note: purge is unused
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
+    void BufferMgr::deleteBuffer(const ChunkKey &key, const bool purge) { 
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        // Note: purge is currently unused
+
         // lookup the buffer for the Chunk in chunkIndex_
-        auto chunkIt = chunkIndex_.find(key);
-        //Buffer *buffer = chunkIt->second->buffer;
+        auto bufferIt = chunkIndex_.find(key);
+        //Buffer *buffer = bufferIt->second->buffer;
 
         if (chunkIndex_.find(key) == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist");
         }
-        auto  segIt = chunkIt->second;
+        auto  segIt = bufferIt->second;
+        chunkIndex_.erase(bufferIt);
+        chunkIndexLock.unlock();
+        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_);
         delete segIt->buffer; // Delete Buffer for segment
         segIt->buffer = 0;
         removeSegment(segIt);
-        chunkIndex_.erase(chunkIt);
     }
 
-    void BufferMgr::deleteChunksWithPrefix(const ChunkKey &keyPrefix, const bool purge) {
+    void BufferMgr::deleteBuffersWithPrefix(const ChunkKey &keyPrefix, const bool purge) {
         // Note: purge is unused
-        //cout << "At start of delete" << endl;
-        //printSegs();
-        //cout << "Map" << endl;
-        //printMap();
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
         // lookup the buffer for the Chunk in chunkIndex_
+        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_); // Take this lock early to prevent deadlock with reserveBuffer which needs segsMutex_ and then chunkIndexMutex_
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
         auto startChunkIt = chunkIndex_.lower_bound(keyPrefix);
         if (startChunkIt == chunkIndex_.end()) {
-            //cout << "Start is at end" << endl;
             return;
         }
-        //else {
-        //    for (auto vecIt = startChunkIt->first.begin(); vecIt != startChunkIt->first.end(); ++vecIt) {
-        //        std::cout << *vecIt << ",";
-        //    }
-        //    cout << endl;
-        //}
-        auto chunkIt = startChunkIt;
-        while (chunkIt != chunkIndex_.end() && std::search(chunkIt->first.begin(),chunkIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != chunkIt->first.begin()+keyPrefix.size()) {
+
+        auto bufferIt = startChunkIt;
+        while (bufferIt != chunkIndex_.end() && std::search(bufferIt->first.begin(),bufferIt->first.begin()+keyPrefix.size(),keyPrefix.begin(),keyPrefix.end()) != bufferIt->first.begin()+keyPrefix.size()) {
         //cout << "Before getting segIt" << endl;
-        auto  segIt = chunkIt->second;
+        auto  segIt = bufferIt->second;
         delete segIt->buffer; // Delete Buffer for segment
         segIt->buffer = 0;
         removeSegment(segIt);
-        chunkIndex_.erase(chunkIt++);
+        chunkIndex_.erase(bufferIt++);
         }
-        //cout << "Segs After " << endl;
-        //printSegs();
-        //cout << "Map After " << endl;
-        //printMap();
     }
 
      void BufferMgr::removeSegment(BufferList::iterator &segIt) {
@@ -395,6 +389,7 @@ namespace Buffer_Namespace {
         int slabNum = segIt->slabNum;
         //cout << "Slab num: " << slabNum << endl;
         if (slabNum < 0) {
+            std::lock_guard < std::mutex > unsizedSegsLock (unsizedSegsMutex_);
             unsizedSegs_.erase(segIt);
         }
         else {
@@ -423,42 +418,49 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::checkpoint() {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-            if (chunkIt->second->chunkKey[0] != -1 && chunkIt->second->buffer->isDirty_) { // checks that buffer is actual chunk (not just buffer) and is dirty
+        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_); // Take this lock early to prevent deadlock with reserveBuffer which needs segsMutex_ and then chunkIndexMutex_
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        for (auto bufferIt = chunkIndex_.begin(); bufferIt != chunkIndex_.end(); ++bufferIt) {
+            if (bufferIt->second->chunkKey[0] != -1 && bufferIt->second->buffer->isDirty_) { // checks that buffer is actual chunk (not just buffer) and is dirty
                 //cout << "Flushing: ";
-                //for (auto vecIt = chunkIt->second->chunkKey.begin(); vecIt != chunkIt->second->chunkKey.end(); ++vecIt) {
+                //for (auto vecIt = bufferIt->second->chunkKey.begin(); vecIt != bufferIt->second->chunkKey.end(); ++vecIt) {
                 //    std::cout << *vecIt << ",";
                 //}
                 //std::cout << std::endl;
-                parentMgr_->putChunk(chunkIt->second->chunkKey, chunkIt->second->buffer); 
-                chunkIt->second->buffer->clearDirtyBits();
+                parentMgr_->putBuffer(bufferIt->second->chunkKey, bufferIt->second->buffer); 
+                bufferIt->second->buffer->clearDirtyBits();
             }
         }
     }
     
     /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
     /// throws a runtime_error.
-    AbstractBuffer* BufferMgr::getChunk(const ChunkKey &key, const size_t numBytes) {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        auto chunkIt = chunkIndex_.find(key);
-        if (chunkIt != chunkIndex_.end()) {
-            chunkIt->second->buffer->pin();
-            chunkIt->second->lastTouched = bufferEpoch_++;
-            if (chunkIt->second->buffer->size() < numBytes) {  // need to fetch part of buffer we don't have - up to numBytes 
-                parentMgr_->fetchChunk(key, chunkIt->second->buffer, numBytes);
+    AbstractBuffer* BufferMgr::getBuffer(const ChunkKey &key, const size_t numBytes) {
+        std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); 
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        
+        auto bufferIt = chunkIndex_.find(key);
+        bool foundBuffer = bufferIt != chunkIndex_.end();
+        chunkIndexLock.unlock();
+        if (foundBuffer) {
+            bufferIt->second->buffer->pin();
+            sizedSegsLock.unlock();
+            bufferIt->second->lastTouched = bufferEpoch_++; // race
+            if (bufferIt->second->buffer->size() < numBytes) {  // need to fetch part of buffer we don't have - up to numBytes 
+                parentMgr_->fetchBuffer(key, bufferIt->second->buffer, numBytes);
             }
-            return chunkIt->second->buffer; 
+            return bufferIt->second->buffer; 
         }
         else { // If wasn't in pool then we need to fetch it
-            AbstractBuffer * buffer = createChunk(key,pageSize_,numBytes); // createChunk pins for us
+            sizedSegsLock.unlock();
+            AbstractBuffer * buffer = createBuffer(key,pageSize_,numBytes); // createChunk pins for us
             try {
-                parentMgr_->fetchChunk(key,buffer,numBytes); // this should put buffer in a BufferSegment
+                parentMgr_->fetchBuffer(key,buffer,numBytes); // this should put buffer in a BufferSegment
             }
             catch (std::runtime_error &error) {
                 // if here, fetch chunk was unsuccessful - delete chunk we just
                 // created
-                deleteChunk(key);
+                deleteBuffer(key);
                 printMap();
                 cout << endl << endl;
                 printSegs();
@@ -472,25 +474,32 @@ namespace Buffer_Namespace {
     }
 
 
-    void BufferMgr::fetchChunk(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        auto chunkIt = chunkIndex_.find(key);
+    void BufferMgr::fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
+        std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); 
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        
+        auto bufferIt = chunkIndex_.find(key);
+        bool foundBuffer = bufferIt != chunkIndex_.end();
+        chunkIndexLock.unlock();
         AbstractBuffer * buffer;
-        if (chunkIt == chunkIndex_.end()) {
+        if (!foundBuffer) {
+            sizedSegsLock.unlock();
             if (parentMgr_ == 0) {
                 throw std::runtime_error("Chunk does not exist");
             }
-            buffer = createChunk(key,pageSize_,numBytes);
+            buffer = createBuffer(key,pageSize_,numBytes); // will pin buffer
             try {
-                parentMgr_->fetchChunk(key, buffer, numBytes);
+                parentMgr_->fetchBuffer(key, buffer, numBytes);
             }
             catch (std::runtime_error &error) {
-                deleteChunk(key);
+                deleteBuffer(key);
                 throw std::runtime_error("Fetch chunk - Could not find chunk in buffer pool or parent buffer pools");
             }
         }
         else {
-            buffer = chunkIt->second->buffer;
+            buffer = bufferIt->second->buffer;
+            buffer->pin();
+            sizedSegsLock.unlock();
         }
         size_t chunkSize = numBytes == 0 ? buffer->size() : numBytes;
         destBuffer->reserve(chunkSize);
@@ -503,37 +512,40 @@ namespace Buffer_Namespace {
         }
         destBuffer->setSize(chunkSize);
         destBuffer->syncEncoder(buffer);
+        buffer->unPin();
     }
 
-    AbstractBuffer* BufferMgr::putChunk(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
-        auto chunkIt = chunkIndex_.find(key);
-        AbstractBuffer *chunk;
-        if (chunkIt == chunkIndex_.end()) {
-            chunk = createChunk(key,pageSize_);
+    AbstractBuffer* BufferMgr::putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        auto bufferIt = chunkIndex_.find(key);
+        bool foundBuffer = bufferIt != chunkIndex_.end();
+        chunkIndexLock.unlock();
+        AbstractBuffer *buffer;
+        if (!foundBuffer) {
+            buffer = createBuffer(key,pageSize_);
         }
         else {
-            chunk = chunkIt->second->buffer;
+            buffer = bufferIt->second->buffer;
         }
-        size_t oldChunkSize = chunk->size();
-        size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
+        size_t oldBufferSize = buffer->size();
+        size_t newBufferSize = numBytes == 0 ? srcBuffer->size() : numBytes;
 
-        if (chunk->isDirty()) {
+        if (buffer->isDirty()) {
             throw std::runtime_error("Chunk inconsistency");
         }
 
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
-            chunk->write((int8_t *)srcBuffer->getMemoryPtr(), newChunkSize,0,srcBuffer->getType(),srcBuffer->getDeviceId());
+            buffer->write((int8_t *)srcBuffer->getMemoryPtr(), newBufferSize,0,srcBuffer->getType(),srcBuffer->getDeviceId());
         }
         else if (srcBuffer->isAppended()) {
-            assert(oldChunkSize < newChunkSize);
-            chunk->append((int8_t *)srcBuffer->getMemoryPtr()+oldChunkSize,newChunkSize-oldChunkSize,srcBuffer->getType(), srcBuffer->getDeviceId());
+            assert(oldBufferSize < newBufferSize);
+            buffer->append((int8_t *)srcBuffer->getMemoryPtr()+oldBufferSize,newBufferSize-oldBufferSize,srcBuffer->getType(), srcBuffer->getDeviceId());
         }
         srcBuffer->clearDirtyBits();
-        chunk->syncEncoder(srcBuffer);
-        return chunk;
+        buffer->syncEncoder(srcBuffer);
+        return buffer;
     }
 
     int BufferMgr::getBufferId() {
@@ -544,7 +556,7 @@ namespace Buffer_Namespace {
     /// client is responsible for deleting memory allocated for b->mem_
     AbstractBuffer* BufferMgr::alloc(const size_t numBytes) {
         ChunkKey chunkKey = {-1,getBufferId()};
-        return createChunk(chunkKey, pageSize_, numBytes); 
+        return createBuffer(chunkKey, pageSize_, numBytes); 
     }
 
     void BufferMgr::free(AbstractBuffer *buffer) {
@@ -552,16 +564,16 @@ namespace Buffer_Namespace {
         if (castedBuffer == 0) {
             throw std::runtime_error ("Wrong buffer type - expects base class pointer to Buffer type");
         }
-        deleteChunk(castedBuffer->segIt_->chunkKey);
+        deleteBuffer(castedBuffer->segIt_->chunkKey);
     }
     
     size_t BufferMgr::getNumChunks() {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
         return chunkIndex_.size();
     }
     
     size_t BufferMgr::size() {
-        std::lock_guard < std::recursive_mutex > lock (globalMutex_);
+        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_);
         return slabs_.size()*pageSize_*numPagesPerSlab_;
     }
     void BufferMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec) {

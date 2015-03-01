@@ -7,6 +7,7 @@
 #define _CHUNK_H_
 
 #include <list>
+#include <memory>
 #include "../Shared/sqltypes.h"
 #include "../DataMgr/AbstractBuffer.h"
 #include "../DataMgr/ChunkMetadata.h"
@@ -42,6 +43,7 @@ namespace Chunk_NS {
 			Chunk() : buffer(nullptr), index_buf(nullptr), column_desc(nullptr) {}
 			Chunk(const ColumnDescriptor *td) : buffer(nullptr), index_buf(nullptr), column_desc(td) {}
 			Chunk(AbstractBuffer *b, AbstractBuffer *ib, const ColumnDescriptor *td) : buffer(b), index_buf(ib), column_desc(td) {};
+      ~Chunk() { unpin_buffer(); }
 			const ColumnDescriptor *get_column_desc() const { return column_desc; }
 			static void translateColumnDescriptorsToChunkVec(const std::list<const ColumnDescriptor*> &colDescs, std::vector<Chunk> &chunkVec) {
 				for (auto cd : colDescs)
@@ -51,21 +53,20 @@ namespace Chunk_NS {
 			ChunkMetadata appendData(DataBlockPtr &srcData, const size_t numAppendElems, const size_t startIdx);
 			void createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0);
 			void getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0, const size_t num_bytes = 0, const size_t num_elems = 0);
-			static Chunk getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId, const size_t num_bytes, const size_t num_elems = 0);
+			static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId, const size_t num_bytes, const size_t num_elems);
 
 		// protected:
 			AbstractBuffer *get_buffer() const { return buffer; }
 			AbstractBuffer *get_index_buf() const { return index_buf; }
 			void set_buffer(AbstractBuffer *b) { buffer = b; }
 			void set_index_buf(AbstractBuffer *ib) { index_buf = ib; }
-			void unpin_buffer();
-			void pin_buffer();
 			void init_encoder();
 			void decompress(int8_t *compressed, VarlenDatum *result, Datum *datum) const;
 		private:
 			AbstractBuffer *buffer;
 			AbstractBuffer *index_buf;
 			const ColumnDescriptor *column_desc;
+			void unpin_buffer();
 	};
 
 }

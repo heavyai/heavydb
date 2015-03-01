@@ -82,7 +82,7 @@ void CudaMgr::setContext(const int deviceNum) const {
 }
 
 int8_t * CudaMgr::allocatePinnedHostMem(const size_t numBytes) {
-    //setContext(deviceNum);
+    setContext(0);
     void * hostPtr;
     checkError(cuMemHostAlloc(&hostPtr,numBytes,CU_MEMHOSTALLOC_PORTABLE));
     return (reinterpret_cast <int8_t *> (hostPtr));

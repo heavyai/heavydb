@@ -148,15 +148,11 @@ FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::Me
     }
 
     for (map<int, Chunk>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
-				colMapIt->second.unpin_buffer();
+				// colMapIt->second.unpin_buffer();
         ChunkKey chunkKey =  chunkKeyPrefix_;
         chunkKey.push_back(colMapIt->second.get_column_desc()->columnId);
         chunkKey.push_back(maxFragmentId_);
 				colMapIt->second.createChunkBuffer(dataMgr_, chunkKey, memoryLevel, newFragmentInfo.deviceIds[static_cast<int>(memoryLevel)]);
-        // shouldn't be evicted between these two statements b/c not sized yet
-        //colMapIt->second.pin_buffer(); // not needed anymore b/c create auto
-        //pins
-        //cout << "Creating chunk with encodingType: " << colMapIt->second.columnDesc->compression << endl;
 				colMapIt->second.init_encoder();
     }
 
@@ -183,7 +179,7 @@ void InsertOrderFragmenter::getFragmentsForQuery(QueryInfo &queryInfo) {
 
 void InsertOrderFragmenter::getInsertBufferChunks() {
     for (map<int, Chunk>::iterator colMapIt = columnMap_.begin(); colMapIt != columnMap_.end(); ++colMapIt) {
-				colMapIt->second.unpin_buffer();
+				// colMapIt->second.unpin_buffer();
         ChunkKey chunkKey = {fragmenterId_, maxFragmentId_,  colMapIt -> second.get_column_desc()->columnId};
 				colMapIt->second.getChunkBuffer(dataMgr_, chunkKey, defaultInsertLevel_);
     }
