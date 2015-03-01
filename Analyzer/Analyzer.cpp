@@ -725,10 +725,8 @@ namespace Analyzer {
       type_info = new_type_info;
       return this;
     }
-#ifdef ALEX_FIX
     if (new_type_info.get_compression() != type_info.get_compression())
       return Expr::add_cast(new_type_info);
-#endif // ALEX_FIX
     if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP || type_info.get_type() == kBOOLEAN)) {
       cast_number(new_type_info);
     } else if (new_type_info.is_string() && type_info.is_string()) {

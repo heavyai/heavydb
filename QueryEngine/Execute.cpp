@@ -690,9 +690,15 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   CHECK_EQ(uoper->get_optype(), kCAST);
   const auto& ti = uoper->get_type_info();
   const auto operand_lv = codegen(uoper->get_operand(), hoist_literals);
+  const auto& operand_ti = uoper->get_operand()->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
-    CHECK(uoper->get_operand()->get_type_info().is_integer() ||
-          uoper->get_operand()->get_type_info().is_time());
+    if (operand_ti.is_string()) {
+      // TODO(alex): make it safe, now that we have full type information
+      CHECK(ti.is_string());
+      CHECK_EQ(kENCODING_DICT, ti.get_compression());
+      return operand_lv;
+    }
+    CHECK(operand_ti.is_integer() || operand_ti.is_time());
     if (ti.is_integer() || ti.is_time()) {
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
       const auto target_width = get_bit_width(ti.get_type());
@@ -708,8 +714,8 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
         : llvm::Type::getDoubleTy(cgen_state_->context_));
     }
   } else {
-    CHECK(uoper->get_operand()->get_type_info().get_type() == kFLOAT ||
-          uoper->get_operand()->get_type_info().get_type() == kDOUBLE);
+    CHECK(operand_ti.get_type() == kFLOAT ||
+          operand_ti.get_type() == kDOUBLE);
     CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
     if (ti.get_type() == kDOUBLE) {
       return cgen_state_->ir_builder_.CreateFPExt(
@@ -1958,6 +1964,14 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   insert_data.tableId = table_id;
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
+    if (!col_cv) {
+      CHECK(target_entry->get_expr()->get_type_info().is_string());
+      CHECK_EQ(target_entry->get_expr()->get_type_info().get_compression(), kENCODING_DICT);
+      auto col_cast = dynamic_cast<const Analyzer::UOper*>(target_entry->get_expr());
+      CHECK(col_cast);
+      CHECK_EQ(kCAST, col_cast->get_optype());
+      col_cv = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
+    }
     CHECK(col_cv);
     const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
