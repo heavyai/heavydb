@@ -95,6 +95,10 @@ namespace Analyzer {
        * Cannot use std::set because we don't have an ordering function.
        */
       virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const { if (f(this)) add_unique(expr_list); }
+      /*
+       * @brief decompress adds cast operator to decompress encoded result
+       */
+      Expr* decompress();
 
     protected:
       SQLTypeInfo type_info; // SQLTypeInfo of the return result of this expression

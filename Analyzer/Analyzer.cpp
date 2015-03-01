@@ -430,6 +430,17 @@ namespace Analyzer {
   }
 
   Expr *
+  Expr::decompress()
+  {
+    if (type_info.get_compression() == kENCODING_NONE)
+      return this;
+    SQLTypeInfo new_type_info = type_info;
+    new_type_info.set_compression(kENCODING_NONE);
+    new_type_info.set_comp_param(0);
+    return new UOper(new_type_info, contains_agg, kCAST, this);
+  }
+
+  Expr *
   Expr::add_cast(const SQLTypeInfo &new_type_info)
   {
     if (new_type_info == type_info)
@@ -714,6 +725,10 @@ namespace Analyzer {
       type_info = new_type_info;
       return this;
     }
+#ifdef ALEX_FIX
+    if (new_type_info.get_compression() != type_info.get_compression())
+      return Expr::add_cast(new_type_info);
+#endif // ALEX_FIX
     if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP || type_info.get_type() == kBOOLEAN)) {
       cast_number(new_type_info);
     } else if (new_type_info.is_string() && type_info.is_string()) {

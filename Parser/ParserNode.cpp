@@ -295,7 +295,7 @@ namespace Parser {
     left_expr = left->analyze(catalog, query, allow_tlist_ref);
     left_type = left_expr->get_type_info();
     if (right == nullptr) {
-      return new Analyzer::UOper(left_type, left_expr->get_contains_agg(), optype, left_expr);
+      return new Analyzer::UOper(left_type, left_expr->get_contains_agg(), optype, left_expr->decompress());
     }
     SQLQualifier qual = kONE;
     if (typeid(*right) == typeid(SubqueryExpr))
@@ -308,6 +308,25 @@ namespace Parser {
       left_expr = left_expr->add_cast(new_left_type);
     if (right_type != new_right_type)
       right_expr = right_expr->add_cast(new_right_type);
+    if (optype == kEQ) {
+      if ((new_left_type.get_compression() == kENCODING_DICT || new_left_type.get_compression() == kENCODING_TOKDICT) && new_right_type.get_compression() == kENCODING_NONE) {
+        SQLTypeInfo ti(new_right_type);
+        ti.set_compression(new_left_type.get_compression());
+        ti.set_comp_param(new_left_type.get_comp_param());
+        right_expr = right_expr->add_cast(ti);
+      } else if ((new_right_type.get_compression() == kENCODING_DICT || new_right_type.get_compression() == kENCODING_TOKDICT) && new_left_type.get_compression() == kENCODING_NONE) {
+        SQLTypeInfo ti(new_right_type);
+        ti.set_compression(new_right_type.get_compression());
+        ti.set_comp_param(new_right_type.get_comp_param());
+        left_expr = left_expr->add_cast(ti);
+      } else {
+        left_expr = left_expr->decompress();
+        right_expr = right_expr->decompress();
+      }
+    } else {
+      left_expr = left_expr->decompress();
+      right_expr = right_expr->decompress();
+    }
     return new Analyzer::BinOper(result_type, has_agg, optype, qual, left_expr, right_expr);
   }
 
@@ -339,11 +358,15 @@ namespace Parser {
   InValues::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
   {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+    bool dict_comp = arg_expr->get_type_info().get_compression() == kENCODING_DICT || arg_expr->get_type_info().get_compression() == kENCODING_TOKDICT;
     std::list<Analyzer::Expr*> *value_exprs = new std::list<Analyzer::Expr*>();
     for (auto p : *value_list) {
       Analyzer::Expr *e = p->analyze(catalog, query, allow_tlist_ref);
-      value_exprs->push_back(e->add_cast(arg_expr->get_type_info()));
+      if (dict_comp)
+        value_exprs->push_back(e->add_cast(arg_expr->get_type_info()));
     }
+    if (!dict_comp)
+      arg_expr = arg_expr->decompress();
     Analyzer::Expr *result = new Analyzer::InValues(arg_expr, value_exprs);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
@@ -358,9 +381,9 @@ namespace Parser {
     Analyzer::Expr *upper_expr = upper->analyze(catalog, query, allow_tlist_ref);
     SQLTypeInfo new_left_type, new_right_type;
     (void)Analyzer::BinOper::analyze_type_info(kGE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-    Analyzer::BinOper *lower_pred = new Analyzer::BinOper(kBOOLEAN, kGE, kONE, arg_expr->add_cast(new_left_type), lower_expr->add_cast(new_right_type));
+    Analyzer::BinOper *lower_pred = new Analyzer::BinOper(kBOOLEAN, kGE, kONE, arg_expr->add_cast(new_left_type)->decompress(), lower_expr->add_cast(new_right_type)->decompress());
     (void)Analyzer::BinOper::analyze_type_info(kLE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-    Analyzer::BinOper *upper_pred = new Analyzer::BinOper(kBOOLEAN, kLE, kONE, arg_expr->deep_copy()->add_cast(new_left_type), upper_expr->add_cast(new_right_type));
+    Analyzer::BinOper *upper_pred = new Analyzer::BinOper(kBOOLEAN, kLE, kONE, arg_expr->deep_copy()->add_cast(new_left_type)->decompress(), upper_expr->add_cast(new_right_type)->decompress());
     Analyzer::Expr *result = new Analyzer::BinOper(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
@@ -379,7 +402,7 @@ namespace Parser {
       throw std::runtime_error("expression after LIKE must be of a string type.");
     if (escape_expr != nullptr && !escape_expr->get_type_info().is_string())
       throw std::runtime_error("expression after ESCAPE must be of a string type.");
-    Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr, like_expr, escape_expr);
+    Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
     return result;
@@ -471,21 +494,25 @@ namespace Parser {
     else if (boost::iequals(*name, "min")) {
       agg_type = kMIN;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info();
     }
     else if (boost::iequals(*name, "max")) {
       agg_type = kMAX;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info();
     }
     else if (boost::iequals(*name, "avg")) {
       agg_type = kAVG;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_expr->decompress();
       result_type.set_type(kDOUBLE);
     }
     else if (boost::iequals(*name, "sum")) {
       agg_type = kSUM;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info();
     }
     else
@@ -500,11 +527,10 @@ namespace Parser {
   {
     target_type->check_type();
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-    SQLTypeInfo ti;
-    ti.set_type(target_type->get_type());
-    ti.set_dimension(target_type->get_param1());
-    ti.set_scale(target_type->get_param2());
-    ti.set_notnull(arg_expr->get_type_info().get_notnull());
+    SQLTypeInfo ti(target_type->get_type(), target_type->get_param1(), target_type->get_param2(), arg_expr->get_type_info().get_notnull());;
+    if (arg_expr->get_type_info().get_type() != target_type->get_type() &&
+        arg_expr->get_type_info().get_compression() != kENCODING_NONE)
+      arg_expr->decompress();
     return arg_expr->add_cast(ti);
   }
 
@@ -627,7 +653,7 @@ namespace Parser {
       c->set_constval(d);
       return c;
     }
-    return new Analyzer::ExtractExpr(ti, from_expr->get_contains_agg(), fieldno, from_expr);
+    return new Analyzer::ExtractExpr(ti, from_expr->get_contains_agg(), fieldno, from_expr->decompress());
   }
 
   std::string
