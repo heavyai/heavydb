@@ -119,6 +119,8 @@ public:
   typedef std::vector<Executor::LiteralValue> LiteralValues;
 
 private:
+  template<class T>
+  llvm::Constant* ll_int(const T v);
   llvm::Value* codegen(const Analyzer::Expr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);

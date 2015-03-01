@@ -1225,6 +1225,7 @@ namespace Parser {
         cd.columnType.set_comp_param(0);
       } else {
         const std::string &comp = *compression->get_encoding_name();
+        int comp_param;
         if (boost::iequals(comp, "fixed")) {
           if (!cd.columnType.is_integer())
             throw std::runtime_error("Fixed encoding is only supported for integer columns.");
@@ -1258,15 +1259,27 @@ namespace Parser {
         } else if (boost::iequals(comp, "dict")) {
           if (!cd.columnType.is_string())
             throw std::runtime_error("Dictionary encoding is only supported on string columns.");
+          if (compression->get_encoding_param() == 0)
+            comp_param = 32; // default to 32-bits
+          else
+            comp_param = compression->get_encoding_param();
+          if (comp_param != 8 && comp_param != 16 && comp_param != 32)
+                throw std::runtime_error("Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
           // diciontary encoding
           cd.columnType.set_compression(kENCODING_DICT);
-          cd.columnType.set_comp_param(0);
+          cd.columnType.set_comp_param(comp_param);
         } else if (boost::iequals(comp, "token_dict")) {
           if (!cd.columnType.is_string())
             throw std::runtime_error("Tokenized-Dictionary encoding is only supported on string columns.");
+          if (compression->get_encoding_param() == 0)
+            comp_param = 32; // default to 32-bits
+          else
+            comp_param = compression->get_encoding_param();
+          if (comp_param != 8 && comp_param != 16 && comp_param != 32)
+                throw std::runtime_error("Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
           // tokenized diciontary encoding
           cd.columnType.set_compression(kENCODING_TOKDICT);
-          cd.columnType.set_comp_param(0);
+          cd.columnType.set_comp_param(comp_param);
         } else if (boost::iequals(comp, "sparse")) {
           // sparse column encoding with mostly NULL values
           if (cd.columnType.get_notnull())

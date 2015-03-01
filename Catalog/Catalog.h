@@ -23,6 +23,7 @@
 #include "../SqliteConnector/SqliteConnector.h"
 #include "TableDescriptor.h"
 #include "ColumnDescriptor.h"
+#include "DictDescriptor.h"
 #include "../DataMgr/DataMgr.h"
 
 namespace Catalog_Namespace {
@@ -54,6 +55,8 @@ typedef std::map < ColumnKey, ColumnDescriptor *> ColumnDescriptorMap;
 
 typedef std::tuple <int, int> ColumnIdKey;
 typedef std::map < ColumnIdKey, ColumnDescriptor *> ColumnDescriptorMapById;
+
+typedef std::map < int, DictDescriptor *> DictDescriptorMapById;
         
 /*
  * @type UserMetadata
@@ -150,9 +153,11 @@ class Catalog {
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 				 Data_Namespace::DataMgr &get_dataMgr() const { return dataMgr_; }
 
+         const DictDescriptor *getMetadataForDict(int dictId) const;
+
     protected:
         void buildMaps();
-        void addTableToMap(TableDescriptor &td, const std::list<ColumnDescriptor> &columns);
+        void addTableToMap(TableDescriptor &td, const std::list<ColumnDescriptor> &columns, const std::list<DictDescriptor> &dicts);
         void removeTableFromMap(const std::string &tableName, int tableId);
 				void instantiateFragmenter(TableDescriptor *td) const;
 				void getAllColumnMetadataForTable(const TableDescriptor *td, std::list<const ColumnDescriptor *> &colDescs) const;
@@ -162,6 +167,7 @@ class Catalog {
         TableDescriptorMapById tableDescriptorMapById_;
         ColumnDescriptorMap columnDescriptorMap_;
         ColumnDescriptorMapById columnDescriptorMapById_;
+        DictDescriptorMapById dictDescriptorMapById_;
         SqliteConnector sqliteConnector_;
         UserMetadata currentUser_;
         DBMetadata currentDB_;
