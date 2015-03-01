@@ -1625,6 +1625,9 @@ canUseFastGroupBy(const Planner::AggPlan* agg_plan,
         CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());
         return lhs_meta_it->second.chunkStats.min.intval < rhs_meta_it->second.chunkStats.min.intval;
     });
+    if (min_frag == fragments.end()) {
+      return std::make_pair(false, 0L);
+    }
     const auto max_frag = std::max_element(fragments.begin(), fragments.end(),
       [group_col_id](const Fragmenter_Namespace::FragmentInfo& lhs, const Fragmenter_Namespace::FragmentInfo& rhs) {
         auto lhs_meta_it = lhs.chunkMetadataMap.find(group_col_id);
@@ -1633,6 +1636,9 @@ canUseFastGroupBy(const Planner::AggPlan* agg_plan,
         CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());
         return lhs_meta_it->second.chunkStats.max.intval < rhs_meta_it->second.chunkStats.max.intval;
     });
+    if (max_frag == fragments.end()) {
+      return std::make_pair(false, 0L);
+    }
     const auto min_it = min_frag->chunkMetadataMap.find(group_col_id);
     CHECK(min_it != min_frag->chunkMetadataMap.end());
     const auto max_it = max_frag->chunkMetadataMap.find(group_col_id);
