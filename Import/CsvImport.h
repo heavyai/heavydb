@@ -25,7 +25,7 @@ public:
     const int table_id,
     const int col_id);
 private:
-  std::unique_ptr<Catalog_Namespace::Catalog> cat_;
+  Catalog_Namespace::Catalog* cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
 
   const std::string table_name_;

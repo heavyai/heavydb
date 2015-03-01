@@ -24,7 +24,7 @@ MapDMeta::MapDMeta(const std::string table_name)
   Catalog_Namespace::DBMetadata db_meta;
   CHECK(sys_cat.getMetadataForDB(db_name_, db_meta));
   CHECK(user_meta.isSuper || user_meta.userId == db_meta.dbOwner);
-  cat_.reset(new Catalog_Namespace::Catalog(base_path_, user_meta, db_meta, *data_mgr_));
+  cat_ = new Catalog_Namespace::Catalog(base_path_, user_meta, db_meta, *data_mgr_);
   td_ = cat_->getMetadataForTable(table_name_);
   CHECK(td_);
   table_id_ = td_->tableId;
