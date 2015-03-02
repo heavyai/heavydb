@@ -63,7 +63,7 @@ public:
     }
     for (size_t idx = 0; idx < size(); ++idx) {
       const auto lhs_val = agg_result(idx);
-      const auto rhs_val = agg_result(idx);
+      const auto rhs_val = r.agg_result(idx);
       {
         const auto lhs_pd = boost::get<double>(&lhs_val);
         if (lhs_pd) {
