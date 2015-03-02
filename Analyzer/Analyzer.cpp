@@ -127,7 +127,7 @@ namespace Analyzer {
   Expr *
   LikeExpr::deep_copy() const
   {
-    return new LikeExpr(arg->deep_copy(), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy());
+    return new LikeExpr(arg->deep_copy(), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy(), is_ilike);
   }
 
   Expr *

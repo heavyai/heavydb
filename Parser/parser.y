@@ -70,7 +70,7 @@ using namespace Parser;
 %token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END ESCAPE EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
-%token GRANT GROUP HAVING IF IN INSERT INTEGER INTO
+%token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
@@ -681,9 +681,13 @@ between_predicate:
 
 like_predicate:
 		scalar_exp NOT LIKE atom opt_escape
-	{ $<nodeval>$ = new LikeExpr(true, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4), dynamic_cast<Expr*>($<nodeval>5)); }
+	{ $<nodeval>$ = new LikeExpr(true, false, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4), dynamic_cast<Expr*>($<nodeval>5)); }
 	|	scalar_exp LIKE atom opt_escape
-	{ $<nodeval>$ = new LikeExpr(false, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>4)); }
+	{ $<nodeval>$ = new LikeExpr(false, false, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>4)); }
+	|	scalar_exp NOT ILIKE atom opt_escape
+	{ $<nodeval>$ = new LikeExpr(true, true, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4), dynamic_cast<Expr*>($<nodeval>5)); }
+	|	scalar_exp ILIKE atom opt_escape
+	{ $<nodeval>$ = new LikeExpr(false, true, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>4)); }
 	;
 
 opt_escape:

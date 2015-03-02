@@ -400,9 +400,16 @@ namespace Parser {
       throw std::runtime_error("expression before LIKE must be of a string type.");
     if (!like_expr->get_type_info().is_string())
       throw std::runtime_error("expression after LIKE must be of a string type.");
-    if (escape_expr != nullptr && !escape_expr->get_type_info().is_string())
-      throw std::runtime_error("expression after ESCAPE must be of a string type.");
-    Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr);
+    if (escape_expr != nullptr) {
+      if (!escape_expr->get_type_info().is_string())
+        throw std::runtime_error("expression after ESCAPE must be of a string type.");
+      if (!escape_expr->get_type_info().is_string())
+        throw std::runtime_error("expression after ESCAPE must be of a string type.");
+      Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(escape_expr);
+      if (c != nullptr && c->get_constval().stringval->length() > 1)
+        throw std::runtime_error("String after ESCAPE must have a single character.");
+    }
+    Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr, is_ilike);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
     return result;

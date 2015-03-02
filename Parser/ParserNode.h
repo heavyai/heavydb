@@ -294,7 +294,7 @@ namespace Parser {
    */
   class LikeExpr : public Expr {
     public:
-      LikeExpr(bool n, Expr *a, Expr *l, Expr *e) : is_not(n), arg(a), like_string(l), escape_string(e) {}
+      LikeExpr(bool n, bool i, Expr *a, Expr *l, Expr *e) : is_not(n), is_ilike(i), arg(a), like_string(l), escape_string(e) {}
       virtual ~LikeExpr();
       bool get_is_not() const { return is_not; }
       const Expr *get_arg() const { return arg; }
@@ -304,6 +304,7 @@ namespace Parser {
       virtual std::string to_string() const;
     private:
       bool is_not;
+      bool is_ilike;
       Expr *arg;
       Expr *like_string;
       Expr *escape_string;

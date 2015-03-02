@@ -128,8 +128,10 @@ TEST(ParseAnalyzePlan, Select) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, d, g from fat where f > 100 and g is null and k <= 100000000000 and c = 'xyz';")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, d, g from fat where f > 100 and g is not null or k <= 100000000000 and c = 'xyz';")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l like '%whatever%';")); } );
-	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l like '%whatever\\%@?' escape '\\@';")); } );
-	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l not like '%whatever\\%@?' escape '\\@';")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l like '%whatever@%_' escape '@';")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l ilike '%whatever@%_' escape '@';")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l not like '%whatever@%_' escape '@';")); } );
+	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l not ilike '%whatever@%_' escape '@';")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select e, f, g from fat where e in (3.5, 133.33, 222.22);")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select e, f, g from fat where e not in (3.5, 133.33, 222.22);")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("select e, f, g from fat where e not in (3.5, 133.33, 222.22) or l not like '%whatever%';")); } );

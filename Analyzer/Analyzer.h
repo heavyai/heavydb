@@ -320,18 +320,19 @@ namespace Analyzer {
    */
   class LikeExpr : public Expr {
     public:
-      LikeExpr(Expr *a, Expr *l, Expr *e) : Expr(kBOOLEAN), arg(a), like_expr(l), escape_expr(e) {}
+      LikeExpr(Expr *a, Expr *l, Expr *e, bool i) : Expr(kBOOLEAN), arg(a), like_expr(l), escape_expr(e), is_ilike(i) {}
       virtual ~LikeExpr() { delete arg; }
       const Expr *get_arg() const { return arg; }
       const Expr *get_like_expr() const { return like_expr; }
       const Expr *get_escape_expr() const { return escape_expr; }
+      bool get_is_ilike() const { return is_ilike; }
       virtual Expr *deep_copy() const;
       virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
       virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
       virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { arg->collect_column_var(colvar_set, include_agg); }
-      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
-      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_child_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
-      virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_agg_to_var(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy()); }
+      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy(), is_ilike); }
+      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_with_child_targetlist(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy(), is_ilike); }
+      virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return new LikeExpr(arg->rewrite_agg_to_var(tlist), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy(), is_ilike); }
       virtual bool operator==(const Expr &rhs) const { assert(false); return false;}
       virtual void print() const;
       virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -339,6 +340,7 @@ namespace Analyzer {
       Expr *arg; // the argument right of LIKE
       Expr *like_expr; // expression that evaluates to like string
       Expr *escape_expr; // expression that evaluates to escape string, can be nullptr
+      bool is_ilike; // is this ILIKE?
   };
 
   /*
