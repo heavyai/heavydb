@@ -27,6 +27,7 @@ ADD_SUBDIRECTORY    (CudaMgr)
 ADD_SUBDIRECTORY    (Fragmenter)
 ADD_SUBDIRECTORY    (Chunk)
 ADD_SUBDIRECTORY    (Shared)
+ADD_SUBDIRECTORY    (Utils)
 ADD_SUBDIRECTORY    (Tests)
 
 set(mapd_source_files main.cpp)
