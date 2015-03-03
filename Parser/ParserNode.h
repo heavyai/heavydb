@@ -308,6 +308,8 @@ namespace Parser {
       Expr *arg;
       Expr *like_string;
       Expr *escape_string;
+
+      static void check_like_expr(const std::string &like_str, char escape_char);
   };
 
   /*
