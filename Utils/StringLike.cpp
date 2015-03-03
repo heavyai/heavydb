@@ -7,7 +7,6 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <cctype>
 #include "StringLike.h"
 
 enum LikeStatus {
@@ -16,6 +15,14 @@ enum LikeStatus {
   kLIKE_ABORT, // means we run out of string characters to match against pattern, can abort early
   kLIKE_ERROR // error condition
 };
+
+static int
+lowercase(char c)
+{
+  if ('A' <= c & c <= 'Z')
+    return 'a' + (c - 'A');
+  return c;
+}
 
 // internal recursive function for performing LIKE matching.
 static LikeStatus
@@ -35,7 +42,7 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
       p++; plen--;
       if (plen <= 0)
         return kLIKE_ERROR;
-      if ((!is_ilike && *s != *p) || (is_ilike && tolower(*s) != tolower(*p)))
+      if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != lowercase(*p)))
         return kLIKE_FALSE;
     } else if (*p == '%') {
       char firstpat;
@@ -61,7 +68,7 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
         firstpat = *p;
 
       while (slen > 0) {
-        if (*s == firstpat || (is_ilike && tolower(*s) == tolower(firstpat))) {
+        if (*s == firstpat || (is_ilike && lowercase(*s) == lowercase(firstpat))) {
           LikeStatus status = string_like_match(s, slen, p, plen, escape_char, is_ilike);
           if (status != kLIKE_FALSE)
             return status;
@@ -73,7 +80,7 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
         s++; slen--;
         p++; plen--;
         continue;
-    } else if ((!is_ilike && *s != *p) || (is_ilike && tolower(*s) != tolower(*p)))
+    } else if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != lowercase(*p)))
       return kLIKE_FALSE;
     s++; slen--;
     p++; plen--;
