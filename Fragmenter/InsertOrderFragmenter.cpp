@@ -124,12 +124,11 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
         numRowsInserted += numRowsToInsert;
     }
     boost::unique_lock < boost::shared_mutex > writeLock (fragmentInfoMutex_);
-    //for (auto partIt = fragmentsToBeUpdated.begin(); partIt != fragmentsToBeUpdated.end(); ++partIt) {
     for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) { 
         partIt->numTuples = partIt->shadowNumTuples;
         partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
     }
-    dataMgr_->checkpoint();
+    // dataMgr_->checkpoint(); leave to upper layer to call checkpoint
 }
 
 FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::MemoryLevel memoryLevel) { 

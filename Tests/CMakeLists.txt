@@ -21,6 +21,6 @@ ADD_EXECUTABLE (StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cp
 
 target_link_libraries (PlanTest Shared Catalog SqliteConnector Parser Analyzer Planner Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
 target_link_libraries (UtilTest Utils "-lgtest")
-target_link_libraries (StorageTest Shared Catalog SqliteConnector Parser Analyzer Planner Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
+target_link_libraries (StorageTest Utils Shared Catalog SqliteConnector Parser Analyzer Planner Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lgtest -lz -lncurses -ldl -pthread")
 target_link_libraries (ExecuteTest Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine Fragmenter Chunk DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lgtest -lz -lncurses -ldl -pthread")
 target_link_libraries (StringDictionaryTest StringDictionary ${Boost_LIBRARIES} "-lgtest")
