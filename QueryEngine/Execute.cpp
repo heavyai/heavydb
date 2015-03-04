@@ -39,10 +39,10 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
   CHECK_EQ(agg_results_idx_.size(), agg_kinds_.size());
   CHECK_EQ(agg_results_idx_.size(), agg_types_.size());
   if (agg_kinds_[idx] == kAVG) {
-    CHECK(!IS_STRING(agg_types_[idx]));
+    CHECK(!agg_types_[idx].is_string());
     CHECK_LT(idx, agg_results_.size() - 1);
     auto actual_idx = agg_results_idx_[idx];
-    return IS_INTEGER(agg_types_[idx])
+    return agg_types_[idx].is_integer()
       ? AggResult(
           static_cast<double>(agg_results_[actual_idx]) /
           static_cast<double>(agg_results_[actual_idx + 1]))
@@ -51,24 +51,24 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
           static_cast<double>(agg_results_[actual_idx + 1]));
   } else {
     CHECK_LT(idx, agg_results_.size());
-    CHECK(IS_NUMBER(agg_types_[idx]) || IS_STRING(agg_types_[idx]) || IS_TIME(agg_types_[idx]));
+    CHECK(agg_types_[idx].is_number() || agg_types_[idx].is_string() || agg_types_[idx].is_time());
     auto actual_idx = agg_results_idx_[idx];
-    if (IS_INTEGER(agg_types_[idx]) || IS_TIME(agg_types_[idx])) {
+    if (agg_types_[idx].is_integer() || agg_types_[idx].is_time()) {
       return AggResult(agg_results_[actual_idx]);
-    } else if (IS_STRING(agg_types_[idx])) {
+    } else if (agg_types_[idx].is_string()) {
       CHECK(executor_);
       return translate_strings
         ? AggResult(executor_->getStringDictionary()->getString(agg_results_[actual_idx]))
         : AggResult(agg_results_[actual_idx]);
     } else {
-      CHECK(agg_types_[idx] == kFLOAT || agg_types_[idx] == kDOUBLE);
+      CHECK(agg_types_[idx].get_type() == kFLOAT || agg_types_[idx].get_type() == kDOUBLE);
       return AggResult(*reinterpret_cast<const double*>(&agg_results_[actual_idx]));
     }
   }
   return agg_results_[idx];
 }
 
-SQLTypes ResultRow::agg_type(const size_t idx) const {
+SQLTypeInfo ResultRow::agg_type(const size_t idx) const {
   return agg_types_[idx];
 }
 
@@ -1234,8 +1234,8 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
           const auto agg_kind = row.agg_kinds_[agg_col_idx];
           const auto agg_type = row.agg_types_[agg_col_idx];
-          CHECK(IS_INTEGER(agg_type) || IS_TIME(agg_type) || IS_STRING(agg_type) ||
-                agg_type == kFLOAT || agg_type == kDOUBLE);
+          CHECK(agg_type.is_integer() || agg_type.is_time() || agg_type.is_string() ||
+                agg_type.get_type() == kFLOAT || agg_type.get_type() == kDOUBLE);
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
           switch (agg_kind) {
           case kSUM:
@@ -1322,13 +1322,13 @@ Executor::ResultRows Executor::groupBufferToResults(
         result_row.agg_kinds_.push_back(agg_type);
         if (agg_type == kAVG) {
           CHECK(agg_expr->get_arg());
-          result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().get_type());
+          result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
           CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
         } else {
-          result_row.agg_types_.push_back(target_expr->get_type_info().get_type());
+          result_row.agg_types_.push_back(target_expr->get_type_info());
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           ++out_vec_idx;
         }
@@ -1808,7 +1808,7 @@ void Executor::executePlanWithoutGroupBy(
     result_row.agg_kinds_.push_back(agg_type);
     if (agg_type == kAVG) {
       CHECK(agg_expr->get_arg());
-      result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info().get_type());
+      result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
       CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
       result_row.agg_results_.push_back(
         reduce_results(
@@ -1824,7 +1824,7 @@ void Executor::executePlanWithoutGroupBy(
           device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       out_vec_idx += 2;
     } else {
-      result_row.agg_types_.push_back(target_expr->get_type_info().get_type());
+      result_row.agg_types_.push_back(target_expr->get_type_info());
       CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
       result_row.agg_results_.push_back(reduce_results(
         agg_type,

@@ -47,7 +47,7 @@ public:
 
   AggResult agg_result(const size_t idx, const bool translate_strings = true) const;
 
-  SQLTypes agg_type(const size_t idx) const;
+  SQLTypeInfo agg_type(const size_t idx) const;
 
   size_t size() const {
     return agg_results_idx_.size();
@@ -90,7 +90,7 @@ private:
   std::vector<int64_t> agg_results_;
   std::vector<size_t> agg_results_idx_;
   std::vector<SQLAgg> agg_kinds_;
-  std::vector<SQLTypes> agg_types_;
+  std::vector<SQLTypeInfo> agg_types_;
   const Executor* executor_;
 
   friend class Executor;
