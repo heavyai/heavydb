@@ -12,12 +12,14 @@
 #include <boost/filesystem.hpp>
 #include <memory>
 #include <string>
+#include <fstream>
 
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::server;
+
 
 using boost::shared_ptr;
 
@@ -40,6 +42,15 @@ TDatumType::type type_to_thrift(const SQLTypes type) {
 }
 
 }
+
+double dtime() {
+    double tseconds = 0.0;
+    struct timeval mytime;
+    gettimeofday(&mytime,(struct timezone*)0);
+    tseconds = (double)(mytime.tv_sec + mytime.tv_usec*1.0e-6);
+    return (tseconds);
+}
+
 class MapDHandler : virtual public MapDIf {
 public:
   MapDHandler() {
@@ -56,9 +67,13 @@ public:
     CHECK(sys_cat.getMetadataForDB(db_name_, db_meta));
     CHECK(user_meta.isSuper || user_meta.userId == db_meta.dbOwner);
     cat_.reset(new Catalog_Namespace::Catalog(base_path_, user_meta, db_meta, *data_mgr_));
+    logFile.open("mapd_log.txt", std::ios::out | std::ios::app);
   }
 
   void select(QueryResult& _return, const std::string& query_str) {
+
+    logFile << query_str << '\t';
+    double tStart = dtime();
     SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
     std::string last_parsed;
@@ -125,6 +140,10 @@ public:
         }
       }
     }
+    double tStop = dtime();
+    double tElapsed = (tStop - tStart) * 1000;
+    logFile << tElapsed << "\n";
+    
   }
 
   void getColumnTypes(ColumnTypes& _return, const std::string& table_name) {
@@ -153,6 +172,8 @@ public:
 private:
   std::unique_ptr<Catalog_Namespace::Catalog> cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
+  std::ofstream logFile;
+
 
   const std::string db_name_ { MAPD_SYSTEM_DB };
   const std::string user_ { MAPD_ROOT_USER };
