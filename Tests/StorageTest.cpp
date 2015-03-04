@@ -92,11 +92,12 @@ namespace {
 			// cout << h << " ";
 		// cout << endl;
 		vector<size_t> scan_col_hashs = scan_table_return_hash(table_name, *gcat);
+		vector<size_t> scan_col_hashs2 = scan_table_return_hash_non_iter(table_name, *gcat);
 		// cout << "scan hashs: ";
 		// for (auto h : scan_col_hashs)
 			// cout << h << " ";
 		// cout << endl;
-		return insert_col_hashs == scan_col_hashs;
+		return insert_col_hashs == scan_col_hashs && insert_col_hashs == scan_col_hashs2;
 	}
 
 }

@@ -23,6 +23,6 @@ struct ChunkIter {
 void ChunkIter_reset(ChunkIter *it);
 void ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *vd, bool *is_end);
 // @brief get nth element in Chunk.  Does not change ChunkIter state
-void ChunkIter_get_nth(ChunkIter *it, size_t nth, bool uncompress, VarlenDatum *vd, bool *is_end);
+void ChunkIter_get_nth(ChunkIter *it, int nth, bool uncompress, VarlenDatum *vd, bool *is_end);
 
 #endif // _CHUNK_ITER_H_
