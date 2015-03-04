@@ -390,6 +390,14 @@ namespace Parser {
     return result;
   }
 
+  void
+  LikeExpr::check_like_expr(const std::string &like_str, char escape_char)
+  {
+    if (like_str.back() == escape_char)
+      throw std::runtime_error("LIKE pattern must not end with escape character.");
+      
+  }
+
   Analyzer::Expr *
   LikeExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
   {
@@ -400,6 +408,7 @@ namespace Parser {
       throw std::runtime_error("expression before LIKE must be of a string type.");
     if (!like_expr->get_type_info().is_string())
       throw std::runtime_error("expression after LIKE must be of a string type.");
+    char escape_char = '\\';
     if (escape_expr != nullptr) {
       if (!escape_expr->get_type_info().is_string())
         throw std::runtime_error("expression after ESCAPE must be of a string type.");
@@ -408,7 +417,11 @@ namespace Parser {
       Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(escape_expr);
       if (c != nullptr && c->get_constval().stringval->length() > 1)
         throw std::runtime_error("String after ESCAPE must have a single character.");
+      escape_char = (*c->get_constval().stringval)[0];
     }
+    Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(like_expr);
+    if (c != nullptr)
+      check_like_expr(*c->get_constval().stringval, escape_char);
     Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr, is_ilike);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
