@@ -190,7 +190,8 @@ private:
     std::vector<int64_t*>& group_by_buffers,
     std::vector<int64_t*>& small_group_by_buffers,
     const int64_t num_rows,
-    Data_Namespace::DataMgr*);
+    Data_Namespace::DataMgr*,
+    const int device_id);
   std::vector<int64_t*> allocateGroupByHostBuffers(
     const size_t num_buffers,
     const size_t group_by_col_count,
@@ -205,7 +206,8 @@ private:
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows,
-    Data_Namespace::DataMgr* data_mgr);
+    Data_Namespace::DataMgr* data_mgr,
+    const int device_id);
   ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
   ResultRows groupBufferToResults(
     const int64_t* group_by_buffer,

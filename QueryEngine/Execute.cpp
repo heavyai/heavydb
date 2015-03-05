@@ -944,7 +944,7 @@ std::vector<int64_t*> launch_query_gpu_code(
     const bool use_fast_path,
     const unsigned block_size_x,
     const unsigned grid_size_x,
-    const int device_id = 0) {
+    const int device_id) {
   std::vector<int64_t*> out_vec;
   CUdeviceptr col_buffers_dev_ptr;
   {
@@ -1007,6 +1007,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &group_by_dev_ptr,
           &small_group_by_dev_ptr
         };
+        data_mgr->cudaMgr_->setContext(device_id);
         checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        shared_mem_size, nullptr, kernel_params, nullptr));
@@ -1018,6 +1019,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &group_by_dev_ptr,
           &small_group_by_dev_ptr
         };
+        data_mgr->cudaMgr_->setContext(device_id);
         checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        shared_mem_size, nullptr, kernel_params, nullptr));
@@ -1047,6 +1049,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &out_vec_dev_ptr,
           &unused_dev_ptr
         };
+        data_mgr->cudaMgr_->setContext(device_id);
         checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        0, nullptr, kernel_params, nullptr));
@@ -1058,6 +1061,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &out_vec_dev_ptr,
           &unused_dev_ptr
         };
+        data_mgr->cudaMgr_->setContext(device_id);
         checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        0, nullptr, kernel_params, nullptr));
@@ -1778,13 +1782,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks(plan_state_->global_to_local_col_ids_.size());
+      const auto memory_level = device_type == ExecutorDeviceType::GPU
+        ? Data_Namespace::GPU_LEVEL
+        : Data_Namespace::CPU_LEVEL;
+      const int device_id = fragment.deviceIds[static_cast<int>(memory_level)];
       for (const int col_id : col_global_ids) {
         auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
         CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
         ChunkKey chunk_key { current_dbid, table_id, col_id, fragment.fragmentId };
-        const auto memory_level = device_type == ExecutorDeviceType::GPU
-          ? Data_Namespace::GPU_LEVEL
-          : Data_Namespace::CPU_LEVEL;
         const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
         auto it = plan_state_->global_to_local_col_ids_.find(col_id);
         CHECK(it != plan_state_->global_to_local_col_ids_.end());
@@ -1792,7 +1797,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         chunks[it->second] = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
           chunk_key,
           memory_level,
-          fragment.deviceIds[static_cast<int>(memory_level)],
+          device_id,
           chunk_meta_it->second.numBytes,
           chunk_meta_it->second.numElements);
         auto ab = chunks[it->second]->get_buffer();
@@ -1802,13 +1807,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       // TODO(alex): multiple devices support
       if (groupby_exprs.empty()) {
         executePlanWithoutGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
-          device_results, get_agg_target_exprs(plan), device_type, col_buffers, num_rows, &cat.get_dataMgr());
+          device_results, get_agg_target_exprs(plan), device_type, col_buffers, num_rows,
+          &cat.get_dataMgr(), device_id);
       } else {
         executePlanWithGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
           device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), device_type, col_buffers,
           frag_state->group_by_buffers_, frag_state->small_group_by_buffers_, num_rows,
-          &cat.get_dataMgr());
+          &cat.get_dataMgr(), device_id);
       }
       reduce_mutex_.lock();
       all_fragment_results.push_back(device_results);
@@ -1844,7 +1850,8 @@ void Executor::executePlanWithoutGroupBy(
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
     const int64_t num_rows,
-    Data_Namespace::DataMgr* data_mgr) {
+    Data_Namespace::DataMgr* data_mgr,
+    const int device_id) {
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(hoisted_literals);
   if (device_type == ExecutorDeviceType::CPU) {
@@ -1855,7 +1862,7 @@ void Executor::executePlanWithoutGroupBy(
     out_vec = launch_query_gpu_code(
       static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, {}, 0,
-      data_mgr, false, block_size_x_, grid_size_x_);
+      data_mgr, false, block_size_x_, grid_size_x_, device_id);
   }
   size_t out_vec_idx = 0;
   ResultRow result_row(this);
@@ -1911,7 +1918,8 @@ void Executor::executePlanWithGroupBy(
     std::vector<int64_t*>& group_by_buffers,
     std::vector<int64_t*>& small_group_by_buffers,
     const int64_t num_rows,
-    Data_Namespace::DataMgr* data_mgr) {
+    Data_Namespace::DataMgr* data_mgr,
+    const int device_id) {
   CHECK(results.empty());
   const size_t agg_col_count = plan_state_->init_agg_vals_.size();
   CHECK_GT(group_by_col_count, 0);
@@ -1948,7 +1956,7 @@ void Executor::executePlanWithGroupBy(
       col_buffers, num_rows, plan_state_->init_agg_vals_,
       group_by_buffers, groups_buffer_size,
       small_group_by_buffers, small_groups_buffer_size,
-      data_mgr, use_fast_path, block_size_x_, grid_size_x_);
+      data_mgr, use_fast_path, block_size_x_, grid_size_x_, device_id);
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
       Executor::ResultRows small_results;
