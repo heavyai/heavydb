@@ -37,7 +37,10 @@ set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
 set(mapd_server_source_files MapDServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
+set(mapd_http_server_source_files MapDHttpServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
+
 add_executable(mapd_server ${mapd_server_source_files})
+add_executable(mapd_http_server ${mapd_http_server_source_files})
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift
@@ -56,4 +59,5 @@ MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
 target_link_libraries (mapd Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (mapd_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
+target_link_libraries (mapd_http_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
