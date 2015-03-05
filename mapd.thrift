@@ -28,7 +28,10 @@ struct ProjInfo {
   2: ColumnType proj_type
 }
 
-typedef list<ColumnValue> TResultRow
+struct TResultRow {
+  1: list<ColumnValue> cols
+}
+
 typedef list<TResultRow> TResultRowSet
 typedef list<ProjInfo> TResultProjInfo
 typedef map<string, ColumnType> ColumnTypes

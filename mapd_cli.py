@@ -54,7 +54,7 @@ def str_row(row):
     return '|'.join([
         str(col_val.datum.int_val) if col_val.type == TDatumType.INT or col_val.type == TDatumType.TIME else
         str(col_val.datum.real_val) if col_val.type == TDatumType.REAL else
-        col_val.datum.str_val for col_val in row ])
+        col_val.datum.str_val for col_val in row.cols ])
 
 
 def input_loop(client):

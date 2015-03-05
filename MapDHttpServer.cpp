@@ -134,7 +134,7 @@ public:
               col_val.type = TDatumType::STR;
               col_val.datum.str_val = *s;
             }
-            trow.push_back(col_val);
+            trow.cols.push_back(col_val);
           }
           _return.rows.push_back(trow);
         }
