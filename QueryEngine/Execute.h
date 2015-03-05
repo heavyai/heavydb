@@ -431,6 +431,8 @@ private:
   bool is_nested_;
 
   boost::mutex reduce_mutex_;
+  static const int max_gpu_count { 8 };
+  boost::mutex gpu_exec_mutex_[max_gpu_count];
 
   mutable std::unique_ptr<StringDictionary> str_dict_;
 

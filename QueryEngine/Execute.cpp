@@ -1786,6 +1786,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         ? Data_Namespace::GPU_LEVEL
         : Data_Namespace::CPU_LEVEL;
       const int device_id = fragment.deviceIds[static_cast<int>(memory_level)];
+      CHECK_GE(device_id, 0);
+      CHECK_LT(device_id, max_gpu_count);
       for (const int col_id : col_global_ids) {
         auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
         CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
@@ -1816,15 +1818,10 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           frag_state->group_by_buffers_, frag_state->small_group_by_buffers_, num_rows,
           &cat.get_dataMgr(), device_id);
       }
-      reduce_mutex_.lock();
+      boost::mutex::scoped_lock lock(reduce_mutex_);
       all_fragment_results.push_back(device_results);
-      reduce_mutex_.unlock();
     };
-    if (device_type == ExecutorDeviceType::GPU) {
-      dispatch();
-    } else {
-      query_threads.push_back(std::thread(dispatch));
-    }
+    query_threads.push_back(std::thread(dispatch));
     if (query_threads.size() >= static_cast<size_t>(MAX_THREADS)) {
       for (auto& child : query_threads) {
         child.join();
@@ -1859,6 +1856,7 @@ void Executor::executePlanWithoutGroupBy(
       query_native_code, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
+    boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
     out_vec = launch_query_gpu_code(
       static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, {}, 0,
@@ -1952,11 +1950,14 @@ void Executor::executePlanWithGroupBy(
       (group_by_col_count + agg_col_count) * groups_buffer_entry_count * sizeof(int64_t) };
     const size_t small_groups_buffer_size {
       (group_by_col_count + agg_col_count) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
-    launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
-      col_buffers, num_rows, plan_state_->init_agg_vals_,
-      group_by_buffers, groups_buffer_size,
-      small_group_by_buffers, small_groups_buffer_size,
-      data_mgr, use_fast_path, block_size_x_, grid_size_x_, device_id);
+    {
+      boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
+      launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
+        col_buffers, num_rows, plan_state_->init_agg_vals_,
+        group_by_buffers, groups_buffer_size,
+        small_group_by_buffers, small_groups_buffer_size,
+        data_mgr, use_fast_path, block_size_x_, grid_size_x_, device_id);
+    }
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
       Executor::ResultRows small_results;
