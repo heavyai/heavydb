@@ -20,6 +20,7 @@
 #include "../DataMgr/DataMgr.h"
 #include "../Shared/sqltypes.h"
 #include "../Fragmenter/Fragmenter.h"
+#include "../QueryEngine/Execute.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -96,7 +97,7 @@ random_fill_double(int8_t *buf, size_t num_elems)
 }
 
 size_t
-random_fill_string(vector<string> &stringVec, size_t num_elems, int max_len)
+random_fill_string(vector<string> &stringVec, size_t num_elems, int max_len, size_t &data_volumn)
 {
 		string chars("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890");
 		default_random_engine gen;
@@ -112,6 +113,7 @@ random_fill_string(vector<string> &stringVec, size_t num_elems, int max_len)
 			// cout << "insert string: " << s << endl;
 			stringVec[n] = s;
 			boost::hash_combine(hash, string_hash(s));
+      data_volumn += len;
 		}
 		return hash;
 }
@@ -119,49 +121,60 @@ random_fill_string(vector<string> &stringVec, size_t num_elems, int max_len)
 #define MAX_TEXT_LEN		255
 
 size_t
-random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems)
+random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems, size_t &data_volumn)
 {
 	size_t hash;
 	switch (cd->columnType.get_type()) {
 		case kSMALLINT:
 			hash = random_fill_int16(p.numbersPtr, num_elems);
+      data_volumn += num_elems * sizeof(int16_t);
 			break;
 		case kINT:
 			hash = random_fill_int32(p.numbersPtr, num_elems);
+      data_volumn += num_elems * sizeof(int32_t);
 			break;
 		case kBIGINT:
 		case kNUMERIC:
 		case kDECIMAL:
 			hash = random_fill_int64(p.numbersPtr, num_elems);
+      data_volumn += num_elems * sizeof(int64_t);
 			break;
 		case kFLOAT:
 			hash = random_fill_float(p.numbersPtr, num_elems);
+      data_volumn += num_elems * sizeof(float);
 			break;
 		case kDOUBLE:
 			hash = random_fill_double(p.numbersPtr, num_elems);
+      data_volumn += num_elems * sizeof(double);
 			break;
 		case kVARCHAR:
 		case kCHAR:
-			hash = random_fill_string(*p.stringsPtr, num_elems, cd->columnType.get_dimension());
+			hash = random_fill_string(*p.stringsPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
 			break;
 		case kTEXT:
-			hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN);
+			hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN, data_volumn);
 			break;
 		case kTIME:
 		case kTIMESTAMP:
 			if (cd->columnType.get_dimension() == 0) {
-				if (sizeof(time_t) == 4)
+				if (sizeof(time_t) == 4) {
 					hash = random_fill_int32(p.numbersPtr, num_elems);
-				else
+          data_volumn += num_elems * sizeof(int32_t);
+				} else {
 					hash = random_fill_int64(p.numbersPtr, num_elems);
+          data_volumn += num_elems * sizeof(int64_t);
+        }
 			} else
 				assert(false); // not supported yet
 			break;
 		case kDATE:
-			if (sizeof(time_t) == 4)
+			if (sizeof(time_t) == 4) {
 				hash = random_fill_int32(p.numbersPtr, num_elems);
-			else
+        data_volumn += num_elems * sizeof(int32_t);
+			} else {
 				hash = random_fill_int64(p.numbersPtr, num_elems);
+        data_volumn += num_elems * sizeof(int64_t);
+      }
 			break;
 		default:
 			assert(false);
@@ -201,14 +214,15 @@ populate_table_random(const string &table_name, const size_t num_rows, const Cat
 	// fill InsertData  with random data
 	vector<size_t> col_hashs(cds.size()); // compute one hash per column for the generated data
 	int i = 0;
+  size_t data_volumn = 0;
 	for (auto cd : cds) {
-		col_hashs[i] = random_fill(cd, insert_data.data[i], num_rows);
+		col_hashs[i] = random_fill(cd, insert_data.data[i], num_rows, data_volumn);
 		i++;
 	}
 
 	// now load the data into table
-	td->fragmenter->insertData(insert_data);
-	// note: no checkpoint here, the inserts are not guaranteed to be persistent
+	auto ms = measure<>::execution([&]() { td->fragmenter->insertData(insert_data); cat.get_dataMgr().checkpoint(); });
+  cout << "Loaded " << num_rows << " rows " << data_volumn << " bytes in " << ms << " ms. at " << (double)data_volumn/(ms/1000.0)/1e6 << " MB/sec." << std::endl;
 	
 	return col_hashs;
 }

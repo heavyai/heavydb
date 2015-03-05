@@ -6,7 +6,6 @@
 
 #include "FileMgr.h"
 #include "File.h"
-#include "../../Shared/global.h"
 #include <string>
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
@@ -391,7 +390,7 @@ namespace File_Namespace {
             }
         }
         // if here then we need to add a file
-        FileInfo *fileInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
+        FileInfo *fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
         pageNum = fileInfo->getFreePage();
         assert(pageNum != -1);
         return (Page (fileInfo->fileId,pageNum));
@@ -418,7 +417,7 @@ namespace File_Namespace {
             }
         }
         while (numPagesNeeded > 0) {
-            FileInfo *fileInfo = createFile(pageSize, MAPD_DEFAULT_N_PAGES);
+            FileInfo *fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
             int pageNum;
             do {
                 pageNum = fileInfo->getFreePage();

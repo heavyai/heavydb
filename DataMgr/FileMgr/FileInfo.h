@@ -1,7 +1,6 @@
 #ifndef FILEINFO_H
 #define FILEINFO_H
 
-#include "../../Shared/global.h"
 #include "../../Shared/types.h"
 #include "Page.h"
 #include <cstdio> 

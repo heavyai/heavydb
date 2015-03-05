@@ -15,7 +15,6 @@
 #include <set>
 #include <mutex>
 
-#include "../../Shared/global.h"
 #include "Page.h"
 #include "FileBuffer.h"
 #include "FileInfo.h"

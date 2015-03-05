@@ -8,6 +8,7 @@
 #define DATAMGR_FILE_FILE_H
 
 #define MAPD_FILE_EXT ".mapd"
+#define MAX_FILE_N_PAGES 16
 
 #include <iostream>
 #include <string>
