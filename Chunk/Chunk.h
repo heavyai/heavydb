@@ -13,6 +13,7 @@
 #include "../DataMgr/ChunkMetadata.h"
 #include "../DataMgr/DataMgr.h"
 #include "../Catalog/ColumnDescriptor.h"
+#include "../Utils/ChunkIter.h"
 
 using Data_Namespace::AbstractBuffer;
 using Data_Namespace::DataMgr;
@@ -21,20 +22,6 @@ using Data_Namespace::MemoryLevel;
 namespace Chunk_NS {
 	class Chunk;
 };
-
-struct ChunkIter {
-		const Chunk_NS::Chunk *chunk;
-		int8_t *current_pos;
-		int8_t *start_pos;
-		int8_t *end_pos;
-		int skip;
-		int skip_size;
-		Datum datum; // used to hold uncompressed value
-};
-
-void ChunkIter_reset(ChunkIter *it);
-void ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *vd, bool *is_end);
-
 
 namespace Chunk_NS {
 
@@ -49,7 +36,7 @@ namespace Chunk_NS {
 				for (auto cd : colDescs)
 					chunkVec.push_back(Chunk(cd));
 			}
-			ChunkIter begin_iterator(int start_idx, int skip) const;
+			ChunkIter begin_iterator(int start_idx = 0, int skip = 1) const;
 			ChunkMetadata appendData(DataBlockPtr &srcData, const size_t numAppendElems, const size_t startIdx);
 			void createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0);
 			void getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0, const size_t num_bytes = 0, const size_t num_elems = 0);

@@ -61,7 +61,7 @@ vector<ResultRow> run_multiple_agg(
   Planner::Optimizer optimizer(query, g_cat);
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
-  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId);
+  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId, 8, 8);
   return executor->execute(plan, true, device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 
@@ -121,7 +121,7 @@ public:
         const auto mapd_variant = mapd_results[row_idx].agg_result(col_idx);
         switch (ref_col_type) {
         case SQLITE_INTEGER: {
-          ASSERT_TRUE(IS_INTEGER(mapd_results[row_idx].agg_type(col_idx)));
+          ASSERT_TRUE(mapd_results[row_idx].agg_type(col_idx).is_integer());
           const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
           const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
           ASSERT_NE(nullptr, mapd_as_int_p);
@@ -130,9 +130,9 @@ public:
           break;
         }
         case SQLITE_FLOAT: {
-          ASSERT_TRUE(IS_INTEGER(mapd_results[row_idx].agg_type(col_idx)) ||
-                      mapd_results[row_idx].agg_type(col_idx) == kFLOAT ||
-                      mapd_results[row_idx].agg_type(col_idx) == kDOUBLE);
+          ASSERT_TRUE(mapd_results[row_idx].agg_type(col_idx).is_integer() ||
+                      mapd_results[row_idx].agg_type(col_idx).get_type() == kFLOAT ||
+                      mapd_results[row_idx].agg_type(col_idx).get_type() == kDOUBLE);
           const auto ref_val = connector_.getData<double>(row_idx, col_idx);
           const auto mapd_as_double_p = boost::get<double>(&mapd_variant);
           ASSERT_NE(nullptr, mapd_as_double_p);
@@ -141,16 +141,16 @@ public:
           break;
         }
         case SQLITE_TEXT: {
-          ASSERT_TRUE(IS_STRING(mapd_results[row_idx].agg_type(col_idx)) ||
-                      IS_TIME(mapd_results[row_idx].agg_type(col_idx)));
+          ASSERT_TRUE(mapd_results[row_idx].agg_type(col_idx).is_string() ||
+                      mapd_results[row_idx].agg_type(col_idx).is_time());
           const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-          if (IS_STRING(mapd_results[row_idx].agg_type(col_idx))) {
+          if (mapd_results[row_idx].agg_type(col_idx).is_string()) {
             const auto mapd_as_str_p = boost::get<std::string>(&mapd_variant);
             ASSERT_NE(nullptr, mapd_as_str_p);
             const auto mapd_val = *mapd_as_str_p;
             ASSERT_EQ(ref_val, mapd_val);
           } else {
-            const auto mapd_type = mapd_results[row_idx].agg_type(col_idx);
+            const auto mapd_type = mapd_results[row_idx].agg_type(col_idx).get_type();
             switch (mapd_type) {
               case kTIMESTAMP:
               case kDATE: {

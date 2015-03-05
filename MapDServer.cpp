@@ -25,30 +25,22 @@ using boost::shared_ptr;
 
 namespace {
 
-TDatumType::type type_to_thrift(const SQLTypes type) {
-  if (IS_INTEGER(type)) {
+TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
+  if (type_info.is_integer()) {
     return TDatumType::INT;
   }
-  if (IS_STRING(type)) {
+  if (type_info.is_string()) {
     return TDatumType::STR;
   }
-  if (type == kFLOAT || type == kDOUBLE) {
+  if (type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE) {
     return TDatumType::REAL;
   }
-  if (IS_TIME(type)) {
+  if (type_info.is_time()) {
     return TDatumType::TIME;
   }
   CHECK(false);
 }
 
-}
-
-double dtime() {
-    double tseconds = 0.0;
-    struct timeval mytime;
-    gettimeofday(&mytime,(struct timezone*)0);
-    tseconds = (double)(mytime.tv_sec + mytime.tv_usec*1.0e-6);
-    return (tseconds);
 }
 
 class MapDHandler : virtual public MapDIf {
@@ -73,76 +65,75 @@ public:
   void select(QueryResult& _return, const std::string& query_str) {
 
     logFile << query_str << '\t';
-    double tStart = dtime();
-    SQLParser parser;
-    std::list<Parser::Stmt*> parse_trees;
-    std::string last_parsed;
-    int num_errors = parser.parse(query_str, parse_trees, last_parsed);
-    if (num_errors > 0) {
-      MapDException ex;
-      ex.error_msg = "Syntax error at: " + last_parsed;
-      throw ex;
-    }
-    for (auto stmt : parse_trees) {
-      std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
-      Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-      if (ddl != nullptr) {
+    auto ms = measure<>::execution([&]() {
+      SQLParser parser;
+      std::list<Parser::Stmt*> parse_trees;
+      std::string last_parsed;
+      int num_errors = parser.parse(query_str, parse_trees, last_parsed);
+      if (num_errors > 0) {
         MapDException ex;
-        ex.error_msg = "Query not allowed";
+        ex.error_msg = "Syntax error at: " + last_parsed;
         throw ex;
-      } else {
-        auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
-        Analyzer::Query query;
-        dml->analyze(*cat_, query);
-        Planner::Optimizer optimizer(query, *cat_);
-        auto root_plan = optimizer.optimize();
-        std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
-        const auto results = executor->execute(root_plan);
-        {
-          const auto plan = root_plan->get_plan();
-          CHECK(plan);
-          const auto& targets = plan->get_targetlist();
-          ProjInfo proj_info;
-          size_t i = 0;
-          for (const auto target : targets) {
-            proj_info.proj_name = target->get_resname();
-            if (proj_info.proj_name.empty()) {
-              proj_info.proj_name = std::to_string(i);
+      }
+      for (auto stmt : parse_trees) {
+        std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
+        Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+        if (ddl != nullptr) {
+          MapDException ex;
+          ex.error_msg = "Query not allowed";
+          throw ex;
+        } else {
+          auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+          Analyzer::Query query;
+          dml->analyze(*cat_, query);
+          Planner::Optimizer optimizer(query, *cat_);
+          auto root_plan = optimizer.optimize();
+          std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+          auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
+          const auto results = executor->execute(root_plan);
+          {
+            const auto plan = root_plan->get_plan();
+            CHECK(plan);
+            const auto& targets = plan->get_targetlist();
+            ProjInfo proj_info;
+            size_t i = 0;
+            for (const auto target : targets) {
+              proj_info.proj_name = target->get_resname();
+              if (proj_info.proj_name.empty()) {
+                proj_info.proj_name = std::to_string(i);
+              }
+              const auto& target_ti = target->get_expr()->get_type_info();
+              proj_info.proj_type.type = type_to_thrift(target_ti);
+              proj_info.proj_type.nullable = !target_ti.get_notnull();
+              _return.proj_info.push_back(proj_info);
+              ++i;
             }
-            const auto& target_type = target->get_expr()->get_type_info();
-            proj_info.proj_type.type = type_to_thrift(target_type.get_type());
-            proj_info.proj_type.nullable = !target_type.get_notnull();
-            _return.proj_info.push_back(proj_info);
-            ++i;
           }
-        }
-        for (const auto& row : results) {
-          TResultRow trow;
-          for (size_t i = 0; i < row.size(); ++i) {
-            ColumnValue col_val;
-            const auto agg_result = row.agg_result(i);
-            if (boost::get<int64_t>(&agg_result)) {
-              col_val.type = type_to_thrift(row.agg_type(i));
-              col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
-            } else if (boost::get<double>(&agg_result)) {
-              col_val.type = TDatumType::REAL;
-              col_val.datum.real_val = *(boost::get<double>(&agg_result));
-            } else {
-              auto s = boost::get<std::string>(&agg_result);
-              CHECK(s);
-              col_val.type = TDatumType::STR;
-              col_val.datum.str_val = *s;
+          for (const auto& row : results) {
+            TResultRow trow;
+            for (size_t i = 0; i < row.size(); ++i) {
+              ColumnValue col_val;
+              const auto agg_result = row.agg_result(i);
+              if (boost::get<int64_t>(&agg_result)) {
+                col_val.type = type_to_thrift(row.agg_type(i));
+                col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
+              } else if (boost::get<double>(&agg_result)) {
+                col_val.type = TDatumType::REAL;
+                col_val.datum.real_val = *(boost::get<double>(&agg_result));
+              } else {
+                auto s = boost::get<std::string>(&agg_result);
+                CHECK(s);
+                col_val.type = TDatumType::STR;
+                col_val.datum.str_val = *s;
+              }
+              trow.push_back(col_val);
             }
-            trow.push_back(col_val);
+            _return.rows.push_back(trow);
           }
-          _return.rows.push_back(trow);
         }
       }
-    }
-    double tStop = dtime();
-    double tElapsed = (tStop - tStart) * 1000;
-    logFile << tElapsed << "\n";
+    });
+    logFile << ms << "\n";
     
   }
 
@@ -156,7 +147,7 @@ public:
     const auto col_descriptors = cat_->getAllColumnMetadataForTable(td->tableId);
     for (const auto cd : col_descriptors) {
       ColumnType col_type;
-      col_type.type = type_to_thrift(cd->columnType.get_type());
+      col_type.type = type_to_thrift(cd->columnType);
       col_type.nullable = !cd->columnType.get_notnull();
       _return.insert(std::make_pair(cd->columnName, col_type));
     }

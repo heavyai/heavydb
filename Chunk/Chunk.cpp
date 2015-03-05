@@ -78,156 +78,21 @@ namespace Chunk_NS {
   Chunk::begin_iterator(int start_idx, int skip) const
   {
     ChunkIter it;
-    it.chunk = this;
+    it.type_info = &column_desc->columnType;;
     it.skip = skip;
     it.skip_size = column_desc->columnType.get_storage_size();
     if (it.skip_size < 0) { // if it's variable length
       it.current_pos = it.start_pos = index_buf->getMemoryPtr() + start_idx * sizeof(StringOffsetT);
       it.end_pos = index_buf->getMemoryPtr() + index_buf->size() - sizeof(StringOffsetT);;
+      it.second_buf = buffer->getMemoryPtr();
     } else {
       it.current_pos = it.start_pos = buffer->getMemoryPtr() + start_idx * it.skip_size;
       it.end_pos = buffer->getMemoryPtr() + buffer->size();
+      it.second_buf = nullptr;
     }
+    ChunkMetadata chunkMetadata;
+    buffer->encoder->getMetadata(chunkMetadata);
+    it.num_elems = chunkMetadata.numElements;
     return it;
   }
-
-  void
-  Chunk::decompress(int8_t *compressed, VarlenDatum *result, Datum *datum) const
-  {
-    result->is_null = false;
-    switch (column_desc->columnType.get_type()) {
-      case kSMALLINT:
-        result->length = sizeof(int16_t);
-        result->pointer = (int8_t*)&datum->smallintval;
-        switch (column_desc->columnType.get_compression()) {
-          case kENCODING_FIXED:
-            assert(column_desc->columnType.get_comp_param() == 8);
-            datum->smallintval = (int16_t)*(int8_t*)compressed;
-            break;
-          case kENCODING_RL:
-          case kENCODING_DIFF:
-          case kENCODING_SPARSE:
-            assert(false);
-            break;
-          default:
-            assert(false);
-        }
-        break;
-      case kINT:
-        result->length = sizeof(int32_t);
-        result->pointer = (int8_t*)&datum->intval;
-        switch (column_desc->columnType.get_compression()) {
-          case kENCODING_FIXED:
-            switch (column_desc->columnType.get_comp_param()) {
-              case 8:
-                datum->intval = (int32_t)*(int8_t*)compressed;
-                break;
-              case 16:
-                datum->intval = (int32_t)*(int16_t*)compressed;
-                break;
-              default:
-                assert(false);
-            }
-            break;
-          case kENCODING_RL:
-          case kENCODING_DIFF:
-          case kENCODING_SPARSE:
-            assert(false);
-            break;
-          default:
-            assert(false);
-        }
-        break;
-      case kBIGINT:
-      case kNUMERIC:
-      case kDECIMAL:
-        result->length = sizeof(int64_t);
-        result->pointer = (int8_t*)&datum->bigintval;
-        switch (column_desc->columnType.get_compression()) {
-          case kENCODING_FIXED:
-            switch (column_desc->columnType.get_comp_param()) {
-              case 8:
-                datum->bigintval = (int64_t)*(int8_t*)compressed;
-                break;
-              case 16:
-                datum->bigintval = (int64_t)*(int16_t*)compressed;
-                break;
-              case 32:
-                datum->bigintval = (int64_t)*(int32_t*)compressed;
-                break;
-              default:
-                assert(false);
-            }
-            break;
-          case kENCODING_RL:
-          case kENCODING_DIFF:
-          case kENCODING_SPARSE:
-            assert(false);
-            break;
-          default:
-            assert(false);
-        }
-        break;
-        case kTIME:
-        case kTIMESTAMP:
-        case kDATE:
-          result->length = sizeof(time_t);
-          result->pointer = (int8_t*)&datum->timeval;
-          switch (column_desc->columnType.get_compression()) {
-            case kENCODING_FIXED:
-            case kENCODING_RL:
-            case kENCODING_DIFF:
-            case kENCODING_DICT:
-            case kENCODING_TOKDICT:
-            case kENCODING_SPARSE:
-            case kENCODING_NONE:
-              assert(false);
-              break;
-            default:
-              assert(false);
-          }
-          break;
-      default:
-        assert(false);
-    }
-  }
 }
-
-void
-ChunkIter_reset(ChunkIter *it)
-{
-  it->current_pos = it->start_pos;
-}
-
-void
-ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is_end)
-{
-  if (it->current_pos >= it->end_pos) {
-    *is_end = true;
-    result->length = 0;
-    result->pointer = nullptr;
-    result->is_null = true;
-    return;
-  }
-  *is_end = false;
-    
-  if (it->skip_size > 0) {
-    // for fixed-size
-    if (uncompress && it->chunk->get_column_desc()->columnType.get_compression() != kENCODING_NONE) {
-      it->chunk->decompress(it->current_pos, result, &it->datum);
-    } else {
-      result->length = it->skip_size;
-      result->pointer = it->current_pos;
-      result->is_null = false;
-    }
-    it->current_pos += it->skip * it->skip_size;
-  } else {
-    // @TODO(wei) ignore uncompress flag for variable length?
-    StringOffsetT offset = *(StringOffsetT*)it->current_pos;
-    result->length = *((StringOffsetT*)it->current_pos + 1) - offset;
-    result->pointer = it->chunk->get_buffer()->getMemoryPtr() + offset;
-    result->is_null = false;
-    it->current_pos += it->skip * sizeof(StringOffsetT);
-  }
-}
-

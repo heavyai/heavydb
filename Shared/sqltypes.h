@@ -263,8 +263,8 @@ class SQLTypeInfo {
     bool notnull; // nullable?  a hint, not used for type checking
     EncodingType compression; // compression scheme
     int comp_param; // compression parameter when applicable for certain schemes
-    std::string type_name[kSQLTYPE_LAST] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT", "DATE" };
-    std::string comp_name[kENCODING_LAST] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "TOKEN_DICT" };
+    static std::string type_name[kSQLTYPE_LAST];
+    static std::string comp_name[kENCODING_LAST];
 };
 
 Datum

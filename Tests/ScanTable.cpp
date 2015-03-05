@@ -29,15 +29,19 @@ using namespace Chunk_NS;
 using namespace Data_Namespace;
 
 void
-scan_chunk(const Chunk &chunk, size_t &hash)
+scan_chunk(const Chunk &chunk, size_t &hash, bool use_iter)
 {
 	ChunkIter cit = chunk.begin_iterator(0, 1);
 	VarlenDatum vd;
 	bool is_end;
 	const ColumnDescriptor *cd = chunk.get_column_desc();
 	std::hash<std::string> string_hash;
+  int nth = 0;
 	while (true) {
-		ChunkIter_get_next(&cit, true, &vd, &is_end);
+    if (use_iter)
+      ChunkIter_get_next(&cit, true, &vd, &is_end);
+    else
+      ChunkIter_get_nth(&cit, nth++, true, &vd, &is_end);
 		if (is_end)
 			break;
 		assert(!vd.is_null);
@@ -103,7 +107,32 @@ scan_table_return_hash(const string &table_name, const Catalog &cat)
             //cout << "Chunk: " << cat.get_currentDB().dbId << " " <<  td->tableId << " " <<  cd->columnId << " " << frag.fragmentId << endl;
       {
 			std::shared_ptr<Chunk> chunkp = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
-			scan_chunk(*chunkp, col_hashs[i]);
+			scan_chunk(*chunkp, col_hashs[i], true);
+      // call Chunk destructor here
+      }
+			i++;
+		}
+	}
+	return col_hashs;
+}
+
+vector<size_t>
+scan_table_return_hash_non_iter(const string &table_name, const Catalog &cat)
+{
+	const TableDescriptor *td = cat.getMetadataForTable(table_name);
+	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId);
+	vector<size_t> col_hashs(cds.size());
+	QueryInfo query_info;
+	td->fragmenter->getFragmentsForQuery(query_info);
+	for (auto frag : query_info.fragments) {
+		int i = 0;
+		for (auto cd : cds) {
+			auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
+			ChunkKey chunk_key { cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId };
+            //cout << "Chunk: " << cat.get_currentDB().dbId << " " <<  td->tableId << " " <<  cd->columnId << " " << frag.fragmentId << endl;
+      {
+			std::shared_ptr<Chunk> chunkp = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
+			scan_chunk(*chunkp, col_hashs[i], false);
       // call Chunk destructor here
       }
 			i++;

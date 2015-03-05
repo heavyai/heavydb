@@ -16,5 +16,7 @@
 
 std::vector<size_t>
 scan_table_return_hash(const std::string &table_name, const Catalog_Namespace::Catalog &cat);
+std::vector<size_t>
+scan_table_return_hash_non_iter(const std::string &table_name, const Catalog_Namespace::Catalog &cat);
 
 #endif // SCAN_TABLE_H
