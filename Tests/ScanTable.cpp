@@ -21,6 +21,7 @@
 #include "../Shared/sqltypes.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Chunk/Chunk.h"
+#include "../QueryEngine/Execute.h" // just for measure
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -98,21 +99,26 @@ scan_table_return_hash(const string &table_name, const Catalog &cat)
 	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId);
 	vector<size_t> col_hashs(cds.size());
 	QueryInfo query_info;
+  int64_t elapsed_time = 0;
+  size_t total_bytes = 0;
 	td->fragmenter->getFragmentsForQuery(query_info);
 	for (auto frag : query_info.fragments) {
 		int i = 0;
 		for (auto cd : cds) {
 			auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
 			ChunkKey chunk_key { cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId };
-            //cout << "Chunk: " << cat.get_currentDB().dbId << " " <<  td->tableId << " " <<  cd->columnId << " " << frag.fragmentId << endl;
+      total_bytes += chunk_meta_it->second.numBytes;
+      auto ms = measure<>::execution([&]() 
       {
 			std::shared_ptr<Chunk> chunkp = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
 			scan_chunk(*chunkp, col_hashs[i], true);
       // call Chunk destructor here
-      }
+      } );
+      elapsed_time += ms;
 			i++;
 		}
 	}
+  cout << "Scanned " << query_info.numTuples << " rows " << total_bytes << " bytes in " << elapsed_time << " ms. at " << (double)total_bytes/(elapsed_time/1000.0)/1e6 << " MB/sec." << std::endl;
 	return col_hashs;
 }
 
@@ -124,19 +130,24 @@ scan_table_return_hash_non_iter(const string &table_name, const Catalog &cat)
 	vector<size_t> col_hashs(cds.size());
 	QueryInfo query_info;
 	td->fragmenter->getFragmentsForQuery(query_info);
+  int64_t elapsed_time = 0;
+  size_t total_bytes = 0;
 	for (auto frag : query_info.fragments) {
 		int i = 0;
 		for (auto cd : cds) {
 			auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
 			ChunkKey chunk_key { cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId };
-            //cout << "Chunk: " << cat.get_currentDB().dbId << " " <<  td->tableId << " " <<  cd->columnId << " " << frag.fragmentId << endl;
+      total_bytes += chunk_meta_it->second.numBytes;
+      auto ms = measure<>::execution([&]() 
       {
 			std::shared_ptr<Chunk> chunkp = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
 			scan_chunk(*chunkp, col_hashs[i], false);
       // call Chunk destructor here
-      }
+      } );
+      elapsed_time += ms;
 			i++;
 		}
 	}
+  cout << "Scanned " << query_info.numTuples << " rows " << total_bytes << " bytes in " << elapsed_time << " ms. at " << (double)total_bytes/(elapsed_time/1000.0)/1e6 << " MB/sec." << std::endl;
 	return col_hashs;
 }
