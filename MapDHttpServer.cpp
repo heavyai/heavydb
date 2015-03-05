@@ -25,17 +25,17 @@ using boost::shared_ptr;
 
 namespace {
 
-TDatumType::type type_to_thrift(const SQLTypes type) {
-  if (IS_INTEGER(type)) {
+TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
+  if (type_info.is_integer()) {
     return TDatumType::INT;
   }
-  if (IS_STRING(type)) {
+  if (type_info.is_string()) {
     return TDatumType::STR;
   }
-  if (type == kFLOAT || type == kDOUBLE) {
+  if (type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE) {
     return TDatumType::REAL;
   }
-  if (IS_TIME(type)) {
+  if (type_info.is_time()) {
     return TDatumType::TIME;
   }
   CHECK(false);
@@ -110,9 +110,9 @@ public:
             if (proj_info.proj_name.empty()) {
               proj_info.proj_name = std::to_string(i);
             }
-            const auto& target_type = target->get_expr()->get_type_info();
-            proj_info.proj_type.type = type_to_thrift(target_type.get_type());
-            proj_info.proj_type.nullable = !target_type.get_notnull();
+            const auto& target_ti = target->get_expr()->get_type_info();
+            proj_info.proj_type.type = type_to_thrift(target_ti);
+            proj_info.proj_type.nullable = !target_ti.get_notnull();
             _return.proj_info.push_back(proj_info);
             ++i;
           }
@@ -156,7 +156,7 @@ public:
     const auto col_descriptors = cat_->getAllColumnMetadataForTable(td->tableId);
     for (const auto cd : col_descriptors) {
       ColumnType col_type;
-      col_type.type = type_to_thrift(cd->columnType.get_type());
+      col_type.type = type_to_thrift(cd->columnType);
       col_type.nullable = !cd->columnType.get_notnull();
       _return.insert(std::make_pair(cd->columnName, col_type));
     }
