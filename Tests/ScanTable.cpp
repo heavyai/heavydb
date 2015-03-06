@@ -21,7 +21,7 @@
 #include "../Shared/sqltypes.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Chunk/Chunk.h"
-#include "../QueryEngine/Execute.h" // just for measure
+#include "../Shared/measure.h"
 
 using namespace std;
 using namespace Catalog_Namespace;

@@ -4,10 +4,13 @@
 
 #include <boost/filesystem.hpp>
 #include <glog/logging.h>
+#include "../Shared/measure.h"
 
 #include <cstdio>
 #include <list>
 
+static int64_t total_csv_parse_time_us = 0;
+static int64_t total_insert_time_ms = 0;
 
 MapDMeta::MapDMeta(const std::string table_name)
   : table_name_(table_name)
@@ -302,6 +305,7 @@ void do_import(
     Fragmenter_Namespace::InsertData& insert_data,
     Data_Namespace::DataMgr* data_mgr,
     Fragmenter_Namespace::AbstractFragmenter* fragmenter) {
+  auto ms = measure<>::execution([&]() {
   {
     decltype(insert_data.data) empty;
     insert_data.data.swap(empty);
@@ -332,6 +336,8 @@ void do_import(
   for (const auto& import_buff : import_buffers) {
     import_buff->flush();
   }
+  });
+  total_insert_time_ms += ms;
 }
 
 const auto NULL_SMALLINT = std::numeric_limits<int16_t>::min();
@@ -340,6 +346,13 @@ const auto NULL_BIGINT = std::numeric_limits<int64_t>::min();
 const auto NULL_FLOAT = std::numeric_limits<float>::min();
 const auto NULL_DOUBLE = std::numeric_limits<double>::min();
 
+}
+
+static CsvRow *CsvParser_getRow_measured(CsvParser *csvParser) {
+  CsvRow *csvRow;
+  auto us = measure<std::chrono::microseconds>::execution([&]() { csvRow = CsvParser_getRow(csvParser); });
+  total_csv_parse_time_us += us;
+  return csvRow;
 }
 
 void CsvImporter::import() {
@@ -370,7 +383,7 @@ void CsvImporter::import() {
     insert_data.columnIds.push_back(col_desc->columnId);
   }
   size_t row_count = 0;
-  while (auto row = CsvParser_getRow(csv_parser_)) {
+  while (auto row = CsvParser_getRow_measured(csv_parser_)) {
     char **row_fields = CsvParser_getFields(row);
     CHECK_EQ(CsvParser_getNumFields(row), col_descriptors.size());
     int col_idx = 0;
@@ -443,6 +456,7 @@ void CsvImporter::import() {
     do_import(import_buffers, row_count, insert_data,
       table_meta_.getDataMgr(), table_meta_.getTableDesc()->fragmenter);
   }
+  std::cout << "Total CSV Parse Time: " << (double)total_csv_parse_time_us/1000000.0 << " Seconds.  Total Insert Time: " << (double)total_insert_time_ms/1000.0 << " Seconds." << std::endl;
 }
 
 CsvImporter::~CsvImporter() {

@@ -20,7 +20,7 @@
 #include "../DataMgr/DataMgr.h"
 #include "../Shared/sqltypes.h"
 #include "../Fragmenter/Fragmenter.h"
-#include "../QueryEngine/Execute.h"
+#include "../Shared/measure.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
