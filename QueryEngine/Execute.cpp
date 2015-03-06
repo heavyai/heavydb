@@ -2593,23 +2593,14 @@ R"(
 
   std::vector<void*> native_functions;
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuExecutionContext*>> cached_functions;
-  boost::mutex cache_mutex;
-  std::vector<std::thread> compilation_threads;
 
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
-    compilation_threads.push_back(std::thread(
-        [&cuda_llir, &func_name, &native_functions, &cached_functions, &cache_mutex, cuda_mgr, device_id] {
-      cuda_mgr->setContext(device_id);
-      auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a");
-      auto native_code = gpu_context->kernel();
-      CHECK(native_code);
-      boost::mutex::scoped_lock lock(cache_mutex);
-      native_functions.push_back(native_code);
-      cached_functions.emplace_back(native_code, nullptr, gpu_context);
-    }));
-  }
-  for (auto& compilation_thread : compilation_threads) {
-    compilation_thread.join();
+    cuda_mgr->setContext(device_id);
+    auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a");
+    auto native_code = gpu_context->kernel();
+    CHECK(native_code);
+    native_functions.push_back(native_code);
+    cached_functions.emplace_back(native_code, nullptr, gpu_context);
   }
 
   addCodeToCache(key, cached_functions, gpu_code_cache_);
