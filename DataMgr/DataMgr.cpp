@@ -61,7 +61,7 @@ namespace Data_Namespace {
             levelSizes_.push_back(numGpus);
         }
         else {
-            bufferMgrs_[1].push_back(new CpuBufferMgr(0,std::numeric_limits<unsigned int>::max(), CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,1L<<33, CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
             levelSizes_.push_back(1);
         }
     }

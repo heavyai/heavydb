@@ -46,7 +46,9 @@ void InsertOrderFragmenter::getChunkMetadata() {
                 
     for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end(); ++chunkIt) {
         int curFragmentId = chunkIt->first[fragmentSubKey];
+
         if (fragmentInfoVec_.empty() || curFragmentId != fragmentInfoVec_.back().fragmentId) {
+            maxFragmentId_ = curFragmentId;
             fragmentInfoVec_.push_back(FragmentInfo());
             fragmentInfoVec_.back().fragmentId = curFragmentId;
             fragmentInfoVec_.back().numTuples = chunkIt->second.numElements;

@@ -245,6 +245,7 @@ namespace File_Namespace {
         /// @todo Make all accesses to chunkIndex_ thread-safe
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
+
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists.");
         }
