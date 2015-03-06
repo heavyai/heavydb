@@ -29,7 +29,7 @@ namespace Analyzer {
    */
   class Expr {
     public:
-      Expr(SQLTypes t) : type_info(t), contains_agg(false) { }
+      explicit Expr(SQLTypes t) : type_info(t), contains_agg(false) { }
       Expr(SQLTypes t, int d) : type_info(t, d, 0, false), contains_agg(false) {}
       Expr(SQLTypes t, int d, int s) : type_info(t, d, s, false), contains_agg(false) {}
       Expr(const SQLTypeInfo &ti, bool has_agg = false) : type_info(ti), contains_agg(has_agg) {}

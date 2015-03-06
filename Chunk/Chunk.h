@@ -28,7 +28,7 @@ namespace Chunk_NS {
 	class Chunk {
 		public:
 			Chunk() : buffer(nullptr), index_buf(nullptr), column_desc(nullptr) {}
-			Chunk(const ColumnDescriptor *td) : buffer(nullptr), index_buf(nullptr), column_desc(td) {}
+			explicit Chunk(const ColumnDescriptor *td) : buffer(nullptr), index_buf(nullptr), column_desc(td) {}
 			Chunk(AbstractBuffer *b, AbstractBuffer *ib, const ColumnDescriptor *td) : buffer(b), index_buf(ib), column_desc(td) {};
       ~Chunk() { unpin_buffer(); }
 			const ColumnDescriptor *get_column_desc() const { return column_desc; }

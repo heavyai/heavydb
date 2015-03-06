@@ -35,7 +35,7 @@ namespace Parser {
    */
   class SQLType : public Node {
     public:
-      SQLType(SQLTypes t) : type(t), param1(-1), param2(0) {}
+      explicit SQLType(SQLTypes t) : type(t), param1(-1), param2(0) {}
       SQLType(SQLTypes t, int p1) : type(t), param1(p1), param2(0) {}
       SQLType(SQLTypes t, int p1, int p2) : type(t), param1(p1), param2(p2) {}
       SQLTypes get_type() const { return type; }
@@ -91,7 +91,7 @@ namespace Parser {
    */
   class StringLiteral : public Literal {
     public:
-      StringLiteral(std::string *s) : stringval(s) {}
+      explicit StringLiteral(std::string *s) : stringval(s) {}
       virtual ~StringLiteral() { delete stringval; }
       const std::string *get_stringval() const { return stringval; }
       virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref = false) const;
@@ -106,7 +106,7 @@ namespace Parser {
    */
   class IntLiteral : public Literal {
     public:
-      IntLiteral(int64_t i) : intval(i) {}
+      explicit IntLiteral(int64_t i) : intval(i) {}
       int64_t get_intval() const { return intval; }
       virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref = false) const;
       virtual std::string to_string() const { return boost::lexical_cast<std::string>(intval); }
@@ -120,7 +120,7 @@ namespace Parser {
    */
   class FixedPtLiteral : public Literal {
     public:
-      FixedPtLiteral(std::string *n) : fixedptval(n) {}
+      explicit FixedPtLiteral(std::string *n) : fixedptval(n) {}
       virtual ~FixedPtLiteral() { delete fixedptval; }
       const std::string *get_fixedptval() const { return fixedptval; }
       virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref = false) const;
@@ -135,7 +135,7 @@ namespace Parser {
    */
   class FloatLiteral : public Literal {
     public:
-      FloatLiteral(float f) : floatval(f) {}
+      explicit FloatLiteral(float f) : floatval(f) {}
       float get_floatval() const { return floatval; }
       virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref = false) const;
       virtual std::string to_string() const { return boost::lexical_cast<std::string>(floatval); }
@@ -149,7 +149,7 @@ namespace Parser {
    */
   class DoubleLiteral : public Literal {
     public:
-      DoubleLiteral(double d) : doubleval(d) {}
+      explicit DoubleLiteral(double d) : doubleval(d) {}
       double get_doubleval() const { return doubleval; }
       virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref = false) const;
       virtual std::string to_string() const { return boost::lexical_cast<std::string>(doubleval); }
@@ -196,7 +196,7 @@ namespace Parser {
    */
   class SubqueryExpr : public Expr {
     public:
-      SubqueryExpr(QuerySpec *q) : qualifier(kANY), query(q) {}
+      explicit SubqueryExpr(QuerySpec *q) : qualifier(kANY), query(q) {}
       virtual ~SubqueryExpr();
       const QuerySpec *get_query() const { return query; }
       SQLQualifier get_qualifier() const { return qualifier; }
@@ -318,7 +318,7 @@ namespace Parser {
    */
   class ExistsExpr : public Expr {
     public:
-      ExistsExpr(QuerySpec *q) : query(q) {}
+      explicit ExistsExpr(QuerySpec *q) : query(q) {}
       virtual ~ExistsExpr();
       const QuerySpec *get_query() const { return query; }
       virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref = false) const;
@@ -333,7 +333,7 @@ namespace Parser {
    */
   class ColumnRef : public Expr {
     public:
-      ColumnRef(std::string *n1) : table(nullptr), column(n1) {}
+      explicit ColumnRef(std::string *n1) : table(nullptr), column(n1) {}
       ColumnRef(std::string *n1, std::string *n2) : table(n1), column(n2) {}
       virtual ~ColumnRef();
       const std::string *get_table() const { return table; }
@@ -351,7 +351,7 @@ namespace Parser {
    */
   class FunctionRef : public Expr {
     public:
-      FunctionRef(std::string *n) : name(n), distinct(false), arg(nullptr) {}
+      explicit FunctionRef(std::string *n) : name(n), distinct(false), arg(nullptr) {}
       FunctionRef(std::string *n, Expr *a) : name(n), distinct(false), arg(a) {}
       FunctionRef(std::string *n, bool d, Expr *a) : name(n), distinct(d), arg(a) {} 
       virtual ~FunctionRef();
@@ -416,7 +416,7 @@ namespace Parser {
    */
   class TableRef : public Node {
     public:
-      TableRef(std::string *t) : table_name(t), range_var(nullptr) {}
+      explicit TableRef(std::string *t) : table_name(t), range_var(nullptr) {}
       TableRef(std::string *t, std::string *r) : table_name(t), range_var(r) {}
       virtual ~TableRef();
       const std::string *get_table_name() const { return table_name; }
@@ -756,7 +756,7 @@ namespace Parser {
 
   class RefreshViewStmt : public DDLStmt {
     public:
-      RefreshViewStmt(std::string *v) : view_name(v) {}
+      explicit RefreshViewStmt(std::string *v) : view_name(v) {}
       virtual ~RefreshViewStmt() { delete view_name; }
       virtual void execute(Catalog_Namespace::Catalog &catalog);
     private:
@@ -798,7 +798,7 @@ namespace Parser {
    */
   class DropDBStmt : public DDLStmt {
     public:
-      DropDBStmt(std::string *n) : db_name(n) {}
+      explicit DropDBStmt(std::string *n) : db_name(n) {}
       virtual ~DropDBStmt() { delete db_name; }
       virtual void execute(Catalog_Namespace::Catalog &catalog);
     private:

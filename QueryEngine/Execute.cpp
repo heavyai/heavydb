@@ -527,7 +527,7 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
   CHECK(else_expr);
   std::vector<llvm::Type*> case_arg_types;
   const auto case_type = case_expr->get_type_info().get_type();
-  CHECK(IS_INTEGER(case_type));
+  CHECK(case_expr->get_type_info().is_integer());
   const auto case_llvm_type = get_int_type(get_bit_width(case_type), cgen_state_->context_);
   for (const auto& expr_pair : expr_pair_list) {
     CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
@@ -1261,7 +1261,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
           case kSUM:
           case kCOUNT:
           case kAVG:
-            if (IS_INTEGER(agg_type) || IS_TIME(agg_type)) {
+            if (agg_type.is_integer() || agg_type.is_time()) {
               agg_sum(
                 &old_agg_results[actual_col_idx],
                 row.agg_results_[actual_col_idx]);
@@ -1275,7 +1275,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
             }
             break;
           case kMIN:
-            if (IS_INTEGER(agg_type) || IS_TIME(agg_type)) {
+            if (agg_type.is_integer() || agg_type.is_time()) {
               agg_min(
                 &old_agg_results[actual_col_idx],
                 row.agg_results_[actual_col_idx]);
@@ -1286,7 +1286,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
             }
             break;
           case kMAX:
-            if (IS_INTEGER(agg_type) || IS_TIME(agg_type)) {
+            if (agg_type.is_integer() || agg_type.is_time()) {
               agg_max(
                 &old_agg_results[actual_col_idx],
                 row.agg_results_[actual_col_idx]);
@@ -1343,7 +1343,7 @@ Executor::ResultRows Executor::groupBufferToResults(
         if (agg_type == kAVG) {
           CHECK(agg_expr->get_arg());
           result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
-          CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
+          CHECK(!target_expr->get_type_info().is_string());
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
           result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
           out_vec_idx += 2;
@@ -1439,36 +1439,38 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
   const auto target_exprs = get_agg_target_exprs(plan);
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
-    const auto target_type = target_expr->get_type_info().get_type();
+    const auto target_type_info = target_expr->get_type_info();
+    const auto target_type = target_type_info.get_type();
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
       result.emplace_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
                           target_expr, 0, nullptr);
       continue;
     }
-    CHECK(IS_INTEGER(target_type) || IS_TIME(target_type) || target_type == kFLOAT || target_type == kDOUBLE);
+    CHECK(target_type_info.is_integer() || target_type_info.is_time() || target_type == kFLOAT || target_type == kDOUBLE);
     const auto agg_type = agg_expr->get_aggtype();
     const auto agg_init_val = init_agg_val(agg_type, target_type);
     switch (agg_type) {
     case kAVG: {
-      const auto agg_arg_type = agg_expr->get_arg()->get_type_info().get_type();
-      CHECK(IS_INTEGER(agg_arg_type) || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
-      result.emplace_back((IS_INTEGER(agg_arg_type) || IS_TIME(agg_arg_type)) ? "agg_sum" : "agg_sum_double",
+      const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
+      const auto agg_arg_type = agg_arg_type_info.get_type();
+      CHECK(agg_arg_type_info.is_integer() || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
+      result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
-      result.emplace_back((IS_INTEGER(agg_arg_type) || IS_TIME(agg_arg_type)) ? "agg_count" : "agg_count_double",
+      result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_count" : "agg_count_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
    }
     case kMIN:
-      result.emplace_back((IS_INTEGER(target_type) || IS_TIME(target_type)) ? "agg_min" : "agg_min_double",
+      result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_min" : "agg_min_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kMAX:
-      result.emplace_back((IS_INTEGER(target_type) || IS_TIME(target_type)) ? "agg_max" : "agg_max_double",
+      result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_max" : "agg_max_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kSUM:
-      result.emplace_back((IS_INTEGER(target_type) || IS_TIME(target_type)) ? "agg_sum" : "agg_sum_double",
+      result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, nullptr);
       break;
     case kCOUNT:
@@ -1873,7 +1875,7 @@ void Executor::executePlanWithoutGroupBy(
     if (agg_type == kAVG) {
       CHECK(agg_expr->get_arg());
       result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
-      CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
+      CHECK(!target_expr->get_type_info().is_string());
       result_row.agg_results_.push_back(
         reduce_results(
           agg_type,
@@ -1889,7 +1891,7 @@ void Executor::executePlanWithoutGroupBy(
       out_vec_idx += 2;
     } else {
       result_row.agg_types_.push_back(target_expr->get_type_info());
-      CHECK(!IS_STRING(target_expr->get_type_info().get_type()));
+      CHECK(!target_expr->get_type_info().is_string());
       result_row.agg_results_.push_back(reduce_results(
         agg_type,
         target_expr->get_type_info().get_type(),
@@ -2009,9 +2011,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   auto& cat = root_plan->get_catalog();
   for (const int col_id : col_id_list) {
     const auto cd = get_column_descriptor(col_id, table_id, cat);
-    const auto col_type = cd->columnType.get_type();
     const auto col_enc = cd->columnType.get_compression();
-    if (IS_STRING(col_type)) {
+    if (cd->columnType.is_string()) {
       switch (col_enc) {
       case kENCODING_NONE: {
         auto it_ok = str_col_buffers.insert(std::make_pair(col_id, std::vector<std::string> {}));
