@@ -1,5 +1,7 @@
 #include "NvidiaKernel.h"
 
+#include "../CudaMgr/CudaMgr.h"
+
 #include <glog/logging.h>
 
 
@@ -17,9 +19,16 @@ void fill_options(CUjit_option options[], void* optionValues[]) {
 
 GpuExecutionContext::GpuExecutionContext(const std::string& llir_module,
                                          const std::string& func_name,
-                                         const std::string& lib_path)
+                                         const std::string& lib_path,
+                                         const int device_id,
+                                         const void* cuda_mgr)
   : module_(nullptr)
-  , kernel_(nullptr) {
+  , kernel_(nullptr)
+  , link_state(nullptr)
+  , ptx(nullptr)
+  , device_id_(device_id)
+  , cuda_mgr_(cuda_mgr) {
+  static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr_)->setContext(device_id_);
   const unsigned int num_options = 1;
   CUjit_option options[num_options];
   void* optionValues[num_options];
@@ -45,6 +54,7 @@ GpuExecutionContext::GpuExecutionContext(const std::string& llir_module,
 }
 
 GpuExecutionContext::~GpuExecutionContext() {
+  static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr_)->setContext(device_id_);
   auto status = cuModuleUnload(module_);
   // TODO(alex): handle this race better
   if (status == CUDA_ERROR_DEINITIALIZED) {

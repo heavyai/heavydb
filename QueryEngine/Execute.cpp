@@ -2595,8 +2595,8 @@ R"(
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuExecutionContext*>> cached_functions;
 
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
-    cuda_mgr->setContext(device_id);
-    auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a");
+    auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a",
+      device_id, cuda_mgr);
     auto native_code = gpu_context->kernel();
     CHECK(native_code);
     native_functions.push_back(native_code);

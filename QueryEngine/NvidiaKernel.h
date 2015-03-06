@@ -8,7 +8,9 @@ class GpuExecutionContext {
 public:
   GpuExecutionContext(const std::string& llir_module,
                       const std::string& func_name,
-                      const std::string& lib_path = "");
+                      const std::string& lib_path,
+                      const int device_id,
+                      const void* cuda_mgr);
   ~GpuExecutionContext();
   CUfunction kernel() {
     return kernel_;
@@ -18,6 +20,8 @@ private:
   CUfunction kernel_;
   CUlinkState link_state;
   char* ptx;
+  const int device_id_;
+  const void* cuda_mgr_;
 };
 
 #define checkCudaErrors(err) CHECK_EQ(err, CUDA_SUCCESS);
