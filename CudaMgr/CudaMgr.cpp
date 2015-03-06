@@ -14,6 +14,7 @@ CudaMgr::CudaMgr() {
     checkError(cuDeviceGetCount(&deviceCount));
     fillDeviceProperties();
     createDeviceContexts();
+    setContext(0);
 }
 
 CudaMgr::~CudaMgr() {
