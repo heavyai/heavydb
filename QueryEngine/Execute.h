@@ -137,7 +137,7 @@ public:
 
 private:
   template<class T>
-  llvm::Constant* ll_int(const T v);
+  llvm::ConstantInt* ll_int(const T v);
   llvm::Value* codegen(const Analyzer::Expr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
@@ -152,6 +152,7 @@ private:
   llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
+  llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* inlineIntNull(const SQLTypes);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
@@ -267,6 +268,9 @@ private:
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col, const bool hoist_literals);
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
+  bool skipFragment(
+    const Fragmenter_Namespace::FragmentInfo& frag_info,
+    const std::list<Analyzer::Expr*>& simple_quals);
 
   typedef std::pair<std::string, std::string> CodeCacheKey;
   typedef std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuExecutionContext>> CodeCacheVal;

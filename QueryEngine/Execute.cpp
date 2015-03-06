@@ -385,8 +385,8 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 }  // namespace
 
 template<class T>
-llvm::Constant* Executor::ll_int(const T v) {
-  return llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, cgen_state_->context_), v);
+llvm::ConstantInt* Executor::ll_int(const T v) {
+  return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
 }
 
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool hoist_literals) {
@@ -497,11 +497,12 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
   case kBOOLEAN:
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval);
   case kSMALLINT:
-    return ll_int(constant->get_constval().smallintval);
   case kINT:
-    return ll_int(constant->get_constval().intval);
   case kBIGINT:
-    return ll_int(constant->get_constval().bigintval);
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    return codegenIntConst(constant);
   case kFLOAT:
     return llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), constant->get_constval().floatval);
   case kDOUBLE:
@@ -509,10 +510,6 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
   case kVARCHAR: {
     return ll_int(getStringDictionary()->get(*constant->get_constval().stringval));
   }
-  case kTIME:
-  case kTIMESTAMP:
-  case kDATE:
-    return ll_int(constant->get_constval().timeval);
   default:
     CHECK(false);
   }
@@ -764,6 +761,24 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
   CHECK(operand->get_type_info().is_integer() || operand->get_type_info().is_string());
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
     operand_lv, inlineIntNull(operand->get_type_info().is_string() ? kINT : operand->get_type_info().get_type()));
+}
+
+llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {
+  const auto& type_info = constant->get_type_info();
+  switch (type_info.get_type()) {
+  case kSMALLINT:
+    return ll_int(constant->get_constval().smallintval);
+  case kINT:
+    return ll_int(constant->get_constval().intval);
+  case kBIGINT:
+    return ll_int(constant->get_constval().bigintval);
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    return ll_int(constant->get_constval().timeval);
+  default:
+    CHECK(false);
+  }
 }
 
 llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
@@ -1634,6 +1649,10 @@ int64_t extract_min_stat(const ChunkStats& stats, const SQLTypes type) {
     return stats.min.intval;
   case kBIGINT:
     return stats.min.bigintval;
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    return stats.min.timeval;
   default:
     CHECK(false);
   }
@@ -1650,6 +1669,10 @@ int64_t extract_max_stat(const ChunkStats& stats, const SQLTypes type) {
     return stats.max.intval;
   case kBIGINT:
     return stats.max.bigintval;
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    return stats.max.timeval;
   default:
     CHECK(false);
   }
@@ -1756,8 +1779,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const auto& fragments = query_info.fragments;
   const auto fast_group_by = canUseFastGroupBy(agg_plan, fragments, max_groups_buffer_entry_count_);
   std::pair<void*, Executor::LiteralValues> query_code_and_literals;
+  const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
   query_code_and_literals = compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(),
-    scan_plan->get_simple_quals(), scan_plan->get_quals(),
+    simple_quals, scan_plan->get_quals(),
     hoist_literals, device_type, opt_level, max_groups_buffer_entry_count_,
     fast_group_by);
   const auto current_dbid = cat.get_currentDB().dbId;
@@ -1774,6 +1798,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const size_t small_groups_buffer_size {
     (groupby_exprs.size() + agg_infos.size()) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
   for (size_t i = 0; i < fragments.size(); ++i) {
+    if (skipFragment(fragments[i], simple_quals)) {
+      continue;
+    }
     auto dispatch = [this, plan, current_dbid, device_type, i, table_id, query_code_and_literals,
         hoist_literals, num_buffers, groups_buffer_size, small_groups_buffer_size,
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs, &agg_infos]() {
@@ -2783,6 +2810,68 @@ int Executor::getLocalColumnId(const int global_col_id) const {
   const auto it = plan_state_->global_to_local_col_ids_.find(global_col_id);
   CHECK(it != plan_state_->global_to_local_col_ids_.end());
   return it->second;
+}
+
+bool Executor::skipFragment(
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const std::list<Analyzer::Expr*>& simple_quals) {
+  for (const auto simple_qual : simple_quals) {
+    const auto comp_expr = dynamic_cast<const Analyzer::BinOper*>(simple_qual);
+    if (!comp_expr) {
+      // is this possible?
+      return false;
+    }
+    const auto lhs = comp_expr->get_left_operand();
+    const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+    if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
+      return false;
+    }
+    const auto rhs = comp_expr->get_right_operand();
+    const auto rhs_const = dynamic_cast<const Analyzer::Constant*>(rhs);
+    if (!rhs_const) {
+      // is this possible?
+      return false;
+    }
+    if (lhs->get_type_info() != rhs->get_type_info()) {
+      // is this possible?
+      return false;
+    }
+    if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
+      return false;
+    }
+    const int col_id = lhs_col->get_column_id();
+    auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+    CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+    const auto chunk_type = lhs->get_type_info().get_type();
+    const auto chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
+    const auto chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
+    const auto rhs_val = codegenIntConst(rhs_const)->getSExtValue();
+    switch (comp_expr->get_optype()) {
+    case kGE:
+      if (chunk_max < rhs_val) {
+        return true;
+      }
+      break;
+    case kGT:
+      if (chunk_max <= rhs_val) {
+        return true;
+      }
+      break;
+    case kLE:
+      if (chunk_min > rhs_val) {
+        return true;
+      }
+      break;
+    case kLT:
+      if (chunk_min >= rhs_val) {
+        return true;
+      }
+      break;
+    default:
+      break;
+    }
+  }
+  return false;
 }
 
 std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> Executor::executors_;
