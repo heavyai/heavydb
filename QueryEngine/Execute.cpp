@@ -945,7 +945,7 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
 
 // TODO(alex): wip, refactor
 std::vector<int64_t*> launch_query_gpu_code(
-    CUfunction kernel,
+    const std::vector<void*>& cu_functions,
     const bool hoist_literals,
     const std::vector<int8_t>& hoisted_literals,
     std::vector<const int8_t*> col_buffers,
@@ -960,6 +960,8 @@ std::vector<int64_t*> launch_query_gpu_code(
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const int device_id) {
+  data_mgr->cudaMgr_->setContext(device_id);
+  auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
   CUdeviceptr col_buffers_dev_ptr;
   {
@@ -1022,8 +1024,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &group_by_dev_ptr,
           &small_group_by_dev_ptr
         };
-        data_mgr->cudaMgr_->setContext(device_id);
-        checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        shared_mem_size, nullptr, kernel_params, nullptr));
       } else {
@@ -1034,8 +1035,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &group_by_dev_ptr,
           &small_group_by_dev_ptr
         };
-        data_mgr->cudaMgr_->setContext(device_id);
-        checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        shared_mem_size, nullptr, kernel_params, nullptr));
       }
@@ -1064,8 +1064,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &out_vec_dev_ptr,
           &unused_dev_ptr
         };
-        data_mgr->cudaMgr_->setContext(device_id);
-        checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        0, nullptr, kernel_params, nullptr));
       } else {
@@ -1076,8 +1075,7 @@ std::vector<int64_t*> launch_query_gpu_code(
           &out_vec_dev_ptr,
           &unused_dev_ptr
         };
-        data_mgr->cudaMgr_->setContext(device_id);
-        checkCudaErrors(cuLaunchKernel(kernel, grid_size_x, grid_size_y, grid_size_z,
+        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
                                        0, nullptr, kernel_params, nullptr));
       }
@@ -1095,7 +1093,7 @@ std::vector<int64_t*> launch_query_gpu_code(
 }
 
 std::vector<int64_t*> launch_query_cpu_code(
-    void* fn_ptr,
+    const std::vector<void*>& fn_ptrs,
     const bool hoist_literals,
     const std::vector<int8_t>& hoisted_literals,
     std::vector<const int8_t*> col_buffers,
@@ -1120,10 +1118,10 @@ std::vector<int64_t*> launch_query_cpu_code(
       int64_t** out,
       int64_t** out2);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
         &out_vec[0], nullptr);
     } else {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0]);
     }
   } else {
@@ -1134,9 +1132,9 @@ std::vector<int64_t*> launch_query_cpu_code(
       int64_t** out,
       int64_t** out2);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0], nullptr);
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0], nullptr);
     } else {
-      reinterpret_cast<agg_query>(fn_ptr)(&col_buffers[0], &num_rows, &init_agg_vals[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0]);
     }
   }
@@ -1560,7 +1558,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   auto query_code_and_literals = compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, max_groups_buffer_entry_count_, std::make_tuple(false, 0L, 0L));
+    ExecutorDeviceType::CPU, opt_level, max_groups_buffer_entry_count_,
+    std::make_tuple(false, 0L, 0L), nullptr);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
@@ -1778,12 +1777,13 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   fragmenter->getFragmentsForQuery(query_info);
   const auto& fragments = query_info.fragments;
   const auto fast_group_by = canUseFastGroupBy(agg_plan, fragments, max_groups_buffer_entry_count_);
-  std::pair<void*, Executor::LiteralValues> query_code_and_literals;
+  std::pair<std::vector<void*>, Executor::LiteralValues> query_code_and_literals;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
   query_code_and_literals = compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(),
     simple_quals, scan_plan->get_quals(),
     hoist_literals, device_type, opt_level, max_groups_buffer_entry_count_,
-    fast_group_by);
+    fast_group_by,
+    cat.get_dataMgr().cudaMgr_);
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
   std::vector<ResultRows> all_fragment_results(fragments.size());
@@ -1868,7 +1868,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
 }
 
 void Executor::executePlanWithoutGroupBy(
-    void* query_native_code,
+    const std::vector<void*>& native_functions,
     const bool hoist_literals,
     const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
@@ -1882,12 +1882,12 @@ void Executor::executePlanWithoutGroupBy(
   const auto hoist_buf = serializeLiterals(hoisted_literals);
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
-      query_native_code, hoist_literals, hoist_buf,
+      native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
     boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
     out_vec = launch_query_gpu_code(
-      static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
+      native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, {}, 0,
       data_mgr, false, block_size_x_, grid_size_x_, device_id);
   }
@@ -1934,7 +1934,7 @@ void Executor::executePlanWithoutGroupBy(
 }
 
 void Executor::executePlanWithGroupBy(
-    void* query_native_code,
+    const std::vector<void*>& native_functions,
     const bool hoist_literals,
     const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
@@ -1960,7 +1960,7 @@ void Executor::executePlanWithGroupBy(
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
   const auto hoist_buf = serializeLiterals(hoisted_literals);
   if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(query_native_code, hoist_literals, hoist_buf, col_buffers,
+    launch_query_cpu_code(native_functions, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers, small_group_by_buffers);
     if (plan_state_->allocate_small_buffers_) {
       CHECK_EQ(group_by_buffers.size(), small_group_by_buffers.size());
@@ -1981,7 +1981,7 @@ void Executor::executePlanWithGroupBy(
       (group_by_col_count + agg_col_count) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
     {
       boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
-      launch_query_gpu_code(static_cast<CUfunction>(query_native_code), hoist_literals, hoist_buf,
+      launch_query_gpu_code(native_functions, hoist_literals, hoist_buf,
         col_buffers, num_rows, plan_state_->init_agg_vals_,
         group_by_buffers, groups_buffer_size,
         small_group_by_buffers, small_groups_buffer_size,
@@ -2287,7 +2287,7 @@ void Executor::nukeOldState() {
   plan_state_.reset(new PlanState());
 }
 
-std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
+std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
@@ -2297,7 +2297,8 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const size_t groups_buffer_entry_count,
-    const Executor::FastGroupByInfo& fast_group_by) {
+    const Executor::FastGroupByInfo& fast_group_by,
+    const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
   nukeOldState();
 
   cgen_state_->fast_group_by_ = fast_group_by;
@@ -2373,8 +2374,8 @@ std::pair<void*, Executor::LiteralValues> Executor::compilePlan(
   return (device_type == ExecutorDeviceType::CPU)
     ? std::make_pair(optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_),
                                            cgen_state_->getLiterals())
-    : std::make_pair(optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_, is_group_by),
-                                           cgen_state_->getLiterals());
+    : std::make_pair(optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_,
+                                           is_group_by, cuda_mgr), cgen_state_->getLiterals());
 }
 
 namespace {
@@ -2411,35 +2412,45 @@ std::string serialize_llvm_object(const T* llvm_obj) {
 
 }  // namespace
 
-void* Executor::getCodeFromCache(
+std::vector<void*> Executor::getCodeFromCache(
     const CodeCacheKey& key,
     const std::map<CodeCacheKey, CodeCacheVal>& cache) {
   auto it = cache.find(key);
   if (it != cache.end()) {
-    return std::get<0>(it->second);
+    std::vector<void*> native_functions;
+    for (auto& native_code : it->second) {
+      native_functions.push_back(std::get<0>(native_code));
+    }
+    return native_functions;
   }
-  return nullptr;
+  return {};
 }
 
 void Executor::addCodeToCache(const CodeCacheKey& key,
-                              void* native_code,
-                              std::map<CodeCacheKey, CodeCacheVal>& cache,
-                              llvm::ExecutionEngine* execution_engine,
-                              GpuExecutionContext* gpu_execution_context) {
-  CHECK(native_code);
-  auto it_ok = cache.insert(std::make_pair(key, std::make_tuple(native_code,
-    std::unique_ptr<llvm::ExecutionEngine>(execution_engine),
-    std::unique_ptr<GpuExecutionContext>(gpu_execution_context))));
+                              const std::vector<std::tuple<
+                                void*,
+                                llvm::ExecutionEngine*,
+                                GpuExecutionContext*>
+                              >& native_code,
+                              std::map<CodeCacheKey, CodeCacheVal>& cache) {
+  CHECK(!native_code.empty());
+  CodeCacheVal cache_val;
+  for (const auto& native_func : native_code) {
+    cache_val.emplace_back(std::get<0>(native_func),
+      std::unique_ptr<llvm::ExecutionEngine>(std::get<1>(native_func)),
+      std::unique_ptr<GpuExecutionContext>(std::get<2>(native_func)));
+  }
+  auto it_ok = cache.insert(std::make_pair(key, std::move(cache_val)));
   CHECK(it_ok.second);
 }
 
-void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
-                                      const bool hoist_literals,
-                                      const ExecutorOptLevel opt_level,
-                                      llvm::Module* module) {
+std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
+                                                   const bool hoist_literals,
+                                                   const ExecutorOptLevel opt_level,
+                                                   llvm::Module* module) {
   const CodeCacheKey key { serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_) };
   auto cached_code = getCodeFromCache(key, cpu_code_cache_);
-  if (cached_code) {
+  if (!cached_code.empty()) {
     return cached_code;
   }
   // run optimizations
@@ -2470,9 +2481,9 @@ void* Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
 
   auto native_code = execution_engine->getPointerToFunction(query_func);
   CHECK(native_code);
-  addCodeToCache(key, native_code, cpu_code_cache_, execution_engine, nullptr);
+  addCodeToCache(key, { { std::make_tuple(native_code, execution_engine, nullptr) } }, cpu_code_cache_);
 
-  return native_code;
+  return { native_code };
 }
 
 namespace {
@@ -2511,15 +2522,17 @@ declare i64 @ExtractFromTime(i32, i64);
 
 }  // namespace
 
-CUfunction Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
-                                           const bool hoist_literals,
-                                           const ExecutorOptLevel opt_level,
-                                           llvm::Module* module,
-                                           const bool is_group_by) {
+std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
+                                                   const bool hoist_literals,
+                                                   const ExecutorOptLevel opt_level,
+                                                   llvm::Module* module,
+                                                   const bool is_group_by,
+                                                   const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+  CHECK(cuda_mgr);
   const CodeCacheKey key { serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_) };
   auto cached_code = getCodeFromCache(key, gpu_code_cache_);
-  if (cached_code) {
-    return static_cast<CUfunction>(cached_code);
+  if (!cached_code.empty()) {
+    return cached_code;
   }
 
   auto get_group_value_func = module->getFunction("get_group_value_one_key");
@@ -2578,11 +2591,30 @@ R"(
   auto cuda_llir = cuda_llir_prologue + ss.str() +
     std::string(nvvm_annotations);
 
-  auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a");
-  auto native_code = gpu_context->kernel();
-  CHECK(native_code);
-  addCodeToCache(key, native_code, gpu_code_cache_, nullptr, gpu_context);
-  return native_code;
+  std::vector<void*> native_functions;
+  std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuExecutionContext*>> cached_functions;
+  boost::mutex cache_mutex;
+  std::vector<std::thread> compilation_threads;
+
+  for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
+    compilation_threads.push_back(std::thread(
+        [&cuda_llir, &func_name, &native_functions, &cached_functions, &cache_mutex, cuda_mgr, device_id] {
+      cuda_mgr->setContext(device_id);
+      auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a");
+      auto native_code = gpu_context->kernel();
+      CHECK(native_code);
+      boost::mutex::scoped_lock lock(cache_mutex);
+      native_functions.push_back(native_code);
+      cached_functions.emplace_back(native_code, nullptr, gpu_context);
+    }));
+  }
+  for (auto& compilation_thread : compilation_threads) {
+    compilation_thread.join();
+  }
+
+  addCodeToCache(key, cached_functions, gpu_code_cache_);
+
+  return native_functions;
 }
 
 llvm::Value* Executor::fastGroupByCodegen(

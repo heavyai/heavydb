@@ -179,7 +179,7 @@ private:
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
   void executePlanWithGroupBy(
-    void* query_native_code,
+    const std::vector<void*>& native_functions,
     const bool hoist_literals,
     const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
@@ -198,7 +198,7 @@ private:
     const size_t groups_buffer_entry_count,
     const size_t groups_buffer_size);
   void executePlanWithoutGroupBy(
-    void* query_native_code,
+    const std::vector<void*>& native_functions,
     const bool hoist_literals,
     const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
@@ -217,7 +217,7 @@ private:
     const std::list<Analyzer::Expr*>& target_exprs);
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
-  std::pair<void*, LiteralValues> compilePlan(
+  std::pair<std::vector<void*>, LiteralValues> compilePlan(
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
@@ -227,18 +227,20 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const size_t groups_buffer_entry_count,
-    const FastGroupByInfo& fast_group_by);
+    const FastGroupByInfo& fast_group_by,
+    const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
   void nukeOldState();
-  void* optimizeAndCodegenCPU(llvm::Function*,
-                              const bool hoist_literals,
-                              const ExecutorOptLevel,
-                              llvm::Module*);
-  CUfunction optimizeAndCodegenGPU(llvm::Function*,
-                                   const bool hoist_literals,
-                                   const ExecutorOptLevel,
-                                   llvm::Module*,
-                                   const bool is_group_by);
+  std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
+                                           const bool hoist_literals,
+                                           const ExecutorOptLevel,
+                                           llvm::Module*);
+  std::vector<void*> optimizeAndCodegenGPU(llvm::Function*,
+                                           const bool hoist_literals,
+                                           const ExecutorOptLevel,
+                                           llvm::Module*,
+                                           const bool is_group_by,
+                                           const CudaMgr_Namespace::CudaMgr* cuda_mgr);
   void codegenAggrCalls(
     const std::vector<AggInfo>& agg_infos,
     llvm::Value* filter_result,
@@ -272,16 +274,16 @@ private:
     const std::list<Analyzer::Expr*>& simple_quals);
 
   typedef std::pair<std::string, std::string> CodeCacheKey;
-  typedef std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuExecutionContext>> CodeCacheVal;
-  void* getCodeFromCache(
+  typedef std::vector<std::tuple<void*,
+                                 std::unique_ptr<llvm::ExecutionEngine>,
+                                 std::unique_ptr<GpuExecutionContext>>> CodeCacheVal;
+  std::vector<void*> getCodeFromCache(
     const CodeCacheKey&,
     const std::map<CodeCacheKey, CodeCacheVal>&);
   void addCodeToCache(
     const CodeCacheKey&,
-    void* native_code,
-    std::map<CodeCacheKey, CodeCacheVal>&,
-    llvm::ExecutionEngine*,
-    GpuExecutionContext*);
+    const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuExecutionContext*>>&,
+    std::map<CodeCacheKey, CodeCacheVal>&);
 
   std::vector<int8_t> serializeLiterals(const Executor::LiteralValues& literals);
 
