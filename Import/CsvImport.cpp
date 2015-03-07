@@ -2,6 +2,8 @@
 #include "csvparser.h"
 #include "../StringDictionary/StringDictionary.h"
 
+#include <iostream>
+#include <fstream>
 #include <boost/filesystem.hpp>
 #include <glog/logging.h>
 #include "../Shared/measure.h"
@@ -358,6 +360,9 @@ static CsvRow *CsvParser_getRow_measured(CsvParser *csvParser) {
 void CsvImporter::import() {
   const size_t row_buffer_size { 1000000 };
   const auto col_descriptors = table_meta_.getColumnDescriptors();
+  std::ofstream exception_file;
+  std::string file_path(csv_parser_->filePath_);
+  exception_file.open(file_path + ".exception");
   if (has_header_) {
     auto header = CsvParser_getHeader(csv_parser_);
     CHECK(header);
@@ -387,42 +392,38 @@ void CsvImporter::import() {
     char **row_fields = CsvParser_getFields(row);
     CHECK_EQ(CsvParser_getNumFields(row), col_descriptors.size());
     int col_idx = 0;
+    try {
     for (const auto col_desc : col_descriptors) {
     switch (col_desc->columnType.get_type()) {
     case kSMALLINT:
-      try {
+      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
         import_buffers[col_idx]->addSmallint(boost::lexical_cast<int16_t>(row_fields[col_idx]));
-      } catch (boost::bad_lexical_cast&) {
+      } else
         import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
-      }
       break;
     case kINT:
-      try {
+      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
         import_buffers[col_idx]->addInt(boost::lexical_cast<int32_t>(row_fields[col_idx]));
-      } catch (boost::bad_lexical_cast&) {
+      } else
         import_buffers[col_idx]->addInt(NULL_INT);
-      }
       break;
     case kBIGINT:
-      try {
+      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
         import_buffers[col_idx]->addBigint(boost::lexical_cast<int64_t>(row_fields[col_idx]));
-      } catch (boost::bad_lexical_cast&) {
+      } else
         import_buffers[col_idx]->addBigint(NULL_BIGINT);
-      }
       break;
     case kFLOAT:
-      try {
+      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
         import_buffers[col_idx]->addFloat(boost::lexical_cast<float>(row_fields[col_idx]));
-      } catch (boost::bad_lexical_cast&) {
+      } else
         import_buffers[col_idx]->addFloat(NULL_FLOAT);
-      }
       break;
     case kDOUBLE:
-      try {
+      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
         import_buffers[col_idx]->addDouble(boost::lexical_cast<double>(row_fields[col_idx]));
-      } catch (boost::bad_lexical_cast&) {
+      } else
         import_buffers[col_idx]->addDouble(NULL_DOUBLE);
-      }
       break;
     case kTEXT: {
       import_buffers[col_idx]->addString(row_fields[col_idx]);
@@ -431,18 +432,26 @@ void CsvImporter::import() {
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      try {
+      if (isdigit(*row_fields[col_idx])) {
         SQLTypeInfo ti = col_desc->columnType;
         Datum d = StringToDatum(std::string(row_fields[col_idx]), ti);
         import_buffers[col_idx]->addTime(d.timeval);
-      } catch (std::exception &) {
+      } else
         import_buffers[col_idx]->addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
-      }
       break;
     default:
       CHECK(false);
     }
     ++col_idx;
+    }
+    }
+    catch (std::exception &e) {
+      for (int i = 0; i < col_descriptors.size(); i++) {
+        if (i > 0)
+          exception_file << ",";
+        exception_file << row_fields[i];
+      }
+      exception_file << std::endl;
     }
     CsvParser_destroy_row(row);
     ++row_count;
@@ -457,6 +466,7 @@ void CsvImporter::import() {
       table_meta_.getDataMgr(), table_meta_.getTableDesc()->fragmenter);
   }
   std::cout << "Total CSV Parse Time: " << (double)total_csv_parse_time_us/1000000.0 << " Seconds.  Total Insert Time: " << (double)total_insert_time_ms/1000.0 << " Seconds." << std::endl;
+  exception_file.close();
 }
 
 CsvImporter::~CsvImporter() {
