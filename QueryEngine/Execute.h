@@ -106,7 +106,7 @@ public:
     const size_t block_size_x = 128,
     const size_t grid_size_x = 16);
 
-  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, void*> AggInfo;
+  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t> AggInfo;
   typedef std::vector<ResultRow> ResultRows;
 
   std::vector<ResultRow> execute(

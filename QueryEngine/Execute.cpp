@@ -1456,7 +1456,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
       result.emplace_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
-                          target_expr, 0, nullptr);
+                          target_expr, 0);
       continue;
     }
     CHECK(target_type_info.is_integer() || target_type_info.is_time() || target_type == kFLOAT || target_type == kDOUBLE);
@@ -1468,29 +1468,28 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
       const auto agg_arg_type = agg_arg_type_info.get_type();
       CHECK(agg_arg_type_info.is_integer() || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
       result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
-                          agg_expr->get_arg(), agg_init_val, nullptr);
+                          agg_expr->get_arg(), agg_init_val);
       result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_count" : "agg_count_double",
-                          agg_expr->get_arg(), agg_init_val, nullptr);
+                          agg_expr->get_arg(), agg_init_val);
       break;
    }
     case kMIN:
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_min" : "agg_min_double",
-                          agg_expr->get_arg(), agg_init_val, nullptr);
+                          agg_expr->get_arg(), agg_init_val);
       break;
     case kMAX:
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_max" : "agg_max_double",
-                          agg_expr->get_arg(), agg_init_val, nullptr);
+                          agg_expr->get_arg(), agg_init_val);
       break;
     case kSUM:
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
-                          agg_expr->get_arg(), agg_init_val, nullptr);
+                          agg_expr->get_arg(), agg_init_val);
       break;
     case kCOUNT:
       result.emplace_back(
         agg_expr->get_is_distinct() ? "agg_count_distinct" : "agg_count",
         agg_expr->get_arg(),
-        agg_init_val,
-        agg_expr->get_is_distinct() ? new std::set<std::pair<int64_t, int64_t*>>() : nullptr);
+        agg_init_val);
       break;
     default:
       CHECK(false);
@@ -1525,7 +1524,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
     const auto target_type = target_entry->get_expr()->get_type_info().get_type();
     agg_infos.emplace_back(
       (target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
-      target_entry->get_expr(), 0, nullptr);
+      target_entry->get_expr(), 0);
   }
   const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
   const size_t in_agg_count { targets.size() };
@@ -1744,6 +1743,8 @@ Executor::FastGroupByInfo canUseFastGroupBy(
   return std::make_tuple(false, 0L, 0L);
 }
 
+std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set { nullptr };
+
 }  // namespace
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
@@ -1760,10 +1761,18 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   CHECK(scan_plan);
   auto agg_infos = get_agg_name_and_exprs(plan);
   auto device_type = device_type_in;
+  bool serialize_execution { false };
   for (const auto& agg_info : agg_infos) {
     // TODO(alex): ount distinct can't be executed on the GPU yet, punt to CPU
     if (std::get<0>(agg_info) == "agg_count_distinct") {
       device_type = ExecutorDeviceType::CPU;
+      serialize_execution = true;
+      if (!count_distinct_set) {
+        count_distinct_set = new std::set<std::tuple<int64_t, int64_t, int64_t>>();
+      } else {
+        std::set<std::tuple<int64_t, int64_t, int64_t>> empty;
+        count_distinct_set->swap(empty);
+      }
       break;
     }
   }
@@ -1849,7 +1858,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       boost::mutex::scoped_lock lock(reduce_mutex_);
       all_fragment_results.push_back(device_results);
     };
-    query_threads.push_back(std::thread(dispatch));
+    if (serialize_execution) {
+      dispatch();
+    } else {
+      query_threads.push_back(std::thread(dispatch));
+    }
     if (query_threads.size() >= static_cast<size_t>(MAX_THREADS)) {
       for (auto& child : query_threads) {
         child.join();
@@ -1861,9 +1874,6 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     child.join();
   }
   cat.get_dataMgr().freeAllBuffers();
-  for (auto& agg_info : agg_infos) {
-    delete reinterpret_cast<std::set<std::pair<int64_t, int64_t*>>*>(std::get<3>(agg_info));
-  }
   return agg_plan ? reduceMultiDeviceResults(all_fragment_results) : results_union(all_fragment_results);
 }
 
@@ -2787,8 +2797,15 @@ void Executor::codegenAggrCalls(
         agg_expr_lv
       };
     }
-    auto count_distinct_set = std::get<3>(agg_info);
-    if (count_distinct_set) {
+    if (std::get<0>(agg_info) == "agg_count_distinct") {
+      agg_args.push_back(ll_int(static_cast<int64_t>(i)));
+      if (is_group_by) {
+        auto& groups_buffer = cgen_state_->row_func_->getArgumentList().front();
+        agg_args.push_back(&groups_buffer);
+      } else {
+        agg_args.push_back(llvm::ConstantPointerNull::get(
+          llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0)));
+      }
       agg_args.push_back(ll_int(reinterpret_cast<int64_t>(count_distinct_set)));
     }
     // Skip null values from aggregate value.
