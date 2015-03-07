@@ -387,6 +387,7 @@ void CsvImporter::import() {
   for (const auto col_desc : col_descriptors) {
     insert_data.columnIds.push_back(col_desc->columnId);
   }
+  bool has_exception = false;
   size_t row_count = 0;
   while (auto row = CsvParser_getRow_measured(csv_parser_)) {
     char **row_fields = CsvParser_getFields(row);
@@ -452,6 +453,7 @@ void CsvImporter::import() {
         exception_file << row_fields[i];
       }
       exception_file << std::endl;
+      has_exception = true;
     }
     CsvParser_destroy_row(row);
     ++row_count;
@@ -467,6 +469,9 @@ void CsvImporter::import() {
   }
   std::cout << "Total CSV Parse Time: " << (double)total_csv_parse_time_us/1000000.0 << " Seconds.  Total Insert Time: " << (double)total_insert_time_ms/1000.0 << " Seconds." << std::endl;
   exception_file.close();
+  if (has_exception) {
+    std::cout << "There were exceptions in the import.  See " + file_path + ".exception for the offending rows." << std::endl;
+  }
 }
 
 CsvImporter::~CsvImporter() {
