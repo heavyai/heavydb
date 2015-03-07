@@ -9,6 +9,7 @@
 #include "../Shared/measure.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <list>
 
 static int64_t total_csv_parse_time_us = 0;
@@ -398,31 +399,31 @@ void CsvImporter::import() {
     switch (col_desc->columnType.get_type()) {
     case kSMALLINT:
       if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addSmallint(boost::lexical_cast<int16_t>(row_fields[col_idx]));
+        import_buffers[col_idx]->addSmallint((int16_t)std::atoi(row_fields[col_idx]));
       } else
         import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
       break;
     case kINT:
       if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addInt(boost::lexical_cast<int32_t>(row_fields[col_idx]));
+        import_buffers[col_idx]->addInt(std::atoi(row_fields[col_idx]));
       } else
         import_buffers[col_idx]->addInt(NULL_INT);
       break;
     case kBIGINT:
       if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addBigint(boost::lexical_cast<int64_t>(row_fields[col_idx]));
+        import_buffers[col_idx]->addBigint(std::atoll(row_fields[col_idx]));
       } else
         import_buffers[col_idx]->addBigint(NULL_BIGINT);
       break;
     case kFLOAT:
       if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addFloat(boost::lexical_cast<float>(row_fields[col_idx]));
+        import_buffers[col_idx]->addFloat((float)std::atof(row_fields[col_idx]));
       } else
         import_buffers[col_idx]->addFloat(NULL_FLOAT);
       break;
     case kDOUBLE:
       if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addDouble(boost::lexical_cast<double>(row_fields[col_idx]));
+        import_buffers[col_idx]->addDouble(std::atof(row_fields[col_idx]));
       } else
         import_buffers[col_idx]->addDouble(NULL_DOUBLE);
       break;
