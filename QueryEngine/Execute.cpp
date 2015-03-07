@@ -1088,7 +1088,6 @@ std::vector<int64_t*> launch_query_gpu_code(
       }
     }
   }
-  data_mgr->freeAllBuffers();
   return out_vec;
 }
 
@@ -1861,6 +1860,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   for (auto& child : query_threads) {
     child.join();
   }
+  cat.get_dataMgr().freeAllBuffers();
   for (auto& agg_info : agg_infos) {
     delete reinterpret_cast<std::set<std::pair<int64_t, int64_t*>>*>(std::get<3>(agg_info));
   }
