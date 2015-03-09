@@ -43,7 +43,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
           if (td == nullptr)
             throw runtime_error("Table " + table_name + " does not exist.");
           list <const ColumnDescriptor *> col_list = cat.getAllColumnMetadataForTable(td->tableId);
-          cout << "TableId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|chunks\n";
+          cout << "TableId|ColumnId|ColumnName|Type|Dimension|Scale|NotNull|Compression|comp_param|size|chunks\n";
 
           for (auto cd : col_list) {
             cout << cd->tableId << "|";
@@ -58,6 +58,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
               cout << "false|";
             cout << cd->columnType.get_compression_name() << "|";
             cout << cd->columnType.get_comp_param() << "|";
+            cout << cd->columnType.get_size() << "|";
             cout << cd->chunks << "\n";
           }
         } else {

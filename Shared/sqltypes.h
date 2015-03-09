@@ -84,10 +84,10 @@ enum EncodingType {
 // length, precision, scale, etc.
 class SQLTypeInfo {
   public:
-    SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p) : type(t), dimension(d), scale(s), notnull(n), compression(c), comp_param(p) {}
-    SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0) {}
-    explicit SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0) {}
-    SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0) {}
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p) : type(t), dimension(d), scale(s), notnull(n), compression(c), comp_param(p), size(get_storage_size()) {}
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
+    explicit SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
+    SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0) {}
 
     inline SQLTypes get_type() const { return type; }
     inline int get_dimension() const { return dimension; }
@@ -96,11 +96,14 @@ class SQLTypeInfo {
     inline bool get_notnull() const { return notnull; }
     inline EncodingType get_compression() const { return compression; }
     inline int get_comp_param() const { return comp_param; }
+    inline int get_size() const { return size; }
     inline void set_type(SQLTypes t) { type = t; }
     inline void set_dimension(int d) { dimension = d; }
     inline void set_precision(int d) { dimension = d; }
     inline void set_scale(int s) { scale = s; }
     inline void set_notnull(bool n) { notnull = n; }
+    inline void set_size(int s) { size = s; }
+    inline void set_fixed_size() { size = get_storage_size(); }
     inline void set_compression(EncodingType c) { compression = c; }
     inline void set_comp_param(int p) { comp_param = p; }
     inline std::string get_type_name() const { return type_name[(int)type]; }
@@ -112,114 +115,6 @@ class SQLTypeInfo {
 
 		inline bool is_varlen() const { return IS_STRING(type) && compression != kENCODING_DICT; }
 
-		inline int get_storage_size() const {
-			switch (type) {
-				case kBOOLEAN:
-					return sizeof(int8_t);
-				case kSMALLINT:
-					switch (compression) {
-						case kENCODING_NONE:
-							return sizeof(int16_t);
-						case kENCODING_FIXED:
-							return comp_param/8;
-						case kENCODING_RL:
-						case kENCODING_DIFF:
-						case kENCODING_SPARSE:
-							assert(false);
-						  break;
-            default:
-              assert(false);
-					}
-					break;
-				case kINT:
-					switch (compression) {
-						case kENCODING_NONE:
-							return sizeof(int32_t);
-						case kENCODING_FIXED:
-							return comp_param/8;
-						case kENCODING_RL:
-						case kENCODING_DIFF:
-						case kENCODING_SPARSE:
-							assert(false);
-              break;
-            default:
-              assert(false);
-					}
-					break;
-				case kBIGINT:
-				case kNUMERIC:
-				case kDECIMAL:
-					switch (compression) {
-						case kENCODING_NONE:
-							return sizeof(int64_t);
-						case kENCODING_FIXED:
-							return comp_param/8;
-						case kENCODING_RL:
-						case kENCODING_DIFF:
-						case kENCODING_SPARSE:
-							assert(false);
-              break;
-            default:
-              assert(false);
-					}
-					break;
-				case kFLOAT:
-					switch (compression) {
-						case kENCODING_NONE:
-							return sizeof(float);
-						case kENCODING_FIXED:
-						case kENCODING_RL:
-						case kENCODING_DIFF:
-						case kENCODING_SPARSE:
-							assert(false);
-              break;
-            default:
-              assert(false);
-					}
-					break;
-				case kDOUBLE:
-					switch (compression) {
-						case kENCODING_NONE:
-							return sizeof(double);
-						case kENCODING_FIXED:
-						case kENCODING_RL:
-						case kENCODING_DIFF:
-						case kENCODING_SPARSE:
-							assert(false);
-              break;
-            default:
-              assert(false);
-					}
-					break;
-				case kTIME:
-				case kTIMESTAMP:
-					if (dimension > 0)
-						assert(false); // not supported yet
-				case kDATE:
-					switch (compression) {
-						case kENCODING_NONE:
-							return sizeof(time_t);
-						case kENCODING_FIXED:
-						case kENCODING_RL:
-						case kENCODING_DIFF:
-						case kENCODING_SPARSE:
-							assert(false);
-              break;
-            default:
-              assert(false);
-					}
-					break;
-        case kTEXT:
-        case kVARCHAR:
-        case kCHAR:
-          if (compression == kENCODING_DICT)
-            return sizeof(int32_t);
-          break;
-				default:
-					break;
-			}
-			return -1;
-		}
 
     inline bool operator!=(const SQLTypeInfo &rhs) const {
       return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || comp_param != rhs.get_comp_param();
@@ -234,6 +129,7 @@ class SQLTypeInfo {
       notnull = rhs.get_notnull();
       compression = rhs.get_compression();
       comp_param = rhs.get_comp_param();
+      size = rhs.get_size();
     }
     inline bool is_castable(const SQLTypeInfo &new_type_info) const {
       // can always cast between the same type but different precision/scale/encodings
@@ -263,8 +159,114 @@ class SQLTypeInfo {
     bool notnull; // nullable?  a hint, not used for type checking
     EncodingType compression; // compression scheme
     int comp_param; // compression parameter when applicable for certain schemes
+    int size; // size of the type in bytes.  -1 for variable size
     static std::string type_name[kSQLTYPE_LAST];
     static std::string comp_name[kENCODING_LAST];
+		inline int get_storage_size() const {
+			switch (type) {
+				case kBOOLEAN:
+					return sizeof(int8_t);
+				case kSMALLINT:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(int16_t);
+						case kENCODING_FIXED:
+						case kENCODING_SPARSE:
+							return comp_param/8;
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						  break;
+            default:
+              assert(false);
+					}
+					break;
+				case kINT:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(int32_t);
+						case kENCODING_FIXED:
+						case kENCODING_SPARSE:
+							return comp_param/8;
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kBIGINT:
+				case kNUMERIC:
+				case kDECIMAL:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(int64_t);
+						case kENCODING_FIXED:
+						case kENCODING_SPARSE:
+							return comp_param/8;
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kFLOAT:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(float);
+						case kENCODING_FIXED:
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+              assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kDOUBLE:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(double);
+						case kENCODING_FIXED:
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+              assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+				case kTIME:
+				case kTIMESTAMP:
+					if (dimension > 0)
+						assert(false); // not supported yet
+				case kDATE:
+					switch (compression) {
+						case kENCODING_NONE:
+							return sizeof(time_t);
+						case kENCODING_FIXED:
+						case kENCODING_RL:
+						case kENCODING_DIFF:
+						case kENCODING_SPARSE:
+              assert(false);
+              break;
+            default:
+              assert(false);
+					}
+					break;
+        case kTEXT:
+        case kVARCHAR:
+        case kCHAR:
+          if (compression == kENCODING_DICT)
+            return 0; // means unknown.  will have to be set from DictDescriptor
+          break;
+				default:
+					break;
+			}
+			return -1;
+		}
 };
 
 Datum

@@ -42,7 +42,7 @@ SysCatalog::createUser(const string &name, const string &passwd, bool issuper)
 	UserMetadata user;
 	if (getMetadataForUser(name, user))
 		throw runtime_error("User " + name + " already exists.");
-	sqliteConnector_.query("INSERT INTO mapd_users (name, passwd, issuper) VALUES ('" + name + "', '" + passwd + "', " + boost::lexical_cast<string>(issuper) + ")");
+	sqliteConnector_.query("INSERT INTO mapd_users (name, passwd, issuper) VALUES ('" + name + "', '" + passwd + "', " + std::to_string(issuper) + ")");
 }
 
 void
@@ -53,7 +53,7 @@ SysCatalog::dropUser(const string &name)
 	UserMetadata user;
 	if (!getMetadataForUser(name, user))
 		throw runtime_error("User " + name + " does not exist.");
-	sqliteConnector_.query("DELETE FROM mapd_users WHERE userid = " + boost::lexical_cast<string>(user.userId));
+	sqliteConnector_.query("DELETE FROM mapd_users WHERE userid = " + std::to_string(user.userId));
 }
 
 void
@@ -65,11 +65,11 @@ SysCatalog::alterUser(const string &name, const string *passwd, bool *is_superp)
 	if (!currentUser_.isSuper && currentUser_.userId != user.userId)
 		throw runtime_error("Only user super can change another user's password.");
 	if (passwd != nullptr && is_superp != nullptr)
-		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "', issuper = " + boost::lexical_cast<std::string>(*is_superp) + " WHERE userid = " + boost::lexical_cast<string>(user.userId));
+		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "', issuper = " + std::to_string(*is_superp) + " WHERE userid = " + std::to_string(user.userId));
 	else if (passwd != nullptr)
-		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "' WHERE userid = " + boost::lexical_cast<string>(user.userId));
+		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "' WHERE userid = " + std::to_string(user.userId));
 	else if (is_superp != nullptr)
-		sqliteConnector_.query("UPDATE mapd_users SET issuper = " + boost::lexical_cast<std::string>(*is_superp) + " WHERE userid = " + boost::lexical_cast<string>(user.userId));
+		sqliteConnector_.query("UPDATE mapd_users SET issuper = " + std::to_string(*is_superp) + " WHERE userid = " + std::to_string(user.userId));
 }
 
 void
@@ -78,10 +78,10 @@ SysCatalog::createDatabase(const string &name, int owner)
 	DBMetadata db;
 	if (getMetadataForDB(name, db))
 		throw runtime_error("Database " + name + " already exists.");
-	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + boost::lexical_cast<string>(owner) + ")");
+	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + std::to_string(owner) + ")");
 	SqliteConnector dbConn(name, basePath_+"/mapd_catalogs/");
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, partitions text)");
-	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
+	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, size integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, refresh int)");
 	dbConn.query("CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean)");
 }
@@ -216,7 +216,7 @@ void Catalog::buildMaps() {
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
     }
-    string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks from mapd_columns");
+    string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, size, chunks from mapd_columns");
     sqliteConnector_.query(columnQuery);
     numRows = sqliteConnector_.getNumRows();
     for (int r = 0; r < numRows; ++r) {
@@ -230,7 +230,8 @@ void Catalog::buildMaps() {
 				cd->columnType.set_notnull(sqliteConnector_.getData<bool>(r,6));
 				cd->columnType.set_compression((EncodingType)sqliteConnector_.getData<int>(r,7));
         cd->columnType.set_comp_param(sqliteConnector_.getData<int>(r,8));
-				cd->chunks = sqliteConnector_.getData<string>(r,9);
+        cd->columnType.set_size(sqliteConnector_.getData<int>(r,9));
+				cd->chunks = sqliteConnector_.getData<string>(r,10);
         ColumnKey columnKey(cd->tableId, cd->columnName);
         columnDescriptorMap_[columnKey] = cd;
 				ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -415,7 +416,7 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
   list<DictDescriptor> dds;
 	sqliteConnector_.query("BEGIN TRANSACTION");
 	try {
-		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions) VALUES ('" + td.tableName + "', " + boost::lexical_cast<string>(columns.size()) + ", " + boost::lexical_cast<string>(td.isView) + ", '', " + boost::lexical_cast<string>(td.fragType) + ", " + boost::lexical_cast<string>(td.maxFragRows) + ", " + boost::lexical_cast<string>(td.fragPageSize) +  ", '')");
+		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions) VALUES ('" + td.tableName + "', " + std::to_string(columns.size()) + ", " + std::to_string(td.isView) + ", '', " + std::to_string(td.fragType) + ", " + std::to_string(td.maxFragRows) + ", " + std::to_string(td.fragPageSize) +  ", '')");
 		// now get the auto generated tableid
 		sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + td.tableName + "'");
 		td.tableId = sqliteConnector_.getData<int>(0, 0);
@@ -430,15 +431,17 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
         std::string folderPath = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
         DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, folderPath);
         dds.push_back(dd);
+        if (cd.columnType.get_compression() == kENCODING_DICT)
+          cd.columnType.set_size(cd.columnType.get_comp_param()/8);
         cd.columnType.set_comp_param(dictId);
       }
-			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, chunks) VALUES (" + boost::lexical_cast<string>(td.tableId) + ", " + boost::lexical_cast<string>(colId) + ", '" + cd.columnName + "', " + boost::lexical_cast<string>(cd.columnType.get_type()) + ", " + boost::lexical_cast<string>(cd.columnType.get_dimension()) + ", " + boost::lexical_cast<string>(cd.columnType.get_scale()) + ", " + boost::lexical_cast<string>(cd.columnType.get_notnull()) + ", " + boost::lexical_cast<string>(cd.columnType.get_compression()) + ", " + boost::lexical_cast<string>(cd.columnType.get_comp_param()) + ", '')");
+			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, size, chunks) VALUES (" + std::to_string(td.tableId) + ", " + std::to_string(colId) + ", '" + cd.columnName + "', " + std::to_string(cd.columnType.get_type()) + ", " + std::to_string(cd.columnType.get_dimension()) + ", " + std::to_string(cd.columnType.get_scale()) + ", " + std::to_string(cd.columnType.get_notnull()) + ", " + std::to_string(cd.columnType.get_compression()) + ", " + std::to_string(cd.columnType.get_comp_param()) + ", " + std::to_string(cd.columnType.get_size()) + ", '')");
 			cd.tableId = td.tableId;
 			cd.columnId = colId++;
 			cds.push_back(cd);
 		}
 		if (td.isView) {
-			sqliteConnector_.query_with_text_param("INSERT INTO mapd_views (tableid, sql, materialized, storage, refresh) VALUES (" + boost::lexical_cast<string>(td.tableId) + ", ?, " + boost::lexical_cast<string>(td.isMaterialized) + ", " + boost::lexical_cast<string>(td.storageOption) + ", " + boost::lexical_cast<string>(td.refreshOption) + ")", td.viewSQL);
+			sqliteConnector_.query_with_text_param("INSERT INTO mapd_views (tableid, sql, materialized, storage, refresh) VALUES (" + std::to_string(td.tableId) + ", ?, " + std::to_string(td.isMaterialized) + ", " + std::to_string(td.storageOption) + ", " + std::to_string(td.refreshOption) + ")", td.viewSQL);
 		}
 	}
 	catch (std::exception &e) {
@@ -454,11 +457,11 @@ Catalog::dropTable(const TableDescriptor *td)
 {
 	sqliteConnector_.query("BEGIN TRANSACTION");
 	try {
-		sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+		sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + std::to_string(td->tableId));
 		sqliteConnector_.query("DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression in (" + std::to_string(kENCODING_DICT) + ", " + std::to_string(kENCODING_TOKDICT) + ") and tableid = " + std::to_string(td->tableId) + ")");
-		sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+		sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + std::to_string(td->tableId));
 		if (td->isView)
-			sqliteConnector_.query("DELETE FROM mapd_views WHERE tableid = " + boost::lexical_cast<string>(td->tableId));
+			sqliteConnector_.query("DELETE FROM mapd_views WHERE tableid = " + std::to_string(td->tableId));
     // must destroy fragmenter before deleteChunks is called.
     if (td->fragmenter != nullptr) {
       auto tableDescIt = tableDescriptorMapById_.find(td->tableId);

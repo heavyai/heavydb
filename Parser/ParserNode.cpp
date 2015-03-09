@@ -1337,6 +1337,7 @@ namespace Parser {
         } else
           throw std::runtime_error("Invalid column compression scheme " + comp);
       }
+      cd.columnType.set_fixed_size();
       columns.push_back(cd);
     }
     TableDescriptor td;

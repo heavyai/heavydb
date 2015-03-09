@@ -204,7 +204,7 @@ populate_table_random(const string &table_name, const size_t num_rows, const Cat
 			gc_strings.push_back(unique_ptr<vector<string>>(col_vec)); // add to gc list
 			p.stringsPtr = col_vec;
 		} else {
-			int8_t *col_buf = static_cast<int8_t*>(malloc(num_rows * cd->columnType.get_storage_size()));
+			int8_t *col_buf = static_cast<int8_t*>(malloc(num_rows * cd->columnType.get_size()));
 			gc_numbers.push_back(unique_ptr<int8_t>(col_buf)); // add to gc list
 			p.numbersPtr = col_buf;
 		}
