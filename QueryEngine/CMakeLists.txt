@@ -3,7 +3,7 @@ set(CMAKE_CXX_FLAGS "-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -std=c++11 -
 set(query_engine_source_files
     Codec.cpp
     Execute.cpp
-    GroupByStrategy.cpp
+    GroupByAndAggregate.cpp
     DeviceSideLaunch.cpp
     NvidiaKernel.cpp
     QueryTemplateGenerator.cpp

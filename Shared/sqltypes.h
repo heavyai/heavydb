@@ -110,6 +110,7 @@ class SQLTypeInfo {
     inline std::string get_compression_name() const { return comp_name[(int)compression]; }
     inline bool is_string() const { return IS_STRING(type); }
     inline bool is_integer() const { return IS_INTEGER(type); }
+    inline bool is_fp() const { return type == kFLOAT || type == kDOUBLE; }
     inline bool is_number() const { return IS_NUMBER(type); }
     inline bool is_time() const { return IS_TIME(type); }
 

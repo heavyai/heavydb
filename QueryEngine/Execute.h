@@ -452,6 +452,8 @@ private:
   const int db_id_;
 
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
+
+  friend class GroupByAndAggregate;
 };
 
 #endif // QUERYENGINE_EXECUTE_H
