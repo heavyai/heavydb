@@ -1,5 +1,4 @@
 #include "CsvImport.h"
-#include "csvparser.h"
 #include "../StringDictionary/StringDictionary.h"
 
 #include <iostream>
@@ -295,10 +294,16 @@ CsvImporter::CsvImporter(
     const std::string& file_path,
     const std::string& delim,
     const bool has_header)
-  : table_name_(table_name)
+  : table_name_(table_name),
+    file_path_(file_path)
   , table_meta_(table_name)
-  , has_header_(has_header)
-  , csv_parser_(CsvParser_new(file_path.c_str(), delim.c_str(), has_header)) {}
+  , has_header_(has_header) {
+    csv_parser_.set_skip_lines(1);
+    csv_parser_.init(file_path.c_str());
+    csv_parser_.set_enclosed_char(0, ENCLOSURE_NONE);
+    csv_parser_.set_field_term_char(delim[0]);
+    csv_parser_.set_line_term_char('\n');
+  }
 
 namespace {
 
@@ -351,9 +356,9 @@ const auto NULL_DOUBLE = std::numeric_limits<double>::min();
 
 }
 
-static CsvRow *CsvParser_getRow_measured(CsvParser *csvParser) {
-  CsvRow *csvRow;
-  auto us = measure<std::chrono::microseconds>::execution([&]() { csvRow = CsvParser_getRow(csvParser); });
+static csv_row CsvParser_getRow_measured(csv_parser &csvParser) {
+  csv_row csvRow;
+  auto us = measure<std::chrono::microseconds>::execution([&]() { csvRow = csvParser.get_row(); });
   total_csv_parse_time_us += us;
   return csvRow;
 }
@@ -362,8 +367,8 @@ void CsvImporter::import() {
   const size_t row_buffer_size { 1000000 };
   const auto col_descriptors = table_meta_.getColumnDescriptors();
   std::ofstream exception_file;
-  std::string file_path(csv_parser_->filePath_);
-  exception_file.open(file_path + ".exception");
+  exception_file.open(file_path_ + ".exception");
+  /*
   if (has_header_) {
     auto header = CsvParser_getHeader(csv_parser_);
     CHECK(header);
@@ -375,6 +380,7 @@ void CsvImporter::import() {
       ++col_idx;
     }
   }
+  */
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
   StringDictionary string_dict(MapDMeta::getStringDictFolder("/tmp",
     table_meta_.getDbId(), table_meta_.getTableId(), 0));
@@ -390,53 +396,53 @@ void CsvImporter::import() {
   }
   bool has_exception = false;
   size_t row_count = 0;
-  while (auto row = CsvParser_getRow_measured(csv_parser_)) {
-    char **row_fields = CsvParser_getFields(row);
-    CHECK_EQ(CsvParser_getNumFields(row), col_descriptors.size());
+  while (csv_parser_.has_more_rows()) {
+    auto row = CsvParser_getRow_measured(csv_parser_);
+    CHECK_EQ(row.size(), col_descriptors.size());
     int col_idx = 0;
     try {
     for (const auto col_desc : col_descriptors) {
     switch (col_desc->columnType.get_type()) {
     case kSMALLINT:
-      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addSmallint((int16_t)std::atoi(row_fields[col_idx]));
+      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+        import_buffers[col_idx]->addSmallint((int16_t)std::atoi(row[col_idx].c_str()));
       } else
         import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
       break;
     case kINT:
-      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addInt(std::atoi(row_fields[col_idx]));
+      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+        import_buffers[col_idx]->addInt(std::atoi(row[col_idx].c_str()));
       } else
         import_buffers[col_idx]->addInt(NULL_INT);
       break;
     case kBIGINT:
-      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addBigint(std::atoll(row_fields[col_idx]));
+      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+        import_buffers[col_idx]->addBigint(std::atoll(row[col_idx].c_str()));
       } else
         import_buffers[col_idx]->addBigint(NULL_BIGINT);
       break;
     case kFLOAT:
-      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addFloat((float)std::atof(row_fields[col_idx]));
+      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+        import_buffers[col_idx]->addFloat((float)std::atof(row[col_idx].c_str()));
       } else
         import_buffers[col_idx]->addFloat(NULL_FLOAT);
       break;
     case kDOUBLE:
-      if (isdigit(*row_fields[col_idx]) || *row_fields[col_idx] == '-') {
-        import_buffers[col_idx]->addDouble(std::atof(row_fields[col_idx]));
+      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+        import_buffers[col_idx]->addDouble(std::atof(row[col_idx].c_str()));
       } else
         import_buffers[col_idx]->addDouble(NULL_DOUBLE);
       break;
     case kTEXT: {
-      import_buffers[col_idx]->addString(row_fields[col_idx]);
+      import_buffers[col_idx]->addString(row[col_idx]);
       break;
     }
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
-      if (isdigit(*row_fields[col_idx])) {
+      if (isdigit(row[col_idx][0])) {
         SQLTypeInfo ti = col_desc->columnType;
-        Datum d = StringToDatum(std::string(row_fields[col_idx]), ti);
+        Datum d = StringToDatum(row[col_idx], ti);
         import_buffers[col_idx]->addTime(d.timeval);
       } else
         import_buffers[col_idx]->addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
@@ -451,12 +457,11 @@ void CsvImporter::import() {
       for (int i = 0; i < col_descriptors.size(); i++) {
         if (i > 0)
           exception_file << ",";
-        exception_file << row_fields[i];
+        exception_file << row[i];
       }
       exception_file << std::endl;
       has_exception = true;
     }
-    CsvParser_destroy_row(row);
     ++row_count;
     if (row_count == row_buffer_size) {
       do_import(import_buffers, row_count, insert_data,
@@ -471,10 +476,9 @@ void CsvImporter::import() {
   std::cout << "Total CSV Parse Time: " << (double)total_csv_parse_time_us/1000000.0 << " Seconds.  Total Insert Time: " << (double)total_insert_time_ms/1000.0 << " Seconds." << std::endl;
   exception_file.close();
   if (has_exception) {
-    std::cout << "There were exceptions in the import.  See " + file_path + ".exception for the offending rows." << std::endl;
+    std::cout << "There were exceptions in the import.  See " + file_path_ + ".exception for the offending rows." << std::endl;
   }
 }
 
 CsvImporter::~CsvImporter() {
-  CsvParser_destroy(csv_parser_);
 }

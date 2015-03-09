@@ -1,7 +1,7 @@
 #ifndef IMPORT_CSVIMPORT_H
 #define IMPORT_CSVIMPORT_H
 
-#include "csvparser.h"
+#include <csv_parser/csv_parser.hpp>
 
 #include "../Catalog/Catalog.h"
 
@@ -44,14 +44,15 @@ public:
     const std::string& table_name,
     const std::string& file_path,
     const std::string& delim = ",",
-    const bool has_headers = true);
+    const bool has_headers = false);
   void import();
   ~CsvImporter();
 private:
   const std::string table_name_;
+  const std::string file_path_;
   MapDMeta table_meta_;
   const bool has_header_;
-  CsvParser* csv_parser_;
+  csv_parser csv_parser_;
 };
 
 #endif  // IMPORT_CSVIMPORT_H
