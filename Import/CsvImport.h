@@ -1,7 +1,7 @@
 #ifndef IMPORT_CSVIMPORT_H
 #define IMPORT_CSVIMPORT_H
 
-#include <csv_parser/csv_parser.hpp>
+#include "./csv_parser.hpp"
 
 #include "../Catalog/Catalog.h"
 
