@@ -401,60 +401,60 @@ void CsvImporter::import() {
     CHECK_EQ(row.size(), col_descriptors.size());
     int col_idx = 0;
     try {
-    for (const auto col_desc : col_descriptors) {
-    switch (col_desc->columnType.get_type()) {
-    case kSMALLINT:
-      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
-        import_buffers[col_idx]->addSmallint((int16_t)std::atoi(row[col_idx].c_str()));
-      } else
-        import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
-      break;
-    case kINT:
-      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
-        import_buffers[col_idx]->addInt(std::atoi(row[col_idx].c_str()));
-      } else
-        import_buffers[col_idx]->addInt(NULL_INT);
-      break;
-    case kBIGINT:
-      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
-        import_buffers[col_idx]->addBigint(std::atoll(row[col_idx].c_str()));
-      } else
-        import_buffers[col_idx]->addBigint(NULL_BIGINT);
-      break;
-    case kFLOAT:
-      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
-        import_buffers[col_idx]->addFloat((float)std::atof(row[col_idx].c_str()));
-      } else
-        import_buffers[col_idx]->addFloat(NULL_FLOAT);
-      break;
-    case kDOUBLE:
-      if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
-        import_buffers[col_idx]->addDouble(std::atof(row[col_idx].c_str()));
-      } else
-        import_buffers[col_idx]->addDouble(NULL_DOUBLE);
-      break;
-    case kTEXT: {
-      import_buffers[col_idx]->addString(row[col_idx]);
-      break;
-    }
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      if (isdigit(row[col_idx][0])) {
-        SQLTypeInfo ti = col_desc->columnType;
-        Datum d = StringToDatum(row[col_idx], ti);
-        import_buffers[col_idx]->addTime(d.timeval);
-      } else
-        import_buffers[col_idx]->addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
-      break;
-    default:
-      CHECK(false);
-    }
-    ++col_idx;
-    }
-    }
-    catch (std::exception &e) {
-      for (int i = 0; i < col_descriptors.size(); i++) {
+      for (const auto col_desc : col_descriptors) {
+        switch (col_desc->columnType.get_type()) {
+        case kSMALLINT:
+          if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+            import_buffers[col_idx]->addSmallint((int16_t)std::atoi(row[col_idx].c_str()));
+          } else
+            import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
+          break;
+        case kINT:
+          if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+            import_buffers[col_idx]->addInt(std::atoi(row[col_idx].c_str()));
+          } else
+            import_buffers[col_idx]->addInt(NULL_INT);
+          break;
+        case kBIGINT:
+          if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+            import_buffers[col_idx]->addBigint(std::atoll(row[col_idx].c_str()));
+          } else
+            import_buffers[col_idx]->addBigint(NULL_BIGINT);
+          break;
+        case kFLOAT:
+          if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+            import_buffers[col_idx]->addFloat((float)std::atof(row[col_idx].c_str()));
+          } else
+            import_buffers[col_idx]->addFloat(NULL_FLOAT);
+          break;
+        case kDOUBLE:
+          if (isdigit(row[col_idx][0]) || row[col_idx][0] == '-') {
+            import_buffers[col_idx]->addDouble(std::atof(row[col_idx].c_str()));
+          } else
+            import_buffers[col_idx]->addDouble(NULL_DOUBLE);
+          break;
+        case kTEXT: {
+          import_buffers[col_idx]->addString(row[col_idx]);
+          break;
+        }
+        case kTIME:
+        case kTIMESTAMP:
+        case kDATE:
+          if (isdigit(row[col_idx][0])) {
+            SQLTypeInfo ti = col_desc->columnType;
+            Datum d = StringToDatum(row[col_idx], ti);
+            import_buffers[col_idx]->addTime(d.timeval);
+          } else
+            import_buffers[col_idx]->addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+          break;
+        default:
+          CHECK(false);
+        }
+        ++col_idx;
+      }
+      ++row_count;
+    } catch (const std::exception&) {
+      for (size_t i = 0; i < col_descriptors.size(); i++) {
         if (i > 0)
           exception_file << ",";
         exception_file << row[i];
@@ -462,7 +462,6 @@ void CsvImporter::import() {
       exception_file << std::endl;
       has_exception = true;
     }
-    ++row_count;
     if (row_count == row_buffer_size) {
       do_import(import_buffers, row_count, insert_data,
         table_meta_.getDataMgr(), table_meta_.getTableDesc()->fragmenter);
