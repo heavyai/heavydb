@@ -95,6 +95,27 @@ private:
   friend class Executor;
 };
 
+inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
+  switch (width) {
+  case 64:
+    return llvm::Type::getInt64Ty(context);
+  case 32:
+    return llvm::Type::getInt32Ty(context);
+    break;
+  case 16:
+    return llvm::Type::getInt16Ty(context);
+    break;
+  case 8:
+    return llvm::Type::getInt8Ty(context);
+    break;
+  case 1:
+    return llvm::Type::getInt1Ty(context);
+    break;
+  default:
+    LOG(FATAL) << "Unsupported integer width: " << width;
+  }
+}
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
     "Host hardware not supported, unexpected size of float / double.");
@@ -136,7 +157,10 @@ public:
 
 private:
   template<class T>
-  llvm::ConstantInt* ll_int(const T v);
+  llvm::ConstantInt* ll_int(const T v) {
+    return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(
+      get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
+  }
   llvm::Value* codegen(const Analyzer::Expr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
@@ -152,7 +176,7 @@ private:
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
-  llvm::Value* inlineIntNull(const SQLTypes);
+  llvm::ConstantInt* inlineIntNull(const SQLTypes);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
     const Planner::RootPlan* root_plan,
@@ -218,6 +242,8 @@ private:
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   std::pair<std::vector<void*>, LiteralValues> compilePlan(
+    const Planner::AggPlan* agg_plan,
+    const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,

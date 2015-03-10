@@ -30,7 +30,6 @@ public:
     OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
     MultiCol,
     Scan,                   // the plan is not a group by plan
-    Unknown
   };
 
   // Private: each thread has its own memory, no atomic operations required

@@ -9,11 +9,11 @@ int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
   case kSMALLINT:
     return datum.smallintval;
-  case kINT:
   case kCHAR:
   case kVARCHAR:
   case kTEXT:
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
+  case kINT:
     return datum.intval;
   case kBIGINT:
     return datum.bigintval;
@@ -45,8 +45,8 @@ std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
   return result;
 }
 
-int64_t get_agg_count(const Planner::Plan* plan) {
-  int64_t agg_count { 0 };
+int32_t get_agg_count(const Planner::Plan* plan) {
+  int32_t agg_count { 0 };
   const auto target_exprs = get_agg_target_exprs(plan);
   for (auto target_expr : target_exprs) {
     CHECK(target_expr);
@@ -97,12 +97,12 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
     return { GroupByAndAggregate::ColRangeType::OneColGuessedRange, 0, guessed_range_max };
   }
   const int group_col_id = group_col_expr->get_column_id();
-  const auto group_by_ti = group_col_expr->get_type_info();
+  const auto& group_by_ti = group_col_expr->get_type_info();
   switch (group_by_ti.get_type()) {
   case kTEXT:
   case kCHAR:
   case kVARCHAR:
-    CHECK(group_by_ti.get_compression() != kENCODING_DICT);
+    CHECK_EQ(kENCODING_DICT, group_by_ti.get_compression());
   case kSMALLINT:
   case kINT:
   case kBIGINT: {
@@ -123,8 +123,11 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
       max_val
     };
   }
+  case kFLOAT:
+  case kDOUBLE:
+    return { GroupByAndAggregate::ColRangeType::OneColGuessedRange, 0, guessed_range_max };
   default:
-    return { GroupByAndAggregate::ColRangeType::Unknown, 0, 0 };
+    return { GroupByAndAggregate::ColRangeType::MultiCol, 0, 0 };
   }
 }
 
@@ -159,91 +162,144 @@ void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
   LL_BUILDER.CreateCondBr(filter_result_, filter_true, filter_false);
   LL_BUILDER.SetInsertPoint(filter_true);
 
+  const auto& groupby_list = agg_plan_->get_groupby_list();
+
+  auto arg_it = executor_->cgen_state_->row_func_->arg_begin();
+  auto groups_buffer = arg_it++;
+
+  llvm::Value* agg_out_start_ptr { nullptr };
+
   switch (col_range_info_.hash_type_) {
   case ColRangeType::OneColKnownRange:
-  case ColRangeType::OneColConsecutiveKeys: {
-    CHECK_EQ(1, agg_plan_->get_groupby_list().size());
-    const auto group_min_val = col_range_info_.min;
-    const auto group_expr = agg_plan_->get_groupby_list().front();
+  case ColRangeType::OneColConsecutiveKeys:
+  case ColRangeType::OneColGuessedRange: {
+    CHECK_EQ(1, groupby_list.size());
+    const auto group_expr = groupby_list.front();
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
-    auto& groups_buffer = ROW_FUNC->getArgumentList().front();
-    const auto agg_out_start_ptr = emitCall(
-      "get_group_value_fast",
+    auto small_groups_buffer = arg_it;
+    if (col_range_info_.hash_type_ == ColRangeType::OneColGuessedRange ||
+        col_range_info_.max - col_range_info_.min > static_cast<int64_t>(executor_->max_groups_buffer_entry_count_)) {
+      executor_->plan_state_->allocate_small_buffers_ = true;
+      agg_out_start_ptr = emitCall(
+        "get_group_value_one_key",
+        {
+          groups_buffer,
+          LL_INT(static_cast<int32_t>(executor_->max_groups_buffer_entry_count_)),
+          small_groups_buffer,
+          LL_INT(static_cast<int32_t>(executor_->small_groups_buffer_entry_count_)),
+          toDoublePrecision(group_expr_lv),
+          LL_INT(col_range_info_.min),
+          LL_INT(get_agg_count(agg_plan_))
+        });
+    } else {
+      agg_out_start_ptr = emitCall(
+        "get_group_value_fast",
+        {
+          groups_buffer,
+          toDoublePrecision(group_expr_lv),
+          LL_INT(col_range_info_.min),
+          LL_INT(get_agg_count(agg_plan_))
+        });
+    }
+    break;
+  }
+  case ColRangeType::MultiCol: {
+    auto key_size_lv = LL_INT(static_cast<int32_t>(groupby_list.size()));
+    // create the key buffer
+    auto group_key = LL_BUILDER.CreateAlloca(
+      llvm::Type::getInt64Ty(LL_CONTEXT),
+      key_size_lv);
+    int32_t subkey_idx = 0;
+    for (const auto group_expr : groupby_list) {
+      const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
+      // store the sub-key to the buffer
+      LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
+    }
+    agg_out_start_ptr = emitCall(
+      "get_group_value",
       {
-        &groups_buffer,
-        group_expr_lv,
-        LL_INT(group_min_val),
-        LL_INT(get_agg_count(agg_plan_))
+        groups_buffer,
+        LL_INT(static_cast<int32_t>(executor_->max_groups_buffer_entry_count_)),
+        group_key,
+        key_size_lv,
+        LL_INT(static_cast<int32_t>(get_agg_count(agg_plan_)))
       });
-    codegenAggCalls(agg_out_start_ptr, device_type, hoist_literals);
     break;
   }
   default:
     CHECK(false);
     break;
   }
-  CHECK(false);
+
+  CHECK(agg_out_start_ptr);
+  codegenAggCalls(agg_out_start_ptr, device_type, hoist_literals);
+
+  LL_BUILDER.CreateBr(filter_false);
+  LL_BUILDER.SetInsertPoint(filter_false);
+  LL_BUILDER.CreateRetVoid();
+}
+
+llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
+                                           const std::vector<llvm::Value*>& args) {
+  return LL_BUILDER.CreateCall(getFunction(fname), args);
 }
 
 namespace {
 
-std::string agg_fn_name(const Analyzer::Expr* target_expr) {
-  std::string agg_fp_suffix { "_double" };
-  const auto target_expr_ti = target_expr->get_type_info();
+struct AggFnInfo {
+  bool is_agg;
+  SQLAgg agg_kind;
+  SQLTypes agg_arg_type;
+  bool skip_null_val;
+  bool is_distinct;
+};
+
+AggFnInfo agg_fn_info(const Analyzer::Expr* target_expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   if (!agg_expr) {
-    return "agg_id" + (target_expr_ti.is_fp() ? agg_fp_suffix : "");
+    return { false, kCOUNT, target_expr->get_type_info().get_type(), false, false };
   }
   const auto agg_type = agg_expr->get_aggtype();
-  const auto agg_arg_ti = agg_expr->get_arg()->get_type_info();
-  agg_fp_suffix = (agg_arg_ti.is_fp() ? agg_fp_suffix : "");
-  switch (agg_type) {
-  case kCOUNT: {
-    return "agg_count" + agg_fp_suffix;
+  const auto agg_arg = agg_expr->get_arg();
+  if (!agg_arg) {
+    CHECK_EQ(kCOUNT, agg_type);
+    CHECK(!agg_expr->get_is_distinct());
+    return { true, kCOUNT, kNULLT, false, false };
   }
-  case kMIN: {
-    return "agg_min" + agg_fp_suffix;
+  const auto& agg_arg_ti = agg_arg->get_type_info();
+  bool is_distinct { false };
+  if (agg_expr->get_aggtype() == kCOUNT) {
+    CHECK(agg_expr->get_is_distinct());
+    CHECK(!agg_arg_ti.is_fp());
+    is_distinct = true;
   }
-  case kMAX: {
-    return "agg_max" + agg_fp_suffix;
-  }
-  case kSUM: {
-    return "agg_sum" + agg_fp_suffix;
-  }
-  default:
-    CHECK(false);
-  }
+  // TODO(alex): null support for all types
+  bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
+  return { true, agg_expr->get_aggtype(), agg_arg_ti.get_type(),
+           skip_null, is_distinct };
 }
 
-size_t next_agg_out_off(const size_t crt_off, const Analyzer::Expr* target_expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-  if (!agg_expr) {
-    return crt_off + 1;
+std::vector<std::string> agg_fn_base_names(const AggFnInfo& agg_fn_info) {
+  if (!agg_fn_info.is_agg) {
+    return { "agg_id" };
   }
-  const auto agg_type = agg_expr->get_aggtype();
-  return crt_off + (agg_type == kAVG ? 2 : 1);
+  switch (agg_fn_info.agg_kind) {
+  case kAVG:
+    return { "agg_sum", "agg_count" };
+  case kCOUNT:
+    return { agg_fn_info.is_distinct ? "agg_count_distinct" : "agg_count" };
+  case kMAX:
+    return { "agg_max" };
+  case kMIN:
+    return { "agg_min" };
+  case kSUM:
+    return { "agg_sum" };
+  }
 }
 
 }  // namespace
 
-void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
-                                      const ExecutorDeviceType device_type,
-                                      const bool hoist_literals) {
-  const auto& target_list = agg_plan_->get_targetlist();
-  size_t agg_out_off { 0 };
-  for (auto target : target_list) {
-    auto target_expr = target->get_expr();
-    CHECK(target_expr);
-    emitCall(
-      agg_fn_name(target_expr),
-      {
-        LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off)),
-        toDoublePrecision(codegenAggArg(target_expr, hoist_literals))
-      });
-    agg_out_off = next_agg_out_off(agg_out_off, target_expr);
-  }
-  CHECK(false);
-}
+extern std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set;
 
 llvm::Value* GroupByAndAggregate::toDoublePrecision(llvm::Value* val) {
   if (val->getType()->isIntegerTy()) {
@@ -257,6 +313,48 @@ llvm::Value* GroupByAndAggregate::toDoublePrecision(llvm::Value* val) {
   return val->getType()->isFloatTy()
     ? LL_BUILDER.CreateFPExt(val, llvm::Type::getDoubleTy(LL_CONTEXT))
     : val;
+}
+
+void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
+                                      const ExecutorDeviceType device_type,
+                                      const bool hoist_literals) {
+  const auto& target_list = agg_plan_->get_targetlist();
+  int32_t agg_out_off { 0 };
+  for (auto target : target_list) {
+    auto target_expr = target->get_expr();
+    CHECK(target_expr);
+    const auto agg_info = agg_fn_info(target_expr);
+    for (const auto& agg_base_name : agg_fn_base_names(agg_info)) {
+      auto target_lv = toDoublePrecision(codegenAggArg(target_expr, hoist_literals));
+      std::vector<llvm::Value*> agg_args {
+        LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off)),
+        // TODO(alex): simply use target_lv once we're done with refactoring,
+        //             for now just generate the same IR for easy debugging
+        (agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct)
+          ? LL_INT(0L)
+          : target_lv
+      };
+      if (agg_info.is_distinct) {
+        agg_args.push_back(LL_INT(static_cast<int64_t>(agg_out_off)));
+        auto& groups_buffer = executor_->cgen_state_->row_func_->getArgumentList().front();
+        agg_args.push_back(&groups_buffer);
+        agg_args.push_back(LL_INT(reinterpret_cast<int64_t>(count_distinct_set)));
+      }
+      std::string agg_fname { agg_base_name };
+      if (agg_info.agg_arg_type == kFLOAT || agg_info.agg_arg_type == kDOUBLE) {
+        agg_fname += "_double";
+      }
+      if (agg_info.skip_null_val) {
+        agg_fname += "_skip_val";
+        auto null_lv = toDoublePrecision(executor_->inlineIntNull(agg_info.agg_arg_type));
+        agg_args.push_back(null_lv);
+      }
+      emitCall(
+        device_type == ExecutorDeviceType::GPU ? agg_fname + "_shared" : agg_fname,
+        agg_args);
+      ++agg_out_off;
+    }
+  }
 }
 
 llvm::Value* GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,

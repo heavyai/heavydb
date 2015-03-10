@@ -1,4 +1,5 @@
 #include "Execute.h"
+#include "GroupByAndAggregate.h"
 #include "Codec.h"
 #include "NvidiaKernel.h"
 #include "Fragmenter/Fragmenter.h"
@@ -296,27 +297,6 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const bool hoist_l
 
 namespace {
 
-llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
-  switch (width) {
-  case 64:
-    return llvm::Type::getInt64Ty(context);
-  case 32:
-    return llvm::Type::getInt32Ty(context);
-    break;
-  case 16:
-    return llvm::Type::getInt16Ty(context);
-    break;
-  case 8:
-    return llvm::Type::getInt8Ty(context);
-    break;
-  case 1:
-    return llvm::Type::getInt1Ty(context);
-    break;
-  default:
-    LOG(FATAL) << "Unsupported integer width: " << width;
-  }
-}
-
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   const auto enc_type = col_var->get_compression();
   const auto& type_info = col_var->get_type_info();
@@ -383,11 +363,6 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 }
 
 }  // namespace
-
-template<class T>
-llvm::ConstantInt* Executor::ll_int(const T v) {
-  return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
-}
 
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool hoist_literals) {
   // only generate the decoding code once; if a column has been previously
@@ -781,7 +756,7 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
   }
 }
 
-llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
+llvm::ConstantInt* Executor::inlineIntNull(const SQLTypes type) {
   switch (type) {
   case kSMALLINT:
     return ll_int(std::numeric_limits<int16_t>::min());
@@ -1554,7 +1529,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
-  auto query_code_and_literals = compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
+  auto query_code_and_literals = compilePlan(nullptr, {}, agg_infos, { nullptr }, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
     ExecutorDeviceType::CPU, opt_level, max_groups_buffer_entry_count_,
     std::make_tuple(false, 0L, 0L), nullptr);
@@ -1743,9 +1718,9 @@ Executor::FastGroupByInfo canUseFastGroupBy(
   return std::make_tuple(false, 0L, 0L);
 }
 
-std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set { nullptr };
-
 }  // namespace
+
+std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set { nullptr };
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
     const Planner::Plan* plan,
@@ -1787,7 +1762,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const auto fast_group_by = canUseFastGroupBy(agg_plan, fragments, max_groups_buffer_entry_count_);
   std::pair<std::vector<void*>, Executor::LiteralValues> query_code_and_literals;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
-  query_code_and_literals = compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(),
+  query_code_and_literals = compilePlan(
+    dynamic_cast<const Planner::AggPlan*>(plan), query_info, agg_infos,
+    groupby_exprs, scan_plan->get_col_list(),
     simple_quals, scan_plan->get_quals(),
     hoist_literals, device_type, opt_level, max_groups_buffer_entry_count_,
     fast_group_by,
@@ -2298,6 +2275,8 @@ void Executor::nukeOldState() {
 }
 
 std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
+    const Planner::AggPlan* agg_plan,
+    const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
@@ -2356,9 +2335,14 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
     for (const auto& agg_info : agg_infos) {
       plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
     }
-    codegenAggrCalls(agg_infos, filter_lv,
+    if (agg_plan && is_group_by) {
+      GroupByAndAggregate group_by_and_aggregate(this, filter_lv, agg_plan, query_info);
+      group_by_and_aggregate.codegen(device_type, hoist_literals);
+    } else {
+      codegenAggrCalls(agg_infos, filter_lv,
         groupby_list, groups_buffer_entry_count,
         cgen_state_->module_, hoist_literals, device_type);
+    }
   }
 
   // iterate through all the instruction in the query template function and
@@ -2818,7 +2802,7 @@ void Executor::codegenAggrCalls(
         ? module->getFunction(std::get<0>(agg_info) + "_skip_val_shared")
         : module->getFunction(std::get<0>(agg_info) + "_skip_val");
       CHECK(agg_func_skip_val);
-      auto null_lv = inlineIntNull(aggr_col->get_type_info().get_type());
+      llvm::Value* null_lv = inlineIntNull(aggr_col->get_type_info().get_type());
       if (aggr_col->get_type_info().get_type() != kBIGINT) {
         null_lv = cgen_state_->ir_builder_.CreateCast(
           llvm::Instruction::CastOps::SExt,
