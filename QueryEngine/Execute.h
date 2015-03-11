@@ -252,7 +252,6 @@ private:
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const size_t groups_buffer_entry_count,
     const FastGroupByInfo& fast_group_by,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 

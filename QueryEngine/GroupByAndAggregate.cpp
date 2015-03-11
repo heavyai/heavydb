@@ -152,7 +152,7 @@ GroupByAndAggregate::GroupByAndAggregate(
 }
 
 void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
-                              const bool hoist_literals) {
+                                  const bool hoist_literals) {
   auto filter_true = llvm::BasicBlock::Create(
     LL_CONTEXT, "filter_true", ROW_FUNC);
   auto filter_false = llvm::BasicBlock::Create(
@@ -403,7 +403,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
 }
 
 llvm::Value* GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,
-                                            const bool hoist_literals) {
+                                                const bool hoist_literals) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   return agg_expr
     ? executor_->codegen(agg_expr->get_arg(), hoist_literals)

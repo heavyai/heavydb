@@ -1531,7 +1531,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   auto query_code_and_literals = compilePlan(result_plan, {}, agg_infos, { nullptr }, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, max_groups_buffer_entry_count_,
+    ExecutorDeviceType::CPU, opt_level,
     std::make_tuple(false, 0L, 0L), nullptr);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
@@ -1762,11 +1762,10 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const auto fast_group_by = canUseFastGroupBy(agg_plan, fragments, max_groups_buffer_entry_count_);
   std::pair<std::vector<void*>, Executor::LiteralValues> query_code_and_literals;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
-  query_code_and_literals = compilePlan(
-    plan, query_info, agg_infos,
+  query_code_and_literals = compilePlan(plan, query_info, agg_infos,
     groupby_exprs, scan_plan->get_col_list(),
     simple_quals, scan_plan->get_quals(),
-    hoist_literals, device_type, opt_level, max_groups_buffer_entry_count_,
+    hoist_literals, device_type, opt_level,
     fast_group_by,
     cat.get_dataMgr().cudaMgr_);
   const auto current_dbid = cat.get_currentDB().dbId;
@@ -2285,7 +2284,6 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const size_t groups_buffer_entry_count,
     const Executor::FastGroupByInfo& fast_group_by,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
   nukeOldState();
