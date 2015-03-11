@@ -267,34 +267,12 @@ private:
                                            llvm::Module*,
                                            const bool is_group_by,
                                            const CudaMgr_Namespace::CudaMgr* cuda_mgr);
-  void codegenAggrCalls(
-    const std::vector<AggInfo>& agg_infos,
-    llvm::Value* filter_result,
-    const std::list<Analyzer::Expr*>& group_by_cols,
-    const int32_t groups_buffer_entry_count,
-    llvm::Module* module,
-    const bool hoist_literals,
-    const ExecutorDeviceType device_type);
-  llvm::Value* fastGroupByCodegen(
-    Analyzer::Expr* group_by_col,
-    const size_t agg_col_count,
-    const bool hoist_literals,
-    llvm::Module* module,
-    const int64_t min_val);
-  llvm::Value* slowGroupByCodegen(
-    const std::list<Analyzer::Expr*>& group_by_cols,
-    const int32_t groups_buffer_entry_count,
-    const bool hoist_literals,
-    llvm::Module* module);
-  llvm::Value* groupByOneColumnCodegen(
-    Analyzer::Expr* group_by_col,
-    const size_t agg_col_count,
-    const bool hoist_literals,
-    llvm::Module* module,
-    const int64_t min_val);
+
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col, const bool hoist_literals);
+
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
+
   bool skipFragment(
     const Fragmenter_Namespace::FragmentInfo& frag_info,
     const std::list<Analyzer::Expr*>& simple_quals);
