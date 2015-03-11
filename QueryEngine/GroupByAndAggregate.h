@@ -12,6 +12,33 @@
 #include <vector>
 
 
+enum class GroupByColRangeType {
+  OneColConsecutiveKeys,  // statically known and consecutive keys, used for dictionary encoded columns
+  OneColKnownRange,       // statically known range, only possible for column expressions
+  OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
+  MultiCol,
+  Scan,                   // the plan is not a group by plan
+};
+
+// Private: each thread has its own memory, no atomic operations required
+// Shared: threads in the same block share memory, atomic operations required
+enum class GroupByMemSharing {
+  Private,
+  Shared
+};
+
+struct GroupByBufferDescriptor {
+  GroupByColRangeType hash_type;
+  std::vector<int8_t> group_col_widths;
+  std::vector<int8_t> agg_col_widths;
+  size_t entry_count;                    // the number of entries in the main buffer
+  bool use_shared_memory;                // use shared memory for the main buffer?
+  size_t entry_count_small;              // the number of entries in the small buffer
+  bool use_shared_memory_small;          // use shared memory for the small buffer?
+  int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
+  GroupByMemSharing sharing;             // meaningful for GPU only
+};
+
 class GroupByAndAggregate {
 public:
   GroupByAndAggregate(
@@ -22,35 +49,21 @@ public:
 
   void codegen(const ExecutorDeviceType, const bool hoist_literals);
 
-  llvm::Value* codegenGroupBy(const std::list<Analyzer::Expr*>& groupby_list,
-                              const bool hoist_literals);
+  GroupByBufferDescriptor getGroupByBufferDescriptor();
+
+  llvm::Value* codegenGroupBy(const bool hoist_literals);
 
   void allocateBuffers(const ExecutorDeviceType);
 
-  enum class ColRangeType {
-    OneColConsecutiveKeys,  // statically known and consecutive keys, used for dictionary encoded columns
-    OneColKnownRange,       // statically known range, only possible for column expressions
-    OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
-    MultiCol,
-    Scan,                   // the plan is not a group by plan
-  };
-
-  // Private: each thread has its own memory, no atomic operations required
-  // Shared: threads in the same block share memory, atomic operations required
-  enum class Sharing {
-    Private,
-    Shared
-  };
-
 private:
   struct ColRangeInfo {
-    GroupByAndAggregate::ColRangeType hash_type_;
+    GroupByColRangeType hash_type_;
     int64_t min;
     int64_t max;
   };
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
-    const Planner::AggPlan*,
+    const Planner::Plan*,
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);
 
   void codegenAggCalls(
@@ -74,5 +87,34 @@ private:
   const Planner::Plan* plan_;
   const Fragmenter_Namespace::QueryInfo& query_info_;
 };
+
+namespace {
+
+inline size_t get_bit_width(const SQLTypes type) {
+  switch (type) {
+    case kSMALLINT:
+      return 16;
+    case kINT:
+      return 32;
+    case kBIGINT:
+      return 64;
+    case kFLOAT:
+      return 32;
+    case kDOUBLE:
+      return 64;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return sizeof(time_t) * 8;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      return 32;
+    default:
+      CHECK(false);
+  }
+}
+
+}  // namespace
 
 #endif // QUERYENGINE_GROUPBYANDAGGREGATE_H

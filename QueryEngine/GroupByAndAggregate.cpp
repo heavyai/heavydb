@@ -78,23 +78,24 @@ int32_t get_agg_count(const Planner::Plan* plan) {
              extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, group_by_ti);         \
   });                                                                                         \
   if (stat_name##_frag == fragments.end()) {                                                  \
-    return { GroupByAndAggregate::ColRangeType::OneColGuessedRange, 0, guessed_range_max };                                                                 \
+    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };                                                                 \
   }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
-    const Planner::AggPlan* plan,
+    const Planner::Plan* plan,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
-  if (!plan) {
-    return { GroupByAndAggregate::ColRangeType::Scan, 0, guessed_range_max };
+  if (!agg_plan) {
+    return { GroupByColRangeType::Scan, 0, guessed_range_max };
   }
-  const auto& groupby_exprs = plan->get_groupby_list();
+  const auto& groupby_exprs = agg_plan->get_groupby_list();
   if (groupby_exprs.size() != 1) {
-    return { GroupByAndAggregate::ColRangeType::MultiCol, 0, 0 };
+    return { GroupByColRangeType::MultiCol, 0, 0 };
   }
   const auto group_col_expr = dynamic_cast<Analyzer::ColumnVar*>(groupby_exprs.front());
   if (!group_col_expr) {
-    return { GroupByAndAggregate::ColRangeType::OneColGuessedRange, 0, guessed_range_max };
+    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
   }
   const int group_col_id = group_col_expr->get_column_id();
   const auto& group_by_ti = group_col_expr->get_type_info();
@@ -117,17 +118,17 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
     CHECK_GE(max_val, min_val);
     return {
       group_by_ti.is_string()
-        ? GroupByAndAggregate::ColRangeType::OneColConsecutiveKeys
-        : GroupByAndAggregate::ColRangeType::OneColKnownRange,
+        ? GroupByColRangeType::OneColConsecutiveKeys
+        : GroupByColRangeType::OneColKnownRange,
       min_val,
       max_val
     };
   }
   case kFLOAT:
   case kDOUBLE:
-    return { GroupByAndAggregate::ColRangeType::OneColGuessedRange, 0, guessed_range_max };
+    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
   default:
-    return { GroupByAndAggregate::ColRangeType::MultiCol, 0, 0 };
+    return { GroupByColRangeType::MultiCol, 0, 0 };
   }
 }
 
@@ -151,6 +152,125 @@ GroupByAndAggregate::GroupByAndAggregate(
   CHECK(plan_);
 }
 
+namespace {
+
+std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+  // For non-aggregate (scan only) plans, execute them like a group by
+  // row index -- the null pointer means row index to Executor::codegen().
+  return agg_plan
+    ? agg_plan->get_groupby_list()
+    : std::list<Analyzer::Expr*> { nullptr };
+}
+
+struct TargetInfo {
+  bool is_agg;
+  SQLAgg agg_kind;
+  SQLTypes sql_type;
+  bool skip_null_val;
+  bool is_distinct;
+};
+
+TargetInfo target_info(const Analyzer::Expr* target_expr) {
+  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+  if (!agg_expr) {
+    return { false, kCOUNT, target_expr->get_type_info().get_type(), false, false };
+  }
+  const auto agg_type = agg_expr->get_aggtype();
+  const auto agg_arg = agg_expr->get_arg();
+  if (!agg_arg) {
+    CHECK_EQ(kCOUNT, agg_type);
+    CHECK(!agg_expr->get_is_distinct());
+    return { true, kCOUNT, kBIGINT, false, false };
+  }
+  const auto& agg_arg_ti = agg_arg->get_type_info();
+  bool is_distinct { false };
+  if (agg_expr->get_aggtype() == kCOUNT) {
+    CHECK(agg_expr->get_is_distinct());
+    CHECK(!agg_arg_ti.is_fp());
+    is_distinct = true;
+  }
+  // TODO(alex): null support for all types
+  bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
+  return { true, agg_expr->get_aggtype(), agg_arg_ti.get_type(),
+           skip_null, is_distinct };
+}
+
+template<class T>
+std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
+  std::vector<int8_t> col_widths;
+  for (const auto col_expr : col_expr_list) {
+    if (!col_expr) {
+      // row index
+      col_widths.push_back(sizeof(int64_t));
+    } else {
+      const auto agg_info = target_info(col_expr);
+      const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type);
+      CHECK_EQ(0, col_expr_bitwidth % 8);
+      col_widths.push_back(col_expr_bitwidth / 8);
+      // for average, we'll need to keep the count as well
+      if (agg_info.agg_kind == kAVG) {
+        CHECK(agg_info.is_agg);
+        col_widths.push_back(sizeof(int64_t));
+      }
+    }
+  }
+  return col_widths;
+}
+
+}  // namespace
+
+GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
+  const auto col_range_info = getColRangeInfo(plan_, query_info_.fragments);
+
+  auto group_col_widths = get_col_byte_widths(group_by_exprs(plan_));
+  const auto& target_list = plan_->get_targetlist();
+  std::vector<Analyzer::Expr*> target_expr_list;
+  for (const auto target : target_list) {
+    target_expr_list.push_back(target->get_expr());
+  }
+  auto agg_col_widths = get_col_byte_widths(target_expr_list);
+
+  switch (col_range_info.hash_type_) {
+  case GroupByColRangeType::OneColKnownRange:
+  case GroupByColRangeType::OneColConsecutiveKeys:
+  case GroupByColRangeType::OneColGuessedRange:
+  case GroupByColRangeType::Scan: {
+    if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
+        col_range_info.hash_type_ == GroupByColRangeType::Scan ||
+        col_range_info.max - col_range_info.min >=
+        static_cast<int64_t>(executor_->max_groups_buffer_entry_count_)) {
+      return {
+        col_range_info.hash_type_,
+        group_col_widths, agg_col_widths,
+        executor_->max_groups_buffer_entry_count_, false,
+        executor_->small_groups_buffer_entry_count_, false,
+        col_range_info.min, GroupByMemSharing::Shared
+      };
+    } else {
+      return {
+        col_range_info.hash_type_,
+        group_col_widths, agg_col_widths,
+        static_cast<size_t>(col_range_info.max - col_range_info.min + 1), false,
+        0, false,
+        col_range_info.min, GroupByMemSharing::Shared
+      };
+    }
+  }
+  case GroupByColRangeType::MultiCol: {
+    return {
+      col_range_info.hash_type_,
+      group_col_widths, agg_col_widths,
+      executor_->max_groups_buffer_entry_count_, false,
+      0, false,
+      0, GroupByMemSharing::Shared
+    };
+  }
+  default:
+    CHECK(false);
+  }
+}
+
 void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
                                   const bool hoist_literals) {
   auto filter_true = llvm::BasicBlock::Create(
@@ -161,12 +281,7 @@ void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
   LL_BUILDER.CreateCondBr(filter_result_, filter_true, filter_false);
   LL_BUILDER.SetInsertPoint(filter_true);
 
-  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
-  // For non-aggregate (scan only) plans, execute them like a group by
-  // row index -- the null pointer means row index to Executor::codegen().
-  const auto groupby_list = agg_plan
-    ? agg_plan->get_groupby_list()
-    : std::list<Analyzer::Expr*> { nullptr };
+  const auto groupby_list = group_by_exprs(plan_);
 
   if (groupby_list.empty()) {
     auto arg_it = ROW_FUNC->arg_begin();
@@ -176,7 +291,7 @@ void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
     }
     codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
   } else {
-    auto agg_out_start_ptr = codegenGroupBy(groupby_list, hoist_literals);
+    auto agg_out_start_ptr = codegenGroupBy(hoist_literals);
     codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
   }
 
@@ -185,39 +300,42 @@ void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
   LL_BUILDER.CreateRetVoid();
 }
 
-llvm::Value* GroupByAndAggregate::codegenGroupBy(
-    const std::list<Analyzer::Expr*>& groupby_list,
-    const bool hoist_literals) {
+llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
 
   llvm::Value* agg_out_start_ptr { nullptr };
 
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
-  const auto col_range_info = getColRangeInfo(agg_plan, query_info_.fragments);
 
-  switch (col_range_info.hash_type_) {
-  case ColRangeType::OneColKnownRange:
-  case ColRangeType::OneColConsecutiveKeys:
-  case ColRangeType::OneColGuessedRange:
-  case ColRangeType::Scan: {
+  // For non-aggregate (scan only) plans, execute them like a group by
+  // row index -- the null pointer means row index to Executor::codegen().
+  const auto groupby_list = agg_plan
+    ? agg_plan->get_groupby_list()
+    : std::list<Analyzer::Expr*> { nullptr };
+
+  auto group_buff_desc = getGroupByBufferDescriptor();
+
+  switch (group_buff_desc.hash_type) {
+  case GroupByColRangeType::OneColKnownRange:
+  case GroupByColRangeType::OneColConsecutiveKeys:
+  case GroupByColRangeType::OneColGuessedRange:
+  case GroupByColRangeType::Scan: {
     CHECK_EQ(1, groupby_list.size());
     const auto group_expr = groupby_list.front();
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
     auto small_groups_buffer = arg_it;
-    if (col_range_info.hash_type_ == ColRangeType::OneColGuessedRange ||
-        col_range_info.hash_type_ == ColRangeType::Scan ||
-        col_range_info.max - col_range_info.min > static_cast<int64_t>(executor_->max_groups_buffer_entry_count_)) {
+    if (group_buff_desc.entry_count_small) {
       executor_->plan_state_->allocate_small_buffers_ = true;
       agg_out_start_ptr = emitCall(
         "get_group_value_one_key",
         {
           groups_buffer,
-          LL_INT(static_cast<int32_t>(executor_->max_groups_buffer_entry_count_)),
+          LL_INT(static_cast<int32_t>(group_buff_desc.entry_count)),
           small_groups_buffer,
-          LL_INT(static_cast<int32_t>(executor_->small_groups_buffer_entry_count_)),
+          LL_INT(static_cast<int32_t>(group_buff_desc.entry_count_small)),
           toDoublePrecision(group_expr_lv),
-          LL_INT(col_range_info.min),
+          LL_INT(group_buff_desc.min_val),
           LL_INT(get_agg_count(plan_))
         });
     } else {
@@ -226,13 +344,13 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         {
           groups_buffer,
           toDoublePrecision(group_expr_lv),
-          LL_INT(col_range_info.min),
+          LL_INT(group_buff_desc.min_val),
           LL_INT(get_agg_count(plan_))
         });
     }
     break;
   }
-  case ColRangeType::MultiCol: {
+  case GroupByColRangeType::MultiCol: {
     auto key_size_lv = LL_INT(static_cast<int32_t>(groupby_list.size()));
     // create the key buffer
     auto group_key = LL_BUILDER.CreateAlloca(
@@ -248,7 +366,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       "get_group_value",
       {
         groups_buffer,
-        LL_INT(static_cast<int32_t>(executor_->max_groups_buffer_entry_count_)),
+        LL_INT(static_cast<int32_t>(group_buff_desc.entry_count)),
         group_key,
         key_size_lv,
         LL_INT(static_cast<int32_t>(get_agg_count(plan_)))
@@ -272,48 +390,15 @@ llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
 
 namespace {
 
-struct AggFnInfo {
-  bool is_agg;
-  SQLAgg agg_kind;
-  SQLTypes agg_arg_type;
-  bool skip_null_val;
-  bool is_distinct;
-};
-
-AggFnInfo agg_fn_info(const Analyzer::Expr* target_expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-  if (!agg_expr) {
-    return { false, kCOUNT, target_expr->get_type_info().get_type(), false, false };
-  }
-  const auto agg_type = agg_expr->get_aggtype();
-  const auto agg_arg = agg_expr->get_arg();
-  if (!agg_arg) {
-    CHECK_EQ(kCOUNT, agg_type);
-    CHECK(!agg_expr->get_is_distinct());
-    return { true, kCOUNT, kNULLT, false, false };
-  }
-  const auto& agg_arg_ti = agg_arg->get_type_info();
-  bool is_distinct { false };
-  if (agg_expr->get_aggtype() == kCOUNT) {
-    CHECK(agg_expr->get_is_distinct());
-    CHECK(!agg_arg_ti.is_fp());
-    is_distinct = true;
-  }
-  // TODO(alex): null support for all types
-  bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
-  return { true, agg_expr->get_aggtype(), agg_arg_ti.get_type(),
-           skip_null, is_distinct };
-}
-
-std::vector<std::string> agg_fn_base_names(const AggFnInfo& agg_fn_info) {
-  if (!agg_fn_info.is_agg) {
+std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
+  if (!target_info.is_agg) {
     return { "agg_id" };
   }
-  switch (agg_fn_info.agg_kind) {
+  switch (target_info.agg_kind) {
   case kAVG:
     return { "agg_sum", "agg_count" };
   case kCOUNT:
-    return { agg_fn_info.is_distinct ? "agg_count_distinct" : "agg_count" };
+    return { target_info.is_distinct ? "agg_count_distinct" : "agg_count" };
   case kMAX:
     return { "agg_max" };
   case kMIN:
@@ -361,7 +446,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
   for (auto target : target_list) {
     auto target_expr = target->get_expr();
     CHECK(target_expr);
-    const auto agg_info = agg_fn_info(target_expr);
+    const auto agg_info = target_info(target_expr);
     for (const auto& agg_base_name : agg_fn_base_names(agg_info)) {
       auto target_lv = toDoublePrecision(codegenAggArg(target_expr, hoist_literals));
       std::vector<llvm::Value*> agg_args {
@@ -386,12 +471,12 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
         agg_args.push_back(LL_INT(reinterpret_cast<int64_t>(count_distinct_set)));
       }
       std::string agg_fname { agg_base_name };
-      if (agg_info.agg_arg_type == kFLOAT || agg_info.agg_arg_type == kDOUBLE) {
+      if (agg_info.sql_type == kFLOAT || agg_info.sql_type == kDOUBLE) {
         agg_fname += "_double";
       }
       if (agg_info.skip_null_val) {
         agg_fname += "_skip_val";
-        auto null_lv = toDoublePrecision(executor_->inlineIntNull(agg_info.agg_arg_type));
+        auto null_lv = toDoublePrecision(executor_->inlineIntNull(agg_info.sql_type));
         agg_args.push_back(null_lv);
       }
       emitCall(

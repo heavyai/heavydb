@@ -332,31 +332,6 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   }
 }
 
-size_t get_bit_width(const SQLTypes type) {
-  switch (type) {
-    case kSMALLINT:
-      return 16;
-    case kINT:
-      return 32;
-    case kBIGINT:
-      return 64;
-    case kFLOAT:
-      return 32;
-    case kDOUBLE:
-      return 64;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return sizeof(time_t) * 8;
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
-      return 32;
-    default:
-      CHECK(false);
-  }
-}
-
 size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
   const auto& type_info = col_var->get_type_info();
   return get_bit_width(type_info.get_type());
