@@ -336,7 +336,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
           LL_INT(static_cast<int32_t>(group_buff_desc.entry_count_small)),
           toDoublePrecision(group_expr_lv),
           LL_INT(group_buff_desc.min_val),
-          LL_INT(get_agg_count(plan_))
+          LL_INT(static_cast<int32_t>(group_buff_desc.agg_col_widths.size()))
         });
     } else {
       agg_out_start_ptr = emitCall(
@@ -345,13 +345,13 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
           groups_buffer,
           toDoublePrecision(group_expr_lv),
           LL_INT(group_buff_desc.min_val),
-          LL_INT(get_agg_count(plan_))
+          LL_INT(static_cast<int32_t>(group_buff_desc.agg_col_widths.size()))
         });
     }
     break;
   }
   case GroupByColRangeType::MultiCol: {
-    auto key_size_lv = LL_INT(static_cast<int32_t>(groupby_list.size()));
+    auto key_size_lv = LL_INT(static_cast<int32_t>(group_buff_desc.group_col_widths.size()));
     // create the key buffer
     auto group_key = LL_BUILDER.CreateAlloca(
       llvm::Type::getInt64Ty(LL_CONTEXT),
@@ -369,7 +369,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
         LL_INT(static_cast<int32_t>(group_buff_desc.entry_count)),
         group_key,
         key_size_lv,
-        LL_INT(static_cast<int32_t>(get_agg_count(plan_)))
+        LL_INT(static_cast<int32_t>(group_buff_desc.agg_col_widths.size()))
       });
     break;
   }
