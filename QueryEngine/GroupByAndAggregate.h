@@ -115,6 +115,17 @@ inline size_t get_bit_width(const SQLTypes type) {
   }
 }
 
+inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
+  const auto& target_list = plan->get_targetlist();
+  std::vector<Analyzer::Expr*> result;
+  for (auto target : target_list) {
+    auto target_expr = target->get_expr();
+    CHECK(target_expr);
+    result.push_back(target_expr);
+  }
+  return result;
+}
+
 }  // namespace
 
 #endif // QUERYENGINE_GROUPBYANDAGGREGATE_H

@@ -34,17 +34,6 @@ int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
   return extract_from_datum(stats.max, ti);
 }
 
-std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
-  const auto& target_list = plan->get_targetlist();
-  std::vector<Analyzer::Expr*> result;
-  for (auto target : target_list) {
-    auto target_expr = target->get_expr();
-    CHECK(target_expr);
-    result.push_back(target_expr);
-  }
-  return result;
-}
-
 int32_t get_agg_count(const Planner::Plan* plan) {
   int32_t agg_count { 0 };
   const auto target_exprs = get_agg_target_exprs(plan);

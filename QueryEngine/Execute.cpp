@@ -790,17 +790,6 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
 
 namespace {
 
-std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
-  const auto& target_list = plan->get_targetlist();
-  std::vector<Analyzer::Expr*> result;
-  for (auto target : target_list) {
-    auto target_expr = target->get_expr();
-    CHECK(target_expr);
-    result.push_back(target_expr);
-  }
-  return result;
-}
-
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
