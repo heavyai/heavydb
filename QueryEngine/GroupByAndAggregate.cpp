@@ -82,13 +82,13 @@ int32_t get_agg_count(const Planner::Plan* plan) {
   }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
-    const Planner::AggPlan* agg_plan,
+    const Planner::AggPlan* plan,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
-  if (!agg_plan) {
-    return { GroupByAndAggregate::ColRangeType::Scan, 0, 0 };
+  if (!plan) {
+    return { GroupByAndAggregate::ColRangeType::Scan, 0, guessed_range_max };
   }
-  const auto& groupby_exprs = agg_plan->get_groupby_list();
+  const auto& groupby_exprs = plan->get_groupby_list();
   if (groupby_exprs.size() != 1) {
     return { GroupByAndAggregate::ColRangeType::MultiCol, 0, 0 };
   }
@@ -141,14 +141,14 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
 GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
     llvm::Value* filter_result,
-    const Planner::AggPlan* agg_plan,
+    const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info)
   : executor_(executor)
   , filter_result_(filter_result)
-  , agg_plan_(agg_plan)
+  , plan_(plan)
   , query_info_(query_info) {
   CHECK(filter_result_);
-  CHECK(agg_plan_);
+  CHECK(plan_);
 }
 
 void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
@@ -161,17 +161,22 @@ void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
   LL_BUILDER.CreateCondBr(filter_result_, filter_true, filter_false);
   LL_BUILDER.SetInsertPoint(filter_true);
 
-  const auto& groupby_list = agg_plan_->get_groupby_list();
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
+  // For non-aggregate (scan only) plans, execute them like a group by
+  // row index -- the null pointer means row index to Executor::codegen().
+  const auto groupby_list = agg_plan
+    ? agg_plan->get_groupby_list()
+    : std::list<Analyzer::Expr*> { nullptr };
 
   if (groupby_list.empty()) {
     auto arg_it = ROW_FUNC->arg_begin();
     std::vector<llvm::Value*> agg_out_vec;
-    for (int32_t i = 0; i < get_agg_count(agg_plan_); ++i) {
+    for (int32_t i = 0; i < get_agg_count(plan_); ++i) {
       agg_out_vec.push_back(arg_it++);
     }
     codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
   } else {
-    auto agg_out_start_ptr = codegenGroupBy(agg_plan_->get_groupby_list(), hoist_literals);
+    auto agg_out_start_ptr = codegenGroupBy(groupby_list, hoist_literals);
     codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
   }
 
@@ -188,17 +193,20 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
 
   llvm::Value* agg_out_start_ptr { nullptr };
 
-  const auto col_range_info = getColRangeInfo(agg_plan_, query_info_.fragments);
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
+  const auto col_range_info = getColRangeInfo(agg_plan, query_info_.fragments);
 
   switch (col_range_info.hash_type_) {
   case ColRangeType::OneColKnownRange:
   case ColRangeType::OneColConsecutiveKeys:
-  case ColRangeType::OneColGuessedRange: {
+  case ColRangeType::OneColGuessedRange:
+  case ColRangeType::Scan: {
     CHECK_EQ(1, groupby_list.size());
     const auto group_expr = groupby_list.front();
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
     auto small_groups_buffer = arg_it;
     if (col_range_info.hash_type_ == ColRangeType::OneColGuessedRange ||
+        col_range_info.hash_type_ == ColRangeType::Scan ||
         col_range_info.max - col_range_info.min > static_cast<int64_t>(executor_->max_groups_buffer_entry_count_)) {
       executor_->plan_state_->allocate_small_buffers_ = true;
       agg_out_start_ptr = emitCall(
@@ -210,7 +218,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
           LL_INT(static_cast<int32_t>(executor_->small_groups_buffer_entry_count_)),
           toDoublePrecision(group_expr_lv),
           LL_INT(col_range_info.min),
-          LL_INT(get_agg_count(agg_plan_))
+          LL_INT(get_agg_count(plan_))
         });
     } else {
       agg_out_start_ptr = emitCall(
@@ -219,7 +227,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
           groups_buffer,
           toDoublePrecision(group_expr_lv),
           LL_INT(col_range_info.min),
-          LL_INT(get_agg_count(agg_plan_))
+          LL_INT(get_agg_count(plan_))
         });
     }
     break;
@@ -243,7 +251,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         LL_INT(static_cast<int32_t>(executor_->max_groups_buffer_entry_count_)),
         group_key,
         key_size_lv,
-        LL_INT(static_cast<int32_t>(get_agg_count(agg_plan_)))
+        LL_INT(static_cast<int32_t>(get_agg_count(plan_)))
       });
     break;
   }
@@ -348,7 +356,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
     CHECK(!agg_out_vec.empty());
   }
 
-  const auto& target_list = agg_plan_->get_targetlist();
+  const auto& target_list = plan_->get_targetlist();
   int32_t agg_out_off { 0 };
   for (auto target : target_list) {
     auto target_expr = target->get_expr();

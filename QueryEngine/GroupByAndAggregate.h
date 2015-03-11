@@ -17,7 +17,7 @@ public:
   GroupByAndAggregate(
     Executor* executor,
     llvm::Value* filter_result,
-    const Planner::AggPlan* agg_plan,
+    const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info);
 
   void codegen(const ExecutorDeviceType, const bool hoist_literals);
@@ -71,7 +71,7 @@ private:
 
   Executor* executor_;
   llvm::Value* filter_result_;
-  const Planner::AggPlan* agg_plan_;
+  const Planner::Plan* plan_;
   const Fragmenter_Namespace::QueryInfo& query_info_;
 };
 

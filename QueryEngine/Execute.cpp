@@ -1529,7 +1529,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
-  auto query_code_and_literals = compilePlan(nullptr, {}, agg_infos, { nullptr }, pseudo_scan_cols,
+  auto query_code_and_literals = compilePlan(result_plan, {}, agg_infos, { nullptr }, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
     ExecutorDeviceType::CPU, opt_level, max_groups_buffer_entry_count_,
     std::make_tuple(false, 0L, 0L), nullptr);
@@ -1763,7 +1763,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   std::pair<std::vector<void*>, Executor::LiteralValues> query_code_and_literals;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
   query_code_and_literals = compilePlan(
-    dynamic_cast<const Planner::AggPlan*>(plan), query_info, agg_infos,
+    plan, query_info, agg_infos,
     groupby_exprs, scan_plan->get_col_list(),
     simple_quals, scan_plan->get_quals(),
     hoist_literals, device_type, opt_level, max_groups_buffer_entry_count_,
@@ -2275,7 +2275,7 @@ void Executor::nukeOldState() {
 }
 
 std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
-    const Planner::AggPlan* agg_plan,
+    const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
@@ -2335,8 +2335,8 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
     for (const auto& agg_info : agg_infos) {
       plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
     }
-    if (agg_plan) {
-      GroupByAndAggregate group_by_and_aggregate(this, filter_lv, agg_plan, query_info);
+    if (!dynamic_cast<const Planner::Result*>(plan)) {
+      GroupByAndAggregate group_by_and_aggregate(this, filter_lv, plan, query_info);
       group_by_and_aggregate.codegen(device_type, hoist_literals);
     } else {
       codegenAggrCalls(agg_infos, filter_lv,

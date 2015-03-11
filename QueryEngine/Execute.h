@@ -242,7 +242,7 @@ private:
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   std::pair<std::vector<void*>, LiteralValues> compilePlan(
-    const Planner::AggPlan* agg_plan,
+    const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<Analyzer::Expr*>& groupby_list,
