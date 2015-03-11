@@ -22,6 +22,9 @@ public:
 
   void codegen(const ExecutorDeviceType, const bool hoist_literals);
 
+  llvm::Value* codegenGroupBy(const std::list<Analyzer::Expr*>& groupby_list,
+                              const bool hoist_literals);
+
   void allocateBuffers(const ExecutorDeviceType);
 
   enum class ColRangeType {
@@ -52,6 +55,7 @@ private:
 
   void codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
+    const std::vector<llvm::Value*>& agg_out_vec,
     const ExecutorDeviceType,
     const bool hoist_literals);
 
@@ -68,7 +72,7 @@ private:
   Executor* executor_;
   llvm::Value* filter_result_;
   const Planner::AggPlan* agg_plan_;
-  ColRangeInfo col_range_info_;
+  const Fragmenter_Namespace::QueryInfo& query_info_;
 };
 
 #endif // QUERYENGINE_GROUPBYANDAGGREGATE_H

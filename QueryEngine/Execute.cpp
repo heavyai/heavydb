@@ -2335,7 +2335,7 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
     for (const auto& agg_info : agg_infos) {
       plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
     }
-    if (agg_plan && is_group_by) {
+    if (agg_plan) {
       GroupByAndAggregate group_by_and_aggregate(this, filter_lv, agg_plan, query_info);
       group_by_and_aggregate.codegen(device_type, hoist_literals);
     } else {
