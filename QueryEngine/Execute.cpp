@@ -804,7 +804,7 @@ namespace {
 std::vector<int64_t*> launch_query_gpu_code(
     const std::vector<void*>& cu_functions,
     const bool hoist_literals,
-    const std::vector<int8_t>& hoisted_literals,
+    const std::vector<int8_t>& literal_buff,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -835,10 +835,10 @@ std::vector<int64_t*> launch_query_gpu_code(
     }
   }
   CUdeviceptr literals_dev_ptr { 0 };
-  if (!hoisted_literals.empty()) {
+  if (!literal_buff.empty()) {
     CHECK(hoist_literals);
-    literals_dev_ptr = alloc_gpu_mem(data_mgr, hoisted_literals.size(), device_id);
-    copy_to_gpu(data_mgr, literals_dev_ptr, &hoisted_literals[0], hoisted_literals.size(), device_id);
+    literals_dev_ptr = alloc_gpu_mem(data_mgr, literal_buff.size(), device_id);
+    copy_to_gpu(data_mgr, literals_dev_ptr, &literal_buff[0], literal_buff.size(), device_id);
   }
   CUdeviceptr num_rows_dev_ptr;
   {
@@ -951,7 +951,7 @@ std::vector<int64_t*> launch_query_gpu_code(
 std::vector<int64_t*> launch_query_cpu_code(
     const std::vector<void*>& fn_ptrs,
     const bool hoist_literals,
-    const std::vector<int8_t>& hoisted_literals,
+    const std::vector<int8_t>& literal_buff,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -974,10 +974,10 @@ std::vector<int64_t*> launch_query_cpu_code(
       int64_t** out,
       int64_t** out2);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &out_vec[0], nullptr);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0]);
     }
   } else {
@@ -1411,7 +1411,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
-  auto query_code_and_literals = compilePlan(result_plan, {}, agg_infos, { nullptr }, pseudo_scan_cols,
+  auto compilation_result = compilePlan(result_plan, {}, agg_infos, { nullptr }, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
     ExecutorDeviceType::CPU, opt_level,
     std::make_tuple(false, 0L, 0L), nullptr);
@@ -1425,8 +1425,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
   init_groups(small_group_by_buffer, small_groups_buffer_entry_count_, target_exprs.size(), &init_agg_vals[0], 1);
   std::vector<int64_t*> group_by_buffers { group_by_buffer };
   std::vector<int64_t*> small_group_by_buffers { small_group_by_buffer };
-  const auto hoist_buf = serializeLiterals(query_code_and_literals.second);
-  launch_query_cpu_code(query_code_and_literals.first, hoist_literals, hoist_buf,
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals, group_by_buffers, small_group_by_buffers);
   auto results = groupBufferToResults(small_group_by_buffer, small_groups_buffer_entry_count_,
     1, target_exprs.size(), target_exprs);
@@ -1642,9 +1642,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   fragmenter->getFragmentsForQuery(query_info);
   const auto& fragments = query_info.fragments;
   const auto fast_group_by = canUseFastGroupBy(agg_plan, fragments, max_groups_buffer_entry_count_);
-  std::pair<std::vector<void*>, Executor::LiteralValues> query_code_and_literals;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
-  query_code_and_literals = compilePlan(plan, query_info, agg_infos,
+  auto compilation_result = compilePlan(plan, query_info, agg_infos,
     groupby_exprs, scan_plan->get_col_list(),
     simple_quals, scan_plan->get_quals(),
     hoist_literals, device_type, opt_level,
@@ -1658,22 +1657,16 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
   const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
-  const size_t num_buffers { device_type == ExecutorDeviceType::CPU ? 1 : block_size_x_ * grid_size_x_ };
-  const size_t groups_buffer_size {
-    (groupby_exprs.size() + agg_infos.size()) * max_groups_buffer_entry_count_ * sizeof(int64_t) };
-  const size_t small_groups_buffer_size {
-    (groupby_exprs.size() + agg_infos.size()) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
   for (size_t i = 0; i < fragments.size(); ++i) {
     if (skipFragment(fragments[i], simple_quals)) {
       continue;
     }
-    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, query_code_and_literals,
-        hoist_literals, num_buffers, groups_buffer_size, small_groups_buffer_size,
-        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs, &agg_infos]() {
+    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, compilation_result, hoist_literals,
+        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
       ResultRows device_results;
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
       std::unique_ptr<FragmentState> frag_state(
-        new FragmentState(this, device_type, groupby_exprs.size(), agg_infos.size()));
+        new FragmentState(this, device_type, compilation_result.group_buff_desc));
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks(plan_state_->global_to_local_col_ids_.size());
@@ -1703,11 +1696,13 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       }
       // TODO(alex): multiple devices support
       if (groupby_exprs.empty()) {
-        executePlanWithoutGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
+        executePlanWithoutGroupBy(
+          compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan), device_type, col_buffers, num_rows,
           &cat.get_dataMgr(), device_id);
       } else {
-        executePlanWithGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
+        executePlanWithGroupBy(
+          compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), device_type, col_buffers,
           frag_state->group_by_buffers_, frag_state->small_group_by_buffers_, num_rows,
@@ -1736,9 +1731,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
 }
 
 void Executor::executePlanWithoutGroupBy(
-    const std::vector<void*>& native_functions,
+    const CompilationResult& compilation_result,
     const bool hoist_literals,
-    const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
@@ -1747,15 +1741,15 @@ void Executor::executePlanWithoutGroupBy(
     Data_Namespace::DataMgr* data_mgr,
     const int device_id) {
   std::vector<int64_t*> out_vec;
-  const auto hoist_buf = serializeLiterals(hoisted_literals);
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
-      native_functions, hoist_literals, hoist_buf,
+      compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
     boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
     out_vec = launch_query_gpu_code(
-      native_functions, hoist_literals, hoist_buf,
+      compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, {}, 0,
       data_mgr, false, block_size_x_, grid_size_x_, device_id);
   }
@@ -1802,9 +1796,8 @@ void Executor::executePlanWithoutGroupBy(
 }
 
 void Executor::executePlanWithGroupBy(
-    const std::vector<void*>& native_functions,
+    const CompilationResult& compilation_result,
     const bool hoist_literals,
-    const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
@@ -1826,11 +1819,11 @@ void Executor::executePlanWithGroupBy(
   // TODO(alex): get rid of std::list everywhere
   std::list<Analyzer::Expr*> target_exprs_list;
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
-  const auto hoist_buf = serializeLiterals(hoisted_literals);
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(native_functions, hoist_literals, hoist_buf, col_buffers,
+    launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers, small_group_by_buffers);
-    if (plan_state_->allocate_small_buffers_) {
+    if (compilation_result.group_buff_desc.entry_count_small) {
       CHECK_EQ(group_by_buffers.size(), small_group_by_buffers.size());
       results = groupBufferToResults(small_group_by_buffers.front(), small_groups_buffer_entry_count_,
         group_by_col_count, agg_col_count, target_exprs_list);
@@ -1849,7 +1842,7 @@ void Executor::executePlanWithGroupBy(
       (group_by_col_count + agg_col_count) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
     {
       boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
-      launch_query_gpu_code(native_functions, hoist_literals, hoist_buf,
+      launch_query_gpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
         col_buffers, num_rows, plan_state_->init_agg_vals_,
         group_by_buffers, groups_buffer_size,
         small_group_by_buffers, small_groups_buffer_size,
@@ -1858,7 +1851,7 @@ void Executor::executePlanWithGroupBy(
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
       Executor::ResultRows small_results;
-      if (plan_state_->allocate_small_buffers_) {
+      if (compilation_result.group_buff_desc.entry_count_small) {
         CHECK_EQ(group_by_buffers.size(), small_group_by_buffers.size());
         small_results = groupBufferToResults(small_group_by_buffers[i],
           small_groups_buffer_entry_count_, group_by_col_count, agg_col_count, target_exprs_list);
@@ -2155,7 +2148,7 @@ void Executor::nukeOldState() {
   plan_state_.reset(new PlanState());
 }
 
-std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
+Executor::CompilationResult Executor::compilePlan(
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
@@ -2211,12 +2204,13 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
+  GroupByBufferDescriptor group_buff_desc;
   {
     for (const auto& agg_info : agg_infos) {
       plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
     }
     GroupByAndAggregate group_by_and_aggregate(this, filter_lv, plan, query_info);
-    group_by_and_aggregate.codegen(device_type, hoist_literals);
+    group_buff_desc = group_by_and_aggregate.codegen(device_type, hoist_literals);
   }
 
   // iterate through all the instruction in the query template function and
@@ -2239,11 +2233,13 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
 
   is_nested_ = false;
 
-  return (device_type == ExecutorDeviceType::CPU)
-    ? std::make_pair(optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_),
-                                           cgen_state_->getLiterals())
-    : std::make_pair(optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_,
-                                           is_group_by, cuda_mgr), cgen_state_->getLiterals());
+  return Executor::CompilationResult {
+    device_type == ExecutorDeviceType::CPU
+      ? optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_)
+      : optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_, is_group_by, cuda_mgr),
+    cgen_state_->getLiterals(),
+    group_buff_desc
+  };
 }
 
 namespace {

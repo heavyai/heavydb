@@ -116,6 +116,33 @@ inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   }
 }
 
+enum class GroupByColRangeType {
+  OneColConsecutiveKeys,  // statically known and consecutive keys, used for dictionary encoded columns
+  OneColKnownRange,       // statically known range, only possible for column expressions
+  OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
+  MultiCol,
+  Scan,                   // the plan is not a group by plan
+};
+
+// Private: each thread has its own memory, no atomic operations required
+// Shared: threads in the same block share memory, atomic operations required
+enum class GroupByMemSharing {
+  Private,
+  Shared
+};
+
+struct GroupByBufferDescriptor {
+  GroupByColRangeType hash_type;
+  std::vector<int8_t> group_col_widths;
+  std::vector<int8_t> agg_col_widths;
+  size_t entry_count;                    // the number of entries in the main buffer
+  bool use_shared_memory;                // use shared memory for the main buffer?
+  size_t entry_count_small;              // the number of entries in the small buffer
+  bool use_shared_memory_small;          // use shared memory for the small buffer?
+  int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
+  GroupByMemSharing sharing;             // meaningful for GPU only
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
     "Host hardware not supported, unexpected size of float / double.");
@@ -202,10 +229,16 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&);
+
+  struct CompilationResult {
+    std::vector<void*> native_functions;
+    LiteralValues literal_values;
+    GroupByBufferDescriptor group_buff_desc;
+  };
+
   void executePlanWithGroupBy(
-    const std::vector<void*>& native_functions,
+    const CompilationResult&,
     const bool hoist_literals,
-    const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
@@ -222,9 +255,8 @@ private:
     const size_t groups_buffer_entry_count,
     const size_t groups_buffer_size);
   void executePlanWithoutGroupBy(
-    const std::vector<void*>& native_functions,
+    const CompilationResult&,
     const bool hoist_literals,
-    const LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
@@ -241,7 +273,7 @@ private:
     const std::list<Analyzer::Expr*>& target_exprs);
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
-  std::pair<std::vector<void*>, LiteralValues> compilePlan(
+  CompilationResult compilePlan(
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
@@ -390,38 +422,30 @@ private:
   std::unique_ptr<CgenState> cgen_state_;
 
   struct PlanState {
-    PlanState() : allocate_small_buffers_(false) {}
-
     std::vector<int64_t> init_agg_vals_;
     std::unordered_map<int, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
-    bool allocate_small_buffers_;
   };
   std::unique_ptr<PlanState> plan_state_;
 
   struct FragmentState {
     FragmentState(Executor* executor,
                   const ExecutorDeviceType device_type,
-                  const size_t group_col_count,
-                  const size_t agg_col_count) {
+                  const GroupByBufferDescriptor& group_buff_desc) {
       const size_t num_buffers { device_type == ExecutorDeviceType::CPU
         ? 1
         : executor->block_size_x_ * executor->grid_size_x_ };
-      const bool use_fast_path {
-        device_type == ExecutorDeviceType::GPU && enabled(executor->cgen_state_->fast_group_by_) };
-      const size_t groups_buffer_entry_count { use_fast_path
-        ? (maxBin(executor->cgen_state_->fast_group_by_) - minBin(executor->cgen_state_->fast_group_by_) + 1)
-        : executor->max_groups_buffer_entry_count_
-      };
+      const size_t group_col_count { group_buff_desc.group_col_widths.size() };
+      const size_t agg_col_count { group_buff_desc.agg_col_widths.size() };
       const size_t groups_buffer_size {
-        (group_col_count + agg_col_count) * groups_buffer_entry_count * sizeof(int64_t) };
-      const size_t small_groups_buffer_size {
-        (group_col_count + agg_col_count) * executor->small_groups_buffer_entry_count_ * sizeof(int64_t) };
+        (group_col_count + agg_col_count) * group_buff_desc.entry_count * sizeof(int64_t) };
       group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
-          groups_buffer_entry_count, groups_buffer_size);
-      if (executor->plan_state_->allocate_small_buffers_) {
+          group_buff_desc.entry_count, groups_buffer_size);
+      if (group_buff_desc.entry_count_small) {
+        const size_t small_groups_buffer_size {
+          (group_col_count + agg_col_count) * group_buff_desc.entry_count_small * sizeof(int64_t) };
         small_group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
-          executor->small_groups_buffer_entry_count_, small_groups_buffer_size);
+          group_buff_desc.entry_count_small, small_groups_buffer_size);
       }
     }
   ~FragmentState() {

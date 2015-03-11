@@ -260,8 +260,9 @@ GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
   }
 }
 
-void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
-                                  const bool hoist_literals) {
+GroupByBufferDescriptor GroupByAndAggregate::codegen(
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals) {
   auto filter_true = llvm::BasicBlock::Create(
     LL_CONTEXT, "filter_true", ROW_FUNC);
   auto filter_false = llvm::BasicBlock::Create(
@@ -272,6 +273,11 @@ void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
 
   const auto groupby_list = group_by_exprs(plan_);
 
+  GroupByBufferDescriptor group_buff_desc;
+  // TODO(alex): remove
+  group_buff_desc.entry_count = executor_->max_groups_buffer_entry_count_;
+  group_buff_desc.entry_count_small = 0;
+
   if (groupby_list.empty()) {
     auto arg_it = ROW_FUNC->arg_begin();
     std::vector<llvm::Value*> agg_out_vec;
@@ -280,16 +286,24 @@ void GroupByAndAggregate::codegen(const ExecutorDeviceType device_type,
     }
     codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
   } else {
-    auto agg_out_start_ptr = codegenGroupBy(hoist_literals);
+    llvm::Value* agg_out_start_ptr { nullptr };
+    std::tie(agg_out_start_ptr, group_buff_desc) = codegenGroupBy(hoist_literals);
+    // TODO(alex): remove
+    if (device_type == ExecutorDeviceType::CPU) {
+      group_buff_desc.entry_count = executor_->max_groups_buffer_entry_count_;
+    }
     codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
   }
 
   LL_BUILDER.CreateBr(filter_false);
   LL_BUILDER.SetInsertPoint(filter_false);
   LL_BUILDER.CreateRetVoid();
+
+  return group_buff_desc;
 }
 
-llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
+std::pair<llvm::Value*, GroupByBufferDescriptor> GroupByAndAggregate::codegenGroupBy(
+    const bool hoist_literals) {
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
 
@@ -315,7 +329,6 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
     auto small_groups_buffer = arg_it;
     if (group_buff_desc.entry_count_small) {
-      executor_->plan_state_->allocate_small_buffers_ = true;
       agg_out_start_ptr = emitCall(
         "get_group_value_one_key",
         {
@@ -369,7 +382,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
 
   CHECK(agg_out_start_ptr);
 
-  return agg_out_start_ptr;
+  return { agg_out_start_ptr, group_buff_desc };
 }
 
 llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
