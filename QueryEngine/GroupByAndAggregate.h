@@ -16,11 +16,13 @@ class GroupByAndAggregate {
 public:
   GroupByAndAggregate(
     Executor* executor,
-    llvm::Value* filter_result,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info);
 
-  GroupByBufferDescriptor codegen(const ExecutorDeviceType, const bool hoist_literals);
+  GroupByBufferDescriptor codegen(
+    llvm::Value* filter_result,
+    const ExecutorDeviceType,
+    const bool hoist_literals);
 
   void allocateBuffers(const ExecutorDeviceType);
 
@@ -39,7 +41,7 @@ private:
     const Planner::Plan*,
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);
 
-  void codegenAggCalls(
+  GroupByBufferDescriptor codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
     const ExecutorDeviceType,

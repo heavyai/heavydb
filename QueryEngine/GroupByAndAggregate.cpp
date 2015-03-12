@@ -130,14 +130,11 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
 
 GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
-    llvm::Value* filter_result,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info)
   : executor_(executor)
-  , filter_result_(filter_result)
   , plan_(plan)
   , query_info_(query_info) {
-  CHECK(filter_result_);
   CHECK(plan_);
 }
 
@@ -210,8 +207,6 @@ std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
 }  // namespace
 
 GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
-  const auto col_range_info = getColRangeInfo(plan_, query_info_.fragments);
-
   auto group_col_widths = get_col_byte_widths(group_by_exprs(plan_));
   const auto& target_list = plan_->get_targetlist();
   std::vector<Analyzer::Expr*> target_expr_list;
@@ -219,6 +214,17 @@ GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
     target_expr_list.push_back(target->get_expr());
   }
   auto agg_col_widths = get_col_byte_widths(target_expr_list);
+
+  if (group_col_widths.empty()) {
+    return {
+      GroupByColRangeType::Scan,
+      group_col_widths, agg_col_widths,
+      0, false,
+      0, false,
+      0, GroupByMemSharing::Shared };
+  }
+
+  const auto col_range_info = getColRangeInfo(plan_, query_info_.fragments);
 
   switch (col_range_info.hash_type_) {
   case GroupByColRangeType::OneColKnownRange:
@@ -261,22 +267,22 @@ GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
 }
 
 GroupByBufferDescriptor GroupByAndAggregate::codegen(
+    llvm::Value* filter_result,
     const ExecutorDeviceType device_type,
     const bool hoist_literals) {
+  CHECK(filter_result);
+
   auto filter_true = llvm::BasicBlock::Create(
     LL_CONTEXT, "filter_true", ROW_FUNC);
   auto filter_false = llvm::BasicBlock::Create(
     LL_CONTEXT, "filter_false", ROW_FUNC);
 
-  LL_BUILDER.CreateCondBr(filter_result_, filter_true, filter_false);
+  LL_BUILDER.CreateCondBr(filter_result, filter_true, filter_false);
   LL_BUILDER.SetInsertPoint(filter_true);
 
   const auto groupby_list = group_by_exprs(plan_);
 
   GroupByBufferDescriptor group_buff_desc;
-  // TODO(alex): remove
-  group_buff_desc.entry_count = executor_->max_groups_buffer_entry_count_;
-  group_buff_desc.entry_count_small = 0;
 
   if (groupby_list.empty()) {
     auto arg_it = ROW_FUNC->arg_begin();
@@ -284,15 +290,15 @@ GroupByBufferDescriptor GroupByAndAggregate::codegen(
     for (int32_t i = 0; i < get_agg_count(plan_); ++i) {
       agg_out_vec.push_back(arg_it++);
     }
-    codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
+    group_buff_desc = codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
   } else {
     llvm::Value* agg_out_start_ptr { nullptr };
     std::tie(agg_out_start_ptr, group_buff_desc) = codegenGroupBy(hoist_literals);
+    group_buff_desc = codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
     // TODO(alex): remove
     if (device_type == ExecutorDeviceType::CPU) {
       group_buff_desc.entry_count = executor_->max_groups_buffer_entry_count_;
     }
-    codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
   }
 
   LL_BUILDER.CreateBr(filter_false);
@@ -430,10 +436,11 @@ llvm::Value* GroupByAndAggregate::toDoublePrecision(llvm::Value* val) {
     : val;
 }
 
-void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
-                                          const std::vector<llvm::Value*>& agg_out_vec,
-                                          const ExecutorDeviceType device_type,
-                                          const bool hoist_literals) {
+GroupByBufferDescriptor GroupByAndAggregate::codegenAggCalls(
+    llvm::Value* agg_out_start_ptr,
+    const std::vector<llvm::Value*>& agg_out_vec,
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals) {
   // TODO(alex): unify the two cases, the output for non-group by queries
   //             should be a contiguous buffer
   const bool is_group_by { agg_out_start_ptr };
@@ -487,6 +494,8 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
       ++agg_out_off;
     }
   }
+
+  return getGroupByBufferDescriptor();
 }
 
 llvm::Value* GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,

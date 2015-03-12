@@ -2204,8 +2204,8 @@ Executor::CompilationResult Executor::compilePlan(
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  GroupByAndAggregate group_by_and_aggregate(this, filter_lv, plan, query_info);
-  auto group_buff_desc = group_by_and_aggregate.codegen(device_type, hoist_literals);
+  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info);
+  auto group_buff_desc = group_by_and_aggregate.codegen(filter_lv, device_type, hoist_literals);
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
