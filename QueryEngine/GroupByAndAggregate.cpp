@@ -1,7 +1,94 @@
 #include "GroupByAndAggregate.h"
 
-#include <glog/logging.h>
+#include "Execute.h"
+#include "RuntimeFunctions.h"
 
+
+GroupByMemory::GroupByMemory(const GroupByBufferDescriptor& group_buff_desc,
+                             const std::vector<int64_t>& init_agg_vals,
+                             const Executor* executor,
+                             const ExecutorDeviceType device_type)
+    : group_buff_desc_(group_buff_desc)
+    , executor_(executor)
+    , device_type_(device_type)
+    , num_buffers_ {
+        device_type == ExecutorDeviceType::CPU
+          ? 1
+          : executor->block_size_x_ * executor->grid_size_x_ } {
+  const size_t num_buffers { device_type == ExecutorDeviceType::CPU
+    ? 1 : executor->block_size_x_ * executor->grid_size_x_ };
+  if (group_buff_desc.group_col_widths.empty()) {
+    return;
+  }
+  for (size_t i = 0; i < num_buffers; ++i) {
+    auto group_by_buffer = static_cast<int64_t*>(malloc(group_buff_desc_.getBufferSize()));
+    init_groups(group_by_buffer, group_buff_desc.entry_count, group_buff_desc.group_col_widths.size(),
+      &init_agg_vals[0], group_buff_desc.agg_col_widths.size());
+    group_by_buffers_.push_back(group_by_buffer);
+    if (group_buff_desc.entry_count_small) {
+      auto group_by_small_buffer = static_cast<int64_t*>(malloc(group_buff_desc_.getSmallBufferSize()));
+      init_groups(group_by_small_buffer, group_buff_desc.entry_count_small, group_buff_desc.group_col_widths.size(),
+        &init_agg_vals[0], group_buff_desc.agg_col_widths.size());
+      small_group_by_buffers_.push_back(group_by_small_buffer);
+    }
+  }
+}
+
+GroupByMemory::~GroupByMemory() {
+  for (auto group_by_buffer : group_by_buffers_) {
+    free(group_by_buffer);
+  }
+  for (auto small_group_by_buffer : small_group_by_buffers_) {
+    free(small_group_by_buffer);
+  }
+}
+
+Executor::ResultRows GroupByMemory::getRowSet(const std::vector<Analyzer::Expr*>& targets) const {
+  std::vector<Executor::ResultRows> results_per_sm;
+  for (size_t i = 0; i < num_buffers_; ++i) {
+    Executor::ResultRows small_results;
+    if (group_buff_desc_.entry_count_small) {
+      CHECK_EQ(group_by_buffers_.size(), small_group_by_buffers_.size());
+      small_results = executor_->groupBufferToResults(
+        small_group_by_buffers_[i],
+        group_buff_desc_.entry_count_small,
+        group_buff_desc_.group_col_widths.size(),
+        group_buff_desc_.agg_col_widths.size(),
+        targets);
+    }
+    auto big_results = executor_->groupBufferToResults(
+      group_by_buffers_[i],
+      group_buff_desc_.entry_count,
+      group_buff_desc_.group_col_widths.size(),
+      group_buff_desc_.agg_col_widths.size(),
+      targets);
+    small_results.insert(small_results.end(), big_results.begin(), big_results.end());
+    if (device_type_ == ExecutorDeviceType::GPU) {
+      results_per_sm.push_back(small_results);
+    } else {
+      CHECK_EQ(1, num_buffers_);
+      return small_results;
+    }
+  }
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+  return executor_->reduceMultiDeviceResults(results_per_sm);
+}
+
+std::unique_ptr<GroupByMemory> GroupByBufferDescriptor::allocateGroupByMem(
+    const std::vector<int64_t>& init_agg_vals,
+    const Executor* executor,
+    const ExecutorDeviceType device_type) const {
+  return std::unique_ptr<GroupByMemory>(
+    new GroupByMemory(*this, init_agg_vals, executor, device_type));
+}
+
+size_t GroupByBufferDescriptor::getBufferSize() const {
+  return (group_col_widths.size() + agg_col_widths.size()) * entry_count * sizeof(int64_t);
+}
+
+size_t GroupByBufferDescriptor::getSmallBufferSize() const {
+  return (group_col_widths.size() + agg_col_widths.size()) * entry_count_small * sizeof(int64_t);
+}
 
 namespace {
 
@@ -266,6 +353,12 @@ GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
   }
 }
 
+bool GroupByBufferDescriptor::usesGetGroupValueFast() {
+  return ((hash_type == GroupByColRangeType::OneColKnownRange ||
+           hash_type == GroupByColRangeType::OneColConsecutiveKeys) &&
+          !entry_count_small);
+}
+
 void GroupByAndAggregate::codegen(
     llvm::Value* filter_result,
     const ExecutorDeviceType device_type,
@@ -281,8 +374,6 @@ void GroupByAndAggregate::codegen(
   LL_BUILDER.SetInsertPoint(filter_true);
 
   const auto groupby_list = group_by_exprs(plan_);
-
-  GroupByBufferDescriptor group_buff_desc;
 
   if (groupby_list.empty()) {
     auto arg_it = ROW_FUNC->arg_begin();
@@ -326,7 +417,16 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
     const auto group_expr = groupby_list.front();
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
     auto small_groups_buffer = arg_it;
-    if (group_buff_desc.entry_count_small) {
+    if (group_buff_desc.usesGetGroupValueFast()) {
+      agg_out_start_ptr = emitCall(
+        "get_group_value_fast",
+        {
+          groups_buffer,
+          toDoublePrecision(group_expr_lv),
+          LL_INT(group_buff_desc.min_val),
+          LL_INT(static_cast<int32_t>(group_buff_desc.agg_col_widths.size()))
+        });
+    } else {
       agg_out_start_ptr = emitCall(
         "get_group_value_one_key",
         {
@@ -334,15 +434,6 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
           LL_INT(static_cast<int32_t>(group_buff_desc.entry_count)),
           small_groups_buffer,
           LL_INT(static_cast<int32_t>(group_buff_desc.entry_count_small)),
-          toDoublePrecision(group_expr_lv),
-          LL_INT(group_buff_desc.min_val),
-          LL_INT(static_cast<int32_t>(group_buff_desc.agg_col_widths.size()))
-        });
-    } else {
-      agg_out_start_ptr = emitCall(
-        "get_group_value_fast",
-        {
-          groups_buffer,
           toDoublePrecision(group_expr_lv),
           LL_INT(group_buff_desc.min_val),
           LL_INT(static_cast<int32_t>(group_buff_desc.agg_col_widths.size()))
@@ -506,7 +597,3 @@ llvm::Function* GroupByAndAggregate::getFunction(const std::string& name) const 
 #undef LL_INT
 #undef LL_BUILDER
 #undef LL_CONTEXT
-
-void GroupByAndAggregate::allocateBuffers(const ExecutorDeviceType) {
-  CHECK(false);
-}

@@ -343,7 +343,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
 llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count,
                                         const bool is_nested, const bool hoist_literals,
-                                        const bool use_fast_path, const size_t groups_buffer_size) {
+                                        const bool fast_group_by, const size_t groups_buffer_size) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -352,11 +352,11 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   CHECK(func_pos_step);
   auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
-  auto func_init_shared_mem = should_use_shared_memory(use_fast_path, groups_buffer_size)
+  auto func_init_shared_mem = should_use_shared_memory(fast_group_by, groups_buffer_size)
     ? mod->getFunction("init_shared_mem")
     : mod->getFunction("init_shared_mem_nop");
   CHECK(func_init_shared_mem);
-  auto func_write_back = should_use_shared_memory(use_fast_path, groups_buffer_size)
+  auto func_write_back = should_use_shared_memory(fast_group_by, groups_buffer_size)
     ? mod->getFunction("write_back")
     : mod->getFunction("write_back_nop");
   CHECK(func_write_back);

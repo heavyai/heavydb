@@ -214,7 +214,6 @@ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   write_back_nop(dest, src, sz);
 }
 
-extern "C"
 void init_groups(int64_t* groups_buffer,
                  const int32_t groups_buffer_entry_count,
                  const int32_t key_qw_count,

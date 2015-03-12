@@ -1,14 +1,13 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
+#include "GroupByAndAggregate.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Planner/Planner.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "NvidiaKernel.h"
 
-#include <boost/variant.hpp>
 #include <boost/thread.hpp>
-#include <glog/logging.h>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -27,73 +26,7 @@ enum class ExecutorOptLevel {
   LoopStrengthReduction
 };
 
-enum class ExecutorDeviceType {
-  CPU,
-  GPU
-};
-
-typedef boost::variant<int64_t, double, std::string> AggResult;
-
 class Executor;
-
-inline bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  return target - eps < v && v < target + eps;
-}
-
-class ResultRow {
-public:
-  ResultRow(const Executor* executor) : executor_(executor) {}
-
-  AggResult agg_result(const size_t idx, const bool translate_strings = true) const;
-
-  SQLTypeInfo agg_type(const size_t idx) const;
-
-  size_t size() const {
-    return agg_results_idx_.size();
-  }
-
-  std::vector<int64_t> value_tuple() const {
-    return value_tuple_;
-  }
-
-  bool operator==(const ResultRow& r) const {
-    if (size() != r.size()) {
-      return false;
-    }
-    for (size_t idx = 0; idx < size(); ++idx) {
-      const auto lhs_val = agg_result(idx);
-      const auto rhs_val = r.agg_result(idx);
-      {
-        const auto lhs_pd = boost::get<double>(&lhs_val);
-        if (lhs_pd) {
-          const auto rhs_pd = boost::get<double>(&rhs_val);
-          if (!rhs_pd) {
-            return false;
-          }
-          if (!approx_eq(*lhs_pd, *rhs_pd)) {
-            return false;
-          }
-        } else {
-          if (lhs_val < rhs_val || rhs_val < lhs_val) {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
-  }
-
-private:
-  // TODO(alex): support for strings
-  std::vector<int64_t> value_tuple_;
-  std::vector<int64_t> agg_results_;
-  std::vector<size_t> agg_results_idx_;
-  std::vector<SQLAgg> agg_kinds_;
-  std::vector<SQLTypeInfo> agg_types_;
-  const Executor* executor_;
-
-  friend class Executor;
-};
 
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   switch (width) {
@@ -115,33 +48,6 @@ inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
     LOG(FATAL) << "Unsupported integer width: " << width;
   }
 }
-
-enum class GroupByColRangeType {
-  OneColConsecutiveKeys,  // statically known and consecutive keys, used for dictionary encoded columns
-  OneColKnownRange,       // statically known range, only possible for column expressions
-  OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
-  MultiCol,
-  Scan,                   // the plan is not a group by plan
-};
-
-// Private: each thread has its own memory, no atomic operations required
-// Shared: threads in the same block share memory, atomic operations required
-enum class GroupByMemSharing {
-  Private,
-  Shared
-};
-
-struct GroupByBufferDescriptor {
-  GroupByColRangeType hash_type;
-  std::vector<int8_t> group_col_widths;
-  std::vector<int8_t> agg_col_widths;
-  size_t entry_count;                    // the number of entries in the main buffer
-  bool use_shared_memory;                // use shared memory for the main buffer?
-  size_t entry_count_small;              // the number of entries in the small buffer
-  bool use_shared_memory_small;          // use shared memory for the small buffer?
-  int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
-  GroupByMemSharing sharing;             // meaningful for GPU only
-};
 
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
@@ -167,20 +73,6 @@ public:
 
   typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double, std::string> LiteralValue;
   typedef std::vector<Executor::LiteralValue> LiteralValues;
-
-  typedef std::tuple<bool, int64_t, int64_t> FastGroupByInfo;
-
-  static bool enabled(const FastGroupByInfo& fast_group_by) {
-    return std::get<0>(fast_group_by);
-  }
-
-  static int64_t minBin(const FastGroupByInfo& fast_group_by) {
-    return std::get<1>(fast_group_by);
-  }
-
-  static int64_t maxBin(const FastGroupByInfo& fast_group_by) {
-    return std::get<2>(fast_group_by);
-  }
 
 private:
   template<class T>
@@ -244,16 +136,10 @@ private:
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
-    std::vector<int64_t*>& group_by_buffers,
-    std::vector<int64_t*>& small_group_by_buffers,
+    const GroupByMemory*,
     const int64_t num_rows,
     Data_Namespace::DataMgr*,
     const int device_id);
-  std::vector<int64_t*> allocateGroupByHostBuffers(
-    const size_t num_buffers,
-    const size_t group_by_col_count,
-    const size_t groups_buffer_entry_count,
-    const size_t groups_buffer_size);
   void executePlanWithoutGroupBy(
     const CompilationResult&,
     const bool hoist_literals,
@@ -264,13 +150,13 @@ private:
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id);
-  ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&);
+  ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&) const;
   ResultRows groupBufferToResults(
     const int64_t* group_by_buffer,
     const size_t groups_buffer_entry_count,
     const size_t group_by_col_count,
     const size_t agg_col_count,
-    const std::list<Analyzer::Expr*>& target_exprs);
+    const std::vector<Analyzer::Expr*>& target_exprs) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compilePlan(
@@ -283,7 +169,6 @@ private:
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const FastGroupByInfo& fast_group_by,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
   void nukeOldState();
@@ -357,7 +242,7 @@ private:
       , row_func_(nullptr)
       , context_(llvm::getGlobalContext())
       , ir_builder_(context_)
-      , fast_group_by_ { false, 0L, 0L }
+      , fast_group_by_ { false }
       , literal_bytes_(0) {}
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant) {
@@ -396,7 +281,7 @@ private:
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, llvm::Value*> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
-    FastGroupByInfo fast_group_by_;
+    bool fast_group_by_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {
@@ -427,38 +312,6 @@ private:
   };
   std::unique_ptr<PlanState> plan_state_;
 
-  struct FragmentState {
-    FragmentState(Executor* executor,
-                  const ExecutorDeviceType device_type,
-                  const GroupByBufferDescriptor& group_buff_desc) {
-      const size_t num_buffers { device_type == ExecutorDeviceType::CPU
-        ? 1
-        : executor->block_size_x_ * executor->grid_size_x_ };
-      const size_t group_col_count { group_buff_desc.group_col_widths.size() };
-      const size_t agg_col_count { group_buff_desc.agg_col_widths.size() };
-      const size_t groups_buffer_size {
-        (group_col_count + agg_col_count) * group_buff_desc.entry_count * sizeof(int64_t) };
-      group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
-          group_buff_desc.entry_count, groups_buffer_size);
-      if (group_buff_desc.entry_count_small) {
-        const size_t small_groups_buffer_size {
-          (group_col_count + agg_col_count) * group_buff_desc.entry_count_small * sizeof(int64_t) };
-        small_group_by_buffers_ = executor->allocateGroupByHostBuffers(num_buffers, group_col_count,
-          group_buff_desc.entry_count_small, small_groups_buffer_size);
-      }
-    }
-  ~FragmentState() {
-    for (auto group_by_buffer : group_by_buffers_) {
-        free(group_by_buffer);
-      }
-      for (auto small_group_by_buffer : small_group_by_buffers_) {
-        free(small_group_by_buffer);
-      }
-    }
-    std::vector<int64_t*> group_by_buffers_;
-    std::vector<int64_t*> small_group_by_buffers_;
-  };
-
   bool is_nested_;
 
   boost::mutex reduce_mutex_;
@@ -480,6 +333,7 @@ private:
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
 
   friend class GroupByAndAggregate;
+  friend class GroupByMemory;
 };
 
 #endif // QUERYENGINE_EXECUTE_H
