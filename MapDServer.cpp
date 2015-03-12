@@ -45,20 +45,20 @@ TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler() {
-    CHECK(boost::filesystem::exists(base_path_));
-    const auto system_db_file = boost::filesystem::path(base_path_) / "mapd_catalogs" / "mapd";
+  MapDHandler(const std::string& base_data_path) : base_data_path_(base_data_path) {
+    CHECK(boost::filesystem::exists(base_data_path_));
+    const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
     CHECK(boost::filesystem::exists(system_db_file));
-    const auto data_path = boost::filesystem::path(base_path_) / "mapd_data";
+    const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string()));
-    Catalog_Namespace::SysCatalog sys_cat(base_path_, *data_mgr_);
+    Catalog_Namespace::SysCatalog sys_cat(base_data_path_, *data_mgr_);
     Catalog_Namespace::UserMetadata user_meta;
     CHECK(sys_cat.getMetadataForUser(user_, user_meta));
     CHECK_EQ(user_meta.passwd, pass_);
     Catalog_Namespace::DBMetadata db_meta;
     CHECK(sys_cat.getMetadataForDB(db_name_, db_meta));
     CHECK(user_meta.isSuper || user_meta.userId == db_meta.dbOwner);
-    cat_.reset(new Catalog_Namespace::Catalog(base_path_, user_meta, db_meta, *data_mgr_));
+    cat_.reset(new Catalog_Namespace::Catalog(base_data_path_, user_meta, db_meta, *data_mgr_));
     logFile.open("mapd_log.txt", std::ios::out | std::ios::app);
   }
 
@@ -169,12 +169,12 @@ private:
   const std::string db_name_ { MAPD_SYSTEM_DB };
   const std::string user_ { MAPD_ROOT_USER };
   const std::string pass_ { MAPD_ROOT_PASSWD_DEFAULT };
-  const std::string base_path_ { "/tmp" };
+  const std::string base_data_path_;
 };
 
 int main(int argc, char **argv) {
   int port = 9090;
-  shared_ptr<MapDHandler> handler(new MapDHandler());
+  shared_ptr<MapDHandler> handler(new MapDHandler(argc > 1 ? argv[1] : "/tmp"));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());

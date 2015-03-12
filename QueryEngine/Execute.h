@@ -312,6 +312,9 @@ private:
   };
   std::unique_ptr<PlanState> plan_state_;
 
+  // TODO(alex): remove
+  std::string data_root_path_;
+
   bool is_nested_;
 
   boost::mutex reduce_mutex_;

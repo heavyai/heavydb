@@ -143,6 +143,7 @@ std::vector<ResultRow> Executor::execute(
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
+  data_root_path_ = root_plan->get_catalog().get_basePath();
   const auto stmt_type = root_plan->get_stmt_type();
   switch (stmt_type) {
   case kSELECT:
@@ -159,8 +160,9 @@ std::vector<ResultRow> Executor::execute(
 
 StringDictionary* Executor::getStringDictionary() const {
   if (!str_dict_) {
+    CHECK(!data_root_path_.empty());
     str_dict_.reset(new StringDictionary(MapDMeta::getStringDictFolder(
-      "/tmp", db_id_, -1, -1)));
+      data_root_path_, db_id_, -1, -1)));
   }
   return str_dict_.get();
 }

@@ -152,6 +152,7 @@ class Catalog {
          const DBMetadata &get_currentDB() const { return currentDB_; }
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 				 Data_Namespace::DataMgr &get_dataMgr() const { return dataMgr_; }
+         std::string get_basePath() const { return basePath_; }
 
          const DictDescriptor *getMetadataForDict(int dictId) const;
 

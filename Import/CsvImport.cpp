@@ -14,22 +14,23 @@
 static int64_t total_csv_parse_time_us = 0;
 static int64_t total_insert_time_ms = 0;
 
-MapDMeta::MapDMeta(const std::string table_name)
+MapDMeta::MapDMeta(const std::string table_name, const std::string& base_data_path)
   : table_name_(table_name)
-  , table_id_(-1) {
-  CHECK(boost::filesystem::exists(base_path_));
-  const auto system_db_file = boost::filesystem::path(base_path_) / "mapd_catalogs" / "mapd";
+  , table_id_(-1)
+  , base_data_path_(base_data_path) {
+  CHECK(boost::filesystem::exists(base_data_path_));
+  const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
   CHECK(boost::filesystem::exists(system_db_file));
-  const auto data_path = boost::filesystem::path(base_path_) / "mapd_data";
+  const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
   data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string()));
-  Catalog_Namespace::SysCatalog sys_cat(base_path_, *data_mgr_);
+  Catalog_Namespace::SysCatalog sys_cat(base_data_path_, *data_mgr_);
   Catalog_Namespace::UserMetadata user_meta;
   CHECK(sys_cat.getMetadataForUser(user_, user_meta));
   CHECK_EQ(user_meta.passwd, pass_);
   Catalog_Namespace::DBMetadata db_meta;
   CHECK(sys_cat.getMetadataForDB(db_name_, db_meta));
   CHECK(user_meta.isSuper || user_meta.userId == db_meta.dbOwner);
-  cat_ = new Catalog_Namespace::Catalog(base_path_, user_meta, db_meta, *data_mgr_);
+  cat_ = new Catalog_Namespace::Catalog(base_data_path_, user_meta, db_meta, *data_mgr_);
   td_ = cat_->getMetadataForTable(table_name_);
   CHECK(td_);
   table_id_ = td_->tableId;
@@ -58,15 +59,22 @@ Data_Namespace::DataMgr* MapDMeta::getDataMgr() const {
 }
 
 std::string MapDMeta::getStringDictFolder(const int col_id) const {
-  return getStringDictFolder(base_path_, getDbId(), getTableId(), col_id);
+  return getStringDictFolder(base_data_path_, getDbId(), getTableId(), col_id);
 }
 
 std::string MapDMeta::getStringDictFolder(
-    const std::string& base_path,
     const int db_id,
     const int table_id,
     const int col_id) {
-  boost::filesystem::path str_dict_folder { base_path };
+  return getStringDictFolder(base_data_path_, db_id, table_id, col_id);
+}
+
+std::string MapDMeta::getStringDictFolder(
+    const std::string& base_data_path,
+    const int db_id,
+    const int table_id,
+    const int col_id) {
+  boost::filesystem::path str_dict_folder { base_data_path };
   str_dict_folder /= ("mapd_strings_" + std::to_string(db_id));
   return str_dict_folder.string();
 }
@@ -291,12 +299,13 @@ private:
 
 CsvImporter::CsvImporter(
     const std::string& table_name,
+    const std::string& base_data_path,
     const std::string& file_path,
     const std::string& delim,
     const bool has_header)
   : table_name_(table_name),
     file_path_(file_path)
-  , table_meta_(table_name)
+  , table_meta_(table_name, base_data_path)
   , has_header_(has_header) {
     csv_parser_.set_skip_lines(1);
     csv_parser_.init(file_path.c_str());
@@ -382,7 +391,7 @@ void CsvImporter::import() {
   }
   */
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
-  StringDictionary string_dict(MapDMeta::getStringDictFolder("/tmp",
+  StringDictionary string_dict(table_meta_.getStringDictFolder(
     table_meta_.getDbId(), table_meta_.getTableId(), 0));
   for (const auto col_desc : col_descriptors) {
     import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(
