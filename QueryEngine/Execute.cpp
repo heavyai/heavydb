@@ -1,5 +1,8 @@
 #include "Execute.h"
+
 #include "Codec.h"
+#include "GpuMemUtils.h"
+#include "GroupByAndAggregate.h"
 #include "NvidiaKernel.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Chunk/Chunk.h"
@@ -296,27 +299,6 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const bool hoist_l
 
 namespace {
 
-llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
-  switch (width) {
-  case 64:
-    return llvm::Type::getInt64Ty(context);
-  case 32:
-    return llvm::Type::getInt32Ty(context);
-    break;
-  case 16:
-    return llvm::Type::getInt16Ty(context);
-    break;
-  case 8:
-    return llvm::Type::getInt8Ty(context);
-    break;
-  case 1:
-    return llvm::Type::getInt1Ty(context);
-    break;
-  default:
-    LOG(FATAL) << "Unsupported integer width: " << width;
-  }
-}
-
 std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   const auto enc_type = col_var->get_compression();
   const auto& type_info = col_var->get_type_info();
@@ -352,42 +334,12 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   }
 }
 
-size_t get_bit_width(const SQLTypes type) {
-  switch (type) {
-    case kSMALLINT:
-      return 16;
-    case kINT:
-      return 32;
-    case kBIGINT:
-      return 64;
-    case kFLOAT:
-      return 32;
-    case kDOUBLE:
-      return 64;
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-      return sizeof(time_t) * 8;
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
-      return 32;
-    default:
-      CHECK(false);
-  }
-}
-
 size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
   const auto& type_info = col_var->get_type_info();
   return get_bit_width(type_info.get_type());
 }
 
 }  // namespace
-
-template<class T>
-llvm::ConstantInt* Executor::ll_int(const T v) {
-  return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
-}
 
 llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool hoist_literals) {
   // only generate the decoding code once; if a column has been previously
@@ -781,7 +733,7 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
   }
 }
 
-llvm::Value* Executor::inlineIntNull(const SQLTypes type) {
+llvm::ConstantInt* Executor::inlineIntNull(const SQLTypes type) {
   switch (type) {
   case kSMALLINT:
     return ll_int(std::numeric_limits<int16_t>::min());
@@ -840,17 +792,6 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
 
 namespace {
 
-std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
-  const auto& target_list = plan->get_targetlist();
-  std::vector<Analyzer::Expr*> result;
-  for (auto target : target_list) {
-    auto target_expr = target->get_expr();
-    CHECK(target_expr);
-    result.push_back(target_expr);
-  }
-  return result;
-}
-
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
@@ -859,95 +800,11 @@ std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
-CUdeviceptr alloc_gpu_mem(
-    Data_Namespace::DataMgr* data_mgr,
-    const size_t num_byes,
-    const int device_id) {
-  auto ab = data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, num_byes);
-  CHECK_EQ(ab->getPinCount(), 1);
-  return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
-}
-
-void copy_to_gpu(
-    Data_Namespace::DataMgr* data_mgr,
-    CUdeviceptr dst,
-    const void* src,
-    const size_t num_byes,
-    const int device_id) {
-  CHECK(data_mgr->cudaMgr_);
-  data_mgr->cudaMgr_->copyHostToDevice(
-    reinterpret_cast<int8_t*>(dst), static_cast<const int8_t*>(src),
-    num_byes, device_id);
-}
-
-void copy_from_gpu(
-    Data_Namespace::DataMgr* data_mgr,
-    void* dst,
-    const CUdeviceptr src,
-    const size_t num_byes,
-    const int device_id) {
-  CHECK(data_mgr->cudaMgr_);
-  data_mgr->cudaMgr_->copyDeviceToHost(
-    static_cast<int8_t*>(dst), reinterpret_cast<const int8_t*>(src),
-    num_byes, device_id);
-}
-
-std::pair<CUdeviceptr, std::vector<CUdeviceptr>> create_dev_group_by_buffers(
-    Data_Namespace::DataMgr* data_mgr,
-    const std::vector<int64_t*>& group_by_buffers,
-    const size_t groups_buffer_size,
-    const bool use_fast_path,
-    const unsigned block_size_x,
-    const unsigned grid_size_x,
-    const int device_id) {
-  if (group_by_buffers.empty()) {
-    return std::make_pair(0, std::vector<CUdeviceptr> {});
-  }
-  std::vector<CUdeviceptr> group_by_dev_buffers;
-  const size_t num_buffers { block_size_x * grid_size_x };
-  for (size_t i = 0; i < num_buffers; ++i) {
-    if (!use_fast_path || (i % block_size_x == 0)) {
-      auto group_by_dev_buffer = alloc_gpu_mem(
-        data_mgr, groups_buffer_size, device_id);
-      copy_to_gpu(data_mgr, group_by_dev_buffer, group_by_buffers[i],
-        groups_buffer_size, device_id);
-      for (size_t j = 0; j < (use_fast_path ? block_size_x : 1); ++j) {
-        group_by_dev_buffers.push_back(group_by_dev_buffer);
-      }
-    }
-  }
-  auto group_by_dev_ptr = alloc_gpu_mem(
-    data_mgr, num_buffers * sizeof(CUdeviceptr), device_id);
-  copy_to_gpu(data_mgr, group_by_dev_ptr, &group_by_dev_buffers[0],
-    num_buffers * sizeof(CUdeviceptr), device_id);
-  return std::make_pair(group_by_dev_ptr, group_by_dev_buffers);
-}
-
-void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
-                                    std::vector<int64_t*> group_by_buffers,
-                                    const size_t groups_buffer_size,
-                                    const std::vector<CUdeviceptr>& group_by_dev_buffers,
-                                    const bool use_fast_path,
-                                    const unsigned block_size_x,
-                                    const unsigned grid_size_x,
-                                    const int device_id) {
-  if (group_by_buffers.empty()) {
-    return;
-  }
-  const size_t num_buffers { block_size_x * grid_size_x };
-  for (size_t i = 0; i < num_buffers; ++i) {
-    if (!use_fast_path || (i % block_size_x == 0)) {
-      copy_from_gpu(data_mgr, group_by_buffers[i], group_by_dev_buffers[i],
-        groups_buffer_size, device_id);
-    }
-  }
-}
-
 // TODO(alex): wip, refactor
 std::vector<int64_t*> launch_query_gpu_code(
     const std::vector<void*>& cu_functions,
     const bool hoist_literals,
-    const std::vector<int8_t>& hoisted_literals,
+    const std::vector<int8_t>& literal_buff,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -978,10 +835,10 @@ std::vector<int64_t*> launch_query_gpu_code(
     }
   }
   CUdeviceptr literals_dev_ptr { 0 };
-  if (!hoisted_literals.empty()) {
+  if (!literal_buff.empty()) {
     CHECK(hoist_literals);
-    literals_dev_ptr = alloc_gpu_mem(data_mgr, hoisted_literals.size(), device_id);
-    copy_to_gpu(data_mgr, literals_dev_ptr, &hoisted_literals[0], hoisted_literals.size(), device_id);
+    literals_dev_ptr = alloc_gpu_mem(data_mgr, literal_buff.size(), device_id);
+    copy_to_gpu(data_mgr, literals_dev_ptr, &literal_buff[0], literal_buff.size(), device_id);
   }
   CUdeviceptr num_rows_dev_ptr;
   {
@@ -1094,7 +951,7 @@ std::vector<int64_t*> launch_query_gpu_code(
 std::vector<int64_t*> launch_query_cpu_code(
     const std::vector<void*>& fn_ptrs,
     const bool hoist_literals,
-    const std::vector<int8_t>& hoisted_literals,
+    const std::vector<int8_t>& literal_buff,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
     const std::vector<int64_t>& init_agg_vals,
@@ -1117,10 +974,10 @@ std::vector<int64_t*> launch_query_cpu_code(
       int64_t** out,
       int64_t** out2);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &out_vec[0], nullptr);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &hoisted_literals[0], &num_rows, &init_agg_vals[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0]);
     }
   } else {
@@ -1554,9 +1411,9 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
-  auto query_code_and_literals = compilePlan(agg_infos, { nullptr }, pseudo_scan_cols,
+  auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, max_groups_buffer_entry_count_,
+    ExecutorDeviceType::CPU, opt_level,
     std::make_tuple(false, 0L, 0L), nullptr);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
@@ -1568,8 +1425,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
   init_groups(small_group_by_buffer, small_groups_buffer_entry_count_, target_exprs.size(), &init_agg_vals[0], 1);
   std::vector<int64_t*> group_by_buffers { group_by_buffer };
   std::vector<int64_t*> small_group_by_buffers { small_group_by_buffer };
-  const auto hoist_buf = serializeLiterals(query_code_and_literals.second);
-  launch_query_cpu_code(query_code_and_literals.first, hoist_literals, hoist_buf,
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals, group_by_buffers, small_group_by_buffers);
   auto results = groupBufferToResults(small_group_by_buffer, small_groups_buffer_entry_count_,
     1, target_exprs.size(), target_exprs);
@@ -1743,9 +1600,9 @@ Executor::FastGroupByInfo canUseFastGroupBy(
   return std::make_tuple(false, 0L, 0L);
 }
 
-std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set { nullptr };
-
 }  // namespace
+
+std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set { nullptr };
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
     const Planner::Plan* plan,
@@ -1785,11 +1642,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   fragmenter->getFragmentsForQuery(query_info);
   const auto& fragments = query_info.fragments;
   const auto fast_group_by = canUseFastGroupBy(agg_plan, fragments, max_groups_buffer_entry_count_);
-  std::pair<std::vector<void*>, Executor::LiteralValues> query_code_and_literals;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
-  query_code_and_literals = compilePlan(agg_infos, groupby_exprs, scan_plan->get_col_list(),
+  auto compilation_result = compilePlan(plan, query_info, agg_infos,
+    scan_plan->get_col_list(),
     simple_quals, scan_plan->get_quals(),
-    hoist_literals, device_type, opt_level, max_groups_buffer_entry_count_,
+    hoist_literals, device_type, opt_level,
     fast_group_by,
     cat.get_dataMgr().cudaMgr_);
   const auto current_dbid = cat.get_currentDB().dbId;
@@ -1800,22 +1657,16 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
   const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
-  const size_t num_buffers { device_type == ExecutorDeviceType::CPU ? 1 : block_size_x_ * grid_size_x_ };
-  const size_t groups_buffer_size {
-    (groupby_exprs.size() + agg_infos.size()) * max_groups_buffer_entry_count_ * sizeof(int64_t) };
-  const size_t small_groups_buffer_size {
-    (groupby_exprs.size() + agg_infos.size()) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
   for (size_t i = 0; i < fragments.size(); ++i) {
     if (skipFragment(fragments[i], simple_quals)) {
       continue;
     }
-    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, query_code_and_literals,
-        hoist_literals, num_buffers, groups_buffer_size, small_groups_buffer_size,
-        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs, &agg_infos]() {
+    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, compilation_result, hoist_literals,
+        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
       ResultRows device_results;
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
       std::unique_ptr<FragmentState> frag_state(
-        new FragmentState(this, device_type, groupby_exprs.size(), agg_infos.size()));
+        new FragmentState(this, device_type, compilation_result.group_buff_desc));
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks(plan_state_->global_to_local_col_ids_.size());
@@ -1845,11 +1696,13 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       }
       // TODO(alex): multiple devices support
       if (groupby_exprs.empty()) {
-        executePlanWithoutGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
+        executePlanWithoutGroupBy(
+          compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan), device_type, col_buffers, num_rows,
           &cat.get_dataMgr(), device_id);
       } else {
-        executePlanWithGroupBy(query_code_and_literals.first, hoist_literals, query_code_and_literals.second,
+        executePlanWithGroupBy(
+          compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), device_type, col_buffers,
           frag_state->group_by_buffers_, frag_state->small_group_by_buffers_, num_rows,
@@ -1878,9 +1731,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
 }
 
 void Executor::executePlanWithoutGroupBy(
-    const std::vector<void*>& native_functions,
+    const CompilationResult& compilation_result,
     const bool hoist_literals,
-    const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
@@ -1889,15 +1741,15 @@ void Executor::executePlanWithoutGroupBy(
     Data_Namespace::DataMgr* data_mgr,
     const int device_id) {
   std::vector<int64_t*> out_vec;
-  const auto hoist_buf = serializeLiterals(hoisted_literals);
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
-      native_functions, hoist_literals, hoist_buf,
+      compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
     boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
     out_vec = launch_query_gpu_code(
-      native_functions, hoist_literals, hoist_buf,
+      compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, {}, 0,
       data_mgr, false, block_size_x_, grid_size_x_, device_id);
   }
@@ -1944,9 +1796,8 @@ void Executor::executePlanWithoutGroupBy(
 }
 
 void Executor::executePlanWithGroupBy(
-    const std::vector<void*>& native_functions,
+    const CompilationResult& compilation_result,
     const bool hoist_literals,
-    const Executor::LiteralValues& hoisted_literals,
     std::vector<ResultRow>& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
@@ -1968,39 +1819,36 @@ void Executor::executePlanWithGroupBy(
   // TODO(alex): get rid of std::list everywhere
   std::list<Analyzer::Expr*> target_exprs_list;
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
-  const auto hoist_buf = serializeLiterals(hoisted_literals);
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  const size_t groups_buffer_entry_count { compilation_result.group_buff_desc.entry_count };
   if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(native_functions, hoist_literals, hoist_buf, col_buffers,
+    launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers, small_group_by_buffers);
-    if (plan_state_->allocate_small_buffers_) {
+    if (compilation_result.group_buff_desc.entry_count_small) {
       CHECK_EQ(group_by_buffers.size(), small_group_by_buffers.size());
       results = groupBufferToResults(small_group_by_buffers.front(), small_groups_buffer_entry_count_,
         group_by_col_count, agg_col_count, target_exprs_list);
     }
-    auto more_results = groupBufferToResults(group_by_buffers.front(), max_groups_buffer_entry_count_,
+    auto more_results = groupBufferToResults(group_by_buffers.front(), groups_buffer_entry_count,
       group_by_col_count, agg_col_count, target_exprs_list);
     results.insert(results.end(), more_results.begin(), more_results.end());
   } else {
-    const bool use_fast_path { enabled(cgen_state_->fast_group_by_) };
-    const size_t groups_buffer_entry_count { use_fast_path
-      ? maxBin(cgen_state_->fast_group_by_) - minBin(cgen_state_->fast_group_by_) + 1
-      : max_groups_buffer_entry_count_ };
     const size_t groups_buffer_size {
       (group_by_col_count + agg_col_count) * groups_buffer_entry_count * sizeof(int64_t) };
     const size_t small_groups_buffer_size {
       (group_by_col_count + agg_col_count) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
     {
       boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
-      launch_query_gpu_code(native_functions, hoist_literals, hoist_buf,
+      launch_query_gpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
         col_buffers, num_rows, plan_state_->init_agg_vals_,
         group_by_buffers, groups_buffer_size,
         small_group_by_buffers, small_groups_buffer_size,
-        data_mgr, use_fast_path, block_size_x_, grid_size_x_, device_id);
+        data_mgr, enabled(cgen_state_->fast_group_by_), block_size_x_, grid_size_x_, device_id);
     }
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
       Executor::ResultRows small_results;
-      if (plan_state_->allocate_small_buffers_) {
+      if (compilation_result.group_buff_desc.entry_count_small) {
         CHECK_EQ(group_by_buffers.size(), small_group_by_buffers.size());
         small_results = groupBufferToResults(small_group_by_buffers[i],
           small_groups_buffer_entry_count_, group_by_col_count, agg_col_count, target_exprs_list);
@@ -2297,16 +2145,16 @@ void Executor::nukeOldState() {
   plan_state_.reset(new PlanState());
 }
 
-std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
+Executor::CompilationResult Executor::compilePlan(
+    const Planner::Plan* plan,
+    const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
-    const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
     const std::list<Analyzer::Expr*>& simple_quals,
     const std::list<Analyzer::Expr*>& quals,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const size_t groups_buffer_entry_count,
     const Executor::FastGroupByInfo& fast_group_by,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
   nukeOldState();
@@ -2317,11 +2165,16 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   cgen_state_->module_ = create_runtime_module(cgen_state_->context_);
-  const bool is_group_by { !groupby_list.empty() };
+
+  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info);
+
+  auto group_buff_desc = group_by_and_aggregate.getGroupByBufferDescriptor();
+
+  const bool is_group_by { !group_buff_desc.group_col_widths.empty() };
   const bool use_fast_path { enabled(fast_group_by) };
-  const size_t groups_buffer_size { use_fast_path
-    ? (groupby_list.size() + agg_infos.size()) * (maxBin(fast_group_by) - minBin(fast_group_by) + 1) * sizeof(int64_t)
-    : (groupby_list.size() + agg_infos.size()) * max_groups_buffer_entry_count_ * sizeof(int64_t) };
+  const size_t groups_buffer_size {
+    (group_buff_desc.group_col_widths.size() + group_buff_desc.agg_col_widths.size()) *
+     group_buff_desc.entry_count * sizeof(int64_t) };
   auto query_func = is_group_by
     ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals, use_fast_path, groups_buffer_size)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
@@ -2352,14 +2205,7 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  {
-    for (const auto& agg_info : agg_infos) {
-      plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
-    }
-    codegenAggrCalls(agg_infos, filter_lv,
-        groupby_list, groups_buffer_entry_count,
-        cgen_state_->module_, hoist_literals, device_type);
-  }
+  group_by_and_aggregate.codegen(filter_lv, device_type, hoist_literals);
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
@@ -2381,11 +2227,17 @@ std::pair<std::vector<void*>, Executor::LiteralValues> Executor::compilePlan(
 
   is_nested_ = false;
 
-  return (device_type == ExecutorDeviceType::CPU)
-    ? std::make_pair(optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_),
-                                           cgen_state_->getLiterals())
-    : std::make_pair(optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_,
-                                           is_group_by, cuda_mgr), cgen_state_->getLiterals());
+  for (const auto& agg_info : agg_infos) {
+    plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
+  }
+
+  return Executor::CompilationResult {
+    device_type == ExecutorDeviceType::CPU
+      ? optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_)
+      : optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_, is_group_by, cuda_mgr),
+    cgen_state_->getLiterals(),
+    group_buff_desc
+  };
 }
 
 namespace {
@@ -2618,78 +2470,6 @@ R"(
   return native_functions;
 }
 
-llvm::Value* Executor::fastGroupByCodegen(
-    Analyzer::Expr* group_by_col,
-    const size_t agg_col_count,
-    const bool hoist_literals,
-    llvm::Module* module,
-    const int64_t min_val) {
-  auto group_key = groupByColumnCodegen(group_by_col, hoist_literals);
-  auto get_group_value_func = module->getFunction("get_group_value_fast");
-  CHECK(get_group_value_func);
-  auto& groups_buffer = cgen_state_->row_func_->getArgumentList().front();
-  std::vector<llvm::Value*> get_group_value_args {
-    &groups_buffer,
-    group_key,
-    ll_int(min_val),
-    ll_int(static_cast<int32_t>(agg_col_count))
-  };
-  return cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
-}
-
-llvm::Value* Executor::slowGroupByCodegen(
-    const std::list<Analyzer::Expr*>& group_by_cols,
-    const int32_t groups_buffer_entry_count,
-    const bool hoist_literals,
-    llvm::Module* module) {
-  auto group_keys_buffer = cgen_state_->ir_builder_.CreateAlloca(
-    llvm::Type::getInt64Ty(cgen_state_->context_),
-    ll_int(static_cast<int32_t>(group_by_cols.size())));
-  int32_t i = 0;
-  for (const auto group_by_col : group_by_cols) {
-    auto group_key = groupByColumnCodegen(group_by_col, hoist_literals);
-    auto group_key_ptr = cgen_state_->ir_builder_.CreateGEP(group_keys_buffer,
-      llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), i));
-    cgen_state_->ir_builder_.CreateStore(group_key, group_key_ptr);
-    ++i;
-  }
-  auto get_group_value_func = module->getFunction("get_group_value");
-  CHECK(get_group_value_func);
-  auto& groups_buffer = cgen_state_->row_func_->getArgumentList().front();
-  std::vector<llvm::Value*> get_group_value_args {
-    &groups_buffer,
-    ll_int(groups_buffer_entry_count),
-    group_keys_buffer,
-    ll_int(static_cast<int32_t>(group_by_cols.size())),
-    ll_int(static_cast<int32_t>(plan_state_->init_agg_vals_.size()))
-  };
-  return cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
-}
-
-llvm::Value* Executor::groupByOneColumnCodegen(
-    Analyzer::Expr* group_by_col,
-    const size_t agg_col_count,
-    const bool hoist_literals,
-    llvm::Module* module,
-    const int64_t min_val) {
-  auto group_key = groupByColumnCodegen(group_by_col, hoist_literals);
-  auto get_group_value_func = module->getFunction("get_group_value_one_key");
-  CHECK(get_group_value_func);
-  auto arg_it = cgen_state_->row_func_->arg_begin();
-  auto groups_buffer = arg_it++;
-  auto small_groups_buffer = arg_it;
-  std::vector<llvm::Value*> get_group_value_args {
-    groups_buffer,
-    ll_int(static_cast<int32_t>(max_groups_buffer_entry_count_)),
-    small_groups_buffer,
-    ll_int(static_cast<int32_t>(small_groups_buffer_entry_count_)),
-    group_key,
-    ll_int(min_val),
-    ll_int(static_cast<int32_t>(agg_col_count))
-  };
-  return cgen_state_->ir_builder_.CreateCall(get_group_value_func, get_group_value_args);
-}
-
 llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                             const bool hoist_literals) {
   auto group_key = codegen(group_by_col, hoist_literals);
@@ -2719,121 +2499,6 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
     }
   }
   return group_key;
-}
-
-void Executor::codegenAggrCalls(
-    const std::vector<AggInfo>& agg_infos,
-    llvm::Value* filter_result,
-    const std::list<Analyzer::Expr*>& group_by_cols,
-    const int32_t groups_buffer_entry_count,
-    llvm::Module* module,
-    const bool hoist_literals,
-    const ExecutorDeviceType device_type) {
-  auto filter_true = llvm::BasicBlock::Create(cgen_state_->context_, "filter_true", cgen_state_->row_func_);
-  auto filter_false = llvm::BasicBlock::Create(cgen_state_->context_, "filter_false", cgen_state_->row_func_);
-
-  cgen_state_->ir_builder_.CreateCondBr(filter_result, filter_true, filter_false);
-  cgen_state_->ir_builder_.SetInsertPoint(filter_true);
-
-  std::vector<llvm::Value*> agg_out_vec;
-
-  const bool is_group_by = !group_by_cols.empty();
-
-  if (is_group_by) {
-    if (group_by_cols.size() == 1) {
-      const auto min_val = minBin(cgen_state_->fast_group_by_);
-      const auto group_by_col = group_by_cols.front();
-      if (enabled(cgen_state_->fast_group_by_)) {
-        agg_out_vec.push_back(fastGroupByCodegen(group_by_col, agg_infos.size(), hoist_literals, module, min_val));
-      } else {
-        plan_state_->allocate_small_buffers_ = true;
-        agg_out_vec.push_back(groupByOneColumnCodegen(group_by_col, agg_infos.size(), hoist_literals, module, min_val));
-      }
-    } else {
-      agg_out_vec.push_back(slowGroupByCodegen(group_by_cols, groups_buffer_entry_count, hoist_literals, module));
-    }
-  } else {
-    auto args = cgen_state_->row_func_->arg_begin();
-    for (size_t i = 0; i < agg_infos.size(); ++i) {
-      agg_out_vec.push_back(args++);
-    }
-  }
-
-  for (size_t i = 0; i < agg_infos.size(); ++i) {
-    const auto& agg_info = agg_infos[i];
-    auto agg_func = (device_type == ExecutorDeviceType::GPU && is_group_by)
-      ? module->getFunction(std::get<0>(agg_info) + "_shared")
-      : module->getFunction(std::get<0>(agg_info));
-    CHECK(agg_func);
-    auto aggr_col = std::get<1>(agg_info);
-    llvm::Value* agg_expr_lv = ll_int(0L);
-    if (aggr_col) {
-      agg_expr_lv = codegen(aggr_col, hoist_literals);
-      auto agg_col_type = agg_expr_lv->getType();
-      if (agg_col_type->isIntegerTy()) {
-        auto agg_col_width = static_cast<llvm::IntegerType*>(agg_col_type)->getBitWidth();
-        CHECK_LE(agg_col_width, 64);
-        if (agg_col_width < 64) {
-          agg_expr_lv = cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
-            agg_expr_lv,
-            get_int_type(64, cgen_state_->context_));
-        }
-      } else {
-        CHECK(agg_col_type->isFloatTy() || agg_col_type->isDoubleTy());
-        if (agg_col_type->isFloatTy()) {
-          agg_expr_lv = cgen_state_->ir_builder_.CreateFPExt(agg_expr_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
-        }
-      }
-    }
-    std::vector<llvm::Value*> agg_args;
-    if (!is_group_by) {
-      agg_args = { agg_out_vec[i], agg_expr_lv };
-    } else {
-      CHECK_EQ(agg_out_vec.size(), 1);
-      agg_args = {
-        cgen_state_->ir_builder_.CreateGEP(
-          agg_out_vec.front(),
-          llvm::ConstantInt::get(llvm::Type::getInt32Ty(cgen_state_->context_), i)),
-        agg_expr_lv
-      };
-    }
-    if (std::get<0>(agg_info) == "agg_count_distinct") {
-      agg_args.push_back(ll_int(static_cast<int64_t>(i)));
-      if (is_group_by) {
-        auto& groups_buffer = cgen_state_->row_func_->getArgumentList().front();
-        agg_args.push_back(&groups_buffer);
-      } else {
-        agg_args.push_back(llvm::ConstantPointerNull::get(
-          llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0)));
-      }
-      agg_args.push_back(ll_int(reinterpret_cast<int64_t>(count_distinct_set)));
-    }
-    // Skip null values from aggregate value.
-    // TODO(alex): handle non-integer columns as well
-    if (std::get<0>(agg_info) != "agg_id" &&
-        aggr_col &&
-        (aggr_col->get_type_info().is_integer() || aggr_col->get_type_info().is_time()) &&
-        !aggr_col->get_type_info().get_notnull()) {
-      auto agg_func_skip_val = (device_type == ExecutorDeviceType::GPU && is_group_by)
-        ? module->getFunction(std::get<0>(agg_info) + "_skip_val_shared")
-        : module->getFunction(std::get<0>(agg_info) + "_skip_val");
-      CHECK(agg_func_skip_val);
-      auto null_lv = inlineIntNull(aggr_col->get_type_info().get_type());
-      if (aggr_col->get_type_info().get_type() != kBIGINT) {
-        null_lv = cgen_state_->ir_builder_.CreateCast(
-          llvm::Instruction::CastOps::SExt,
-          null_lv,
-          get_int_type(64, cgen_state_->context_));
-      }
-      agg_args.push_back(null_lv);
-      cgen_state_->ir_builder_.CreateCall(agg_func_skip_val, agg_args);
-    } else {
-      cgen_state_->ir_builder_.CreateCall(agg_func, agg_args);
-    }
-  }
-  cgen_state_->ir_builder_.CreateBr(filter_false);
-  cgen_state_->ir_builder_.SetInsertPoint(filter_false);
-  cgen_state_->ir_builder_.CreateRetVoid();
 }
 
 void Executor::allocateLocalColumnIds(const std::list<int>& global_col_ids) {

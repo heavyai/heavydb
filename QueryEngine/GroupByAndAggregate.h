@@ -16,43 +16,34 @@ class GroupByAndAggregate {
 public:
   GroupByAndAggregate(
     Executor* executor,
-    llvm::Value* filter_result,
-    const Planner::AggPlan* agg_plan,
+    const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info);
 
-  void codegen(const ExecutorDeviceType, const bool hoist_literals);
+  GroupByBufferDescriptor getGroupByBufferDescriptor();
+
+  void codegen(
+    llvm::Value* filter_result,
+    const ExecutorDeviceType,
+    const bool hoist_literals);
 
   void allocateBuffers(const ExecutorDeviceType);
 
-  enum class ColRangeType {
-    OneColConsecutiveKeys,  // statically known and consecutive keys, used for dictionary encoded columns
-    OneColKnownRange,       // statically known range, only possible for column expressions
-    OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
-    MultiCol,
-    Scan,                   // the plan is not a group by plan
-    Unknown
-  };
-
-  // Private: each thread has its own memory, no atomic operations required
-  // Shared: threads in the same block share memory, atomic operations required
-  enum class Sharing {
-    Private,
-    Shared
-  };
-
 private:
   struct ColRangeInfo {
-    GroupByAndAggregate::ColRangeType hash_type_;
-    int64_t min;
-    int64_t max;
+    const GroupByColRangeType hash_type_;
+    const int64_t min;
+    const int64_t max;
   };
 
+  llvm::Value* codegenGroupBy(const bool hoist_literals);
+
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
-    const Planner::AggPlan*,
+    const Planner::Plan*,
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);
 
   void codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
+    const std::vector<llvm::Value*>& agg_out_vec,
     const ExecutorDeviceType,
     const bool hoist_literals);
 
@@ -67,9 +58,48 @@ private:
   llvm::Function* getFunction(const std::string& name) const;
 
   Executor* executor_;
-  llvm::Value* filter_result_;
-  const Planner::AggPlan* agg_plan_;
-  ColRangeInfo col_range_info_;
+  const Planner::Plan* plan_;
+  const Fragmenter_Namespace::QueryInfo& query_info_;
 };
+
+namespace {
+
+inline size_t get_bit_width(const SQLTypes type) {
+  switch (type) {
+    case kSMALLINT:
+      return 16;
+    case kINT:
+      return 32;
+    case kBIGINT:
+      return 64;
+    case kFLOAT:
+      return 32;
+    case kDOUBLE:
+      return 64;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return sizeof(time_t) * 8;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      return 32;
+    default:
+      CHECK(false);
+  }
+}
+
+inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
+  const auto& target_list = plan->get_targetlist();
+  std::vector<Analyzer::Expr*> result;
+  for (auto target : target_list) {
+    auto target_expr = target->get_expr();
+    CHECK(target_expr);
+    result.push_back(target_expr);
+  }
+  return result;
+}
+
+}  // namespace
 
 #endif // QUERYENGINE_GROUPBYANDAGGREGATE_H
