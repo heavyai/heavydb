@@ -1757,7 +1757,8 @@ void Executor::executePlanWithGroupBy(
         col_buffers, num_rows, plan_state_->init_agg_vals_,
         group_by_memory->group_by_buffers_, compilation_result.group_buff_desc.getBufferSize(),
         group_by_memory->small_group_by_buffers_, compilation_result.group_buff_desc.getSmallBufferSize(),
-        data_mgr, cgen_state_->fast_group_by_, block_size_x_, grid_size_x_, device_id);
+        data_mgr, compilation_result.group_buff_desc.usesGetGroupValueFast(),
+        block_size_x_, grid_size_x_, device_id);
     }
     results = group_by_memory->getRowSet(target_exprs);
   }
@@ -2043,8 +2044,6 @@ Executor::CompilationResult Executor::compilePlan(
   GroupByAndAggregate group_by_and_aggregate(this, plan, query_info);
   auto group_buff_desc = group_by_and_aggregate.getGroupByBufferDescriptor();
 
-  cgen_state_->fast_group_by_ = group_buff_desc.usesGetGroupValueFast();
-
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
@@ -2056,7 +2055,7 @@ Executor::CompilationResult Executor::compilePlan(
      group_buff_desc.entry_count * sizeof(int64_t) };
   auto query_func = is_group_by
     ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals,
-        cgen_state_->fast_group_by_, groups_buffer_size)
+        group_buff_desc.usesGetGroupValueFast(), groups_buffer_size)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", query_func, cgen_state_->module_);

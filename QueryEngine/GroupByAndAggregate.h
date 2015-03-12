@@ -143,7 +143,7 @@ struct GroupByBufferDescriptor {
   size_t getSmallBufferSize() const;
 
   // TODO(alex): remove
-  bool usesGetGroupValueFast();
+  bool usesGetGroupValueFast() const;
 };
 
 class GroupByAndAggregate {

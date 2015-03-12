@@ -15,12 +15,10 @@ GroupByMemory::GroupByMemory(const GroupByBufferDescriptor& group_buff_desc,
         device_type == ExecutorDeviceType::CPU
           ? 1
           : executor->block_size_x_ * executor->grid_size_x_ } {
-  const size_t num_buffers { device_type == ExecutorDeviceType::CPU
-    ? 1 : executor->block_size_x_ * executor->grid_size_x_ };
   if (group_buff_desc.group_col_widths.empty()) {
     return;
   }
-  for (size_t i = 0; i < num_buffers; ++i) {
+  for (size_t i = 0; i < num_buffers_; ++i) {
     auto group_by_buffer = static_cast<int64_t*>(malloc(group_buff_desc_.getBufferSize()));
     init_groups(group_by_buffer, group_buff_desc.entry_count, group_buff_desc.group_col_widths.size(),
       &init_agg_vals[0], group_buff_desc.agg_col_widths.size());
@@ -353,7 +351,7 @@ GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
   }
 }
 
-bool GroupByBufferDescriptor::usesGetGroupValueFast() {
+bool GroupByBufferDescriptor::usesGetGroupValueFast() const {
   return ((hash_type == GroupByColRangeType::OneColKnownRange ||
            hash_type == GroupByColRangeType::OneColConsecutiveKeys) &&
           !entry_count_small);

@@ -242,7 +242,6 @@ private:
       , row_func_(nullptr)
       , context_(llvm::getGlobalContext())
       , ir_builder_(context_)
-      , fast_group_by_ { false }
       , literal_bytes_(0) {}
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant) {
@@ -281,7 +280,6 @@ private:
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, llvm::Value*> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
-    bool fast_group_by_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {
