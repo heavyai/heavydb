@@ -42,6 +42,9 @@ namespace Data_Namespace {
         virtual void getChunkMetadataVec(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadata) = 0;
         virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) = 0;
 
+        virtual bool isBufferOnDevice(const ChunkKey &key) = 0;
+
+
         virtual void checkpoint() = 0;
 
         // Buffer API

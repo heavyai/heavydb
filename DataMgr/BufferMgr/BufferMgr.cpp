@@ -342,6 +342,16 @@ namespace Buffer_Namespace {
         std::cout << "--------------------" << std::endl;
     }
 
+    bool BufferMgr::isBufferOnDevice(const ChunkKey &key) {
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        if (chunkIndex_.find(key) == chunkIndex_.end()) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
     /// This method throws a runtime_error when deleting a Chunk that does not exist.
     void BufferMgr::deleteBuffer(const ChunkKey &key, const bool purge) { 
         std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);

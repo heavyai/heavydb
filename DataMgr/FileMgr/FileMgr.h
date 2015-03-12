@@ -74,7 +74,8 @@ namespace File_Namespace {
         
         /// Creates a chunk with the specified key and page size.
         virtual AbstractBuffer * createBuffer(const ChunkKey &key, size_t pageSize = 0, const size_t numBytes = 0);
-        
+
+        virtual bool isBufferOnDevice(const ChunkKey &key);
         /// Deletes the chunk with the specified key
         // Purge == true means delete the data chunks - 
         // can't undelete and revert to previous
@@ -85,6 +86,7 @@ namespace File_Namespace {
 
         /// Returns the a pointer to the chunk with the specified key.
         virtual AbstractBuffer* getBuffer(const ChunkKey &key, const size_t numBytes = 0);
+
 
         virtual void fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes);
 

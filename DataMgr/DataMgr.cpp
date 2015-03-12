@@ -65,6 +65,10 @@ namespace Data_Namespace {
             levelSizes_.push_back(1);
         }
     }
+
+    bool DataMgr::isBufferOnDevice(const ChunkKey &key, const MemoryLevel memLevel, const int deviceId) {
+        return bufferMgrs_[memLevel][deviceId]->isBufferOnDevice(key);
+    }
     
     void DataMgr::getChunkMetadataVec(std::vector<std::pair <ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
         // Can we always assume this will just be at the disklevel bc we just

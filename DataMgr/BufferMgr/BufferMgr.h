@@ -64,6 +64,7 @@ namespace Buffer_Namespace {
          * @param d - An object representing the source data for the Chunk.
          * @return AbstractBuffer*
          */
+        virtual bool isBufferOnDevice(const ChunkKey &key);
         virtual void fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes = 0);
         virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *d, const size_t numBytes = 0);
         void checkpoint();

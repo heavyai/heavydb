@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <fstream>
+#include <iostream>
 
 
 using namespace ::apache::thrift;
@@ -54,6 +55,7 @@ double dtime() {
 class MapDHandler : virtual public MapDIf {
 public:
   MapDHandler() {
+    std::cout << "MapDHandler initialized" << std::endl; 
     CHECK(boost::filesystem::exists(base_path_));
     const auto system_db_file = boost::filesystem::path(base_path_) / "mapd_catalogs" / "mapd";
     CHECK(boost::filesystem::exists(system_db_file));

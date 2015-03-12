@@ -215,6 +215,7 @@ namespace File_Namespace {
 
     void FileMgr::checkpoint() {
         //std::cout << "Checkpointing " << epoch_ <<  std::endl;
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
             /*   
             for (auto vecIt = chunkIt->first.begin(); vecIt != chunkIt->first.end(); ++vecIt) {
@@ -227,6 +228,7 @@ namespace File_Namespace {
                 chunkIt->second->clearDirtyBits();
             }
         }
+        chunkIndexLock.unlock();
         for (auto fileIt = files_.begin(); fileIt != files_.end(); ++fileIt) {
             int status = (*fileIt)->syncToDisk();
             if (status != 0)
@@ -245,20 +247,30 @@ namespace File_Namespace {
         /// @todo Make all accesses to chunkIndex_ thread-safe
         // we will do this lazily and not allocate space for the Chunk (i.e.
         // FileBuffer yet)
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
 
         if (chunkIndex_.find(key) != chunkIndex_.end()) {
             throw std::runtime_error("Chunk already exists.");
         }
         chunkIndex_[key] = new FileBuffer (this,actualPageSize,key,numBytes);
+        chunkIndexLock.unlock();
         return (chunkIndex_[key]);
     }
 
+    bool FileMgr::isBufferOnDevice(const ChunkKey &key) {
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        return  chunkIndex_.find(key) != chunkIndex_.end();
+    }
+
+
     void FileMgr::deleteBuffer(const ChunkKey &key, const bool purge) {
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
         auto chunkIt = chunkIndex_.find(key);
         // ensure the Chunk exists
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist.");
         }
+        chunkIndexLock.unlock();
         //chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
         if (purge) {
             chunkIt->second->freePages();
@@ -269,6 +281,7 @@ namespace File_Namespace {
     }
 
     void FileMgr::deleteBuffersWithPrefix(const ChunkKey &keyPrefix, const bool purge) {
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
         auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
         if (chunkIt == chunkIndex_.end()) {
             return; // should we throw?
@@ -292,9 +305,11 @@ namespace File_Namespace {
     }
 
     AbstractBuffer* FileMgr::getBuffer(const ChunkKey &key, const size_t numBytes) {
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end())
             throw std::runtime_error("Chunk does not exist.");
+        chunkIndexLock.unlock();
         return chunkIt->second;
     }
 
@@ -302,11 +317,13 @@ namespace File_Namespace {
     void FileMgr::fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
         // reads chunk specified by ChunkKey into AbstractBuffer provided by
         // destBuffer
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
         
         auto chunkIt = chunkIndex_.find(key);
         if (chunkIt == chunkIndex_.end()) {
             throw std::runtime_error("Chunk does not exist");
         }
+        chunkIndexLock.unlock();
         if (destBuffer->isDirty()) {
             throw std::runtime_error("Chunk inconsitency - fetchChunk");
         }
@@ -331,6 +348,7 @@ namespace File_Namespace {
 
     AbstractBuffer* FileMgr::putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer, const size_t numBytes) {
         // obtain a pointer to the Chunk
+        std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
         auto chunkIt = chunkIndex_.find(key);
         AbstractBuffer *chunk;
         if (chunkIt == chunkIndex_.end()) {
@@ -339,6 +357,7 @@ namespace File_Namespace {
         else {
             chunk = chunkIt->second;
         }
+        chunkIndexLock.unlock();
         size_t oldChunkSize = chunk->size();
         // write the buffer's data to the Chunk
         //size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
@@ -487,6 +506,7 @@ namespace File_Namespace {
     }
     */
     void FileMgr::getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec) {
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
         chunkMetadataVec.reserve(chunkIndex_.size());
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) { 
             if (chunkIt->second->hasEncoder) {
@@ -498,6 +518,7 @@ namespace File_Namespace {
     }
 
     void FileMgr::getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix) {
+        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
         auto chunkIt = chunkIndex_.lower_bound(keyPrefix); 
         if (chunkIt == chunkIndex_.end()) {
             return; // throw?

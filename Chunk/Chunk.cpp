@@ -14,6 +14,21 @@ namespace Chunk_NS {
       return chunkp;
     }
 
+  bool
+  Chunk::isChunkOnDevice(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id) {
+    if (column_desc->columnType.is_varlen()) {
+      ChunkKey subKey = key;
+      ChunkKey indexKey (subKey);
+      indexKey.push_back(1);
+      ChunkKey dataKey (subKey);
+      dataKey.push_back(2);
+      return data_mgr->isBufferOnDevice(indexKey,mem_level,device_id) && data_mgr->isBufferOnDevice(dataKey,mem_level,device_id);
+    }
+    else {
+      return data_mgr->isBufferOnDevice(key,mem_level,device_id);
+    }
+  }
+
   void 
   Chunk::getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id, const size_t num_bytes, const size_t num_elems)
   {

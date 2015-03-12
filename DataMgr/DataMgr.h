@@ -40,6 +40,7 @@ namespace Data_Namespace {
             void freeAllBuffers();
             // copies one buffer to another
             void copy(AbstractBuffer *destBuffer, AbstractBuffer *srcBuffer);
+            bool isBufferOnDevice(const ChunkKey &key, const MemoryLevel memLevel, const int deviceId);
 
             //const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();
             const std::map<ChunkKey, File_Namespace::FileBuffer *> & getChunkMap();

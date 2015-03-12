@@ -41,6 +41,7 @@ namespace Chunk_NS {
 			void createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0);
 			void getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0, const size_t num_bytes = 0, const size_t num_elems = 0);
 			static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId, const size_t num_bytes, const size_t num_elems);
+            bool isChunkOnDevice(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id);
 
 		// protected:
 			AbstractBuffer *get_buffer() const { return buffer; }
