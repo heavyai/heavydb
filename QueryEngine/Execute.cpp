@@ -2204,14 +2204,8 @@ Executor::CompilationResult Executor::compilePlan(
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  GroupByBufferDescriptor group_buff_desc;
-  {
-    for (const auto& agg_info : agg_infos) {
-      plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
-    }
-    GroupByAndAggregate group_by_and_aggregate(this, filter_lv, plan, query_info);
-    group_buff_desc = group_by_and_aggregate.codegen(device_type, hoist_literals);
-  }
+  GroupByAndAggregate group_by_and_aggregate(this, filter_lv, plan, query_info);
+  auto group_buff_desc = group_by_and_aggregate.codegen(device_type, hoist_literals);
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
@@ -2232,6 +2226,10 @@ Executor::CompilationResult Executor::compilePlan(
   }
 
   is_nested_ = false;
+
+  for (const auto& agg_info : agg_infos) {
+    plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
+  }
 
   return Executor::CompilationResult {
     device_type == ExecutorDeviceType::CPU
