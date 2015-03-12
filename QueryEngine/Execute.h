@@ -277,7 +277,6 @@ private:
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
-    const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
     const std::list<Analyzer::Expr*>& simple_quals,
     const std::list<Analyzer::Expr*>& quals,

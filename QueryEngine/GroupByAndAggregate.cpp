@@ -266,7 +266,7 @@ GroupByBufferDescriptor GroupByAndAggregate::getGroupByBufferDescriptor() {
   }
 }
 
-GroupByBufferDescriptor GroupByAndAggregate::codegen(
+void GroupByAndAggregate::codegen(
     llvm::Value* filter_result,
     const ExecutorDeviceType device_type,
     const bool hoist_literals) {
@@ -290,26 +290,18 @@ GroupByBufferDescriptor GroupByAndAggregate::codegen(
     for (int32_t i = 0; i < get_agg_count(plan_); ++i) {
       agg_out_vec.push_back(arg_it++);
     }
-    group_buff_desc = codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
+    codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
   } else {
-    llvm::Value* agg_out_start_ptr { nullptr };
-    std::tie(agg_out_start_ptr, group_buff_desc) = codegenGroupBy(hoist_literals);
-    group_buff_desc = codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
-    // TODO(alex): remove
-    if (device_type == ExecutorDeviceType::CPU) {
-      group_buff_desc.entry_count = executor_->max_groups_buffer_entry_count_;
-    }
+    auto agg_out_start_ptr = codegenGroupBy(hoist_literals);
+    codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
   }
 
   LL_BUILDER.CreateBr(filter_false);
   LL_BUILDER.SetInsertPoint(filter_false);
   LL_BUILDER.CreateRetVoid();
-
-  return group_buff_desc;
 }
 
-std::pair<llvm::Value*, GroupByBufferDescriptor> GroupByAndAggregate::codegenGroupBy(
-    const bool hoist_literals) {
+llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
 
@@ -388,7 +380,7 @@ std::pair<llvm::Value*, GroupByBufferDescriptor> GroupByAndAggregate::codegenGro
 
   CHECK(agg_out_start_ptr);
 
-  return { agg_out_start_ptr, group_buff_desc };
+  return agg_out_start_ptr;
 }
 
 llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
@@ -436,7 +428,7 @@ llvm::Value* GroupByAndAggregate::toDoublePrecision(llvm::Value* val) {
     : val;
 }
 
-GroupByBufferDescriptor GroupByAndAggregate::codegenAggCalls(
+void GroupByAndAggregate::codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
     const ExecutorDeviceType device_type,
@@ -494,8 +486,6 @@ GroupByBufferDescriptor GroupByAndAggregate::codegenAggCalls(
       ++agg_out_off;
     }
   }
-
-  return getGroupByBufferDescriptor();
 }
 
 llvm::Value* GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,

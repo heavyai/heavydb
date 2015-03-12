@@ -19,7 +19,9 @@ public:
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info);
 
-  GroupByBufferDescriptor codegen(
+  GroupByBufferDescriptor getGroupByBufferDescriptor();
+
+  void codegen(
     llvm::Value* filter_result,
     const ExecutorDeviceType,
     const bool hoist_literals);
@@ -28,20 +30,18 @@ public:
 
 private:
   struct ColRangeInfo {
-    GroupByColRangeType hash_type_;
-    int64_t min;
-    int64_t max;
+    const GroupByColRangeType hash_type_;
+    const int64_t min;
+    const int64_t max;
   };
 
-  GroupByBufferDescriptor getGroupByBufferDescriptor();
-
-  std::pair<llvm::Value*, GroupByBufferDescriptor> codegenGroupBy(const bool hoist_literals);
+  llvm::Value* codegenGroupBy(const bool hoist_literals);
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
     const Planner::Plan*,
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);
 
-  GroupByBufferDescriptor codegenAggCalls(
+  void codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
     const ExecutorDeviceType,

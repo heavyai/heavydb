@@ -1411,7 +1411,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
   }
-  auto compilation_result = compilePlan(result_plan, {}, agg_infos, { nullptr }, pseudo_scan_cols,
+  auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
     ExecutorDeviceType::CPU, opt_level,
     std::make_tuple(false, 0L, 0L), nullptr);
@@ -1644,7 +1644,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const auto fast_group_by = canUseFastGroupBy(agg_plan, fragments, max_groups_buffer_entry_count_);
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
   auto compilation_result = compilePlan(plan, query_info, agg_infos,
-    groupby_exprs, scan_plan->get_col_list(),
+    scan_plan->get_col_list(),
     simple_quals, scan_plan->get_quals(),
     hoist_literals, device_type, opt_level,
     fast_group_by,
@@ -1820,6 +1820,7 @@ void Executor::executePlanWithGroupBy(
   std::list<Analyzer::Expr*> target_exprs_list;
   std::copy(target_exprs.begin(), target_exprs.end(), std::back_inserter(target_exprs_list));
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  const size_t groups_buffer_entry_count { compilation_result.group_buff_desc.entry_count };
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_, group_by_buffers, small_group_by_buffers);
@@ -1828,14 +1829,10 @@ void Executor::executePlanWithGroupBy(
       results = groupBufferToResults(small_group_by_buffers.front(), small_groups_buffer_entry_count_,
         group_by_col_count, agg_col_count, target_exprs_list);
     }
-    auto more_results = groupBufferToResults(group_by_buffers.front(), max_groups_buffer_entry_count_,
+    auto more_results = groupBufferToResults(group_by_buffers.front(), groups_buffer_entry_count,
       group_by_col_count, agg_col_count, target_exprs_list);
     results.insert(results.end(), more_results.begin(), more_results.end());
   } else {
-    const bool use_fast_path { enabled(cgen_state_->fast_group_by_) };
-    const size_t groups_buffer_entry_count { use_fast_path
-      ? maxBin(cgen_state_->fast_group_by_) - minBin(cgen_state_->fast_group_by_) + 1
-      : max_groups_buffer_entry_count_ };
     const size_t groups_buffer_size {
       (group_by_col_count + agg_col_count) * groups_buffer_entry_count * sizeof(int64_t) };
     const size_t small_groups_buffer_size {
@@ -1846,7 +1843,7 @@ void Executor::executePlanWithGroupBy(
         col_buffers, num_rows, plan_state_->init_agg_vals_,
         group_by_buffers, groups_buffer_size,
         small_group_by_buffers, small_groups_buffer_size,
-        data_mgr, use_fast_path, block_size_x_, grid_size_x_, device_id);
+        data_mgr, enabled(cgen_state_->fast_group_by_), block_size_x_, grid_size_x_, device_id);
     }
     std::vector<Executor::ResultRows> results_per_sm;
     for (size_t i = 0; i < num_buffers; ++i) {
@@ -2152,7 +2149,6 @@ Executor::CompilationResult Executor::compilePlan(
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
-    const std::list<Analyzer::Expr*>& groupby_list,
     const std::list<int>& scan_cols,
     const std::list<Analyzer::Expr*>& simple_quals,
     const std::list<Analyzer::Expr*>& quals,
@@ -2169,11 +2165,16 @@ Executor::CompilationResult Executor::compilePlan(
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   cgen_state_->module_ = create_runtime_module(cgen_state_->context_);
-  const bool is_group_by { !groupby_list.empty() };
+
+  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info);
+
+  auto group_buff_desc = group_by_and_aggregate.getGroupByBufferDescriptor();
+
+  const bool is_group_by { !group_buff_desc.group_col_widths.empty() };
   const bool use_fast_path { enabled(fast_group_by) };
-  const size_t groups_buffer_size { use_fast_path
-    ? (groupby_list.size() + agg_infos.size()) * (maxBin(fast_group_by) - minBin(fast_group_by) + 1) * sizeof(int64_t)
-    : (groupby_list.size() + agg_infos.size()) * max_groups_buffer_entry_count_ * sizeof(int64_t) };
+  const size_t groups_buffer_size {
+    (group_buff_desc.group_col_widths.size() + group_buff_desc.agg_col_widths.size()) *
+     group_buff_desc.entry_count * sizeof(int64_t) };
   auto query_func = is_group_by
     ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals, use_fast_path, groups_buffer_size)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
@@ -2204,8 +2205,7 @@ Executor::CompilationResult Executor::compilePlan(
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info);
-  auto group_buff_desc = group_by_and_aggregate.codegen(filter_lv, device_type, hoist_literals);
+  group_by_and_aggregate.codegen(filter_lv, device_type, hoist_literals);
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter

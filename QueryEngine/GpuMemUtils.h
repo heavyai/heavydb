@@ -1,3 +1,6 @@
+#ifndef QUERYENGINE_GPUMEMUTILS_H
+#define QUERYENGINE_GPUMEMUTILS_H
+
 #include "../DataMgr/DataMgr.h"
 
 #include <cuda.h>
@@ -44,3 +47,5 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
                                     const int device_id);
+
+#endif // QUERYENGINE_GPUMEMUTILS_H
