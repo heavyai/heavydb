@@ -58,7 +58,6 @@ private:
   llvm::Function* getFunction(const std::string& name) const;
 
   Executor* executor_;
-  llvm::Value* filter_result_;
   const Planner::Plan* plan_;
   const Fragmenter_Namespace::QueryInfo& query_info_;
 };
