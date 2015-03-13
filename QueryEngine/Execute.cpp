@@ -802,154 +802,6 @@ namespace {
 #pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
-// TODO(alex): wip, refactor
-std::vector<int64_t*> launch_query_gpu_code(
-    const std::vector<void*>& cu_functions,
-    const bool hoist_literals,
-    const std::vector<int8_t>& literal_buff,
-    std::vector<const int8_t*> col_buffers,
-    const int64_t num_rows,
-    const std::vector<int64_t>& init_agg_vals,
-    std::vector<int64_t*> group_by_buffers,
-    const size_t groups_buffer_size,
-    std::vector<int64_t*> small_group_by_buffers,
-    const size_t small_groups_buffer_size,
-    Data_Namespace::DataMgr* data_mgr,
-    const bool fast_group_by,
-    const unsigned block_size_x,
-    const unsigned grid_size_x,
-    const int device_id) {
-  data_mgr->cudaMgr_->setContext(device_id);
-  auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
-  std::vector<int64_t*> out_vec;
-  CUdeviceptr col_buffers_dev_ptr;
-  {
-    const size_t col_count { col_buffers.size() };
-    std::vector<CUdeviceptr> col_dev_buffers;
-    for (auto col_buffer : col_buffers) {
-      col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
-    }
-    if (!col_dev_buffers.empty()) {
-      col_buffers_dev_ptr = alloc_gpu_mem(
-        data_mgr, col_count * sizeof(CUdeviceptr), device_id);
-      copy_to_gpu(data_mgr, col_buffers_dev_ptr, &col_dev_buffers[0],
-        col_count * sizeof(CUdeviceptr), device_id);
-    }
-  }
-  CUdeviceptr literals_dev_ptr { 0 };
-  if (!literal_buff.empty()) {
-    CHECK(hoist_literals);
-    literals_dev_ptr = alloc_gpu_mem(data_mgr, literal_buff.size(), device_id);
-    copy_to_gpu(data_mgr, literals_dev_ptr, &literal_buff[0], literal_buff.size(), device_id);
-  }
-  CUdeviceptr num_rows_dev_ptr;
-  {
-    num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
-    copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows,
-      sizeof(int64_t), device_id);
-  }
-  CUdeviceptr init_agg_vals_dev_ptr;
-  {
-    init_agg_vals_dev_ptr = alloc_gpu_mem(
-      data_mgr, init_agg_vals.size() * sizeof(int64_t), device_id);
-    copy_to_gpu(data_mgr, init_agg_vals_dev_ptr, &init_agg_vals[0],
-      init_agg_vals.size() * sizeof(int64_t), device_id);
-  }
-  {
-    const unsigned block_size_y = 1;
-    const unsigned block_size_z = 1;
-    const unsigned grid_size_y  = 1;
-    const unsigned grid_size_z  = 1;
-    if (groups_buffer_size > 0) {
-      CHECK(!group_by_buffers.empty());
-      CUdeviceptr group_by_dev_ptr;
-      std::vector<CUdeviceptr> group_by_dev_buffers;
-      std::tie(group_by_dev_ptr, group_by_dev_buffers) = create_dev_group_by_buffers(
-        data_mgr, group_by_buffers, groups_buffer_size, fast_group_by,
-        block_size_x, grid_size_x, device_id);
-      CUdeviceptr small_group_by_dev_ptr;
-      std::vector<CUdeviceptr> small_group_by_dev_buffers;
-      std::tie(small_group_by_dev_ptr, small_group_by_dev_buffers) = create_dev_group_by_buffers(
-        data_mgr, small_group_by_buffers, small_groups_buffer_size, fast_group_by,
-        block_size_x, grid_size_x, device_id);
-      const size_t shared_mem_size {
-        should_use_shared_memory(fast_group_by, groups_buffer_size) ? groups_buffer_size : 0 };
-      if (hoist_literals) {
-        void* kernel_params[] = {
-          &col_buffers_dev_ptr,
-          &literals_dev_ptr,
-          &num_rows_dev_ptr,
-          &init_agg_vals_dev_ptr,
-          &group_by_dev_ptr,
-          &small_group_by_dev_ptr
-        };
-        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
-                                       block_size_x, block_size_y, block_size_z,
-                                       shared_mem_size, nullptr, kernel_params, nullptr));
-      } else {
-        void* kernel_params[] = {
-          &col_buffers_dev_ptr,
-          &num_rows_dev_ptr,
-          &init_agg_vals_dev_ptr,
-          &group_by_dev_ptr,
-          &small_group_by_dev_ptr
-        };
-        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
-                                       block_size_x, block_size_y, block_size_z,
-                                       shared_mem_size, nullptr, kernel_params, nullptr));
-      }
-      copy_group_by_buffers_from_gpu(data_mgr, group_by_buffers, groups_buffer_size, group_by_dev_buffers,
-        fast_group_by, block_size_x, grid_size_x, device_id);
-      copy_group_by_buffers_from_gpu(data_mgr, small_group_by_buffers, small_groups_buffer_size, small_group_by_dev_buffers,
-        fast_group_by, block_size_x, grid_size_x, device_id);
-    } else {
-      std::vector<CUdeviceptr> out_vec_dev_buffers;
-      const size_t agg_col_count { init_agg_vals.size() };
-      for (size_t i = 0; i < agg_col_count; ++i) {
-        auto out_vec_dev_buffer = alloc_gpu_mem(
-          data_mgr, block_size_x * grid_size_x * sizeof(int64_t), device_id);
-        out_vec_dev_buffers.push_back(out_vec_dev_buffer);
-      }
-      auto out_vec_dev_ptr = alloc_gpu_mem(data_mgr, agg_col_count * sizeof(CUdeviceptr), device_id);
-      copy_to_gpu(data_mgr, out_vec_dev_ptr, &out_vec_dev_buffers[0],
-        agg_col_count * sizeof(CUdeviceptr), device_id);
-      CUdeviceptr unused_dev_ptr { 0 };
-      if (hoist_literals) {
-        void* kernel_params[] = {
-          &col_buffers_dev_ptr,
-          &literals_dev_ptr,
-          &num_rows_dev_ptr,
-          &init_agg_vals_dev_ptr,
-          &out_vec_dev_ptr,
-          &unused_dev_ptr
-        };
-        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
-                                       block_size_x, block_size_y, block_size_z,
-                                       0, nullptr, kernel_params, nullptr));
-      } else {
-        void* kernel_params[] = {
-          &col_buffers_dev_ptr,
-          &num_rows_dev_ptr,
-          &init_agg_vals_dev_ptr,
-          &out_vec_dev_ptr,
-          &unused_dev_ptr
-        };
-        checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
-                                       block_size_x, block_size_y, block_size_z,
-                                       0, nullptr, kernel_params, nullptr));
-      }
-      for (size_t i = 0; i < agg_col_count; ++i) {
-        int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t)];
-        copy_from_gpu(data_mgr, host_out_vec, out_vec_dev_buffers[i],
-          block_size_x * grid_size_x * sizeof(int64_t),
-          device_id);
-        out_vec.push_back(host_out_vec);
-      }
-    }
-  }
-  return out_vec;
-}
-
 std::vector<int64_t*> launch_query_cpu_code(
     const std::vector<void*>& fn_ptrs,
     const bool hoist_literals,
@@ -1491,50 +1343,6 @@ std::vector<ResultRow> Executor::executeSortPlan(
     : rows_to_sort;
 }
 
-namespace {
-
-int64_t extract_min_stat(const ChunkStats& stats, const SQLTypes type) {
-  switch (type) {
-  case kSMALLINT:
-    return stats.min.smallintval;
-  case kINT:
-  case kCHAR:
-  case kVARCHAR:
-  case kTEXT:
-    return stats.min.intval;
-  case kBIGINT:
-    return stats.min.bigintval;
-  case kTIME:
-  case kTIMESTAMP:
-  case kDATE:
-    return stats.min.timeval;
-  default:
-    CHECK(false);
-  }
-}
-
-int64_t extract_max_stat(const ChunkStats& stats, const SQLTypes type) {
-  switch (type) {
-  case kSMALLINT:
-    return stats.max.smallintval;
-  case kINT:
-  case kCHAR:
-  case kVARCHAR:
-  case kTEXT:
-    return stats.max.intval;
-  case kBIGINT:
-    return stats.max.bigintval;
-  case kTIME:
-  case kTIMESTAMP:
-  case kDATE:
-    return stats.max.timeval;
-  default:
-    CHECK(false);
-  }
-}
-
-}  // namespace
-
 std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set { nullptr };
 
 std::vector<ResultRow> Executor::executeAggScanPlan(
@@ -1596,7 +1404,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
       ResultRows device_results;
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
-      auto group_by_memory = compilation_result.group_buff_desc.allocateGroupByMem(
+      auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
         plan_state_->init_agg_vals_, this, device_type);
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
@@ -1636,7 +1444,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), device_type, col_buffers,
-          group_by_memory.get(), num_rows,
+          query_exe_context.get(), num_rows,
           &cat.get_dataMgr(), device_id);
       }
       boost::mutex::scoped_lock lock(reduce_mutex_);
@@ -1679,10 +1487,12 @@ void Executor::executePlanWithoutGroupBy(
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
     boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
-    out_vec = launch_query_gpu_code(
+    auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
+      plan_state_->init_agg_vals_, this, device_type);
+    out_vec = query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers, num_rows, plan_state_->init_agg_vals_, {}, 0, {}, 0,
-      data_mgr, false, block_size_x_, grid_size_x_, device_id);
+      col_buffers, num_rows, plan_state_->init_agg_vals_,
+      data_mgr, block_size_x_, grid_size_x_, device_id);
   }
   size_t out_vec_idx = 0;
   ResultRow result_row(this);
@@ -1734,7 +1544,7 @@ void Executor::executePlanWithGroupBy(
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
-    const GroupByMemory* group_by_memory,
+    const QueryExecutionContext* query_exe_context,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id) {
@@ -1748,19 +1558,18 @@ void Executor::executePlanWithGroupBy(
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
       num_rows, plan_state_->init_agg_vals_,
-      group_by_memory->group_by_buffers_, group_by_memory->small_group_by_buffers_);
-    results = group_by_memory->getRowSet(target_exprs);
+      query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_);
+    results = query_exe_context->getRowSet(target_exprs);
   } else {
     {
       boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
-      launch_query_gpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
-        col_buffers, num_rows, plan_state_->init_agg_vals_,
-        group_by_memory->group_by_buffers_, compilation_result.group_buff_desc.getBufferSize(),
-        group_by_memory->small_group_by_buffers_, compilation_result.group_buff_desc.getSmallBufferSize(),
-        data_mgr, compilation_result.group_buff_desc.usesGetGroupValueFast(),
-        block_size_x_, grid_size_x_, device_id);
+      query_exe_context->launchGpuCode(
+        compilation_result.native_functions, hoist_literals, hoist_buf,
+        col_buffers,
+        num_rows, plan_state_->init_agg_vals_,
+        data_mgr, block_size_x_, grid_size_x_, device_id);
     }
-    results = group_by_memory->getRowSet(target_exprs);
+    results = query_exe_context->getRowSet(target_exprs);
   }
 }
 
@@ -2042,20 +1851,20 @@ Executor::CompilationResult Executor::compilePlan(
   nukeOldState();
 
   GroupByAndAggregate group_by_and_aggregate(this, plan, query_info);
-  auto group_buff_desc = group_by_and_aggregate.getGroupByBufferDescriptor();
+  auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
   cgen_state_->module_ = create_runtime_module(cgen_state_->context_);
 
-  const bool is_group_by { !group_buff_desc.group_col_widths.empty() };
+  const bool is_group_by { !query_mem_desc.group_col_widths.empty() };
   const size_t groups_buffer_size {
-    (group_buff_desc.group_col_widths.size() + group_buff_desc.agg_col_widths.size()) *
-     group_buff_desc.entry_count * sizeof(int64_t) };
+    (query_mem_desc.group_col_widths.size() + query_mem_desc.agg_col_widths.size()) *
+     query_mem_desc.entry_count * sizeof(int64_t) };
   auto query_func = is_group_by
     ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals,
-        group_buff_desc.usesGetGroupValueFast(), groups_buffer_size)
+        query_mem_desc.usesGetGroupValueFast(), groups_buffer_size)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", query_func, cgen_state_->module_);
@@ -2115,7 +1924,7 @@ Executor::CompilationResult Executor::compilePlan(
       ? optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_)
       : optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_, is_group_by, cuda_mgr),
     cgen_state_->getLiterals(),
-    group_buff_desc
+    query_mem_desc
   };
 }
 
@@ -2426,7 +2235,7 @@ bool Executor::skipFragment(
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
     CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-    const auto chunk_type = lhs->get_type_info().get_type();
+    const auto& chunk_type = lhs->get_type_info();
     const auto chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
     const auto chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
     const auto rhs_val = codegenIntConst(rhs_const)->getSExtValue();

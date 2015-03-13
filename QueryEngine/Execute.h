@@ -125,7 +125,7 @@ private:
   struct CompilationResult {
     std::vector<void*> native_functions;
     LiteralValues literal_values;
-    GroupByBufferDescriptor group_buff_desc;
+    QueryMemoryDescriptor query_mem_desc;
   };
 
   void executePlanWithGroupBy(
@@ -136,7 +136,7 @@ private:
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
-    const GroupByMemory*,
+    const QueryExecutionContext*,
     const int64_t num_rows,
     Data_Namespace::DataMgr*,
     const int device_id);
@@ -334,7 +334,7 @@ private:
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
 
   friend class GroupByAndAggregate;
-  friend class GroupByMemory;
+  friend class QueryExecutionContext;
 };
 
 #endif // QUERYENGINE_EXECUTE_H

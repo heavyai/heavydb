@@ -36,7 +36,7 @@ enum class GroupByMemSharing {
   Shared
 };
 
-struct GroupByBufferDescriptor;
+struct QueryMemoryDescriptor;
 
 typedef boost::variant<int64_t, double, std::string> AggResult;
 
@@ -99,20 +99,33 @@ private:
   friend class Executor;
 };
 
-class GroupByMemory : boost::noncopyable {
+class QueryExecutionContext : boost::noncopyable {
 public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
-  GroupByMemory(const GroupByBufferDescriptor&,
-                const std::vector<int64_t>& init_agg_vals,
-                const Executor* executor,
-                const ExecutorDeviceType device_type);
-  ~GroupByMemory();
+  QueryExecutionContext(
+    const QueryMemoryDescriptor&,
+    const std::vector<int64_t>& init_agg_vals,
+    const Executor* executor,
+    const ExecutorDeviceType device_type);
+  ~QueryExecutionContext();
 
   // TOOD(alex): get rid of targets parameter
   std::vector<ResultRow> getRowSet(const std::vector<Analyzer::Expr*>& targets) const;
 
+  std::vector<int64_t*> launchGpuCode(
+    const std::vector<void*>& cu_functions,
+    const bool hoist_literals,
+    const std::vector<int8_t>& literal_buff,
+    std::vector<const int8_t*> col_buffers,
+    const int64_t num_rows,
+    const std::vector<int64_t>& init_agg_vals,
+    Data_Namespace::DataMgr* data_mgr,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int device_id) const;
+
 private:
-  const GroupByBufferDescriptor& group_buff_desc_;
+  const QueryMemoryDescriptor& query_mem_desc_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
   const size_t num_buffers_;
@@ -123,7 +136,7 @@ private:
   friend class Executor;
 };
 
-struct GroupByBufferDescriptor {
+struct QueryMemoryDescriptor {
   GroupByColRangeType hash_type;
   std::vector<int8_t> group_col_widths;
   std::vector<int8_t> agg_col_widths;
@@ -134,7 +147,7 @@ struct GroupByBufferDescriptor {
   int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
   GroupByMemSharing sharing;             // meaningful for GPU only
 
-  std::unique_ptr<GroupByMemory> allocateGroupByMem(
+  std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
     const ExecutorDeviceType device_type) const;
@@ -153,7 +166,7 @@ public:
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info);
 
-  GroupByBufferDescriptor getGroupByBufferDescriptor();
+  QueryMemoryDescriptor getQueryMemoryDescriptor();
 
   void codegen(
     llvm::Value* filter_result,
@@ -230,6 +243,35 @@ inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* pl
     result.push_back(target_expr);
   }
   return result;
+}
+
+inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
+  switch (ti.get_type()) {
+  case kSMALLINT:
+    return datum.smallintval;
+  case kCHAR:
+  case kVARCHAR:
+  case kTEXT:
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+  case kINT:
+    return datum.intval;
+  case kBIGINT:
+    return datum.bigintval;
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    return datum.timeval;
+  default:
+    CHECK(false);
+  }
+}
+
+inline int64_t extract_min_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
+  return extract_from_datum(stats.min, ti);
+}
+
+inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
+  return extract_from_datum(stats.max, ti);
 }
 
 }  // namespace
