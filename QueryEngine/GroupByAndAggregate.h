@@ -180,7 +180,7 @@ private:
     const int64_t max;
   };
 
-  llvm::Value* codegenGroupBy(const bool hoist_literals);
+  llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const bool hoist_literals);
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
     const Planner::Plan*,
@@ -189,6 +189,7 @@ private:
   void codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
+    const QueryMemoryDescriptor&,
     const ExecutorDeviceType,
     const bool hoist_literals);
 

@@ -499,18 +499,18 @@ void GroupByAndAggregate::codegen(
   LL_BUILDER.CreateCondBr(filter_result, filter_true, filter_false);
   LL_BUILDER.SetInsertPoint(filter_true);
 
-  const auto groupby_list = group_by_exprs(plan_);
+  auto query_mem_desc = getQueryMemoryDescriptor();
 
-  if (groupby_list.empty()) {
+  if (group_by_exprs(plan_).empty()) {
     auto arg_it = ROW_FUNC->arg_begin();
     std::vector<llvm::Value*> agg_out_vec;
     for (int32_t i = 0; i < get_agg_count(plan_); ++i) {
       agg_out_vec.push_back(arg_it++);
     }
-    codegenAggCalls(nullptr, agg_out_vec, device_type, hoist_literals);
+    codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, device_type, hoist_literals);
   } else {
-    auto agg_out_start_ptr = codegenGroupBy(hoist_literals);
-    codegenAggCalls(agg_out_start_ptr, {}, device_type, hoist_literals);
+    auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, hoist_literals);
+    codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
   }
 
   LL_BUILDER.CreateBr(filter_false);
@@ -518,7 +518,9 @@ void GroupByAndAggregate::codegen(
   LL_BUILDER.CreateRetVoid();
 }
 
-llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
+llvm::Value* GroupByAndAggregate::codegenGroupBy(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool hoist_literals) {
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
 
@@ -531,8 +533,6 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
   const auto groupby_list = agg_plan
     ? agg_plan->get_groupby_list()
     : std::list<Analyzer::Expr*> { nullptr };
-
-  auto query_mem_desc = getQueryMemoryDescriptor();
 
   switch (query_mem_desc.hash_type) {
   case GroupByColRangeType::OneColKnownRange:
@@ -634,6 +634,7 @@ extern std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set;
 void GroupByAndAggregate::codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
+    const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     const bool hoist_literals) {
   // TODO(alex): unify the two cases, the output for non-group by queries
@@ -684,7 +685,9 @@ void GroupByAndAggregate::codegenAggCalls(
         agg_args.push_back(null_lv);
       }
       emitCall(
-        device_type == ExecutorDeviceType::GPU && is_group_by ? agg_fname + "_shared" : agg_fname,
+        (device_type == ExecutorDeviceType::GPU && query_mem_desc.usesGetGroupValueFast())
+          ? agg_fname + "_shared"
+          : agg_fname,
         agg_args);
       ++agg_out_off;
     }
