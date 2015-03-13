@@ -1,7 +1,6 @@
 #include "GroupByAndAggregate.h"
 
 #include "Execute.h"
-#include "GpuMemUtils.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 #include "../CudaMgr/CudaMgr.h"
@@ -26,7 +25,7 @@ QueryExecutionContext::QueryExecutionContext(
     init_groups(group_by_buffer, query_mem_desc_.entry_count, query_mem_desc_.group_col_widths.size(),
       &init_agg_vals[0], query_mem_desc_.agg_col_widths.size());
     group_by_buffers_.push_back(group_by_buffer);
-    if (query_mem_desc_.entry_count_small) {
+    if (query_mem_desc_.getSmallBufferSize()) {
       auto group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSize()));
       init_groups(group_by_small_buffer, query_mem_desc_.entry_count_small, query_mem_desc_.group_col_widths.size(),
         &init_agg_vals[0], query_mem_desc_.agg_col_widths.size());
@@ -46,9 +45,9 @@ QueryExecutionContext::~QueryExecutionContext() {
 
 Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& targets) const {
   std::vector<Executor::ResultRows> results_per_sm;
-  for (size_t i = 0; i < num_buffers_; ++i) {
+  for (size_t i = 0; i < group_by_buffers_.size(); ++i) {
     Executor::ResultRows small_results;
-    if (query_mem_desc_.entry_count_small) {
+    if (query_mem_desc_.getSmallBufferSize()) {
       CHECK_EQ(group_by_buffers_.size(), small_group_by_buffers_.size());
       small_results = executor_->groupBufferToResults(
         small_group_by_buffers_[i],
@@ -131,20 +130,13 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       CHECK(!group_by_buffers_.empty());
       CUdeviceptr group_by_dev_ptr;
       std::vector<CUdeviceptr> group_by_dev_buffers;
-      std::tie(group_by_dev_ptr, group_by_dev_buffers) = create_dev_group_by_buffers(
-        data_mgr,
-        group_by_buffers_, query_mem_desc_.getBufferSize(),
-        query_mem_desc_.usesGetGroupValueFast(),
+      auto gpu_query_mem = create_dev_group_by_buffers(
+        data_mgr, group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id);
+      std::tie(group_by_dev_ptr, group_by_dev_buffers) = gpu_query_mem.group_by_buffers;
       CUdeviceptr small_group_by_dev_ptr;
       std::vector<CUdeviceptr> small_group_by_dev_buffers;
-      if (query_mem_desc_.getSmallBufferSize()) {
-        std::tie(small_group_by_dev_ptr, small_group_by_dev_buffers) = create_dev_group_by_buffers(
-          data_mgr,
-          small_group_by_buffers_, query_mem_desc_.getSmallBufferSize(),
-          query_mem_desc_.usesGetGroupValueFast(),
-          block_size_x, grid_size_x, device_id);
-      }
+      std::tie(small_group_by_dev_ptr, small_group_by_dev_buffers) = gpu_query_mem.small_group_by_buffers;
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
@@ -169,12 +161,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        block_size_x, block_size_y, block_size_z,
                                        query_mem_desc_.sharedMemBytes(), nullptr, kernel_params, nullptr));
       }
-      copy_group_by_buffers_from_gpu(data_mgr, group_by_buffers_, query_mem_desc_.getBufferSize(),
-        group_by_dev_buffers, query_mem_desc_.usesGetGroupValueFast(), block_size_x, grid_size_x, device_id);
-      if (query_mem_desc_.getSmallBufferSize()) {
-        copy_group_by_buffers_from_gpu(data_mgr, small_group_by_buffers_, query_mem_desc_.getSmallBufferSize(),
-          small_group_by_dev_buffers, query_mem_desc_.usesGetGroupValueFast(), block_size_x, grid_size_x, device_id);
-      }
+      copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
     } else {
       std::vector<CUdeviceptr> out_vec_dev_buffers;
       const size_t agg_col_count { init_agg_vals.size() };
@@ -476,6 +463,10 @@ bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
           !entry_count_small);
 }
 
+bool QueryMemoryDescriptor::threadsShareMemory() const {
+  return usesGetGroupValueFast();
+}
+
 size_t QueryMemoryDescriptor::sharedMemBytes() const {
   const size_t shared_mem_threshold { 0 };
   const size_t shared_mem_bytes { getBufferSize() };
@@ -685,7 +676,7 @@ void GroupByAndAggregate::codegenAggCalls(
         agg_args.push_back(null_lv);
       }
       emitCall(
-        (device_type == ExecutorDeviceType::GPU && query_mem_desc.usesGetGroupValueFast())
+        (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory())
           ? agg_fname + "_shared"
           : agg_fname,
         agg_args);

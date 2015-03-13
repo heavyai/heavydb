@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_GROUPBYANDAGGREGATE_H
 #define QUERYENGINE_GROUPBYANDAGGREGATE_H
 
+#include "GpuMemUtils.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
 #include "../Shared/sqltypes.h"
@@ -134,6 +135,13 @@ private:
   std::vector<int64_t*> small_group_by_buffers_;
 
   friend class Executor;
+  friend void copy_group_by_buffers_from_gpu(
+    Data_Namespace::DataMgr* data_mgr,
+    const QueryExecutionContext* query_exe_context,
+    const GpuQueryMemory& gpu_query_mem,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int device_id);
 };
 
 struct QueryMemoryDescriptor {
@@ -155,6 +163,8 @@ struct QueryMemoryDescriptor {
 
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;
+
+  bool threadsShareMemory() const;
 
   size_t sharedMemBytes() const;
 };
