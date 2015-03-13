@@ -1977,7 +1977,7 @@ void Executor::addCodeToCache(const CodeCacheKey& key,
                               const std::vector<std::tuple<
                                 void*,
                                 llvm::ExecutionEngine*,
-                                GpuExecutionContext*>
+                                GpuCompilationContext*>
                               >& native_code,
                               std::map<CodeCacheKey, CodeCacheVal>& cache) {
   CHECK(!native_code.empty());
@@ -1985,7 +1985,7 @@ void Executor::addCodeToCache(const CodeCacheKey& key,
   for (const auto& native_func : native_code) {
     cache_val.emplace_back(std::get<0>(native_func),
       std::unique_ptr<llvm::ExecutionEngine>(std::get<1>(native_func)),
-      std::unique_ptr<GpuExecutionContext>(std::get<2>(native_func)));
+      std::unique_ptr<GpuCompilationContext>(std::get<2>(native_func)));
   }
   auto it_ok = cache.insert(std::make_pair(key, std::move(cache_val)));
   CHECK(it_ok.second);
@@ -2139,10 +2139,10 @@ R"(
     std::string(nvvm_annotations);
 
   std::vector<void*> native_functions;
-  std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuExecutionContext*>> cached_functions;
+  std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>> cached_functions;
 
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
-    auto gpu_context = new GpuExecutionContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a",
+    auto gpu_context = new GpuCompilationContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a",
       device_id, cuda_mgr);
     auto native_code = gpu_context->kernel();
     CHECK(native_code);

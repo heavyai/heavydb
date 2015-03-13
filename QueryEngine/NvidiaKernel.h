@@ -4,14 +4,14 @@
 #include <cuda.h>
 #include <string>
 
-class GpuExecutionContext {
+class GpuCompilationContext {
 public:
-  GpuExecutionContext(const std::string& llir_module,
-                      const std::string& func_name,
-                      const std::string& lib_path,
-                      const int device_id,
-                      const void* cuda_mgr);
-  ~GpuExecutionContext();
+  GpuCompilationContext(const std::string& llir_module,
+                        const std::string& func_name,
+                        const std::string& lib_path,
+                        const int device_id,
+                        const void* cuda_mgr);
+  ~GpuCompilationContext();
   CUfunction kernel() {
     return kernel_;
   }

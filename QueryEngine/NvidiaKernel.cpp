@@ -17,11 +17,11 @@ void fill_options(CUjit_option options[], void* optionValues[]) {
 
 }
 
-GpuExecutionContext::GpuExecutionContext(const std::string& llir_module,
-                                         const std::string& func_name,
-                                         const std::string& lib_path,
-                                         const int device_id,
-                                         const void* cuda_mgr)
+GpuCompilationContext::GpuCompilationContext(const std::string& llir_module,
+                                             const std::string& func_name,
+                                             const std::string& lib_path,
+                                             const int device_id,
+                                             const void* cuda_mgr)
   : module_(nullptr)
   , kernel_(nullptr)
   , link_state(nullptr)
@@ -53,7 +53,7 @@ GpuExecutionContext::GpuExecutionContext(const std::string& llir_module,
   checkCudaErrors(cuModuleGetFunction(&kernel_, module_, func_name.c_str()));
 }
 
-GpuExecutionContext::~GpuExecutionContext() {
+GpuCompilationContext::~GpuCompilationContext() {
   static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr_)->setContext(device_id_);
   auto status = cuModuleUnload(module_);
   // TODO(alex): handle this race better

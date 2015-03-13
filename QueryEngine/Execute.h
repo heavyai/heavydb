@@ -197,13 +197,13 @@ private:
   typedef std::pair<std::string, std::string> CodeCacheKey;
   typedef std::vector<std::tuple<void*,
                                  std::unique_ptr<llvm::ExecutionEngine>,
-                                 std::unique_ptr<GpuExecutionContext>>> CodeCacheVal;
+                                 std::unique_ptr<GpuCompilationContext>>> CodeCacheVal;
   std::vector<void*> getCodeFromCache(
     const CodeCacheKey&,
     const std::map<CodeCacheKey, CodeCacheVal>&);
   void addCodeToCache(
     const CodeCacheKey&,
-    const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuExecutionContext*>>&,
+    const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>&,
     std::map<CodeCacheKey, CodeCacheVal>&);
 
   std::vector<int8_t> serializeLiterals(const Executor::LiteralValues& literals);
