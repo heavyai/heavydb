@@ -2155,34 +2155,27 @@ R"(
   return native_functions;
 }
 
+llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
+  if (val->getType()->isIntegerTy()) {
+    auto val_width = static_cast<llvm::IntegerType*>(val->getType())->getBitWidth();
+    CHECK_LE(val_width, 64);
+    return val_width < 64
+      ? cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt, val,
+                                            get_int_type(64, cgen_state_->context_))
+      : val;
+  }
+  CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
+  return val->getType()->isFloatTy()
+    ? cgen_state_->ir_builder_.CreateFPExt(val, llvm::Type::getDoubleTy(cgen_state_->context_))
+    : val;
+}
+
 llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                             const bool hoist_literals) {
   auto group_key = codegen(group_by_col, hoist_literals);
   cgen_state_->group_by_expr_cache_.push_back(group_key);
-  const auto key_expr_type = group_by_col ? group_by_col->get_type_info().get_type() : kBIGINT;
-  if (IS_INTEGER(key_expr_type) || IS_STRING(key_expr_type)) {
-    CHECK(group_key->getType()->isIntegerTy());
-    auto group_key_bitwidth = static_cast<llvm::IntegerType*>(group_key->getType())->getBitWidth();
-    CHECK_LE(group_key_bitwidth, 64);
-    if (group_key_bitwidth < 64) {
-      group_key = cgen_state_->ir_builder_.CreateCast(
-        llvm::Instruction::CastOps::SExt,
-        group_key,
-        get_int_type(64, cgen_state_->context_));
-    }
-  } else {
-    CHECK(key_expr_type == kFLOAT || key_expr_type == kDOUBLE);
-    switch (key_expr_type) {
-    case kFLOAT:
-      group_key = cgen_state_->ir_builder_.CreateFPExt(group_key, llvm::Type::getDoubleTy(cgen_state_->context_));
-      // fall-through
-    case kDOUBLE:
-      group_key = cgen_state_->ir_builder_.CreateBitCast(group_key, get_int_type(64, cgen_state_->context_));
-      break;
-    default:
-      CHECK(false);
-    }
-  }
+  group_key = cgen_state_->ir_builder_.CreateBitCast(
+    toDoublePrecision(group_key), get_int_type(64, cgen_state_->context_));
   return group_key;
 }
 

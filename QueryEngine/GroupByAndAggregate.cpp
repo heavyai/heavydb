@@ -548,7 +548,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
         "get_group_value_fast",
         {
           groups_buffer,
-          toDoublePrecision(group_expr_lv),
+          group_expr_lv,
           LL_INT(query_mem_desc.min_val),
           LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))
         });
@@ -560,7 +560,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const bool hoist_literals) {
           LL_INT(static_cast<int32_t>(query_mem_desc.entry_count)),
           small_groups_buffer,
           LL_INT(static_cast<int32_t>(query_mem_desc.entry_count_small)),
-          toDoublePrecision(group_expr_lv),
+          group_expr_lv,
           LL_INT(query_mem_desc.min_val),
           LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))
         });
@@ -631,20 +631,6 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
 
 extern std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set;
 
-llvm::Value* GroupByAndAggregate::toDoublePrecision(llvm::Value* val) {
-  if (val->getType()->isIntegerTy()) {
-    auto val_width = static_cast<llvm::IntegerType*>(val->getType())->getBitWidth();
-    CHECK_LE(val_width, 64);
-    return val_width < 64
-      ? LL_BUILDER.CreateCast(llvm::Instruction::CastOps::SExt, val, llvm::Type::getInt64Ty(LL_CONTEXT))
-      : val;
-  }
-  CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
-  return val->getType()->isFloatTy()
-    ? LL_BUILDER.CreateFPExt(val, llvm::Type::getDoubleTy(LL_CONTEXT))
-    : val;
-}
-
 void GroupByAndAggregate::codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
@@ -666,7 +652,7 @@ void GroupByAndAggregate::codegenAggCalls(
     CHECK(target_expr);
     const auto agg_info = target_info(target_expr);
     for (const auto& agg_base_name : agg_fn_base_names(agg_info)) {
-      auto target_lv = toDoublePrecision(codegenAggArg(target_expr, hoist_literals));
+      auto target_lv = executor_->toDoublePrecision(codegenAggArg(target_expr, hoist_literals));
       std::vector<llvm::Value*> agg_args {
         is_group_by
           ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
@@ -694,7 +680,7 @@ void GroupByAndAggregate::codegenAggCalls(
       }
       if (agg_info.skip_null_val) {
         agg_fname += "_skip_val";
-        auto null_lv = toDoublePrecision(executor_->inlineIntNull(agg_info.sql_type));
+        auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(agg_info.sql_type));
         agg_args.push_back(null_lv);
       }
       emitCall(

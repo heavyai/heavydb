@@ -185,6 +185,8 @@ private:
 
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col, const bool hoist_literals);
 
+  llvm::Value* toDoublePrecision(llvm::Value* val);
+
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id) const;
 
