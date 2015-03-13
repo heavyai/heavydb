@@ -885,6 +885,7 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypes target_type) {
   }
 }
 
+// TODO(alex): remove
 int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64_t* out_vec, const size_t out_vec_sz) {
   switch (agg) {
   case kAVG:
@@ -1037,49 +1038,6 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
     reduced_results_vec.push_back(row);
   }
   return reduced_results_vec;
-}
-
-Executor::ResultRows Executor::groupBufferToResults(
-    const int64_t* group_by_buffer,
-    const size_t groups_buffer_entry_count,
-    const size_t group_by_col_count,
-    const size_t agg_col_count,
-    const std::vector<Analyzer::Expr*>& target_exprs) const {
-  std::vector<ResultRow> results;
-  for (size_t i = 0; i < groups_buffer_entry_count; ++i) {
-    const size_t key_off = (group_by_col_count + agg_col_count) * i;
-    if (group_by_buffer[key_off] != EMPTY_KEY) {
-      size_t out_vec_idx = 0;
-      ResultRow result_row(this);
-      for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
-        const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
-        CHECK_NE(key_comp, EMPTY_KEY);
-        result_row.value_tuple_.push_back(key_comp);
-      }
-      for (const auto target_expr : target_exprs) {
-        const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-        // If the target is not an aggregate, use kMIN since
-        // additive would be incorrect for the reduce phase.
-        const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kMIN;
-        result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
-        result_row.agg_kinds_.push_back(agg_type);
-        if (agg_type == kAVG) {
-          CHECK(agg_expr->get_arg());
-          result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
-          CHECK(!target_expr->get_type_info().is_string());
-          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
-          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
-          out_vec_idx += 2;
-        } else {
-          result_row.agg_types_.push_back(target_expr->get_type_info());
-          result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
-          ++out_vec_idx;
-        }
-      }
-      results.push_back(result_row);
-    }
-  }
-  return results;
 }
 
 namespace {
@@ -1252,16 +1210,23 @@ std::vector<ResultRow> Executor::executeResultPlan(
   is_nested_ = true;
   const size_t groups_buffer_size {
     (targets.size() + 1) * max_groups_buffer_entry_count_ * sizeof(int64_t) };
-  QueryMemoryDescriptor query_mem_desc { GroupByColRangeType::Scan, {} };
+  std::vector<Analyzer::Expr*> target_exprs;
+  for (auto target_entry : targets) {
+    target_exprs.push_back(target_entry->get_expr());
+  }
+  QueryMemoryDescriptor query_mem_desc {
+    GroupByColRangeType::OneColGuessedRange,
+    { sizeof(int64_t) },
+    get_col_byte_widths(target_exprs),
+    max_groups_buffer_entry_count_,
+    small_groups_buffer_entry_count_,
+    0, GroupByMemSharing::Private
+  };
   auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_,
     hoist_literals, query_mem_desc);
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, hoist_literals, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
-  std::vector<Analyzer::Expr*> target_exprs;
-  for (auto target_entry : targets) {
-    target_exprs.push_back(target_entry->get_expr());
-  }
   std::list<int> pseudo_scan_cols;
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
     pseudo_scan_cols.push_back(pseudo_col);
@@ -1277,17 +1242,12 @@ std::vector<ResultRow> Executor::executeResultPlan(
     (target_exprs.size() + 1) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
   auto small_group_by_buffer = static_cast<int64_t*>(malloc(small_groups_buffer_size));
   init_groups(small_group_by_buffer, small_groups_buffer_entry_count_, target_exprs.size(), &init_agg_vals[0], 1);
-  std::vector<int64_t*> group_by_buffers { group_by_buffer };
-  std::vector<int64_t*> small_group_by_buffers { small_group_by_buffer };
+  auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this, ExecutorDeviceType::CPU);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
-    column_buffers, result_columns.size(), init_agg_vals, group_by_buffers, small_group_by_buffers);
-  auto results = groupBufferToResults(small_group_by_buffer, small_groups_buffer_entry_count_,
-    1, target_exprs.size(), target_exprs);
-  auto more_results = groupBufferToResults(group_by_buffer, max_groups_buffer_entry_count_,
-    1, target_exprs.size(), target_exprs);
-  results.insert(results.end(), more_results.begin(), more_results.end());
-  return results;
+    column_buffers, result_columns.size(), init_agg_vals,
+    query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_);
+  return query_exe_context->groupBufferToResults(0, target_exprs);
 }
 
 std::vector<ResultRow> Executor::executeSortPlan(

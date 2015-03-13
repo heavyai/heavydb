@@ -151,12 +151,6 @@ private:
     Data_Namespace::DataMgr* data_mgr,
     const int device_id);
   ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&) const;
-  ResultRows groupBufferToResults(
-    const int64_t* group_by_buffer,
-    const size_t groups_buffer_entry_count,
-    const size_t group_by_col_count,
-    const size_t agg_col_count,
-    const std::vector<Analyzer::Expr*>& target_exprs) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compilePlan(

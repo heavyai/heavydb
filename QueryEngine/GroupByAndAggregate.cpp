@@ -45,33 +45,71 @@ QueryExecutionContext::~QueryExecutionContext() {
 
 Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& targets) const {
   std::vector<Executor::ResultRows> results_per_sm;
+  CHECK_EQ(num_buffers_, group_by_buffers_.size());
   for (size_t i = 0; i < group_by_buffers_.size(); ++i) {
-    Executor::ResultRows small_results;
-    if (query_mem_desc_.getSmallBufferSize()) {
-      CHECK_EQ(group_by_buffers_.size(), small_group_by_buffers_.size());
-      small_results = executor_->groupBufferToResults(
-        small_group_by_buffers_[i],
-        query_mem_desc_.entry_count_small,
-        query_mem_desc_.group_col_widths.size(),
-        query_mem_desc_.agg_col_widths.size(),
-        targets);
-    }
-    auto big_results = executor_->groupBufferToResults(
-      group_by_buffers_[i],
-      query_mem_desc_.entry_count,
-      query_mem_desc_.group_col_widths.size(),
-      query_mem_desc_.agg_col_widths.size(),
-      targets);
-    small_results.insert(small_results.end(), big_results.begin(), big_results.end());
+    auto results = groupBufferToResults(i, targets);
     if (device_type_ == ExecutorDeviceType::GPU) {
-      results_per_sm.push_back(small_results);
+      results_per_sm.push_back(results);
     } else {
-      CHECK_EQ(1, num_buffers_);
-      return small_results;
+      return results;
     }
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(results_per_sm);
+}
+
+Executor::ResultRows QueryExecutionContext::groupBufferToResults(
+    const size_t i,
+    const std::vector<Analyzer::Expr*>& targets) const {
+  const size_t group_by_col_count { query_mem_desc_.group_col_widths.size() };
+  const size_t agg_col_count { query_mem_desc_.agg_col_widths.size() };
+  auto impl = [group_by_col_count, agg_col_count, this, &targets](
+      const size_t groups_buffer_entry_count,
+      const int64_t* group_by_buffer) {
+    std::vector<ResultRow> results;
+    for (size_t i = 0; i < groups_buffer_entry_count; ++i) {
+      const size_t key_off = (group_by_col_count + agg_col_count) * i;
+      if (group_by_buffer[key_off] != EMPTY_KEY) {
+        size_t out_vec_idx = 0;
+        ResultRow result_row(executor_);
+        for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
+          const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
+          CHECK_NE(key_comp, EMPTY_KEY);
+          result_row.value_tuple_.push_back(key_comp);
+        }
+        for (const auto target_expr : targets) {
+          const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+          // If the target is not an aggregate, use kMIN since
+          // additive would be incorrect for the reduce phase.
+          const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kMIN;
+          result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
+          result_row.agg_kinds_.push_back(agg_type);
+          if (agg_type == kAVG) {
+            CHECK(agg_expr->get_arg());
+            result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
+            CHECK(!target_expr->get_type_info().is_string());
+            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
+            out_vec_idx += 2;
+          } else {
+            result_row.agg_types_.push_back(target_expr->get_type_info());
+            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+            ++out_vec_idx;
+          }
+        }
+        results.push_back(result_row);
+      }
+    }
+    return results;
+  };
+  std::vector<ResultRow> results;
+  if (query_mem_desc_.getSmallBufferSize()) {
+    results = impl(query_mem_desc_.entry_count_small, small_group_by_buffers_[i]);
+  }
+  CHECK_LT(i, group_by_buffers_.size());
+  auto more_results = impl(query_mem_desc_.entry_count, group_by_buffers_[i]);
+  results.insert(results.end(), more_results.begin(), more_results.end());
+  return results;
 }
 
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
@@ -341,61 +379,6 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
   return agg_plan
     ? agg_plan->get_groupby_list()
     : std::list<Analyzer::Expr*> { nullptr };
-}
-
-struct TargetInfo {
-  bool is_agg;
-  SQLAgg agg_kind;
-  SQLTypes sql_type;
-  bool skip_null_val;
-  bool is_distinct;
-};
-
-TargetInfo target_info(const Analyzer::Expr* target_expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-  if (!agg_expr) {
-    return { false, kCOUNT, target_expr->get_type_info().get_type(), false, false };
-  }
-  const auto agg_type = agg_expr->get_aggtype();
-  const auto agg_arg = agg_expr->get_arg();
-  if (!agg_arg) {
-    CHECK_EQ(kCOUNT, agg_type);
-    CHECK(!agg_expr->get_is_distinct());
-    return { true, kCOUNT, kBIGINT, false, false };
-  }
-  const auto& agg_arg_ti = agg_arg->get_type_info();
-  bool is_distinct { false };
-  if (agg_expr->get_aggtype() == kCOUNT) {
-    CHECK(agg_expr->get_is_distinct());
-    CHECK(!agg_arg_ti.is_fp());
-    is_distinct = true;
-  }
-  // TODO(alex): null support for all types
-  bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
-  return { true, agg_expr->get_aggtype(), agg_arg_ti.get_type(),
-           skip_null, is_distinct };
-}
-
-template<class T>
-std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
-  std::vector<int8_t> col_widths;
-  for (const auto col_expr : col_expr_list) {
-    if (!col_expr) {
-      // row index
-      col_widths.push_back(sizeof(int64_t));
-    } else {
-      const auto agg_info = target_info(col_expr);
-      const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type);
-      CHECK_EQ(0, col_expr_bitwidth % 8);
-      col_widths.push_back(col_expr_bitwidth / 8);
-      // for average, we'll need to keep the count as well
-      if (agg_info.agg_kind == kAVG) {
-        CHECK(agg_info.is_agg);
-        col_widths.push_back(sizeof(int64_t));
-      }
-    }
-  }
-  return col_widths;
 }
 
 }  // namespace
