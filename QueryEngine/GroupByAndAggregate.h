@@ -141,9 +141,7 @@ struct QueryMemoryDescriptor {
   std::vector<int8_t> group_col_widths;
   std::vector<int8_t> agg_col_widths;
   size_t entry_count;                    // the number of entries in the main buffer
-  bool use_shared_memory;                // use shared memory for the main buffer?
   size_t entry_count_small;              // the number of entries in the small buffer
-  bool use_shared_memory_small;          // use shared memory for the small buffer?
   int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
   GroupByMemSharing sharing;             // meaningful for GPU only
 
@@ -157,6 +155,8 @@ struct QueryMemoryDescriptor {
 
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;
+
+  size_t sharedMemBytes() const;
 };
 
 class GroupByAndAggregate {

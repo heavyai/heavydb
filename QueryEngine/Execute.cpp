@@ -1252,8 +1252,9 @@ std::vector<ResultRow> Executor::executeResultPlan(
   is_nested_ = true;
   const size_t groups_buffer_size {
     (targets.size() + 1) * max_groups_buffer_entry_count_ * sizeof(int64_t) };
+  QueryMemoryDescriptor query_mem_desc { GroupByColRangeType::Scan, {} };
   auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_,
-    hoist_literals, false, groups_buffer_size);
+    hoist_literals, query_mem_desc);
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, hoist_literals, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
@@ -1859,12 +1860,8 @@ Executor::CompilationResult Executor::compilePlan(
   cgen_state_->module_ = create_runtime_module(cgen_state_->context_);
 
   const bool is_group_by { !query_mem_desc.group_col_widths.empty() };
-  const size_t groups_buffer_size {
-    (query_mem_desc.group_col_widths.size() + query_mem_desc.agg_col_widths.size()) *
-     query_mem_desc.entry_count * sizeof(int64_t) };
   auto query_func = is_group_by
-    ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals,
-        query_mem_desc.usesGetGroupValueFast(), groups_buffer_size)
+    ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals, query_mem_desc)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", query_func, cgen_state_->module_);

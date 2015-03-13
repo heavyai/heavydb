@@ -343,7 +343,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
 llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count,
                                         const bool is_nested, const bool hoist_literals,
-                                        const bool fast_group_by, const size_t groups_buffer_size) {
+                                        const QueryMemoryDescriptor& query_mem_desc) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -352,11 +352,11 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   CHECK(func_pos_step);
   auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
-  auto func_init_shared_mem = should_use_shared_memory(fast_group_by, groups_buffer_size)
+  auto func_init_shared_mem = query_mem_desc.sharedMemBytes()
     ? mod->getFunction("init_shared_mem")
     : mod->getFunction("init_shared_mem_nop");
   CHECK(func_init_shared_mem);
-  auto func_write_back = should_use_shared_memory(fast_group_by, groups_buffer_size)
+  auto func_write_back = query_mem_desc.sharedMemBytes()
     ? mod->getFunction("write_back")
     : mod->getFunction("write_back_nop");
   CHECK(func_write_back);
@@ -485,12 +485,13 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, int64_153, "", label_146);
   auto small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
   small_ptr_155->setAlignment(8);
-  auto small_groups_buff_sz = ConstantInt::get(IntegerType::get(mod->getContext(), 32), groups_buffer_size);
+  auto shared_mem_bytes_lv = ConstantInt::get(IntegerType::get(mod->getContext(), 32),
+    query_mem_desc.sharedMemBytes());
   auto ptr_156 = CallInst::Create(
     func_init_shared_mem,
     std::vector<llvm::Value*> {
       ptr_155,
-      small_groups_buff_sz
+      shared_mem_bytes_lv
     }, "", label_146);
   ICmpInst* int1_156 = new ICmpInst(*label_146, ICmpInst::ICMP_SLT, int64_153, int64_150, "");
   BranchInst::Create(label__lr_ph_147, label___crit_edge_149, int1_156, label_146);
@@ -532,7 +533,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
     std::vector<Value*> {
       ptr_155,
       ptr_156,
-      small_groups_buff_sz
+      shared_mem_bytes_lv
     }, "", label___crit_edge_149);
   ReturnInst::Create(mod->getContext(), label___crit_edge_149);
 

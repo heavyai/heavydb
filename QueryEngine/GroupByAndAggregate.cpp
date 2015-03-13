@@ -145,10 +145,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           query_mem_desc_.usesGetGroupValueFast(),
           block_size_x, grid_size_x, device_id);
       }
-      const size_t shared_mem_size {
-        should_use_shared_memory(query_mem_desc_.usesGetGroupValueFast(), query_mem_desc_.getBufferSize())
-          ? query_mem_desc_.getBufferSize()
-          : 0 };
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
@@ -160,7 +156,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
-                                       shared_mem_size, nullptr, kernel_params, nullptr));
+                                       query_mem_desc_.sharedMemBytes(), nullptr, kernel_params, nullptr));
       } else {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
@@ -171,7 +167,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
-                                       shared_mem_size, nullptr, kernel_params, nullptr));
+                                       query_mem_desc_.sharedMemBytes(), nullptr, kernel_params, nullptr));
       }
       copy_group_by_buffers_from_gpu(data_mgr, group_by_buffers_, query_mem_desc_.getBufferSize(),
         group_by_dev_buffers, query_mem_desc_.usesGetGroupValueFast(), block_size_x, grid_size_x, device_id);
@@ -430,8 +426,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
     return {
       GroupByColRangeType::Scan,
       group_col_widths, agg_col_widths,
-      0, false,
-      0, false,
+      0, 0,
       0, GroupByMemSharing::Shared };
   }
 
@@ -449,16 +444,15 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       return {
         col_range_info.hash_type_,
         group_col_widths, agg_col_widths,
-        executor_->max_groups_buffer_entry_count_, false,
-        executor_->small_groups_buffer_entry_count_, false,
+        executor_->max_groups_buffer_entry_count_,
+        executor_->small_groups_buffer_entry_count_,
         col_range_info.min, GroupByMemSharing::Shared
       };
     } else {
       return {
         col_range_info.hash_type_,
         group_col_widths, agg_col_widths,
-        static_cast<size_t>(col_range_info.max - col_range_info.min + 1), false,
-        0, false,
+        static_cast<size_t>(col_range_info.max - col_range_info.min + 1), 0,
         col_range_info.min, GroupByMemSharing::Shared
       };
     }
@@ -467,8 +461,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
     return {
       col_range_info.hash_type_,
       group_col_widths, agg_col_widths,
-      executor_->max_groups_buffer_entry_count_, false,
-      0, false,
+      executor_->max_groups_buffer_entry_count_, 0,
       0, GroupByMemSharing::Shared
     };
   }
@@ -481,6 +474,15 @@ bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
   return ((hash_type == GroupByColRangeType::OneColKnownRange ||
            hash_type == GroupByColRangeType::OneColConsecutiveKeys) &&
           !entry_count_small);
+}
+
+size_t QueryMemoryDescriptor::sharedMemBytes() const {
+  const size_t shared_mem_threshold { 0 };
+  const size_t shared_mem_bytes { getBufferSize() };
+  if (!usesGetGroupValueFast() || shared_mem_bytes > shared_mem_threshold) {
+    return 0;
+  }
+  return shared_mem_bytes;
 }
 
 void GroupByAndAggregate::codegen(
