@@ -35,7 +35,7 @@ struct GpuQueryMemory {
   std::pair<CUdeviceptr, std::vector<CUdeviceptr>> small_group_by_buffers;
 };
 
-class QueryMemoryDescriptor;
+struct QueryMemoryDescriptor;
 
 GpuQueryMemory create_dev_group_by_buffers(
     Data_Namespace::DataMgr* data_mgr,
