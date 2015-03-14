@@ -441,7 +441,9 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
-  return hash_type == GroupByColRangeType::OneColKnownRange || hash_type == GroupByColRangeType::OneColConsecutiveKeys;
+  return ((hash_type == GroupByColRangeType::OneColKnownRange ||
+           hash_type == GroupByColRangeType::OneColConsecutiveKeys) &&
+          !getSmallBufferSize());
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
