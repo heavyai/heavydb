@@ -57,8 +57,8 @@ public:
 
   static std::shared_ptr<Executor> getExecutor(
     const int db_id,
-    const size_t block_size_x = 128,
-    const size_t grid_size_x = 16);
+    const size_t block_size_x = 512,
+    const size_t grid_size_x = 4);
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t> AggInfo;
   typedef std::vector<ResultRow> ResultRows;

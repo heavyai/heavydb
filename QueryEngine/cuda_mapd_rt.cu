@@ -25,7 +25,9 @@ extern "C"
 __device__ const int64_t* init_shared_mem(const int64_t* groups_buffer,
                                           const int32_t groups_buffer_size) {
   extern __shared__ int64_t fast_bins[];
-  memcpy(fast_bins, groups_buffer, groups_buffer_size);
+  if (threadIdx.x == 0) {
+    memcpy(fast_bins, groups_buffer, groups_buffer_size);
+  }
   __syncthreads();
   return fast_bins;
 }
@@ -33,7 +35,9 @@ __device__ const int64_t* init_shared_mem(const int64_t* groups_buffer,
 extern "C"
 __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   __syncthreads();
-  memcpy(dest, src, sz);
+  if (threadIdx.x == 0) {
+    memcpy(dest, src, sz);
+  }
 }
 
 #define EMPTY_KEY -9223372036854775808L
@@ -45,9 +49,13 @@ __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
                                   const int32_t key_qw_count,
                                   const int32_t agg_col_count) {
   int64_t off = h * (key_qw_count + agg_col_count);
-  if (groups_buffer[off] == EMPTY_KEY) {
-    memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
-    return groups_buffer + off + key_qw_count;
+  {
+    const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off),
+      EMPTY_KEY, *key);
+    if (EMPTY_KEY == old) {
+      memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
+      return groups_buffer + off + key_qw_count;
+    }
   }
   bool match = true;
   for (int64_t i = 0; i < key_qw_count; ++i) {
@@ -66,7 +74,7 @@ __device__ int32_t key_hash(const int64_t* key, const int32_t key_qw_count,
   for (int32_t i = 0; i < key_qw_count; ++i) {
     hash = ((hash << 5) - hash + key[i]) % groups_buffer_entry_count;
   }
-  return hash;
+  return static_cast<uint32_t>(hash) % groups_buffer_entry_count;
 }
 
 extern "C"

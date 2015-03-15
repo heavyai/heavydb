@@ -15,11 +15,6 @@
 #include <vector>
 
 
-enum class ExecutorDeviceType {
-  CPU,
-  GPU
-};
-
 class Executor;
 
 enum class GroupByColRangeType {
@@ -160,8 +155,11 @@ struct QueryMemoryDescriptor {
     const Executor* executor,
     const ExecutorDeviceType device_type) const;
 
-  size_t getBufferSize() const;
-  size_t getSmallBufferSize() const;
+  size_t getBufferSizeQuad() const;
+  size_t getSmallBufferSizeQuad() const;
+
+  size_t getBufferSizeBytes() const;
+  size_t getSmallBufferSizeBytes() const;
 
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;

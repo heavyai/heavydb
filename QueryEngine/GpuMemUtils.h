@@ -54,4 +54,17 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const unsigned grid_size_x,
                                     const int device_id);
 
+enum class ExecutorDeviceType {
+  CPU,
+  GPU
+};
+
+class QueryMemoryDescriptor;
+
+// TODO(alex): remove
+bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
+                     const unsigned block_size_x,
+                     const ExecutorDeviceType device_type,
+                     size_t i);
+
 #endif // QUERYENGINE_GPUMEMUTILS_H

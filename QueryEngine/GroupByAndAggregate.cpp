@@ -5,6 +5,8 @@
 #include "RuntimeFunctions.h"
 #include "../CudaMgr/CudaMgr.h"
 
+#include <thread>
+
 
 QueryExecutionContext::QueryExecutionContext(
     const QueryMemoryDescriptor& query_mem_desc,
@@ -20,15 +22,39 @@ QueryExecutionContext::QueryExecutionContext(
   if (query_mem_desc_.group_col_widths.empty()) {
     return;
   }
+
+  std::vector<int64_t> group_by_buffer_template(query_mem_desc_.getBufferSizeQuad());
+  init_groups(
+    &group_by_buffer_template[0],
+    query_mem_desc_.entry_count,
+    query_mem_desc_.group_col_widths.size(),
+    &init_agg_vals[0],
+    query_mem_desc_.agg_col_widths.size());
+
+  std::vector<int64_t> group_by_small_buffer_template(query_mem_desc_.getSmallBufferSizeQuad());
+  init_groups(
+    &group_by_small_buffer_template[0],
+    query_mem_desc_.entry_count_small,
+    query_mem_desc_.group_col_widths.size(),
+    &init_agg_vals[0],
+    query_mem_desc_.agg_col_widths.size());
+
   for (size_t i = 0; i < num_buffers_; ++i) {
-    auto group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSize()));
-    init_groups(group_by_buffer, query_mem_desc_.entry_count, query_mem_desc_.group_col_widths.size(),
-      &init_agg_vals[0], query_mem_desc_.agg_col_widths.size());
+    int64_t* group_by_buffer { nullptr };
+    // For GPU, only allocate one buffer per block when threads share memory.
+    // TODO(alex): this is awkward, improve
+    bool alloc = buffer_not_null(query_mem_desc, executor_->block_size_x_, device_type, i);
+    if (alloc) {
+      group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSizeBytes()));
+      memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes());
+    }
     group_by_buffers_.push_back(group_by_buffer);
-    if (query_mem_desc_.getSmallBufferSize()) {
-      auto group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSize()));
-      init_groups(group_by_small_buffer, query_mem_desc_.entry_count_small, query_mem_desc_.group_col_widths.size(),
-        &init_agg_vals[0], query_mem_desc_.agg_col_widths.size());
+    if (query_mem_desc_.getSmallBufferSizeBytes()) {
+      int64_t* group_by_small_buffer { nullptr };
+      if (alloc) {
+        group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSizeBytes()));
+        memcpy(group_by_small_buffer, &group_by_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
+      }
       small_group_by_buffers_.push_back(group_by_small_buffer);
     }
   }
@@ -46,13 +72,31 @@ QueryExecutionContext::~QueryExecutionContext() {
 Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& targets) const {
   std::vector<Executor::ResultRows> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
+  if (device_type_ == ExecutorDeviceType::CPU) {
+    CHECK_EQ(1, num_buffers_);
+    return groupBufferToResults(0, targets);
+  }
+  const size_t MAX_THREADS = std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
+  boost::mutex row_set_mutex;
+  std::vector<std::thread> row_set_threads;
   for (size_t i = 0; i < group_by_buffers_.size(); ++i) {
-    auto results = groupBufferToResults(i, targets);
-    if (device_type_ == ExecutorDeviceType::GPU) {
-      results_per_sm.push_back(results);
-    } else {
-      return results;
+    if (!buffer_not_null(query_mem_desc_, executor_->block_size_x_, device_type_, i)) {
+      continue;
     }
+    row_set_threads.push_back(std::thread([i, this, &row_set_mutex, &results_per_sm, &targets]() {
+      auto results = groupBufferToResults(i, targets);
+      boost::mutex::scoped_lock lock(row_set_mutex);
+      results_per_sm.push_back(results);
+    }));
+    if (row_set_threads.size() >= MAX_THREADS) {
+      for (auto& child : row_set_threads) {
+        child.join();
+      }
+      row_set_threads.clear();
+    }
+  }
+  for (auto& child : row_set_threads) {
+    child.join();
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(results_per_sm);
@@ -103,7 +147,7 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
     return results;
   };
   std::vector<ResultRow> results;
-  if (query_mem_desc_.getSmallBufferSize()) {
+  if (query_mem_desc_.getSmallBufferSizeBytes()) {
     results = impl(query_mem_desc_.entry_count_small, small_group_by_buffers_[i]);
   }
   CHECK_LT(i, group_by_buffers_.size());
@@ -164,7 +208,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned block_size_z = 1;
     const unsigned grid_size_y  = 1;
     const unsigned grid_size_z  = 1;
-    if (query_mem_desc_.getBufferSize() > 0) {  // group by path
+    if (query_mem_desc_.getBufferSizeBytes() > 0) {  // group by path
       CHECK(!group_by_buffers_.empty());
       CUdeviceptr group_by_dev_ptr;
       std::vector<CUdeviceptr> group_by_dev_buffers;
@@ -256,12 +300,20 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     new QueryExecutionContext(*this, init_agg_vals, executor, device_type));
 }
 
-size_t QueryMemoryDescriptor::getBufferSize() const {
-  return (group_col_widths.size() + agg_col_widths.size()) * entry_count * sizeof(int64_t);
+size_t QueryMemoryDescriptor::getBufferSizeQuad() const {
+  return (group_col_widths.size() + agg_col_widths.size()) * entry_count;
 }
 
-size_t QueryMemoryDescriptor::getSmallBufferSize() const {
-  return (group_col_widths.size() + agg_col_widths.size()) * entry_count_small * sizeof(int64_t);
+size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
+  return (group_col_widths.size() + agg_col_widths.size()) * entry_count_small;
+}
+
+size_t QueryMemoryDescriptor::getBufferSizeBytes() const {
+  return getBufferSizeQuad() * sizeof(int64_t);
+}
+
+size_t QueryMemoryDescriptor::getSmallBufferSizeBytes() const {
+  return getSmallBufferSizeQuad() * sizeof(int64_t);
 }
 
 namespace {
@@ -397,7 +449,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       GroupByColRangeType::Scan,
       group_col_widths, agg_col_widths,
       0, 0,
-      0, GroupByMemSharing::Shared };
+      0, GroupByMemSharing::Private };
   }
 
   const auto col_range_info = getColRangeInfo(plan_, query_info_.fragments);
@@ -432,7 +484,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       col_range_info.hash_type_,
       group_col_widths, agg_col_widths,
       executor_->max_groups_buffer_entry_count_, 0,
-      0, GroupByMemSharing::Shared
+      0, GroupByMemSharing::Private
     };
   }
   default:
@@ -443,16 +495,16 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
   return ((hash_type == GroupByColRangeType::OneColKnownRange ||
            hash_type == GroupByColRangeType::OneColConsecutiveKeys) &&
-          !getSmallBufferSize());
+          !getSmallBufferSizeBytes());
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
-  return usesGetGroupValueFast();
+  return sharing == GroupByMemSharing::Shared;
 }
 
 size_t QueryMemoryDescriptor::sharedMemBytes() const {
   const size_t shared_mem_threshold { 0 };
-  const size_t shared_mem_bytes { getBufferSize() };
+  const size_t shared_mem_bytes { getBufferSizeBytes() };
   if (!usesGetGroupValueFast() || shared_mem_bytes > shared_mem_threshold) {
     return 0;
   }
