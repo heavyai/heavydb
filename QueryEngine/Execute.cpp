@@ -145,6 +145,7 @@ std::vector<ResultRow> Executor::execute(
     const ExecutorOptLevel opt_level) {
   data_root_path_ = root_plan->get_catalog().get_basePath();
   const auto stmt_type = root_plan->get_stmt_type();
+  boost::mutex::scoped_lock lock(execute_mutex_);
   switch (stmt_type) {
   case kSELECT:
     return executeSelectPlan(root_plan->get_plan(), root_plan,
@@ -2218,3 +2219,4 @@ bool Executor::skipFragment(
 }
 
 std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> Executor::executors_;
+boost::mutex Executor::execute_mutex_;

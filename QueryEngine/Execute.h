@@ -328,6 +328,7 @@ private:
   const int db_id_;
 
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
+  static boost::mutex execute_mutex_;
 
   friend class GroupByAndAggregate;
   friend class QueryExecutionContext;
