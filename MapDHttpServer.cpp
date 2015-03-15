@@ -14,6 +14,7 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <sys/time.h>
 
 
 using namespace ::apache::thrift;

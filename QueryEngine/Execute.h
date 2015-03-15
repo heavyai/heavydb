@@ -7,7 +7,6 @@
 #include "../StringDictionary/StringDictionary.h"
 #include "NvidiaKernel.h"
 
-#include <boost/thread.hpp>
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
@@ -17,7 +16,10 @@
 #include <cuda.h>
 
 #include <map>
+#include <condition_variable>
+#include <mutex>
 #include <unordered_map>
+#include <unordered_set>
 #include "../Shared/measure.h"
 
 
@@ -311,9 +313,9 @@ private:
 
   bool is_nested_;
 
-  boost::mutex reduce_mutex_;
+  std::mutex reduce_mutex_;
   static const int max_gpu_count { 8 };
-  boost::mutex gpu_exec_mutex_[max_gpu_count];
+  std::mutex gpu_exec_mutex_[max_gpu_count];
 
   mutable std::unique_ptr<StringDictionary> str_dict_;
 
@@ -328,7 +330,7 @@ private:
   const int db_id_;
 
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
-  static boost::mutex execute_mutex_;
+  static std::mutex execute_mutex_;
 
   friend class GroupByAndAggregate;
   friend class QueryExecutionContext;

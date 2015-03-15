@@ -145,7 +145,7 @@ std::vector<ResultRow> Executor::execute(
     const ExecutorOptLevel opt_level) {
   data_root_path_ = root_plan->get_catalog().get_basePath();
   const auto stmt_type = root_plan->get_stmt_type();
-  boost::mutex::scoped_lock lock(execute_mutex_);
+  std::lock_guard<std::mutex> lock(execute_mutex_);
   switch (stmt_type) {
   case kSELECT:
     return executeSelectPlan(root_plan->get_plan(), root_plan,
@@ -1345,38 +1345,68 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   fragmenter->getFragmentsForQuery(query_info);
   const auto& fragments = query_info.fragments;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
-  auto compilation_result = compilePlan(plan, query_info, agg_infos,
-    scan_plan->get_col_list(),
-    simple_quals, scan_plan->get_quals(),
-    hoist_literals, device_type, opt_level,
-    cat.get_dataMgr().cudaMgr_);
+  CompilationResult compilation_result_cpu;
+  if (device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::Auto) {
+    compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
+      scan_plan->get_col_list(),
+      simple_quals, scan_plan->get_quals(),
+      hoist_literals, ExecutorDeviceType::CPU, opt_level,
+      cat.get_dataMgr().cudaMgr_);
+  }
+  CompilationResult compilation_result_gpu;
+  if (device_type == ExecutorDeviceType::GPU || (device_type == ExecutorDeviceType::Auto &&
+      cat.get_dataMgr().gpusPresent())) {
+    compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
+      scan_plan->get_col_list(),
+      simple_quals, scan_plan->get_quals(),
+      hoist_literals, ExecutorDeviceType::GPU, opt_level,
+      cat.get_dataMgr().cudaMgr_);
+  }
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
   std::vector<ResultRows> all_fragment_results(fragments.size());
   std::vector<std::thread> query_threads;
-  // MAX_THREADS could use std::thread::hardware_concurrency(), but some
+  // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
-  const int64_t MAX_THREADS { std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) };
+  int available_cpus = std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
+  std::unordered_set<int> available_gpus;
+  if (cat.get_dataMgr().gpusPresent()) {
+    int gpu_count = cat.get_dataMgr().cudaMgr_->getDeviceCount();
+    CHECK_GT(gpu_count, 0);
+    for (int gpu_id = 0; gpu_id < gpu_count; ++gpu_id) {
+      available_gpus.insert(gpu_id);
+    }
+  }
+  std::condition_variable scheduler_cv_;
+  std::mutex scheduler_mutex_;
   for (size_t i = 0; i < fragments.size(); ++i) {
     if (skipFragment(fragments[i], simple_quals)) {
       continue;
     }
-    auto dispatch = [this, plan, current_dbid, device_type, i, table_id, compilation_result, hoist_literals,
-        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]() {
+    auto dispatch = [this, plan, current_dbid, device_type, i, table_id,
+        &available_cpus, &available_gpus, &scheduler_cv_, &scheduler_mutex_,
+        &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
+        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]
+        (const ExecutorDeviceType chosen_device_type, int chosen_device_id) {
       ResultRows device_results;
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
+      CHECK(chosen_device_type != ExecutorDeviceType::Auto);
+      const CompilationResult& compilation_result =
+        chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
       auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
-        plan_state_->init_agg_vals_, this, device_type);
+        plan_state_->init_agg_vals_, this, chosen_device_type);
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks(plan_state_->global_to_local_col_ids_.size());
-      const auto memory_level = device_type == ExecutorDeviceType::GPU
+      const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
         ? Data_Namespace::GPU_LEVEL
         : Data_Namespace::CPU_LEVEL;
-      const int device_id = fragment.deviceIds[static_cast<int>(memory_level)];
-      CHECK_GE(device_id, 0);
-      CHECK_LT(device_id, max_gpu_count);
+      if (device_type != ExecutorDeviceType::Auto) {
+        chosen_device_id = fragment.deviceIds[static_cast<int>(memory_level)];
+      }
+      CHECK_GE(chosen_device_id, 0);
+      CHECK_LT(chosen_device_id, max_gpu_count);
       for (const int col_id : col_global_ids) {
         auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
         CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
@@ -1388,40 +1418,65 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         chunks[it->second] = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
           chunk_key,
           memory_level,
-          device_id,
+          chosen_device_id,
           chunk_meta_it->second.numBytes,
           chunk_meta_it->second.numElements);
         auto ab = chunks[it->second]->get_buffer();
         CHECK(ab->getMemoryPtr());
         col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
       }
-      // TODO(alex): multiple devices support
       if (groupby_exprs.empty()) {
         executePlanWithoutGroupBy(
           compilation_result, hoist_literals,
-          device_results, get_agg_target_exprs(plan), device_type, col_buffers, num_rows,
-          &cat.get_dataMgr(), device_id);
+          device_results, get_agg_target_exprs(plan), chosen_device_type, col_buffers, num_rows,
+          &cat.get_dataMgr(), chosen_device_id);
       } else {
         executePlanWithGroupBy(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan),
-          groupby_exprs.size(), device_type, col_buffers,
+          groupby_exprs.size(), chosen_device_type, col_buffers,
           query_exe_context.get(), num_rows,
-          &cat.get_dataMgr(), device_id);
+          &cat.get_dataMgr(), chosen_device_id);
       }
-      boost::mutex::scoped_lock lock(reduce_mutex_);
-      all_fragment_results.push_back(device_results);
+      {
+        std::lock_guard<std::mutex> lock(reduce_mutex_);
+        all_fragment_results.push_back(device_results);
+      }
+      if (device_type == ExecutorDeviceType::Auto) {
+        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex_);
+        if (chosen_device_type == ExecutorDeviceType::CPU) {
+          ++available_cpus;
+        } else {
+          CHECK(chosen_device_type == ExecutorDeviceType::GPU);
+          auto it_ok = available_gpus.insert(chosen_device_id);
+          CHECK(it_ok.second);
+        }
+        scheduler_lock.unlock();
+        scheduler_cv_.notify_one();
+      }
     };
     if (serialize_execution) {
-      dispatch();
+      dispatch(ExecutorDeviceType::CPU, 0);
     } else {
-      query_threads.push_back(std::thread(dispatch));
-    }
-    if (query_threads.size() >= static_cast<size_t>(MAX_THREADS)) {
-      for (auto& child : query_threads) {
-        child.join();
+      auto chosen_device_type = device_type;
+      int chosen_device_id = 0;
+      if (device_type == ExecutorDeviceType::Auto) {
+        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex_);
+        scheduler_cv_.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
+          return available_cpus || !available_gpus.empty();
+        });
+        if (!available_gpus.empty()) {
+          chosen_device_type = ExecutorDeviceType::GPU;
+          auto device_id_it = available_gpus.begin();
+          chosen_device_id = *device_id_it;
+          available_gpus.erase(device_id_it);
+        } else {
+          chosen_device_type = ExecutorDeviceType::CPU;
+          CHECK_GT(available_cpus, 0);
+          --available_cpus;
+        }
       }
-      query_threads.clear();
+      query_threads.push_back(std::thread(dispatch, chosen_device_type, chosen_device_id));
     }
   }
   for (auto& child : query_threads) {
@@ -1448,7 +1503,7 @@ void Executor::executePlanWithoutGroupBy(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
-    boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
+    std::lock_guard<std::mutex> lock(gpu_exec_mutex_[device_id]);
     auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
       plan_state_->init_agg_vals_, this, device_type);
     out_vec = query_exe_context->launchGpuCode(
@@ -1524,7 +1579,7 @@ void Executor::executePlanWithGroupBy(
     results = query_exe_context->getRowSet(target_exprs);
   } else {
     {
-      boost::mutex::scoped_lock lock(gpu_exec_mutex_[device_id]);
+      std::lock_guard<std::mutex> lock(gpu_exec_mutex_[device_id]);
       query_exe_context->launchGpuCode(
         compilation_result.native_functions, hoist_literals, hoist_buf,
         col_buffers,
@@ -2219,4 +2274,4 @@ bool Executor::skipFragment(
 }
 
 std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> Executor::executors_;
-boost::mutex Executor::execute_mutex_;
+std::mutex Executor::execute_mutex_;

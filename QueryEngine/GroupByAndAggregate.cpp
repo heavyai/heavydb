@@ -77,7 +77,7 @@ Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer
     return groupBufferToResults(0, targets);
   }
   const size_t MAX_THREADS = std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
-  boost::mutex row_set_mutex;
+  std::mutex row_set_mutex;
   std::vector<std::thread> row_set_threads;
   for (size_t i = 0; i < group_by_buffers_.size(); ++i) {
     if (!buffer_not_null(query_mem_desc_, executor_->block_size_x_, device_type_, i)) {
@@ -85,7 +85,7 @@ Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer
     }
     row_set_threads.push_back(std::thread([i, this, &row_set_mutex, &results_per_sm, &targets]() {
       auto results = groupBufferToResults(i, targets);
-      boost::mutex::scoped_lock lock(row_set_mutex);
+      std::lock_guard<std::mutex> lock(row_set_mutex);
       results_per_sm.push_back(results);
     }));
     if (row_set_threads.size() >= MAX_THREADS) {
