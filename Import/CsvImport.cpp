@@ -301,12 +301,10 @@ CsvImporter::CsvImporter(
     const std::string& table_name,
     const std::string& base_data_path,
     const std::string& file_path,
-    const std::string& delim,
-    const bool has_header)
+    const std::string& delim)
   : table_name_(table_name),
     file_path_(file_path)
-  , table_meta_(table_name, base_data_path)
-  , has_header_(has_header) {
+  , table_meta_(table_name, base_data_path) {
     csv_parser_.set_skip_lines(1);
     csv_parser_.init(file_path.c_str());
     csv_parser_.set_enclosed_char(0, ENCLOSURE_NONE);
@@ -377,19 +375,6 @@ void CsvImporter::import() {
   const auto col_descriptors = table_meta_.getColumnDescriptors();
   std::ofstream exception_file;
   exception_file.open(file_path_ + ".exception");
-  /*
-  if (has_header_) {
-    auto header = CsvParser_getHeader(csv_parser_);
-    CHECK(header);
-    CHECK_EQ(CsvParser_getNumFields(header), col_descriptors.size());
-    char **header_fields = CsvParser_getFields(header);
-    int col_idx = 0;
-    for (const auto col_desc : col_descriptors) {
-      CHECK_EQ(col_desc->columnName, header_fields[col_idx]);
-      ++col_idx;
-    }
-  }
-  */
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
   StringDictionary string_dict(table_meta_.getStringDictFolder(
     table_meta_.getDbId(), table_meta_.getTableId(), 0));

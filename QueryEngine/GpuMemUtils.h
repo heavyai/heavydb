@@ -60,8 +60,6 @@ enum class ExecutorDeviceType {
   Auto
 };
 
-class QueryMemoryDescriptor;
-
 // TODO(alex): remove
 bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
                      const unsigned block_size_x,

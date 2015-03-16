@@ -48,15 +48,13 @@ public:
     const std::string& table_name,
     const std::string& base_data_path,
     const std::string& file_path,
-    const std::string& delim = ",",
-    const bool has_headers = false);
+    const std::string& delim = ",");
   void import();
   ~CsvImporter();
 private:
   const std::string table_name_;
   const std::string file_path_;
   MapDMeta table_meta_;
-  const bool has_header_;
   csv_parser csv_parser_;
 };
 
