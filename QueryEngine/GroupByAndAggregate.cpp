@@ -390,9 +390,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
     const auto max_val = extract_max_stat(max_it->second.chunkStats, group_by_ti);
     CHECK_GE(max_val, min_val);
     return {
-      group_by_ti.is_string()
-        ? GroupByColRangeType::OneColConsecutiveKeys
-        : GroupByColRangeType::OneColKnownRange,
+      GroupByColRangeType::OneColKnownRange,
       min_val,
       max_val
     };
@@ -456,7 +454,6 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
 
   switch (col_range_info.hash_type_) {
   case GroupByColRangeType::OneColKnownRange:
-  case GroupByColRangeType::OneColConsecutiveKeys:
   case GroupByColRangeType::OneColGuessedRange:
   case GroupByColRangeType::Scan: {
     if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
@@ -493,9 +490,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
-  return ((hash_type == GroupByColRangeType::OneColKnownRange ||
-           hash_type == GroupByColRangeType::OneColConsecutiveKeys) &&
-          !getSmallBufferSizeBytes());
+  return (hash_type == GroupByColRangeType::OneColKnownRange && !getSmallBufferSizeBytes());
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
@@ -562,7 +557,6 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
 
   switch (query_mem_desc.hash_type) {
   case GroupByColRangeType::OneColKnownRange:
-  case GroupByColRangeType::OneColConsecutiveKeys:
   case GroupByColRangeType::OneColGuessedRange:
   case GroupByColRangeType::Scan: {
     CHECK_EQ(1, groupby_list.size());

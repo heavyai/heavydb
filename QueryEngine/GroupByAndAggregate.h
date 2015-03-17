@@ -18,7 +18,6 @@
 class Executor;
 
 enum class GroupByColRangeType {
-  OneColConsecutiveKeys,  // statically known and consecutive keys, used for dictionary encoded columns
   OneColKnownRange,       // statically known range, only possible for column expressions
   OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
   MultiCol,
