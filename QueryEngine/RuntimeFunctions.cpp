@@ -218,7 +218,15 @@ void init_groups(int64_t* groups_buffer,
                  const int32_t groups_buffer_entry_count,
                  const int32_t key_qw_count,
                  const int64_t* init_vals,
-                 const int32_t agg_col_count) {
+                 const int32_t agg_col_count,
+                 const bool keyless) {
+  if (keyless) {
+    assert(key_qw_count == 1 && agg_col_count == 1);
+    for (int32_t i = 0; i < groups_buffer_entry_count; ++i) {
+      groups_buffer[i] = *init_vals;
+    }
+    return;
+  }
   int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
   for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
     groups_buffer[i] = (i % (key_qw_count + agg_col_count) < key_qw_count)
@@ -300,6 +308,13 @@ int64_t* get_group_value_one_key(int64_t* groups_buffer,
     return get_group_value_fast(small_groups_buffer, key, min_key, agg_col_count);
   }
   return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count);
+}
+
+extern "C" __attribute__((always_inline))
+int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
+                                      const int64_t key,
+                                      const int64_t min_key) {
+  return groups_buffer + key - min_key;
 }
 
 #ifdef __clang__

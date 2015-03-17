@@ -10,7 +10,7 @@ public:
   GroupsBuffer(const size_t groups_buffer_entry_count, const size_t key_qw_count, const int64_t init_val)
   : size_ { groups_buffer_entry_count * (key_qw_count + 1) } {
     groups_buffer_ = new int64_t[size_];
-    init_groups(groups_buffer_, groups_buffer_entry_count, key_qw_count, &init_val, 1);
+    init_groups(groups_buffer_, groups_buffer_entry_count, key_qw_count, &init_val, 1, false);
   }
   ~GroupsBuffer() {
     delete[] groups_buffer_;

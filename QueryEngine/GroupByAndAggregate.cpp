@@ -29,7 +29,12 @@ QueryExecutionContext::QueryExecutionContext(
     query_mem_desc_.entry_count,
     query_mem_desc_.group_col_widths.size(),
     &init_agg_vals[0],
-    query_mem_desc_.agg_col_widths.size());
+    query_mem_desc_.agg_col_widths.size(),
+    query_mem_desc.keyless_hash);
+
+  if (query_mem_desc.keyless_hash) {
+    CHECK_EQ(0, query_mem_desc_.getSmallBufferSizeQuad());
+  }
 
   std::vector<int64_t> group_by_small_buffer_template(query_mem_desc_.getSmallBufferSizeQuad());
   init_groups(
@@ -37,7 +42,8 @@ QueryExecutionContext::QueryExecutionContext(
     query_mem_desc_.entry_count_small,
     query_mem_desc_.group_col_widths.size(),
     &init_agg_vals[0],
-    query_mem_desc_.agg_col_widths.size());
+    query_mem_desc_.agg_col_widths.size(),
+    false);
 
   for (size_t i = 0; i < num_buffers_; ++i) {
     int64_t* group_by_buffer { nullptr };
@@ -111,6 +117,25 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
       const size_t groups_buffer_entry_count,
       const int64_t* group_by_buffer) {
     std::vector<ResultRow> results;
+    if (query_mem_desc_.keyless_hash) {
+      CHECK_EQ(1, group_by_col_count);
+      CHECK_EQ(1, targets.size());
+      const auto target_expr = targets.front();
+      for (size_t i = 0; i < groups_buffer_entry_count; ++i) {
+        if (group_by_buffer[i] != 0) {
+          ResultRow result_row(executor_);
+          result_row.value_tuple_.push_back(i + query_mem_desc_.min_val);
+          const auto agg_info = target_info(targets.front());
+          CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
+          result_row.agg_results_.push_back(group_by_buffer[i]);
+          result_row.agg_results_idx_.push_back(0);
+          result_row.agg_kinds_.push_back(kCOUNT);
+          result_row.agg_types_.push_back(target_expr->get_type_info());
+          results.push_back(result_row);
+        }
+      }
+      return results;
+    }
     for (size_t i = 0; i < groups_buffer_entry_count; ++i) {
       const size_t key_off = (group_by_col_count + agg_col_count) * i;
       if (group_by_buffer[key_off] != EMPTY_KEY) {
@@ -301,10 +326,16 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad() const {
+  if (keyless_hash) {
+    CHECK_EQ(1, group_col_widths.size());
+    CHECK_EQ(1, agg_col_widths.size());
+    return entry_count;
+  }
   return (group_col_widths.size() + agg_col_widths.size()) * entry_count;
 }
 
 size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
+  CHECK(!keyless_hash || entry_count_small == 0);
   return (group_col_widths.size() + agg_col_widths.size()) * entry_count_small;
 }
 
@@ -355,7 +386,6 @@ int32_t get_agg_count(const Planner::Plan* plan) {
   }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
-    const Planner::Plan* plan,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
@@ -444,13 +474,13 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
 
   if (group_col_widths.empty()) {
     return {
-      GroupByColRangeType::Scan,
+      GroupByColRangeType::Scan, false,
       group_col_widths, agg_col_widths,
       0, 0,
       0, GroupByMemSharing::Private };
   }
 
-  const auto col_range_info = getColRangeInfo(plan_, query_info_.fragments);
+  const auto col_range_info = getColRangeInfo(query_info_.fragments);
 
   switch (col_range_info.hash_type_) {
   case GroupByColRangeType::OneColKnownRange:
@@ -461,15 +491,23 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
         col_range_info.max - col_range_info.min >=
         static_cast<int64_t>(executor_->max_groups_buffer_entry_count_)) {
       return {
-        col_range_info.hash_type_,
+        col_range_info.hash_type_, false,
         group_col_widths, agg_col_widths,
         executor_->max_groups_buffer_entry_count_,
         executor_->small_groups_buffer_entry_count_,
         col_range_info.min, GroupByMemSharing::Shared
       };
     } else {
+      bool keyless = (target_expr_list.size() == 1);
+      if (keyless) {
+        auto target_expr = target_expr_list.front();
+        auto agg_info = target_info(target_expr);
+        if (!agg_info.is_agg || agg_info.agg_kind != kCOUNT) {
+          keyless = false;
+        }
+      }
       return {
-        col_range_info.hash_type_,
+        col_range_info.hash_type_, keyless,
         group_col_widths, agg_col_widths,
         static_cast<size_t>(col_range_info.max - col_range_info.min + 1), 0,
         col_range_info.min, GroupByMemSharing::Shared
@@ -478,7 +516,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
   }
   case GroupByColRangeType::MultiCol: {
     return {
-      col_range_info.hash_type_,
+      col_range_info.hash_type_, false,
       group_col_widths, agg_col_widths,
       executor_->max_groups_buffer_entry_count_, 0,
       0, GroupByMemSharing::Private
@@ -564,14 +602,17 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
     auto small_groups_buffer = arg_it;
     if (query_mem_desc.usesGetGroupValueFast()) {
-      agg_out_start_ptr = emitCall(
-        "get_group_value_fast",
-        {
-          groups_buffer,
-          group_expr_lv,
-          LL_INT(query_mem_desc.min_val),
-          LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))
-        });
+      const std::string get_group_fn_name {
+        "get_group_value_fast" + std::string(query_mem_desc.keyless_hash ? "_keyless" : "") };
+      std::vector<llvm::Value*> get_group_fn_args {
+        groups_buffer,
+        group_expr_lv,
+        LL_INT(query_mem_desc.min_val)
+      };
+      if (!query_mem_desc.keyless_hash) {
+        get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
+      }
+      agg_out_start_ptr = emitCall(get_group_fn_name, get_group_fn_args);
     } else {
       agg_out_start_ptr = emitCall(
         "get_group_value_one_key",

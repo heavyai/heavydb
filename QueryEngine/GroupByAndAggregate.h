@@ -142,6 +142,7 @@ private:
 
 struct QueryMemoryDescriptor {
   GroupByColRangeType hash_type;
+  bool keyless_hash;
   std::vector<int8_t> group_col_widths;
   std::vector<int8_t> agg_col_widths;
   size_t entry_count;                    // the number of entries in the main buffer
@@ -192,7 +193,6 @@ private:
   llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const bool hoist_literals);
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
-    const Planner::Plan*,
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);
 
   void codegenAggCalls(
