@@ -10,6 +10,8 @@
 #include <string>
 
 
+class StringDictionary;
+
 class MapDMeta {
 public:
   MapDMeta(const std::string table_name, const std::string& base_data_path);
@@ -18,16 +20,7 @@ public:
   const TableDescriptor* getTableDesc() const;
   int getDbId() const;
   Data_Namespace::DataMgr* getDataMgr() const;
-  std::string getStringDictFolder(const int col_id) const;
-  std::string getStringDictFolder(
-    const int db_id,
-    const int table_id,
-    const int col_id);
-  static std::string getStringDictFolder(
-    const std::string& base_data_path,
-    const int db_id,
-    const int table_id,
-    const int col_id);
+  StringDictionary* getStringDict(const int col_id) const;
 private:
   Catalog_Namespace::Catalog* cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;

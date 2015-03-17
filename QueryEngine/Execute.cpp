@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <map>
 #include <set>
+#include <boost/filesystem/path.hpp>
 
 
 AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) const {
@@ -59,9 +60,10 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
     if (agg_types_[idx].is_integer() || agg_types_[idx].is_time()) {
       return AggResult(agg_results_[actual_idx]);
     } else if (agg_types_[idx].is_string()) {
-      CHECK(executor_);
+      CHECK_EQ(kENCODING_DICT, agg_types_[idx].get_compression());
+      const int dict_id = agg_types_[idx].get_comp_param();
       return translate_strings
-        ? AggResult(executor_->getStringDictionary()->getString(agg_results_[actual_idx]))
+        ? AggResult(executor_->getStringDictionary(dict_id)->getString(agg_results_[actual_idx]))
         : AggResult(agg_results_[actual_idx]);
     } else {
       CHECK(agg_types_[idx].get_type() == kFLOAT || agg_types_[idx].get_type() == kDOUBLE);
@@ -81,7 +83,8 @@ Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid
   , is_nested_(false)
   , block_size_x_(block_size_x)
   , grid_size_x_(grid_size_x)
-  , db_id_(db_id) {}
+  , db_id_(db_id)
+  , catalog_(nullptr) {}
 
 std::shared_ptr<Executor> Executor::getExecutor(
     const int db_id,
@@ -143,7 +146,7 @@ std::vector<ResultRow> Executor::execute(
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level) {
-  data_root_path_ = root_plan->get_catalog().get_basePath();
+  catalog_ = &root_plan->get_catalog();
   const auto stmt_type = root_plan->get_stmt_type();
   std::lock_guard<std::mutex> lock(execute_mutex_);
   switch (stmt_type) {
@@ -159,13 +162,19 @@ std::vector<ResultRow> Executor::execute(
   }
 }
 
-StringDictionary* Executor::getStringDictionary() const {
-  if (!str_dict_) {
-    CHECK(!data_root_path_.empty());
-    str_dict_.reset(new StringDictionary(MapDMeta::getStringDictFolder(
-      data_root_path_, db_id_, -1, -1)));
+StringDictionary* Executor::getStringDictionary(const int dict_id) const {
+  CHECK(catalog_);
+  const auto dd = catalog_->getMetadataForDict(dict_id);
+  CHECK(dd);
+  CHECK_EQ(32, dd->dictNBits);
+  const auto dict_it = str_dicts_.find(dict_id);
+  if (dict_it != str_dicts_.end()) {
+    return dict_it->second.get();
   }
-  return str_dict_.get();
+  auto dict_it_ok = str_dicts_.insert(std::make_pair(dict_id,
+    std::unique_ptr<StringDictionary>(new StringDictionary(dd->dictFolderPath))));
+  CHECK(dict_it_ok.second);
+  return dict_it_ok.first->second.get();
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& literals) {
@@ -216,9 +225,9 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
         break;
       }
       case 6: {
-        const auto p = boost::get<std::string>(&lit);
+        const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionary()->getOrAdd(*p);
+        const auto str_id = getStringDictionary(p->second)->getOrAdd(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -257,7 +266,10 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_lite
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
-    return codegen(constant, hoist_literals);
+    // The dictionary encoding case should be handled by the parent expression
+    // (cast, for now), here is too late to know the dictionary id
+    CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
+    return codegen(constant, -1, hoist_literals);
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
@@ -414,7 +426,9 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool hoist_literals) {
+llvm::Value* Executor::codegen(const Analyzer::Constant* constant,
+                               const int dict_id,
+                               const bool hoist_literals) {
   const auto& type_info = constant->get_type_info();
   if (hoist_literals) {
     auto arg_it = cgen_state_->row_func_->arg_begin();
@@ -437,7 +451,7 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
         ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
         : llvm::Type::getDoublePtrTy(cgen_state_->context_);
     }
-    const int16_t lit_off = cgen_state_->getOrAddLiteral(constant);
+    const int16_t lit_off = cgen_state_->getOrAddLiteral(constant, dict_id);
     const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(
       arg_it, ll_int(lit_off));
     auto lit_lv = cgen_state_->ir_builder_.CreateLoad(
@@ -463,7 +477,7 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant, const bool ho
   case kDOUBLE:
     return llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), constant->get_constval().doubleval);
   case kVARCHAR: {
-    return ll_int(getStringDictionary()->get(*constant->get_constval().stringval));
+    return ll_int(getStringDictionary(dict_id)->get(*constant->get_constval().stringval));
   }
   default:
     CHECK(false);
@@ -646,8 +660,14 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const b
 llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hoist_literals) {
   CHECK_EQ(uoper->get_optype(), kCAST);
   const auto& ti = uoper->get_type_info();
-  const auto operand_lv = codegen(uoper->get_operand(), hoist_literals);
-  const auto& operand_ti = uoper->get_operand()->get_type_info();
+  const auto operand = uoper->get_operand();
+  const auto operand_as_const = dynamic_cast<const Analyzer::Constant*>(operand);
+  // For dictionary encoded constants, the cast holds the dictionary id
+  // information as the compression parameter; handle this case separately.
+  const auto operand_lv = operand_as_const
+    ? codegen(operand_as_const, ti.get_comp_param(), hoist_literals)
+    : codegen(operand, hoist_literals);
+  const auto& operand_ti = operand->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
       // TODO(alex): make it safe, now that we have full type information
@@ -1614,6 +1634,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         break;
       }
       case kENCODING_DICT: {
+        const auto dd = cat.getMetadataForDict(cd->columnType.get_comp_param());
+        CHECK(dd);
         auto it_ok = col_buffers.insert(std::make_pair(col_id, nullptr));
         CHECK(it_ok.second);
         break;
@@ -1684,7 +1706,8 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
         break;
       case kENCODING_DICT: {
-        const int32_t str_id = getStringDictionary()->getOrAdd(*col_datum.stringval);
+        const int dict_id = cd->columnType.get_comp_param();
+        const int32_t str_id = getStringDictionary(dict_id)->getOrAdd(*col_datum.stringval);
         auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
         *col_data = str_id;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);

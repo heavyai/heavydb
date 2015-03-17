@@ -511,6 +511,5 @@ int main(int argc, char** argv)
   const std::string drop_test { "DROP TABLE test;" };
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
-  boost::filesystem::remove_all("/tmp/mapd_strings_1");
   return err;
 }

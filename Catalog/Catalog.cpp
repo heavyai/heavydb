@@ -258,7 +258,7 @@ void Catalog::buildMaps() {
         std::string dictName = sqliteConnector_.getData<string>(r,1);
 				int dictNBits = sqliteConnector_.getData<int>(r,2);
         bool is_shared = sqliteConnector_.getData<bool>(r, 3);
-        std::string fname = currentDB_.dbName + "_" + dictName;
+        std::string fname = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
 				DictDescriptor *dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
         dictDescriptorMapById_[dd->dictId] = dd;
     }

@@ -58,25 +58,15 @@ Data_Namespace::DataMgr* MapDMeta::getDataMgr() const {
   return &dm;
 }
 
-std::string MapDMeta::getStringDictFolder(const int col_id) const {
-  return getStringDictFolder(base_data_path_, getDbId(), getTableId(), col_id);
-}
-
-std::string MapDMeta::getStringDictFolder(
-    const int db_id,
-    const int table_id,
-    const int col_id) {
-  return getStringDictFolder(base_data_path_, db_id, table_id, col_id);
-}
-
-std::string MapDMeta::getStringDictFolder(
-    const std::string& base_data_path,
-    const int db_id,
-    const int table_id,
-    const int col_id) {
-  boost::filesystem::path str_dict_folder { base_data_path };
-  str_dict_folder /= ("mapd_strings_" + std::to_string(db_id));
-  return str_dict_folder.string();
+StringDictionary* MapDMeta::getStringDict(const int col_id) const {
+  for (const auto cd : col_descriptors_) {
+    if (cd->columnId == col_id && cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_DICT) {
+      const auto dd = cat_->getMetadataForDict(cd->columnType.get_comp_param());
+      CHECK(dd);
+      return new StringDictionary(dd->dictFolderPath);
+    }
+  }
+  return nullptr;
 }
 
 namespace {
@@ -292,7 +282,7 @@ private:
   std::vector<int32_t>* string_dict_buffer_;
   SQLTypes type_;
   EncodingType encoding_;
-  StringDictionary* string_dict_;
+  std::unique_ptr<StringDictionary> string_dict_;
 };
 
 };
@@ -376,11 +366,10 @@ void CsvImporter::import() {
   std::ofstream exception_file;
   exception_file.open(file_path_ + ".exception");
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
-  StringDictionary string_dict(table_meta_.getStringDictFolder(
-    table_meta_.getDbId(), table_meta_.getTableId(), 0));
   for (const auto col_desc : col_descriptors) {
-    import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(
-      new TypedImportBuffer(col_desc, &string_dict)));
+    import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(
+      col_desc,
+      table_meta_.getStringDict(col_desc->columnId))));
   }
   Fragmenter_Namespace::InsertData insert_data;
   insert_data.databaseId = table_meta_.getDbId();

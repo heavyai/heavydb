@@ -71,9 +71,9 @@ public:
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
     const ExecutorOptLevel = ExecutorOptLevel::Default);
 
-  StringDictionary* getStringDictionary() const;
+  StringDictionary* getStringDictionary(const int dictId) const;
 
-  typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double, std::string> LiteralValue;
+  typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>> LiteralValue;
   typedef std::vector<Executor::LiteralValue> LiteralValues;
 
 private:
@@ -86,7 +86,7 @@ private:
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ColumnVar*, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::Constant*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
@@ -242,7 +242,7 @@ private:
       , ir_builder_(context_)
       , literal_bytes_(0) {}
 
-    size_t getOrAddLiteral(const Analyzer::Constant* constant) {
+    size_t getOrAddLiteral(const Analyzer::Constant* constant, const int dict_id) {
       const auto& type_info = constant->get_type_info();
       switch (type_info.get_type()) {
       case kBOOLEAN:
@@ -258,7 +258,7 @@ private:
       case kDOUBLE:
         return getOrAddLiteral(constant->get_constval().doubleval);
       case kVARCHAR:
-        return getOrAddLiteral(*constant->get_constval().stringval);
+        return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id));
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
@@ -308,16 +308,13 @@ private:
   };
   std::unique_ptr<PlanState> plan_state_;
 
-  // TODO(alex): remove
-  std::string data_root_path_;
-
   bool is_nested_;
 
   std::mutex reduce_mutex_;
   static const int max_gpu_count { 8 };
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
-  mutable std::unique_ptr<StringDictionary> str_dict_;
+  mutable std::unordered_map<int, std::unique_ptr<StringDictionary>> str_dicts_;
 
   std::map<CodeCacheKey, CodeCacheVal> cpu_code_cache_;
   std::map<CodeCacheKey, CodeCacheVal> gpu_code_cache_;
@@ -328,6 +325,7 @@ private:
   const unsigned grid_size_x_;
 
   const int db_id_;
+  const Catalog_Namespace::Catalog* catalog_;
 
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;
