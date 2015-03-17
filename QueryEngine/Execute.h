@@ -315,6 +315,7 @@ private:
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
   mutable std::unordered_map<int, std::unique_ptr<StringDictionary>> str_dicts_;
+  mutable std::mutex str_dicts_mutex_;
 
   std::map<CodeCacheKey, CodeCacheVal> cpu_code_cache_;
   std::map<CodeCacheKey, CodeCacheVal> gpu_code_cache_;

@@ -167,6 +167,7 @@ StringDictionary* Executor::getStringDictionary(const int dict_id) const {
   const auto dd = catalog_->getMetadataForDict(dict_id);
   CHECK(dd);
   CHECK_EQ(32, dd->dictNBits);
+  std::lock_guard<std::mutex> lock(str_dicts_mutex_);
   const auto dict_it = str_dicts_.find(dict_id);
   if (dict_it != str_dicts_.end()) {
     return dict_it->second.get();
