@@ -143,7 +143,7 @@ random_fill_int16array(vector<vector<int16_t>> &stringVec, size_t num_elems, int
 {
 		default_random_engine gen;
     uniform_int_distribution<int16_t> dist(INT16_MIN, INT16_MAX);
-    uniform_int_distribution<> len_dist(0, max_len);
+    uniform_int_distribution<> len_dist(0, max_len/2);
 		size_t hash = 0;
 		for (int n = 0; n < num_elems; n++) {
 			int len = len_dist(gen);
@@ -163,7 +163,7 @@ random_fill_int32array(vector<vector<int32_t>> &stringVec, size_t num_elems, int
 {
 		default_random_engine gen;
     uniform_int_distribution<int32_t> dist(INT32_MIN, INT32_MAX);
-    uniform_int_distribution<> len_dist(0, max_len);
+    uniform_int_distribution<> len_dist(0, max_len/4);
 		size_t hash = 0;
 		for (int n = 0; n < num_elems; n++) {
 			int len = len_dist(gen);
