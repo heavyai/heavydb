@@ -84,7 +84,7 @@ namespace {
 	};
 
 	bool
-	storage_test(string table_name, size_t num_rows)
+	storage_test(const string &table_name, size_t num_rows)
 	{
 		vector<size_t> insert_col_hashs = populate_table_random(table_name, num_rows, *gcat);
 		// cout << "insert hashs: ";
@@ -131,6 +131,13 @@ TEST(StorageSmall, AllTypes) {
 	ASSERT_NO_THROW(run_ddl("create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, g timestamp(0), h time(0), i date, x varchar(10), y text);"););
 	EXPECT_TRUE(storage_test("alltypes", SMALL));
 	ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
+}
+
+TEST(StorageSmall, TokStrings) {
+	ASSERT_NO_THROW(run_ddl("drop table if exists tokstrings;"););
+	ASSERT_NO_THROW(run_ddl("create table tokstrings (x varchar(10) encoding token_dict(8), y varchar(20) encoding token_dict(16), z text encoding token_dict );"););
+	EXPECT_TRUE(storage_test("tokstrings", SMALL));
+	ASSERT_NO_THROW(run_ddl("drop table tokstrings;"););
 }
 
 int

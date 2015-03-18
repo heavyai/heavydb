@@ -220,16 +220,20 @@ namespace File_Namespace {
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
         fread((int8_t *)&pageSize_,sizeof(size_t),1,f);
         fread((int8_t *)&size_,sizeof(size_t),1,f);
-        vector <int> typeData (7); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
+        vector <int> typeData (NUM_METADATA); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         fread((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
-        hasEncoder = static_cast <bool> (typeData[0]);
+        int version = typeData[0];
+        assert(version == METADATA_VERSION); // add backward compatibility code here
+        hasEncoder = static_cast <bool> (typeData[1]);
         if (hasEncoder) {
-            sqlType.set_type(static_cast<SQLTypes> (typeData[1]));
-						sqlType.set_dimension(typeData[2]);
-						sqlType.set_scale(typeData[3]);
-						sqlType.set_notnull(static_cast<bool>(typeData[4]));
-            sqlType.set_compression(static_cast<EncodingType> (typeData[5]));
-            sqlType.set_comp_param(typeData[6]);
+            sqlType.set_type(static_cast<SQLTypes> (typeData[2]));
+						sqlType.set_dimension(typeData[3]);
+						sqlType.set_scale(typeData[4]);
+						sqlType.set_notnull(static_cast<bool>(typeData[5]));
+            sqlType.set_compression(static_cast<EncodingType> (typeData[6]));
+            sqlType.set_comp_param(typeData[7]);
+            sqlType.set_size(typeData[8]);
+            sqlType.set_elem_size(typeData[9]);
             initEncoder(sqlType);
             encoder->readMetadata(f);
         }
@@ -245,15 +249,18 @@ namespace File_Namespace {
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
         size_t numBytesWritten = fwrite((int8_t *)&pageSize_,sizeof(size_t),1,f);
         numBytesWritten = fwrite((int8_t *)&size_,sizeof(size_t),1,f);
-        vector <int> typeData (7); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
-        typeData[0] = static_cast<int>(hasEncoder); 
+        vector <int> typeData (NUM_METADATA); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
+        typeData[0] = METADATA_VERSION;
+        typeData[1] = static_cast<int>(hasEncoder); 
         if (hasEncoder) {
-            typeData[1] = static_cast<int>(sqlType.get_type()); 
-            typeData[2] = sqlType.get_dimension(); 
-            typeData[3] = sqlType.get_scale(); 
-            typeData[4] = static_cast<int>(sqlType.get_notnull()); 
-            typeData[5] = static_cast<int>(sqlType.get_compression()); 
-            typeData[6] = sqlType.get_comp_param(); 
+            typeData[2] = static_cast<int>(sqlType.get_type()); 
+            typeData[3] = sqlType.get_dimension(); 
+            typeData[4] = sqlType.get_scale(); 
+            typeData[5] = static_cast<int>(sqlType.get_notnull()); 
+            typeData[6] = static_cast<int>(sqlType.get_compression()); 
+            typeData[7] = sqlType.get_comp_param(); 
+            typeData[8] = sqlType.get_size(); 
+            typeData[9] = sqlType.get_elem_size(); 
         }
         numBytesWritten = fwrite((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         if (hasEncoder) { // redundant

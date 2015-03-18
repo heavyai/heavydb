@@ -10,9 +10,14 @@
 #include <stdexcept>
 #include <limits>
 
+typedef int32_t StringOffsetT;
+
 namespace Data_Namespace {
     class AbstractBuffer;
 }
+
+// default max input buffer size to 1MB
+#define MAX_INPUT_BUF_SIZE		1048576
 
 class Encoder {
     public: 

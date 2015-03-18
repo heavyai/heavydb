@@ -17,8 +17,6 @@
 
 using Data_Namespace::AbstractBuffer;
 
-typedef int32_t StringOffsetT;
-
 class StringNoneEncoder : public Encoder {
 
     public:

@@ -60,6 +60,9 @@ struct VarlenDatum {
 union DataBlockPtr {
 	int8_t *numbersPtr;
 	std::vector<std::string> *stringsPtr;
+  std::vector<std::vector<int8_t>> *tok8dictPtr; // single byte tokenized dictionary encoding array
+  std::vector<std::vector<int16_t>> *tok16dictPtr; // double byte tokenized dictionary encoding array
+  std::vector<std::vector<int32_t>> *tok32dictPtr; // 4-byte tokenized dictionary encoding array
 };
 
 // must not change because these values persist in catalogs.
@@ -84,10 +87,10 @@ enum EncodingType {
 // length, precision, scale, etc.
 class SQLTypeInfo {
   public:
-    SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p) : type(t), dimension(d), scale(s), notnull(n), compression(c), comp_param(p), size(get_storage_size()) {}
-    SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
-    explicit SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
-    SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0) {}
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p, int es) : type(t), dimension(d), scale(s), notnull(n), compression(c), comp_param(p), size(get_storage_size()), elem_size(es) {}
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
+    explicit SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
+    SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0), elem_size(0) {}
 
     inline SQLTypes get_type() const { return type; }
     inline int get_dimension() const { return dimension; }
@@ -97,6 +100,7 @@ class SQLTypeInfo {
     inline EncodingType get_compression() const { return compression; }
     inline int get_comp_param() const { return comp_param; }
     inline int get_size() const { return size; }
+    inline int get_elem_size() const { return elem_size; }
     inline void set_type(SQLTypes t) { type = t; }
     inline void set_dimension(int d) { dimension = d; }
     inline void set_precision(int d) { dimension = d; }
@@ -104,6 +108,7 @@ class SQLTypeInfo {
     inline void set_notnull(bool n) { notnull = n; }
     inline void set_size(int s) { size = s; }
     inline void set_fixed_size() { size = get_storage_size(); }
+    inline void set_elem_size(int s) { elem_size = s; }
     inline void set_compression(EncodingType c) { compression = c; }
     inline void set_comp_param(int p) { comp_param = p; }
     inline std::string get_type_name() const { return type_name[(int)type]; }
@@ -131,6 +136,7 @@ class SQLTypeInfo {
       compression = rhs.get_compression();
       comp_param = rhs.get_comp_param();
       size = rhs.get_size();
+      elem_size = rhs.get_elem_size();
     }
     inline bool is_castable(const SQLTypeInfo &new_type_info) const {
       // can always cast between the same type but different precision/scale/encodings
@@ -161,6 +167,7 @@ class SQLTypeInfo {
     EncodingType compression; // compression scheme
     int comp_param; // compression parameter when applicable for certain schemes
     int size; // size of the type in bytes.  -1 for variable size
+    int elem_size; // size of array elements in bytes, 1, 2 or 4.  for internal use for tokenized dictionary encoding only.
     static std::string type_name[kSQLTYPE_LAST];
     static std::string comp_name[kENCODING_LAST];
 		inline int get_storage_size() const {

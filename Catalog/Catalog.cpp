@@ -190,9 +190,21 @@ Catalog::~Catalog() {
 }
 
 void Catalog::buildMaps() {
+    string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
+    sqliteConnector_.query(dictQuery);
+    size_t numRows = sqliteConnector_.getNumRows();
+    for (int r = 0; r < numRows; ++r) {
+				int dictId = sqliteConnector_.getData<int>(r,0);
+        std::string dictName = sqliteConnector_.getData<string>(r,1);
+				int dictNBits = sqliteConnector_.getData<int>(r,2);
+        bool is_shared = sqliteConnector_.getData<bool>(r, 3);
+        std::string fname = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
+				DictDescriptor *dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
+        dictDescriptorMapById_[dd->dictId] = dd;
+    }
     string tableQuery("SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions from mapd_tables");
     sqliteConnector_.query(tableQuery);
-    size_t numRows = sqliteConnector_.getNumRows();
+    numRows = sqliteConnector_.getNumRows();
     for (int r = 0; r < numRows; ++r) {
 				TableDescriptor *td = new TableDescriptor();
 				td->tableId = sqliteConnector_.getData<int>(r,0);
@@ -231,6 +243,11 @@ void Catalog::buildMaps() {
 				cd->columnType.set_compression((EncodingType)sqliteConnector_.getData<int>(r,7));
         cd->columnType.set_comp_param(sqliteConnector_.getData<int>(r,8));
         cd->columnType.set_size(sqliteConnector_.getData<int>(r,9));
+        if (cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_TOKDICT) {
+          
+          DictDescriptor *dd = dictDescriptorMapById_[cd->columnType.get_comp_param()];
+          cd->columnType.set_elem_size(dd->dictNBits/8);
+        }
 				cd->chunks = sqliteConnector_.getData<string>(r,10);
         ColumnKey columnKey(cd->tableId, cd->columnName);
         columnDescriptorMap_[columnKey] = cd;
@@ -249,18 +266,6 @@ void Catalog::buildMaps() {
 				td->refreshOption = (ViewRefreshOption)sqliteConnector_.getData<int>(r,4);
 				td->isReady = !td->isMaterialized;
 				td->fragmenter = nullptr;
-    }
-    string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
-    sqliteConnector_.query(dictQuery);
-    numRows = sqliteConnector_.getNumRows();
-    for (int r = 0; r < numRows; ++r) {
-				int dictId = sqliteConnector_.getData<int>(r,0);
-        std::string dictName = sqliteConnector_.getData<string>(r,1);
-				int dictNBits = sqliteConnector_.getData<int>(r,2);
-        bool is_shared = sqliteConnector_.getData<bool>(r, 3);
-        std::string fname = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
-				DictDescriptor *dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
-        dictDescriptorMapById_[dd->dictId] = dd;
     }
 }
 

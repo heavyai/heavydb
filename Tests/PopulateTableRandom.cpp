@@ -118,12 +118,72 @@ random_fill_string(vector<string> &stringVec, size_t num_elems, int max_len, siz
 		return hash;
 }
 
+size_t
+random_fill_int8array(vector<vector<int8_t>> &stringVec, size_t num_elems, int max_len, size_t &data_volumn)
+{
+		default_random_engine gen;
+    uniform_int_distribution<int8_t> dist(INT8_MIN, INT8_MAX);
+    uniform_int_distribution<> len_dist(0, max_len);
+		size_t hash = 0;
+		for (int n = 0; n < num_elems; n++) {
+			int len = len_dist(gen);
+			vector<int8_t> s(len);
+			for (int i = 0; i < len; i++) {
+				s[i] = dist(gen);
+        boost::hash_combine(hash, s[i]);
+      }
+			stringVec[n] = s;
+      data_volumn += len * sizeof(int8_t);
+		}
+		return hash;
+}
+
+size_t
+random_fill_int16array(vector<vector<int16_t>> &stringVec, size_t num_elems, int max_len, size_t &data_volumn)
+{
+		default_random_engine gen;
+    uniform_int_distribution<int16_t> dist(INT16_MIN, INT16_MAX);
+    uniform_int_distribution<> len_dist(0, max_len);
+		size_t hash = 0;
+		for (int n = 0; n < num_elems; n++) {
+			int len = len_dist(gen);
+			vector<int16_t> s(len);
+			for (int i = 0; i < len; i++) {
+				s[i] = dist(gen);
+        boost::hash_combine(hash, s[i]);
+      }
+			stringVec[n] = s;
+      data_volumn += len * sizeof(int16_t);
+		}
+		return hash;
+}
+
+size_t
+random_fill_int32array(vector<vector<int32_t>> &stringVec, size_t num_elems, int max_len, size_t &data_volumn)
+{
+		default_random_engine gen;
+    uniform_int_distribution<int32_t> dist(INT32_MIN, INT32_MAX);
+    uniform_int_distribution<> len_dist(0, max_len);
+		size_t hash = 0;
+		for (int n = 0; n < num_elems; n++) {
+			int len = len_dist(gen);
+			vector<int32_t> s(len);
+			for (int i = 0; i < len; i++) {
+				s[i] = dist(gen);
+        boost::hash_combine(hash, s[i]);
+      }
+			stringVec[n] = s;
+      data_volumn += len * sizeof(int32_t);
+		}
+		return hash;
+}
+
 #define MAX_TEXT_LEN		255
 
 size_t
 random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems, size_t &data_volumn)
 {
-	size_t hash;
+	size_t hash = 0;
 	switch (cd->columnType.get_type()) {
 		case kSMALLINT:
 			hash = random_fill_int16(p.numbersPtr, num_elems);
@@ -149,10 +209,44 @@ random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems, size_t
 			break;
 		case kVARCHAR:
 		case kCHAR:
-			hash = random_fill_string(*p.stringsPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
+      if (cd->columnType.get_compression() == kENCODING_NONE)
+        hash = random_fill_string(*p.stringsPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
+      else if (cd->columnType.get_compression() == kENCODING_TOKDICT) {
+        switch (cd->columnType.get_elem_size()) {
+          case 1:
+            hash = random_fill_int8array(*p.tok8dictPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
+            break;
+          case 2:
+            hash = random_fill_int16array(*p.tok16dictPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
+            break;
+          case 4:
+            hash = random_fill_int32array(*p.tok32dictPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
+            break;
+          default:
+            assert(false);
+            break;
+        }
+      }
 			break;
 		case kTEXT:
-			hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN, data_volumn);
+      if (cd->columnType.get_compression() == kENCODING_NONE)
+        hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN, data_volumn);
+      else if (cd->columnType.get_compression() == kENCODING_TOKDICT) {
+        switch (cd->columnType.get_elem_size()) {
+          case 1:
+            hash = random_fill_int8array(*p.tok8dictPtr, num_elems, MAX_TEXT_LEN, data_volumn);
+            break;
+          case 2:
+            hash = random_fill_int16array(*p.tok16dictPtr, num_elems, MAX_TEXT_LEN, data_volumn);
+            break;
+          case 4:
+            hash = random_fill_int32array(*p.tok32dictPtr, num_elems, MAX_TEXT_LEN, data_volumn);
+            break;
+          default:
+            assert(false);
+            break;
+        }
+      }
 			break;
 		case kTIME:
 		case kTIMESTAMP:
@@ -196,13 +290,41 @@ populate_table_random(const string &table_name, const size_t num_rows, const Cat
 	insert_data.numRows = num_rows;
 	vector<unique_ptr<int8_t>> gc_numbers;  // making sure input buffers get freed
 	vector<unique_ptr<vector<string>>> gc_strings;  // making sure input vectors get freed
+  vector<unique_ptr<vector<vector<int8_t>>>> gc_int8arrays;
+  vector<unique_ptr<vector<vector<int16_t>>>> gc_int16arrays;
+  vector<unique_ptr<vector<vector<int32_t>>>> gc_int32arrays;
 	DataBlockPtr p;
 	// now allocate space for insert data
 	for (auto cd : cds) {
 		if (cd->columnType.is_varlen()) {
-			vector<string> *col_vec = new vector<string>(num_rows);
-			gc_strings.push_back(unique_ptr<vector<string>>(col_vec)); // add to gc list
-			p.stringsPtr = col_vec;
+      if (cd->columnType.get_compression() == kENCODING_NONE) {
+        vector<string> *col_vec = new vector<string>(num_rows);
+        gc_strings.push_back(unique_ptr<vector<string>>(col_vec)); // add to gc list
+        p.stringsPtr = col_vec;
+      } else if (cd->columnType.get_compression() == kENCODING_TOKDICT) {
+        switch (cd->columnType.get_elem_size()) {
+          case 1: {
+            vector<vector<int8_t>> *col_vec = new vector<vector<int8_t>>(num_rows);
+            gc_int8arrays.push_back(unique_ptr<vector<vector<int8_t>>>(col_vec));
+            p.tok8dictPtr = col_vec;
+            break;
+          }
+          case 2: {
+            vector<vector<int16_t>> *col_vec = new vector<vector<int16_t>>(num_rows);
+            gc_int16arrays.push_back(unique_ptr<vector<vector<int16_t>>>(col_vec));
+            p.tok16dictPtr = col_vec;
+            break;
+          }
+          case 4: {
+            vector<vector<int32_t>> *col_vec = new vector<vector<int32_t>>(num_rows);
+            gc_int32arrays.push_back(unique_ptr<vector<vector<int32_t>>>(col_vec));
+            p.tok32dictPtr = col_vec;
+            break;
+          }
+          default:
+            assert(false);
+        }
+      }
 		} else {
 			int8_t *col_buf = static_cast<int8_t*>(malloc(num_rows * cd->columnType.get_size()));
 			gc_numbers.push_back(unique_ptr<int8_t>(col_buf)); // add to gc list
