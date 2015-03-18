@@ -2,6 +2,7 @@
 #include "NoneEncoder.h"
 #include "FixedLengthEncoder.h"
 #include "StringNoneEncoder.h"
+#include "StringTokDictEncoder.h"
 #include <glog/logging.h>
 
 
@@ -117,10 +118,23 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
             break;
         } // Case: kENCODING_FIXED
         case kENCODING_DICT: {
-          CHECK(IS_STRING(sqlType.get_type()));
+          CHECK(sqlType.is_string());
           return new NoneEncoder <int32_t> (buffer);
           break;
         }
+        case kENCODING_TOKDICT:
+          CHECK(sqlType.is_string());
+          switch (sqlType.get_elem_size()) {
+            case 1:
+              return new StringTokDictEncoder<int8_t>(buffer);
+            case 2:
+              return new StringTokDictEncoder<int16_t>(buffer);
+            case 4:
+              return new StringTokDictEncoder<int32_t>(buffer);
+            default:
+              assert(false);
+          }
+          break;
         default: {
             return 0;
             break;

@@ -14,9 +14,6 @@
 
 using Data_Namespace::AbstractBuffer;
 
-// default max input buffer size to 1MB
-#define MAX_INPUT_BUF_SIZE		1048576
-
 ChunkMetadata
 StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int start_idx, const size_t numAppendElems)
 {

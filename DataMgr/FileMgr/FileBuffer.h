@@ -15,6 +15,9 @@
 
 using namespace Data_Namespace;
 
+#define NUM_METADATA  10
+#define METADATA_VERSION 0
+
 namespace File_Namespace {
 
     class FileMgr; // forward declaration

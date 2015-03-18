@@ -4,7 +4,7 @@
  */
 
 #include "ChunkIter.h"
-#include "../DataMgr/StringNoneEncoder.h" // just for StringOffsetT
+#include "../DataMgr/Encoder.h" // just for StringOffsetT
 
 static void
 decompress(const SQLTypeInfo &ti, int8_t *compressed, VarlenDatum *result, Datum *datum)

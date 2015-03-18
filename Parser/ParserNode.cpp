@@ -1326,6 +1326,7 @@ namespace Parser {
           // tokenized diciontary encoding
           cd.columnType.set_compression(kENCODING_TOKDICT);
           cd.columnType.set_comp_param(comp_param);
+          cd.columnType.set_elem_size(comp_param/8);
         } else if (boost::iequals(comp, "sparse")) {
           // sparse column encoding with mostly NULL values
           if (cd.columnType.get_notnull())

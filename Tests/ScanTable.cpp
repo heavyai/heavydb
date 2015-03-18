@@ -67,8 +67,33 @@ scan_chunk(const Chunk &chunk, size_t &hash, bool use_iter)
 			case kVARCHAR:
 			case kCHAR:
 			case kTEXT:
-				// cout << "read string: " << string((char*)vd.pointer, vd.length) << endl;
-				boost::hash_combine(hash, string_hash(string((char*)vd.pointer, vd.length)));
+        if (cd->columnType.get_compression() == kENCODING_NONE) {
+          // cout << "read string: " << string((char*)vd.pointer, vd.length) << endl;
+          boost::hash_combine(hash, string_hash(string((char*)vd.pointer, vd.length)));
+        } else if (cd->columnType.get_compression() == kENCODING_TOKDICT) {
+          switch (cd->columnType.get_elem_size()) {
+            case 1: {
+              int8_t *p = (int8_t*)vd.pointer;
+              for (int i = 0; i < vd.length/sizeof(int8_t); i++)
+                boost::hash_combine(hash, p[i]);
+              break;
+            }
+            case 2: {
+              int16_t *p = (int16_t*)vd.pointer;
+              for (int i = 0; i < vd.length/sizeof(int16_t); i++)
+                boost::hash_combine(hash, p[i]);
+              break;
+            }
+            case 4: {
+              int32_t *p = (int32_t*)vd.pointer;
+              for (int i = 0; i < vd.length/sizeof(int32_t); i++)
+                boost::hash_combine(hash, p[i]);
+              break;
+            }
+            default:
+              assert(false);
+          }
+        }
 				break;
 			case kTIME:
 			case kTIMESTAMP:
