@@ -319,4 +319,5 @@ int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
 
 #ifdef __clang__
 #include "ExtractFromTime.cpp"
+#include "../Utils/StringLike.cpp"
 #endif

@@ -89,6 +89,7 @@ private:
   llvm::Value* codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
@@ -97,6 +98,8 @@ private:
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
+  std::pair<llvm::Value*, llvm::Value*>
+  colByteStream(const int col_id, const bool hoist_literals);
   llvm::ConstantInt* inlineIntNull(const SQLTypes);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
@@ -309,6 +312,7 @@ private:
   std::unique_ptr<PlanState> plan_state_;
 
   bool is_nested_;
+  bool must_run_on_cpu_;
 
   std::mutex reduce_mutex_;
   static const int max_gpu_count { 8 };

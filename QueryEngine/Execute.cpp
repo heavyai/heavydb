@@ -81,6 +81,7 @@ Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid
   : cgen_state_(new CgenState())
   , plan_state_(new PlanState)
   , is_nested_(false)
+  , must_run_on_cpu_(false)
   , block_size_x_(block_size_x)
   , grid_size_x_(grid_size_x)
   , db_id_(db_id)
@@ -280,7 +281,76 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_lite
   if (extract_expr) {
     return codegen(extract_expr, hoist_literals);
   }
+  auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
+  if (like_expr) {
+    return codegen(like_expr, hoist_literals);
+  }
   CHECK(false);
+}
+
+extern "C"
+void string_decode(int8_t** str, int32_t* len, int8_t* chunk_iter_, int64_t pos) {
+  auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  VarlenDatum vd;
+  bool is_end;
+  ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
+  CHECK(!is_end);
+  *str = vd.pointer;
+  *len = vd.length;
+}
+
+llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
+  must_run_on_cpu_ = true;
+  auto like_expr_col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr->get_arg());
+  CHECK(like_expr_col_var);
+  auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
+  CHECK(like_expr_arg_const);
+  CHECK(like_expr_arg_const->get_type_info().is_string());
+  CHECK_EQ(kENCODING_NONE, like_expr_arg_const->get_type_info().get_compression());
+  const auto like_pattern = *like_expr_arg_const->get_constval().stringval;
+  llvm::Value* like_pattern_lv = cgen_state_->ir_builder_.CreateGlobalString(
+    like_pattern, like_pattern);
+  auto i8_ptr = llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0);
+  like_pattern_lv = cgen_state_->ir_builder_.CreateBitCast(like_pattern_lv, i8_ptr);
+  auto like_pattern_len = like_expr_arg_const->get_constval().stringval->size();
+  llvm::Value* like_pattern_len_lv = ll_int(static_cast<int32_t>(like_pattern_len));
+  auto string_like_fn = cgen_state_->module_->getFunction("string_like");
+  CHECK(string_like_fn);
+  CHECK(!expr->get_escape_expr());
+  // TODO(alex)
+  auto col_id = like_expr_col_var->get_column_id();
+  CHECK(like_expr_col_var->get_rte_idx() >= 0 && !is_nested_);
+  auto i8_ptr_ptr = llvm::PointerType::get(i8_ptr, 0);
+  auto i32_ptr = llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+  auto string_decode_ft = llvm::FunctionType::get(
+    llvm::Type::getVoidTy(cgen_state_->context_),
+    std::vector<llvm::Type*> {
+      i8_ptr_ptr, i32_ptr, i8_ptr, get_int_type(64, cgen_state_->context_) },
+    false);
+  auto string_decode_fn = cgen_state_->module_->getOrInsertFunction("string_decode",
+    string_decode_ft);
+  CHECK(string_decode_fn);
+  llvm::Value* col_byte_stream;
+  llvm::Value* pos;
+  std::tie(col_byte_stream, pos) = colByteStream(col_id, hoist_literals);
+  llvm::Value* str_ptr = cgen_state_->ir_builder_.CreateAlloca(i8_ptr);
+  llvm::Value* len_ptr = cgen_state_->ir_builder_.CreateAlloca(get_int_type(32, cgen_state_->context_));
+  cgen_state_->ir_builder_.CreateCall(string_decode_fn, std::vector<llvm::Value*> {
+    str_ptr,
+    len_ptr,
+    col_byte_stream,
+    pos,
+  });
+  return cgen_state_->ir_builder_.CreateCall(string_like_fn, std::vector<llvm::Value*> {
+    cgen_state_->ir_builder_.CreateLoad(str_ptr),
+    cgen_state_->ir_builder_.CreateLoad(len_ptr),
+    like_pattern_lv,
+    like_pattern_len_lv,
+    ll_int(int8_t('\\')),
+    expr->get_is_ilike()
+      ? llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), true)
+      : llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), false)
+  });
 }
 
 llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
@@ -381,46 +451,58 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
   }
   auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
   CHECK_GE(in_arg_list.size(), 4);
+  llvm::Value* col_byte_stream;
+  llvm::Value* pos_arg;
+  std::tie(col_byte_stream, pos_arg) = colByteStream(col_id, hoist_literals);
+  const auto decoder = get_col_decoder(col_var);
+  auto dec_val = decoder->codegenDecode(
+    col_byte_stream,
+    pos_arg,
+    cgen_state_->module_);
+  cgen_state_->ir_builder_.Insert(dec_val);
+  auto dec_type = dec_val->getType();
+  llvm::Value* dec_val_cast { nullptr };
+  if (dec_type->isIntegerTy()) {
+    auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
+    auto col_width = get_col_bit_width(col_var);
+    dec_val_cast = cgen_state_->ir_builder_.CreateCast(
+      static_cast<size_t>(col_width) > dec_width
+        ? llvm::Instruction::CastOps::SExt
+        : llvm::Instruction::CastOps::Trunc,
+      dec_val,
+      get_int_type(col_width, cgen_state_->context_));
+  } else {
+    CHECK(dec_type->isFloatTy() || dec_type->isDoubleTy());
+    if (dec_type->isDoubleTy()) {
+      CHECK(col_var->get_type_info().get_type() == kDOUBLE);
+    } else if (dec_type->isFloatTy()) {
+      CHECK(col_var->get_type_info().get_type() == kFLOAT);
+    }
+    dec_val_cast = dec_val;
+  }
+  CHECK(dec_val_cast);
+  auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
+    local_col_id,
+    dec_val_cast));
+  CHECK(it_ok.second);
+  return it_ok.first->second;
+}
+
+// returns the byte stream argument and the position for the given column
+std::pair<llvm::Value*, llvm::Value*>
+Executor::colByteStream(const int col_id, const bool hoist_literals) {
+  auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
+  CHECK_GE(in_arg_list.size(), 4);
   size_t arg_idx = 0;
   size_t pos_idx = 0;
   llvm::Value* pos_arg { nullptr };
+  const int local_col_id = getLocalColumnId(col_id);
   for (auto& arg : in_arg_list) {
     if (arg.getType()->isIntegerTy()) {
       pos_arg = &arg;
       pos_idx = arg_idx;
     } else if (pos_arg && arg_idx == pos_idx + 1 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
-      const auto decoder = get_col_decoder(col_var);
-      auto dec_val = decoder->codegenDecode(
-        &arg,
-        pos_arg,
-        cgen_state_->module_);
-      cgen_state_->ir_builder_.Insert(dec_val);
-      auto dec_type = dec_val->getType();
-      llvm::Value* dec_val_cast { nullptr };
-      if (dec_type->isIntegerTy()) {
-        auto dec_width = static_cast<llvm::IntegerType*>(dec_type)->getBitWidth();
-        auto col_width = get_col_bit_width(col_var);
-        dec_val_cast = cgen_state_->ir_builder_.CreateCast(
-          static_cast<size_t>(col_width) > dec_width
-            ? llvm::Instruction::CastOps::SExt
-            : llvm::Instruction::CastOps::Trunc,
-          dec_val,
-          get_int_type(col_width, cgen_state_->context_));
-      } else {
-        CHECK(dec_type->isFloatTy() || dec_type->isDoubleTy());
-        if (dec_type->isDoubleTy()) {
-          CHECK(col_var->get_type_info().get_type() == kDOUBLE);
-        } else if (dec_type->isFloatTy()) {
-          CHECK(col_var->get_type_info().get_type() == kFLOAT);
-        }
-        dec_val_cast = dec_val;
-      }
-      CHECK(dec_val_cast);
-      auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
-        local_col_id,
-        dec_val_cast));
-      CHECK(it_ok.second);
-      return it_ok.first->second;
+      return std::make_pair(&arg, pos_arg);
     }
     ++arg_idx;
   }
@@ -1343,7 +1425,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     : dynamic_cast<const Planner::Scan*>(plan);
   CHECK(scan_plan);
   auto agg_infos = get_agg_name_and_exprs(plan);
-  auto device_type = device_type_in;
+  auto device_type = must_run_on_cpu_ ? ExecutorDeviceType::CPU : device_type_in;
   bool serialize_execution { false };
   for (const auto& agg_info : agg_infos) {
     // TODO(alex): ount distinct can't be executed on the GPU yet, punt to CPU
@@ -1421,7 +1503,6 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         plan_state_->init_agg_vals_, this, chosen_device_type);
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks(plan_state_->global_to_local_col_ids_.size());
       const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
         ? Data_Namespace::GPU_LEVEL
         : Data_Namespace::CPU_LEVEL;
@@ -1430,6 +1511,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       }
       CHECK_GE(chosen_device_id, 0);
       CHECK_LT(chosen_device_id, max_gpu_count);
+      std::vector<ChunkIter> chunk_iterators;  // need to own them while query executes
       for (const int col_id : col_global_ids) {
         auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
         CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
@@ -1438,15 +1520,22 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         auto it = plan_state_->global_to_local_col_ids_.find(col_id);
         CHECK(it != plan_state_->global_to_local_col_ids_.end());
         CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
-        chunks[it->second] = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
+        auto chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
           chunk_key,
           memory_level,
           chosen_device_id,
           chunk_meta_it->second.numBytes,
           chunk_meta_it->second.numElements);
-        auto ab = chunks[it->second]->get_buffer();
-        CHECK(ab->getMemoryPtr());
-        col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
+        if (cd->columnType.is_string() &&
+            cd->columnType.get_compression() == kENCODING_NONE) {
+          chunk_iterators.push_back(chunk->begin_iterator());
+          auto& chunk_iter = chunk_iterators.back();
+          col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);
+        } else {
+          auto ab = chunk->get_buffer();
+          CHECK(ab->getMemoryPtr());
+          col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
+        }
       }
       if (groupby_exprs.empty()) {
         executePlanWithoutGroupBy(

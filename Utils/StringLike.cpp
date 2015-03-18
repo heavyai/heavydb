@@ -107,7 +107,7 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
  * @return true if str matchs pattern, false otherwise.  error condition
  * not handled for now.
  */
-bool
+extern "C" bool
 string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
 {
   // @TODO(wei/alex) add runtime error handling
