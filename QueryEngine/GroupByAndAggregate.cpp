@@ -153,10 +153,17 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
           const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kMIN;
           result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
           result_row.agg_kinds_.push_back(agg_type);
+          bool is_real_string = (target_expr && target_expr->get_type_info().is_string() &&
+            target_expr->get_type_info().get_compression() == kENCODING_NONE);
           if (agg_type == kAVG) {
             CHECK(agg_expr->get_arg());
             result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
             CHECK(!target_expr->get_type_info().is_string());
+            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
+            out_vec_idx += 2;
+          } else if (is_real_string) {
+            result_row.agg_types_.push_back(target_expr->get_type_info());
             result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
             result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
             out_vec_idx += 2;
@@ -356,7 +363,12 @@ int32_t get_agg_count(const Planner::Plan* plan) {
     CHECK(target_expr);
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
-      ++agg_count;
+      const auto& ti = target_expr->get_type_info();
+      if (ti.is_string() && ti.get_compression() != kENCODING_DICT) {
+        agg_count += 2;
+      } else {
+        ++agg_count;
+      }
       continue;
     }
     if (agg_expr && agg_expr->get_aggtype() == kAVG) {
@@ -670,6 +682,9 @@ namespace {
 
 std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
   if (!target_info.is_agg) {
+    if (target_info.sql_type.is_string() && target_info.sql_type.get_compression() == kENCODING_NONE) {
+      return { "agg_id", "agg_id" };
+    }
     return { "agg_id" };
   }
   switch (target_info.agg_kind) {
@@ -713,8 +728,21 @@ void GroupByAndAggregate::codegenAggCalls(
     auto target_expr = target->get_expr();
     CHECK(target_expr);
     const auto agg_info = target_info(target_expr);
-    for (const auto& agg_base_name : agg_fn_base_names(agg_info)) {
-      auto target_lv = executor_->toDoublePrecision(codegenAggArg(target_expr, hoist_literals));
+    const auto agg_fn_names = agg_fn_base_names(agg_info);
+    auto target_lvs = codegenAggArg(target_expr, hoist_literals);
+    if (target_lvs.size() < agg_fn_names.size()) {
+      CHECK_EQ(1, target_lvs.size());
+      CHECK_EQ(2, agg_fn_names.size());
+      for (size_t i = 1; i < agg_fn_names.size(); ++i) {
+        target_lvs.push_back(target_lvs.front());
+      }
+    } else {
+      CHECK_EQ(agg_fn_names.size(), target_lvs.size());
+      CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
+    }
+    size_t target_lv_idx = 0;
+    for (const auto& agg_base_name : agg_fn_names) {
+      auto target_lv = executor_->toDoublePrecision(target_lvs[target_lv_idx]);
       std::vector<llvm::Value*> agg_args {
         is_group_by
           ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
@@ -737,12 +765,13 @@ void GroupByAndAggregate::codegenAggCalls(
         agg_args.push_back(LL_INT(reinterpret_cast<int64_t>(count_distinct_set)));
       }
       std::string agg_fname { agg_base_name };
-      if (agg_info.sql_type == kFLOAT || agg_info.sql_type == kDOUBLE) {
+      if (agg_info.sql_type.is_fp()) {
         agg_fname += "_double";
       }
       if (agg_info.skip_null_val) {
         agg_fname += "_skip_val";
-        auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(agg_info.sql_type));
+        auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(
+          agg_info.sql_type.get_type()));
         agg_args.push_back(null_lv);
       }
       emitCall(
@@ -751,12 +780,14 @@ void GroupByAndAggregate::codegenAggCalls(
           : agg_fname,
         agg_args);
       ++agg_out_off;
+      ++target_lv_idx;
     }
   }
 }
 
-llvm::Value* GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,
-                                                const bool hoist_literals) {
+std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
+    const Analyzer::Expr* target_expr,
+    const bool hoist_literals) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   return agg_expr
     ? executor_->codegen(agg_expr->get_arg(), hoist_literals)

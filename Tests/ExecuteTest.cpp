@@ -443,6 +443,15 @@ TEST(Select, Strings) {
   }
 }
 
+TEST(Select, StringsNoneEncoding) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_%%%';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
+    c("SELECT * FROM test WHERE real_str LIKE 'real_f%%';", dt);
+  }
+}
+
 TEST(Select, Time) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
@@ -478,27 +487,27 @@ int main(int argc, char** argv)
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test {
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text encoding dict, m timestamp(0), n time(0), o date);" };
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date);" };
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text, m timestamp(0), n time(0), o date);");
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
   }
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2, 'foo', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2, 'foo', 'real_foo', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4, 'bar', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
+    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4, 'bar', 'real_bar', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6, 'baz', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6, 'baz', 'real_baz', '2014-12-13T222315', '15:13:14', '1999-09-09');" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }

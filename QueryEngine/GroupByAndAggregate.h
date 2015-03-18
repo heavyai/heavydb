@@ -202,7 +202,7 @@ private:
     const ExecutorDeviceType,
     const bool hoist_literals);
 
-  llvm::Value* codegenAggArg(
+  std::vector<llvm::Value*> codegenAggArg(
     const Analyzer::Expr* target_expr,
     const bool hoist_literals);
 
@@ -287,7 +287,7 @@ inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) 
 struct TargetInfo {
   bool is_agg;
   SQLAgg agg_kind;
-  SQLTypes sql_type;
+  SQLTypeInfo sql_type;
   bool skip_null_val;
   bool is_distinct;
 };
@@ -295,14 +295,14 @@ struct TargetInfo {
 inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   if (!agg_expr) {
-    return { false, kCOUNT, target_expr->get_type_info().get_type(), false, false };
+    return { false, kCOUNT, target_expr->get_type_info(), false, false };
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();
   if (!agg_arg) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!agg_expr->get_is_distinct());
-    return { true, kCOUNT, kBIGINT, false, false };
+    return { true, kCOUNT, SQLTypeInfo(kBIGINT), false, false };
   }
   const auto& agg_arg_ti = agg_arg->get_type_info();
   bool is_distinct { false };
@@ -313,8 +313,7 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   }
   // TODO(alex): null support for all types
   bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
-  return { true, agg_expr->get_aggtype(), agg_arg_ti.get_type(),
-           skip_null, is_distinct };
+  return { true, agg_expr->get_aggtype(), agg_arg_ti, skip_null, is_distinct };
 }
 
 template<class T>
@@ -326,7 +325,12 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       col_widths.push_back(sizeof(int64_t));
     } else {
       const auto agg_info = target_info(col_expr);
-      const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type);
+      if (agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) {
+        col_widths.push_back(sizeof(int64_t));
+        col_widths.push_back(sizeof(int64_t));
+        continue;
+      }
+      const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type.get_type());
       CHECK_EQ(0, col_expr_bitwidth % 8);
       col_widths.push_back(col_expr_bitwidth / 8);
       // for average, we'll need to keep the count as well

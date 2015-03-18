@@ -82,10 +82,10 @@ private:
     return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(
       get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
   }
-  llvm::Value* codegen(const Analyzer::Expr*, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::ColumnVar*, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
@@ -279,7 +279,7 @@ private:
     llvm::Function* row_func_;
     llvm::LLVMContext& context_;
     llvm::IRBuilder<> ir_builder_;
-    std::unordered_map<int, llvm::Value*> fetch_cache_;
+    std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
   private:
     template<class T>

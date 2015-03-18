@@ -60,11 +60,17 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
     if (agg_types_[idx].is_integer() || agg_types_[idx].is_time()) {
       return AggResult(agg_results_[actual_idx]);
     } else if (agg_types_[idx].is_string()) {
-      CHECK_EQ(kENCODING_DICT, agg_types_[idx].get_compression());
-      const int dict_id = agg_types_[idx].get_comp_param();
-      return translate_strings
-        ? AggResult(executor_->getStringDictionary(dict_id)->getString(agg_results_[actual_idx]))
-        : AggResult(agg_results_[actual_idx]);
+      if (agg_types_[idx].get_compression() == kENCODING_DICT) {
+        const int dict_id = agg_types_[idx].get_comp_param();
+        return translate_strings
+          ? AggResult(executor_->getStringDictionary(dict_id)->getString(agg_results_[actual_idx]))
+          : AggResult(agg_results_[actual_idx]);
+      } else {
+        CHECK_EQ(kENCODING_NONE, agg_types_[idx].get_compression());
+        return AggResult(std::string(
+          reinterpret_cast<char*>(agg_results_[actual_idx]),  // payload
+          agg_results_[actual_idx + 1]));  // length
+      }
     } else {
       CHECK(agg_types_[idx].get_type() == kFLOAT || agg_types_[idx].get_type() == kDOUBLE);
       return AggResult(*reinterpret_cast<const double*>(&agg_results_[actual_idx]));
@@ -240,7 +246,7 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
   return serialized;
 }
 
-llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_literals) {
+std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr, const bool hoist_literals) {
   if (!expr) {
     llvm::Value* pos_arg { nullptr };
     auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
@@ -252,15 +258,15 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_lite
     }
     CHECK(pos_arg);
     CHECK_EQ(static_cast<llvm::IntegerType*>(pos_arg->getType())->getBitWidth(), 64);
-    return pos_arg;
+    return { pos_arg };
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
-    return codegen(bin_oper, hoist_literals);
+    return { codegen(bin_oper, hoist_literals) };
   }
   auto u_oper = dynamic_cast<const Analyzer::UOper*>(expr);
   if (u_oper) {
-    return codegen(u_oper, hoist_literals);
+    return { codegen(u_oper, hoist_literals) };
   }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
@@ -271,19 +277,19 @@ llvm::Value* Executor::codegen(const Analyzer::Expr* expr, const bool hoist_lite
     // The dictionary encoding case should be handled by the parent expression
     // (cast, for now), here is too late to know the dictionary id
     CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
-    return codegen(constant, -1, hoist_literals);
+    return { codegen(constant, -1, hoist_literals) };
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
-    return codegen(case_expr, hoist_literals);
+    return { codegen(case_expr, hoist_literals) };
   }
   auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
   if (extract_expr) {
-    return codegen(extract_expr, hoist_literals);
+    return { codegen(extract_expr, hoist_literals) };
   }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
-    return codegen(like_expr, hoist_literals);
+    return { codegen(like_expr, hoist_literals) };
   }
   CHECK(false);
 }
@@ -317,7 +323,6 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   auto string_like_fn = cgen_state_->module_->getFunction("string_like");
   CHECK(string_like_fn);
   CHECK(!expr->get_escape_expr());
-  // TODO(alex)
   auto col_id = like_expr_col_var->get_column_id();
   CHECK(like_expr_col_var->get_rte_idx() >= 0 && !is_nested_);
   auto i8_ptr_ptr = llvm::PointerType::get(i8_ptr, 0);
@@ -427,7 +432,9 @@ size_t get_col_bit_width(const Analyzer::ColumnVar* col_var) {
 
 }  // namespace
 
-llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool hoist_literals) {
+std::vector<llvm::Value*> Executor::codegen(
+    const Analyzer::ColumnVar* col_var,
+    const bool hoist_literals) {
   // only generate the decoding code once; if a column has been previously
   // fetch in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
@@ -441,19 +448,47 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
     CHECK_GE(col_id, 1);
     if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
       CHECK_LE(col_id, cgen_state_->group_by_expr_cache_.size());
-      return cgen_state_->group_by_expr_cache_[col_id - 1];
+      return { cgen_state_->group_by_expr_cache_[col_id - 1] };
     }
   }
   const int local_col_id = getLocalColumnId(col_id);
   auto it = cgen_state_->fetch_cache_.find(local_col_id);
   if (it != cgen_state_->fetch_cache_.end()) {
-    return it->second;
+    return { it->second };
   }
-  auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
-  CHECK_GE(in_arg_list.size(), 4);
   llvm::Value* col_byte_stream;
   llvm::Value* pos_arg;
   std::tie(col_byte_stream, pos_arg) = colByteStream(col_id, hoist_literals);
+  if (col_var->get_type_info().is_string() &&
+      col_var->get_type_info().get_compression() == kENCODING_NONE) {
+    // real (not dictionary-encoded) strings; store the pointer to the payload
+    must_run_on_cpu_ = true;
+    auto i8_ptr = llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0);
+    auto i8_ptr_ptr = llvm::PointerType::get(i8_ptr, 0);
+    auto i32_ptr = llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+    auto string_decode_ft = llvm::FunctionType::get(
+      llvm::Type::getVoidTy(cgen_state_->context_),
+      std::vector<llvm::Type*> {
+        i8_ptr_ptr, i32_ptr, i8_ptr, get_int_type(64, cgen_state_->context_) },
+      false);
+    auto string_decode_fn = cgen_state_->module_->getOrInsertFunction("string_decode", string_decode_ft);
+    CHECK(string_decode_fn);
+    llvm::Value* str_ptr = cgen_state_->ir_builder_.CreateAlloca(i8_ptr);
+    llvm::Value* len_ptr = cgen_state_->ir_builder_.CreateAlloca(get_int_type(32, cgen_state_->context_));
+    cgen_state_->ir_builder_.CreateCall(string_decode_fn, std::vector<llvm::Value*> {
+      str_ptr,
+      len_ptr,
+      col_byte_stream,
+      pos_arg,
+    });
+    llvm::Value* str_lv = cgen_state_->ir_builder_.CreateLoad(str_ptr);
+    llvm::Value* len_lv = cgen_state_->ir_builder_.CreateLoad(len_ptr);
+    auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
+      local_col_id,
+      std::vector<llvm::Value*> { str_lv, len_lv }));
+    CHECK(it_ok.second);
+    return { str_lv, len_lv };
+  }
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(
     col_byte_stream,
@@ -483,9 +518,9 @@ llvm::Value* Executor::codegen(const Analyzer::ColumnVar* col_var, const bool ho
   CHECK(dec_val_cast);
   auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
     local_col_id,
-    dec_val_cast));
+    std::vector<llvm::Value*> { dec_val_cast }));
   CHECK(it_ok.second);
-  return it_ok.first->second;
+  return { it_ok.first->second };
 }
 
 // returns the byte stream argument and the position for the given column
@@ -622,15 +657,15 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
   // (code generation is easier this way because of how 'BasicBlock::Create' works).
   // Reverse the actual arguments to compensate for this, then call the function.
   for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
-    case_func_args.push_back(codegen(expr_pair.first, hoist_literals));
-    case_func_args.push_back(codegen(expr_pair.second, hoist_literals));
+    case_func_args.push_back(codegen(expr_pair.first, hoist_literals).front());
+    case_func_args.push_back(codegen(expr_pair.second, hoist_literals).front());
   }
-  case_func_args.push_back(codegen(else_expr, hoist_literals));
+  case_func_args.push_back(codegen(else_expr, hoist_literals).front());
   return cgen_state_->ir_builder_.CreateCall(case_func, case_func_args);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const bool hoist_literals) {
-  auto from_expr = codegen(extract_expr->get_from_expr(), hoist_literals);
+  auto from_expr = codegen(extract_expr->get_from_expr(), hoist_literals).front();
   const int32_t extract_field { extract_expr->get_field() };
   if (extract_field == kEPOCH) {
     CHECK(extract_expr->get_from_expr()->get_type_info().get_type() == kTIMESTAMP ||
@@ -707,8 +742,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
-  const auto lhs_lv = codegen(lhs, hoist_literals);
-  const auto rhs_lv = codegen(rhs, hoist_literals);
+  const auto lhs_lv = codegen(lhs, hoist_literals).front();
+  const auto rhs_lv = codegen(rhs, hoist_literals).front();
   CHECK((lhs_type.get_type() == rhs_type.get_type()) ||
         (lhs_type.is_string() && rhs_type.is_string()));
   if (lhs_type.is_integer() || lhs_type.is_time() || lhs_type.is_string()) {
@@ -728,8 +763,8 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const b
   CHECK(IS_LOGIC(optype));
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  const auto lhs_lv = codegen(lhs, hoist_literals);
-  const auto rhs_lv = codegen(rhs, hoist_literals);
+  const auto lhs_lv = codegen(lhs, hoist_literals).front();
+  const auto rhs_lv = codegen(rhs, hoist_literals).front();
   switch (optype) {
   case kAND:
     return cgen_state_->ir_builder_.CreateAnd(lhs_lv, rhs_lv);
@@ -749,7 +784,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   // information as the compression parameter; handle this case separately.
   const auto operand_lv = operand_as_const
     ? codegen(operand_as_const, ti.get_comp_param(), hoist_literals)
-    : codegen(operand, hoist_literals);
+    : codegen(operand, hoist_literals).front();
   const auto& operand_ti = operand->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
@@ -791,7 +826,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
 
 llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const bool hoist_literals) {
   CHECK_EQ(uoper->get_optype(), kUMINUS);
-  const auto operand_lv = codegen(uoper->get_operand(), hoist_literals);
+  const auto operand_lv = codegen(uoper->get_operand(), hoist_literals).front();
   CHECK(operand_lv->getType()->isIntegerTy());
   return cgen_state_->ir_builder_.CreateNeg(operand_lv);
 }
@@ -800,7 +835,7 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool h
   const auto optype = uoper->get_optype();
   CHECK(optype == kNOT || optype == kUMINUS || optype == kISNULL);
   const auto operand = uoper->get_operand();
-  const auto operand_lv = codegen(operand, hoist_literals);
+  const auto operand_lv = codegen(operand, hoist_literals).front();
   switch (optype) {
   case kNOT:
     return cgen_state_->ir_builder_.CreateNot(operand_lv);
@@ -815,7 +850,7 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
   if (operand->get_type_info().get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
-  const auto operand_lv = codegen(operand, hoist_literals);
+  const auto operand_lv = codegen(operand, hoist_literals).front();
   CHECK(operand->get_type_info().is_integer() || operand->get_type_info().is_string());
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
     operand_lv, inlineIntNull(operand->get_type_info().is_string() ? kINT : operand->get_type_info().get_type()));
@@ -862,8 +897,8 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
-  const auto lhs_lv = codegen(lhs, hoist_literals);
-  const auto rhs_lv = codegen(rhs, hoist_literals);
+  const auto lhs_lv = codegen(lhs, hoist_literals).front();
+  const auto rhs_lv = codegen(rhs, hoist_literals).front();
   CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   if (lhs_type.is_integer()) {
     switch (optype) {
@@ -2014,10 +2049,10 @@ Executor::CompilationResult Executor::compilePlan(
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, hoist_literals));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, hoist_literals).front());
   }
   for (auto expr : quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, hoist_literals));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, hoist_literals).front());
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
@@ -2295,6 +2330,12 @@ llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
                                             get_int_type(64, cgen_state_->context_))
       : val;
   }
+  // real (not dictionary-encoded) strings; store the pointer to the payload
+  if (val->getType()->isPointerTy()) {
+    const auto val_ptr_type = static_cast<llvm::PointerType*>(val->getType());
+    CHECK(val_ptr_type->getElementType()->isIntegerTy(8));
+    return cgen_state_->ir_builder_.CreatePointerCast(val, get_int_type(64, cgen_state_->context_));
+  }
   CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
   return val->getType()->isFloatTy()
     ? cgen_state_->ir_builder_.CreateFPExt(val, llvm::Type::getDoubleTy(cgen_state_->context_))
@@ -2303,7 +2344,7 @@ llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
 
 llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                             const bool hoist_literals) {
-  auto group_key = codegen(group_by_col, hoist_literals);
+  auto group_key = codegen(group_by_col, hoist_literals).front();
   cgen_state_->group_by_expr_cache_.push_back(group_key);
   group_key = cgen_state_->ir_builder_.CreateBitCast(
     toDoublePrecision(group_key), get_int_type(64, cgen_state_->context_));
