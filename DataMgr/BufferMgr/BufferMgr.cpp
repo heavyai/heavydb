@@ -217,8 +217,17 @@ namespace Buffer_Namespace {
         // If we're here then we didn't find a free segment of sufficient size
         // First we see if we can add another slab
         if (numSlabs < maxNumSlabs_) {
-            addSlab(slabSize_);
-            return findFreeBufferInSlab(numSlabs, numPagesRequested); // has to return a free slab as long as requested buffer is smaller than the size of a slab
+            try {
+                addSlab(slabSize_);
+
+                return findFreeBufferInSlab(numSlabs, numPagesRequested); // has to return a free slab as long as requested buffer is smaller than the size of a slab
+            }
+            catch (std::runtime_error &error) { // failed to allocate slab)
+
+                maxNumSlabs_ = numSlabs; // this prevents us from ever allocating slabs in the future - is this desired?
+
+            }
+
         }
         
         // If here then we can't add a slab - so we need to evict

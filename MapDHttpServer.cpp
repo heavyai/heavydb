@@ -1,6 +1,7 @@
 #include "gen-cpp/MapD.h"
 #include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/server/TSimpleServer.h>
+//#include <thrift/server/TSimpleServer.h>
+#include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/THttpServer.h>
 
@@ -101,7 +102,8 @@ public:
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
-        const auto results = executor->execute(root_plan);
+        const auto results = executor->execute(root_plan,true,ExecutorDeviceType::Auto);
+        //const auto results = executor->execute(root_plan,true,ExecutorDeviceType::CPU);
         {
           const auto plan = root_plan->get_plan();
           CHECK(plan);
@@ -191,8 +193,7 @@ int main(int argc, char **argv) {
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new THttpServerTransportFactory());
   shared_ptr<TProtocolFactory> protocolFactory(new TJSONProtocolFactory());
-
-  TSimpleServer server(processor, serverTransport, transportFactory, protocolFactory);
+  TThreadedServer server (processor, serverTransport, transportFactory, protocolFactory);
   server.serve();
   return 0;
 }
