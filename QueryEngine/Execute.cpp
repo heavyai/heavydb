@@ -307,8 +307,9 @@ void string_decode(int8_t** str, int32_t* len, int8_t* chunk_iter_, int64_t pos)
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
   must_run_on_cpu_ = true;
-  auto like_expr_col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr->get_arg());
-  CHECK(like_expr_col_var);
+  CHECK(!expr->get_escape_expr());
+  auto str_lv = codegen(expr->get_arg(), hoist_literals);
+  CHECK_EQ(2, str_lv.size());
   auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
   CHECK(like_expr_arg_const);
   CHECK(like_expr_arg_const->get_type_info().is_string());
@@ -322,33 +323,9 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   llvm::Value* like_pattern_len_lv = ll_int(static_cast<int32_t>(like_pattern_len));
   auto string_like_fn = cgen_state_->module_->getFunction("string_like");
   CHECK(string_like_fn);
-  CHECK(!expr->get_escape_expr());
-  auto col_id = like_expr_col_var->get_column_id();
-  CHECK(like_expr_col_var->get_rte_idx() >= 0 && !is_nested_);
-  auto i8_ptr_ptr = llvm::PointerType::get(i8_ptr, 0);
-  auto i32_ptr = llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
-  auto string_decode_ft = llvm::FunctionType::get(
-    llvm::Type::getVoidTy(cgen_state_->context_),
-    std::vector<llvm::Type*> {
-      i8_ptr_ptr, i32_ptr, i8_ptr, get_int_type(64, cgen_state_->context_) },
-    false);
-  auto string_decode_fn = cgen_state_->module_->getOrInsertFunction("string_decode",
-    string_decode_ft);
-  CHECK(string_decode_fn);
-  llvm::Value* col_byte_stream;
-  llvm::Value* pos;
-  std::tie(col_byte_stream, pos) = colByteStream(col_id, hoist_literals);
-  llvm::Value* str_ptr = cgen_state_->ir_builder_.CreateAlloca(i8_ptr);
-  llvm::Value* len_ptr = cgen_state_->ir_builder_.CreateAlloca(get_int_type(32, cgen_state_->context_));
-  cgen_state_->ir_builder_.CreateCall(string_decode_fn, std::vector<llvm::Value*> {
-    str_ptr,
-    len_ptr,
-    col_byte_stream,
-    pos,
-  });
   return cgen_state_->ir_builder_.CreateCall(string_like_fn, std::vector<llvm::Value*> {
-    cgen_state_->ir_builder_.CreateLoad(str_ptr),
-    cgen_state_->ir_builder_.CreateLoad(len_ptr),
+    str_lv[0],
+    str_lv[1],
     like_pattern_lv,
     like_pattern_len_lv,
     ll_int(int8_t('\\')),
