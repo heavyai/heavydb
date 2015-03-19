@@ -189,6 +189,11 @@ int32_t pos_step_impl() {
   return 1;
 }
 
+extern "C" __attribute__((noinline))
+int8_t thread_warp_idx(const int8_t warp_sz) {
+  abort();
+}
+
 // group by helpers
 
 extern "C" __attribute__((noinline))
@@ -219,10 +224,12 @@ void init_groups(int64_t* groups_buffer,
                  const int32_t key_qw_count,
                  const int64_t* init_vals,
                  const int32_t agg_col_count,
-                 const bool keyless) {
+                 const bool keyless,
+                 const size_t warp_size) {
   if (keyless) {
+    assert(warp_size >= 1);
     assert(key_qw_count == 1 && agg_col_count == 1);
-    for (int32_t i = 0; i < groups_buffer_entry_count; ++i) {
+    for (int32_t i = 0; i < groups_buffer_entry_count * warp_size; ++i) {
       groups_buffer[i] = *init_vals;
     }
     return;
@@ -315,6 +322,15 @@ int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
                                       const int64_t key,
                                       const int64_t min_key) {
   return groups_buffer + key - min_key;
+}
+
+extern "C" __attribute__((always_inline))
+int64_t* get_group_value_fast_keyless_semiprivate(int64_t* groups_buffer,
+                                                  const int64_t key,
+                                                  const int64_t min_key,
+                                                  const int8_t thread_warp_idx,
+                                                  const int8_t warp_size) {
+  return groups_buffer + warp_size * (key - min_key) + thread_warp_idx;
 }
 
 #ifdef __clang__

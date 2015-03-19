@@ -12,6 +12,11 @@ __device__ int32_t pos_step_impl() {
 }
 
 extern "C"
+__device__ int8_t thread_warp_idx(const int8_t warp_sz) {
+  return threadIdx.x % warp_sz;
+}
+
+extern "C"
 __device__ const int64_t* init_shared_mem_nop(const int64_t* groups_buffer,
                                               const int32_t groups_buffer_size) {
   return groups_buffer;

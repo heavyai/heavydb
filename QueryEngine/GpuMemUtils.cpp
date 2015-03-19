@@ -40,8 +40,9 @@ std::pair<CUdeviceptr, std::vector<CUdeviceptr>> create_dev_group_by_buffers(
   if (group_by_buffers.empty()) {
     return std::make_pair(0, std::vector<CUdeviceptr> {});
   }
-  size_t buffer_size {
-    small_buffers ? query_mem_desc.getSmallBufferSizeBytes() : query_mem_desc.getBufferSizeBytes() };
+  size_t buffer_size { small_buffers
+    ? query_mem_desc.getSmallBufferSizeBytes()
+    : query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU) };
   CHECK_GT(buffer_size, 0);
   std::vector<CUdeviceptr> group_by_dev_buffers;
   const size_t num_buffers { block_size_x * grid_size_x };
@@ -127,7 +128,7 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
   copy_group_by_buffers_from_gpu(
     data_mgr,
     query_exe_context->group_by_buffers_,
-    query_exe_context->query_mem_desc_.getBufferSizeBytes(),
+    query_exe_context->query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
     gpu_query_mem.group_by_buffers.second,
     query_exe_context->query_mem_desc_,
     block_size_x, grid_size_x, device_id);

@@ -182,6 +182,8 @@ private:
                                            const bool is_group_by,
                                            const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
+  int8_t warpSize() const;
+
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col, const bool hoist_literals);
 
   llvm::Value* toDoublePrecision(llvm::Value* val);
@@ -336,6 +338,7 @@ private:
   static std::mutex execute_mutex_;
 
   friend class GroupByAndAggregate;
+  friend class QueryMemoryDescriptor;
   friend class QueryExecutionContext;
 };
 

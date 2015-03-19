@@ -23,16 +23,21 @@ QueryExecutionContext::QueryExecutionContext(
     return;
   }
 
-  std::vector<int64_t> group_by_buffer_template(query_mem_desc_.getBufferSizeQuad());
+  std::vector<int64_t> group_by_buffer_template(query_mem_desc_.getBufferSizeQuad(device_type));
   init_groups(
     &group_by_buffer_template[0],
     query_mem_desc_.entry_count,
     query_mem_desc_.group_col_widths.size(),
     &init_agg_vals[0],
     query_mem_desc_.agg_col_widths.size(),
-    query_mem_desc.keyless_hash);
+    query_mem_desc_.keyless_hash,
+    query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1);
 
-  if (query_mem_desc.keyless_hash) {
+  if (query_mem_desc_.interleavedBins(device_type_)) {
+    CHECK(query_mem_desc_.keyless_hash);
+  }
+
+  if (query_mem_desc_.keyless_hash) {
     CHECK_EQ(0, query_mem_desc_.getSmallBufferSizeQuad());
   }
 
@@ -43,16 +48,17 @@ QueryExecutionContext::QueryExecutionContext(
     query_mem_desc_.group_col_widths.size(),
     &init_agg_vals[0],
     query_mem_desc_.agg_col_widths.size(),
-    false);
+    false,
+    1);
 
   for (size_t i = 0; i < num_buffers_; ++i) {
     int64_t* group_by_buffer { nullptr };
     // For GPU, only allocate one buffer per block when threads share memory.
     // TODO(alex): this is awkward, improve
-    bool alloc = buffer_not_null(query_mem_desc, executor_->block_size_x_, device_type, i);
+    bool alloc = buffer_not_null(query_mem_desc_, executor_->block_size_x_, device_type, i);
     if (alloc) {
-      group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSizeBytes()));
-      memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes());
+      group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
+      memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes(device_type_));
     }
     group_by_buffers_.push_back(group_by_buffer);
     if (query_mem_desc_.getSmallBufferSizeBytes()) {
@@ -122,12 +128,21 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
       CHECK_EQ(1, targets.size());
       const auto target_expr = targets.front();
       for (size_t i = 0; i < groups_buffer_entry_count; ++i) {
-        if (group_by_buffer[i] != 0) {
+        int64_t bin_val { 0 };
+        if (query_mem_desc_.interleavedBins(device_type_)) {
+          bin_val = std::accumulate(
+            group_by_buffer + i * executor_->warpSize(),
+            group_by_buffer + (i + 1) * executor_->warpSize(),
+            0);
+        } else {
+          bin_val = group_by_buffer[i];
+        }
+        if (bin_val != 0) {
           ResultRow result_row(executor_);
           result_row.value_tuple_.push_back(i + query_mem_desc_.min_val);
           const auto agg_info = target_info(targets.front());
           CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
-          result_row.agg_results_.push_back(group_by_buffer[i]);
+          result_row.agg_results_.push_back(bin_val);
           result_row.agg_results_idx_.push_back(0);
           result_row.agg_kinds_.push_back(kCOUNT);
           result_row.agg_types_.push_back(target_expr->get_type_info());
@@ -240,7 +255,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned block_size_z = 1;
     const unsigned grid_size_y  = 1;
     const unsigned grid_size_z  = 1;
-    if (query_mem_desc_.getBufferSizeBytes() > 0) {  // group by path
+    if (query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0) {  // group by path
       CHECK(!group_by_buffers_.empty());
       CUdeviceptr group_by_dev_ptr;
       std::vector<CUdeviceptr> group_by_dev_buffers;
@@ -332,11 +347,11 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     new QueryExecutionContext(*this, init_agg_vals, executor, device_type));
 }
 
-size_t QueryMemoryDescriptor::getBufferSizeQuad() const {
+size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {
   if (keyless_hash) {
     CHECK_EQ(1, group_col_widths.size());
     CHECK_EQ(1, agg_col_widths.size());
-    return entry_count;
+    return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count;
   }
   return (group_col_widths.size() + agg_col_widths.size()) * entry_count;
 }
@@ -346,8 +361,8 @@ size_t QueryMemoryDescriptor::getSmallBufferSizeQuad() const {
   return (group_col_widths.size() + agg_col_widths.size()) * entry_count_small;
 }
 
-size_t QueryMemoryDescriptor::getBufferSizeBytes() const {
-  return getBufferSizeQuad() * sizeof(int64_t);
+size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device_type) const {
+  return getBufferSizeQuad(device_type) * sizeof(int64_t);
 }
 
 size_t QueryMemoryDescriptor::getSmallBufferSizeBytes() const {
@@ -486,7 +501,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
 
   if (group_col_widths.empty()) {
     return {
-      GroupByColRangeType::Scan, false,
+      executor_,
+      GroupByColRangeType::Scan, false, false,
       group_col_widths, agg_col_widths,
       0, 0,
       0, GroupByMemSharing::Private };
@@ -503,7 +519,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
         col_range_info.max - col_range_info.min >=
         static_cast<int64_t>(executor_->max_groups_buffer_entry_count_)) {
       return {
-        col_range_info.hash_type_, false,
+        executor_,
+        col_range_info.hash_type_, false, false,
         group_col_widths, agg_col_widths,
         executor_->max_groups_buffer_entry_count_,
         executor_->small_groups_buffer_entry_count_,
@@ -518,17 +535,23 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
           keyless = false;
         }
       }
+      const size_t bin_count = col_range_info.max - col_range_info.min + 1;
+      const size_t interleaved_max_threshold { 20 };
+      bool interleaved_bins = keyless &&
+        bin_count <= interleaved_max_threshold;
       return {
-        col_range_info.hash_type_, keyless,
+        executor_,
+        col_range_info.hash_type_, keyless, interleaved_bins,
         group_col_widths, agg_col_widths,
-        static_cast<size_t>(col_range_info.max - col_range_info.min + 1), 0,
+        bin_count, 0,
         col_range_info.min, GroupByMemSharing::Shared
       };
     }
   }
   case GroupByColRangeType::MultiCol: {
     return {
-      col_range_info.hash_type_, false,
+      executor_,
+      col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       executor_->max_groups_buffer_entry_count_, 0,
       0, GroupByMemSharing::Private
@@ -547,9 +570,13 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
   return sharing == GroupByMemSharing::Shared;
 }
 
+bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {
+  return interleaved_bins_on_gpu && device_type == ExecutorDeviceType::GPU;
+}
+
 size_t QueryMemoryDescriptor::sharedMemBytes() const {
   const size_t shared_mem_threshold { 0 };
-  const size_t shared_mem_bytes { getBufferSizeBytes() };
+  const size_t shared_mem_bytes { getBufferSizeBytes(ExecutorDeviceType::GPU) };
   if (!usesGetGroupValueFast() || shared_mem_bytes > shared_mem_threshold) {
     return 0;
   }
@@ -580,7 +607,7 @@ void GroupByAndAggregate::codegen(
     }
     codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, device_type, hoist_literals);
   } else {
-    auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, hoist_literals);
+    auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
     codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
   }
 
@@ -591,6 +618,7 @@ void GroupByAndAggregate::codegen(
 
 llvm::Value* GroupByAndAggregate::codegenGroupBy(
     const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType device_type,
     const bool hoist_literals) {
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
@@ -614,8 +642,14 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
     auto small_groups_buffer = arg_it;
     if (query_mem_desc.usesGetGroupValueFast()) {
-      const std::string get_group_fn_name {
-        "get_group_value_fast" + std::string(query_mem_desc.keyless_hash ? "_keyless" : "") };
+      std::string get_group_fn_name { "get_group_value_fast" };
+      if (query_mem_desc.keyless_hash) {
+        get_group_fn_name += "_keyless";
+      }
+      if (query_mem_desc.interleavedBins(device_type)) {
+        CHECK(query_mem_desc.keyless_hash);
+        get_group_fn_name += "_semiprivate";
+      }
       std::vector<llvm::Value*> get_group_fn_args {
         groups_buffer,
         group_expr_lv,
@@ -623,6 +657,12 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       };
       if (!query_mem_desc.keyless_hash) {
         get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
+      } else {
+        if (query_mem_desc.interleavedBins(device_type)) {
+          auto warp_idx = emitCall("thread_warp_idx", { LL_INT(executor_->warpSize()) });
+          get_group_fn_args.push_back(warp_idx);
+          get_group_fn_args.push_back(LL_INT(executor_->warpSize()));
+        }
       }
       agg_out_start_ptr = emitCall(get_group_fn_name, get_group_fn_args);
     } else {

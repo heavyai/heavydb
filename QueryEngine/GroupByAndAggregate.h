@@ -141,8 +141,10 @@ private:
 };
 
 struct QueryMemoryDescriptor {
+  const Executor* executor_;
   GroupByColRangeType hash_type;
   bool keyless_hash;
+  bool interleaved_bins_on_gpu;
   std::vector<int8_t> group_col_widths;
   std::vector<int8_t> agg_col_widths;
   size_t entry_count;                    // the number of entries in the main buffer
@@ -155,16 +157,18 @@ struct QueryMemoryDescriptor {
     const Executor* executor,
     const ExecutorDeviceType device_type) const;
 
-  size_t getBufferSizeQuad() const;
+  size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
 
-  size_t getBufferSizeBytes() const;
+  size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeBytes() const;
 
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;
 
   bool threadsShareMemory() const;
+
+  bool interleavedBins(const ExecutorDeviceType) const;
 
   size_t sharedMemBytes() const;
 };
@@ -190,7 +194,10 @@ private:
     const int64_t max;
   };
 
-  llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const bool hoist_literals);
+  llvm::Value* codegenGroupBy(
+    const QueryMemoryDescriptor&,
+    const ExecutorDeviceType,
+    const bool hoist_literals);
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);

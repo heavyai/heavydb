@@ -1338,7 +1338,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
     target_exprs.push_back(target_entry->get_expr());
   }
   QueryMemoryDescriptor query_mem_desc {
-    GroupByColRangeType::OneColGuessedRange, false,
+    this,
+    GroupByColRangeType::OneColGuessedRange, false, false,
     { sizeof(int64_t) },
     get_col_byte_widths(target_exprs),
     max_groups_buffer_entry_count_,
@@ -1361,12 +1362,12 @@ std::vector<ResultRow> Executor::executeResultPlan(
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
   init_groups(group_by_buffer, max_groups_buffer_entry_count_, target_exprs.size(),
-    &init_agg_vals[0], 1, false);
+    &init_agg_vals[0], 1, false, 1);
   const size_t small_groups_buffer_size {
     (target_exprs.size() + 1) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
   auto small_group_by_buffer = static_cast<int64_t*>(malloc(small_groups_buffer_size));
   init_groups(small_group_by_buffer, small_groups_buffer_entry_count_, target_exprs.size(),
-    &init_agg_vals[0], 1, false);
+    &init_agg_vals[0], 1, false, 1);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this, ExecutorDeviceType::CPU);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
@@ -2192,6 +2193,7 @@ target triple = "nvptx64-nvidia-cuda"
 
 declare i32 @pos_start_impl();
 declare i32 @pos_step_impl();
+declare i8 @thread_warp_idx(i8);
 declare i64* @init_shared_mem(i64*, i32);
 declare i64* @init_shared_mem_nop(i64*, i32);
 declare void @write_back(i64*, i64*, i32);
@@ -2303,6 +2305,13 @@ R"(
   addCodeToCache(key, cached_functions, gpu_code_cache_);
 
   return native_functions;
+}
+
+int8_t Executor::warpSize() const {
+  CHECK(catalog_->get_dataMgr().cudaMgr_);
+  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  CHECK(!dev_props.empty());
+  return dev_props.front().warpSize;
 }
 
 llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
