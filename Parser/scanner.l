@@ -181,24 +181,7 @@ WORK		TOK(WORK)
 "--".*	;	/* comment */
 
 
-.			/* ignore random non-SQL text */
+.			{ return yytext[0]; } /* random non-SQL text.  cause error in parser */
 
 <<EOF>>		{ yyterminate(); }
 %%
-
-/*
-void
-yyerror(char *s)
-{
-	printf("%d: %s at %s\n", lineno, s, yytext);
-}
-
-int main()
-{
-	if(!yyparse())
-		fprintf(stderr, "Embedded SQL parse worked\n");
-	else
-		fprintf(stderr, "Embedded SQL parse failed\n");
-	return 0;
-}
-*/
