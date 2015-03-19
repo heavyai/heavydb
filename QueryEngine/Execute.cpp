@@ -307,7 +307,14 @@ void string_decode(int8_t** str, int32_t* len, int8_t* chunk_iter_, int64_t pos)
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
   must_run_on_cpu_ = true;
-  CHECK(!expr->get_escape_expr());
+  char escape_char { '\\' };
+  if (expr->get_escape_expr()) {
+    auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
+    CHECK(escape_char_expr);
+    CHECK(escape_char_expr->get_type_info().is_string());
+    CHECK_EQ(1, escape_char_expr->get_constval().stringval->size());
+    escape_char = (*escape_char_expr->get_constval().stringval)[0];
+  }
   auto str_lv = codegen(expr->get_arg(), hoist_literals);
   CHECK_EQ(2, str_lv.size());
   auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
@@ -328,7 +335,7 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     str_lv[1],
     like_pattern_lv,
     like_pattern_len_lv,
-    ll_int(int8_t('\\')),
+    ll_int(int8_t(escape_char)),
     expr->get_is_ilike()
       ? llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), true)
       : llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), false)
