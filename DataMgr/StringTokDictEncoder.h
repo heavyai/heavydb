@@ -8,6 +8,8 @@
 #ifndef STRING_TOK_DICT_ENCODER_H
 #define STRING_TOK_DICT_ENCODER_H
 
+#include <cstring>
+#include <memory>
 #include <vector>
 #include <string>
 #include <cassert>
