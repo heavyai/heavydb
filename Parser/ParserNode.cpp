@@ -308,7 +308,7 @@ namespace Parser {
       left_expr = left_expr->add_cast(new_left_type);
     if (right_type != new_right_type)
       right_expr = right_expr->add_cast(new_right_type);
-    if (optype == kEQ) {
+    if (optype == kEQ || optype == kNE) {
       if ((new_left_type.get_compression() == kENCODING_DICT || new_left_type.get_compression() == kENCODING_TOKDICT) && new_right_type.get_compression() == kENCODING_NONE) {
         SQLTypeInfo ti(new_right_type);
         ti.set_compression(new_left_type.get_compression());
