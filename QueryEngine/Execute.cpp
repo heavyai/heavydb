@@ -235,7 +235,7 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionary(p->second)->getOrAdd(p->first);
+        const auto str_id = getStringDictionary(p->second)->get(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
