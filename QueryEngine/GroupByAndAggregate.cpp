@@ -5,6 +5,7 @@
 #include "RuntimeFunctions.h"
 #include "../CudaMgr/CudaMgr.h"
 
+#include <numeric>
 #include <thread>
 
 
