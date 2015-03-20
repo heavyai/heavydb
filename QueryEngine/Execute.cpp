@@ -1503,14 +1503,15 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       available_gpus.insert(gpu_id);
     }
   }
-  std::condition_variable scheduler_cv_;
-  std::mutex scheduler_mutex_;
+  std::condition_variable scheduler_cv;
+  std::mutex scheduler_mutex;
+  std::mutex reduce_mutex;
   for (size_t i = 0; i < fragments.size(); ++i) {
     if (skipFragment(fragments[i], simple_quals)) {
       continue;
     }
     auto dispatch = [this, plan, current_dbid, device_type, i, table_id,
-        &available_cpus, &available_gpus, &scheduler_cv_, &scheduler_mutex_,
+        &available_cpus, &available_gpus, &reduce_mutex, &scheduler_cv, &scheduler_mutex,
         &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]
         (const ExecutorDeviceType chosen_device_type, int chosen_device_id) {
@@ -1571,11 +1572,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           &cat.get_dataMgr(), chosen_device_id);
       }
       {
-        std::lock_guard<std::mutex> lock(reduce_mutex_);
+        std::lock_guard<std::mutex> lock(reduce_mutex);
         all_fragment_results.push_back(device_results);
       }
       if (device_type == ExecutorDeviceType::Auto) {
-        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex_);
+        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
         if (chosen_device_type == ExecutorDeviceType::CPU) {
           ++available_cpus;
         } else {
@@ -1584,7 +1585,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           CHECK(it_ok.second);
         }
         scheduler_lock.unlock();
-        scheduler_cv_.notify_one();
+        scheduler_cv.notify_one();
       }
     };
     if (serialize_execution) {
@@ -1593,8 +1594,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       auto chosen_device_type = device_type;
       int chosen_device_id = 0;
       if (device_type == ExecutorDeviceType::Auto) {
-        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex_);
-        scheduler_cv_.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
+        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
+        scheduler_cv.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
           return available_cpus || !available_gpus.empty();
         });
         if (!available_gpus.empty()) {

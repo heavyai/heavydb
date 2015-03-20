@@ -316,7 +316,6 @@ private:
   bool is_nested_;
   bool must_run_on_cpu_;
 
-  std::mutex reduce_mutex_;
   static const int max_gpu_count { 8 };
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
