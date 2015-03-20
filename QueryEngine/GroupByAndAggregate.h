@@ -302,7 +302,7 @@ struct TargetInfo {
 inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   if (!agg_expr) {
-    return { false, kCOUNT, target_expr->get_type_info(), false, false };
+    return { false, kMIN, target_expr->get_type_info(), false, false };
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();

@@ -228,9 +228,9 @@ void init_groups(int64_t* groups_buffer,
                  const size_t warp_size) {
   if (keyless) {
     assert(warp_size >= 1);
-    assert(key_qw_count == 1 && agg_col_count == 1);
+    assert(key_qw_count == 1);
     for (int32_t i = 0; i < groups_buffer_entry_count * warp_size; ++i) {
-      groups_buffer[i] = *init_vals;
+      groups_buffer[i] = init_vals[i % agg_col_count];
     }
     return;
   }
@@ -320,17 +320,19 @@ int64_t* get_group_value_one_key(int64_t* groups_buffer,
 extern "C" __attribute__((always_inline))
 int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
                                       const int64_t key,
-                                      const int64_t min_key) {
-  return groups_buffer + key - min_key;
+                                      const int64_t min_key,
+                                      const int32_t agg_col_count) {
+  return groups_buffer + agg_col_count * (key - min_key);
 }
 
 extern "C" __attribute__((always_inline))
 int64_t* get_group_value_fast_keyless_semiprivate(int64_t* groups_buffer,
                                                   const int64_t key,
                                                   const int64_t min_key,
+                                                  const int32_t agg_col_count,
                                                   const int8_t thread_warp_idx,
                                                   const int8_t warp_size) {
-  return groups_buffer + warp_size * (key - min_key) + thread_warp_idx;
+  return groups_buffer + agg_col_count * (warp_size * (key - min_key) + thread_warp_idx);
 }
 
 #ifdef __clang__
