@@ -13,21 +13,21 @@
 
 CUdeviceptr alloc_gpu_mem(
   Data_Namespace::DataMgr* data_mgr,
-  const size_t num_byes,
+  const size_t num_bytes,
   const int device_id);
 
 void copy_to_gpu(
     Data_Namespace::DataMgr* data_mgr,
     CUdeviceptr dst,
     const void* src,
-    const size_t num_byes,
+    const size_t num_bytes,
     const int device_id);
 
 void copy_from_gpu(
     Data_Namespace::DataMgr* data_mgr,
     void* dst,
     const CUdeviceptr src,
-    const size_t num_byes,
+    const size_t num_bytes,
     const int device_id);
 
 struct GpuQueryMemory {

@@ -8,9 +8,9 @@
 
 CUdeviceptr alloc_gpu_mem(
     Data_Namespace::DataMgr* data_mgr,
-    const size_t num_byes,
+    const size_t num_bytes,
     const int device_id) {
-  auto ab = data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, num_byes);
+  auto ab = data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, num_bytes);
   CHECK_EQ(ab->getPinCount(), 1);
   return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
 }
@@ -19,12 +19,12 @@ void copy_to_gpu(
     Data_Namespace::DataMgr* data_mgr,
     CUdeviceptr dst,
     const void* src,
-    const size_t num_byes,
+    const size_t num_bytes,
     const int device_id) {
   CHECK(data_mgr->cudaMgr_);
   data_mgr->cudaMgr_->copyHostToDevice(
     reinterpret_cast<int8_t*>(dst), static_cast<const int8_t*>(src),
-    num_byes, device_id);
+    num_bytes, device_id);
 }
 
 namespace {
@@ -87,12 +87,12 @@ void copy_from_gpu(
     Data_Namespace::DataMgr* data_mgr,
     void* dst,
     const CUdeviceptr src,
-    const size_t num_byes,
+    const size_t num_bytes,
     const int device_id) {
   CHECK(data_mgr->cudaMgr_);
   data_mgr->cudaMgr_->copyDeviceToHost(
     static_cast<int8_t*>(dst), reinterpret_cast<const int8_t*>(src),
-    num_byes, device_id);
+    num_bytes, device_id);
 }
 
 namespace {
