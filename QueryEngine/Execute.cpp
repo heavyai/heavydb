@@ -1533,6 +1533,10 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       CHECK_GE(chosen_device_id, 0);
       CHECK_LT(chosen_device_id, max_gpu_count);
       std::vector<ChunkIter> chunk_iterators;  // need to own them while query executes
+      std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
+      if (chosen_device_type == ExecutorDeviceType::GPU) {
+        gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
+      }
       for (const int col_id : col_global_ids) {
         auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
         CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
@@ -1636,7 +1640,6 @@ void Executor::executePlanWithoutGroupBy(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
-    std::lock_guard<std::mutex> lock(gpu_exec_mutex_[device_id]);
     auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
       plan_state_->init_agg_vals_, this, device_type);
     out_vec = query_exe_context->launchGpuCode(
@@ -1711,14 +1714,11 @@ void Executor::executePlanWithGroupBy(
       query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_);
     results = query_exe_context->getRowSet(target_exprs);
   } else {
-    {
-      std::lock_guard<std::mutex> lock(gpu_exec_mutex_[device_id]);
-      query_exe_context->launchGpuCode(
-        compilation_result.native_functions, hoist_literals, hoist_buf,
-        col_buffers,
-        num_rows, plan_state_->init_agg_vals_,
-        data_mgr, block_size_x_, grid_size_x_, device_id);
-    }
+    query_exe_context->launchGpuCode(
+      compilation_result.native_functions, hoist_literals, hoist_buf,
+      col_buffers,
+      num_rows, plan_state_->init_agg_vals_,
+      data_mgr, block_size_x_, grid_size_x_, device_id);
     results = query_exe_context->getRowSet(target_exprs);
   }
 }
