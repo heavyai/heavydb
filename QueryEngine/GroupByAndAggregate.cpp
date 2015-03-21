@@ -278,7 +278,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
-                                       query_mem_desc_.sharedMemBytes(), nullptr, kernel_params, nullptr));
+                                       query_mem_desc_.sharedMemBytes(ExecutorDeviceType::GPU),
+                                       nullptr, kernel_params, nullptr));
       } else {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
@@ -289,7 +290,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
-                                       query_mem_desc_.sharedMemBytes(), nullptr, kernel_params, nullptr));
+                                       query_mem_desc_.sharedMemBytes(ExecutorDeviceType::GPU),
+                                       nullptr, kernel_params, nullptr));
       }
       copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
     } else {
@@ -575,7 +577,11 @@ bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type
   return interleaved_bins_on_gpu && device_type == ExecutorDeviceType::GPU;
 }
 
-size_t QueryMemoryDescriptor::sharedMemBytes() const {
+size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_type) const {
+  CHECK(device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::GPU);
+  if (device_type == ExecutorDeviceType::CPU) {
+    return 0;
+  }
   const size_t shared_mem_threshold { 0 };
   const size_t shared_mem_bytes { getBufferSizeBytes(ExecutorDeviceType::GPU) };
   if (!usesGetGroupValueFast() || shared_mem_bytes > shared_mem_threshold) {

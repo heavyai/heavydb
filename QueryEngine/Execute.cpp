@@ -1347,7 +1347,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
     0, GroupByMemSharing::Private
   };
   auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_,
-    hoist_literals, query_mem_desc);
+    hoist_literals, query_mem_desc, ExecutorDeviceType::CPU);
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, hoist_literals, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
@@ -2013,7 +2013,7 @@ Executor::CompilationResult Executor::compilePlan(
 
   const bool is_group_by { !query_mem_desc.group_col_widths.empty() };
   auto query_func = is_group_by
-    ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals, query_mem_desc)
+    ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals, query_mem_desc, device_type)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", query_func, cgen_state_->module_);

@@ -343,7 +343,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
 llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count,
                                         const bool is_nested, const bool hoist_literals,
-                                        const QueryMemoryDescriptor& query_mem_desc) {
+                                        const QueryMemoryDescriptor& query_mem_desc,
+                                        const ExecutorDeviceType device_type) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -352,11 +353,11 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   CHECK(func_pos_step);
   auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
-  auto func_init_shared_mem = query_mem_desc.sharedMemBytes()
+  auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type)
     ? mod->getFunction("init_shared_mem")
     : mod->getFunction("init_shared_mem_nop");
   CHECK(func_init_shared_mem);
-  auto func_write_back = query_mem_desc.sharedMemBytes()
+  auto func_write_back = query_mem_desc.sharedMemBytes(device_type)
     ? mod->getFunction("write_back")
     : mod->getFunction("write_back_nop");
   CHECK(func_write_back);
@@ -486,7 +487,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   auto small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
   small_ptr_155->setAlignment(8);
   auto shared_mem_bytes_lv = ConstantInt::get(IntegerType::get(mod->getContext(), 32),
-    query_mem_desc.sharedMemBytes());
+    query_mem_desc.sharedMemBytes(device_type));
   auto ptr_156 = CallInst::Create(
     func_init_shared_mem,
     std::vector<llvm::Value*> {

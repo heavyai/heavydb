@@ -337,7 +337,7 @@ private:
   static std::mutex execute_mutex_;
 
   friend class GroupByAndAggregate;
-  friend class QueryMemoryDescriptor;
+  friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
 };
 

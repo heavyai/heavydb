@@ -170,7 +170,7 @@ struct QueryMemoryDescriptor {
 
   bool interleavedBins(const ExecutorDeviceType) const;
 
-  size_t sharedMemBytes() const;
+  size_t sharedMemBytes(const ExecutorDeviceType) const;
 };
 
 class GroupByAndAggregate {
