@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <typeinfo>
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/filesystem.hpp>
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
 #include "../Planner/Planner.h"
@@ -123,6 +124,17 @@ namespace Parser {
       for (auto p : *storage_options)
         delete p;
       delete storage_options;
+    }
+  }
+
+  CopyTableStmt::~CopyTableStmt()
+  {
+    delete table;
+    delete file_path;
+    if (options != nullptr) {
+      for (auto p : *options)
+        delete p;
+      delete options;
     }
   }
 
@@ -1389,6 +1401,70 @@ namespace Parser {
     if (td->isView)
       throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
     catalog.dropTable(td);
+  }
+
+  struct CopyParams {
+    char delimiter;
+    std::string null_str;
+    bool has_header;
+    char quote;
+    char escape;
+
+    CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"') {}
+  };
+
+  void
+  CopyTableStmt::execute(Catalog_Namespace::Catalog &catalog)
+  {
+    const TableDescriptor *td = catalog.getMetadataForTable(*table);
+    if (td == nullptr)
+      throw std::runtime_error("Table " + *table + " does not exist.");
+    if (!boost::filesystem::exists(*file_path))
+      throw std::runtime_error("File " + *file_path + " does not exist.");
+    CopyParams copy_params;
+    if (options != nullptr) {
+      for (auto p : *options) {
+        if (boost::iequals(*p->get_name(), "delimiter")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Delimiter option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Delimiter must be a single character string.");
+          copy_params.delimiter = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "nulls")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Nulls option must be a string.");
+          copy_params.null_str = *str_literal->get_stringval();
+        } else if (boost::iequals(*p->get_name(), "header")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Header option must be a boolean.");
+          const std::string *s = str_literal->get_stringval();
+          if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+            copy_params.has_header = true;
+          else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+            copy_params.has_header = false;
+          else
+            throw std::runtime_error("Invalid string for boolean " + *s);
+        } else if (boost::iequals(*p->get_name(), "quote")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Quote option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Quote must be a single character string.");
+          copy_params.quote = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "escape")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Escape option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Escape must be a single character string.");
+          copy_params.escape = (*str_literal->get_stringval())[0];
+        } else
+          throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
+      }
+    }
   }
 
   void

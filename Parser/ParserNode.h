@@ -626,6 +626,21 @@ namespace Parser {
   };
 
   /*
+   * @type CopyTableStmt
+   * @brief COPY ... FROM ...
+   */
+  class CopyTableStmt : public DDLStmt {
+    public:
+      CopyTableStmt(std::string *t, std::string *f, std::list<NameValueAssign*> *o) : table(t), file_path(f), options(o) {}
+      virtual ~CopyTableStmt();
+      virtual void execute(Catalog_Namespace::Catalog &catalog);
+    private:
+      std::string *table;
+      std::string *file_path;
+      std::list<NameValueAssign*> *options;
+  };
+
+  /*
    * @type QueryExpr
    * @brief query expression
    */

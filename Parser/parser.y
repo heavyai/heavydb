@@ -67,7 +67,7 @@ using namespace Parser;
 	/* literal keyword tokens */
 
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
-%token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE CREATE CURRENT
+%token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE COPY CREATE CURRENT
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END ESCAPE EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
@@ -198,6 +198,13 @@ drop_table_statement:
 			$<nodeval>$ = new DropTableStmt($<stringval>4, $<boolval>3);
 		}
 		;
+
+copy_table_statement:
+    COPY table FROM STRING opt_with_option_list
+    {
+      $<nodeval>$ = new CopyTableStmt($<stringval>2, $<stringval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5)); 
+    }
+    ;
 
 base_table_element_commalist:
 		base_table_element { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
