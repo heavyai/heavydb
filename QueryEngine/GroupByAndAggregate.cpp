@@ -89,27 +89,11 @@ Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer
     CHECK_EQ(1, num_buffers_);
     return groupBufferToResults(0, targets);
   }
-  const size_t MAX_THREADS = std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
-  std::mutex row_set_mutex;
-  std::vector<std::thread> row_set_threads;
   for (size_t i = 0; i < group_by_buffers_.size(); ++i) {
     if (!buffer_not_null(query_mem_desc_, executor_->block_size_x_, device_type_, i)) {
       continue;
     }
-    row_set_threads.push_back(std::thread([i, this, &row_set_mutex, &results_per_sm, &targets]() {
-      auto results = groupBufferToResults(i, targets);
-      std::lock_guard<std::mutex> lock(row_set_mutex);
-      results_per_sm.push_back(results);
-    }));
-    if (row_set_threads.size() >= MAX_THREADS) {
-      for (auto& child : row_set_threads) {
-        child.join();
-      }
-      row_set_threads.clear();
-    }
-  }
-  for (auto& child : row_set_threads) {
-    child.join();
+    results_per_sm.emplace_back(groupBufferToResults(i, targets));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(results_per_sm);
