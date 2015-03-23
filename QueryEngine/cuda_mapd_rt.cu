@@ -222,7 +222,7 @@ __device__ double atomicMin(double* address, double val)
 
 extern "C"
 __device__ void agg_count_shared(int64_t* agg, const int64_t val) {
-  atomicAdd(reinterpret_cast<unsigned long long*>(agg), 1L);
+  atomicAdd(reinterpret_cast<int32_t*>(agg), 1L);
 }
 
 extern "C"
