@@ -809,6 +809,21 @@ void GroupByAndAggregate::codegenAggCalls(
       CHECK_EQ(agg_fn_names.size(), target_lvs.size());
       CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
     }
+    auto agg_out_lv = is_group_by
+      ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
+      : agg_out_vec[agg_out_off];
+    const bool is_simple_count = agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
+    if (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() && is_simple_count) {
+      CHECK_EQ(1, agg_fn_names.size());
+      // TODO(alex): use 32-bit wherever possible, avoid casts
+      auto acc_i32 = LL_BUILDER.CreateCast(
+        llvm::Instruction::CastOps::BitCast,
+        agg_out_lv,
+        llvm::PointerType::get(get_int_type(32, LL_CONTEXT), 0));
+      LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add, acc_i32, LL_INT(1),
+        llvm::AtomicOrdering::Monotonic);
+      continue;
+    }
     size_t target_lv_idx = 0;
     for (const auto& agg_base_name : agg_fn_names) {
       auto target_lv = executor_->toDoublePrecision(target_lvs[target_lv_idx]);
@@ -818,9 +833,7 @@ void GroupByAndAggregate::codegenAggCalls(
           : agg_out_vec[agg_out_off],
         // TODO(alex): simply use target_lv once we're done with refactoring,
         //             for now just generate the same IR for easy debugging
-        (agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct)
-          ? LL_INT(0L)
-          : target_lv
+        is_simple_count ? LL_INT(0L) : target_lv
       };
       if (agg_info.is_distinct) {
         agg_args.push_back(LL_INT(static_cast<int64_t>(agg_out_off)));
