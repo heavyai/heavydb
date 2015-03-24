@@ -89,10 +89,8 @@ Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer
     CHECK_EQ(1, num_buffers_);
     return groupBufferToResults(0, targets);
   }
-  for (size_t i = 0; i < group_by_buffers_.size(); ++i) {
-    if (!buffer_not_null(query_mem_desc_, executor_->block_size_x_, device_type_, i)) {
-      continue;
-    }
+  size_t step { query_mem_desc_.threadsShareMemory() ? executor_->block_size_x_ : 1 };
+  for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     results_per_sm.emplace_back(groupBufferToResults(i, targets));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
@@ -118,17 +116,19 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
         ResultRow result_row(executor_);
         result_row.value_tuple_.push_back(bin + query_mem_desc_.min_val);
         bool discard_row = true;
+        size_t group_by_buffer_base_idx { warp_count * bin * agg_col_count };
         for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
           bool discard_partial_result = true;
           for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
             const auto agg_info = target_info(targets[target_idx]);
             CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
-            partial_agg_vals[target_idx] = group_by_buffer[(warp_count * bin + warp_idx) * agg_col_count + target_idx];
+            partial_agg_vals[target_idx] = group_by_buffer[group_by_buffer_base_idx + target_idx];
             if (agg_info.is_agg && partial_agg_vals[target_idx]) {
               discard_partial_result = false;
               break;
             }
           }
+          group_by_buffer_base_idx += agg_col_count;
           if (discard_partial_result) {
             continue;
           }
