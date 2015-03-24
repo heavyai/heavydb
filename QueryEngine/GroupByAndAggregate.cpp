@@ -89,10 +89,8 @@ Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer
     CHECK_EQ(1, num_buffers_);
     return groupBufferToResults(0, targets);
   }
-  for (size_t i = 0; i < group_by_buffers_.size(); ++i) {
-    if (!buffer_not_null(query_mem_desc_, executor_->block_size_x_, device_type_, i)) {
-      continue;
-    }
+  size_t step { query_mem_desc_.threadsShareMemory() ? executor_->block_size_x_ : 1 };
+  for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     results_per_sm.emplace_back(groupBufferToResults(i, targets));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
@@ -112,43 +110,58 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
       CHECK_EQ(1, group_by_col_count);
       CHECK_EQ(targets.size(), agg_col_count);
       for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
+        const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
+        std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
+        std::vector<int64_t> agg_vals(agg_col_count, 0);
         ResultRow result_row(executor_);
         result_row.value_tuple_.push_back(bin + query_mem_desc_.min_val);
         bool discard_row = true;
-        for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-          const auto target_expr = targets[target_idx];
-          const auto agg_info = target_info(target_expr);
-          CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
-          int64_t bin_val { 0 };
-          if (query_mem_desc_.interleavedBins(device_type_)) {
-            for (int8_t warp_idx = 0; warp_idx < executor_->warpSize(); ++warp_idx) {
-              int64_t partial_bin_val = group_by_buffer[(executor_->warpSize() * bin + warp_idx) * agg_col_count + target_idx];
-              if (agg_info.is_agg) {
-                CHECK_EQ(kCOUNT, agg_info.agg_kind);
-                bin_val += partial_bin_val;
+        size_t group_by_buffer_base_idx { warp_count * bin * agg_col_count };
+        for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
+          bool discard_partial_result = true;
+          for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
+            const auto agg_info = target_info(targets[target_idx]);
+            CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
+            partial_agg_vals[target_idx] = group_by_buffer[group_by_buffer_base_idx + target_idx];
+            if (agg_info.is_agg && partial_agg_vals[target_idx]) {
+              discard_partial_result = false;
+              break;
+            }
+          }
+          group_by_buffer_base_idx += agg_col_count;
+          if (discard_partial_result) {
+            continue;
+          }
+          discard_row = false;
+          for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
+            const auto target_expr = targets[target_idx];
+            const auto agg_info = target_info(target_expr);
+            auto partial_bin_val = partial_agg_vals[target_idx];
+            if (agg_info.is_agg) {
+              CHECK_EQ(kCOUNT, agg_info.agg_kind);
+              agg_vals[target_idx] += partial_bin_val;
+            } else {
+              if (agg_vals[target_idx]) {
+                CHECK_EQ(agg_vals[target_idx], partial_bin_val);
               } else {
-                if (bin_val) {
-                  CHECK_EQ(bin_val, partial_bin_val);
-                }
-                bin_val = partial_bin_val;
+                agg_vals[target_idx] = partial_bin_val;
               }
             }
-          } else {
-            bin_val = group_by_buffer[agg_col_count * bin + target_idx];
           }
-          if (agg_info.is_agg && bin_val != 0) {
-            discard_row = false;
-          }
-          CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
+        }
+        if (discard_row) {
+          continue;
+        }
+        for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
           result_row.agg_results_idx_.push_back(target_idx);
           CHECK_EQ(target_idx, result_row.agg_results_.size());
-          result_row.agg_results_.push_back(bin_val);
+          result_row.agg_results_.push_back(agg_vals[target_idx]);
+          const auto target_expr = targets[target_idx];
+          const auto agg_info = target_info(target_expr);
           result_row.agg_kinds_.push_back(agg_info.agg_kind);
           result_row.agg_types_.push_back(target_expr->get_type_info());
         }
-        if (!discard_row) {
-          results.push_back(result_row);
-        }
+        results.push_back(result_row);
       }
       return results;
     }
@@ -258,23 +271,17 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned grid_size_z  = 1;
     if (query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0) {  // group by path
       CHECK(!group_by_buffers_.empty());
-      CUdeviceptr group_by_dev_ptr;
-      std::vector<CUdeviceptr> group_by_dev_buffers;
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id);
-      std::tie(group_by_dev_ptr, group_by_dev_buffers) = gpu_query_mem.group_by_buffers;
-      CUdeviceptr small_group_by_dev_ptr;
-      std::vector<CUdeviceptr> small_group_by_dev_buffers;
-      std::tie(small_group_by_dev_ptr, small_group_by_dev_buffers) = gpu_query_mem.small_group_by_buffers;
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
-          &group_by_dev_ptr,
-          &small_group_by_dev_ptr
+          &gpu_query_mem.group_by_buffers.first,
+          &gpu_query_mem.small_group_by_buffers.first
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
@@ -285,8 +292,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &col_buffers_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
-          &group_by_dev_ptr,
-          &small_group_by_dev_ptr
+          &gpu_query_mem.group_by_buffers.first,
+          &gpu_query_mem.small_group_by_buffers.first
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
@@ -353,7 +360,9 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {
   if (keyless_hash) {
     CHECK_EQ(1, group_col_widths.size());
-    return (interleavedBins(device_type) ? executor_->warpSize() * agg_col_widths.size() : agg_col_widths.size()) * entry_count;
+    return (interleavedBins(device_type)
+      ? executor_->warpSize() * agg_col_widths.size()
+      : agg_col_widths.size()) * entry_count;
   }
   return (group_col_widths.size() + agg_col_widths.size()) * entry_count;
 }
@@ -545,7 +554,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       }
       const size_t bin_count = col_range_info.max - col_range_info.min + 1;
       const size_t interleaved_max_threshold { 20 };
-      bool interleaved_bins = keyless && (target_expr_list.size() == 1) &&
+      bool interleaved_bins = keyless &&
         bin_count <= interleaved_max_threshold;
       return {
         executor_,

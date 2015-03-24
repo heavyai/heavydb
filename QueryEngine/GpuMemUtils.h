@@ -31,8 +31,8 @@ void copy_from_gpu(
     const int device_id);
 
 struct GpuQueryMemory {
-  std::pair<CUdeviceptr, std::vector<CUdeviceptr>> group_by_buffers;
-  std::pair<CUdeviceptr, std::vector<CUdeviceptr>> small_group_by_buffers;
+  std::pair<CUdeviceptr, CUdeviceptr> group_by_buffers;
+  std::pair<CUdeviceptr, CUdeviceptr> small_group_by_buffers;
 };
 
 struct QueryMemoryDescriptor;
