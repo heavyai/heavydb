@@ -42,32 +42,36 @@ QueryExecutionContext::QueryExecutionContext(
     CHECK_EQ(0, query_mem_desc_.getSmallBufferSizeQuad());
   }
 
-  for (size_t i = 0; i < num_buffers_; ++i) {
-    int64_t* group_by_buffer { nullptr };
-    // For GPU, only allocate one buffer per block when threads share memory.
-    // TODO(alex): this is awkward, improve
-    bool alloc = buffer_not_null(query_mem_desc_, executor_->block_size_x_, device_type, i);
-    if (alloc) {
-      group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
-      memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes(device_type_));
-    }
+  std::vector<int64_t> group_by_small_buffer_template;
+  if (query_mem_desc_.getSmallBufferSizeBytes()) {
+    group_by_small_buffer_template.resize(query_mem_desc_.getSmallBufferSizeQuad());
+    init_groups(
+      &group_by_small_buffer_template[0],
+      query_mem_desc_.entry_count_small,
+      query_mem_desc_.group_col_widths.size(),
+      &init_agg_vals[0],
+      query_mem_desc_.agg_col_widths.size(),
+      false,
+      1);
+  }
+
+  size_t step { device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()
+    ? executor_->block_size_x_ : 1 };
+
+  for (size_t i = 0; i < num_buffers_; i += step) {
+    auto group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
+    memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes(device_type_));
     group_by_buffers_.push_back(group_by_buffer);
+    for (size_t j = 1; j < step; ++j) {
+      group_by_buffers_.push_back(nullptr);
+    }
     if (query_mem_desc_.getSmallBufferSizeBytes()) {
-      std::vector<int64_t> group_by_small_buffer_template(query_mem_desc_.getSmallBufferSizeQuad());
-      init_groups(
-        &group_by_small_buffer_template[0],
-        query_mem_desc_.entry_count_small,
-        query_mem_desc_.group_col_widths.size(),
-        &init_agg_vals[0],
-        query_mem_desc_.agg_col_widths.size(),
-        false,
-        1);
-      int64_t* group_by_small_buffer { nullptr };
-      if (alloc) {
-        group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSizeBytes()));
-        memcpy(group_by_small_buffer, &group_by_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
-      }
+      auto group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSizeBytes()));
+      memcpy(group_by_small_buffer, &group_by_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
       small_group_by_buffers_.push_back(group_by_small_buffer);
+      for (size_t j = 1; j < step; ++j) {
+        small_group_by_buffers_.push_back(nullptr);
+      }
     }
   }
 }
