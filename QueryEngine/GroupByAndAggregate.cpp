@@ -271,23 +271,17 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned grid_size_z  = 1;
     if (query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0) {  // group by path
       CHECK(!group_by_buffers_.empty());
-      CUdeviceptr group_by_dev_ptr;
-      std::vector<CUdeviceptr> group_by_dev_buffers;
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id);
-      std::tie(group_by_dev_ptr, group_by_dev_buffers) = gpu_query_mem.group_by_buffers;
-      CUdeviceptr small_group_by_dev_ptr;
-      std::vector<CUdeviceptr> small_group_by_dev_buffers;
-      std::tie(small_group_by_dev_ptr, small_group_by_dev_buffers) = gpu_query_mem.small_group_by_buffers;
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
-          &group_by_dev_ptr,
-          &small_group_by_dev_ptr
+          &gpu_query_mem.group_by_buffers.first,
+          &gpu_query_mem.small_group_by_buffers.first
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
@@ -298,8 +292,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &col_buffers_dev_ptr,
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
-          &group_by_dev_ptr,
-          &small_group_by_dev_ptr
+          &gpu_query_mem.group_by_buffers.first,
+          &gpu_query_mem.small_group_by_buffers.first
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
