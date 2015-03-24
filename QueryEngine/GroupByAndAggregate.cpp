@@ -545,7 +545,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       }
       const size_t bin_count = col_range_info.max - col_range_info.min + 1;
       const size_t interleaved_max_threshold { 20 };
-      bool interleaved_bins = keyless &&
+      bool interleaved_bins = keyless && (target_expr_list.size() == 1) &&
         bin_count <= interleaved_max_threshold;
       return {
         executor_,
