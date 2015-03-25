@@ -607,36 +607,45 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
   return shared_mem_bytes;
 }
 
+GroupByAndAggregate::DiamondCodegen::DiamondCodegen(llvm::Value* cond, const Executor* executor) : executor_(executor) {
+  cond_true_ = llvm::BasicBlock::Create(
+    LL_CONTEXT, "cond_true", ROW_FUNC);
+  cond_false_ = llvm::BasicBlock::Create(
+    LL_CONTEXT, "cond_false", ROW_FUNC);
+
+  LL_BUILDER.CreateCondBr(cond, cond_true_, cond_false_);
+  LL_BUILDER.SetInsertPoint(cond_true_);
+}
+
+GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
+  LL_BUILDER.CreateBr(cond_false_);
+  LL_BUILDER.SetInsertPoint(cond_false_);
+}
+
 void GroupByAndAggregate::codegen(
     llvm::Value* filter_result,
     const ExecutorDeviceType device_type,
     const bool hoist_literals) {
   CHECK(filter_result);
 
-  auto filter_true = llvm::BasicBlock::Create(
-    LL_CONTEXT, "filter_true", ROW_FUNC);
-  auto filter_false = llvm::BasicBlock::Create(
-    LL_CONTEXT, "filter_false", ROW_FUNC);
+  {
+    DiamondCodegen diamond_codegen(filter_result, executor_);
 
-  LL_BUILDER.CreateCondBr(filter_result, filter_true, filter_false);
-  LL_BUILDER.SetInsertPoint(filter_true);
+    auto query_mem_desc = getQueryMemoryDescriptor();
 
-  auto query_mem_desc = getQueryMemoryDescriptor();
-
-  if (group_by_exprs(plan_).empty()) {
-    auto arg_it = ROW_FUNC->arg_begin();
-    std::vector<llvm::Value*> agg_out_vec;
-    for (int32_t i = 0; i < get_agg_count(plan_); ++i) {
-      agg_out_vec.push_back(arg_it++);
+    if (group_by_exprs(plan_).empty()) {
+      auto arg_it = ROW_FUNC->arg_begin();
+      std::vector<llvm::Value*> agg_out_vec;
+      for (int32_t i = 0; i < get_agg_count(plan_); ++i) {
+        agg_out_vec.push_back(arg_it++);
+      }
+      codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, device_type, hoist_literals);
+    } else {
+      auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
+      codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
     }
-    codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, device_type, hoist_literals);
-  } else {
-    auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
-    codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
   }
 
-  LL_BUILDER.CreateBr(filter_false);
-  LL_BUILDER.SetInsertPoint(filter_false);
   LL_BUILDER.CreateRetVoid();
 }
 

@@ -194,6 +194,15 @@ private:
     const int64_t max;
   };
 
+  struct DiamondCodegen {
+    DiamondCodegen(llvm::Value* cond, const Executor* executor);
+    ~DiamondCodegen();
+
+    const Executor* executor_;
+    llvm::BasicBlock* cond_true_;
+    llvm::BasicBlock* cond_false_;
+  };
+
   llvm::Value* codegenGroupBy(
     const QueryMemoryDescriptor&,
     const ExecutorDeviceType,
