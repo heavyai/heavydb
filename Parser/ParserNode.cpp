@@ -15,6 +15,7 @@
 #include "ParserNode.h"
 #include "../Planner/Planner.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
+#include "../Import/Importer.h"
 #include "parser.h"
 
 namespace Parser {
@@ -1403,16 +1404,6 @@ namespace Parser {
     catalog.dropTable(td);
   }
 
-  struct CopyParams {
-    char delimiter;
-    std::string null_str;
-    bool has_header;
-    char quote;
-    char escape;
-
-    CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"') {}
-  };
-
   void
   CopyTableStmt::execute(Catalog_Namespace::Catalog &catalog)
   {
@@ -1465,6 +1456,10 @@ namespace Parser {
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
     }
+    /*
+    Importer importer(catalog, td, file_path, copy_params);
+    importer.import();
+    */
   }
 
   void

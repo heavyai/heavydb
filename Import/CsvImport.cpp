@@ -345,12 +345,6 @@ void do_import(
   total_insert_time_ms += ms;
 }
 
-const auto NULL_SMALLINT = std::numeric_limits<int16_t>::min();
-const auto NULL_INT = std::numeric_limits<int32_t>::min();
-const auto NULL_BIGINT = std::numeric_limits<int64_t>::min();
-const auto NULL_FLOAT = std::numeric_limits<float>::min();
-const auto NULL_DOUBLE = std::numeric_limits<double>::min();
-
 }
 
 static csv_row CsvParser_getRow_measured(csv_parser &csvParser) {

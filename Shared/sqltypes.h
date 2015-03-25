@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <ctime>
+#include <cfloat>
 #include <string>
 #include <vector>
 #include <cassert>
@@ -283,5 +284,11 @@ std::string
 DatumToString(Datum d, const SQLTypeInfo &ti);
 
 #include "../QueryEngine/ExtractFromTime.h"
+
+#define NULL_SMALLINT   INT16_MIN
+#define NULL_INT        INT32_MIN
+#define NULL_BIGINT     INT64_MIN
+#define NULL_FLOAT      FLT_MIN
+#define NULL_DOUBLE     DBL_MIN
 
 #endif // SQLTYPES_H
