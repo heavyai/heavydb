@@ -182,7 +182,9 @@ public:
 
   QueryMemoryDescriptor getQueryMemoryDescriptor();
 
-  void codegen(
+  // returns true iff checking the error code after every row
+  // is required -- slow path group by queries for now
+  bool codegen(
     llvm::Value* filter_result,
     const ExecutorDeviceType,
     const bool hoist_literals);

@@ -636,11 +636,13 @@ GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
   LL_BUILDER.SetInsertPoint(cond_false_);
 }
 
-void GroupByAndAggregate::codegen(
+bool GroupByAndAggregate::codegen(
     llvm::Value* filter_result,
     const ExecutorDeviceType device_type,
     const bool hoist_literals) {
   CHECK(filter_result);
+
+  bool can_return_error = false;
 
   {
     const bool is_group_by = !group_by_exprs(plan_).empty();
@@ -665,6 +667,7 @@ void GroupByAndAggregate::codegen(
             &filter_cfg);
           codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
         }
+        can_return_error = true;
         LL_BUILDER.CreateRet(LL_INT(-1));
       }
     } else {
@@ -678,6 +681,8 @@ void GroupByAndAggregate::codegen(
   }
 
   LL_BUILDER.CreateRet(LL_INT(0));
+
+  return can_return_error;
 }
 
 llvm::Value* GroupByAndAggregate::codegenGroupBy(

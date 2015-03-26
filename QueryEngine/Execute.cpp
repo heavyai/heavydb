@@ -2042,7 +2042,34 @@ Executor::CompilationResult Executor::compilePlan(
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  group_by_and_aggregate.codegen(filter_lv, device_type, hoist_literals);
+  const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, device_type, hoist_literals);
+
+  if (needs_error_check) {
+    // check whether the row processing was successful; currently, it can
+    // fail by running out of group by buffer slots
+    bool done_splitting = false;
+    for (auto bb_it = query_func->begin(); bb_it != query_func->end() && !done_splitting; ++bb_it) {
+      for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); ++inst_it) {
+        if (!llvm::isa<llvm::CallInst>(*inst_it)) {
+          continue;
+        }
+        auto& filter_call = llvm::cast<llvm::CallInst>(*inst_it);
+        if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
+          auto next_inst_it = inst_it;
+          ++next_inst_it;
+          auto new_bb = bb_it->splitBasicBlock(next_inst_it);
+          auto& br_instr = bb_it->back();
+          llvm::IRBuilder<> ir_builder(&br_instr);
+          auto err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, inst_it, ll_int(int32_t(0)));
+          auto& last_bb = query_func->back();
+          llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(&last_bb, new_bb, err_lv));
+          done_splitting = true;
+          break;
+        }
+      }
+    }
+    CHECK(done_splitting);
+  }
 
   // iterate through all the instruction in the query template function and
   // replace the call to the filter placeholder with the call to the actual filter
