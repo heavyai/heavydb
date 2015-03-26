@@ -451,8 +451,6 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%%';", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%';", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@';", dt);
-  }
-  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str ILIKE 'rEaL_f%%';", dt)));
   }
 }

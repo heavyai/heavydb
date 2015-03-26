@@ -51,12 +51,18 @@ typedef union {
 #endif
 } Datum;
 
+#ifdef __CUDACC__
+#define DEVICE __device__
+#else
+#define DEVICE
+#endif
+
 struct VarlenDatum {
 	int length;
 	int8_t *pointer;
 	bool is_null;
 
-	VarlenDatum() : length(0), pointer(NULL), is_null(true) {}
+	DEVICE VarlenDatum() : length(0), pointer(NULL), is_null(true) {}
 	VarlenDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n) {}
 };
 
@@ -86,12 +92,6 @@ enum EncodingType {
 #define IS_NUMBER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
-
-#ifdef __CUDACC__
-#define DEVICE __device__
-#else
-#define DEVICE
-#endif
 
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including

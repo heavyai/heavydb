@@ -67,9 +67,20 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
           : AggResult(agg_results_[actual_idx]);
       } else {
         CHECK_EQ(kENCODING_NONE, agg_types_[idx].get_compression());
+        CHECK_NE(agg_results_[actual_idx + 1], 0);
+        if (agg_results_[actual_idx + 1] > 0) {
+          return AggResult(std::string(
+            reinterpret_cast<char*>(agg_results_[actual_idx]),  // payload
+            agg_results_[actual_idx + 1]));  // length
+        }
+        // TODO(alex): remove the negative length hack
+        auto& data_mgr = executor_->catalog_->get_dataMgr();
+        const size_t str_len = -agg_results_[actual_idx + 1];
+        std::vector<int8_t> cpu_buffer(str_len);
+        copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(agg_results_[actual_idx]), str_len, 0);
         return AggResult(std::string(
-          reinterpret_cast<char*>(agg_results_[actual_idx]),  // payload
-          agg_results_[actual_idx + 1]));  // length
+          reinterpret_cast<char*>(&cpu_buffer[0]),  // payload
+          str_len));  // length
       }
     } else {
       CHECK(agg_types_[idx].get_type() == kFLOAT || agg_types_[idx].get_type() == kDOUBLE);
@@ -87,7 +98,7 @@ Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid
   : cgen_state_(new CgenState())
   , plan_state_(new PlanState)
   , is_nested_(false)
-  , must_run_on_cpu_(false)
+  , uses_str_none_enc_(false)
   , block_size_x_(block_size_x)
   , grid_size_x_(grid_size_x)
   , db_id_(db_id)
@@ -300,18 +311,17 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr, const bo
 }
 
 extern "C"
-void string_decode(int8_t** str, int32_t* len, int8_t* chunk_iter_, int64_t pos) {
+uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
   CHECK(!is_end);
-  *str = vd.pointer;
-  *len = vd.length;
+  return (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
-  must_run_on_cpu_ = true;
+  uses_str_none_enc_ = true;
   char escape_char { '\\' };
   if (expr->get_escape_expr()) {
     auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
@@ -328,7 +338,8 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   CHECK_EQ(kENCODING_NONE, like_expr_arg_const->get_type_info().get_compression());
   const auto like_pattern = *like_expr_arg_const->get_constval().stringval;
   llvm::Value* like_pattern_lv = cgen_state_->ir_builder_.CreateGlobalString(
-    like_pattern, like_pattern);
+    like_pattern, "like_pattern_" + std::to_string(std::hash<std::string>()(like_pattern)));
+  cgen_state_->like_patterns_.push_back(like_pattern_lv);
   auto i8_ptr = llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0);
   like_pattern_lv = cgen_state_->ir_builder_.CreateBitCast(like_pattern_lv, i8_ptr);
   auto like_pattern_len = like_expr_arg_const->get_constval().stringval->size();
@@ -451,27 +462,24 @@ std::vector<llvm::Value*> Executor::codegen(
   if (col_var->get_type_info().is_string() &&
       col_var->get_type_info().get_compression() == kENCODING_NONE) {
     // real (not dictionary-encoded) strings; store the pointer to the payload
-    must_run_on_cpu_ = true;
+    uses_str_none_enc_ = true;
     auto i8_ptr = llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0);
-    auto i8_ptr_ptr = llvm::PointerType::get(i8_ptr, 0);
-    auto i32_ptr = llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
     auto string_decode_ft = llvm::FunctionType::get(
-      llvm::Type::getVoidTy(cgen_state_->context_),
-      std::vector<llvm::Type*> {
-        i8_ptr_ptr, i32_ptr, i8_ptr, get_int_type(64, cgen_state_->context_) },
+      get_int_type(64, cgen_state_->context_),
+      std::vector<llvm::Type*> { i8_ptr, get_int_type(64, cgen_state_->context_) },
       false);
     auto string_decode_fn = cgen_state_->module_->getOrInsertFunction("string_decode", string_decode_ft);
     CHECK(string_decode_fn);
-    llvm::Value* str_ptr = cgen_state_->ir_builder_.CreateAlloca(i8_ptr);
-    llvm::Value* len_ptr = cgen_state_->ir_builder_.CreateAlloca(get_int_type(32, cgen_state_->context_));
-    cgen_state_->ir_builder_.CreateCall(string_decode_fn, std::vector<llvm::Value*> {
-      str_ptr,
-      len_ptr,
-      col_byte_stream,
-      pos_arg,
-    });
-    llvm::Value* str_lv = cgen_state_->ir_builder_.CreateLoad(str_ptr);
-    llvm::Value* len_lv = cgen_state_->ir_builder_.CreateLoad(len_ptr);
+    auto ptr_and_len = cgen_state_->ir_builder_.CreateCall(
+      string_decode_fn,
+      std::vector<llvm::Value*> { col_byte_stream, pos_arg });
+    // Unpack the pointer + length, see string_decode function.
+    llvm::Value* str_lv = cgen_state_->ir_builder_.CreateCall(
+      cgen_state_->module_->getFunction("extract_str_ptr"),
+      std::vector<llvm::Value*> { ptr_and_len });
+    llvm::Value* len_lv = cgen_state_->ir_builder_.CreateCall(
+      cgen_state_->module_->getFunction("extract_str_len"),
+      std::vector<llvm::Value*> { ptr_and_len });
     auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
       local_col_id,
       std::vector<llvm::Value*> { str_lv, len_lv }));
@@ -1254,6 +1262,9 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
     if (!agg_expr) {
       result.emplace_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
                           target_expr, 0);
+      if (target_type_info.is_string() && target_type_info.get_compression() == kENCODING_NONE) {
+        result.emplace_back("agg_id", target_expr, 0);
+      }
       continue;
     }
     CHECK(target_type_info.is_integer() || target_type_info.is_time() || target_type == kFLOAT || target_type == kDOUBLE);
@@ -1447,7 +1458,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     : dynamic_cast<const Planner::Scan*>(plan);
   CHECK(scan_plan);
   auto agg_infos = get_agg_name_and_exprs(plan);
-  auto device_type = must_run_on_cpu_ ? ExecutorDeviceType::CPU : device_type_in;
+  auto device_type = device_type_in;
   bool serialize_execution { false };
   for (const auto& agg_info : agg_infos) {
     // TODO(alex): ount distinct can't be executed on the GPU yet, punt to CPU
@@ -1557,7 +1568,15 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
             cd->columnType.get_compression() == kENCODING_NONE) {
           chunk_iterators.push_back(chunk->begin_iterator());
           auto& chunk_iter = chunk_iterators.back();
-          col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);
+          if (memory_level == Data_Namespace::CPU_LEVEL) {
+            col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);
+          } else {
+            CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
+            auto& data_mgr = cat.get_dataMgr();
+            auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), chosen_device_id);
+            copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), chosen_device_id);
+            col_buffers[it->second] = reinterpret_cast<int8_t*>(chunk_iter_gpu);
+          }
         } else {
           auto ab = chunk->get_buffer();
           CHECK(ab->getMemoryPtr());
@@ -2100,7 +2119,8 @@ Executor::CompilationResult Executor::compilePlan(
   return Executor::CompilationResult {
     device_type == ExecutorDeviceType::CPU
       ? optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_)
-      : optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_, is_group_by, cuda_mgr),
+      : optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_,
+                              is_group_by || uses_str_none_enc_, cuda_mgr),
     cgen_state_->getLiterals(),
     query_mem_desc
   };
@@ -2246,6 +2266,8 @@ declare void @agg_min_double_shared(i64*, double);
 declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_double_shared(i64*, double);
 declare i64 @ExtractFromTime(i32, i64);
+declare i64 @string_decode(i8*, i64);
+declare i1 @string_like(i8*, i32, i8*, i32, i8, i1);
 
 )";
 
@@ -2255,7 +2277,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                                                    const bool hoist_literals,
                                                    const ExecutorOptLevel opt_level,
                                                    llvm::Module* module,
-                                                   const bool is_group_by,
+                                                   const bool no_inline,
                                                    const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
   CHECK(cuda_mgr);
   const CodeCacheKey key { serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_) };
@@ -2269,14 +2291,16 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   get_group_value_func->setAttributes(llvm::AttributeSet {});
 
   bool row_func_not_inlined = false;
-  if (is_group_by) {
+  if (no_inline) {
     for (auto it = llvm::inst_begin(cgen_state_->row_func_), e = llvm::inst_end(cgen_state_->row_func_);
          it != e; ++it) {
       if (llvm::isa<llvm::CallInst>(*it)) {
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
-        if (get_gv_call.getCalledFunction()->getName() == "get_group_value") {
-          llvm::AttributeSet no_attributes;
-          cgen_state_->row_func_->setAttributes(no_attributes);
+        if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
+            get_gv_call.getCalledFunction()->getName() == "string_decode") {
+          llvm::AttributeSet no_inline;
+          no_inline = no_inline.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
+          cgen_state_->row_func_->setAttributes(no_inline);
           row_func_not_inlined = true;
           break;
         }
@@ -2289,11 +2313,17 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
+
+  for (const auto like_pattern : cgen_state_->like_patterns_) {
+    like_pattern->print(os);
+  }
+
   if (row_func_not_inlined) {
     llvm::AttributeSet no_attributes;
     cgen_state_->row_func_->setAttributes(no_attributes);
     cgen_state_->row_func_->print(os);
   }
+
   query_func->print(os);
 
   char nvvm_annotations[1024];
