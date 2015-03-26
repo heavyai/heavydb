@@ -607,7 +607,17 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
   return shared_mem_bytes;
 }
 
-GroupByAndAggregate::DiamondCodegen::DiamondCodegen(llvm::Value* cond, const Executor* executor) : executor_(executor) {
+GroupByAndAggregate::DiamondCodegen::DiamondCodegen(
+    llvm::Value* cond,
+    Executor* executor,
+    const bool chain_to_next,
+    DiamondCodegen* parent)
+  : executor_(executor)
+  , chain_to_next_(chain_to_next)
+  , parent_(parent) {
+  if (parent_) {
+    CHECK(!chain_to_next_);
+  }
   cond_true_ = llvm::BasicBlock::Create(
     LL_CONTEXT, "cond_true", ROW_FUNC);
   cond_false_ = llvm::BasicBlock::Create(
@@ -618,7 +628,11 @@ GroupByAndAggregate::DiamondCodegen::DiamondCodegen(llvm::Value* cond, const Exe
 }
 
 GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
-  LL_BUILDER.CreateBr(cond_false_);
+  if (parent_) {
+    LL_BUILDER.CreateBr(parent_->cond_false_);
+  } else if (chain_to_next_) {
+    LL_BUILDER.CreateBr(cond_false_);
+  }
   LL_BUILDER.SetInsertPoint(cond_false_);
 }
 
@@ -629,24 +643,41 @@ void GroupByAndAggregate::codegen(
   CHECK(filter_result);
 
   {
-    DiamondCodegen diamond_codegen(filter_result, executor_);
+    const bool is_group_by = !group_by_exprs(plan_).empty();
+
+    DiamondCodegen filter_cfg(filter_result, executor_, !is_group_by);
 
     auto query_mem_desc = getQueryMemoryDescriptor();
 
-    if (group_by_exprs(plan_).empty()) {
+    if (is_group_by) {
+      auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
+      {
+        std::unique_ptr<DiamondCodegen> nullcheck_cfg;
+        // Don't generate null checks if the group slot is guaranteed to be non-null,
+        // as it's the case for get_group_value_fast* family.
+        if (!query_mem_desc.usesGetGroupValueFast()) {
+          nullcheck_cfg.reset(new DiamondCodegen(
+            LL_BUILDER.CreateICmpNE(
+              agg_out_start_ptr,
+              llvm::ConstantPointerNull::get(llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0))),
+            executor_,
+            false,
+            &filter_cfg));
+        }
+        codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
+      }
+      LL_BUILDER.CreateRet(LL_INT(-1));
+    } else {
       auto arg_it = ROW_FUNC->arg_begin();
       std::vector<llvm::Value*> agg_out_vec;
       for (int32_t i = 0; i < get_agg_count(plan_); ++i) {
         agg_out_vec.push_back(arg_it++);
       }
       codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, device_type, hoist_literals);
-    } else {
-      auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
-      codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
     }
   }
 
-  LL_BUILDER.CreateRetVoid();
+  LL_BUILDER.CreateRet(LL_INT(0));
 }
 
 llvm::Value* GroupByAndAggregate::codegenGroupBy(

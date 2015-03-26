@@ -1971,7 +1971,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
   // generate the function
   auto ft = llvm::FunctionType::get(
-    llvm::Type::getVoidTy(context),
+    get_int_type(32, context),
     row_process_arg_types,
     false);
 
