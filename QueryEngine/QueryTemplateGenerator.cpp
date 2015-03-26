@@ -98,7 +98,7 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
     FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
   }
   FunctionType* FuncTy_5 = FunctionType::get(
-    /*Result=*/Type::getVoidTy(mod->getContext()),
+    /*Result=*/IntegerType::get(mod->getContext(), 32),
     /*Params=*/FuncTy_5_args,
     /*isVarArg=*/false);
 

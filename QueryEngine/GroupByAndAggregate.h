@@ -195,12 +195,17 @@ private:
   };
 
   struct DiamondCodegen {
-    DiamondCodegen(llvm::Value* cond, const Executor* executor);
+    DiamondCodegen(llvm::Value* cond,
+                   Executor* executor,
+                   const bool chain_to_next,
+                   DiamondCodegen* parent = nullptr);
     ~DiamondCodegen();
 
-    const Executor* executor_;
+    Executor* executor_;
     llvm::BasicBlock* cond_true_;
     llvm::BasicBlock* cond_false_;
+    const bool chain_to_next_;
+    DiamondCodegen* parent_;
   };
 
   llvm::Value* codegenGroupBy(
