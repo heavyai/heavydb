@@ -122,20 +122,25 @@ const ColumnDescriptor* get_column_descriptor(
 
 std::vector<ResultRow> Executor::executeSelectPlan(
     const Planner::Plan* plan,
-    const Planner::RootPlan* root_plan,
+    const int64_t limit,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel opt_level) {
+    const ExecutorOptLevel opt_level,
+    const Catalog_Namespace::Catalog& cat) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
-    return executeAggScanPlan(plan, hoist_literals, device_type, opt_level, root_plan->get_catalog());
+    if (limit) {
+      auto rows = executeAggScanPlan(plan, hoist_literals, device_type, opt_level, cat);
+      return std::vector<ResultRow>(rows.begin(), rows.begin() + std::min(limit, static_cast<int64_t>(rows.size())));
+    }
+    return executeAggScanPlan(plan, hoist_literals, device_type, opt_level, cat);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
-    return executeResultPlan(result_plan, hoist_literals, device_type, opt_level, root_plan->get_catalog());
+    return executeResultPlan(result_plan, hoist_literals, device_type, opt_level, cat);
   }
   const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
   if (sort_plan) {
-    return executeSortPlan(sort_plan, root_plan, hoist_literals, device_type, opt_level, root_plan->get_catalog());
+    return executeSortPlan(sort_plan, limit, hoist_literals, device_type, opt_level, cat);
   }
   CHECK(false);
 }
@@ -158,8 +163,8 @@ std::vector<ResultRow> Executor::execute(
   std::lock_guard<std::mutex> lock(execute_mutex_);
   switch (stmt_type) {
   case kSELECT:
-    return executeSelectPlan(root_plan->get_plan(), root_plan,
-      hoist_literals, device_type, opt_level);
+    return executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
+      hoist_literals, device_type, opt_level, root_plan->get_catalog());
   case kINSERT: {
     executeSimpleInsert(root_plan);
     return {};
@@ -1378,13 +1383,13 @@ std::vector<ResultRow> Executor::executeResultPlan(
 
 std::vector<ResultRow> Executor::executeSortPlan(
     const Planner::Sort* sort_plan,
-    const Planner::RootPlan* root_plan,
+    const int64_t limit,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const Catalog_Namespace::Catalog&) {
-  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), root_plan,
-    hoist_literals, device_type, opt_level);
+    const Catalog_Namespace::Catalog& cat) {
+  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0,
+    hoist_literals, device_type, opt_level, cat);
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
   // TODO(alex): check the semantics for order by multiple columns
@@ -1421,12 +1426,9 @@ std::vector<ResultRow> Executor::executeSortPlan(
     };
     std::sort(rows_to_sort.begin(), rows_to_sort.end(), compare);
   }
-  auto limit = root_plan->get_limit();
-  if (limit) {
-    limit = std::min(limit, static_cast<int64_t>(rows_to_sort.size()));
-  }
   return limit
-    ? decltype(rows_to_sort)(rows_to_sort.begin(), rows_to_sort.begin() + limit)
+    ? decltype(rows_to_sort)(rows_to_sort.begin(), rows_to_sort.begin() +
+      std::min(limit, static_cast<int64_t>(rows_to_sort.size())))
     : rows_to_sort;
 }
 

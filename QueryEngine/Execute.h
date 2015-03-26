@@ -103,10 +103,11 @@ private:
   llvm::ConstantInt* inlineIntNull(const SQLTypes);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
-    const Planner::RootPlan* root_plan,
+    const int64_t limit,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel);
+    const ExecutorOptLevel,
+    const Catalog_Namespace::Catalog&);
   std::vector<ResultRow> executeAggScanPlan(
     const Planner::Plan* plan,
     const bool hoist_literals,
@@ -121,7 +122,7 @@ private:
     const Catalog_Namespace::Catalog&);
   std::vector<ResultRow> executeSortPlan(
     const Planner::Sort* sort_plan,
-    const Planner::RootPlan* root_plan,
+    const int64_t limit,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
