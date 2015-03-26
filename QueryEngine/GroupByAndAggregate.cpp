@@ -644,29 +644,29 @@ void GroupByAndAggregate::codegen(
 
   {
     const bool is_group_by = !group_by_exprs(plan_).empty();
-
-    DiamondCodegen filter_cfg(filter_result, executor_, !is_group_by);
-
     auto query_mem_desc = getQueryMemoryDescriptor();
+
+    DiamondCodegen filter_cfg(filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast());
 
     if (is_group_by) {
       auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
-      {
-        std::unique_ptr<DiamondCodegen> nullcheck_cfg;
+      if (query_mem_desc.usesGetGroupValueFast()) {
         // Don't generate null checks if the group slot is guaranteed to be non-null,
         // as it's the case for get_group_value_fast* family.
-        if (!query_mem_desc.usesGetGroupValueFast()) {
-          nullcheck_cfg.reset(new DiamondCodegen(
+        codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
+      } else {
+        {
+          DiamondCodegen nullcheck_cfg(
             LL_BUILDER.CreateICmpNE(
               agg_out_start_ptr,
               llvm::ConstantPointerNull::get(llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0))),
             executor_,
             false,
-            &filter_cfg));
+            &filter_cfg);
+          codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
         }
-        codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
+        LL_BUILDER.CreateRet(LL_INT(-1));
       }
-      LL_BUILDER.CreateRet(LL_INT(-1));
     } else {
       auto arg_it = ROW_FUNC->arg_begin();
       std::vector<llvm::Value*> agg_out_vec;
