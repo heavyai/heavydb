@@ -235,7 +235,6 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
   {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
     table_desc->fragmenter->insertData(ins_data);
-    catalog.get_dataMgr().checkpoint();
   }
   for (const auto& import_buff : import_buffers) {
     import_buff->flush();
@@ -299,6 +298,7 @@ Importer::import()
       */
     }
   }
+  catalog.get_dataMgr().checkpoint();
 
   free(buffer[0]);
   buffer[0] = nullptr;
