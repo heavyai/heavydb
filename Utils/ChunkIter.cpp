@@ -4,9 +4,8 @@
  */
 
 #include "ChunkIter.h"
-#include "../DataMgr/Encoder.h" // just for StringOffsetT
 
-static void
+DEVICE static void
 decompress(const SQLTypeInfo &ti, int8_t *compressed, VarlenDatum *result, Datum *datum)
 {
   result->is_null = false;
@@ -113,13 +112,13 @@ ChunkIter_reset(ChunkIter *it)
   it->current_pos = it->start_pos;
 }
 
-void
+DEVICE void
 ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is_end)
 {
   if (it->current_pos >= it->end_pos) {
     *is_end = true;
     result->length = 0;
-    result->pointer = nullptr;
+    result->pointer = NULL;
     result->is_null = true;
     return;
   }
@@ -146,13 +145,13 @@ ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is
 }
 
 // @brief get nth element in Chunk.  Does not change ChunkIter state
-void
+DEVICE void
 ChunkIter_get_nth(ChunkIter *it, int n, bool uncompress, VarlenDatum *result, bool *is_end)
 {
   if (n >= it->num_elems || n < 0) {
     *is_end = true;
     result->length = 0;
-    result->pointer = nullptr;
+    result->pointer = NULL;
     result->is_null = true;
     return;
   }

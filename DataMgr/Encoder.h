@@ -10,8 +10,6 @@
 #include <stdexcept>
 #include <limits>
 
-typedef int32_t StringOffsetT;
-
 namespace Data_Namespace {
     class AbstractBuffer;
 }

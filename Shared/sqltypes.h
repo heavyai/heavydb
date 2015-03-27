@@ -8,7 +8,7 @@
 #ifndef SQLTYPES_H
 #define SQLTYPES_H
 
-#include <cstdint>
+#include <stdint.h>
 #include <ctime>
 #include <cfloat>
 #include <string>
@@ -46,7 +46,9 @@ typedef union {
 	std::time_t timeval;
 	float floatval;
 	double doubleval;
+#ifndef __CUDACC__
 	std::string *stringval; // string value
+#endif
 } Datum;
 
 struct VarlenDatum {
@@ -54,10 +56,11 @@ struct VarlenDatum {
 	int8_t *pointer;
 	bool is_null;
 
-	VarlenDatum() : length(0), pointer(nullptr), is_null(true) {}
+	VarlenDatum() : length(0), pointer(NULL), is_null(true) {}
 	VarlenDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n) {}
 };
 
+#ifndef __CUDACC__
 union DataBlockPtr {
 	int8_t *numbersPtr;
 	std::vector<std::string> *stringsPtr;
@@ -65,6 +68,7 @@ union DataBlockPtr {
   std::vector<std::vector<int16_t>> *tok16dictPtr; // double byte tokenized dictionary encoding array
   std::vector<std::vector<int32_t>> *tok32dictPtr; // 4-byte tokenized dictionary encoding array
 };
+#endif
 
 // must not change because these values persist in catalogs.
 enum EncodingType {
@@ -83,6 +87,12 @@ enum EncodingType {
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
 
+#ifdef __CUDACC__
+#define DEVICE __device__
+#else
+#define DEVICE
+#endif
+
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
 // length, precision, scale, etc.
@@ -93,13 +103,13 @@ class SQLTypeInfo {
     explicit SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
     SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0), elem_size(0) {}
 
-    inline SQLTypes get_type() const { return type; }
+    DEVICE inline SQLTypes get_type() const { return type; }
     inline int get_dimension() const { return dimension; }
     inline int get_precision() const { return dimension; }
     inline int get_scale() const { return scale; }
     inline bool get_notnull() const { return notnull; }
-    inline EncodingType get_compression() const { return compression; }
-    inline int get_comp_param() const { return comp_param; }
+    DEVICE inline EncodingType get_compression() const { return compression; }
+    DEVICE inline int get_comp_param() const { return comp_param; }
     inline int get_size() const { return size; }
     inline int get_elem_size() const { return elem_size; }
     inline void set_type(SQLTypes t) { type = t; }
@@ -112,8 +122,10 @@ class SQLTypeInfo {
     inline void set_elem_size(int s) { elem_size = s; }
     inline void set_compression(EncodingType c) { compression = c; }
     inline void set_comp_param(int p) { comp_param = p; }
+#ifndef __CUDACC__
     inline std::string get_type_name() const { return type_name[(int)type]; }
     inline std::string get_compression_name() const { return comp_name[(int)compression]; }
+#endif
     inline bool is_string() const { return IS_STRING(type); }
     inline bool is_integer() const { return IS_INTEGER(type); }
     inline bool is_fp() const { return type == kFLOAT || type == kDOUBLE; }
@@ -123,13 +135,13 @@ class SQLTypeInfo {
 		inline bool is_varlen() const { return IS_STRING(type) && compression != kENCODING_DICT; }
 
 
-    inline bool operator!=(const SQLTypeInfo &rhs) const {
+    DEVICE inline bool operator!=(const SQLTypeInfo &rhs) const {
       return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || comp_param != rhs.get_comp_param();
     }
-    inline bool operator==(const SQLTypeInfo &rhs) const {
+    DEVICE inline bool operator==(const SQLTypeInfo &rhs) const {
       return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && comp_param == rhs.get_comp_param();
     }
-    inline void operator=(const SQLTypeInfo &rhs) {
+    DEVICE inline void operator=(const SQLTypeInfo &rhs) {
       type = rhs.get_type();
       dimension = rhs.get_dimension();
       scale = rhs.get_scale();
@@ -139,7 +151,7 @@ class SQLTypeInfo {
       size = rhs.get_size();
       elem_size = rhs.get_elem_size();
     }
-    inline bool is_castable(const SQLTypeInfo &new_type_info) const {
+    DEVICE inline bool is_castable(const SQLTypeInfo &new_type_info) const {
       // can always cast between the same type but different precision/scale/encodings
       if (type == new_type_info.get_type())
         return true;
@@ -169,8 +181,10 @@ class SQLTypeInfo {
     int comp_param; // compression parameter when applicable for certain schemes
     int size; // size of the type in bytes.  -1 for variable size
     int elem_size; // size of array elements in bytes, 1, 2 or 4.  for internal use for tokenized dictionary encoding only.
+#ifndef __CUDACC__
     static std::string type_name[kSQLTYPE_LAST];
     static std::string comp_name[kENCODING_LAST];
+#endif
 		inline int get_storage_size() const {
 			switch (type) {
 				case kBOOLEAN:
@@ -278,10 +292,12 @@ class SQLTypeInfo {
 		}
 };
 
+#ifndef __CUDACC__
 Datum
 StringToDatum(const std::string &s, SQLTypeInfo &ti);
 std::string
 DatumToString(Datum d, const SQLTypeInfo &ti);
+#endif
 
 #include "../QueryEngine/ExtractFromTime.h"
 
@@ -290,5 +306,7 @@ DatumToString(Datum d, const SQLTypeInfo &ti);
 #define NULL_BIGINT     INT64_MIN
 #define NULL_FLOAT      FLT_MIN
 #define NULL_DOUBLE     DBL_MIN
+
+typedef int32_t StringOffsetT;
 
 #endif // SQLTYPES_H
