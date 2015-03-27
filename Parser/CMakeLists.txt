@@ -55,5 +55,5 @@ SET (parser_source_files
 )
 
 ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
-TARGET_LINK_LIBRARIES (Parser Shared)
+TARGET_LINK_LIBRARIES (Parser Shared CsvImport)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})

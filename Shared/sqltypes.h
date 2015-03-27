@@ -301,6 +301,7 @@ DatumToString(Datum d, const SQLTypeInfo &ti);
 
 #include "../QueryEngine/ExtractFromTime.h"
 
+#define NULL_BOOLEAN    INT8_MIN
 #define NULL_SMALLINT   INT16_MIN
 #define NULL_INT        INT32_MIN
 #define NULL_BIGINT     INT64_MIN

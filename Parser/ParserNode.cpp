@@ -16,6 +16,7 @@
 #include "../Planner/Planner.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Import/Importer.h"
+#include "../Shared/measure.h"
 #include "parser.h"
 
 namespace Parser {
@@ -1412,7 +1413,7 @@ namespace Parser {
       throw std::runtime_error("Table " + *table + " does not exist.");
     if (!boost::filesystem::exists(*file_path))
       throw std::runtime_error("File " + *file_path + " does not exist.");
-    CopyParams copy_params;
+    Importer_NS::CopyParams copy_params;
     if (options != nullptr) {
       for (auto p : *options) {
         if (boost::iequals(*p->get_name(), "delimiter")) {
@@ -1456,10 +1457,11 @@ namespace Parser {
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
     }
-    /*
-    Importer importer(catalog, td, file_path, copy_params);
-    importer.import();
-    */
+    Importer_NS::Importer importer(catalog, td, *file_path, copy_params);
+    auto ms = measure<>::execution([&]() {
+      importer.import();
+    });
+    std::cout << "Total Import Time: " << (double)ms/1000.0 << " Seconds." << std::endl;
   }
 
   void

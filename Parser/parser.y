@@ -98,6 +98,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| refresh_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
+  | copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_user_statement { $<nodeval>$ = $<nodeval>1; }
