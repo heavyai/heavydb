@@ -1550,6 +1550,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       if (chosen_device_type == ExecutorDeviceType::GPU) {
         gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
       }
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks;
       for (const int col_id : col_global_ids) {
         auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
         CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
@@ -1564,6 +1565,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           chosen_device_id,
           chunk_meta_it->second.numBytes,
           chunk_meta_it->second.numElements);
+        chunks.push_back(chunk);
         if (cd->columnType.is_string() &&
             cd->columnType.get_compression() == kENCODING_NONE) {
           chunk_iterators.push_back(chunk->begin_iterator());
