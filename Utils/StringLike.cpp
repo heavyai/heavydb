@@ -16,7 +16,7 @@ enum LikeStatus {
   kLIKE_ERROR // error condition
 };
 
-static int
+DEVICE static int
 lowercase(char c)
 {
   if ('A' <= c & c <= 'Z')
@@ -25,9 +25,12 @@ lowercase(char c)
 }
 
 // internal recursive function for performing LIKE matching.
-static LikeStatus
+DEVICE static LikeStatus
 string_like_match(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
 {
+#ifdef __CUDACC__
+  str_len = -str_len;  // TODO(alex): remove this hack once ResultRow is fixed
+#endif
   const char *s = str;
   int slen = str_len;
   const char *p = pattern;
@@ -107,8 +110,8 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
  * @return true if str matchs pattern, false otherwise.  error condition
  * not handled for now.
  */
-extern "C" bool
-string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
+extern "C" DEVICE
+bool string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
 {
   // @TODO(wei/alex) add runtime error handling
   LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, is_ilike);

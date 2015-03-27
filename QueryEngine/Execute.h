@@ -180,7 +180,7 @@ private:
                                            const bool hoist_literals,
                                            const ExecutorOptLevel,
                                            llvm::Module*,
-                                           const bool is_group_by,
+                                           const bool no_inline,
                                            const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
   int8_t warpSize() const;
@@ -284,6 +284,7 @@ private:
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
+    std::vector<llvm::Value*> like_patterns_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {
@@ -315,7 +316,7 @@ private:
   std::unique_ptr<PlanState> plan_state_;
 
   bool is_nested_;
-  bool must_run_on_cpu_;
+  bool uses_str_none_enc_;
 
   static const int max_gpu_count { 8 };
   std::mutex gpu_exec_mutex_[max_gpu_count];
@@ -340,6 +341,7 @@ private:
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
+  friend class ResultRow;
 };
 
 #endif // QUERYENGINE_EXECUTE_H

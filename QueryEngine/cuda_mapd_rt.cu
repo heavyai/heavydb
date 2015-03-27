@@ -417,3 +417,14 @@ __device__  tm* gmtime_r_cuda(const time_t *tim_p, tm* res) {
 
 #include "ExtractFromTime.cpp"
 #include "../Utils/ChunkIter.cpp"
+#include "../Utils/StringLike.cpp"
+
+extern "C"
+__device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
+  // TODO(alex): de-dup, the x64 version is basically identical
+  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  VarlenDatum vd;
+  bool is_end;
+  ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
+  return (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(-vd.length) << 48);
+}

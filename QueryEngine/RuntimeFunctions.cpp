@@ -335,6 +335,16 @@ int64_t* get_group_value_fast_keyless_semiprivate(int64_t* groups_buffer,
   return groups_buffer + agg_col_count * (warp_size * (key - min_key) + thread_warp_idx);
 }
 
+extern "C" __attribute__((always_inline))
+int8_t* extract_str_ptr(const uint64_t str_and_len) {
+  return reinterpret_cast<int8_t*>(str_and_len & 0xffffffffffff);
+}
+
+extern "C" __attribute__((always_inline))
+int32_t extract_str_len(const uint64_t str_and_len) {
+  return static_cast<int64_t>(str_and_len) >> 48;
+}
+
 #ifdef __clang__
 #include "ExtractFromTime.cpp"
 #include "../Utils/StringLike.cpp"

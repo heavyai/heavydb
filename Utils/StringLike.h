@@ -10,6 +10,12 @@
 #ifndef STRING_LIKE_H
 #define STRING_LIKE_H
 
+#ifdef __CUDACC__
+#define DEVICE __device__
+#else
+#define DEVICE
+#endif
+
 /*
  * @brief string_like performs the SQL LIKE and ILIKE operation
  * @param str string argument to be matched against pattern.  single-byte 
@@ -22,7 +28,8 @@
  * @return true if str matchs pattern, false otherwise.  error condition
  * not handled for now.
  */
-extern "C" bool
+extern "C"
+DEVICE bool
 string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike);
 
 
