@@ -962,13 +962,15 @@ std::vector<int64_t*> launch_query_cpu_code(
       const int64_t* num_rows,
       const int64_t* init_agg_value,
       int64_t** out,
-      int64_t** out2);
+      int64_t** out2,
+      int32_t* error_code);
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
-        &out_vec[0], nullptr);
+        &out_vec[0], nullptr, nullptr);
     } else {
+      int32_t error_code { 0 };
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
-        &group_by_buffers[0], &small_group_by_buffers[0]);
+        &group_by_buffers[0], &small_group_by_buffers[0], &error_code);
     }
   } else {
     typedef void (*agg_query)(
@@ -976,12 +978,16 @@ std::vector<int64_t*> launch_query_cpu_code(
       const int64_t* num_rows,
       const int64_t* init_agg_value,
       int64_t** out,
-      int64_t** out2);
+      int64_t** out2,
+      int32_t* error_code);
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0], nullptr);
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0],
+        nullptr, nullptr);
     } else {
+      int32_t error_code { 0 };
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0],
-        &group_by_buffers[0], &small_group_by_buffers[0]);
+        &group_by_buffers[0], &small_group_by_buffers[0], &error_code);
+      CHECK(!error_code);
     }
   }
   return out_vec;
@@ -2083,7 +2089,11 @@ Executor::CompilationResult Executor::compilePlan(
           auto new_bb = bb_it->splitBasicBlock(next_inst_it);
           auto& br_instr = bb_it->back();
           llvm::IRBuilder<> ir_builder(&br_instr);
-          auto err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, inst_it, ll_int(int32_t(0)));
+          llvm::Value* err_lv = inst_it;
+          auto& error_code_arg = query_func->getArgumentList().back();
+          err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("merge_error_code"),
+            std::vector<llvm::Value*> { err_lv, &error_code_arg });
+          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, err_lv, ll_int(int32_t(0)));
           auto& last_bb = query_func->back();
           llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(&last_bb, new_bb, err_lv));
           done_splitting = true;
@@ -2270,6 +2280,7 @@ declare void @agg_id_double_shared(i64*, double);
 declare i64 @ExtractFromTime(i32, i64);
 declare i64 @string_decode(i8*, i64);
 declare i1 @string_like(i8*, i32, i8*, i32, i8, i1);
+declare i32 @merge_error_code(i32, i32*);
 
 )";
 
@@ -2338,7 +2349,8 @@ R"(
                       i64*,
                       i64*,
                       i64**,
-                      i64**)* @%s, metadata !"kernel", i32 1}
+                      i64**,
+                      i32*)* @%s, metadata !"kernel", i32 1}
 )" :
 R"(
 !nvvm.annotations = !{!0}
@@ -2346,7 +2358,8 @@ R"(
                       i64*,
                       i64*,
                       i64**,
-                      i64**)* @%s, metadata !"kernel", i32 1}
+                      i64**,
+                      i32*)* @%s, metadata !"kernel", i32 1}
 )", func_name.c_str());
 
   auto cuda_llir = cuda_llir_prologue + ss.str() +

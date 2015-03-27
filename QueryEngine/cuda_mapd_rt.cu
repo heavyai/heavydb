@@ -428,3 +428,12 @@ __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
   return (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(-vd.length) << 48);
 }
+
+extern "C"
+__device__ int32_t merge_error_code(const int32_t err_code, int32_t* merged_err_code) {
+  if (err_code) {
+    *merged_err_code = err_code;
+  }
+  __syncthreads();
+  return *merged_err_code;
+}

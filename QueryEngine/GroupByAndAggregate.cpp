@@ -267,6 +267,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     copy_to_gpu(data_mgr, init_agg_vals_dev_ptr, &init_agg_vals[0],
       init_agg_vals.size() * sizeof(int64_t), device_id);
   }
+  int32_t error_code { 0 };
+  CUdeviceptr error_code_dev_ptr { 0 };
   {
     const unsigned block_size_y = 1;
     const unsigned block_size_z = 1;
@@ -277,6 +279,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id);
+      error_code_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(error_code), device_id);
+      copy_to_gpu(data_mgr, error_code_dev_ptr, &error_code, sizeof(error_code), device_id);
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
@@ -284,7 +288,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
           &gpu_query_mem.group_by_buffers.first,
-          &gpu_query_mem.small_group_by_buffers.first
+          &gpu_query_mem.small_group_by_buffers.first,
+          &error_code_dev_ptr
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
@@ -296,7 +301,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
           &gpu_query_mem.group_by_buffers.first,
-          &gpu_query_mem.small_group_by_buffers.first
+          &gpu_query_mem.small_group_by_buffers.first,
+          &error_code_dev_ptr
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
@@ -304,6 +310,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        nullptr, kernel_params, nullptr));
       }
       copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
+      copy_from_gpu(data_mgr, &error_code, error_code_dev_ptr, sizeof(error_code), device_id);
     } else {
       std::vector<CUdeviceptr> out_vec_dev_buffers;
       const size_t agg_col_count { init_agg_vals.size() };
@@ -323,7 +330,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
           &out_vec_dev_ptr,
-          &unused_dev_ptr
+          &unused_dev_ptr,
+          &error_code_dev_ptr
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,
@@ -334,7 +342,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &num_rows_dev_ptr,
           &init_agg_vals_dev_ptr,
           &out_vec_dev_ptr,
-          &unused_dev_ptr
+          &unused_dev_ptr,
+          &error_code_dev_ptr
         };
         checkCudaErrors(cuLaunchKernel(cu_func, grid_size_x, grid_size_y, grid_size_z,
                                        block_size_x, block_size_y, block_size_z,

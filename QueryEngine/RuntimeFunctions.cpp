@@ -194,6 +194,14 @@ int8_t thread_warp_idx(const int8_t warp_sz) {
   abort();
 }
 
+extern "C" __attribute__((always_inline))
+int32_t merge_error_code(const int32_t err_code, int32_t* merged_err_code) {
+  if (err_code) {
+    *merged_err_code = err_code;
+  }
+  return err_code;
+}
+
 // group by helpers
 
 extern "C" __attribute__((noinline))

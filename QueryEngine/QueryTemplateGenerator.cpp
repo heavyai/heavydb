@@ -157,6 +157,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   PointerType* PointerTy_10 = PointerType::get(PointerTy_6, 0);
   FuncTy_8_args.push_back(PointerTy_10);
   FuncTy_8_args.push_back(PointerTy_10);
+  FuncTy_8_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
 
   FunctionType* FuncTy_8 = FunctionType::get(
     /*Result=*/Type::getVoidTy(mod->getContext()),
@@ -226,6 +227,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   ptr_out->setName("out");
   Value* ptr_unused = args++;
   ptr_unused->setName("unused");
+  Value* ptr_error_code = args++;
+  ptr_error_code->setName("unused_error_code");
 
   BasicBlock* label_120 = BasicBlock::Create(mod->getContext(), "", func_query_template, 0);
   BasicBlock* label__lr_ph = BasicBlock::Create(mod->getContext(), ".lr.ph", func_query_template, 0);
@@ -377,6 +380,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
 
   FuncTy_12_args.push_back(PointerTy_13);
   FuncTy_12_args.push_back(PointerTy_13);
+  FuncTy_12_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
+
   FunctionType* FuncTy_12 = FunctionType::get(
     /*Result=*/Type::getVoidTy(mod->getContext()),
     /*Params=*/FuncTy_12_args,
@@ -457,6 +462,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   ptr_group_by_buffers->setName("group_by_buffers");
   Value* ptr_small_groups_buffer = args++;
   ptr_small_groups_buffer->setName("small_groups_buffer");
+  Value* ptr_error_code = args++;
+  ptr_error_code->setName("error_code");
 
   BasicBlock* label_146 = BasicBlock::Create(mod->getContext(), "", func_query_group_by_template, 0);
   BasicBlock* label__lr_ph_147 = BasicBlock::Create(mod->getContext(), ".lr.ph", func_query_group_by_template, 0);
