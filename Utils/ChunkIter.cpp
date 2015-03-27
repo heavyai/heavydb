@@ -126,8 +126,8 @@ ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is
     
   if (it->skip_size > 0) {
     // for fixed-size
-    if (uncompress && it->type_info->get_compression() != kENCODING_NONE) {
-      decompress(*it->type_info, it->current_pos, result, &it->datum);
+    if (uncompress && it->type_info.get_compression() != kENCODING_NONE) {
+      decompress(it->type_info, it->current_pos, result, &it->datum);
     } else {
       result->length = it->skip_size;
       result->pointer = it->current_pos;
@@ -160,8 +160,8 @@ ChunkIter_get_nth(ChunkIter *it, int n, bool uncompress, VarlenDatum *result, bo
   if (it->skip_size > 0) {
     // for fixed-size
     int8_t *current_pos = it->start_pos + n * it->skip_size;
-    if (uncompress && it->type_info->get_compression() != kENCODING_NONE) {
-      decompress(*it->type_info, current_pos, result, &it->datum);
+    if (uncompress && it->type_info.get_compression() != kENCODING_NONE) {
+      decompress(it->type_info, current_pos, result, &it->datum);
     } else {
       result->length = it->skip_size;
       result->pointer = current_pos;

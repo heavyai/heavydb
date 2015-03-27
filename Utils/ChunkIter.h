@@ -9,7 +9,7 @@
 #include "../Shared/sqltypes.h"
 
 struct ChunkIter {
-    const SQLTypeInfo *type_info;
+    SQLTypeInfo type_info;
     int8_t *second_buf;
 		int8_t *current_pos;
 		int8_t *start_pos;

@@ -156,7 +156,7 @@ namespace Chunk_NS {
   Chunk::begin_iterator(int start_idx, int skip) const
   {
     ChunkIter it;
-    it.type_info = &column_desc->columnType;;
+    it.type_info = column_desc->columnType;
     it.skip = skip;
     it.skip_size = column_desc->columnType.get_size();
     if (it.skip_size < 0) { // if it's variable length
