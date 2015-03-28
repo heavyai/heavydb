@@ -2370,7 +2370,7 @@ R"(
 
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
     auto gpu_context = new GpuCompilationContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a",
-      device_id, cuda_mgr);
+      device_id, cuda_mgr, block_size_x_);
     auto native_code = gpu_context->kernel();
     CHECK(native_code);
     native_functions.push_back(native_code);

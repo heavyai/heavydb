@@ -10,7 +10,8 @@ public:
                         const std::string& func_name,
                         const std::string& lib_path,
                         const int device_id,
-                        const void* cuda_mgr);
+                        const void* cuda_mgr,
+                        const unsigned block_size_x);
   ~GpuCompilationContext();
   CUfunction kernel() {
     return kernel_;
