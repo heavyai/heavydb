@@ -39,30 +39,95 @@ Importer::~Importer()
 }
 
 static const char *
-get_row(const char *buf, const char *buf_end, const CopyParams &copy_params, bool is_begin, std::vector<std::string> &row)
+get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const CopyParams &copy_params, bool is_begin, std::vector<std::string> &row)
 {
   const char *field = buf;
   const char *p;
   bool in_quote = false;
-  for (p = buf; p < buf_end && !in_quote && *p != copy_params.line_delim; p++) {
-    if (*p == copy_params.quote) {
-      if (is_begin || *(p - 1) != copy_params.escape)
-        in_quote = !in_quote;
+  bool has_escape = false;
+  bool strip_quotes = false;
+  for (p = buf; p < buf_end && (in_quote || *p != copy_params.line_delim); p++) {
+    if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
+      p++;
+      has_escape = true;
+    } else if (*p == copy_params.quote) {
+      in_quote = !in_quote;
+      if (in_quote)
+        strip_quotes = true;
     } else if (*p == copy_params.delimiter) {
       if (!in_quote) {
-        std::string s(field, p - field);
-        row.push_back(s);
+        if (!has_escape && !strip_quotes) {
+          std::string s(field, p - field);
+          row.push_back(s);
+        } else {
+          char field_buf[p - field + 1];
+          int j = 0, i = 0;
+          if (strip_quotes)
+            i++;
+          for (; i < p - field; i++, j++) {
+            if (has_escape && field[i] == copy_params.escape && field[i+1] == copy_params.quote) {
+              field_buf[j] = copy_params.quote;
+              i++;
+          } else
+            field_buf[j] = field[i];
+          }
+          if (strip_quotes)
+            field_buf[j - 1] = '\0';
+          else
+            field_buf[j] = '\0';
+          row.push_back(std::string(field_buf));
+        }
         field = p + 1;
+        has_escape = false;
+        strip_quotes = false;
       }
     } 
   }
-  row.push_back(std::string(field, p - field));
-  /*
-  std::cout << "Row: ";
-  for (auto p : row)
-    std::cout << p << ", ";
-  std::cout << std::endl;
-  */
+  if (*p == copy_params.line_delim) {
+    row.push_back(std::string(field, p - field));
+    return p + 1;
+  }
+  for (; p < entire_buf_end && (in_quote || *p != copy_params.line_delim); p++) {
+    if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
+      p++;
+      has_escape = true;
+    } else if (*p == copy_params.quote) {
+      in_quote = !in_quote;
+      if (in_quote)
+        strip_quotes = true;
+    } else if (*p == copy_params.delimiter) {
+      if (!in_quote) {
+        if (!has_escape) {
+          std::string s(field, p - field);
+          row.push_back(s);
+        } else {
+          char field_buf[p - field + 1];
+          int j = 0, i = 0;
+          if (strip_quotes)
+            i++;
+          for (; i < p - field; i++, j++) {
+            if (has_escape && field[i] == copy_params.escape && field[i+1] == copy_params.quote) {
+              field_buf[j] = copy_params.quote;
+              i++;
+          } else
+            field_buf[j] = field[i];
+          }
+          if (strip_quotes)
+            field_buf[j - 1] = '\0';
+          else
+            field_buf[j] = '\0';
+          row.push_back(std::string(field_buf));
+        }
+        field = p + 1;
+        has_escape = false;
+        strip_quotes = false;
+      }
+    } 
+  }
+  if (*p == copy_params.line_delim) {
+    row.push_back(std::string(field, p - field));
+    return p + 1;
+  }
   /*
   @TODO(wei) do error handling
   */
@@ -88,16 +153,17 @@ find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &c
 }
 
 static void
-import_thread(const Importer &importer, const char *buffer, size_t begin_pos, size_t end_pos)
+import_thread(const Importer *importer, const char *buffer, size_t begin_pos, size_t end_pos, size_t total_size)
 {
-  const CopyParams &copy_params = importer.get_copy_params();
-  const std::list<const ColumnDescriptor*> &col_descs = importer.get_column_descs();
+  const CopyParams &copy_params = importer->get_copy_params();
+  const std::list<const ColumnDescriptor*> &col_descs = importer->get_column_descs();
   size_t begin = find_beginning(buffer, begin_pos, end_pos, copy_params);
   const char *thread_buf = buffer + begin_pos + begin;
   const char *thread_buf_end = buffer + end_pos;
+  const char *buf_end = buffer + total_size;
   std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
-  for (const auto cd : importer.get_column_descs()) {
-    import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, importer.get_string_dict(cd))));
+  for (const auto cd : importer->get_column_descs()) {
+    import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, importer->get_string_dict(cd))));
   }
   size_t row_count = 0;
   std::vector<std::string> row;
@@ -106,9 +172,18 @@ import_thread(const Importer &importer, const char *buffer, size_t begin_pos, si
       decltype(row) empty;
       row.swap(empty);
     }
-    p = get_row(p, thread_buf_end, copy_params, p == thread_buf, row);
+    p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, row);
+    /*
+    std::cout << "Row " << row_count << " : ";
+    for (auto p : row)
+      std::cout << p << ", ";
+    std::cout << std::endl;
+    */
     if (row.size() != col_descs.size()) {
-      std::cerr << "incorrect rowsize." << std::endl;
+      std::cerr << "Incorrect rowsize Row: ";
+      for (auto p : row)
+        std::cout << p << ", ";
+      std::cout << std::endl;
       continue;
     }
     try {
@@ -185,7 +260,7 @@ import_thread(const Importer &importer, const char *buffer, size_t begin_pos, si
     }
   }
   if (row_count > 0) {
-    importer.load(import_buffers, row_count);
+    importer->load(import_buffers, row_count);
     std::cout << row_count << " rows inserted." << std::endl;
   }
 }
@@ -196,10 +271,10 @@ find_end(const char *buffer, size_t size, const CopyParams &copy_params)
   bool in_quote = false;
   int i;
   for (i = size - 1; i >= 0 && (buffer[i] != copy_params.line_delim || in_quote); i--) {
-    if (!in_quote && buffer[i] == copy_params.quote && (i == 0 || buffer[i - 1] != copy_params.escape))
-      in_quote = true;
-    else if (in_quote && buffer[i] == copy_params.quote && i > 0 && buffer[i - 1] != copy_params.escape)
-      in_quote = false;
+    if (i > 0 && buffer[i - 1] == copy_params.escape && buffer[i] == copy_params.quote)
+      i--;
+    else if (buffer[i] == copy_params.quote)
+      in_quote = !in_quote;
   }
   // @TODO(wei) check for error of unmatched quote
   return i + 1;
@@ -273,29 +348,27 @@ Importer::import()
       end_pos = size;
     else
       end_pos = find_end(buffer[which_buf], size, copy_params);
-    {
-      /*
-      std::vector<std::unique_ptr<std::thread>> gc_threads;
-      std::vector<std::thread*> threads;
+    if (max_threads == 1) {
+      import_thread(this, buffer[which_buf], 0, end_pos, end_pos);
+      current_pos += end_pos;
+      size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
+      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
+        eof_reached = true;
+    } else {
+      std::vector<std::thread> threads;
       for (int i = 0; i < max_threads; i++) {
         size_t begin = i * (end_pos / max_threads);
         size_t end = (i < max_threads - 1) ? (i + 1) * (end_pos / max_threads) : end_pos;
-        std::thread *thd = new std::thread(import_thread, *this, buffer[which_buf], begin, end);
-        threads.push_back(thd);
-        gc_threads.push_back(std::unique_ptr<std::thread>(thd));
+        threads.push_back(std::thread(import_thread, this, buffer[which_buf], begin, end, end_pos));
       }
-      */
-      import_thread(*this, buffer[which_buf], 0, end_pos);
       current_pos += end_pos;
       which_buf = (which_buf + 1) % 2;
       (void)fseek(p_file, current_pos, SEEK_SET);
       size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
       if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
         eof_reached = true;
-      /*
-      for (auto p : threads)
-        p->join();
-      */
+      for (auto& p : threads)
+        p.join();
     }
   }
   catalog.get_dataMgr().checkpoint();
