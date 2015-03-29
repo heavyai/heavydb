@@ -261,8 +261,9 @@ struct CopyParams {
   char quote;
   char escape;
   char line_delim;
+  int threads;
 
-  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"'), line_delim('\n') {}
+  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"'), line_delim('\n'), threads(1) {}
 };
 
 #define IMPORT_FILE_BUFFER_SIZE   100000000

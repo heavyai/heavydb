@@ -12,6 +12,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include "../Shared/measure.h"
 #include "Importer.h"
 
 namespace Importer_NS {
@@ -155,6 +156,9 @@ find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &c
 static void
 import_thread(const Importer *importer, const char *buffer, size_t begin_pos, size_t end_pos, size_t total_size)
 {
+  size_t row_count = 0;
+  auto load_ms = measure<>::execution([]() {});
+  auto ms = measure<>::execution([&]() {
   const CopyParams &copy_params = importer->get_copy_params();
   const std::list<const ColumnDescriptor*> &col_descs = importer->get_column_descs();
   size_t begin = find_beginning(buffer, begin_pos, end_pos, copy_params);
@@ -165,7 +169,6 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
   for (const auto cd : importer->get_column_descs()) {
     import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, importer->get_string_dict(cd))));
   }
-  size_t row_count = 0;
   std::vector<std::string> row;
   for (const char *p = thread_buf; p < thread_buf_end; p++) {
     {
@@ -260,8 +263,13 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
     }
   }
   if (row_count > 0) {
+    load_ms = measure<>::execution([&]() {
     importer->load(import_buffers, row_count);
-    std::cout << row_count << " rows inserted." << std::endl;
+    });
+  }
+  });
+  if (row_count > 0) {
+    std::cout << "Thread" << std::this_thread::get_id() << " " << row_count << " rows inserted in " << (double)ms/1000.0 << "sec, Insert Time: " << (double)load_ms/1000.0 << "sec" << std::endl;
   }
 }
 
@@ -334,8 +342,8 @@ Importer::import()
   p_file = fopen(file_path.c_str(), "r");
   (void)fseek(p_file,0,SEEK_END);
   file_size = ftell(p_file);
-  max_threads = sysconf(_SC_NPROCESSORS_CONF);
-  max_threads = 1;
+  // max_threads = sysconf(_SC_NPROCESSORS_CONF);
+  max_threads = copy_params.threads;
   buffer[0] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
   buffer[1] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
   size_t current_pos = 0;
@@ -371,7 +379,10 @@ Importer::import()
         p.join();
     }
   }
-  catalog.get_dataMgr().checkpoint();
+  auto ms = measure<>::execution([&] () {
+    catalog.get_dataMgr().checkpoint();
+  });
+  std::cout << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;
 
   free(buffer[0]);
   buffer[0] = nullptr;

@@ -1416,6 +1416,12 @@ namespace Parser {
     Importer_NS::CopyParams copy_params;
     if (options != nullptr) {
       for (auto p : *options) {
+        if (boost::iequals(*p->get_name(), "threads")) {
+          const IntLiteral *int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+          if (int_literal == nullptr)
+            throw std::runtime_error("Threads option must be an integer.");
+          copy_params.threads = int_literal->get_intval();
+        } else
         if (boost::iequals(*p->get_name(), "delimiter")) {
           const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
           if (str_literal == nullptr)
