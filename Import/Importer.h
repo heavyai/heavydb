@@ -263,7 +263,7 @@ struct CopyParams {
   char line_delim;
   int threads;
 
-  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"'), line_delim('\n'), threads(1) {}
+  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"'), line_delim('\n'), threads(0) {}
 };
 
 class Importer {

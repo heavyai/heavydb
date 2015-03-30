@@ -18,7 +18,7 @@
 
 namespace Importer_NS {
 
-bool debug_timing = false;
+bool debug_timing = true;
 
 static std::mutex insert_mutex;
 
@@ -332,6 +332,7 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
 }
 
 #define IMPORT_FILE_BUFFER_SIZE   100000000
+#define MIN_FILE_BUFFER_SIZE      1000000
 
 void
 Importer::import()
@@ -352,8 +353,10 @@ Importer::import()
   p_file = fopen(file_path.c_str(), "rb");
   (void)fseek(p_file,0,SEEK_END);
   file_size = ftell(p_file);
-  // max_threads = sysconf(_SC_NPROCESSORS_CONF);
-  max_threads = copy_params.threads;
+  if (copy_params.threads == 0)
+    max_threads = sysconf(_SC_NPROCESSORS_CONF);
+  else
+    max_threads = copy_params.threads;
   buffer[0] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
   if (max_threads > 1)
     buffer[1] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
@@ -376,6 +379,9 @@ Importer::import()
       end_pos = size;
     else
       end_pos = find_end(buffer[which_buf], size, copy_params);
+    if (size < IMPORT_FILE_BUFFER_SIZE) {
+      max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos)/MIN_FILE_BUFFER_SIZE));
+    }
     if (max_threads == 1) {
       import_thread(this, buffer[which_buf], begin_pos, end_pos, end_pos);
       current_pos += end_pos;
