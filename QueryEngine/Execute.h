@@ -110,6 +110,7 @@ private:
     const Catalog_Namespace::Catalog&);
   std::vector<ResultRow> executeAggScanPlan(
     const Planner::Plan* plan,
+    const int64_t limit,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
