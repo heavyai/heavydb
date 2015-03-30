@@ -384,7 +384,7 @@ Importer::import()
     } else {
       std::vector<std::thread> threads;
       for (int i = 0; i < max_threads; i++) {
-        size_t begin = i * ((end_pos - begin_pos) / max_threads);
+        size_t begin = begin_pos + i * ((end_pos - begin_pos) / max_threads);
         size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
         threads.push_back(std::thread(import_thread, this, buffer[which_buf], begin, end, end_pos));
       }
