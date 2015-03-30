@@ -102,7 +102,7 @@ public:
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
-        const auto results = executor->execute(root_plan,true,ExecutorDeviceType::Auto);
+        const auto results = executor->execute(root_plan,true,ExecutorDeviceType::GPU);
         //const auto results = executor->execute(root_plan,true,ExecutorDeviceType::CPU);
         {
           const auto plan = root_plan->get_plan();
