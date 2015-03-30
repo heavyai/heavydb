@@ -56,7 +56,7 @@ namespace Data_Namespace {
             int numGpus = cudaMgr_->getDeviceCount();
             for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
                 size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (1<<29); // set max mem size to be size of global mem - 512MB
-                bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
+                bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 30,512,bufferMgrs_[1][0]));
             }
             levelSizes_.push_back(numGpus);
         }

@@ -67,7 +67,7 @@ namespace File_Namespace {
         
     public:
         /// Constructor
-        FileMgr(const int deviceId, std::string basePath = ".",   const size_t defaultPageSize=1048576, const int epoch = -1);
+        FileMgr(const int deviceId, std::string basePath = ".",   const size_t defaultPageSize=2097152, const int epoch = -1);
         
         /// Destructor
         virtual ~FileMgr();
