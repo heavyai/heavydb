@@ -5,6 +5,7 @@
  */
 
 #include <iostream>
+#include <iomanip>
 #include <cstdio>
 #include <unistd.h>
 #include <stdexcept>
@@ -47,7 +48,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
   bool in_quote = false;
   bool has_escape = false;
   bool strip_quotes = false;
-  for (p = buf; p < buf_end && (in_quote || *p != copy_params.line_delim); p++) {
+  for (p = buf; p < buf_end && *p != copy_params.line_delim; p++) {
     if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
       p++;
       has_escape = true;
@@ -81,8 +82,8 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
         field = p + 1;
         has_escape = false;
         strip_quotes = false;
-      }
-    } 
+      } 
+    }
   }
   if (*p == copy_params.line_delim) {
     row.push_back(std::string(field, p - field));
@@ -140,10 +141,8 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
 static size_t
 find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &copy_params)
 {
-  // @TODO(wei) what if line_delim is in quotes?
-  if (begin > 0 && buffer[begin - 1] == copy_params.line_delim)
-    return begin;
-  if (begin == 0 && !copy_params.has_header)
+  // @TODO(wei) line_delim is in quotes note supported
+  if (begin == 0 || (begin > 0 && buffer[begin - 1] == copy_params.line_delim))
     return 0;
   size_t i;
   const char *buf = buffer + begin;
@@ -157,6 +156,8 @@ static void
 import_thread(const Importer *importer, const char *buffer, size_t begin_pos, size_t end_pos, size_t total_size)
 {
   size_t row_count = 0;
+  int64_t total_get_row_time_us = 0;
+  int64_t total_str_to_val_time_us = 0;
   auto load_ms = measure<>::execution([]() {});
   auto ms = measure<>::execution([&]() {
   const CopyParams &copy_params = importer->get_copy_params();
@@ -175,7 +176,10 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
       decltype(row) empty;
       row.swap(empty);
     }
+    auto us = measure<std::chrono::microseconds>::execution([&]() {
     p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, row);
+    });
+    total_get_row_time_us += us;
     /*
     std::cout << "Row " << row_count << " : ";
     for (auto p : row)
@@ -183,12 +187,13 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
     std::cout << std::endl;
     */
     if (row.size() != col_descs.size()) {
-      std::cerr << "Incorrect rowsize Row: ";
-      for (auto p : row)
+    std::cerr << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
+    for (auto p : row)
         std::cout << p << ", ";
       std::cout << std::endl;
       continue;
     }
+    us = measure<std::chrono::microseconds>::execution([&]() {
     try {
       int col_idx = 0;
       for (const auto cd : col_descs) {
@@ -261,6 +266,8 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
     } catch (const std::exception&) {
       std::cerr << "input exception throw." << std::endl;
     }
+    });
+    total_str_to_val_time_us += us;
   }
   if (row_count > 0) {
     load_ms = measure<>::execution([&]() {
@@ -269,22 +276,20 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
   }
   });
   if (row_count > 0) {
-    std::cout << "Thread" << std::this_thread::get_id() << " " << row_count << " rows inserted in " << (double)ms/1000.0 << "sec, Insert Time: " << (double)load_ms/1000.0 << "sec" << std::endl;
+    std::cout << "Thread" << std::this_thread::get_id() << ":" << row_count << " rows inserted in " << (double)ms/1000.0 << "sec, Insert Time: " << (double)load_ms/1000.0 << "sec, get_row: " << (double)total_get_row_time_us/1000000.0 << "sec, str_to_val: " << (double)total_str_to_val_time_us/1000000.0 << "sec" << std::endl;
   }
 }
 
 static size_t
 find_end(const char *buffer, size_t size, const CopyParams &copy_params)
 {
-  bool in_quote = false;
   int i;
-  for (i = size - 1; i >= 0 && (buffer[i] != copy_params.line_delim || in_quote); i--) {
-    if (i > 0 && buffer[i - 1] == copy_params.escape && buffer[i] == copy_params.quote)
-      i--;
-    else if (buffer[i] == copy_params.quote)
-      in_quote = !in_quote;
-  }
-  // @TODO(wei) check for error of unmatched quote
+  // @TODO(wei) line_delim is in quotes note supported
+  for (i = size - 1; i >= 0 && buffer[i] != copy_params.line_delim; i--)
+  ;
+
+  if (i < 0)
+    std::cerr << "No line delimiter in block." << std::endl;
   return i + 1;
 }
 
@@ -324,9 +329,12 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
   }
 }
 
+#define IMPORT_FILE_BUFFER_SIZE   100000000
+
 void
 Importer::import()
 {
+  std::setprecision(3);
   column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
   insert_data.databaseId = catalog.get_currentDB().dbId;
   insert_data.tableId = table_desc->tableId;
@@ -339,34 +347,45 @@ Importer::import()
     }
   }
   insert_data.numRows = 0;
-  p_file = fopen(file_path.c_str(), "r");
+  p_file = fopen(file_path.c_str(), "rb");
   (void)fseek(p_file,0,SEEK_END);
   file_size = ftell(p_file);
   // max_threads = sysconf(_SC_NPROCESSORS_CONF);
   max_threads = copy_params.threads;
   buffer[0] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
-  buffer[1] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
+  if (max_threads > 1)
+    buffer[1] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
   size_t current_pos = 0;
   size_t end_pos;
   (void)fseek(p_file, current_pos, SEEK_SET);
   size_t size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
   bool eof_reached = false;
+  size_t begin_pos = 0;
+  if (copy_params.has_header) {
+    size_t i;
+    for (i = 0; i < size && buffer[which_buf][i] != copy_params.line_delim; i++)
+    ;
+    if (i == size)
+      std::cout << "No line delimiter in block." << std::endl;
+    begin_pos = i + 1;
+  }
   while (size > 0) {
     if (eof_reached)
       end_pos = size;
     else
       end_pos = find_end(buffer[which_buf], size, copy_params);
     if (max_threads == 1) {
-      import_thread(this, buffer[which_buf], 0, end_pos, end_pos);
+      import_thread(this, buffer[which_buf], begin_pos, end_pos, end_pos);
       current_pos += end_pos;
+      (void)fseek(p_file, current_pos, SEEK_SET);
       size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
       if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
         eof_reached = true;
     } else {
       std::vector<std::thread> threads;
       for (int i = 0; i < max_threads; i++) {
-        size_t begin = i * (end_pos / max_threads);
-        size_t end = (i < max_threads - 1) ? (i + 1) * (end_pos / max_threads) : end_pos;
+        size_t begin = i * ((end_pos - begin_pos) / max_threads);
+        size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
         threads.push_back(std::thread(import_thread, this, buffer[which_buf], begin, end, end_pos));
       }
       current_pos += end_pos;
@@ -378,6 +397,7 @@ Importer::import()
       for (auto& p : threads)
         p.join();
     }
+    begin_pos = 0;
   }
   auto ms = measure<>::execution([&] () {
     catalog.get_dataMgr().checkpoint();

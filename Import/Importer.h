@@ -266,8 +266,6 @@ struct CopyParams {
   CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"'), line_delim('\n'), threads(1) {}
 };
 
-#define IMPORT_FILE_BUFFER_SIZE   100000000
-
 class Importer {
   public:
     Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p);
