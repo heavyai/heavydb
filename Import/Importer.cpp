@@ -18,6 +18,8 @@
 
 namespace Importer_NS {
 
+bool debug_timing = false;
+
 static std::mutex insert_mutex;
 
 Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : catalog(c), table_desc(t), file_path(f), copy_params(p) 
@@ -275,7 +277,7 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
     });
   }
   });
-  if (row_count > 0) {
+  if (debug_timing && row_count > 0) {
     std::cout << "Thread" << std::this_thread::get_id() << ":" << row_count << " rows inserted in " << (double)ms/1000.0 << "sec, Insert Time: " << (double)load_ms/1000.0 << "sec, get_row: " << (double)total_get_row_time_us/1000000.0 << "sec, str_to_val: " << (double)total_str_to_val_time_us/1000000.0 << "sec" << std::endl;
   }
 }
@@ -402,7 +404,8 @@ Importer::import()
   auto ms = measure<>::execution([&] () {
     catalog.get_dataMgr().checkpoint();
   });
-  std::cout << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;
+  if (debug_timing)
+    std::cout << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;
 
   free(buffer[0]);
   buffer[0] = nullptr;

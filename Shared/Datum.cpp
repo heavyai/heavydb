@@ -48,6 +48,9 @@ parse_numeric(const std::string &s, SQLTypeInfo &ti)
 	return result;
 }
 
+// had to port timegm because the one on MacOS is horrendously slow.
+extern time_t my_timegm(const struct tm *tm);
+
 /*
  * @brief convert string to a datum
  */
@@ -91,7 +94,7 @@ StringToDatum(const std::string &s, SQLTypeInfo &ti)
 				tm_struct.tm_mon = 0;
 				tm_struct.tm_year = 70;
 				tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
-				d.timeval = timegm(&tm_struct);
+				d.timeval = my_timegm(&tm_struct);
 				break;
 			}
 		case kTIMESTAMP:
@@ -116,7 +119,7 @@ StringToDatum(const std::string &s, SQLTypeInfo &ti)
 				if (p == nullptr)
 					throw std::runtime_error("Invalid timestamp string " + s);
 				tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
-				d.timeval = timegm(&tm_struct);
+				d.timeval = my_timegm(&tm_struct);
 				break;
 			}
 		case kDATE:
@@ -127,7 +130,7 @@ StringToDatum(const std::string &s, SQLTypeInfo &ti)
 					throw std::runtime_error("Invalid timestamp string " + s);
 				tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
 				tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
-				d.timeval = timegm(&tm_struct);
+				d.timeval = my_timegm(&tm_struct);
 				break;
 			}
 		default:
