@@ -264,17 +264,7 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
 
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr, const bool hoist_literals) {
   if (!expr) {
-    llvm::Value* pos_arg { nullptr };
-    auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
-    for (auto& arg : in_arg_list) {
-      if (arg.getType()->isIntegerTy()) {
-        pos_arg = &arg;
-        break;
-      }
-    }
-    CHECK(pos_arg);
-    CHECK_EQ(static_cast<llvm::IntegerType*>(pos_arg->getType())->getBitWidth(), 64);
-    return { pos_arg };
+    return { cgen_state_->getCurrentRowIndex() };
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {

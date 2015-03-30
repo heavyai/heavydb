@@ -278,6 +278,20 @@ private:
       return literals_;
     }
 
+    llvm::Value* getCurrentRowIndex() const {
+      llvm::Value* pos_arg { nullptr };
+      auto& in_arg_list = row_func_->getArgumentList();
+      for (auto& arg : in_arg_list) {
+        if (arg.getType()->isIntegerTy()) {
+          pos_arg = &arg;
+          break;
+        }
+      }
+      CHECK(pos_arg);
+      CHECK_EQ(static_cast<llvm::IntegerType*>(pos_arg->getType())->getBitWidth(), 64);
+      return pos_arg;
+    }
+
     llvm::Module* module_;
     llvm::Function* row_func_;
     llvm::LLVMContext& context_;

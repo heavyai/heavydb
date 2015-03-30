@@ -677,7 +677,9 @@ bool GroupByAndAggregate::codegen(
           codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
         }
         can_return_error = true;
-        LL_BUILDER.CreateRet(LL_INT(-1));
+        LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
+          // TODO(alex): remove the trunc once pos is converted to 32 bits
+          executor_->cgen_state_->getCurrentRowIndex(), get_int_type(32, LL_CONTEXT))));
       }
     } else {
       auto arg_it = ROW_FUNC->arg_begin();

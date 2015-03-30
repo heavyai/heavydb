@@ -432,7 +432,11 @@ __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
 extern "C"
 __device__ int32_t merge_error_code(const int32_t err_code, int32_t* merged_err_code) {
   if (err_code) {
-    *merged_err_code = err_code;
+    int32_t assumed = *merged_err_code;
+    int32_t old;
+    do {
+      old = atomicCAS(merged_err_code, assumed, err_code);
+    } while (old != assumed);
   }
   __syncthreads();
   return *merged_err_code;
