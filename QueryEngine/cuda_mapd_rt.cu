@@ -2,8 +2,9 @@
 #include <limits>
 
 extern "C"
-__device__ int32_t pos_start_impl() {
-  return blockIdx.x * blockDim.x + threadIdx.x;
+__device__ int32_t pos_start_impl(const int32_t* row_index_resume) {
+  return blockIdx.x * blockDim.x + threadIdx.x +
+    (row_index_resume ? row_index_resume[blockIdx.x] : 0);
 }
 
 extern "C"

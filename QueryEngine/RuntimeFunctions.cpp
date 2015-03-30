@@ -180,8 +180,8 @@ DEF_SHARED_AGG_STUBS(agg_id)
 // x64 stride functions
 
 extern "C" __attribute__((noinline))
-int32_t pos_start_impl() {
-  return 0;
+int32_t pos_start_impl(const int32_t* row_index_resume) {
+  return row_index_resume ? row_index_resume[0] : 0;
 }
 
 extern "C" __attribute__((noinline))

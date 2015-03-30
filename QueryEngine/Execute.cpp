@@ -953,7 +953,7 @@ std::vector<int64_t*> launch_query_cpu_code(
       const int64_t* init_agg_value,
       int64_t** out,
       int64_t** out2,
-      int32_t* error_code);
+      int32_t* resume_row_index);
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &out_vec[0], nullptr, nullptr);
@@ -969,7 +969,7 @@ std::vector<int64_t*> launch_query_cpu_code(
       const int64_t* init_agg_value,
       int64_t** out,
       int64_t** out2,
-      int32_t* error_code);
+      int32_t* resume_row_index);
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0],
         nullptr, nullptr);
@@ -977,7 +977,6 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t error_code { 0 };
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0], &error_code);
-      CHECK(!error_code);
     }
   }
   return out_vec;
@@ -1892,14 +1891,26 @@ llvm::Module* create_runtime_module(llvm::LLVMContext& context) {
   return makeLLVMModuleContents(new llvm::Module("empty_module", context));
 }
 
-void bind_pos_placeholders(const std::string& pos_fn_name, llvm::Function* query_func, llvm::Module* module) {
+void bind_pos_placeholders(
+    const std::string& pos_fn_name,
+    const bool use_resume_param,
+    llvm::Function* query_func,
+    llvm::Module* module) {
   for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
     if (!llvm::isa<llvm::CallInst>(*it)) {
       continue;
     }
     auto& pos_call = llvm::cast<llvm::CallInst>(*it);
     if (std::string(pos_call.getCalledFunction()->getName()) == pos_fn_name) {
-      llvm::ReplaceInstWithInst(&pos_call, llvm::CallInst::Create(module->getFunction(pos_fn_name + "_impl")));
+      if (use_resume_param) {
+        auto& resume_param = query_func->getArgumentList().back();
+        llvm::ReplaceInstWithInst(&pos_call, llvm::CallInst::Create(
+          module->getFunction(pos_fn_name + "_impl"),
+          std::vector<llvm::Value*> { &resume_param }));
+      } else {
+        llvm::ReplaceInstWithInst(
+          &pos_call, llvm::CallInst::Create(module->getFunction(pos_fn_name + "_impl")));
+      }
       break;
     }
   }
@@ -2034,8 +2045,8 @@ Executor::CompilationResult Executor::compilePlan(
   auto query_func = is_group_by
     ? query_group_by_template(cgen_state_->module_, 1, is_nested_, hoist_literals, query_mem_desc, device_type)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
-  bind_pos_placeholders("pos_start", query_func, cgen_state_->module_);
-  bind_pos_placeholders("pos_step", query_func, cgen_state_->module_);
+  bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
+  bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
 
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) = create_row_function(
@@ -2243,7 +2254,7 @@ R"(
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
 target triple = "nvptx64-nvidia-cuda"
 
-declare i32 @pos_start_impl();
+declare i32 @pos_start_impl(i32*);
 declare i32 @pos_step_impl();
 declare i8 @thread_warp_idx(i8);
 declare i64* @init_shared_mem(i64*, i32);
