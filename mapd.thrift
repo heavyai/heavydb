@@ -47,6 +47,7 @@ exception MapDException {
 
 service MapD {
   QueryResult select(1: string query) throws (1: MapDException e)
+  void ddl(1: string ddl_query) throws (1: MapDException e)
   ColumnTypes getColumnTypes(1: string table_name) throws (1: MapDException e)
   list<string> getTables();
 }

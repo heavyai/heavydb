@@ -151,6 +151,12 @@ public:
     
   }
 
+  void ddl(const std::string& ddl_query) {
+    MapDException ex;
+    ex.error_msg = "DDL queries not allowed over HTTP";
+    throw ex;
+  }
+
   void getColumnTypes(ColumnTypes& _return, const std::string& table_name) {
     auto td = cat_->getMetadataForTable(table_name);
     if (!td) {
