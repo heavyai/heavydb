@@ -28,9 +28,9 @@ lowercase(char c)
 DEVICE static LikeStatus
 string_like_match(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
 {
-#ifdef __CUDACC__
-  str_len = -str_len;  // TODO(alex): remove this hack once ResultRow is fixed
-#endif
+  if (str_len < 0) {
+    str_len = -str_len;  // TODO(alex): remove this hack once ResultRow is fixed
+  }
   const char *s = str;
   int slen = str_len;
   const char *p = pattern;
