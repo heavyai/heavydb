@@ -1200,6 +1200,41 @@ namespace Analyzer {
   }
 
   bool
+  LikeExpr::operator==(const Expr &rhs) const
+  {
+    if (typeid(rhs) != typeid(LikeExpr))
+      return false;
+    const LikeExpr &rhs_lk = dynamic_cast<const LikeExpr&>(rhs);
+    if (!(*arg == *rhs_lk.get_arg()) || !(*like_expr == *rhs_lk.get_like_expr()) || is_ilike != rhs_lk.get_is_ilike())
+      return false;
+    if (escape_expr == rhs_lk.get_escape_expr())
+      return true;
+    if (escape_expr != nullptr && rhs_lk.get_escape_expr() != nullptr &&
+        *escape_expr == *rhs_lk.get_escape_expr())
+      return true;
+    return false;
+  }
+
+  bool
+  InValues::operator==(const Expr &rhs) const
+  {
+    if (typeid(rhs) != typeid(InValues))
+      return false;
+    const InValues &rhs_iv = dynamic_cast<const InValues&>(rhs);
+    if (!(*arg == *rhs_iv.get_arg()))
+      return false;
+    if (value_list->size() != rhs_iv.get_value_list()->size())
+      return false;
+    auto q = rhs_iv.get_value_list()->begin();
+    for (auto p : *value_list) {
+      if (!(*p == **q))
+        return false;
+      q++;
+    }
+    return true;
+  }
+
+  bool
   AggExpr::operator==(const Expr &rhs) const
   {
     if (typeid(rhs) != typeid(AggExpr))
