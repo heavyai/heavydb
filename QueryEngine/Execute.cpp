@@ -71,7 +71,7 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
         return AggResult(*boost::get<std::string>(&agg_results_[actual_idx]));
       }
     } else {
-      CHECK(agg_types_[idx].get_type() == kFLOAT || agg_types_[idx].get_type() == kDOUBLE);
+      CHECK(agg_types_[idx].is_fp());
       return AggResult(*reinterpret_cast<const double*>(boost::get<int64_t>(&agg_results_[actual_idx])));
     }
   }
@@ -84,7 +84,6 @@ SQLTypeInfo ResultRow::agg_type(const size_t idx) const {
 
 Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x)
   : cgen_state_(new CgenState())
-  , plan_state_(new PlanState)
   , is_nested_(false)
   , uses_str_none_enc_(false)
   , block_size_x_(block_size_x)
@@ -445,6 +444,10 @@ std::vector<llvm::Value*> Executor::codegen(
   llvm::Value* col_byte_stream;
   llvm::Value* pos_arg;
   std::tie(col_byte_stream, pos_arg) = colByteStream(col_id, fetch_column, hoist_literals);
+  if (plan_state_->isLazyFetchColumn(col_var)) {
+    plan_state_->columns_to_not_fetch_.insert(col_id);
+    return { pos_arg };
+  }
   if (col_var->get_type_info().is_string() &&
       col_var->get_type_info().get_compression() == kENCODING_NONE) {
     // real (not dictionary-encoded) strings; store the pointer to the payload
@@ -1365,7 +1368,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, nullptr);
+    ExecutorDeviceType::CPU, opt_level, nullptr, false);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
@@ -1376,7 +1379,8 @@ std::vector<ResultRow> Executor::executeResultPlan(
   auto small_group_by_buffer = static_cast<int64_t*>(malloc(small_groups_buffer_size));
   init_groups(small_group_by_buffer, small_groups_buffer_entry_count_, target_exprs.size(),
     &init_agg_vals[0], 1, false, 1);
-  auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this, ExecutorDeviceType::CPU, 0);
+  auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
+    ExecutorDeviceType::CPU, 0, {});
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals,
@@ -1478,20 +1482,38 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
   CompilationResult compilation_result_cpu;
   if (device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::Auto) {
-    compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
-      scan_plan->get_col_list(),
-      simple_quals, scan_plan->get_quals(),
-      hoist_literals, ExecutorDeviceType::CPU, opt_level,
-      cat.get_dataMgr().cudaMgr_);
+    try {
+      compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
+        scan_plan->get_col_list(),
+        simple_quals, scan_plan->get_quals(),
+        hoist_literals, ExecutorDeviceType::CPU, opt_level,
+        cat.get_dataMgr().cudaMgr_, true);
+    } catch (...) {
+      compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
+        scan_plan->get_col_list(),
+        simple_quals, scan_plan->get_quals(),
+        hoist_literals, ExecutorDeviceType::CPU, opt_level,
+        cat.get_dataMgr().cudaMgr_, false);
+    }
   }
   CompilationResult compilation_result_gpu;
   if (device_type == ExecutorDeviceType::GPU || (device_type == ExecutorDeviceType::Auto &&
       cat.get_dataMgr().gpusPresent())) {
-    compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
-      scan_plan->get_col_list(),
-      simple_quals, scan_plan->get_quals(),
-      hoist_literals, ExecutorDeviceType::GPU, opt_level,
-      cat.get_dataMgr().cudaMgr_);
+    try {
+      compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
+        scan_plan->get_col_list(),
+        simple_quals, scan_plan->get_quals(),
+        hoist_literals, ExecutorDeviceType::GPU, opt_level,
+        cat.get_dataMgr().cudaMgr_,
+        true);
+    } catch (...) {
+      compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
+        scan_plan->get_col_list(),
+        simple_quals, scan_plan->get_quals(),
+        hoist_literals, ExecutorDeviceType::GPU, opt_level,
+        cat.get_dataMgr().cudaMgr_,
+        false);
+    }
   }
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
@@ -1524,11 +1546,6 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         (const ExecutorDeviceType chosen_device_type, int chosen_device_id) {
       ResultRows device_results;
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
-      CHECK(chosen_device_type != ExecutorDeviceType::Auto);
-      const CompilationResult& compilation_result =
-        chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
-      auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
-        plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id);
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
@@ -1553,9 +1570,13 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         auto it = plan_state_->global_to_local_col_ids_.find(col_id);
         CHECK(it != plan_state_->global_to_local_col_ids_.end());
         CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+        auto memory_level_for_column = memory_level;
+        if (plan_state_->columns_to_fetch_.find(col_id) == plan_state_->columns_to_fetch_.end()) {
+          memory_level_for_column = Data_Namespace::CPU_LEVEL;
+        }
         auto chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
           chunk_key,
-          memory_level,
+          memory_level_for_column,
           chosen_device_id,
           chunk_meta_it->second.numBytes,
           chunk_meta_it->second.numElements);
@@ -1564,10 +1585,10 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
             cd->columnType.get_compression() == kENCODING_NONE) {
           chunk_iterators.push_back(chunk->begin_iterator());
           auto& chunk_iter = chunk_iterators.back();
-          if (memory_level == Data_Namespace::CPU_LEVEL) {
+          if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
             col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);
           } else {
-            CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
+            CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_for_column);
             auto& data_mgr = cat.get_dataMgr();
             auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), chosen_device_id);
             copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), chosen_device_id);
@@ -1579,6 +1600,11 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
         }
       }
+      CHECK(chosen_device_type != ExecutorDeviceType::Auto);
+      const CompilationResult& compilation_result =
+        chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
+      auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
+        plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers);
       if (groupby_exprs.empty()) {
         executePlanWithoutGroupBy(
           compilation_result, hoist_literals,
@@ -1666,7 +1692,7 @@ void Executor::executePlanWithoutGroupBy(
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
     auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
-      plan_state_->init_agg_vals_, this, device_type, device_id);
+      plan_state_->init_agg_vals_, this, device_type, device_id, {});
     out_vec = query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_,
@@ -2020,9 +2046,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
 }  // namespace
 
-void Executor::nukeOldState() {
+void Executor::nukeOldState(const bool allow_lazy_fetch) {
   cgen_state_.reset(new CgenState());
-  plan_state_.reset(new PlanState());
+  plan_state_.reset(new PlanState(allow_lazy_fetch));
 }
 
 Executor::CompilationResult Executor::compilePlan(
@@ -2035,10 +2061,11 @@ Executor::CompilationResult Executor::compilePlan(
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
-  nukeOldState();
+    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+    const bool allow_lazy_fetch) {
+  nukeOldState(allow_lazy_fetch);
 
-  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info);
+  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, allow_lazy_fetch);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   // Read the module template and target either CPU or GPU

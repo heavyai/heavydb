@@ -42,4 +42,23 @@ int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t key_qw_count,
                          const int32_t agg_col_count);
 
+// Regular fixed_width_*_decode are only available from the JIT,
+// we need to call them for lazy fetch columns -- create wrappers.
+
+extern "C"
+int64_t fixed_width_int_decode_noinline(
+    const int8_t* byte_stream,
+    const int32_t byte_width,
+    const int64_t pos);
+
+extern "C"
+float fixed_width_float_decode_noinline(
+    const int8_t* byte_stream,
+    const int64_t pos);
+
+extern "C"
+double fixed_width_double_decode_noinline(
+    const int8_t* byte_stream,
+    const int64_t pos);
+
 #endif  // QUERYENGINE_RUNTIMEFUNCTIONS_H

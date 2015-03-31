@@ -170,9 +170,10 @@ private:
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const CudaMgr_Namespace::CudaMgr* cuda_mgr);
+    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+    const bool allow_lazy_fetch);
 
-  void nukeOldState();
+  void nukeOldState(const bool allow_lazy_fetch);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            const bool hoist_literals,
                                            const ExecutorOptLevel,
@@ -324,10 +325,32 @@ private:
   std::unique_ptr<CgenState> cgen_state_;
 
   struct PlanState {
+    PlanState(const bool allow_lazy_fetch) : allow_lazy_fetch_(allow_lazy_fetch) {}
+
     std::vector<int64_t> init_agg_vals_;
     std::unordered_map<int, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
     std::unordered_set<int> columns_to_fetch_;
+    std::unordered_set<int> columns_to_not_fetch_;
+    bool allow_lazy_fetch_;
+
+    bool isLazyFetchColumn(const Analyzer::Expr* target_expr) {
+      if (!allow_lazy_fetch_) {
+        return false;
+      }
+      const auto do_not_fetch_column = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+      if (!do_not_fetch_column || dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
+        return false;
+      }
+      std::unordered_set<int> intersect;
+      set_intersection(columns_to_fetch_.begin(), columns_to_fetch_.end(),
+          columns_to_not_fetch_.begin(), columns_to_not_fetch_.end(),
+          std::inserter(intersect, intersect.begin()));
+      if (!intersect.empty()) {
+        throw std::exception();
+      }
+      return columns_to_fetch_.find(do_not_fetch_column->get_column_id()) == columns_to_fetch_.end();
+    }
   };
   std::unique_ptr<PlanState> plan_state_;
 

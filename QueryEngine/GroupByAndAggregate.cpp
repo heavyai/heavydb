@@ -4,6 +4,7 @@
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 #include "../CudaMgr/CudaMgr.h"
+#include "../Utils/ChunkIter.h"
 
 #include <numeric>
 #include <thread>
@@ -14,11 +15,13 @@ QueryExecutionContext::QueryExecutionContext(
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
     const ExecutorDeviceType device_type,
-    const int device_id)
+    const int device_id,
+    const std::vector<const int8_t*>& col_buffers)
   : query_mem_desc_(query_mem_desc)
   , executor_(executor)
   , device_type_(device_type)
   , device_id_(device_id)
+  , col_buffers_(col_buffers)
   , num_buffers_ { device_type == ExecutorDeviceType::CPU
       ? 1
       : executor->block_size_x_ * executor->grid_size_x_ } {
@@ -101,6 +104,28 @@ Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(results_per_sm);
 }
+
+namespace {
+
+int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_stream, const int64_t pos) {
+  const auto enc_type = col_var->get_compression();
+  const auto& type_info = col_var->get_type_info();
+  if (type_info.is_fp()) {
+    double fval = (type_info.get_type() == kFLOAT)
+      ? fixed_width_float_decode_noinline(byte_stream, pos)
+      : fixed_width_double_decode_noinline(byte_stream, pos);
+    return *reinterpret_cast<int64_t*>(&fval);
+  }
+  CHECK(type_info.is_integer() || type_info.is_time() || (type_info.is_string() && enc_type == kENCODING_DICT));
+  size_t type_bitwidth = get_bit_width(col_var->get_type_info().get_type());
+  if (col_var->get_type_info().get_compression() == kENCODING_FIXED) {
+    type_bitwidth = col_var->get_type_info().get_comp_param();
+  }
+  CHECK_EQ(0, type_bitwidth % 8);
+  return fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
+}
+
+}  // namespace
 
 Executor::ResultRows QueryExecutionContext::groupBufferToResults(
     const size_t i,
@@ -189,34 +214,62 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
           result_row.agg_kinds_.push_back(agg_type);
           bool is_real_string = (target_expr && target_expr->get_type_info().is_string() &&
             target_expr->get_type_info().get_compression() == kENCODING_NONE);
-          if (agg_type == kAVG) {
-            CHECK(agg_expr->get_arg());
-            result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
-            CHECK(!target_expr->get_type_info().is_string());
-            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
-            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
-            out_vec_idx += 2;
-          } else if (is_real_string) {
+          const int global_col_id { dynamic_cast<Analyzer::ColumnVar*>(target_expr)
+            ? dynamic_cast<Analyzer::ColumnVar*>(target_expr)->get_column_id()
+            : -1 };
+          if (is_real_string) {
             result_row.agg_types_.push_back(target_expr->get_type_info());
             int64_t str_len = group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1];
             int64_t str_ptr = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
             CHECK_GE(str_len, 0);
-            CHECK(device_type_ == ExecutorDeviceType::CPU ||
-                  device_type_ == ExecutorDeviceType::GPU);
-            if (device_type_ == ExecutorDeviceType::CPU) {
+            if (executor_->plan_state_->isLazyFetchColumn(target_expr)) {
+              CHECK_EQ(str_ptr, str_len);  // both are the row index in this case
+              VarlenDatum vd;
+              bool is_end;
+              CHECK_GE(global_col_id, 0);
+              auto col_id = executor_->getLocalColumnId(global_col_id, false);
+              ChunkIter_get_nth(
+                reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(col_buffers_[col_id])),
+                str_ptr, false, &vd, &is_end);
+              CHECK(!is_end);
               result_row.agg_results_.push_back(std::string(
-                reinterpret_cast<char*>(str_ptr), str_len));
+                reinterpret_cast<char*>(vd.pointer), vd.length));
             } else {
-              std::vector<int8_t> cpu_buffer(str_len);
-              auto& data_mgr = executor_->catalog_->get_dataMgr();
-              copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(str_ptr), str_len, device_id_);
-              result_row.agg_results_.push_back(std::string(reinterpret_cast<char*>(&cpu_buffer[0]), str_len));
+              CHECK(device_type_ == ExecutorDeviceType::CPU ||
+                    device_type_ == ExecutorDeviceType::GPU);
+              if (device_type_ == ExecutorDeviceType::CPU) {
+                result_row.agg_results_.push_back(std::string(
+                  reinterpret_cast<char*>(str_ptr), str_len));
+              } else {
+                std::vector<int8_t> cpu_buffer(str_len);
+                auto& data_mgr = executor_->catalog_->get_dataMgr();
+                copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(str_ptr), str_len, device_id_);
+                result_row.agg_results_.push_back(std::string(reinterpret_cast<char*>(&cpu_buffer[0]), str_len));
+              }
             }
             out_vec_idx += 2;
           } else {
-            result_row.agg_types_.push_back(target_expr->get_type_info());
-            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
+            if (agg_type == kAVG) {
+              CHECK(agg_expr->get_arg());
+              CHECK(!target_expr->get_type_info().is_string());
+              result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
+            } else {
+              result_row.agg_types_.push_back(target_expr->get_type_info());
+            }
+            int64_t val1 = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
+            if (executor_->plan_state_->isLazyFetchColumn(target_expr)) {
+              CHECK_GE(global_col_id, 0);
+              auto col_id = executor_->getLocalColumnId(global_col_id, false);
+              val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), col_buffers_[col_id], val1);
+            }
+            result_row.agg_results_.push_back(val1);
             ++out_vec_idx;
+            if (agg_type == kAVG) {
+              CHECK(!executor_->plan_state_->isLazyFetchColumn(target_expr));
+              int64_t val2 = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
+              result_row.agg_results_.push_back(val2);
+              ++out_vec_idx;
+            }
           }
         }
         results.push_back(result_row);
@@ -379,9 +432,10 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
     const ExecutorDeviceType device_type,
-    const int device_id) const {
+    const int device_id,
+    const std::vector<const int8_t*>& col_buffers) const {
   return std::unique_ptr<QueryExecutionContext>(
-    new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id));
+    new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id, col_buffers));
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {
@@ -508,7 +562,8 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
 GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
     const Planner::Plan* plan,
-    const Fragmenter_Namespace::QueryInfo& query_info)
+    const Fragmenter_Namespace::QueryInfo& query_info,
+    const bool allow_lazy_fetch)
   : executor_(executor)
   , plan_(plan)
   , query_info_(query_info) {
@@ -915,7 +970,10 @@ void GroupByAndAggregate::codegenAggCalls(
       }
       std::string agg_fname { agg_base_name };
       if (agg_info.sql_type.is_fp()) {
-        agg_fname += "_double";
+        if (!executor_->plan_state_->isLazyFetchColumn(target_expr)) {
+          CHECK(target_lv->getType()->isDoubleTy());
+          agg_fname += "_double";
+        }
       }
       if (agg_info.skip_null_val) {
         agg_fname += "_skip_val";
@@ -932,6 +990,11 @@ void GroupByAndAggregate::codegenAggCalls(
       ++target_lv_idx;
     }
   }
+  for (auto target : target_list) {
+    auto target_expr = target->get_expr();
+    CHECK(target_expr);
+    executor_->plan_state_->isLazyFetchColumn(target_expr);
+  }
 }
 
 std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
@@ -940,7 +1003,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   return agg_expr
     ? executor_->codegen(agg_expr->get_arg(), true, hoist_literals)
-    : executor_->codegen(target_expr, false, hoist_literals);
+    : executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, hoist_literals);
 }
 
 llvm::Function* GroupByAndAggregate::getFunction(const std::string& name) const {

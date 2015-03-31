@@ -12,6 +12,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
 
+#include <unordered_map>
 #include <vector>
 
 
@@ -106,6 +107,8 @@ inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
   return boost::lexical_cast<std::string>(agg_result);
 }
 
+class ChunkIter;
+
 class QueryExecutionContext : boost::noncopyable {
 public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
@@ -114,7 +117,8 @@ public:
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
     const ExecutorDeviceType device_type,
-    const int device_id);
+    const int device_id,
+    const std::vector<const int8_t*>& col_buffers);
   ~QueryExecutionContext();
 
   // TOOD(alex): get rid of targets parameter
@@ -138,6 +142,7 @@ private:
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
   const int device_id_;
+  const std::vector<const int8_t*>& col_buffers_;
   const size_t num_buffers_;
 
   std::vector<int64_t*> group_by_buffers_;
@@ -169,7 +174,8 @@ struct QueryMemoryDescriptor {
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
     const ExecutorDeviceType device_type,
-    const int device_id) const;
+    const int device_id,
+    const std::vector<const int8_t*>& col_buffers) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
@@ -192,7 +198,8 @@ public:
   GroupByAndAggregate(
     Executor* executor,
     const Planner::Plan* plan,
-    const Fragmenter_Namespace::QueryInfo& query_info);
+    const Fragmenter_Namespace::QueryInfo& query_info,
+    const bool allow_lazy_fetch);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor();
 

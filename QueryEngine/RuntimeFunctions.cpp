@@ -28,6 +28,14 @@ int64_t fixed_width_int_decode(
   }
 }
 
+extern "C"
+int64_t fixed_width_int_decode_noinline(
+    const int8_t* byte_stream,
+    const int32_t byte_width,
+    const int64_t pos) {
+  return fixed_width_int_decode(byte_stream, byte_width, pos);
+}
+
 extern "C" __attribute__((always_inline))
 int64_t diff_fixed_width_int_decode(
     const int8_t* byte_stream,
@@ -44,11 +52,25 @@ float fixed_width_float_decode(
   return *(reinterpret_cast<const float*>(&byte_stream[pos * sizeof(float)]));
 }
 
+extern "C"
+float fixed_width_float_decode_noinline(
+    const int8_t* byte_stream,
+    const int64_t pos) {
+  return fixed_width_float_decode(byte_stream, pos);
+}
+
 extern "C" __attribute__((always_inline))
 double fixed_width_double_decode(
     const int8_t* byte_stream,
     const int64_t pos) {
   return *(reinterpret_cast<const double*>(&byte_stream[pos * sizeof(double)]));
+}
+
+extern "C"
+double fixed_width_double_decode_noinline(
+    const int8_t* byte_stream,
+    const int64_t pos) {
+  return fixed_width_double_decode(byte_stream, pos);
 }
 
 // aggregator implementations
