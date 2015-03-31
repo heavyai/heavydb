@@ -448,6 +448,7 @@ TEST(Select, StringsNoneEncoding) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str LIKE '%eal_bar';", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%%';", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%';", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@';", dt);

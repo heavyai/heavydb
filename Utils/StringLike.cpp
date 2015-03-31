@@ -28,9 +28,6 @@ lowercase(char c)
 DEVICE static LikeStatus
 string_like_match(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
 {
-  if (str_len < 0) {
-    str_len = -str_len;  // TODO(alex): remove this hack once ResultRow is fixed
-  }
   const char *s = str;
   int slen = str_len;
   const char *p = pattern;
@@ -113,6 +110,10 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
 extern "C" DEVICE
 bool string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
 {
+#ifdef __CUDACC__
+  // TODO(alex): remove this hack once ResultRow is fixed
+  str_len = -str_len;
+#endif
   // @TODO(wei/alex) add runtime error handling
   LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, is_ilike);
   return status == kLIKE_TRUE;
