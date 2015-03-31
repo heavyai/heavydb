@@ -82,10 +82,10 @@ private:
     return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(
       get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
   }
-  std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
-  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
@@ -99,7 +99,7 @@ private:
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   std::pair<llvm::Value*, llvm::Value*>
-  colByteStream(const int col_id, const bool hoist_literals);
+  colByteStream(const int col_id, const bool fetch_column, const bool hoist_literals);
   llvm::ConstantInt* inlineIntNull(const SQLTypes);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
@@ -191,7 +191,7 @@ private:
   llvm::Value* toDoublePrecision(llvm::Value* val);
 
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
-  int getLocalColumnId(const int global_col_id) const;
+  int getLocalColumnId(const int global_col_id, const bool fetch_column) const;
 
   bool skipFragment(
     const Fragmenter_Namespace::FragmentInfo& frag_info,
@@ -327,6 +327,7 @@ private:
     std::vector<int64_t> init_agg_vals_;
     std::unordered_map<int, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
+    std::unordered_set<int> columns_to_fetch_;
   };
   std::unique_ptr<PlanState> plan_state_;
 

@@ -924,8 +924,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const bool hoist_literals) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   return agg_expr
-    ? executor_->codegen(agg_expr->get_arg(), hoist_literals)
-    : executor_->codegen(target_expr, hoist_literals);
+    ? executor_->codegen(agg_expr->get_arg(), true, hoist_literals)
+    : executor_->codegen(target_expr, false, hoist_literals);
 }
 
 llvm::Function* GroupByAndAggregate::getFunction(const std::string& name) const {
