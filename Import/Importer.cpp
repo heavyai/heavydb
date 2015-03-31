@@ -18,7 +18,7 @@
 
 namespace Importer_NS {
 
-bool debug_timing = true;
+bool debug_timing = false;
 
 static std::mutex insert_mutex;
 
@@ -155,7 +155,7 @@ find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &c
 }
 
 static void
-import_thread(const Importer *importer, const char *buffer, size_t begin_pos, size_t end_pos, size_t total_size)
+import_thread(int thread_id, Importer *importer, const char *buffer, size_t begin_pos, size_t end_pos, size_t total_size)
 {
   size_t row_count = 0;
   int64_t total_get_row_time_us = 0;
@@ -168,10 +168,9 @@ import_thread(const Importer *importer, const char *buffer, size_t begin_pos, si
   const char *thread_buf = buffer + begin_pos + begin;
   const char *thread_buf_end = buffer + end_pos;
   const char *buf_end = buffer + total_size;
-  std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
-  for (const auto cd : importer->get_column_descs()) {
-    import_buffers.push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, importer->get_string_dict(cd))));
-  }
+  std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers = importer->get_import_buffers(thread_id);
+  for (const auto& p : import_buffers)
+    p->flush();
   std::vector<std::string> row;
   for (const char *p = thread_buf; p < thread_buf_end; p++) {
     {
@@ -326,9 +325,6 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
     table_desc->fragmenter->insertData(ins_data);
   }
-  for (const auto& import_buff : import_buffers) {
-    import_buff->flush();
-  }
 }
 
 #define IMPORT_FILE_BUFFER_SIZE   100000000
@@ -337,7 +333,6 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
 void
 Importer::import()
 {
-  std::setprecision(3);
   column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
   insert_data.databaseId = catalog.get_currentDB().dbId;
   insert_data.tableId = table_desc->tableId;
@@ -360,6 +355,11 @@ Importer::import()
   buffer[0] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
   if (max_threads > 1)
     buffer[1] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
+  for (int i = 0; i < max_threads; i++) {
+    import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
+    for (const auto cd : column_descs)
+      import_buffers_vec[i].push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, get_string_dict(cd))));
+  }
   size_t current_pos = 0;
   size_t end_pos;
   (void)fseek(p_file, current_pos, SEEK_SET);
@@ -383,7 +383,7 @@ Importer::import()
       max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos)/MIN_FILE_BUFFER_SIZE));
     }
     if (max_threads == 1) {
-      import_thread(this, buffer[which_buf], begin_pos, end_pos, end_pos);
+      import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
       current_pos += end_pos;
       (void)fseek(p_file, current_pos, SEEK_SET);
       size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
@@ -394,7 +394,7 @@ Importer::import()
       for (int i = 0; i < max_threads; i++) {
         size_t begin = begin_pos + i * ((end_pos - begin_pos) / max_threads);
         size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
-        threads.push_back(std::thread(import_thread, this, buffer[which_buf], begin, end, end_pos));
+        threads.push_back(std::thread(import_thread, i, this, buffer[which_buf], begin, end, end_pos));
       }
       current_pos += end_pos;
       which_buf = (which_buf + 1) % 2;

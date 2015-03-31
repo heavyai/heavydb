@@ -185,53 +185,44 @@ public:
   void flush() {
     switch (column_desc_->columnType.get_type()) {
     case kBOOLEAN: {
-      std::vector<int8_t> empty;
-      bool_buffer_->swap(empty);
+      bool_buffer_->clear();
       break;
     }
     case kSMALLINT: {
-      std::vector<int16_t> empty;
-      smallint_buffer_->swap(empty);
+      smallint_buffer_->clear();
       break;
     }
     case kINT: {
-      std::vector<int32_t> empty;
-      int_buffer_->swap(empty);
+      int_buffer_->clear();
       break;
     }
     case kBIGINT:
     case kNUMERIC:
     case kDECIMAL: {
-      std::vector<int64_t> empty;
-      bigint_buffer_->swap(empty);
+      bigint_buffer_->clear();
       break;
     }
     case kFLOAT: {
-      std::vector<float> empty;
-      float_buffer_->swap(empty);
+      float_buffer_->clear();
       break;
     }
     case kDOUBLE: {
-      std::vector<double> empty;
-      double_buffer_->swap(empty);
+      double_buffer_->clear();
       break;
     }
     case kTEXT: 
     case kVARCHAR:
     case kCHAR: {
-      std::vector<std::string> empty;
-      string_buffer_->swap(empty);
+      string_buffer_->clear();
       if (column_desc_->columnType.get_compression() == kENCODING_DICT) {
-        std::vector<int32_t> empty;
-        string_dict_buffer_->swap(empty);
+        string_dict_buffer_->clear();
       }
       break;
     }
     case kTIME:
     case kTIMESTAMP:
     case kDATE: {
-      std::vector<time_t> empty;
-      time_buffer_->swap(empty);
+      time_buffer_->clear();
       break;
     }
     default:
@@ -282,6 +273,8 @@ class Importer {
       return dict_map.at(cd->columnId).get();
     }
     void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) const;
+    std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> &get_import_buffers_vec() { return import_buffers_vec; }
+    std::vector<std::unique_ptr<TypedImportBuffer>> &get_import_buffers(int i) { return import_buffers_vec[i]; }
   private:
     const Catalog_Namespace::Catalog &catalog;
     const TableDescriptor *table_desc;
@@ -295,6 +288,7 @@ class Importer {
     std::list <const ColumnDescriptor *> column_descs;
     Fragmenter_Namespace::InsertData insert_data;
     std::map<int, std::shared_ptr<StringDictionary>> dict_map;
+    std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
 };
 
 };
