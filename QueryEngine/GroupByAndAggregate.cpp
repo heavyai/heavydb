@@ -13,10 +13,12 @@ QueryExecutionContext::QueryExecutionContext(
     const QueryMemoryDescriptor& query_mem_desc,
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
-    const ExecutorDeviceType device_type)
+    const ExecutorDeviceType device_type,
+    const int device_id)
   : query_mem_desc_(query_mem_desc)
   , executor_(executor)
   , device_type_(device_type)
+  , device_id_(device_id)
   , num_buffers_ { device_type == ExecutorDeviceType::CPU
       ? 1
       : executor->block_size_x_ * executor->grid_size_x_ } {
@@ -196,8 +198,20 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
             out_vec_idx += 2;
           } else if (is_real_string) {
             result_row.agg_types_.push_back(target_expr->get_type_info());
-            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count]);
-            result_row.agg_results_.push_back(group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1]);
+            int64_t str_len = group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1];
+            int64_t str_ptr = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
+            CHECK_GE(str_len, 0);
+            CHECK(device_type_ == ExecutorDeviceType::CPU ||
+                  device_type_ == ExecutorDeviceType::GPU);
+            if (device_type_ == ExecutorDeviceType::CPU) {
+              result_row.agg_results_.push_back(std::string(
+                reinterpret_cast<char*>(str_ptr), str_len));
+            } else {
+              std::vector<int8_t> cpu_buffer(str_len);
+              auto& data_mgr = executor_->catalog_->get_dataMgr();
+              copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(str_ptr), str_len, device_id_);
+              result_row.agg_results_.push_back(std::string(reinterpret_cast<char*>(&cpu_buffer[0]), str_len));
+            }
             out_vec_idx += 2;
           } else {
             result_row.agg_types_.push_back(target_expr->get_type_info());
@@ -364,9 +378,10 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
 std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionContext(
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
-    const ExecutorDeviceType device_type) const {
+    const ExecutorDeviceType device_type,
+    const int device_id) const {
   return std::unique_ptr<QueryExecutionContext>(
-    new QueryExecutionContext(*this, init_agg_vals, executor, device_type));
+    new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id));
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {

@@ -48,11 +48,11 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
     auto actual_idx = agg_results_idx_[idx];
     return agg_types_[idx].is_integer()
       ? AggResult(
-          static_cast<double>(agg_results_[actual_idx]) /
-          static_cast<double>(agg_results_[actual_idx + 1]))
+          static_cast<double>(*boost::get<int64_t>(&agg_results_[actual_idx])) /
+          static_cast<double>(*boost::get<int64_t>(&agg_results_[actual_idx + 1])))
       : AggResult(
-          *reinterpret_cast<const double*>(&agg_results_[actual_idx]) /
-          static_cast<double>(agg_results_[actual_idx + 1]));
+          *reinterpret_cast<const double*>(boost::get<int64_t>(&agg_results_[actual_idx])) /
+          static_cast<double>(*boost::get<int64_t>(&agg_results_[actual_idx + 1])));
   } else {
     CHECK_LT(idx, agg_results_.size());
     CHECK(agg_types_[idx].is_number() || agg_types_[idx].is_string() || agg_types_[idx].is_time());
@@ -63,28 +63,16 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
       if (agg_types_[idx].get_compression() == kENCODING_DICT) {
         const int dict_id = agg_types_[idx].get_comp_param();
         return translate_strings
-          ? AggResult(executor_->getStringDictionary(dict_id)->getString(agg_results_[actual_idx]))
+          ? AggResult(executor_->getStringDictionary(dict_id)->getString(
+              *boost::get<int64_t>(&agg_results_[actual_idx])))
           : AggResult(agg_results_[actual_idx]);
       } else {
         CHECK_EQ(kENCODING_NONE, agg_types_[idx].get_compression());
-        CHECK_NE(agg_results_[actual_idx + 1], 0);
-        if (agg_results_[actual_idx + 1] > 0) {
-          return AggResult(std::string(
-            reinterpret_cast<char*>(agg_results_[actual_idx]),  // payload
-            agg_results_[actual_idx + 1]));  // length
-        }
-        // TODO(alex): remove the negative length hack
-        auto& data_mgr = executor_->catalog_->get_dataMgr();
-        const size_t str_len = -agg_results_[actual_idx + 1];
-        std::vector<int8_t> cpu_buffer(str_len);
-        copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(agg_results_[actual_idx]), str_len, 0);
-        return AggResult(std::string(
-          reinterpret_cast<char*>(&cpu_buffer[0]),  // payload
-          str_len));  // length
+        return AggResult(*boost::get<std::string>(&agg_results_[actual_idx]));
       }
     } else {
       CHECK(agg_types_[idx].get_type() == kFLOAT || agg_types_[idx].get_type() == kDOUBLE);
-      return AggResult(*reinterpret_cast<const double*>(&agg_results_[actual_idx]));
+      return AggResult(*reinterpret_cast<const double*>(boost::get<int64_t>(&agg_results_[actual_idx])));
     }
   }
   return agg_results_[idx];
@@ -1118,37 +1106,38 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
           case kAVG:
             if (agg_type.is_integer() || agg_type.is_time()) {
               agg_sum(
-                &old_agg_results[actual_col_idx],
-                row.agg_results_[actual_col_idx]);
+                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
+                *boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
             } else {
               agg_sum_double(
-                &old_agg_results[actual_col_idx],
-                *reinterpret_cast<const double*>(&row.agg_results_[actual_col_idx]));
+                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
+                *reinterpret_cast<const double*>(boost::get<int64_t>(&row.agg_results_[actual_col_idx])));
             }
             if (agg_kind == kAVG) {
-              old_agg_results[actual_col_idx + 1] += row.agg_results_[actual_col_idx + 1];
+              *boost::get<int64_t>(&old_agg_results[actual_col_idx + 1]) +=
+                *boost::get<int64_t>(&row.agg_results_[actual_col_idx + 1]);
             }
             break;
           case kMIN:
             if (agg_type.is_integer() || agg_type.is_time()) {
               agg_min(
-                &old_agg_results[actual_col_idx],
-                row.agg_results_[actual_col_idx]);
+                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
+                *boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
             } else {
               agg_min_double(
-                &old_agg_results[actual_col_idx],
-                *reinterpret_cast<const double*>(&row.agg_results_[actual_col_idx]));
+                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
+                *reinterpret_cast<const double*>(boost::get<int64_t>(&row.agg_results_[actual_col_idx])));
             }
             break;
           case kMAX:
             if (agg_type.is_integer() || agg_type.is_time()) {
               agg_max(
-                &old_agg_results[actual_col_idx],
-                row.agg_results_[actual_col_idx]);
+                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
+                *boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
             } else {
               agg_max_double(
-                &old_agg_results[actual_col_idx],
-                *reinterpret_cast<const double*>(&row.agg_results_[actual_col_idx]));
+                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
+                *reinterpret_cast<const double*>(boost::get<int64_t>(&row.agg_results_[actual_col_idx])));
             }
             break;
           default:
@@ -1379,7 +1368,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   auto small_group_by_buffer = static_cast<int64_t*>(malloc(small_groups_buffer_size));
   init_groups(small_group_by_buffer, small_groups_buffer_entry_count_, target_exprs.size(),
     &init_agg_vals[0], 1, false, 1);
-  auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this, ExecutorDeviceType::CPU);
+  auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this, ExecutorDeviceType::CPU, 0);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals,
@@ -1531,7 +1520,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       const CompilationResult& compilation_result =
         chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
       auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
-        plan_state_->init_agg_vals_, this, chosen_device_type);
+        plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id);
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
       if (limit && limit < num_rows) {
@@ -1672,7 +1661,7 @@ void Executor::executePlanWithoutGroupBy(
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
     auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
-      plan_state_->init_agg_vals_, this, device_type);
+      plan_state_->init_agg_vals_, this, device_type, device_id);
     out_vec = query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_,

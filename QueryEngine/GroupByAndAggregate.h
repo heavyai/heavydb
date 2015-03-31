@@ -85,7 +85,7 @@ public:
 private:
   // TODO(alex): support for strings
   std::vector<int64_t> value_tuple_;
-  std::vector<int64_t> agg_results_;
+  std::vector<boost::variant<int64_t, std::string>> agg_results_;
   std::vector<size_t> agg_results_idx_;
   std::vector<SQLAgg> agg_kinds_;
   std::vector<SQLTypeInfo> agg_types_;
@@ -102,7 +102,8 @@ public:
     const QueryMemoryDescriptor&,
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
-    const ExecutorDeviceType device_type);
+    const ExecutorDeviceType device_type,
+    const int device_id);
   ~QueryExecutionContext();
 
   // TOOD(alex): get rid of targets parameter
@@ -125,6 +126,7 @@ private:
   const QueryMemoryDescriptor& query_mem_desc_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
+  const int device_id_;
   const size_t num_buffers_;
 
   std::vector<int64_t*> group_by_buffers_;
@@ -155,7 +157,8 @@ struct QueryMemoryDescriptor {
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
     const std::vector<int64_t>& init_agg_vals,
     const Executor* executor,
-    const ExecutorDeviceType device_type) const;
+    const ExecutorDeviceType device_type,
+    const int device_id) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
