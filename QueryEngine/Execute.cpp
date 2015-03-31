@@ -127,6 +127,10 @@ std::vector<ResultRow> Executor::executeSelectPlan(
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
+    if (limit) {
+      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat);
+      return std::vector<ResultRow>(rows.begin(), rows.begin() + std::min(limit, static_cast<int64_t>(rows.size())));
+    }
     return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
@@ -1523,9 +1527,6 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id);
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
-      if (limit && limit < num_rows) {
-        num_rows = limit;
-      }
       const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
         ? Data_Namespace::GPU_LEVEL
         : Data_Namespace::CPU_LEVEL;
