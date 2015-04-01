@@ -108,7 +108,7 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
 								case kTIME:
 								case kTIMESTAMP:
 								case kDATE:
-									assert(false);
+									return new FixedLengthEncoder<time_t, int32_t>(buffer);
 									break;
                 default: {
                     return 0;

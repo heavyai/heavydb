@@ -45,7 +45,6 @@ scan_chunk(const Chunk &chunk, size_t &hash, bool use_iter)
       ChunkIter_get_nth(&cit, nth++, true, &vd, &is_end);
 		if (is_end)
 			break;
-		assert(!vd.is_null);
 		switch (cd->columnType.get_type()) {
 			case kSMALLINT:
 				boost::hash_combine(hash, *(int16_t*)vd.pointer);

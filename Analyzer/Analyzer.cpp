@@ -718,15 +718,9 @@ namespace Analyzer {
     type_info = str_type_info;
   }
 
-  Expr *
-  Constant::add_cast(const SQLTypeInfo &new_type_info)
+  void
+  Constant::do_cast(const SQLTypeInfo &new_type_info)
   {
-    if (is_null) {
-      type_info = new_type_info;
-      return this;
-    }
-    if (new_type_info.get_compression() != type_info.get_compression())
-      return Expr::add_cast(new_type_info);
     if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP || type_info.get_type() == kBOOLEAN)) {
       cast_number(new_type_info);
     } else if (new_type_info.is_string() && type_info.is_string()) {
@@ -737,6 +731,24 @@ namespace Analyzer {
       cast_to_string(new_type_info);
     } else
       throw std::runtime_error("Invalid cast.");
+  }
+
+  Expr *
+  Constant::add_cast(const SQLTypeInfo &new_type_info)
+  {
+    if (is_null) {
+      type_info = new_type_info;
+      return this;
+    }
+    if (new_type_info.get_compression() != type_info.get_compression()) {
+      if (new_type_info.get_compression() != kENCODING_NONE) {
+        SQLTypeInfo new_ti = new_type_info;
+        new_ti.set_compression(kENCODING_NONE);
+        do_cast(new_ti);
+      }
+      return Expr::add_cast(new_type_info);
+    }
+    do_cast(new_type_info);
     return this;
   }
 

@@ -213,7 +213,7 @@ class SQLTypeInfo {
         case kNULLT:
           return true;
         default:
-          return false;
+          break;
       }
       return false;
     }
@@ -232,7 +232,7 @@ class SQLTypeInfo {
           return true;
         default:
           // @TODO(wei) handle null strings
-          return false;
+          break;
       }
       return false;
     }
@@ -334,6 +334,7 @@ class SQLTypeInfo {
 						case kENCODING_NONE:
 							return sizeof(time_t);
 						case kENCODING_FIXED:
+							return comp_param/8;
 						case kENCODING_RL:
 						case kENCODING_DIFF:
 						case kENCODING_SPARSE:

@@ -190,6 +190,7 @@ namespace Analyzer {
       void cast_string(const SQLTypeInfo &new_type_info);
       void cast_from_string(const SQLTypeInfo &new_type_info);
       void cast_to_string(const SQLTypeInfo &new_type_info);
+      void do_cast(const SQLTypeInfo &new_type_info);
   };
 
   /*

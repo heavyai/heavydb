@@ -1790,8 +1790,6 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     if (!col_cv) {
-      CHECK(target_entry->get_expr()->get_type_info().is_string());
-      CHECK_EQ(target_entry->get_expr()->get_type_info().get_compression(), kENCODING_DICT);
       auto col_cast = dynamic_cast<const Analyzer::UOper*>(target_entry->get_expr());
       CHECK(col_cast);
       CHECK_EQ(kCAST, col_cast->get_optype());

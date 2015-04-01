@@ -84,10 +84,10 @@ decompress(const SQLTypeInfo &ti, int8_t *compressed, VarlenDatum *result, Datum
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
-        result->length = sizeof(time_t);
-        result->pointer = (int8_t*)&datum->timeval;
         switch (ti.get_compression()) {
           case kENCODING_FIXED:
+            datum->timeval = (time_t)*(int32_t*)compressed;
+            break;
           case kENCODING_RL:
           case kENCODING_DIFF:
           case kENCODING_DICT:
@@ -99,6 +99,8 @@ decompress(const SQLTypeInfo &ti, int8_t *compressed, VarlenDatum *result, Datum
           default:
             assert(false);
         }
+        result->length = sizeof(time_t);
+        result->pointer = (int8_t*)&datum->timeval;
         break;
     default:
       assert(false);
