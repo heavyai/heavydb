@@ -1,6 +1,7 @@
 #include "gen-cpp/MapD.h"
 #include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/server/TSimpleServer.h>
+//#include <thrift/server/TSimpleServer.h>
+#include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
 
@@ -204,8 +205,9 @@ int main(int argc, char **argv) {
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
   shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
+  TThreadedServer server (processor, serverTransport, transportFactory, protocolFactory);
 
-  TSimpleServer server(processor, serverTransport, transportFactory, protocolFactory);
+  //SimpleServer server(processor, serverTransport, transportFactory, protocolFactory);
   server.serve();
   return 0;
 }
