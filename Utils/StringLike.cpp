@@ -33,9 +33,6 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
   const char *p = pattern;
   int plen = pat_len;
 
-  if (plen == 1 && *p == '%')
-    return kLIKE_TRUE; // match everything
-
   while (slen > 0 && plen > 0) {
     if (*p == escape_char) {
       // next pattern char must match literally, whatever it is
