@@ -77,7 +77,7 @@ namespace Data_Namespace {
         bufferMgrs_[0].push_back(new FileMgr (0, dataDir_)); 
         levelSizes_.push_back(1);
         size_t cpuMemory = getTotalSystemMemory() * 0.75; // should get free memory instead of this ugly heuristic
-        cout << "Max Cpu Buffer Pool size: " << static_cast<float> (cpuMemory) / (1 << 30) << " GB CPU memory" << endl;
+        //cout << "Max Cpu Buffer Pool size: " << static_cast<float> (cpuMemory) / (1 << 30) << " GB CPU memory" << endl;
         if (hasGpus_) {
             bufferMgrs_.resize(3);
             bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));
@@ -85,8 +85,8 @@ namespace Data_Namespace {
             int numGpus = cudaMgr_->getDeviceCount();
             for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
                 size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (1<<29); // set max mem size to be size of global mem - 512MB
-                size_t gpuSlabSize = std::min(static_cast<size_t>((cudaMgr_->deviceProperties[gpuNum].globalMem / 4)), static_cast<size_t>(1 << 31));
-                cout << "Gpu Slab Size: " << gpuSlabSize;
+                size_t gpuSlabSize = std::min(static_cast<size_t>((cudaMgr_->deviceProperties[gpuNum].globalMem / 4)), static_cast<size_t>(1L << 31));
+                //cout << "Gpu Slab Size: " << gpuSlabSize << endl;
                 //bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
                 bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512,bufferMgrs_[1][0]));
             }

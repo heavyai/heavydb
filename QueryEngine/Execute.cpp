@@ -325,17 +325,16 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   like_pattern_lv = cgen_state_->ir_builder_.CreateBitCast(like_pattern_lv, i8_ptr);
   auto like_pattern_len = like_expr_arg_const->get_constval().stringval->size();
   llvm::Value* like_pattern_len_lv = ll_int(static_cast<int32_t>(like_pattern_len));
-  auto string_like_fn = cgen_state_->module_->getFunction("string_like");
+  auto string_like_fn = expr->get_is_ilike()
+    ? cgen_state_->module_->getFunction("string_ilike")
+    : cgen_state_->module_->getFunction("string_like");
   CHECK(string_like_fn);
   return cgen_state_->ir_builder_.CreateCall(string_like_fn, std::vector<llvm::Value*> {
     str_lv[0],
     str_lv[1],
     like_pattern_lv,
     like_pattern_len_lv,
-    ll_int(int8_t(escape_char)),
-    expr->get_is_ilike()
-      ? llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), true)
-      : llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), false)
+    ll_int(int8_t(escape_char))
   });
 }
 
@@ -401,6 +400,11 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   case kENCODING_DICT:
     CHECK(type_info.is_string());
     return std::make_shared<FixedWidthInt>(4);
+  case kENCODING_FIXED: {
+    const auto bit_width = col_var->get_comp_param();
+    CHECK_EQ(0, bit_width % 8);
+    return std::make_shared<FixedWidthInt>(bit_width / 8);
+  }
   default:
     CHECK(false);
   }
@@ -1791,8 +1795,6 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   for (auto target_entry : targets) {
     auto col_cv = dynamic_cast<const Analyzer::Constant*>(target_entry->get_expr());
     if (!col_cv) {
-      CHECK(target_entry->get_expr()->get_type_info().is_string());
-      CHECK_EQ(target_entry->get_expr()->get_type_info().get_compression(), kENCODING_DICT);
       auto col_cast = dynamic_cast<const Analyzer::UOper*>(target_entry->get_expr());
       CHECK(col_cast);
       CHECK_EQ(kCAST, col_cast->get_optype());
@@ -2283,7 +2285,8 @@ declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_double_shared(i64*, double);
 declare i64 @ExtractFromTime(i32, i64);
 declare i64 @string_decode(i8*, i64);
-declare i1 @string_like(i8*, i32, i8*, i32, i8, i1);
+declare i1 @string_like(i8*, i32, i8*, i32, i8);
+declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i32 @merge_error_code(i32, i32*);
 
 )";

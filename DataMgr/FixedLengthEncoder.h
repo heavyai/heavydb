@@ -4,6 +4,7 @@
 #include "AbstractBuffer.h"
 #include <stdexcept>
 #include <iostream>
+#include <memory>
 
 template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {
@@ -13,15 +14,13 @@ class FixedLengthEncoder : public Encoder {
 
         ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) {
             T * unencodedData = reinterpret_cast<T *> (srcData); 
-            V * encodedData = new V [numAppendElems];  
+            std::unique_ptr<V> encodedData = std::unique_ptr<V>(new V [numAppendElems]);  
             for (size_t i = 0; i < numAppendElems; ++i) {
                 //std::cout << "Unencoded: " << unencodedData[i] << std::endl;
                 //std::cout << "Min: " << dataMin << " Max: " <<  dataMax << std::endl;
-                encodedData[i] = static_cast <V>(unencodedData[i]);
-                if (unencodedData[i] != encodedData[i]) {
-                    //std::cout << "Unencoded: " << unencodedData[i] << " Encoded: " << encodedData[i] << std::endl;
-                    delete [] encodedData;
-                    throw std::runtime_error ("Encoding failed");
+                encodedData.get()[i] = static_cast <V>(unencodedData[i]);
+                if (unencodedData[i] != encodedData.get()[i]) {
+                    throw std::runtime_error ("Fixed encoding failed, Unencoded: " + std::to_string(unencodedData[i]) + " encoded: " + std::to_string(encodedData.get()[i]));
                 }
                 else {
                     dataMin = std::min(dataMin,unencodedData[i]);
@@ -32,8 +31,7 @@ class FixedLengthEncoder : public Encoder {
             numElems += numAppendElems;
 
             // assume always CPU_BUFFER?
-            buffer_ -> append((int8_t *)(encodedData),numAppendElems*sizeof(V));
-            delete [] encodedData;
+            buffer_ -> append((int8_t *)(encodedData.get()),numAppendElems*sizeof(V));
             ChunkMetadata chunkMetadata;
             getMetadata(chunkMetadata);
             srcData += numAppendElems *sizeof(T);

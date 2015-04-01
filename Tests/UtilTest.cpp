@@ -2,14 +2,14 @@
 #include "gtest/gtest.h"
 
 TEST(Utils, StringLike) {
-	ASSERT_TRUE(string_like("abc", 3, "abc", 3, '\\', false));
-	ASSERT_FALSE(string_like("abc", 3, "ABC", 3, '\\', false));
-	ASSERT_TRUE(string_like("abc", 3, "AbC", 3, '\\', true));
-	ASSERT_TRUE(string_like("Xyzabc", 6, "xyz%", 4, '\\', true));
-  ASSERT_TRUE(string_like("abcxyzefg", 9, "%xyz%", 5, '\\', false));
-  ASSERT_TRUE(string_like("abcxyzefgXYZhij", 15, "%xyz%XYZ%", 9, '\\', false));
-  ASSERT_TRUE(string_like("abcxOzefgXpZhij", 15, "%x_z%X_Z%", 9, '\\', false));
-  ASSERT_TRUE(string_like("abc100%efg", 10, "%100!%___", 9, '!', false));
+	ASSERT_TRUE(string_like("abc", 3, "abc", 3, '\\'));
+	ASSERT_FALSE(string_like("abc", 3, "ABC", 3, '\\'));
+	ASSERT_TRUE(string_ilike("abc", 3, "AbC", 3, '\\'));
+	ASSERT_TRUE(string_ilike("Xyzabc", 6, "xyz%", 4, '\\'));
+  ASSERT_TRUE(string_like("abcxyzefg", 9, "%xyz%", 5, '\\'));
+  ASSERT_TRUE(string_like("abcxyzefgXYZhij", 15, "%xyz%XYZ%", 9, '\\'));
+  ASSERT_TRUE(string_like("abcxOzefgXpZhij", 15, "%x_z%X_Z%", 9, '\\'));
+  ASSERT_TRUE(string_like("abc100%efg", 10, "%100!%___", 9, '!'));
 }
 
 int

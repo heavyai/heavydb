@@ -1287,8 +1287,8 @@ namespace Parser {
         const std::string &comp = *compression->get_encoding_name();
         int comp_param;
         if (boost::iequals(comp, "fixed")) {
-          if (!cd.columnType.is_integer())
-            throw std::runtime_error("Fixed encoding is only supported for integer columns.");
+          if (!cd.columnType.is_integer() && !cd.columnType.is_time())
+            throw std::runtime_error("Fixed encoding is only supported for integer or time columns.");
           // fixed-bits encoding
           switch (cd.columnType.get_type()) {
             case kSMALLINT:
@@ -1302,6 +1302,12 @@ namespace Parser {
             case kBIGINT:
               if (compression->get_encoding_param() != 8 && compression->get_encoding_param() != 16 && compression->get_encoding_param() != 32)
                 throw std::runtime_error("Compression parameter for Fixed encoding on BIGINT must be 8 or 16 or 32.");
+              break;
+            case kTIMESTAMP:
+            case kDATE:
+            case kTIME:
+              if (compression->get_encoding_param() != 32)
+                throw std::runtime_error("Compression parameter for Fixed encoding on TIME, DATE or TIMESTAMP must 32.");
               break;
             default:
               break;

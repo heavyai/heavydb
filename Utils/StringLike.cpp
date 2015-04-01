@@ -105,9 +105,17 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
  * not handled for now.
  */
 extern "C" DEVICE
-bool string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
+bool string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char)
 {
   // @TODO(wei/alex) add runtime error handling
-  LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, is_ilike);
+  LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, false);
+  return status == kLIKE_TRUE;
+}
+
+extern "C" DEVICE
+bool string_ilike(const char *str, int str_len, const char *pattern, int pat_len, char escape_char)
+{
+  // @TODO(wei/alex) add runtime error handling
+  LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, true);
   return status == kLIKE_TRUE;
 }
