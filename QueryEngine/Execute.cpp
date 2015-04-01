@@ -400,6 +400,11 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   case kENCODING_DICT:
     CHECK(type_info.is_string());
     return std::make_shared<FixedWidthInt>(4);
+  case kENCODING_FIXED: {
+    const auto bit_width = col_var->get_comp_param();
+    CHECK_EQ(0, bit_width % 8);
+    return std::make_shared<FixedWidthInt>(bit_width / 8);
+  }
   default:
     CHECK(false);
   }
