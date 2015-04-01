@@ -8,7 +8,6 @@
 DEVICE static void
 decompress(const SQLTypeInfo &ti, int8_t *compressed, VarlenDatum *result, Datum *datum)
 {
-  result->is_null = false;
   switch (ti.get_type()) {
     case kSMALLINT:
       result->length = sizeof(int16_t);
@@ -104,6 +103,7 @@ decompress(const SQLTypeInfo &ti, int8_t *compressed, VarlenDatum *result, Datum
     default:
       assert(false);
   }
+  result->is_null = ti.is_null(*datum);
 }
 
 void
@@ -131,7 +131,7 @@ ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is
     } else {
       result->length = it->skip_size;
       result->pointer = it->current_pos;
-      result->is_null = false;
+      result->is_null = it->type_info.is_null(result->pointer);
     }
     it->current_pos += it->skip * it->skip_size;
   } else {

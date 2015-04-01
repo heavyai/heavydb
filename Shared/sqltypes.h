@@ -40,6 +40,7 @@ enum SQLTypes {
 
 typedef union {
 	bool boolval;
+  int8_t tinyintval;
 	int16_t smallintval;
 	int32_t intval;
 	int64_t bigintval;
@@ -92,6 +93,15 @@ enum EncodingType {
 #define IS_NUMBER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
 #define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
+
+#define NULL_BOOLEAN    INT8_MIN
+#define NULL_TINYINT    INT8_MIN
+#define NULL_SMALLINT   INT16_MIN
+#define NULL_INT        INT32_MIN
+#define NULL_BIGINT     INT64_MIN
+#define NULL_FLOAT      FLT_MIN
+#define NULL_DOUBLE     DBL_MIN
+
 
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
@@ -171,6 +181,60 @@ class SQLTypeInfo {
         return true;
       else
         return false;
+    }
+    DEVICE inline bool is_null(const Datum &d) const {
+      // assuming Datum is always uncompressed
+      switch (type) {
+        case kBOOLEAN:
+          return (int8_t)d.boolval == NULL_BOOLEAN;
+        case kSMALLINT:
+          return d.smallintval == NULL_SMALLINT;
+        case kINT:
+          return d.intval == NULL_INT;
+        case kBIGINT:
+        case kNUMERIC:
+        case kDECIMAL:
+          return d.bigintval == NULL_BIGINT;
+        case kFLOAT:
+          return d.floatval == NULL_FLOAT;
+        case kDOUBLE:
+          return d.doubleval == NULL_DOUBLE;
+        case kTIME:
+        case kTIMESTAMP:
+        case kDATE:
+          if (sizeof(time_t) == 4)
+            return d.timeval == NULL_INT;
+          return d.timeval == NULL_BIGINT;
+        case kTEXT:
+        case kVARCHAR:
+        case kCHAR:
+          // @TODO handle null strings
+          break;
+        case kNULLT:
+          return true;
+        default:
+          return false;
+      }
+      return false;
+    }
+    DEVICE inline bool is_null(const int8_t *val) const {
+      // val can be either compressed or uncompressed
+      switch (size) {
+        case 1:
+          return *val == NULL_TINYINT;
+        case 2:
+          return *(int16_t*)val == NULL_SMALLINT;
+        case 4:
+          return *(int32_t*)val == NULL_INT;
+        case 8:
+          return *(int64_t*)val == NULL_BIGINT;
+        case kNULLT:
+          return true;
+        default:
+          // @TODO(wei) handle null strings
+          return false;
+      }
+      return false;
     }
   private:
     SQLTypes type; // type id
@@ -300,13 +364,6 @@ DatumToString(Datum d, const SQLTypeInfo &ti);
 #endif
 
 #include "../QueryEngine/ExtractFromTime.h"
-
-#define NULL_BOOLEAN    INT8_MIN
-#define NULL_SMALLINT   INT16_MIN
-#define NULL_INT        INT32_MIN
-#define NULL_BIGINT     INT64_MIN
-#define NULL_FLOAT      FLT_MIN
-#define NULL_DOUBLE     DBL_MIN
 
 typedef int32_t StringOffsetT;
 
