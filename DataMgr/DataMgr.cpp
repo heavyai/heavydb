@@ -9,6 +9,14 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 
+#ifdef __APPLE__
+#include <sys/types.h>
+#include <sys/sysctl.h>
+#else
+#include <unistd.h>
+#endif
+
+#include <algorithm>
 #include <limits>
 
 
@@ -43,25 +51,49 @@ namespace Data_Namespace {
         }
     }
 
+    size_t DataMgr::getTotalSystemMemory() {
+        #ifdef __APPLE__
+        int mib[2];
+        size_t physical_memory;
+        size_t length;
+        //Get the Physical memory size
+        mib[0] = CTL_HW;
+        mib[1] = HW_MEMSIZE;
+        length = sizeof(size_t);
+        sysctl(mib, 2, &physical_memory,
+                     &length, NULL, 0);
+        return physical_memory;
+
+        #else
+        long pages = sysconf(_SC_PHYS_PAGES);
+        long page_size = sysconf(_SC_PAGE_SIZE);
+        return pages * page_size;
+        #endif
+    }
 
 
     void DataMgr::populateMgrs() {
         bufferMgrs_.resize(2);
         bufferMgrs_[0].push_back(new FileMgr (0, dataDir_)); 
         levelSizes_.push_back(1);
+        size_t cpuMemory = getTotalSystemMemory() * 0.75; // should get free memory instead of this ugly heuristic
+        //cout << "Max Cpu Buffer Pool size: " << static_cast<float> (cpuMemory) / (1 << 30) << " GB CPU memory" << endl;
         if (hasGpus_) {
             bufferMgrs_.resize(3);
-            bufferMgrs_[1].push_back(new CpuBufferMgr(0,std::numeric_limits<unsigned int>::max(), CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));
             levelSizes_.push_back(1);
             int numGpus = cudaMgr_->getDeviceCount();
             for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
                 size_t gpuMaxMemSize = (cudaMgr_->deviceProperties[gpuNum].globalMem) - (1<<29); // set max mem size to be size of global mem - 512MB
-                bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 30,512,bufferMgrs_[1][0]));
+                size_t gpuSlabSize = std::min(static_cast<size_t>((cudaMgr_->deviceProperties[gpuNum].globalMem / 4)), static_cast<size_t>(1L << 31));
+                //cout << "Gpu Slab Size: " << gpuSlabSize << endl;
+                //bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
+                bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512,bufferMgrs_[1][0]));
             }
             levelSizes_.push_back(numGpus);
         }
         else {
-            bufferMgrs_[1].push_back(new CpuBufferMgr(0,1L<<33, CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));  // allocate 4GB for now
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));
             levelSizes_.push_back(1);
         }
     }

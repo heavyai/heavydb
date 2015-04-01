@@ -57,6 +57,7 @@ namespace Data_Namespace {
             std::vector <int> levelSizes_;
 
         private:
+            size_t getTotalSystemMemory();
             void populateMgrs();
             std::vector <std::vector <AbstractBufferMgr *> > bufferMgrs_;
             std::string dataDir_;
