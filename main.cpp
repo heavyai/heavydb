@@ -334,9 +334,9 @@ main(int argc, char* argv[])
 						}
 						if (!results.empty()) {
 							for (const auto& row : results) {
-								cout << fixed << setprecision(13) << row.agg_result(0);
+								cout << fixed << setprecision(13) << row_col_to_string(row, 0);
 								for (size_t i = 1; i < row.size(); ++i) {
-									cout << "|" << row.agg_result(i);
+									cout << "|" << row_col_to_string(row, i);
 								}
 								cout << endl;
 							}

@@ -95,6 +95,17 @@ private:
   friend class QueryExecutionContext;
 };
 
+inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
+  const auto& agg_result = row.agg_result(i);
+  const auto& agg_ti = row.agg_type(i);
+  if (agg_ti.is_time()) {
+    Datum datum;
+    datum.timeval = *boost::get<int64_t>(&agg_result);
+    return DatumToString(datum, agg_ti);
+  }
+  return boost::lexical_cast<std::string>(agg_result);
+}
+
 class QueryExecutionContext : boost::noncopyable {
 public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
