@@ -104,7 +104,14 @@ inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
     datum.timeval = *boost::get<int64_t>(&agg_result);
     return DatumToString(datum, agg_ti);
   }
-  return boost::lexical_cast<std::string>(agg_result);
+  if (agg_ti.is_fp()) {
+    return std::to_string(*boost::get<double>(&agg_result));
+  }
+  if (agg_ti.is_integer()) {
+    return std::to_string(*boost::get<int64_t>(&agg_result));
+  }
+  CHECK(agg_ti.is_string());
+  return *boost::get<std::string>(&agg_result);
 }
 
 class ChunkIter;
