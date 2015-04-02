@@ -42,7 +42,8 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
   CHECK_LT(idx, agg_kinds_.size());
   CHECK_EQ(agg_results_idx_.size(), agg_kinds_.size());
   CHECK_EQ(agg_results_idx_.size(), agg_types_.size());
-  if (agg_kinds_[idx] == kAVG) {
+  const auto agg_info = agg_kinds_[idx];
+  if (agg_info.agg_kind == kAVG) {
     CHECK(!agg_types_[idx].is_string());
     CHECK_LT(idx, agg_results_.size() - 1);
     auto actual_idx = agg_results_idx_[idx];
@@ -58,6 +59,10 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
     CHECK(agg_types_[idx].is_number() || agg_types_[idx].is_string() || agg_types_[idx].is_time());
     auto actual_idx = agg_results_idx_[idx];
     if (agg_types_[idx].is_integer() || agg_types_[idx].is_time()) {
+      if (agg_info.is_distinct) {
+        return AggResult(bitmap_size(*boost::get<int64_t>(&agg_results_[actual_idx]), idx,
+          row_set_mem_owner_->count_distinct_descriptors_));
+      }
       return AggResult(*boost::get<int64_t>(&agg_results_[actual_idx]));
     } else if (agg_types_[idx].is_string()) {
       if (agg_types_[idx].get_compression() == kENCODING_DICT) {
@@ -126,11 +131,12 @@ std::vector<ResultRow> Executor::executeSelectPlan(
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
+    auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
     if (limit) {
-      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat);
+      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat, row_set_mem_owner);
       return std::vector<ResultRow>(rows.begin(), rows.begin() + std::min(limit, static_cast<int64_t>(rows.size())));
     }
-    return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat);
+    return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat, row_set_mem_owner);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -1068,7 +1074,10 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64
 
 }  // namespace
 
-Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Executor::ResultRows>& results_per_device) const {
+Executor::ResultRows Executor::reduceMultiDeviceResults(
+    const std::vector<Executor::ResultRows>& results_per_device,
+    const QueryMemoryDescriptor& query_mem_desc,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   if (results_per_device.empty()) {
     return {};
   }
@@ -1095,7 +1104,6 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         CHECK(agg_types.empty());
         agg_types = row.agg_types_;
       } else {
-        CHECK(agg_kinds == row.agg_kinds_);
         CHECK(agg_types == row.agg_types_);
       }
       auto it = reduced_results_map.find(row.value_tuple_);
@@ -1106,15 +1114,29 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
         CHECK_EQ(old_agg_results.size(), row.agg_results_.size());
         const size_t agg_col_count = row.size();
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-          const auto agg_kind = row.agg_kinds_[agg_col_idx];
+          const auto agg_info = row.agg_kinds_[agg_col_idx];
           const auto agg_type = row.agg_types_[agg_col_idx];
           CHECK(agg_type.is_integer() || agg_type.is_time() || agg_type.is_string() ||
                 agg_type.get_type() == kFLOAT || agg_type.get_type() == kDOUBLE);
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
-          switch (agg_kind) {
+          switch (agg_info.agg_kind) {
           case kSUM:
           case kCOUNT:
           case kAVG:
+            if (agg_info.is_distinct) {
+              auto count_distinct_desc_it = query_mem_desc.count_distinct_descriptors_.find(agg_col_idx);
+              CHECK(count_distinct_desc_it != query_mem_desc.count_distinct_descriptors_.end());
+              if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
+                CHECK(agg_info.is_agg);
+                CHECK_EQ(kCOUNT, agg_info.agg_kind);
+                auto old_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&old_agg_results[actual_col_idx]));
+                auto new_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
+                const size_t set_size = count_distinct_desc_it->second.max_val -
+                  count_distinct_desc_it->second.min_val + 1;
+                bitmap_unify(new_set, old_set, set_size);
+                break;
+              }
+            }
             if (agg_type.is_integer() || agg_type.is_time()) {
               agg_sum(
                 boost::get<int64_t>(&old_agg_results[actual_col_idx]),
@@ -1124,7 +1146,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
                 boost::get<int64_t>(&old_agg_results[actual_col_idx]),
                 *reinterpret_cast<const double*>(boost::get<int64_t>(&row.agg_results_[actual_col_idx])));
             }
-            if (agg_kind == kAVG) {
+            if (agg_info.agg_kind == kAVG) {
               *boost::get<int64_t>(&old_agg_results[actual_col_idx + 1]) +=
                 *boost::get<int64_t>(&row.agg_results_[actual_col_idx + 1]);
             }
@@ -1160,7 +1182,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(const std::vector<Execut
   }
   // now flatten the reduced map
   for (const auto& kv : reduced_results_map) {
-    ResultRow row(this);
+    ResultRow row(this, row_set_mem_owner);
     row.value_tuple_ = kv.first;
     row.agg_results_ = kv.second;
     row.agg_results_idx_ = agg_results_idx;
@@ -1249,16 +1271,17 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan) {
   std::vector<Executor::AggInfo> result;
   const auto target_exprs = get_agg_target_exprs(plan);
-  for (auto target_expr : target_exprs) {
+  for (auto target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
+    const auto target_expr = target_exprs[target_idx];
     CHECK(target_expr);
     const auto target_type_info = target_expr->get_type_info();
     const auto target_type = target_type_info.get_type();
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     if (!agg_expr) {
       result.emplace_back((target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
-                          target_expr, 0);
+                          target_expr, 0, target_idx);
       if (target_type_info.is_string() && target_type_info.get_compression() == kENCODING_NONE) {
-        result.emplace_back("agg_id", target_expr, 0);
+        result.emplace_back("agg_id", target_expr, 0, target_idx);
       }
       continue;
     }
@@ -1271,28 +1294,29 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
       const auto agg_arg_type = agg_arg_type_info.get_type();
       CHECK(agg_arg_type_info.is_integer() || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
       result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
-                          agg_expr->get_arg(), agg_init_val);
+                          agg_expr->get_arg(), agg_init_val, target_idx);
       result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_count" : "agg_count_double",
-                          agg_expr->get_arg(), agg_init_val);
+                          agg_expr->get_arg(), agg_init_val, target_idx);
       break;
    }
     case kMIN:
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_min" : "agg_min_double",
-                          agg_expr->get_arg(), agg_init_val);
+                          agg_expr->get_arg(), agg_init_val, target_idx);
       break;
     case kMAX:
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_max" : "agg_max_double",
-                          agg_expr->get_arg(), agg_init_val);
+                          agg_expr->get_arg(), agg_init_val, target_idx);
       break;
     case kSUM:
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
-                          agg_expr->get_arg(), agg_init_val);
+                          agg_expr->get_arg(), agg_init_val, target_idx);
       break;
     case kCOUNT:
       result.emplace_back(
         agg_expr->get_is_distinct() ? "agg_count_distinct" : "agg_count",
         agg_expr->get_arg(),
-        agg_init_val);
+        agg_init_val,
+        target_idx);
       break;
     default:
       CHECK(false);
@@ -1319,15 +1343,16 @@ std::vector<ResultRow> Executor::executeResultPlan(
     const Catalog_Namespace::Catalog& cat) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
-  auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat);
+  auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat, nullptr);
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
-  for (auto target_entry : targets) {
+  for (size_t target_idx = 0; target_idx < targets.size(); ++target_idx) {
+    const auto target_entry = targets[target_idx];
     const auto target_type = target_entry->get_expr()->get_type_info().get_type();
     agg_infos.emplace_back(
       (target_type == kFLOAT || target_type == kDOUBLE) ? "agg_id_double" : "agg_id",
-      target_entry->get_expr(), 0);
+      target_entry->get_expr(), 0, target_idx);
   }
   const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
   const size_t in_agg_count { targets.size() };
@@ -1368,11 +1393,11 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, nullptr, false);
+    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
-    ExecutorDeviceType::CPU, 0, {});
+    ExecutorDeviceType::CPU, 0, {}, nullptr);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
     column_buffers, result_columns.size(), init_agg_vals,
@@ -1439,7 +1464,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     const bool hoist_literals,
     const ExecutorDeviceType device_type_in,
     const ExecutorOptLevel opt_level,
-    const Catalog_Namespace::Catalog& cat) {
+    const Catalog_Namespace::Catalog& cat,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // TODO(alex): heuristic for group by buffer size
   const auto scan_plan = agg_plan
@@ -1479,13 +1505,13 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level,
-        cat.get_dataMgr().cudaMgr_, true);
+        cat.get_dataMgr().cudaMgr_, true, row_set_mem_owner);
     } catch (...) {
       compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level,
-        cat.get_dataMgr().cudaMgr_, false);
+        cat.get_dataMgr().cudaMgr_, false, row_set_mem_owner);
     }
   }
   CompilationResult compilation_result_gpu;
@@ -1497,15 +1523,18 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
-        true);
+        true, row_set_mem_owner);
     } catch (...) {
       compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
-        false);
+        false, row_set_mem_owner);
     }
+  }
+  for (const auto target_expr : get_agg_target_exprs(plan)) {
+    plan_state_->target_exprs_.push_back(target_expr);
   }
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
@@ -1535,7 +1564,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     auto dispatch = [this, plan, limit, current_dbid, device_type, i, table_id,
         &available_cpus, &available_gpus, &reduce_mutex, &scheduler_cv, &scheduler_mutex,
         &str_dec_mutex, &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
-        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]
+        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs, row_set_mem_owner]
         (const ExecutorDeviceType chosen_device_type, int chosen_device_id) {
       ResultRows device_results;
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
@@ -1610,7 +1639,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       const CompilationResult& compilation_result =
         chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
       auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
-        plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers);
+        plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
       if (groupby_exprs.empty()) {
         executePlanWithoutGroupBy(
           compilation_result, hoist_literals,
@@ -1642,7 +1671,16 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         scheduler_cv.notify_one();
       }
     };
+    bool must_serialize = false;
     if (uses_count_distinct) {
+      for (const auto& kv : compilation_result_cpu.query_mem_desc.count_distinct_descriptors_) {
+        if (kv.second.impl_type_ == CountDistinctImplType::StdSet) {
+          must_serialize = true;
+          break;
+        }
+      }
+    }
+    if (must_serialize) {
       dispatch(ExecutorDeviceType::CPU, 0);
     } else {
       auto chosen_device_type = device_type;
@@ -1678,7 +1716,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     child.join();
   }
   cat.get_dataMgr().freeAllBuffers();
-  return agg_plan ? reduceMultiDeviceResults(all_fragment_results) : results_union(all_fragment_results);
+  return agg_plan
+    ? reduceMultiDeviceResults(all_fragment_results, compilation_result_cpu.query_mem_desc, row_set_mem_owner)
+    : results_union(all_fragment_results);
 }
 
 void Executor::executePlanWithoutGroupBy(
@@ -1705,26 +1745,26 @@ void Executor::executePlanWithoutGroupBy(
       data_mgr, block_size_x_, grid_size_x_, device_id);
   }
   size_t out_vec_idx = 0;
-  ResultRow result_row(this);
+  ResultRow result_row(this, query_exe_context->row_set_mem_owner_);
   for (const auto target_expr : target_exprs) {
     const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
     CHECK(agg_expr);
-    const auto agg_type = agg_expr->get_aggtype();
     result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
-    result_row.agg_kinds_.push_back(agg_type);
-    if (agg_type == kAVG) {
+    const auto agg_info = target_info(agg_expr);
+    result_row.agg_kinds_.push_back(agg_info);
+    if (agg_info.agg_kind == kAVG) {
       CHECK(agg_expr->get_arg());
       result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
       CHECK(!target_expr->get_type_info().is_string());
       result_row.agg_results_.push_back(
         reduce_results(
-          agg_type,
+          agg_info.agg_kind,
           target_expr->get_type_info().get_type(),
           out_vec[out_vec_idx],
           device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
       result_row.agg_results_.push_back(
         reduce_results(
-          agg_type,
+          agg_info.agg_kind,
           target_expr->get_type_info().get_type(),
           out_vec[out_vec_idx + 1],
           device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
@@ -1733,7 +1773,7 @@ void Executor::executePlanWithoutGroupBy(
       result_row.agg_types_.push_back(target_expr->get_type_info());
       CHECK(!target_expr->get_type_info().is_string());
       result_row.agg_results_.push_back(reduce_results(
-        agg_type,
+        agg_info.agg_kind,
         target_expr->get_type_info().get_type(),
         out_vec[out_vec_idx],
         device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
@@ -2068,10 +2108,11 @@ Executor::CompilationResult Executor::compilePlan(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-    const bool allow_lazy_fetch) {
+    const bool allow_lazy_fetch,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   nukeOldState(allow_lazy_fetch);
 
-  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, allow_lazy_fetch);
+  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   // Read the module template and target either CPU or GPU

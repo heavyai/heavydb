@@ -62,7 +62,7 @@ public:
     const size_t block_size_x = 1024,
     const size_t grid_size_x = 12);
 
-  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t> AggInfo;
+  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
   typedef std::vector<ResultRow> ResultRows;
 
   std::vector<ResultRow> execute(
@@ -114,7 +114,8 @@ private:
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const Catalog_Namespace::Catalog&);
+    const Catalog_Namespace::Catalog&,
+    std::shared_ptr<RowSetMemoryOwner>);
   std::vector<ResultRow> executeResultPlan(
     const Planner::Result* result_plan,
     const bool hoist_literals,
@@ -158,7 +159,10 @@ private:
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id);
-  ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&) const;
+  ResultRows reduceMultiDeviceResults(
+    const std::vector<ResultRows>&,
+    const QueryMemoryDescriptor&,
+    std::shared_ptr<RowSetMemoryOwner>) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compilePlan(
@@ -172,7 +176,8 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
-    const bool allow_lazy_fetch);
+    const bool allow_lazy_fetch,
+    std::shared_ptr<RowSetMemoryOwner>);
 
   void nukeOldState(const bool allow_lazy_fetch);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
@@ -329,6 +334,7 @@ private:
     PlanState(const bool allow_lazy_fetch) : allow_lazy_fetch_(allow_lazy_fetch) {}
 
     std::vector<int64_t> init_agg_vals_;
+    std::vector<Analyzer::Expr*> target_exprs_;
     std::unordered_map<int, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
     std::unordered_set<int> columns_to_fetch_;

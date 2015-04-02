@@ -16,7 +16,8 @@ QueryExecutionContext::QueryExecutionContext(
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
-    const std::vector<const int8_t*>& col_buffers)
+    const std::vector<const int8_t*>& col_buffers,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
   : query_mem_desc_(query_mem_desc)
   , executor_(executor)
   , device_type_(device_type)
@@ -24,19 +25,16 @@ QueryExecutionContext::QueryExecutionContext(
   , col_buffers_(col_buffers)
   , num_buffers_ { device_type == ExecutorDeviceType::CPU
       ? 1
-      : executor->block_size_x_ * executor->grid_size_x_ } {
+      : executor->block_size_x_ * executor->grid_size_x_ }
+  , row_set_mem_owner_(row_set_mem_owner) {
   if (query_mem_desc_.group_col_widths.empty()) {
+    allocateCountDistinctBuffers(false);
     return;
   }
 
   std::vector<int64_t> group_by_buffer_template(query_mem_desc_.getBufferSizeQuad(device_type));
-  init_groups(
-    &group_by_buffer_template[0],
-    query_mem_desc_.entry_count,
-    query_mem_desc_.group_col_widths.size(),
-    &init_agg_vals[0],
-    query_mem_desc_.agg_col_widths.size(),
-    query_mem_desc_.keyless_hash,
+  initGroups(&group_by_buffer_template[0], &init_agg_vals[0],
+    query_mem_desc_.entry_count, query_mem_desc_.keyless_hash,
     query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1);
 
   if (query_mem_desc_.interleavedBins(device_type_)) {
@@ -50,14 +48,8 @@ QueryExecutionContext::QueryExecutionContext(
   std::vector<int64_t> group_by_small_buffer_template;
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
     group_by_small_buffer_template.resize(query_mem_desc_.getSmallBufferSizeQuad());
-    init_groups(
-      &group_by_small_buffer_template[0],
-      query_mem_desc_.entry_count_small,
-      query_mem_desc_.group_col_widths.size(),
-      &init_agg_vals[0],
-      query_mem_desc_.agg_col_widths.size(),
-      false,
-      1);
+    initGroups(&group_by_small_buffer_template[0], &init_agg_vals[0],
+      query_mem_desc_.entry_count_small, false, 1);
   }
 
   size_t step { device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()
@@ -90,6 +82,81 @@ QueryExecutionContext::~QueryExecutionContext() {
   }
 }
 
+void QueryExecutionContext::initGroups(int64_t* groups_buffer,
+                                       const int64_t* init_vals,
+                                       const int32_t groups_buffer_entry_count,
+                                       const bool keyless,
+                                       const size_t warp_size) {
+  auto agg_bitmap_size = allocateCountDistinctBuffers(true);
+  const int32_t agg_col_count = query_mem_desc_.agg_col_widths.size();
+  const int32_t key_qw_count = query_mem_desc_.group_col_widths.size();
+  if (keyless) {
+    assert(warp_size >= 1);
+    assert(key_qw_count == 1);
+    for (int32_t i = 0; i < groups_buffer_entry_count * agg_col_count * warp_size; ++i) {
+      auto init_idx = i % agg_col_count;
+      const size_t bitmap_sz { agg_bitmap_size[init_idx] };
+      groups_buffer[i] = bitmap_sz ? allocateCountDistinctBuffer(bitmap_sz) : init_vals[init_idx];
+    }
+    return;
+  }
+  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
+  for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
+    if (i % (key_qw_count + agg_col_count) < key_qw_count) {
+      groups_buffer[i] = EMPTY_KEY;
+    } else {
+      auto init_idx = (i - key_qw_count) % (key_qw_count + agg_col_count);
+      const size_t bitmap_sz { agg_bitmap_size[init_idx] };
+      groups_buffer[i] = bitmap_sz ? allocateCountDistinctBuffer(bitmap_sz) : init_vals[init_idx];
+    }
+  }
+}
+
+// deferred is true for group by queries; initGroups will allocate a bitmap
+// for each group slot
+std::vector<size_t> QueryExecutionContext::allocateCountDistinctBuffers(const bool deferred) {
+  const size_t agg_col_count { query_mem_desc_.agg_col_widths.size() };
+  std::vector<size_t> agg_bitmap_size(deferred ? agg_col_count : 0);
+
+  size_t init_agg_idx { 0 };
+  for (size_t target_idx = 0; target_idx < executor_->plan_state_->target_exprs_.size(); ++target_idx) {
+    const auto target_expr = executor_->plan_state_->target_exprs_[target_idx];
+    const auto agg_info = target_info(target_expr);
+    if (agg_info.is_distinct) {
+      CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
+      auto count_distinct_it = query_mem_desc_.count_distinct_descriptors_.find(target_idx);
+      CHECK(count_distinct_it != query_mem_desc_.count_distinct_descriptors_.end());
+      const auto& count_distinct_desc = count_distinct_it->second;
+      if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
+        const size_t bitmap_sz = count_distinct_desc.max_val - count_distinct_desc.min_val + 1;
+        if (deferred) {
+          agg_bitmap_size[init_agg_idx] = bitmap_sz;
+        } else {
+          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctBuffer(bitmap_sz);
+        }
+      }
+    }
+    if (agg_info.agg_kind == kAVG) {
+      init_agg_idx += 2;
+    } else {
+      ++init_agg_idx;
+    }
+  }
+  CHECK_LE(init_agg_idx, agg_col_count);
+
+  return agg_bitmap_size;
+}
+
+int64_t QueryExecutionContext::allocateCountDistinctBuffer(const size_t bitmap_sz) {
+  size_t bitmap_byte_sz = bitmap_sz / 8;
+  if (bitmap_sz % 8) {
+    ++bitmap_byte_sz;
+  }
+  auto count_distinct_buffer = static_cast<int8_t*>(calloc(bitmap_byte_sz, 1));
+  row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer);
+  return reinterpret_cast<int64_t>(count_distinct_buffer);
+}
+
 Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& targets) const {
   std::vector<Executor::ResultRows> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
@@ -102,7 +169,7 @@ Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer
     results_per_sm.emplace_back(groupBufferToResults(i, targets));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return executor_->reduceMultiDeviceResults(results_per_sm);
+  return executor_->reduceMultiDeviceResults(results_per_sm, query_mem_desc_, row_set_mem_owner_);
 }
 
 namespace {
@@ -143,7 +210,7 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
         const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
         std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
         std::vector<int64_t> agg_vals(agg_col_count, 0);
-        ResultRow result_row(executor_);
+        ResultRow result_row(executor_, row_set_mem_owner_);
         result_row.value_tuple_.push_back(bin + query_mem_desc_.min_val);
         bool discard_row = true;
         size_t group_by_buffer_base_idx { warp_count * bin * agg_col_count };
@@ -153,7 +220,12 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
             const auto agg_info = target_info(targets[target_idx]);
             CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
             partial_agg_vals[target_idx] = group_by_buffer[group_by_buffer_base_idx + target_idx];
-            if (agg_info.is_agg && partial_agg_vals[target_idx]) {
+            auto partial_bin_val = partial_agg_vals[target_idx];
+            if (agg_info.is_distinct) {
+              CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
+              partial_bin_val = bitmap_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
+            }
+            if (agg_info.is_agg && partial_bin_val) {
               discard_partial_result = false;
               break;
             }
@@ -187,8 +259,7 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
           CHECK_EQ(target_idx, result_row.agg_results_.size());
           result_row.agg_results_.push_back(agg_vals[target_idx]);
           const auto target_expr = targets[target_idx];
-          const auto agg_info = target_info(target_expr);
-          result_row.agg_kinds_.push_back(agg_info.agg_kind);
+          result_row.agg_kinds_.push_back(target_info(target_expr));
           result_row.agg_types_.push_back(target_expr->get_type_info());
         }
         results.push_back(result_row);
@@ -199,7 +270,7 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
       const size_t key_off = (group_by_col_count + agg_col_count) * bin;
       if (group_by_buffer[key_off] != EMPTY_KEY) {
         size_t out_vec_idx = 0;
-        ResultRow result_row(executor_);
+        ResultRow result_row(executor_, row_set_mem_owner_);
         for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
           const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
           CHECK_NE(key_comp, EMPTY_KEY);
@@ -209,9 +280,9 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
           const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
           // If the target is not an aggregate, use kMIN since
           // additive would be incorrect for the reduce phase.
-          const auto agg_type = agg_expr ? agg_expr->get_aggtype() : kMIN;
           result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
-          result_row.agg_kinds_.push_back(agg_type);
+          const auto agg_info = target_info(agg_expr);
+          result_row.agg_kinds_.push_back(agg_info);
           bool is_real_string = (target_expr && target_expr->get_type_info().is_string() &&
             target_expr->get_type_info().get_compression() == kENCODING_NONE);
           const int global_col_id { dynamic_cast<Analyzer::ColumnVar*>(target_expr)
@@ -249,7 +320,7 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
             }
             out_vec_idx += 2;
           } else {
-            if (agg_type == kAVG) {
+            if (agg_info.agg_kind == kAVG) {
               CHECK(agg_expr->get_arg());
               CHECK(!target_expr->get_type_info().is_string());
               result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
@@ -264,7 +335,7 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
             }
             result_row.agg_results_.push_back(val1);
             ++out_vec_idx;
-            if (agg_type == kAVG) {
+            if (agg_info.agg_kind == kAVG) {
               CHECK(!executor_->plan_state_->isLazyFetchColumn(target_expr));
               int64_t val2 = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
               result_row.agg_results_.push_back(val2);
@@ -433,9 +504,10 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
-    const std::vector<const int8_t*>& col_buffers) const {
+    const std::vector<const int8_t*>& col_buffers,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   return std::unique_ptr<QueryExecutionContext>(
-    new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id, col_buffers));
+    new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id, col_buffers, row_set_mem_owner));
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {
@@ -576,10 +648,11 @@ GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
-    const bool allow_lazy_fetch)
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
   : executor_(executor)
   , plan_(plan)
-  , query_info_(query_info) {
+  , query_info_(query_info)
+  , row_set_mem_owner_(row_set_mem_owner) {
   CHECK(plan_);
 }
 
@@ -601,6 +674,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
   const auto& target_list = plan_->get_targetlist();
   std::vector<Analyzer::Expr*> target_expr_list;
   CountDistinctDescriptors count_distinct_descriptors;
+  size_t target_idx { 0 };
   for (const auto target : target_list) {
     auto target_expr = target->get_expr();
     auto agg_info = target_info(target_expr);
@@ -617,10 +691,15 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
         arg_range_info.min,
         arg_range_info.max
       };
-      auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_expr, count_distinct_desc));
+      auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_idx, count_distinct_desc));
       CHECK(it_ok.second);
     }
     target_expr_list.push_back(target_expr);
+    ++target_idx;
+  }
+  if (!count_distinct_descriptors.empty()) {
+    CHECK(row_set_mem_owner_);
+    row_set_mem_owner_->setCountDistinctDescriptors(count_distinct_descriptors);
   }
   auto agg_col_widths = get_col_byte_widths(target_expr_list);
 
@@ -952,7 +1031,8 @@ void GroupByAndAggregate::codegenAggCalls(
 
   const auto& target_list = plan_->get_targetlist();
   int32_t agg_out_off { 0 };
-  for (auto target : target_list) {
+  for (auto target_idx = 0; target_idx < target_list.size(); ++target_idx) {
+    auto target = target_list[target_idx];
     auto target_expr = target->get_expr();
     CHECK(target_expr);
     const auto agg_info = target_info(target_expr);
@@ -994,17 +1074,6 @@ void GroupByAndAggregate::codegenAggCalls(
         //             for now just generate the same IR for easy debugging
         is_simple_count ? LL_INT(0L) : target_lv
       };
-      if (agg_info.is_distinct) {
-        agg_args.push_back(LL_INT(static_cast<int64_t>(agg_out_off)));
-        if (is_group_by) {
-          auto& groups_buffer = ROW_FUNC->getArgumentList().front();
-          agg_args.push_back(&groups_buffer);
-        } else {
-          agg_args.push_back(llvm::ConstantPointerNull::get(
-            llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)));
-        }
-        agg_args.push_back(LL_INT(reinterpret_cast<int64_t>(count_distinct_set)));
-      }
       std::string agg_fname { agg_base_name };
       if (agg_info.sql_type.is_fp()) {
         if (!executor_->plan_state_->isLazyFetchColumn(target_expr)) {
@@ -1012,17 +1081,25 @@ void GroupByAndAggregate::codegenAggCalls(
           agg_fname += "_double";
         }
       }
-      if (agg_info.skip_null_val) {
-        agg_fname += "_skip_val";
-        auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(
-          agg_info.sql_type.get_type()));
-        agg_args.push_back(null_lv);
+      if (agg_info.is_distinct) {
+        CHECK(!agg_info.sql_type.is_fp());
+        CHECK_EQ("agg_count_distinct", agg_base_name);
+        codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc, device_type, is_group_by, agg_out_off);
+      } else {
+        if (agg_info.skip_null_val) {
+          agg_fname += "_skip_val";
+          auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(
+            agg_info.sql_type.get_type()));
+          agg_args.push_back(null_lv);
+        }
+        if (!agg_info.is_distinct) {
+          emitCall(
+            (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory())
+              ? agg_fname + "_shared"
+              : agg_fname,
+            agg_args);
+        }
       }
-      emitCall(
-        (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory())
-          ? agg_fname + "_shared"
-          : agg_fname,
-        agg_args);
       ++agg_out_off;
       ++target_lv_idx;
     }
@@ -1031,6 +1108,46 @@ void GroupByAndAggregate::codegenAggCalls(
     auto target_expr = target->get_expr();
     CHECK(target_expr);
     executor_->plan_state_->isLazyFetchColumn(target_expr);
+  }
+}
+
+void GroupByAndAggregate::codegenCountDistinct(
+    const size_t target_idx,
+    const Analyzer::Expr* target_expr,
+    std::vector<llvm::Value*>& agg_args,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutorDeviceType device_type,
+    const bool is_group_by,
+    const int32_t agg_out_off) {
+  const auto agg_info = target_info(target_expr);
+  CHECK(device_type == ExecutorDeviceType::CPU);
+  auto it_count_distinct = query_mem_desc.count_distinct_descriptors_.find(target_idx);
+  CHECK(it_count_distinct != query_mem_desc.count_distinct_descriptors_.end());
+  std::string agg_fname { "agg_count_distinct" };
+  if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {
+    agg_fname += "_bitmap";
+    agg_args.push_back(LL_INT(static_cast<int64_t>(it_count_distinct->second.min_val)));
+  } else {
+    agg_args.push_back(LL_INT(static_cast<int64_t>(agg_out_off)));
+    if (is_group_by) {
+      auto& groups_buffer = ROW_FUNC->getArgumentList().front();
+      agg_args.push_back(&groups_buffer);
+    } else {
+      agg_args.push_back(llvm::ConstantPointerNull::get(
+        llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)));
+    }
+    agg_args.push_back(LL_INT(reinterpret_cast<int64_t>(count_distinct_set)));
+  }
+  if (agg_info.skip_null_val) {
+    agg_fname += "_skip_val";
+    auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(
+      agg_info.sql_type.get_type()));
+    agg_args.push_back(null_lv);
+  }
+  if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {
+    emitCall(agg_fname, agg_args);
+  } else {
+    emitCall(agg_fname, agg_args);
   }
 }
 

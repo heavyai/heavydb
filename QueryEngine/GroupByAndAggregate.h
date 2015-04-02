@@ -12,6 +12,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
 
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -40,9 +41,101 @@ inline bool approx_eq(const double v, const double target, const double eps = 0.
   return target - eps < v && v < target + eps;
 }
 
+struct TargetInfo {
+  bool is_agg;
+  SQLAgg agg_kind;
+  SQLTypeInfo sql_type;
+  bool skip_null_val;
+  bool is_distinct;
+};
+
+enum class CountDistinctImplType {
+  Bitmap,
+  StdSet
+};
+
+struct CountDistinctDescriptor {
+  const Executor* executor_;
+  CountDistinctImplType impl_type_;
+  int64_t min_val;
+  int64_t max_val;
+};
+
+typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescriptors;
+
+class RowSetMemoryOwner;
+
+struct QueryMemoryDescriptor {
+  const Executor* executor_;
+  GroupByColRangeType hash_type;
+  bool keyless_hash;
+  bool interleaved_bins_on_gpu;
+  std::vector<int8_t> group_col_widths;
+  std::vector<int8_t> agg_col_widths;
+  size_t entry_count;                    // the number of entries in the main buffer
+  size_t entry_count_small;              // the number of entries in the small buffer
+  int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
+  GroupByMemSharing sharing;             // meaningful for GPU only
+  CountDistinctDescriptors count_distinct_descriptors_;
+
+  std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
+    const std::vector<int64_t>& init_agg_vals,
+    const Executor* executor,
+    const ExecutorDeviceType device_type,
+    const int device_id,
+    const std::vector<const int8_t*>& col_buffers,
+    std::shared_ptr<RowSetMemoryOwner>) const;
+
+  size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
+  size_t getSmallBufferSizeQuad() const;
+
+  size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
+  size_t getSmallBufferSizeBytes() const;
+
+  // TODO(alex): remove
+  bool usesGetGroupValueFast() const;
+
+  bool threadsShareMemory() const;
+
+  bool interleavedBins(const ExecutorDeviceType) const;
+
+  size_t sharedMemBytes(const ExecutorDeviceType) const;
+};
+
+inline int64_t bitmap_size(const int64_t bitmap_ptr,
+                           const int target_idx,
+                           const CountDistinctDescriptors& count_distinct_descriptors) {
+  const auto count_distinct_desc_it = count_distinct_descriptors.find(target_idx);
+  CHECK(count_distinct_desc_it != count_distinct_descriptors.end());
+  if (count_distinct_desc_it->second.impl_type_ != CountDistinctImplType::Bitmap) {
+    CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
+    return bitmap_ptr;
+  }
+  int64_t set_size { 0 };
+  auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
+  for (int64_t i = 0; i < count_distinct_desc_it->second.max_val - count_distinct_desc_it->second.min_val + 1; ++i) {
+    for (auto bit_idx = 0; bit_idx < 8; ++bit_idx) {
+      if (set_vals[i] & (1 << bit_idx)) {
+        ++set_size;
+      }
+    }
+  }
+  return set_size;
+}
+
+inline void bitmap_unify(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
+  for (size_t i = 0; i < bitmap_sz; ++i) {
+    lhs[i] = rhs[i] = lhs[i] | rhs[i];
+  }
+}
+
 class ResultRow {
 public:
-  ResultRow(const Executor* executor) : executor_(executor) {}
+  ResultRow(
+    const Executor* executor,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    : executor_(executor)
+    , row_set_mem_owner_(row_set_mem_owner) {}
 
   AggResult agg_result(const size_t idx, const bool translate_strings = true) const;
 
@@ -88,9 +181,10 @@ private:
   std::vector<int64_t> value_tuple_;
   std::vector<boost::variant<int64_t, std::string>> agg_results_;
   std::vector<size_t> agg_results_idx_;
-  std::vector<SQLAgg> agg_kinds_;
+  std::vector<TargetInfo> agg_kinds_;
   std::vector<SQLTypeInfo> agg_types_;
   const Executor* executor_;
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
   friend class Executor;
   friend class QueryExecutionContext;
@@ -119,6 +213,31 @@ inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
 
 class ChunkIter;
 
+class RowSetMemoryOwner : boost::noncopyable {
+public:
+  void setCountDistinctDescriptors(const CountDistinctDescriptors& count_distinct_descriptors) {
+    if (count_distinct_descriptors_.empty()) {
+      count_distinct_descriptors_ = count_distinct_descriptors;
+    }
+  }
+  void addCountDistinctBuffer(int8_t* count_distinct_buffer) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    count_distinct_buffers_.push_back(count_distinct_buffer);
+  }
+  ~RowSetMemoryOwner() {
+    for (auto count_distinct_buffer : count_distinct_buffers_) {
+      free(count_distinct_buffer);
+    }
+  }
+private:
+  CountDistinctDescriptors count_distinct_descriptors_;
+  std::vector<int8_t*> count_distinct_buffers_;
+  std::mutex state_mutex_;
+
+  friend class ResultRow;
+  friend class QueryExecutionContext;
+};
+
 class QueryExecutionContext : boost::noncopyable {
 public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
@@ -128,7 +247,8 @@ public:
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
-    const std::vector<const int8_t*>& col_buffers);
+    const std::vector<const int8_t*>& col_buffers,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
   ~QueryExecutionContext();
 
   // TOOD(alex): get rid of targets parameter
@@ -148,6 +268,15 @@ public:
     const int device_id) const;
 
 private:
+  void initGroups(int64_t* groups_buffer,
+                  const int64_t* init_vals,
+                  const int32_t groups_buffer_entry_count,
+                  const bool keyless,
+                  const size_t warp_size);
+
+  std::vector<size_t> allocateCountDistinctBuffers(const bool deferred);
+  int64_t allocateCountDistinctBuffer(const size_t bitmap_sz);
+
   const QueryMemoryDescriptor& query_mem_desc_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
@@ -157,6 +286,7 @@ private:
 
   std::vector<int64_t*> group_by_buffers_;
   std::vector<int64_t*> small_group_by_buffers_;
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
   friend class Executor;
   friend void copy_group_by_buffers_from_gpu(
@@ -168,63 +298,13 @@ private:
     const int device_id);
 };
 
-enum class CountDistinctImplType {
-  Bitmap,
-  StdSet
-};
-
-struct CountDistinctDescriptor {
-  const Executor* executor_;
-  CountDistinctImplType impl_type_;
-  int64_t min_val;
-  int64_t max_val;
-};
-
-typedef std::unordered_map<const Analyzer::Expr*, CountDistinctDescriptor> CountDistinctDescriptors;
-
-struct QueryMemoryDescriptor {
-  const Executor* executor_;
-  GroupByColRangeType hash_type;
-  bool keyless_hash;
-  bool interleaved_bins_on_gpu;
-  std::vector<int8_t> group_col_widths;
-  std::vector<int8_t> agg_col_widths;
-  size_t entry_count;                    // the number of entries in the main buffer
-  size_t entry_count_small;              // the number of entries in the small buffer
-  int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
-  GroupByMemSharing sharing;             // meaningful for GPU only
-  CountDistinctDescriptors count_distinct_descriptors_;
-
-  std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
-    const std::vector<int64_t>& init_agg_vals,
-    const Executor* executor,
-    const ExecutorDeviceType device_type,
-    const int device_id,
-    const std::vector<const int8_t*>& col_buffers) const;
-
-  size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
-  size_t getSmallBufferSizeQuad() const;
-
-  size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
-  size_t getSmallBufferSizeBytes() const;
-
-  // TODO(alex): remove
-  bool usesGetGroupValueFast() const;
-
-  bool threadsShareMemory() const;
-
-  bool interleavedBins(const ExecutorDeviceType) const;
-
-  size_t sharedMemBytes(const ExecutorDeviceType) const;
-};
-
 class GroupByAndAggregate {
 public:
   GroupByAndAggregate(
     Executor* executor,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
-    const bool allow_lazy_fetch);
+    std::shared_ptr<RowSetMemoryOwner>);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor();
 
@@ -275,6 +355,15 @@ private:
     const ExecutorDeviceType,
     const bool hoist_literals);
 
+  void codegenCountDistinct(
+    const size_t target_idx,
+    const Analyzer::Expr* target_expr,
+    std::vector<llvm::Value*>& agg_args,
+    const QueryMemoryDescriptor&,
+    const ExecutorDeviceType,
+    const bool is_group_by,
+    const int32_t agg_out_off);
+
   std::vector<llvm::Value*> codegenAggArg(
     const Analyzer::Expr* target_expr,
     const bool hoist_literals);
@@ -288,6 +377,7 @@ private:
   Executor* executor_;
   const Planner::Plan* plan_;
   const Fragmenter_Namespace::QueryInfo& query_info_;
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 };
 
 namespace {
@@ -357,18 +447,12 @@ inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) 
   return extract_from_datum(stats.max, ti);
 }
 
-struct TargetInfo {
-  bool is_agg;
-  SQLAgg agg_kind;
-  SQLTypeInfo sql_type;
-  bool skip_null_val;
-  bool is_distinct;
-};
+}  // namespace
 
 inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   if (!agg_expr) {
-    return { false, kMIN, target_expr->get_type_info(), false, false };
+    return { false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT), false, false };
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();
@@ -415,7 +499,5 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   }
   return col_widths;
 }
-
-}  // namespace
 
 #endif // QUERYENGINE_GROUPBYANDAGGREGATE_H

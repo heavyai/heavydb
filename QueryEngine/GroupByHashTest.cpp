@@ -5,12 +5,27 @@
 #include <numeric>
 
 
+namespace {
+
+void init_groups(int64_t* groups_buffer,
+                 const int32_t groups_buffer_entry_count,
+                 const int32_t key_qw_count,
+                 const int64_t* init_vals) {
+  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + 1);
+  for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
+    groups_buffer[i] = (i % (key_qw_count + 1) < key_qw_count)
+      ? EMPTY_KEY : init_vals[(i - key_qw_count) % (key_qw_count + 1)];
+  }
+}
+
+}  // namespace
+
 class GroupsBuffer {
 public:
   GroupsBuffer(const size_t groups_buffer_entry_count, const size_t key_qw_count, const int64_t init_val)
   : size_ { groups_buffer_entry_count * (key_qw_count + 1) } {
     groups_buffer_ = new int64_t[size_];
-    init_groups(groups_buffer_, groups_buffer_entry_count, key_qw_count, &init_val, 1, false, 1);
+    init_groups(groups_buffer_, groups_buffer_entry_count, key_qw_count, &init_val);
   }
   ~GroupsBuffer() {
     delete[] groups_buffer_;
