@@ -1458,7 +1458,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   auto device_type = device_type_in;
   bool uses_count_distinct { false };
   for (const auto& agg_info : agg_infos) {
-    // TODO(alex): ount distinct can't be executed on the GPU yet, punt to CPU
+    // TODO(alex): count distinct can't be executed on the GPU yet, punt to CPU
     if (std::get<0>(agg_info) == "agg_count_distinct") {
       device_type = ExecutorDeviceType::CPU;
       uses_count_distinct = true;

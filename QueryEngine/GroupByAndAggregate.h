@@ -165,6 +165,20 @@ private:
     const int device_id);
 };
 
+enum class CountDistinctImplType {
+  Bitmap,
+  StdSet
+};
+
+struct CountDistinctDescriptor {
+  const Executor* executor_;
+  CountDistinctImplType impl_type_;
+  int64_t min_val;
+  int64_t max_val;
+};
+
+typedef std::unordered_map<const Analyzer::Expr*, CountDistinctDescriptor> CountDistinctDescriptors;
+
 struct QueryMemoryDescriptor {
   const Executor* executor_;
   GroupByColRangeType hash_type;
@@ -176,6 +190,7 @@ struct QueryMemoryDescriptor {
   size_t entry_count_small;              // the number of entries in the small buffer
   int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
   GroupByMemSharing sharing;             // meaningful for GPU only
+  CountDistinctDescriptors count_distinct_descriptors_;
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
     const std::vector<int64_t>& init_agg_vals,
@@ -245,6 +260,10 @@ private:
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);
+
+  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(
+    const Analyzer::Expr* expr,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
 
   void codegenAggCalls(
     llvm::Value* agg_out_start_ptr,

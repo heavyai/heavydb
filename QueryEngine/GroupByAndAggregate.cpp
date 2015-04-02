@@ -489,21 +489,6 @@ int32_t get_agg_count(const Planner::Plan* plan) {
 
 }  // namespace
 
-#define FIND_STAT_FRAG(stat_name)                                                             \
-  const auto stat_name##_frag = std::stat_name##_element(fragments.begin(), fragments.end(),  \
-    [group_col_id, group_by_ti](const Fragmenter_Namespace::FragmentInfo& lhs,                \
-                                 const Fragmenter_Namespace::FragmentInfo& rhs) {             \
-      auto lhs_meta_it = lhs.chunkMetadataMap.find(group_col_id);                             \
-      CHECK(lhs_meta_it != lhs.chunkMetadataMap.end());                                       \
-      auto rhs_meta_it = rhs.chunkMetadataMap.find(group_col_id);                             \
-      CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());                                       \
-      return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, group_by_ti) <        \
-             extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, group_by_ti);         \
-  });                                                                                         \
-  if (stat_name##_frag == fragments.end()) {                                                  \
-    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };                                                                 \
-  }
-
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
@@ -519,24 +504,52 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
   if (!group_col_expr) {
     return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
   }
-  const int group_col_id = group_col_expr->get_column_id();
-  const auto& group_by_ti = group_col_expr->get_type_info();
-  switch (group_by_ti.get_type()) {
+  return getExprRangeInfo(group_col_expr, fragments);
+}
+
+#define FIND_STAT_FRAG(stat_name)                                                             \
+  const auto stat_name##_frag = std::stat_name##_element(fragments.begin(), fragments.end(),  \
+    [col_id, col_ti](const Fragmenter_Namespace::FragmentInfo& lhs,                           \
+                                 const Fragmenter_Namespace::FragmentInfo& rhs) {             \
+      auto lhs_meta_it = lhs.chunkMetadataMap.find(col_id);                                   \
+      CHECK(lhs_meta_it != lhs.chunkMetadataMap.end());                                       \
+      auto rhs_meta_it = rhs.chunkMetadataMap.find(col_id);                                   \
+      CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());                                       \
+      return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <             \
+             extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);              \
+  });                                                                                         \
+  if (stat_name##_frag == fragments.end()) {                                                  \
+    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };                                                                 \
+  }
+
+GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
+    const Analyzer::Expr* expr,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+  const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
+
+  const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  if (!col_expr) {
+    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
+  }
+
+  int col_id = col_expr->get_column_id();
+  const auto& col_ti = col_expr->get_type_info();
+  switch (col_ti.get_type()) {
   case kTEXT:
   case kCHAR:
   case kVARCHAR:
-    CHECK_EQ(kENCODING_DICT, group_by_ti.get_compression());
+    CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
   case kSMALLINT:
   case kINT:
   case kBIGINT: {
     FIND_STAT_FRAG(min);
     FIND_STAT_FRAG(max);
-    const auto min_it = min_frag->chunkMetadataMap.find(group_col_id);
+    const auto min_it = min_frag->chunkMetadataMap.find(col_id);
     CHECK(min_it != min_frag->chunkMetadataMap.end());
-    const auto max_it = max_frag->chunkMetadataMap.find(group_col_id);
+    const auto max_it = max_frag->chunkMetadataMap.find(col_id);
     CHECK(max_it != max_frag->chunkMetadataMap.end());
-    const auto min_val = extract_min_stat(min_it->second.chunkStats, group_by_ti);
-    const auto max_val = extract_max_stat(max_it->second.chunkStats, group_by_ti);
+    const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
+    const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
     CHECK_GE(max_val, min_val);
     return {
       GroupByColRangeType::OneColKnownRange,
@@ -587,8 +600,27 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
   auto group_col_widths = get_col_byte_widths(group_by_exprs(plan_));
   const auto& target_list = plan_->get_targetlist();
   std::vector<Analyzer::Expr*> target_expr_list;
+  CountDistinctDescriptors count_distinct_descriptors;
   for (const auto target : target_list) {
-    target_expr_list.push_back(target->get_expr());
+    auto target_expr = target->get_expr();
+    auto agg_info = target_info(target_expr);
+    if (agg_info.is_distinct) {
+      CHECK(agg_info.is_agg);
+      CHECK_EQ(kCOUNT, agg_info.agg_kind);
+      const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
+      auto arg_range_info = getExprRangeInfo(agg_expr->get_arg(), query_info_.fragments);
+      CountDistinctDescriptor count_distinct_desc {
+        executor_,
+        (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange)
+          ? CountDistinctImplType::Bitmap
+          : CountDistinctImplType::StdSet,
+        arg_range_info.min,
+        arg_range_info.max
+      };
+      auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_expr, count_distinct_desc));
+      CHECK(it_ok.second);
+    }
+    target_expr_list.push_back(target_expr);
   }
   auto agg_col_widths = get_col_byte_widths(target_expr_list);
 
@@ -598,7 +630,9 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       GroupByColRangeType::Scan, false, false,
       group_col_widths, agg_col_widths,
       0, 0,
-      0, GroupByMemSharing::Private };
+      0, GroupByMemSharing::Private,
+      count_distinct_descriptors
+    };
   }
 
   const auto col_range_info = getColRangeInfo(query_info_.fragments);
@@ -617,7 +651,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
         group_col_widths, agg_col_widths,
         executor_->max_groups_buffer_entry_count_,
         executor_->small_groups_buffer_entry_count_,
-        col_range_info.min, GroupByMemSharing::Shared
+        col_range_info.min, GroupByMemSharing::Shared,
+        count_distinct_descriptors
       };
     } else {
       bool keyless = true;
@@ -643,7 +678,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
         col_range_info.hash_type_, keyless, interleaved_bins,
         group_col_widths, agg_col_widths,
         bin_count, 0,
-        col_range_info.min, GroupByMemSharing::Shared
+        col_range_info.min, GroupByMemSharing::Shared,
+        count_distinct_descriptors
       };
     }
   }
@@ -653,7 +689,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       executor_->max_groups_buffer_entry_count_, 0,
-      0, GroupByMemSharing::Private
+      0, GroupByMemSharing::Private,
+      count_distinct_descriptors
     };
   }
   default:
