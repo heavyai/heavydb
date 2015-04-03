@@ -960,6 +960,9 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t error_code { 0 };
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0], &error_code);
+      if (error_code) {
+        throw std::runtime_error("Query has failed at position " + std::to_string(-error_code) + ", too many groups");
+      }
     }
   } else {
     typedef void (*agg_query)(
@@ -976,6 +979,9 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t error_code { 0 };
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0], &error_code);
+      if (error_code) {
+        throw std::runtime_error("Query has failed at position " + std::to_string(-error_code) + ", too many groups");
+      }
     }
   }
   return out_vec;

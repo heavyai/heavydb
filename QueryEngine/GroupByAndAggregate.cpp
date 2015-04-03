@@ -378,6 +378,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       }
       copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
       copy_from_gpu(data_mgr, &error_code[0], error_code_dev_ptr, grid_size_x * sizeof(error_code[0]), device_id);
+      for (const auto err : error_code) {
+        if (err) {
+          throw std::runtime_error("Query has failed at position " + std::to_string(-err) + ", too many groups");
+        }
+      }
     } else {
       std::vector<CUdeviceptr> out_vec_dev_buffers;
       const size_t agg_col_count { init_agg_vals.size() };
