@@ -164,7 +164,7 @@ WORK		TOK(WORK)
 		unput(c);	/* just peeking */
 		if(c != '\'') {
 			/* remove quotes */
-      char escape_removed[strlen(yytext) - 4];
+      char escape_removed[strlen(yytext) - 3];
       char *p = yytext + 1;
       int j = 0;
       for (int i = 0; i < strlen(yytext) - 3; i++) {
