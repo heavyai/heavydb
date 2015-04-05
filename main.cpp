@@ -327,8 +327,8 @@ main(int argc, char* argv[])
 									cout << "Query took " << ms << " ms to execute." << endl;
 								}
 							}
-							CHECK(results_cpu == results_gpu);
-							results.swap(results_gpu);
+							//CHECK(results_cpu == results_gpu);
+							results.swap(results_cpu);
 						} else {
 							results.swap(results_cpu);
 						}

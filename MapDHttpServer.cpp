@@ -56,7 +56,19 @@ double dtime() {
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(const std::string& base_data_path) : base_data_path_(base_data_path) {
+  MapDHandler(const std::string& base_data_path, const std::string& executor_device) : base_data_path_(base_data_path) {
+    if (executor_device == "gpu") {
+        executor_device_type_ = ExecutorDeviceType::GPU;
+        std::cout << "GPU Mode" << std::endl; 
+    }
+    else if (executor_device == "auto") {
+        executor_device_type_ = ExecutorDeviceType::Auto;
+        std::cout << "Auto Mode" << std::endl; 
+    }
+    else {
+        executor_device_type_ = ExecutorDeviceType::CPU;
+        std::cout << "CPU Mode" << std::endl; 
+    }
     std::cout << "MapDHandler initialized" << std::endl; 
     CHECK(boost::filesystem::exists(base_data_path_));
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
@@ -102,8 +114,7 @@ public:
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
-        const auto results = executor->execute(root_plan,true,ExecutorDeviceType::GPU);
-        //const auto results = executor->execute(root_plan,true,ExecutorDeviceType::CPU);
+        const auto results = executor->execute(root_plan,true,executor_device_type_);
         {
           const auto plan = root_plan->get_plan();
           CHECK(plan);
@@ -190,11 +201,13 @@ private:
   const std::string user_ { MAPD_ROOT_USER };
   const std::string pass_ { MAPD_ROOT_PASSWD_DEFAULT };
   const std::string base_data_path_;
+  ExecutorDeviceType executor_device_type_;
+  //const std::string executor_device_type_;
 };
 
 int main(int argc, char **argv) {
   int port = 9090;
-  shared_ptr<MapDHandler> handler(new MapDHandler(argc > 1 ? argv[1] : "/tmp"));
+  shared_ptr<MapDHandler> handler(new MapDHandler(argc > 1 ? argv[1] : "/tmp", argc > 2 ? argv[2] : "cpu"));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new THttpServerTransportFactory());
