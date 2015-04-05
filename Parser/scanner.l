@@ -164,7 +164,16 @@ WORK		TOK(WORK)
 		unput(c);	/* just peeking */
 		if(c != '\'') {
 			/* remove quotes */
-			yylval.stringval = new std::string(yytext+1, strlen(yytext)-3);
+      char escape_removed[strlen(yytext) - 4];
+      char *p = yytext + 1;
+      int j = 0;
+      for (int i = 0; i < strlen(yytext) - 3; i++) {
+        if (p[i] != '\'' || p[i + 1] != '\'')
+          escape_removed[j++] = p[i];
+      }
+      escape_removed[j] = '\0';
+        
+			yylval.stringval = new std::string(escape_removed);
 			return SQLParser::STRING;
 		}
 		else
