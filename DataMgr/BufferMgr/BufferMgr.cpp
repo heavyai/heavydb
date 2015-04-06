@@ -223,7 +223,10 @@ namespace Buffer_Namespace {
                 return findFreeBufferInSlab(numSlabs, numPagesRequested); // has to return a free slab as long as requested buffer is smaller than the size of a slab
             }
             catch (std::runtime_error &error) { // failed to allocate slab)
-		std::cout << "Could not allocate slab on device " << deviceId_ <<  " - capping at " << numSlabs << std::endl;
+                if (numSlabs == 0) {
+                    throw std::runtime_error("Could not allocate first slab on device");
+                }
+                std::cout << "Could not allocate slab on device " << deviceId_ <<  " - capping at " << numSlabs << " slabs." << std::endl;
 
                 maxNumSlabs_ = numSlabs; // this prevents us from ever allocating slabs in the future - is this desired?
 
