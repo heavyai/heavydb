@@ -259,7 +259,7 @@ void init_groups(int64_t* groups_buffer,
   if (keyless) {
     assert(warp_size >= 1);
     assert(key_qw_count == 1);
-    for (int32_t i = 0; i < groups_buffer_entry_count * warp_size; ++i) {
+    for (int32_t i = 0; i < groups_buffer_entry_count * agg_col_count * warp_size; ++i) {
       groups_buffer[i] = init_vals[i % agg_col_count];
     }
     return;

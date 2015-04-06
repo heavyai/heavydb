@@ -97,21 +97,24 @@ private:
 };
 
 inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
-  const auto& agg_result = row.agg_result(i);
-  const auto& agg_ti = row.agg_type(i);
+  const auto agg_result = row.agg_result(i);
+  const auto agg_ti = row.agg_type(i);
   if (agg_ti.is_time()) {
     Datum datum;
     datum.timeval = *boost::get<int64_t>(&agg_result);
     return DatumToString(datum, agg_ti);
   }
-  if (agg_ti.is_fp()) {
-    return std::to_string(*boost::get<double>(&agg_result));
+  auto iptr = boost::get<int64_t>(&agg_result);
+  if (iptr) {
+    return std::to_string(*iptr);
   }
-  if (agg_ti.is_integer()) {
-    return std::to_string(*boost::get<int64_t>(&agg_result));
+  auto dptr = boost::get<double>(&agg_result);
+  if (dptr) {
+    return std::to_string(*dptr);
   }
-  CHECK(agg_ti.is_string());
-  return *boost::get<std::string>(&agg_result);
+  auto sptr = boost::get<std::string>(&agg_result);
+  CHECK(sptr);
+  return *sptr;
 }
 
 class ChunkIter;
