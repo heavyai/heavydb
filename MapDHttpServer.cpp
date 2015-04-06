@@ -1,6 +1,5 @@
 #include "gen-cpp/MapD.h"
 #include <thrift/protocol/TJSONProtocol.h>
-//#include <thrift/server/TSimpleServer.h>
 #include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/THttpServer.h>
@@ -10,6 +9,7 @@
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
 
+#include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <memory>
 #include <string>
@@ -56,7 +56,7 @@ double dtime() {
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(const std::string& base_data_path, const std::string& executor_device) : base_data_path_(base_data_path) {
+  MapDHandler(const std::string& base_data_path, const std::string &db_name, const std::string& executor_device) : base_data_path_(base_data_path), db_name_(db_name) {
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
         std::cout << "GPU Mode" << std::endl; 
@@ -70,9 +70,7 @@ public:
         std::cout << "CPU Mode" << std::endl; 
     }
     std::cout << "MapDHandler initialized" << std::endl; 
-    CHECK(boost::filesystem::exists(base_data_path_));
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
-    CHECK(boost::filesystem::exists(system_db_file));
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string()));
     Catalog_Namespace::SysCatalog sys_cat(base_data_path_, *data_mgr_);
@@ -162,12 +160,6 @@ public:
     
   }
 
-  void ddl(const std::string& ddl_query) {
-    MapDException ex;
-    ex.error_msg = "DDL queries not allowed over HTTP";
-    throw ex;
-  }
-
   void getColumnTypes(ColumnTypes& _return, const std::string& table_name) {
     auto td = cat_->getMetadataForTable(table_name);
     if (!td) {
@@ -197,17 +189,76 @@ private:
   std::ofstream logFile;
 
 
-  const std::string db_name_ { MAPD_SYSTEM_DB };
+  const std::string base_data_path_;
+  const std::string db_name_;
   const std::string user_ { MAPD_ROOT_USER };
   const std::string pass_ { MAPD_ROOT_PASSWD_DEFAULT };
-  const std::string base_data_path_;
   ExecutorDeviceType executor_device_type_;
   //const std::string executor_device_type_;
 };
 
 int main(int argc, char **argv) {
   int port = 9090;
-  shared_ptr<MapDHandler> handler(new MapDHandler(argc > 1 ? argv[1] : "/tmp", argc > 2 ? argv[2] : "cpu"));
+  std::string base_path;
+  std::string db_name(MAPD_SYSTEM_DB);
+  std::string device("auto");
+
+	namespace po = boost::program_options;
+
+	po::options_description desc("Options");
+	desc.add_options()
+		("help,h", "Print help messages ")
+		("path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")
+		("db", po::value<std::string>(&db_name), "Database name")
+    ("cpu", "Run on CPU only")
+    ("gpu", "Run on GPUs")
+    ("port,p", po::value<int>(&port), "Port number (default 9090)");
+
+	po::positional_options_description positionalOptions;
+	positionalOptions.add("path", 1);
+	positionalOptions.add("db", 1);
+
+	po::variables_map vm;
+
+	try {
+		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
+		if (vm.count("help")) {
+			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port number>]\n";
+			return 0;
+		}
+		if (vm.count("cpu"))
+			device = "cpu";
+    if (vm.count("gpu"))
+      device = "gpu";
+
+		po::notify(vm);
+	}
+	catch (boost::program_options::error &e)
+	{
+		std::cerr << "Usage Error: " << e.what() << std::endl;
+		return 1;
+	}
+
+  if (!boost::filesystem::exists(base_path)) {
+    std::cerr << "Path " << base_path << " does not exist." << std::endl;
+    return 1;
+  }
+  const auto system_db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";
+  if (!boost::filesystem::exists(system_db_file)) {
+    std::cerr << "MapD system catalogs does not exist at " << system_db_file << ". Run initdb" << std::endl;
+    return 1;
+  }
+  const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
+  if (!boost::filesystem::exists(data_path)) {
+    std::cerr << "MapD data directory does not exist at " << base_path << ". Run initdb" << std::endl;
+    return 1;
+  }
+  const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / db_name;
+  if (!boost::filesystem::exists(db_file)) {
+    std::cerr << "MapD database " << db_name << " does not exist." << std::endl;
+    return 1;
+  }
+  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, db_name, device));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new THttpServerTransportFactory());
