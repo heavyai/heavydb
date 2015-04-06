@@ -58,14 +58,14 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
     CHECK(agg_types_[idx].is_number() || agg_types_[idx].is_string() || agg_types_[idx].is_time());
     auto actual_idx = agg_results_idx_[idx];
     if (agg_types_[idx].is_integer() || agg_types_[idx].is_time()) {
-      return AggResult(agg_results_[actual_idx]);
+      return AggResult(*boost::get<int64_t>(&agg_results_[actual_idx]));
     } else if (agg_types_[idx].is_string()) {
       if (agg_types_[idx].get_compression() == kENCODING_DICT) {
         const int dict_id = agg_types_[idx].get_comp_param();
         return translate_strings
           ? AggResult(executor_->getStringDictionary(dict_id)->getString(
               *boost::get<int64_t>(&agg_results_[actual_idx])))
-          : AggResult(agg_results_[actual_idx]);
+          : AggResult(*boost::get<int64_t>(&agg_results_[actual_idx]));
       } else {
         CHECK_EQ(kENCODING_NONE, agg_types_[idx].get_compression());
         return AggResult(*boost::get<std::string>(&agg_results_[actual_idx]));
@@ -75,7 +75,7 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
       return AggResult(*reinterpret_cast<const double*>(boost::get<int64_t>(&agg_results_[actual_idx])));
     }
   }
-  return agg_results_[idx];
+  CHECK(false);
 }
 
 SQLTypeInfo ResultRow::agg_type(const size_t idx) const {
