@@ -1540,6 +1540,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   std::condition_variable scheduler_cv;
   std::mutex scheduler_mutex;
   std::mutex reduce_mutex;
+  std::mutex str_dec_mutex;
   size_t result_rows_count { 0 };
   for (size_t i = 0; i < fragments.size(); ++i) {
     if (skipFragment(fragments[i], simple_quals)) {
@@ -1547,7 +1548,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     }
     auto dispatch = [this, plan, limit, current_dbid, device_type, i, table_id,
         &available_cpus, &available_gpus, &reduce_mutex, &scheduler_cv, &scheduler_mutex,
-        &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
+        &str_dec_mutex, &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs]
         (const ExecutorDeviceType chosen_device_type, int chosen_device_id) {
       ResultRows device_results;
@@ -1580,15 +1581,28 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         if (plan_state_->columns_to_fetch_.find(col_id) == plan_state_->columns_to_fetch_.end()) {
           memory_level_for_column = Data_Namespace::CPU_LEVEL;
         }
-        auto chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
-          chunk_key,
-          memory_level_for_column,
-          chosen_device_id,
-          chunk_meta_it->second.numBytes,
-          chunk_meta_it->second.numElements);
-        chunks.push_back(chunk);
-        if (cd->columnType.is_string() &&
-            cd->columnType.get_compression() == kENCODING_NONE) {
+        const bool is_real_string = cd->columnType.is_string() &&
+          cd->columnType.get_compression() == kENCODING_NONE;
+        std::shared_ptr<Chunk_NS::Chunk> chunk;
+        if (is_real_string) {
+          std::lock_guard<std::mutex> lock(str_dec_mutex);
+          chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
+            chunk_key,
+            memory_level_for_column,
+            chosen_device_id,
+            chunk_meta_it->second.numBytes,
+            chunk_meta_it->second.numElements);
+          chunks.push_back(chunk);
+        } else {
+          chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
+            chunk_key,
+            memory_level_for_column,
+            chosen_device_id,
+            chunk_meta_it->second.numBytes,
+            chunk_meta_it->second.numElements);
+          chunks.push_back(chunk);
+        }
+        if (is_real_string) {
           chunk_iterators.push_back(chunk->begin_iterator());
           auto& chunk_iter = chunk_iterators.back();
           if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
