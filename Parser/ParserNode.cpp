@@ -1430,15 +1430,11 @@ namespace Parser {
         } else
         if (boost::iequals(*p->get_name(), "delimiter")) {
           const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
-          bool isTab =  str_literal->get_stringval()->length() == 2 && (*str_literal->get_stringval())[0] == '\\' && (*str_literal->get_stringval())[1] == 't';
           if (str_literal == nullptr)
             throw std::runtime_error("Delimiter option must be a string.");
-          else if (str_literal->get_stringval()->length() != 1 && !isTab)
+          else if (str_literal->get_stringval()->length() != 1)
             throw std::runtime_error("Delimiter must be a single character string.");
-          if (isTab)
-              copy_params.delimiter = '\t'; 
-          else 
-              copy_params.delimiter = (*str_literal->get_stringval())[0];
+          copy_params.delimiter = (*str_literal->get_stringval())[0];
         } else if (boost::iequals(*p->get_name(), "nulls")) {
           const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
           if (str_literal == nullptr)
@@ -1469,6 +1465,13 @@ namespace Parser {
           else if (str_literal->get_stringval()->length() != 1)
             throw std::runtime_error("Escape must be a single character string.");
           copy_params.escape = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "line_delimiter")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Line_delimiter option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Line_delimiter must be a single character string.");
+          copy_params.line_delim = (*str_literal->get_stringval())[0];
         } else
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

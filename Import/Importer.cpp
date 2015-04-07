@@ -297,6 +297,7 @@ find_end(const char *buffer, size_t size, const CopyParams &copy_params)
 void
 Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) const
 {
+  try {
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   for (const auto& import_buff : import_buffers) {
@@ -324,6 +325,9 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
   {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
     table_desc->fragmenter->insertData(ins_data);
+  }
+  } catch (std::exception &e) {
+    std::cerr << "Fragmenter Insert Exception: " << e.what() << std::endl;
   }
 }
 

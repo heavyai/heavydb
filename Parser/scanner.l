@@ -4,6 +4,7 @@
 %{
 #undef yyFlexLexer
 #include <cstdint>
+#include <cstdio>
 #include <../Shared/sqldefs.h>
 #include "parser.h"
 
@@ -167,7 +168,33 @@ WORK		TOK(WORK)
       char escape_removed[strlen(yytext) - 3];
       char *p = yytext + 1;
       int j = 0;
-      for (int i = 0; i < strlen(yytext) - 3; i++) {
+      int len = strlen(yytext) - 3;
+      for (int i = 0; i < len; i++) {
+        if (p[i] == '\\') {
+          if (p[i+1] == 't') {
+            escape_removed[j++] = '\t';
+            i++;
+            continue;
+          } else if (p[i+1] == 'n') {
+            escape_removed[j++] = '\n';
+            i++;
+            continue;
+          } else if (p[i+1] == '\\') {
+            escape_removed[j++] = '\\';
+            i++;
+            continue;
+          } else if (p[i+1] == 'x' && i + 3 < len) {
+            char s[3];
+            s[0] = p[i+2];
+            s[1] = p[i+3];
+            s[2] = '\0';
+            int c;
+            sscanf(s, "%x", &c);
+            escape_removed[j++] = (char)c;
+            i += 3;
+            continue;
+          }
+        }
         if (p[i] != '\'' || p[i + 1] != '\'')
           escape_removed[j++] = p[i];
       }
