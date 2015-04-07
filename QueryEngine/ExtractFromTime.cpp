@@ -12,7 +12,6 @@ extern "C" __attribute__((noinline))
 __device__
 #endif
 int64_t ExtractFromTime(ExtractField field, time_t timeval) {
-  int64_t result;
   if (field == kEPOCH)
     return timeval;
   tm tm_struct;
@@ -23,29 +22,21 @@ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
 #endif
   switch (field) {
     case kYEAR:
-      result = 1900 + tm_struct.tm_year;
-      break;
+      return 1900 + tm_struct.tm_year;
     case kMONTH:
-      result = tm_struct.tm_mon + 1;
-      break;
+      return tm_struct.tm_mon + 1;
     case kDAY:
-      result = tm_struct.tm_mday;
-      break;
+      return tm_struct.tm_mday;
     case kHOUR:
-      result = tm_struct.tm_hour;
-      break;
+      return tm_struct.tm_hour;
     case kMINUTE:
-      result = tm_struct.tm_min;
-      break;
+      return tm_struct.tm_min;
     case kSECOND:
-      result = tm_struct.tm_sec;
-      break;
+      return tm_struct.tm_sec;
     case kDOW:
-      result = tm_struct.tm_wday;
-      break;
+      return tm_struct.tm_wday;
     case kDOY:
-      result = tm_struct.tm_yday + 1;
-      break;
+      return tm_struct.tm_yday + 1;
     default:
 #ifdef __CUDACC__
       return -1;
@@ -53,5 +44,4 @@ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
       assert(false);
 #endif
   }
-  return result;
 }
