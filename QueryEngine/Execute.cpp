@@ -1614,8 +1614,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       if (groupby_exprs.empty()) {
         executePlanWithoutGroupBy(
           compilation_result, hoist_literals,
-          device_results, get_agg_target_exprs(plan), chosen_device_type, col_buffers, num_rows,
-          &cat.get_dataMgr(), chosen_device_id);
+          device_results, get_agg_target_exprs(plan), chosen_device_type,
+          col_buffers, query_exe_context.get(),
+          num_rows, &cat.get_dataMgr(), chosen_device_id);
       } else {
         executePlanWithGroupBy(
           compilation_result, hoist_literals,
@@ -1687,6 +1688,7 @@ void Executor::executePlanWithoutGroupBy(
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
+    const QueryExecutionContext* query_exe_context,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id) {
@@ -1697,8 +1699,6 @@ void Executor::executePlanWithoutGroupBy(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {});
   } else {
-    auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
-      plan_state_->init_agg_vals_, this, device_type, device_id, {});
     out_vec = query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_,
