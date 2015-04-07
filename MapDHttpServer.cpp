@@ -25,16 +25,37 @@ public:
   MapDHandler(MapDClient &client) : client_(client) {}
 
   void select(QueryResult& _return, const std::string& query_str) {
+    try {
     client_.select(_return, query_str);
+    }
+    catch (std::exception &e) {
+      MapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
   }
 
   void getColumnTypes(ColumnTypes& _return, const std::string& table_name) {
+    try {
     client_.getColumnTypes(_return, table_name);
+    }
+    catch (std::exception &e) {
+      MapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
   }
 
   void getTables(std::vector<std::string> & _return)
   {
+    try {
     client_.getTables(_return);
+    }
+    catch (std::exception &e) {
+      MapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
   }
 
 private:
