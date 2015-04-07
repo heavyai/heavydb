@@ -1563,7 +1563,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
       }
       CHECK_GE(chosen_device_id, 0);
       CHECK_LT(chosen_device_id, max_gpu_count);
-      std::vector<ChunkIter> chunk_iterators;  // need to own them while query executes
+      std::list<ChunkIter> chunk_iterators;  // need to own them while query executes
       std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
       if (chosen_device_type == ExecutorDeviceType::GPU) {
         gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
