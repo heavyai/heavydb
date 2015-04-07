@@ -1430,11 +1430,15 @@ namespace Parser {
         } else
         if (boost::iequals(*p->get_name(), "delimiter")) {
           const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          bool isTab =  str_literal->get_stringval()->length() == 2 && (*str_literal->get_stringval())[0] == '\\' && (*str_literal->get_stringval())[1] == 't';
           if (str_literal == nullptr)
             throw std::runtime_error("Delimiter option must be a string.");
-          else if (str_literal->get_stringval()->length() != 1)
+          else if (str_literal->get_stringval()->length() != 1 && !isTab)
             throw std::runtime_error("Delimiter must be a single character string.");
-          copy_params.delimiter = (*str_literal->get_stringval())[0];
+          if (isTab)
+              copy_params.delimiter = '\t'; 
+          else 
+              copy_params.delimiter = (*str_literal->get_stringval())[0];
         } else if (boost::iequals(*p->get_name(), "nulls")) {
           const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
           if (str_literal == nullptr)
