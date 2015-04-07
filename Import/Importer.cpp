@@ -22,7 +22,7 @@ bool debug_timing = false;
 
 static std::mutex insert_mutex;
 
-Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : catalog(c), table_desc(t), file_path(f), copy_params(p) 
+Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : catalog(c), table_desc(t), file_path(f), copy_params(p), load_failed(false)
 {
   file_size = 0;
   max_threads = 0;
@@ -295,9 +295,8 @@ find_end(const char *buffer, size_t size, const CopyParams &copy_params)
 }
 
 void
-Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) const
+Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count)
 {
-  try {
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   for (const auto& import_buff : import_buffers) {
@@ -324,10 +323,12 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
   }
   {
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
-    table_desc->fragmenter->insertData(ins_data);
-  }
-  } catch (std::exception &e) {
-    std::cerr << "Fragmenter Insert Exception: " << e.what() << std::endl;
+    try {
+      table_desc->fragmenter->insertData(ins_data);
+    } catch (std::exception &e) {
+      std::cerr << "Fragmenter Insert Exception: " << e.what() << std::endl;
+      set_load_failed(true);
+    }
   }
 }
 
@@ -412,7 +413,8 @@ Importer::import()
     begin_pos = 0;
   }
   auto ms = measure<>::execution([&] () {
-    catalog.get_dataMgr().checkpoint();
+    if (!load_failed)
+      catalog.get_dataMgr().checkpoint();
   });
   if (debug_timing)
     std::cout << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;

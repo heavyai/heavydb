@@ -272,9 +272,11 @@ class Importer {
         return nullptr;
       return dict_map.at(cd->columnId).get();
     }
-    void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) const;
+    void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count);
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> &get_import_buffers_vec() { return import_buffers_vec; }
     std::vector<std::unique_ptr<TypedImportBuffer>> &get_import_buffers(int i) { return import_buffers_vec[i]; }
+    bool get_load_failed() const { return load_failed; }
+    void set_load_failed(bool f) { load_failed = f; }
   private:
     const Catalog_Namespace::Catalog &catalog;
     const TableDescriptor *table_desc;
@@ -289,6 +291,7 @@ class Importer {
     Fragmenter_Namespace::InsertData insert_data;
     std::map<int, std::shared_ptr<StringDictionary>> dict_map;
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
+    bool load_failed;
 };
 
 };
