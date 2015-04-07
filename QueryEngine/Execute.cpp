@@ -1371,14 +1371,6 @@ std::vector<ResultRow> Executor::executeResultPlan(
     ExecutorDeviceType::CPU, opt_level, nullptr, false);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
-  auto group_by_buffer = static_cast<int64_t*>(malloc(groups_buffer_size));
-  init_groups(group_by_buffer, max_groups_buffer_entry_count_, target_exprs.size(),
-    &init_agg_vals[0], 1, false, 1);
-  const size_t small_groups_buffer_size {
-    (target_exprs.size() + 1) * small_groups_buffer_entry_count_ * sizeof(int64_t) };
-  auto small_group_by_buffer = static_cast<int64_t*>(malloc(small_groups_buffer_size));
-  init_groups(small_group_by_buffer, small_groups_buffer_entry_count_, target_exprs.size(),
-    &init_agg_vals[0], 1, false, 1);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
     ExecutorDeviceType::CPU, 0, {});
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
