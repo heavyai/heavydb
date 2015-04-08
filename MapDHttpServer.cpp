@@ -29,6 +29,7 @@ public:
     client_.select(_return, query_str);
     }
     catch (std::exception &e) {
+      std::cerr << "select caught exception: " << e.what() << std::endl;
       MapDException ex;
       ex.error_msg = e.what();
       throw ex;
@@ -40,6 +41,7 @@ public:
     client_.getColumnTypes(_return, table_name);
     }
     catch (std::exception &e) {
+      std::cerr << "getColumnTypes caught exception: " << e.what() << std::endl;
       MapDException ex;
       ex.error_msg = e.what();
       throw ex;
