@@ -78,7 +78,7 @@ if len(sys.argv) <= 1 or sys.argv[1] == '--help':
   sys.exit(0)
 
 host = 'localhost'
-port = 9090
+port = 9091
 argi = 1
 
 if sys.argv[argi] == '-h':
