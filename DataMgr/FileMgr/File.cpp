@@ -75,11 +75,9 @@ namespace File_Namespace {
         
     }
     
-    mapd_err_t removeFile(const std::string basePath, const std::string filename) {
+    bool removeFile(const std::string basePath, const std::string filename) {
         const std::string filePath = basePath + filename;
-        if (remove(filePath.c_str()) != 0)
-            return MAPD_FAILURE;
-        return MAPD_SUCCESS;
+        return remove(filePath.c_str()) == 0;
     }
     
     size_t read(FILE *f, const size_t offset, const size_t size, int8_t * buf) {
