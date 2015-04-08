@@ -294,7 +294,6 @@ namespace File_Namespace {
             }
             cout << endl;
             */
-            //chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
             if (purge) { 
                 chunkIt->second->freePages();
             }

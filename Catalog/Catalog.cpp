@@ -98,6 +98,7 @@ SysCatalog::dropDatabase(const string &name)
 	boost::filesystem::remove(basePath_+"/mapd_catalogs/" + name);
 	ChunkKey chunkKeyPrefix = {db.dbId};
 	dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);
+    dataMgr_.checkpoint();
 }
 
 bool
@@ -476,6 +477,7 @@ Catalog::dropTable(const TableDescriptor *td)
 		ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
 		// assuming deleteChunksWithPrefix is atomic
 		dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);
+		dataMgr_.checkpoint();
 	}
 	catch (std::exception &e) {
 		sqliteConnector_.query("ROLLBACK TRANSACTION");
