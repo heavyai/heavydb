@@ -245,7 +245,11 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
         case kTEXT:
         case kVARCHAR:
         case kCHAR: {
-          import_buffers[col_idx]->addString(row[col_idx]);
+          // @TODO(wei) for now, use empty string for nulls
+          if (is_null)
+            import_buffers[col_idx]->addString(std::string());
+          else
+            import_buffers[col_idx]->addString(row[col_idx]);
           break;
         }
         case kTIME:

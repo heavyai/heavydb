@@ -137,11 +137,11 @@ ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is
     }
     it->current_pos += it->skip * it->skip_size;
   } else {
-    // @TODO(wei) ignore uncompress flag for variable length?
     StringOffsetT offset = *(StringOffsetT*)it->current_pos;
     result->length = *((StringOffsetT*)it->current_pos + 1) - offset;
     result->pointer = it->second_buf + offset;
-    result->is_null = false;
+    // @TODO(wei) treat zero length as null for now
+    result->is_null = (result->length == 0);
     it->current_pos += it->skip * sizeof(StringOffsetT);
   }
 }
@@ -167,14 +167,14 @@ ChunkIter_get_nth(ChunkIter *it, int n, bool uncompress, VarlenDatum *result, bo
     } else {
       result->length = it->skip_size;
       result->pointer = current_pos;
-      result->is_null = false;
+      result->is_null = it->type_info.is_null(result->pointer);
     }
   } else {
-    // @TODO(wei) ignore uncompress flag for variable length?
     int8_t *current_pos = it->start_pos + n * sizeof(StringOffsetT);
     StringOffsetT offset = *(StringOffsetT*)current_pos;
     result->length = *((StringOffsetT*)current_pos + 1) - offset;
     result->pointer = it->second_buf + offset;
-    result->is_null = false;
+    // @TODO(wei) treat zero length as null for now
+    result->is_null = (result->length == 0);
   }
 }
