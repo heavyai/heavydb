@@ -11,38 +11,10 @@
 #include <vector>
 #include <cstddef>
 
-// definition of a byte type
-typedef unsigned char mapd_byte_t;
-
-// definition of a memory address type
-typedef mapd_byte_t* mapd_addr_t;
-
-// definition of Map-D size type
-typedef unsigned int mapd_size_t;
-
 // The ChunkKey is a unique identifier for chunks in the database file.
 // The first element of the underlying vector for ChunkKey indicates the type of
 // ChunkKey (also referred to as the keyspace id)
 typedef std::vector<int> ChunkKey;
-
-/**
- * DerefSort is used for sorting pointers to comparable types/objects when they
- * are stored in a sorted STL container such as a set. It simply dereferences the
- * pointers so that the sort predicate implemented for the object is used, instead
- * of a pointer comparison.
- */
-template <typename T>
-struct DerefSort {
-	bool operator() (const T* lhs, const T* rhs) const {
-		return (*lhs < *rhs);
-	}
-};
-
-enum mapd_data_t {
-    INT_TYPE,
-    FLOAT_TYPE,
-    BOOLEAN_TYPE
-};
 
 #endif	/* _TYPES_H */
 
