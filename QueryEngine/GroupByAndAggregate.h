@@ -54,11 +54,25 @@ enum class CountDistinctImplType {
   StdSet
 };
 
+inline size_t bitmap_size_bytes(const size_t bitmap_sz) {
+  size_t bitmap_byte_sz = bitmap_sz / 8;
+  if (bitmap_sz % 8) {
+    ++bitmap_byte_sz;
+  }
+  return bitmap_byte_sz;
+}
+
 struct CountDistinctDescriptor {
   const Executor* executor_;
   CountDistinctImplType impl_type_;
   int64_t min_val;
   int64_t max_val;
+
+  size_t bitmapSizeBytes() const {
+    CHECK(impl_type_ == CountDistinctImplType::Bitmap);
+    int64_t bitmap_sz_bits = max_val - min_val + 1;
+    return bitmap_size_bytes(bitmap_sz_bits);
+  }
 };
 
 typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescriptors;
@@ -102,9 +116,9 @@ struct QueryMemoryDescriptor {
   size_t sharedMemBytes(const ExecutorDeviceType) const;
 };
 
-inline int64_t bitmap_size(const int64_t bitmap_ptr,
-                           const int target_idx,
-                           const CountDistinctDescriptors& count_distinct_descriptors) {
+inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
+                               const int target_idx,
+                               const CountDistinctDescriptors& count_distinct_descriptors) {
   const auto count_distinct_desc_it = count_distinct_descriptors.find(target_idx);
   CHECK(count_distinct_desc_it != count_distinct_descriptors.end());
   if (count_distinct_desc_it->second.impl_type_ != CountDistinctImplType::Bitmap) {
@@ -113,7 +127,7 @@ inline int64_t bitmap_size(const int64_t bitmap_ptr,
   }
   int64_t set_size { 0 };
   auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
-  for (int64_t i = 0; i < count_distinct_desc_it->second.max_val - count_distinct_desc_it->second.min_val + 1; ++i) {
+  for (int64_t i = 0; i < count_distinct_desc_it->second.bitmapSizeBytes(); ++i) {
     for (auto bit_idx = 0; bit_idx < 8; ++bit_idx) {
       if (set_vals[i] & (1 << bit_idx)) {
         ++set_size;
@@ -123,7 +137,7 @@ inline int64_t bitmap_size(const int64_t bitmap_ptr,
   return set_size;
 }
 
-inline void bitmap_unify(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
+inline void bitmap_set_unify(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
   for (size_t i = 0; i < bitmap_sz; ++i) {
     lhs[i] = rhs[i] = lhs[i] | rhs[i];
   }

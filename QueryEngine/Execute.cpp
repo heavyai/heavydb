@@ -60,7 +60,7 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
     auto actual_idx = agg_results_idx_[idx];
     if (agg_types_[idx].is_integer() || agg_types_[idx].is_time()) {
       if (agg_info.is_distinct) {
-        return AggResult(bitmap_size(*boost::get<int64_t>(&agg_results_[actual_idx]), idx,
+        return AggResult(bitmap_set_size(*boost::get<int64_t>(&agg_results_[actual_idx]), idx,
           row_set_mem_owner_->count_distinct_descriptors_));
       }
       return AggResult(*boost::get<int64_t>(&agg_results_[actual_idx]));
@@ -1131,9 +1131,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(
                 CHECK_EQ(kCOUNT, agg_info.agg_kind);
                 auto old_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&old_agg_results[actual_col_idx]));
                 auto new_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
-                const size_t set_size = count_distinct_desc_it->second.max_val -
-                  count_distinct_desc_it->second.min_val + 1;
-                bitmap_unify(new_set, old_set, set_size);
+                bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
                 break;
               }
             }

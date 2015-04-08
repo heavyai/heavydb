@@ -148,10 +148,7 @@ std::vector<size_t> QueryExecutionContext::allocateCountDistinctBuffers(const bo
 }
 
 int64_t QueryExecutionContext::allocateCountDistinctBuffer(const size_t bitmap_sz) {
-  size_t bitmap_byte_sz = bitmap_sz / 8;
-  if (bitmap_sz % 8) {
-    ++bitmap_byte_sz;
-  }
+  auto bitmap_byte_sz = bitmap_size_bytes(bitmap_sz);
   auto count_distinct_buffer = static_cast<int8_t*>(calloc(bitmap_byte_sz, 1));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
@@ -223,7 +220,7 @@ Executor::ResultRows QueryExecutionContext::groupBufferToResults(
             auto partial_bin_val = partial_agg_vals[target_idx];
             if (agg_info.is_distinct) {
               CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
-              partial_bin_val = bitmap_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
+              partial_bin_val = bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
             }
             if (agg_info.is_agg && partial_bin_val) {
               discard_partial_result = false;
