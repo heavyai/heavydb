@@ -203,7 +203,7 @@ private:
 };
 
 int main(int argc, char **argv) {
-  int port = 9090;
+  int port = 9091;
   std::string base_path;
   std::string db_name(MAPD_SYSTEM_DB);
   std::string device("auto");
@@ -217,7 +217,7 @@ int main(int argc, char **argv) {
 		("db", po::value<std::string>(&db_name), "Database name")
     ("cpu", "Run on CPU only")
     ("gpu", "Run on GPUs")
-    ("port,p", po::value<int>(&port), "Port number (default 9090)");
+    ("port,p", po::value<int>(&port), "Port number (default 9091)");
 
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("path", 1);

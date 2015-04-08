@@ -52,6 +52,7 @@ public:
     client_.getTables(_return);
     }
     catch (std::exception &e) {
+      std::cerr << "getTables caught exception: " << e.what() << std::endl;
       MapDException ex;
       ex.error_msg = e.what();
       throw ex;
@@ -63,20 +64,22 @@ private:
 };
 
 int main(int argc, char **argv) {
-  int port = 9091;
-  int server_port = 9090;
+  int port = 9090;
+  int server_port = 9091;
 
 	namespace po = boost::program_options;
 
 	po::options_description desc("Options");
 	desc.add_options()
 		("help,h", "Print help messages ")
-    ("server,s", po::value<int>(&server_port), "Server port number (default 9090)")
-    ("port,p", po::value<int>(&port), "Port number (default 9091)");
+    ("server,s", po::value<int>(&server_port), "MapD Server port number (default 9091)")
+    ("port,p", po::value<int>(&port), "Port number (default 9090)");
 
 	po::variables_map vm;
+	po::positional_options_description positionalOptions;
 
 	try {
+		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
 			std::cout << "Usage: mapd_http_server [{-p|--port} <port number>] [{-s|--server} <port number>]\n";
 			return 0;
@@ -94,6 +97,7 @@ int main(int argc, char **argv) {
   shared_ptr<TTransport> transport(new TBufferedTransport(socket));
   shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   MapDClient client(protocol);
+  transport->open();
   shared_ptr<MapDHandler> handler(new MapDHandler(client));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
@@ -101,5 +105,6 @@ int main(int argc, char **argv) {
   shared_ptr<TProtocolFactory> protocolFactory(new TJSONProtocolFactory());
   TThreadedServer server (processor, serverTransport, transportFactory, protocolFactory);
   server.serve();
+  transport->close();
   return 0;
 }
