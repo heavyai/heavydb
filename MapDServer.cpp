@@ -270,6 +270,10 @@ int main(int argc, char **argv) {
   shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
   TThreadedServer server (processor, serverTransport, transportFactory, protocolFactory);
 
-  server.serve();
+  try {
+    server.serve();
+  } catch (std::exception &e) {
+    std::cerr << "Exception: " << e.what() << std::endl;
+  }
   return 0;
 }

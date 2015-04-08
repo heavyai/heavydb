@@ -89,7 +89,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
   }
   if (*p == copy_params.line_delim) {
     row.push_back(std::string(field, p - field));
-    return p + 1;
+    return p;
   }
   for (; p < entire_buf_end && (in_quote || *p != copy_params.line_delim); p++) {
     if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
@@ -130,14 +130,14 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
   }
   if (*p == copy_params.line_delim) {
     row.push_back(std::string(field, p - field));
-    return p + 1;
+    return p;
   }
   /*
   @TODO(wei) do error handling
   */
   if (in_quote)
     std::cerr << "unmatched quote." << std::endl;
-  return p + 1;
+  return p;
 }
 
 static size_t
