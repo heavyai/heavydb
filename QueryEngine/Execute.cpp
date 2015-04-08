@@ -303,7 +303,9 @@ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
   CHECK(!is_end);
-  return (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
+  return vd.is_null
+    ? 0
+    : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
@@ -317,7 +319,7 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     escape_char = (*escape_char_expr->get_constval().stringval)[0];
   }
   auto str_lv = codegen(expr->get_arg(), true, hoist_literals);
-  CHECK_EQ(2, str_lv.size());
+  CHECK_EQ(3, str_lv.size());
   auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
   CHECK(like_expr_arg_const);
   CHECK(like_expr_arg_const->get_type_info().is_string());
@@ -335,8 +337,8 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     : cgen_state_->module_->getFunction("string_like");
   CHECK(string_like_fn);
   return cgen_state_->ir_builder_.CreateCall(string_like_fn, std::vector<llvm::Value*> {
-    str_lv[0],
     str_lv[1],
+    str_lv[2],
     like_pattern_lv,
     like_pattern_len_lv,
     ll_int(int8_t(escape_char))
@@ -479,7 +481,7 @@ std::vector<llvm::Value*> Executor::codegen(
       local_col_id,
       std::vector<llvm::Value*> { str_lv, len_lv }));
     CHECK(it_ok.second);
-    return { str_lv, len_lv };
+    return { ptr_and_len, str_lv, len_lv };
   }
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(
@@ -838,14 +840,14 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool h
 
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool hoist_literals) {
   const auto operand = uoper->get_operand();
+  CHECK(operand->get_type_info().is_integer() || operand->get_type_info().is_string());
   // if the type is inferred as non null, short-circuit to false
   if (operand->get_type_info().get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, true, hoist_literals).front();
-  CHECK(operand->get_type_info().is_integer() || operand->get_type_info().is_string());
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-    operand_lv, inlineIntNull(operand->get_type_info().is_string() ? kINT : operand->get_type_info().get_type()));
+    operand_lv, inlineIntNull(operand->get_type_info()));
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {
@@ -866,7 +868,21 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
   }
 }
 
-llvm::ConstantInt* Executor::inlineIntNull(const SQLTypes type) {
+llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
+  auto type = type_info.get_type();
+  if (type_info.is_string()) {
+    switch (type_info.get_compression()) {
+    case kENCODING_DICT: {
+      CHECK_EQ(4, type_info.get_size());
+      type = kINT;
+      break;
+    }
+    case kENCODING_NONE:
+      return ll_int(int64_t(0));
+    default:
+      CHECK(false);
+    }
+  }
   switch (type) {
   case kSMALLINT:
     return ll_int(std::numeric_limits<int16_t>::min());

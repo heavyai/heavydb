@@ -100,7 +100,7 @@ private:
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   std::pair<llvm::Value*, llvm::Value*>
   colByteStream(const int col_id, const bool fetch_column, const bool hoist_literals);
-  llvm::ConstantInt* inlineIntNull(const SQLTypes);
+  llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   std::vector<ResultRow> executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,

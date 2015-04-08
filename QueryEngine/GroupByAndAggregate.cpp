@@ -1085,8 +1085,7 @@ void GroupByAndAggregate::codegenAggCalls(
       } else {
         if (agg_info.skip_null_val) {
           agg_fname += "_skip_val";
-          auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(
-            agg_info.sql_type.get_type()));
+          auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(agg_info.sql_type));
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {
@@ -1137,8 +1136,7 @@ void GroupByAndAggregate::codegenCountDistinct(
   }
   if (agg_info.skip_null_val) {
     agg_fname += "_skip_val";
-    auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(
-      agg_info.sql_type.get_type()));
+    auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(agg_info.sql_type));
     agg_args.push_back(null_lv);
   }
   if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {

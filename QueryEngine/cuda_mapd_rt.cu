@@ -427,7 +427,9 @@ __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   VarlenDatum vd;
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
-  return (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
+  return vd.is_null
+    ? 0
+    : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
 }
 
 extern "C"
