@@ -14,7 +14,13 @@ namespace Buffer_Namespace {
     void GpuCudaBufferMgr::addSlab(const size_t slabSize) {
 	std::cout << "Adding GPU slab " << slabs_.size() << " to GPU " << deviceId_ << " of size " << slabSize << std::endl;
         slabs_.resize(slabs_.size()+1);
-        slabs_.back() = cudaMgr_->allocateDeviceMem(slabSize,deviceId_);
+        try {
+            slabs_.back() = cudaMgr_->allocateDeviceMem(slabSize,deviceId_);
+        }
+        catch (std::runtime_error &error) {
+            slabs_.resize(slabs_.size()-1);
+            throw std::runtime_error("Could not create slab on device");
+        }
         slabSegments_.resize(slabSegments_.size()+1);
         slabSegments_[slabSegments_.size()-1].push_back(BufferSeg(0,numPagesPerSlab_));
     }

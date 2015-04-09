@@ -13,10 +13,22 @@ namespace Buffer_Namespace {
     void CpuBufferMgr::addSlab(const size_t slabSize) {
         slabs_.resize(slabs_.size()+1);
         if (cpuBufferMgrMemType_ == CUDA_HOST) {
-            slabs_.back() = cudaMgr_->allocatePinnedHostMem(slabSize);
+            try {
+                slabs_.back() = cudaMgr_->allocatePinnedHostMem(slabSize);
+            }
+            catch (std::runtime_error &error) {
+                slabs_.resize(slabs_.size()-1);
+                throw std::runtime_error("Could not create slab on device");
+            }
         }
         else {
-            slabs_.back() = new int8_t[slabSize];
+            try {
+                slabs_.back() = new int8_t[slabSize];
+            }
+            catch (std::runtime_error &error) {
+                slabs_.resize(slabs_.size()-1);
+                throw std::runtime_error("Could not create slab on device");
+            }
         }
         slabSegments_.resize(slabSegments_.size()+1);
         slabSegments_[slabSegments_.size()-1].push_back(BufferSeg(0,numPagesPerSlab_));
