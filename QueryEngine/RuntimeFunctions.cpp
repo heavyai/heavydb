@@ -80,24 +80,9 @@ void agg_count(int64_t* agg, const int64_t val) {
   ++*agg;
 }
 
-namespace {
-
-int add_to_unique_set(const int64_t val, const int64_t agg_idx,
-                      const int64_t group_idx, int64_t unique_set_handle) {
-  auto it_ok = reinterpret_cast<std::set<std::tuple<int64_t, int64_t, int64_t>>*>(
-    unique_set_handle)->insert(std::make_tuple(val, agg_idx, group_idx));
-  return it_ok.second ? 1 : 0;
-}
-
-}
-
 extern "C" __attribute__((always_inline))
-void agg_count_distinct(int64_t* agg, const int64_t val, const int64_t agg_idx,
-                        const int64_t* groups_buffer, int64_t unique_set_handle) {
-  *agg += add_to_unique_set(val,
-                            agg_idx,
-                            groups_buffer ? groups_buffer - agg : 0,
-                            unique_set_handle);
+void agg_count_distinct(int64_t* agg, const int64_t val) {
+  reinterpret_cast<std::set<int64_t>*>(*agg)->insert(val);
 }
 
 extern "C" __attribute__((always_inline))
@@ -127,11 +112,9 @@ void agg_id(int64_t* agg, const int64_t val) {
 }
 
 extern "C" __attribute__((always_inline))
-void agg_count_distinct_skip_val(int64_t* agg, const int64_t val,
-                                 const int64_t agg_idx, const int64_t* groups_buffer,
-                                 int64_t unique_set_handle, const int64_t skip_val) {
+void agg_count_distinct_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {
   if (val != skip_val) {
-    agg_count_distinct(agg, val, agg_idx, groups_buffer, unique_set_handle);
+    agg_count_distinct(agg, val);
   }
 }
 

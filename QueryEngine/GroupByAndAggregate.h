@@ -14,6 +14,7 @@
 
 #include <mutex>
 #include <unordered_map>
+#include <set>
 #include <vector>
 
 
@@ -123,11 +124,11 @@ inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
   CHECK(count_distinct_desc_it != count_distinct_descriptors.end());
   if (count_distinct_desc_it->second.impl_type_ != CountDistinctImplType::Bitmap) {
     CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
-    return bitmap_ptr;
+    return reinterpret_cast<std::set<int64_t>*>(bitmap_ptr)->size();
   }
   int64_t set_size { 0 };
   auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
-  for (int64_t i = 0; i < count_distinct_desc_it->second.bitmapSizeBytes(); ++i) {
+  for (size_t i = 0; i < count_distinct_desc_it->second.bitmapSizeBytes(); ++i) {
     for (auto bit_idx = 0; bit_idx < 8; ++bit_idx) {
       if (set_vals[i] & (1 << bit_idx)) {
         ++set_size;
@@ -234,18 +235,29 @@ public:
       count_distinct_descriptors_ = count_distinct_descriptors;
     }
   }
+
   void addCountDistinctBuffer(int8_t* count_distinct_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
-    count_distinct_buffers_.push_back(count_distinct_buffer);
+    count_distinct_bitmaps_.push_back(count_distinct_buffer);
   }
+
+  void addCountDistinctSet(std::set<int64_t>* count_distinct_set) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    count_distinct_sets_.push_back(count_distinct_set);
+  }
+
   ~RowSetMemoryOwner() {
-    for (auto count_distinct_buffer : count_distinct_buffers_) {
+    for (auto count_distinct_buffer : count_distinct_bitmaps_) {
       free(count_distinct_buffer);
+    }
+    for (auto count_distinct_set : count_distinct_sets_) {
+      delete count_distinct_set;
     }
   }
 private:
   CountDistinctDescriptors count_distinct_descriptors_;
-  std::vector<int8_t*> count_distinct_buffers_;
+  std::vector<int8_t*> count_distinct_bitmaps_;
+  std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::mutex state_mutex_;
 
   friend class ResultRow;
@@ -288,8 +300,9 @@ private:
                   const bool keyless,
                   const size_t warp_size);
 
-  std::vector<size_t> allocateCountDistinctBuffers(const bool deferred);
-  int64_t allocateCountDistinctBuffer(const size_t bitmap_sz);
+  std::vector<ssize_t> allocateCountDistinctBuffers(const bool deferred);
+  int64_t allocateCountDistinctBitmap(const size_t bitmap_sz);
+  int64_t allocateCountDistinctSet();
 
   const QueryMemoryDescriptor& query_mem_desc_;
   const Executor* executor_;

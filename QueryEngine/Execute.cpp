@@ -1140,16 +1140,22 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(
           case kCOUNT:
           case kAVG:
             if (agg_info.is_distinct) {
+              CHECK(agg_info.is_agg);
+              CHECK_EQ(kCOUNT, agg_info.agg_kind);
               auto count_distinct_desc_it = query_mem_desc.count_distinct_descriptors_.find(agg_col_idx);
               CHECK(count_distinct_desc_it != query_mem_desc.count_distinct_descriptors_.end());
               if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
-                CHECK(agg_info.is_agg);
-                CHECK_EQ(kCOUNT, agg_info.agg_kind);
                 auto old_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&old_agg_results[actual_col_idx]));
                 auto new_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
                 bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
-                break;
+              } else {
+                CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
+                auto old_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(&old_agg_results[actual_col_idx]));
+                auto new_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
+                old_set->insert(new_set->begin(), new_set->end());
+                new_set->insert(old_set->begin(), old_set->end());
               }
+              break;
             }
             if (agg_type.is_integer() || agg_type.is_time()) {
               agg_sum(
@@ -1285,7 +1291,7 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan) {
   std::vector<Executor::AggInfo> result;
   const auto target_exprs = get_agg_target_exprs(plan);
-  for (auto target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
+  for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
     const auto target_expr = target_exprs[target_idx];
     CHECK(target_expr);
     const auto target_type_info = target_expr->get_type_info();
@@ -1381,8 +1387,6 @@ std::vector<ResultRow> Executor::executeResultPlan(
   llvm::Function* row_func;
   // Nested query, let the compiler know
   is_nested_ = true;
-  const size_t groups_buffer_size {
-    (targets.size() + 1) * max_groups_buffer_entry_count_ * sizeof(int64_t) };
   std::vector<Analyzer::Expr*> target_exprs;
   for (auto target_entry : targets) {
     target_exprs.push_back(target_entry->get_expr());
@@ -1470,8 +1474,6 @@ std::vector<ResultRow> Executor::executeSortPlan(
     : rows_to_sort;
 }
 
-std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set { nullptr };
-
 std::vector<ResultRow> Executor::executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
@@ -1488,18 +1490,10 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   CHECK(scan_plan);
   auto agg_infos = get_agg_name_and_exprs(plan);
   auto device_type = device_type_in;
-  bool uses_count_distinct { false };
   for (const auto& agg_info : agg_infos) {
     // TODO(alex): count distinct can't be executed on the GPU yet, punt to CPU
     if (std::get<0>(agg_info) == "agg_count_distinct") {
       device_type = ExecutorDeviceType::CPU;
-      uses_count_distinct = true;
-      if (!count_distinct_set) {
-        count_distinct_set = new std::set<std::tuple<int64_t, int64_t, int64_t>>();
-      } else {
-        std::set<std::tuple<int64_t, int64_t, int64_t>> empty;
-        count_distinct_set->swap(empty);
-      }
       break;
     }
   }
@@ -1677,45 +1671,32 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         scheduler_cv.notify_one();
       }
     };
-    bool must_serialize = false;
-    if (uses_count_distinct) {
-      for (const auto& kv : compilation_result_cpu.query_mem_desc.count_distinct_descriptors_) {
-        if (kv.second.impl_type_ == CountDistinctImplType::StdSet) {
-          must_serialize = true;
-          break;
-        }
+    auto chosen_device_type = device_type;
+    int chosen_device_id = 0;
+    if (device_type == ExecutorDeviceType::Auto) {
+      std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
+      scheduler_cv.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
+        return available_cpus || !available_gpus.empty();
+      });
+      if (!available_gpus.empty()) {
+        chosen_device_type = ExecutorDeviceType::GPU;
+        auto device_id_it = available_gpus.begin();
+        chosen_device_id = *device_id_it;
+        available_gpus.erase(device_id_it);
+      } else {
+        chosen_device_type = ExecutorDeviceType::CPU;
+        CHECK_GT(available_cpus, 0);
+        --available_cpus;
       }
     }
-    if (must_serialize) {
-      dispatch(ExecutorDeviceType::CPU, 0);
+    if (!agg_plan) {
+      dispatch(chosen_device_type, chosen_device_id);
+      result_rows_count += all_fragment_results.back().size();
+      if (result_rows_count >= static_cast<size_t>(limit)) {
+        break;
+      }
     } else {
-      auto chosen_device_type = device_type;
-      int chosen_device_id = 0;
-      if (device_type == ExecutorDeviceType::Auto) {
-        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-        scheduler_cv.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
-          return available_cpus || !available_gpus.empty();
-        });
-        if (!available_gpus.empty()) {
-          chosen_device_type = ExecutorDeviceType::GPU;
-          auto device_id_it = available_gpus.begin();
-          chosen_device_id = *device_id_it;
-          available_gpus.erase(device_id_it);
-        } else {
-          chosen_device_type = ExecutorDeviceType::CPU;
-          CHECK_GT(available_cpus, 0);
-          --available_cpus;
-        }
-      }
-      if (!agg_plan) {
-        dispatch(chosen_device_type, chosen_device_id);
-        result_rows_count += all_fragment_results.back().size();
-        if (result_rows_count >= limit) {
-          break;
-        }
-      } else {
-        query_threads.push_back(std::thread(dispatch, chosen_device_type, chosen_device_id));
-      }
+      query_threads.push_back(std::thread(dispatch, chosen_device_type, chosen_device_id));
     }
   }
   for (auto& child : query_threads) {

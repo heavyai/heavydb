@@ -93,10 +93,14 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
   if (keyless) {
     assert(warp_size >= 1);
     assert(key_qw_count == 1);
-    for (int32_t i = 0; i < groups_buffer_entry_count * agg_col_count * warp_size; ++i) {
+    for (int32_t i = 0; i < groups_buffer_entry_count * agg_col_count * static_cast<int32_t>(warp_size); ++i) {
       auto init_idx = i % agg_col_count;
-      const size_t bitmap_sz { agg_bitmap_size[init_idx] };
-      groups_buffer[i] = bitmap_sz ? allocateCountDistinctBuffer(bitmap_sz) : init_vals[init_idx];
+      const ssize_t bitmap_sz { agg_bitmap_size[init_idx] };
+      if (!bitmap_sz) {
+        groups_buffer[i] = init_vals[init_idx];
+      } else {
+        groups_buffer[i] = bitmap_sz > 0 ? allocateCountDistinctBitmap(bitmap_sz) : allocateCountDistinctSet();
+      }
     }
     return;
   }
@@ -106,17 +110,21 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
       groups_buffer[i] = EMPTY_KEY;
     } else {
       auto init_idx = (i - key_qw_count) % (key_qw_count + agg_col_count);
-      const size_t bitmap_sz { agg_bitmap_size[init_idx] };
-      groups_buffer[i] = bitmap_sz ? allocateCountDistinctBuffer(bitmap_sz) : init_vals[init_idx];
+      const ssize_t bitmap_sz { agg_bitmap_size[init_idx] };
+      if (!bitmap_sz) {
+        groups_buffer[i] = init_vals[init_idx];
+      } else {
+        groups_buffer[i] = bitmap_sz > 0 ? allocateCountDistinctBitmap(bitmap_sz) : allocateCountDistinctSet();
+      }
     }
   }
 }
 
 // deferred is true for group by queries; initGroups will allocate a bitmap
 // for each group slot
-std::vector<size_t> QueryExecutionContext::allocateCountDistinctBuffers(const bool deferred) {
+std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const bool deferred) {
   const size_t agg_col_count { query_mem_desc_.agg_col_widths.size() };
-  std::vector<size_t> agg_bitmap_size(deferred ? agg_col_count : 0);
+  std::vector<ssize_t> agg_bitmap_size(deferred ? agg_col_count : 0);
 
   size_t init_agg_idx { 0 };
   for (size_t target_idx = 0; target_idx < executor_->plan_state_->target_exprs_.size(); ++target_idx) {
@@ -132,7 +140,14 @@ std::vector<size_t> QueryExecutionContext::allocateCountDistinctBuffers(const bo
         if (deferred) {
           agg_bitmap_size[init_agg_idx] = bitmap_sz;
         } else {
-          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctBuffer(bitmap_sz);
+          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctBitmap(bitmap_sz);
+        }
+      } else {
+        CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
+        if (deferred) {
+          agg_bitmap_size[init_agg_idx] = -1;
+        } else {
+          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctSet();
         }
       }
     }
@@ -147,11 +162,17 @@ std::vector<size_t> QueryExecutionContext::allocateCountDistinctBuffers(const bo
   return agg_bitmap_size;
 }
 
-int64_t QueryExecutionContext::allocateCountDistinctBuffer(const size_t bitmap_sz) {
+int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_sz) {
   auto bitmap_byte_sz = bitmap_size_bytes(bitmap_sz);
   auto count_distinct_buffer = static_cast<int8_t*>(calloc(bitmap_byte_sz, 1));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
+}
+
+int64_t QueryExecutionContext::allocateCountDistinctSet() {
+  auto count_distinct_set = new std::set<int64_t>();
+  row_set_mem_owner_->addCountDistinctSet(count_distinct_set);
+  return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
 Executor::ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& targets) const {
@@ -1009,8 +1030,6 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
 
 }  // namespace
 
-extern std::set<std::tuple<int64_t, int64_t, int64_t>>* count_distinct_set;
-
 void GroupByAndAggregate::codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
@@ -1028,7 +1047,7 @@ void GroupByAndAggregate::codegenAggCalls(
 
   const auto& target_list = plan_->get_targetlist();
   int32_t agg_out_off { 0 };
-  for (auto target_idx = 0; target_idx < target_list.size(); ++target_idx) {
+  for (size_t target_idx = 0; target_idx < target_list.size(); ++target_idx) {
     auto target = target_list[target_idx];
     auto target_expr = target->get_expr();
     CHECK(target_expr);
@@ -1123,16 +1142,6 @@ void GroupByAndAggregate::codegenCountDistinct(
   if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {
     agg_fname += "_bitmap";
     agg_args.push_back(LL_INT(static_cast<int64_t>(it_count_distinct->second.min_val)));
-  } else {
-    agg_args.push_back(LL_INT(static_cast<int64_t>(agg_out_off)));
-    if (is_group_by) {
-      auto& groups_buffer = ROW_FUNC->getArgumentList().front();
-      agg_args.push_back(&groups_buffer);
-    } else {
-      agg_args.push_back(llvm::ConstantPointerNull::get(
-        llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)));
-    }
-    agg_args.push_back(LL_INT(reinterpret_cast<int64_t>(count_distinct_set)));
   }
   if (agg_info.skip_null_val) {
     agg_fname += "_skip_val";
