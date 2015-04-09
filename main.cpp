@@ -328,7 +328,7 @@ main(int argc, char* argv[])
 								}
 							}
 							//CHECK(results_cpu == results_gpu);
-							results.swap(results_cpu);
+							results.swap(results_gpu);
 						} else {
 							results.swap(results_cpu);
 						}
