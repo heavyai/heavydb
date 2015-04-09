@@ -89,10 +89,15 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
   std::vector<Type*>FuncTy_5_args;
   PointerType* PointerTy_6 = PointerType::get(IntegerType::get(mod->getContext(), 64), 0);
 
-  for (size_t i = 0; i < aggr_col_count; ++i) {
-    FuncTy_5_args.push_back(PointerTy_6);
+  if (aggr_col_count) {
+    for (size_t i = 0; i < aggr_col_count; ++i) {
+      FuncTy_5_args.push_back(PointerTy_6);
+    }
+  } else {  // group by query
+    FuncTy_5_args.push_back(PointerTy_6);  // groups buffer
+    FuncTy_5_args.push_back(PointerTy_6);  // small groups buffer
   }
-  FuncTy_5_args.push_back(PointerTy_6);
+
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
   if (hoist_literals) {
     FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
@@ -286,7 +291,6 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
   std::vector<Value*> void_134_params;
   void_134_params.insert(void_134_params.end(), ptr_result_vec.begin(), ptr_result_vec.end());
-  void_134_params.push_back(ConstantPointerNull::get(PointerTy_6));
   void_134_params.push_back(int64_pos_01);
   if (hoist_literals) {
     CHECK(literals);
@@ -354,7 +358,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, 1, is_nested, hoist_literals);
+  auto func_row_process = row_process(mod, 0, is_nested, hoist_literals);
   CHECK(func_row_process);
   auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type)
     ? mod->getFunction("init_shared_mem")
