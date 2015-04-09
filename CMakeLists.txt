@@ -29,6 +29,7 @@ ADD_SUBDIRECTORY    (Chunk)
 ADD_SUBDIRECTORY    (Shared)
 ADD_SUBDIRECTORY    (Utils)
 ADD_SUBDIRECTORY    (Tests)
+ADD_SUBDIRECTORY    (SQLFrontend)
 
 set(mapd_source_files main.cpp)
 add_executable(mapd ${mapd_source_files})
@@ -38,9 +39,11 @@ add_executable(initdb ${initdb_source_files})
 
 set(mapd_server_source_files MapDServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 set(mapd_http_server_source_files MapDHttpServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
+#set(mapdql_source_files mapdql/mapdql.cpp mapdql/linenoise.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 
 add_executable(mapd_server ${mapd_server_source_files})
 add_executable(mapd_http_server ${mapd_http_server_source_files})
+#add_executable(mapdql ${mapdql_source_files})
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift
@@ -61,3 +64,4 @@ target_link_libraries (mapd Shared Catalog SqliteConnector Parser Analyzer Plann
 target_link_libraries (mapd_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (mapd_http_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
+#target_link_libraries (mapdql ${Boost_LIBRARIES} "-lthrift")
