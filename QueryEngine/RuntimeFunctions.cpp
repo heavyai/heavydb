@@ -245,12 +245,23 @@ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   write_back_nop(dest, src, sz);
 }
 
+extern "C" __attribute__((noinline))
+void init_group_by_buffer_impl(int64_t* groups_buffer,
+                               const int64_t* init_vals,
+                               const int32_t groups_buffer_entry_count,
+                               const int32_t key_qw_count,
+                               const int32_t agg_col_count) {
+  // the body is not really needed, just make sure the call is not optimized away
+  assert(groups_buffer);
+}
+
 extern "C" __attribute__((always_inline))
 int64_t* get_matching_group_value(int64_t* groups_buffer,
                                   const int32_t h,
                                   const int64_t* key,
                                   const int32_t key_qw_count,
-                                  const int32_t agg_col_count) {
+                                  const int32_t agg_col_count,
+                                  const int64_t* init_vals) {
   auto off = h * (key_qw_count + agg_col_count);
   if (groups_buffer[off] == EMPTY_KEY) {
     memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
@@ -276,15 +287,16 @@ int64_t* get_group_value(int64_t* groups_buffer,
                          const int32_t groups_buffer_entry_count,
                          const int64_t* key,
                          const int32_t key_qw_count,
-                         const int32_t agg_col_count) {
+                         const int32_t agg_col_count,
+                         const int64_t* init_vals) {
   auto h = key_hash(key, key_qw_count, groups_buffer_entry_count);
-  auto matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, agg_col_count);
+  auto matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, agg_col_count, init_vals);
   if (matching_group) {
     return matching_group;
   }
   auto h_probe = h + 1;
   while (h_probe != h) {
-    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, agg_col_count);
+    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, agg_col_count, init_vals);
     if (matching_group) {
       return matching_group;
     }
@@ -312,12 +324,13 @@ int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                  const int32_t small_groups_buffer_qw_count,
                                  const int64_t key,
                                  const int64_t min_key,
-                                 const int32_t agg_col_count) {
+                                 const int32_t agg_col_count,
+                                 const int64_t* init_vals) {
   auto off = (key - min_key) * (1 + agg_col_count);
   if (0 <= off && off < small_groups_buffer_qw_count) {
     return get_group_value_fast(small_groups_buffer, key, min_key, agg_col_count);
   }
-  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count);
+  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count, init_vals);
 }
 
 extern "C" __attribute__((always_inline))

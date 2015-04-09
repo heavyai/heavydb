@@ -33,9 +33,11 @@ QueryExecutionContext::QueryExecutionContext(
   }
 
   std::vector<int64_t> group_by_buffer_template(query_mem_desc_.getBufferSizeQuad(device_type));
-  initGroups(&group_by_buffer_template[0], &init_agg_vals[0],
-    query_mem_desc_.entry_count, query_mem_desc_.keyless_hash,
-    query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1);
+  if (!query_mem_desc_.lazyInitGroups(device_type)) {
+    initGroups(&group_by_buffer_template[0], &init_agg_vals[0],
+      query_mem_desc_.entry_count, query_mem_desc_.keyless_hash,
+      query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1);
+  }
 
   if (query_mem_desc_.interleavedBins(device_type_)) {
     CHECK(query_mem_desc_.keyless_hash);
@@ -57,7 +59,9 @@ QueryExecutionContext::QueryExecutionContext(
 
   for (size_t i = 0; i < num_buffers_; i += step) {
     auto group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
-    memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes(device_type_));
+    if (!query_mem_desc_.lazyInitGroups(device_type)) {
+      memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes(device_type_));
+    }
     group_by_buffers_.push_back(group_by_buffer);
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
@@ -467,6 +471,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       }
       copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
       copy_from_gpu(data_mgr, &error_code[0], error_code_dev_ptr, grid_size_x * sizeof(error_code[0]), device_id);
+      for (const auto err : error_code) {
+        if (err) {
+          auto it = std::max_element(error_code.begin(), error_code.end());
+          throw GroupBySlotsError { -*it };
+        }
+      }
     } else {
       std::vector<CUdeviceptr> out_vec_dev_buffers;
       const size_t agg_col_count { init_agg_vals.size() };
@@ -588,13 +598,19 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
   }
   const auto& groupby_exprs = agg_plan->get_groupby_list();
   if (groupby_exprs.size() != 1) {
-    return { GroupByColRangeType::MultiCol, 0, 0 };
+    int64_t cardinality { 1 };
+    for (const auto groupby_expr : groupby_exprs) {
+      auto col_range_info = getExprRangeInfo(groupby_expr, fragments);
+      if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
+        return { GroupByColRangeType::MultiCol, 0, 0 };
+      }
+      auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1;
+      CHECK_GT(crt_col_cardinality, 0);
+      cardinality *= crt_col_cardinality;
+    }
+    return { GroupByColRangeType::MultiColKnownCardinality, 0, cardinality };
   }
-  const auto group_col_expr = dynamic_cast<Analyzer::ColumnVar*>(groupby_exprs.front());
-  if (!group_col_expr) {
-    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
-  }
-  return getExprRangeInfo(group_col_expr, fragments);
+  return getExprRangeInfo(groupby_exprs.front(), fragments);
 }
 
 #define FIND_STAT_FRAG(stat_name)                                                             \
@@ -666,11 +682,13 @@ GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const size_t max_groups_buffer_entry_count)
   : executor_(executor)
   , plan_(plan)
   , query_info_(query_info)
-  , row_set_mem_owner_(row_set_mem_owner) {
+  , row_set_mem_owner_(row_set_mem_owner)
+  , max_groups_buffer_entry_count_(max_groups_buffer_entry_count) {
   CHECK(plan_);
 }
 
@@ -687,7 +705,7 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
 
 }  // namespace
 
-QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
+QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count) {
   auto group_col_widths = get_col_byte_widths(group_by_exprs(plan_));
   const auto& target_list = plan_->get_targetlist();
   std::vector<Analyzer::Expr*> target_expr_list;
@@ -741,12 +759,12 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
     if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
         col_range_info.hash_type_ == GroupByColRangeType::Scan ||
         col_range_info.max - col_range_info.min >=
-        static_cast<int64_t>(executor_->max_groups_buffer_entry_count_)) {
+        static_cast<int64_t>(max_groups_buffer_entry_count)) {
       return {
         executor_,
         col_range_info.hash_type_, false, false,
         group_col_widths, agg_col_widths,
-        executor_->max_groups_buffer_entry_count_,
+        max_groups_buffer_entry_count,
         executor_->small_groups_buffer_entry_count_,
         col_range_info.min, GroupByMemSharing::Shared,
         count_distinct_descriptors
@@ -785,8 +803,18 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       executor_,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
-      executor_->max_groups_buffer_entry_count_, 0,
+      max_groups_buffer_entry_count, 0,
       0, GroupByMemSharing::Shared,
+      count_distinct_descriptors
+    };
+  }
+  case GroupByColRangeType::MultiColKnownCardinality: {
+    return {
+      executor_,
+      col_range_info.hash_type_, false, false,
+      group_col_widths, agg_col_widths,
+      static_cast<size_t>(1.5 * col_range_info.max),  // maximum hash load factor of 2/3
+      0, 0, GroupByMemSharing::Shared,
       count_distinct_descriptors
     };
   }
@@ -801,6 +829,10 @@ bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
   return sharing == GroupByMemSharing::Shared;
+}
+
+bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
+  return device_type == ExecutorDeviceType::GPU && hash_type == GroupByColRangeType::MultiCol;
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {
@@ -859,7 +891,7 @@ bool GroupByAndAggregate::codegen(
 
   {
     const bool is_group_by = !group_by_exprs(plan_).empty();
-    auto query_mem_desc = getQueryMemoryDescriptor();
+    auto query_mem_desc = getQueryMemoryDescriptor(max_groups_buffer_entry_count_);
 
     DiamondCodegen filter_cfg(filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast());
 
@@ -960,12 +992,14 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
           LL_INT(static_cast<int32_t>(query_mem_desc.entry_count_small)),
           group_expr_lv,
           LL_INT(query_mem_desc.min_val),
-          LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))
+          LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())),
+          ++arg_it
         });
     }
     break;
   }
-  case GroupByColRangeType::MultiCol: {
+  case GroupByColRangeType::MultiCol:
+  case GroupByColRangeType::MultiColKnownCardinality: {
     auto key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc.group_col_widths.size()));
     // create the key buffer
     auto group_key = LL_BUILDER.CreateAlloca(
@@ -984,7 +1018,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         LL_INT(static_cast<int32_t>(query_mem_desc.entry_count)),
         group_key,
         key_size_lv,
-        LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))
+        LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())),
+        ++arg_it
       });
     break;
   }

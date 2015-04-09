@@ -59,18 +59,19 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(
     coalesced_size(query_mem_desc, groups_buffer_size, block_size_x, grid_size_x), device_id);
 
   const size_t num_buffers { block_size_x * grid_size_x };
-
-  std::vector<int8_t> buff_to_gpu(coalesced_size(
-    query_mem_desc, groups_buffer_size, block_size_x, grid_size_x));
-  auto buff_to_gpu_ptr = &buff_to_gpu[0];
-
   const size_t step { query_mem_desc.threadsShareMemory() ? block_size_x : 1 };
 
-  for (size_t i = 0; i < num_buffers; i += step) {
-    memcpy(buff_to_gpu_ptr, group_by_buffers[i], groups_buffer_size);
-    buff_to_gpu_ptr += groups_buffer_size;
+  if (!query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU)) {
+    std::vector<int8_t> buff_to_gpu(coalesced_size(
+      query_mem_desc, groups_buffer_size, block_size_x, grid_size_x));
+    auto buff_to_gpu_ptr = &buff_to_gpu[0];
+
+    for (size_t i = 0; i < num_buffers; i += step) {
+      memcpy(buff_to_gpu_ptr, group_by_buffers[i], groups_buffer_size);
+      buff_to_gpu_ptr += groups_buffer_size;
+    }
+    copy_to_gpu(data_mgr, group_by_dev_buffers_mem, &buff_to_gpu[0], buff_to_gpu.size(), device_id);
   }
-  copy_to_gpu(data_mgr, group_by_dev_buffers_mem, &buff_to_gpu[0], buff_to_gpu.size(), device_id);
 
   auto group_by_dev_buffer = group_by_dev_buffers_mem;
   std::vector<CUdeviceptr> group_by_dev_buffers(num_buffers);

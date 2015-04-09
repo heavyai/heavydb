@@ -24,6 +24,7 @@ enum class GroupByColRangeType {
   OneColKnownRange,       // statically known range, only possible for column expressions
   OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
   MultiCol,
+  MultiColKnownCardinality,
   Scan,                   // the plan is not a group by plan
 };
 
@@ -111,6 +112,8 @@ struct QueryMemoryDescriptor {
   bool usesGetGroupValueFast() const;
 
   bool threadsShareMemory() const;
+
+  bool lazyInitGroups(const ExecutorDeviceType) const;
 
   bool interleavedBins(const ExecutorDeviceType) const;
 
@@ -331,9 +334,10 @@ public:
     Executor* executor,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
-    std::shared_ptr<RowSetMemoryOwner>);
+    std::shared_ptr<RowSetMemoryOwner>,
+    const size_t max_groups_buffer_entry_count);
 
-  QueryMemoryDescriptor getQueryMemoryDescriptor();
+  QueryMemoryDescriptor getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
@@ -401,6 +405,7 @@ private:
   const Planner::Plan* plan_;
   const Fragmenter_Namespace::QueryInfo& query_info_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+  const size_t max_groups_buffer_entry_count_;
 };
 
 namespace {
@@ -522,5 +527,9 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   }
   return col_widths;
 }
+
+struct GroupBySlotsError {
+  int32_t last_known_good_position;
+};
 
 #endif // QUERYENGINE_GROUPBYANDAGGREGATE_H

@@ -129,22 +129,25 @@ std::vector<ResultRow> Executor::executeSelectPlan(
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const Catalog_Namespace::Catalog& cat) {
+    const Catalog_Namespace::Catalog& cat,
+    const size_t max_groups_buffer_entry_guess) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
     auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
     if (limit) {
-      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat, row_set_mem_owner);
+      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
+        row_set_mem_owner, max_groups_buffer_entry_guess);
       return std::vector<ResultRow>(rows.begin(), rows.begin() + std::min(limit, static_cast<int64_t>(rows.size())));
     }
-    return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat, row_set_mem_owner);
+    return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat, row_set_mem_owner,
+      max_groups_buffer_entry_guess);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
-    return executeResultPlan(result_plan, hoist_literals, device_type, opt_level, cat);
+    return executeResultPlan(result_plan, hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess);
   }
   const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
   if (sort_plan) {
-    return executeSortPlan(sort_plan, limit, hoist_literals, device_type, opt_level, cat);
+    return executeSortPlan(sort_plan, limit, hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess);
   }
   CHECK(false);
 }
@@ -167,8 +170,13 @@ std::vector<ResultRow> Executor::execute(
   std::lock_guard<std::mutex> lock(execute_mutex_);
   switch (stmt_type) {
   case kSELECT:
-    return executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
-      hoist_literals, device_type, opt_level, root_plan->get_catalog());
+    try {
+      return executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
+        hoist_literals, device_type, opt_level, root_plan->get_catalog(), 2048);
+    } catch (GroupBySlotsError&) {
+      return executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
+        hoist_literals, ExecutorDeviceType::CPU, opt_level, root_plan->get_catalog(), 0);
+    }
   case kINSERT: {
     executeSimpleInsert(root_plan);
     return {};
@@ -1058,6 +1066,9 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t error_code { 0 };
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0], &error_code);
+      if (error_code) {
+        throw GroupBySlotsError { -error_code };
+      }
     }
   } else {
     typedef void (*agg_query)(
@@ -1074,6 +1085,9 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t error_code { 0 };
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0], &error_code);
+      if (error_code) {
+        throw GroupBySlotsError { -error_code };
+      }
     }
   }
   return out_vec;
@@ -1436,10 +1450,12 @@ std::vector<ResultRow> Executor::executeResultPlan(
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const Catalog_Namespace::Catalog& cat) {
+    const Catalog_Namespace::Catalog& cat,
+    const size_t max_groups_buffer_entry_guess) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
-  auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat, nullptr);
+  auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
+    nullptr, max_groups_buffer_entry_guess);
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
@@ -1472,7 +1488,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
     GroupByColRangeType::OneColGuessedRange, false, false,
     { sizeof(int64_t) },
     get_col_byte_widths(target_exprs),
-    max_groups_buffer_entry_count_,
+    max_groups_buffer_entry_guess,
     small_groups_buffer_entry_count_,
     0, GroupByMemSharing::Shared
   };
@@ -1487,7 +1503,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr);
+    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr, max_groups_buffer_entry_guess);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
@@ -1505,9 +1521,10 @@ std::vector<ResultRow> Executor::executeSortPlan(
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
-    const Catalog_Namespace::Catalog& cat) {
+    const Catalog_Namespace::Catalog& cat,
+    const size_t max_groups_buffer_entry_guess) {
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0,
-    hoist_literals, device_type, opt_level, cat);
+    hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess);
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
   // TODO(alex): check the semantics for order by multiple columns
@@ -1557,7 +1574,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     const ExecutorDeviceType device_type_in,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const size_t max_groups_buffer_entry_guess_in) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // TODO(alex): heuristic for group by buffer size
   const auto scan_plan = agg_plan
@@ -1581,6 +1599,20 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   Fragmenter_Namespace::QueryInfo query_info;
   fragmenter->getFragmentsForQuery(query_info);
   const auto& fragments = query_info.fragments;
+
+  auto max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_in;
+  if (!max_groups_buffer_entry_guess) {
+    // The query has failed the first execution attempt because of running out
+    // of group by slots. Make the conservative choice: allocate fragment size
+    // slots and run on the CPU.
+    CHECK(device_type == ExecutorDeviceType::CPU);
+    using Fragmenter_Namespace::FragmentInfo;
+    CHECK(!fragments.empty());
+    auto it = std::max_element(fragments.begin(), fragments.end(),
+      [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.numTuples < f2.numTuples; });
+    max_groups_buffer_entry_guess = it->numTuples;  // not a guess anymore
+  }
+
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
 
   CompilationResult compilation_result_cpu;
@@ -1590,13 +1622,13 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level,
-        cat.get_dataMgr().cudaMgr_, true, row_set_mem_owner);
+        cat.get_dataMgr().cudaMgr_, true, row_set_mem_owner, max_groups_buffer_entry_guess);
     } catch (...) {
       compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level,
-        cat.get_dataMgr().cudaMgr_, false, row_set_mem_owner);
+        cat.get_dataMgr().cudaMgr_, false, row_set_mem_owner, max_groups_buffer_entry_guess);
     }
   };
 
@@ -1613,14 +1645,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
-        true, row_set_mem_owner);
+        true, row_set_mem_owner, max_groups_buffer_entry_guess);
     } catch (...) {
       compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
-        false, row_set_mem_owner);
+        false, row_set_mem_owner, max_groups_buffer_entry_guess);
     }
   }
 
@@ -1742,7 +1774,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
           device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), chosen_device_type, col_buffers,
           query_exe_context.get(), num_rows,
-          &cat.get_dataMgr(), chosen_device_id);
+          &cat.get_dataMgr(), chosen_device_id,
+          dynamic_cast<const Planner::Scan*>(plan) && limit ? limit : 0);
       }
       {
         std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -1874,7 +1907,8 @@ void Executor::executePlanWithGroupBy(
     const QueryExecutionContext* query_exe_context,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
-    const int device_id) {
+    const int device_id,
+    const int64_t limit) {
   CHECK(results.empty());
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
@@ -1882,19 +1916,26 @@ void Executor::executePlanWithGroupBy(
   // 2. Resize on overflow.
   // 3. Optimize runtime.
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
-  if (device_type == ExecutorDeviceType::CPU) {
-    launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
-      num_rows, plan_state_->init_agg_vals_,
-      query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_);
+  try {
+    if (device_type == ExecutorDeviceType::CPU) {
+      launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
+        num_rows, plan_state_->init_agg_vals_,
+        query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_);
+    } else {
+      query_exe_context->launchGpuCode(
+        compilation_result.native_functions, hoist_literals, hoist_buf,
+        col_buffers,
+        num_rows, plan_state_->init_agg_vals_,
+        data_mgr, block_size_x_, grid_size_x_, device_id);
+    }
+  } catch (GroupBySlotsError&) {
     results = query_exe_context->getRowSet(target_exprs);
-  } else {
-    query_exe_context->launchGpuCode(
-      compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers,
-      num_rows, plan_state_->init_agg_vals_,
-      data_mgr, block_size_x_, grid_size_x_, device_id);
-    results = query_exe_context->getRowSet(target_exprs);
+    if (!limit || results.size() < static_cast<size_t>(limit)) {
+      throw;  // unlucky, not enough results and we ran out of slots
+    }
+    return;
   }
+  results = query_exe_context->getRowSet(target_exprs);
 }
 
 void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
@@ -2070,6 +2111,32 @@ void bind_pos_placeholders(
   }
 }
 
+void bind_init_group_by_buffer(llvm::Function* query_func,
+                               const QueryMemoryDescriptor& query_mem_desc,
+                               const ExecutorDeviceType device_type) {
+  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
+    if (!llvm::isa<llvm::CallInst>(*it)) {
+      continue;
+    }
+    auto& init_group_by_buffer_call = llvm::cast<llvm::CallInst>(*it);
+    std::vector<llvm::Value*> args;
+    for (size_t i = 0; i < init_group_by_buffer_call.getNumArgOperands(); ++i) {
+      args.push_back(init_group_by_buffer_call.getArgOperand(i));
+    }
+    if (std::string(init_group_by_buffer_call.getCalledFunction()->getName()) == "init_group_by_buffer") {
+      if (query_mem_desc.lazyInitGroups(device_type)) {
+        llvm::ReplaceInstWithInst(
+          &init_group_by_buffer_call,
+          llvm::CallInst::Create(query_func->getParent()->getFunction("init_group_by_buffer_impl"), args));
+      } else {
+        // init_group_by_buffer is meaningless if groups are initialized on host
+        init_group_by_buffer_call.eraseFromParent();
+      }
+      return;
+    }
+  }
+}
+
 std::vector<llvm::Value*> generate_column_heads_load(
     const int num_columns,
     llvm::Function* query_func,
@@ -2108,6 +2175,9 @@ void set_row_func_argnames(llvm::Function* row_func,
     ++arg_it;
   }
 
+  arg_it->setName("agg_init_val");
+  ++arg_it;
+
   arg_it->setName("pos");
   ++arg_it;
 
@@ -2142,6 +2212,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     // small group by buffer
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
   }
+
+  // aggregate init values
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
   // position argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
@@ -2194,11 +2267,20 @@ Executor::CompilationResult Executor::compilePlan(
     const ExecutorOptLevel opt_level,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const bool allow_lazy_fetch,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const size_t max_groups_buffer_entry_guess) {
   nukeOldState(allow_lazy_fetch);
 
-  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner);
-  auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
+  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner, max_groups_buffer_entry_guess);
+  auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor(max_groups_buffer_entry_guess);
+
+  if (device_type == ExecutorDeviceType::GPU &&
+      query_mem_desc.hash_type == GroupByColRangeType::MultiColKnownCardinality) {
+    const size_t required_memory { (grid_size_x_ * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)) };
+    CHECK(catalog_->get_dataMgr().cudaMgr_);
+    const size_t max_memory { catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 10 };
+    cgen_state_->must_run_on_cpu_ =  required_memory > max_memory;
+  }
 
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
@@ -2211,6 +2293,9 @@ Executor::CompilationResult Executor::compilePlan(
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
+  if (is_group_by) {
+    bind_init_group_by_buffer(query_func, query_mem_desc, device_type);
+  }
 
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) = create_row_function(
@@ -2429,9 +2514,10 @@ declare i64* @init_shared_mem(i64*, i32);
 declare i64* @init_shared_mem_nop(i64*, i32);
 declare void @write_back(i64*, i64*, i32);
 declare void @write_back_nop(i64*, i64*, i32);
-declare i64* @get_group_value(i64*, i32, i64*, i32, i32);
+declare void @init_group_by_buffer_impl(i64*, i64*, i32, i32, i32);
+declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*);
 declare i64* @get_group_value_fast(i64*, i64, i64, i32);
-declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32);
+declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
 declare void @agg_count_shared(i64*, i64);
 declare void @agg_count_skip_val_shared(i64*, i64, i64);
 declare void @agg_count_double_shared(i64*, double);

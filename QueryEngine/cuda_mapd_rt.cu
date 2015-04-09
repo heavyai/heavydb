@@ -49,17 +49,34 @@ __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
 #define EMPTY_KEY -9223372036854775808L
 
 extern "C"
+__device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
+                                          const int64_t* init_vals,
+                                          const int32_t groups_buffer_entry_count,
+                                          const int32_t key_qw_count,
+                                          const int32_t agg_col_count) {
+  const int32_t start = threadIdx.x;
+  const int32_t step = blockDim.x;
+  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
+  for (int32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
+    groups_buffer[i] = EMPTY_KEY;
+  }
+  __syncthreads();
+}
+
+extern "C"
 __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
-                                  const int32_t h,
-                                  const int64_t* key,
-                                  const int32_t key_qw_count,
-                                  const int32_t agg_col_count) {
+                                             const int32_t h,
+                                             const int64_t* key,
+                                             const int32_t key_qw_count,
+                                             const int32_t agg_col_count,
+                                             const int64_t* init_vals) {
   int64_t off = h * (key_qw_count + agg_col_count);
   {
     const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off),
       EMPTY_KEY, *key);
     if (EMPTY_KEY == old) {
       memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
+      memcpy(groups_buffer +off + key_qw_count, init_vals, agg_col_count * sizeof(*init_vals));
     }
   }
   __syncthreads();
@@ -88,15 +105,16 @@ __device__ int64_t* get_group_value(int64_t* groups_buffer,
                                     const int32_t groups_buffer_entry_count,
                                     const int64_t* key,
                                     const int32_t key_qw_count,
-                                    const int32_t agg_col_count) {
+                                    const int32_t agg_col_count,
+                                    const int64_t* init_vals) {
   int64_t h = key_hash(key, key_qw_count, groups_buffer_entry_count);
-  int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, agg_col_count);
+  int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, agg_col_count, init_vals);
   if (matching_group) {
     return matching_group;
   }
   int64_t h_probe = h + 1;
   while (h_probe != h) {
-    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, agg_col_count);
+    matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, agg_col_count, init_vals);
     if (matching_group) {
       return matching_group;
     }
@@ -119,17 +137,18 @@ __device__ int64_t* get_group_value_fast(int64_t* groups_buffer,
 
 extern "C"
 __device__ int64_t* get_group_value_one_key(int64_t* groups_buffer,
-                                 const int32_t groups_buffer_entry_count,
-                                 int64_t* small_groups_buffer,
-                                 const int32_t small_groups_buffer_qw_count,
-                                 const int64_t key,
-                                 const int64_t min_key,
-                                 const int32_t agg_col_count) {
+                                            const int32_t groups_buffer_entry_count,
+                                            int64_t* small_groups_buffer,
+                                            const int32_t small_groups_buffer_qw_count,
+                                            const int64_t key,
+                                            const int64_t min_key,
+                                            const int32_t agg_col_count,
+                                            const int64_t* init_vals) {
   int64_t off = (key - min_key) * (1 + agg_col_count);
   if (0 <= off && off < small_groups_buffer_qw_count) {
     return get_group_value_fast(small_groups_buffer, key, min_key, agg_col_count);
   }
-  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count);
+  return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count, init_vals);
 }
 
 __device__ int64_t atomicMax64(int64_t* address, int64_t val)

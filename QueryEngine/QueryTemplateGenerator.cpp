@@ -82,6 +82,48 @@ llvm::Function* pos_step(llvm::Module* mod) {
   return func_pos_step;
 }
 
+llvm::Function* init_group_by_buffer(llvm::Module* mod) {
+  using namespace llvm;
+
+  auto i64_type = IntegerType::get(mod->getContext(), 64);
+  auto pi64_type = PointerType::get(i64_type, 0);
+  auto i32_type = IntegerType::get(mod->getContext(), 32);
+
+  std::vector<Type*> init_group_by_buffer_args {
+    pi64_type, pi64_type, i32_type, i32_type, i32_type
+  };
+
+  auto init_group_by_buffer_type = FunctionType::get(
+    Type::getVoidTy(mod->getContext()),
+    init_group_by_buffer_args,
+    false);
+
+  auto func_init_group_by_buffer = mod->getFunction("init_group_by_buffer");
+  if (!func_init_group_by_buffer) {
+    func_init_group_by_buffer = Function::Create(
+      init_group_by_buffer_type,
+      GlobalValue::ExternalLinkage,
+      "init_group_by_buffer", mod);
+    func_init_group_by_buffer->setCallingConv(CallingConv::C);
+  }
+
+  AttributeSet func_init_group_by_buffer_PAL;
+  {
+    SmallVector<AttributeSet, 4> Attrs;
+    AttributeSet PAS;
+    {
+      AttrBuilder B;
+      PAS = AttributeSet::get(mod->getContext(), ~0U, B);
+    }
+
+    Attrs.push_back(PAS);
+    func_init_group_by_buffer_PAL = AttributeSet::get(mod->getContext(), Attrs);
+  }
+  func_init_group_by_buffer->setAttributes(func_init_group_by_buffer_PAL);
+
+  return func_init_group_by_buffer;
+}
+
 llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
                             const bool is_nested, const bool hoist_literals) {
   using namespace llvm;
@@ -97,6 +139,8 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
     FuncTy_5_args.push_back(PointerTy_6);  // groups buffer
     FuncTy_5_args.push_back(PointerTy_6);  // small groups buffer
   }
+
+  FuncTy_5_args.push_back(PointerTy_6);  // aggregate init values
 
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
   if (hoist_literals) {
@@ -291,6 +335,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 
   std::vector<Value*> void_134_params;
   void_134_params.insert(void_134_params.end(), ptr_result_vec.begin(), ptr_result_vec.end());
+  void_134_params.push_back(ptr_agg_init_val);
   void_134_params.push_back(int64_pos_01);
   if (hoist_literals) {
     CHECK(literals);
@@ -358,6 +403,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
+  auto func_init_group_by_buffer = init_group_by_buffer(mod);
   auto func_row_process = row_process(mod, 0, is_nested, hoist_literals);
   CHECK(func_row_process);
   auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type)
@@ -497,6 +543,13 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, int64_153, "", label_146);
   auto small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
   small_ptr_155->setAlignment(8);
+  CallInst::Create(func_init_group_by_buffer,
+    std::vector<llvm::Value*> {
+      ptr_155, ptr_agg_init_val_145,
+      ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.entry_count),
+      ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.group_col_widths.size()),
+      ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.agg_col_widths.size()),
+    }, "", label_146);
   auto shared_mem_bytes_lv = ConstantInt::get(IntegerType::get(mod->getContext(), 32),
     query_mem_desc.sharedMemBytes(device_type));
   auto ptr_156 = CallInst::Create(
@@ -521,6 +574,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   std::vector<Value*> void_162_params;
   void_162_params.push_back(ptr_156);
   void_162_params.push_back(small_ptr_155);
+  void_162_params.push_back(ptr_agg_init_val_145);
   void_162_params.push_back(int64_pos_01_160);
   if (hoist_literals) {
     CHECK(literals);

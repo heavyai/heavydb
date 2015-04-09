@@ -107,7 +107,8 @@ private:
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const Catalog_Namespace::Catalog&);
+    const Catalog_Namespace::Catalog&,
+    const size_t max_groups_buffer_entry_count);
   std::vector<ResultRow> executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
@@ -115,20 +116,23 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
-    std::shared_ptr<RowSetMemoryOwner>);
+    std::shared_ptr<RowSetMemoryOwner>,
+    const size_t max_groups_buffer_entry_count);
   std::vector<ResultRow> executeResultPlan(
     const Planner::Result* result_plan,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const Catalog_Namespace::Catalog&);
+    const Catalog_Namespace::Catalog&,
+    const size_t max_groups_buffer_entry_count);
   std::vector<ResultRow> executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
-    const Catalog_Namespace::Catalog&);
+    const Catalog_Namespace::Catalog&,
+    const size_t max_groups_buffer_entry_count);
 
   struct CompilationResult {
     std::vector<void*> native_functions;
@@ -147,7 +151,8 @@ private:
     const QueryExecutionContext*,
     const int64_t num_rows,
     Data_Namespace::DataMgr*,
-    const int device_id);
+    const int device_id,
+    const int64_t limit);
   void executePlanWithoutGroupBy(
     const CompilationResult&,
     const bool hoist_literals,
@@ -177,7 +182,8 @@ private:
     const ExecutorOptLevel,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const bool allow_lazy_fetch,
-    std::shared_ptr<RowSetMemoryOwner>);
+    std::shared_ptr<RowSetMemoryOwner>,
+    const size_t max_groups_buffer_entry_count);
 
   void nukeOldState(const bool allow_lazy_fetch);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
@@ -409,7 +415,6 @@ private:
   std::map<CodeCacheKey, CodeCacheVal> cpu_code_cache_;
   std::map<CodeCacheKey, CodeCacheVal> gpu_code_cache_;
 
-  const size_t max_groups_buffer_entry_count_ { 2048 };
   const size_t small_groups_buffer_entry_count_ { 512 };
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
