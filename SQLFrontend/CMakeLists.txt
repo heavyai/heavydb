@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
 set( CMAKE_CXX_FLAGS "-std=c++11 -Wall -O3 -g")
-SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR})
 FIND_PACKAGE( Boost COMPONENTS program_options REQUIRED )
 ADD_EXECUTABLE (mapdql mapdql.cpp linenoise.cpp ${CMAKE_CURRENT_BINARY_DIR}/../gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/../gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/../gen-cpp/mapd_types.cpp)
 

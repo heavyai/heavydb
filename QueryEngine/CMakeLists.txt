@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 set(CMAKE_CXX_FLAGS "-D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -std=c++11 -Wall -Wno-attributes -O3")
 set(query_engine_source_files
     Codec.cpp

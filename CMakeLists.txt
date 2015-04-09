@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 PROJECT			(mapd_exe)
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
 set(CMAKE_CXX_FLAGS "-g -O3 -std=c++11 -Wall -pthread ${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/nvvm/lib -L/usr/local/cuda/nvvm/lib64")
 FIND_PACKAGE( Boost COMPONENTS filesystem program_options thread system REQUIRED )
@@ -39,11 +40,9 @@ add_executable(initdb ${initdb_source_files})
 
 set(mapd_server_source_files MapDServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 set(mapd_http_server_source_files MapDHttpServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
-#set(mapdql_source_files mapdql/mapdql.cpp mapdql/linenoise.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 
 add_executable(mapd_server ${mapd_server_source_files})
 add_executable(mapd_http_server ${mapd_http_server_source_files})
-#add_executable(mapdql ${mapdql_source_files})
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift
@@ -55,8 +54,8 @@ set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp GENERAT
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
 
-add_executable(csv_import csv_import.cpp)
-target_link_libraries(csv_import CsvImport ${Boost_LIBRARIES})
+#add_executable(csv_import csv_import.cpp)
+#target_link_libraries(csv_import CsvImport ${Boost_LIBRARIES})
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
@@ -64,4 +63,3 @@ target_link_libraries (mapd Shared Catalog SqliteConnector Parser Analyzer Plann
 target_link_libraries (mapd_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (mapd_http_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
-#target_link_libraries (mapdql ${Boost_LIBRARIES} "-lthrift")
