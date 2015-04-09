@@ -1610,10 +1610,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         if (plan_state_->columns_to_fetch_.find(col_id) == plan_state_->columns_to_fetch_.end()) {
           memory_level_for_column = Data_Namespace::CPU_LEVEL;
         }
-        const bool is_real_string = cd->columnType.is_string() &&
-          cd->columnType.get_compression() == kENCODING_NONE;
         std::shared_ptr<Chunk_NS::Chunk> chunk;
-        if (is_real_string) {
+        {
           std::lock_guard<std::mutex> lock(str_dec_mutex);
           chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
             chunk_key,
@@ -1622,15 +1620,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
             chunk_meta_it->second.numBytes,
             chunk_meta_it->second.numElements);
           chunks.push_back(chunk);
-        } else {
-          chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
-            chunk_key,
-            memory_level_for_column,
-            chosen_device_id,
-            chunk_meta_it->second.numBytes,
-            chunk_meta_it->second.numElements);
-          chunks.push_back(chunk);
         }
+        const bool is_real_string = cd->columnType.is_string() &&
+          cd->columnType.get_compression() == kENCODING_NONE;
         if (is_real_string) {
           chunk_iterators.push_back(chunk->begin_iterator());
           auto& chunk_iter = chunk_iterators.back();
