@@ -765,7 +765,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       executor_->max_groups_buffer_entry_count_, 0,
-      0, GroupByMemSharing::Private,
+      0, GroupByMemSharing::Shared,
       count_distinct_descriptors
     };
   }

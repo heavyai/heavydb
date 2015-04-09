@@ -307,7 +307,6 @@ int64_t* get_group_value(int64_t* groups_buffer,
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
   }
-  // TODO(alex): handle error by resizing?
   return nullptr;
 }
 

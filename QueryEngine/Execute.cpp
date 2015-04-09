@@ -1394,7 +1394,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
     get_col_byte_widths(target_exprs),
     max_groups_buffer_entry_count_,
     small_groups_buffer_entry_count_,
-    0, GroupByMemSharing::Private
+    0, GroupByMemSharing::Shared
   };
   auto query_func = query_group_by_template(cgen_state_->module_, 1, is_nested_,
     hoist_literals, query_mem_desc, ExecutorDeviceType::CPU);

@@ -60,9 +60,9 @@ __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
       EMPTY_KEY, *key);
     if (EMPTY_KEY == old) {
       memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
-      return groups_buffer + off + key_qw_count;
     }
   }
+  __syncthreads();
   bool match = true;
   for (int64_t i = 0; i < key_qw_count; ++i) {
     if (groups_buffer[off + i] != key[i]) {
@@ -102,7 +102,6 @@ __device__ int64_t* get_group_value(int64_t* groups_buffer,
     }
     h_probe = (h_probe + 1) % groups_buffer_entry_count;
   }
-  // TODO(alex): handle error by resizing?
   return NULL;
 }
 
