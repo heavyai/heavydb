@@ -9,8 +9,8 @@ add_custom_command(
     COMMAND thrift
     ARGS -gen cpp -o ${CMAKE_CURRENT_BINARY_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../mapd.thrift)
 
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/../gen-cpp/MapD.cpp GENERATED)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/../gen-cpp/mapd_constants.cpp GENERATED)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/../gen-cpp/mapd_types.cpp GENERATED)
+set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
+set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
+set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
 
 target_link_libraries (mapdql ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lthrift")

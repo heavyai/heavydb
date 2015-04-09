@@ -1,10 +1,10 @@
-namespace php mapd
-
 enum TDatumType {
   INT,
   REAL,
   STR,
-  TIME
+  TIME,
+  TIMESTAMP,
+  DATE
 }
 
 union TDatum {
@@ -15,7 +15,8 @@ union TDatum {
 
 struct ColumnValue {
   1: TDatumType type,
-  2: TDatum datum
+  2: TDatum datum,
+  3: bool is_null
 }
 
 struct ColumnType {

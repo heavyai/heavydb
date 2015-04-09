@@ -13,7 +13,7 @@
 #include <iostream>
 #include <boost/program_options.hpp>
 
-#include "../gen-cpp/MapD.h"
+#include "gen-cpp/MapD.h"
 #include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -101,22 +101,25 @@ int main(int argc, char **argv) {
                 std::cout << "|";
               else
                 not_first = true;
-              switch (col_val.type) {
-                case TDatumType::INT:
-                  std::cout << std::to_string(col_val.datum.int_val);
-                  break;
-                case TDatumType::REAL:
-                  std::cout << std::to_string(col_val.datum.real_val);
-                  break;
-                case TDatumType::STR:
-                  std::cout << col_val.datum.str_val;
-                  break;
-                case TDatumType::TIME:
-                  std::cout << std::to_string(col_val.datum.int_val);
-                  break;
-                default:
-                  std::cerr << "Unknown column type." << std::endl;
-              }
+              if (col_val.is_null)
+                std::cout << "NULL";
+              else
+                switch (col_val.type) {
+                  case TDatumType::INT:
+                    std::cout << std::to_string(col_val.datum.int_val);
+                    break;
+                  case TDatumType::REAL:
+                    std::cout << std::to_string(col_val.datum.real_val);
+                    break;
+                  case TDatumType::STR:
+                    std::cout << col_val.datum.str_val;
+                    break;
+                  case TDatumType::TIME:
+                    std::cout << std::to_string(col_val.datum.int_val);
+                    break;
+                  default:
+                    std::cerr << "Unknown column type." << std::endl;
+                }
             }
           std::cout << std::endl;
           }

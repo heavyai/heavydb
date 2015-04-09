@@ -112,10 +112,10 @@ public:
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
         const auto results = executor->execute(root_plan,true,executor_device_type_);
+        const auto plan = root_plan->get_plan();
+        const auto& targets = plan->get_targetlist();
         {
-          const auto plan = root_plan->get_plan();
           CHECK(plan);
-          const auto& targets = plan->get_targetlist();
           ProjInfo proj_info;
           size_t i = 0;
           for (const auto target : targets) {
@@ -138,14 +138,44 @@ public:
             if (boost::get<int64_t>(&agg_result)) {
               col_val.type = type_to_thrift(row.agg_type(i));
               col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
+              switch (targets[i]->get_expr()->get_type_info().get_type()) {
+                case kBOOLEAN:
+                  col_val.is_null = (col_val.datum.int_val == NULL_BOOLEAN);
+                  break;
+                case kSMALLINT:
+                  col_val.is_null = (col_val.datum.int_val == NULL_SMALLINT);
+                  break;
+                case kINT:
+                  col_val.is_null = (col_val.datum.int_val == NULL_INT);
+                  break;
+                case kBIGINT:
+                  col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
+                  break;
+                case kTIME:
+                case kTIMESTAMP:
+                case kDATE:
+                  if (sizeof(time_t) == 4)
+                    col_val.is_null = (col_val.datum.int_val == NULL_INT);
+                  else
+                    col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
+                  break;
+                default:
+                  col_val.is_null = false;
+              }
             } else if (boost::get<double>(&agg_result)) {
               col_val.type = TDatumType::REAL;
               col_val.datum.real_val = *(boost::get<double>(&agg_result));
+              if (targets[i]->get_expr()->get_type_info().get_type() == kFLOAT) {
+                col_val.is_null = (col_val.datum.real_val == NULL_FLOAT);
+              } else {
+                col_val.is_null = (col_val.datum.real_val == NULL_DOUBLE);
+              }
             } else {
               auto s = boost::get<std::string>(&agg_result);
               CHECK(s);
               col_val.type = TDatumType::STR;
               col_val.datum.str_val = *s;
+              col_val.is_null = s->empty();
             }
             trow.cols.push_back(col_val);
           }
