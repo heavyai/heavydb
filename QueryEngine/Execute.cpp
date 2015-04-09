@@ -2006,13 +2006,17 @@ void set_row_func_argnames(llvm::Function* row_func,
                            const bool hoist_literals) {
   auto arg_it = row_func->arg_begin();
 
-  for (size_t i = 0; i < agg_col_count; ++i) {
-    arg_it->setName("out");
+  if (agg_col_count) {
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      arg_it->setName("out");
+      ++arg_it;
+    }
+  } else {
+    arg_it->setName("group_by_buff");
+    ++arg_it;
+    arg_it->setName("small_group_by_buff");
     ++arg_it;
   }
-
-  arg_it->setName("small_out");
-  ++arg_it;
 
   arg_it->setName("pos");
   ++arg_it;
@@ -2037,13 +2041,17 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     llvm::LLVMContext& context) {
   std::vector<llvm::Type*> row_process_arg_types;
 
-  // output (aggregate) arguments
-  for (size_t i = 0; i < agg_col_count; ++i) {
+  if (agg_col_count) {
+    // output (aggregate) arguments
+    for (size_t i = 0; i < agg_col_count; ++i) {
+      row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    }
+  } else {
+    // group by buffer
+    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    // small group by buffer
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
   }
-
-  // small group by buffer
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
   // position argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
@@ -2116,7 +2124,7 @@ Executor::CompilationResult Executor::compilePlan(
 
   std::vector<llvm::Value*> col_heads;
   std::tie(cgen_state_->row_func_, col_heads) = create_row_function(
-    scan_cols.size(), is_group_by ? 1 : agg_infos.size(), hoist_literals, query_func,
+    scan_cols.size(), is_group_by ? 0 : agg_infos.size(), hoist_literals, query_func,
     cgen_state_->module_, cgen_state_->context_);
   CHECK(cgen_state_->row_func_);
 
