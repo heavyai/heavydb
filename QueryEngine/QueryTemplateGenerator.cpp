@@ -344,7 +344,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   return func_query_template;
 }
 
-llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col_count,
+llvm::Function* query_group_by_template(llvm::Module* mod,
                                         const bool is_nested, const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType device_type) {
@@ -354,7 +354,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod, const size_t aggr_col
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
-  auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
+  auto func_row_process = row_process(mod, 1, is_nested, hoist_literals);
   CHECK(func_row_process);
   auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type)
     ? mod->getFunction("init_shared_mem")
