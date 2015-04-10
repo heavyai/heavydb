@@ -308,6 +308,24 @@ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
     : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
 }
 
+extern "C"
+uint64_t string_decompress(const int32_t string_id, const int64_t string_dict_handle) {
+  auto string_dict = reinterpret_cast<const StringDictionary*>(string_dict_handle);
+  auto string_bytes = string_dict->getStringBytes(string_id);
+  CHECK(string_bytes.first);
+  return (reinterpret_cast<uint64_t>(string_bytes.first) & 0xffffffffffff) |
+         (static_cast<uint64_t>(string_bytes.second) << 48);
+}
+
+extern "C"
+int32_t string_compress(const int64_t ptr_and_len, const int64_t string_dict_handle) {
+  std::string raw_str(
+    reinterpret_cast<char*>(extract_str_ptr_noinline(ptr_and_len)),
+    extract_str_len_noinline(ptr_and_len));
+  auto string_dict = reinterpret_cast<const StringDictionary*>(string_dict_handle);
+  return string_dict->get(raw_str);
+}
+
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
   uses_str_none_enc_ = true;
   char escape_char { '\\' };
@@ -319,7 +337,12 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     escape_char = (*escape_char_expr->get_constval().stringval)[0];
   }
   auto str_lv = codegen(expr->get_arg(), true, hoist_literals);
-  CHECK_EQ(3, str_lv.size());
+  if (str_lv.size() != 3) {
+    CHECK_EQ(1, str_lv.size());
+    str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", { str_lv.front() }));
+    str_lv.push_back(cgen_state_->emitCall("extract_str_len", { str_lv.front() }));
+    cgen_state_->must_run_on_cpu_ = true;
+  }
   auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
   CHECK(like_expr_arg_const);
   CHECK(like_expr_arg_const->get_type_info().is_string());
@@ -460,12 +483,8 @@ std::vector<llvm::Value*> Executor::codegen(
       "string_decode", get_int_type(64, cgen_state_->context_),
       { col_byte_stream, pos_arg });
     // Unpack the pointer + length, see string_decode function.
-    llvm::Value* str_lv = cgen_state_->ir_builder_.CreateCall(
-      cgen_state_->module_->getFunction("extract_str_ptr"),
-      std::vector<llvm::Value*> { ptr_and_len });
-    llvm::Value* len_lv = cgen_state_->ir_builder_.CreateCall(
-      cgen_state_->module_->getFunction("extract_str_len"),
-      std::vector<llvm::Value*> { ptr_and_len });
+    auto str_lv = cgen_state_->emitCall("extract_str_ptr", { ptr_and_len });
+    auto len_lv = cgen_state_->emitCall("extract_str_len", { ptr_and_len });
     auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
       local_col_id,
       std::vector<llvm::Value*> { ptr_and_len, str_lv, len_lv }));
@@ -577,7 +596,9 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     return { llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), constant->get_constval().floatval) };
   case kDOUBLE:
     return { llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), constant->get_constval().doubleval) };
-  case kVARCHAR: {
+  case kVARCHAR:
+  case kCHAR:
+  case kTEXT: {
     const auto& str_const = *constant->get_constval().stringval;
     if (dict_id > 0) {
       return { ll_int(getStringDictionary(dict_id)->get(str_const)) };
@@ -753,8 +774,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
-  const auto lhs_lvs = codegen(lhs, true, hoist_literals);
-  const auto rhs_lvs = codegen(rhs, true, hoist_literals);
+  auto lhs_lvs = codegen(lhs, true, hoist_literals);
+  auto rhs_lvs = codegen(rhs, true, hoist_literals);
   CHECK((lhs_type.get_type() == rhs_type.get_type()) ||
         (lhs_type.is_string() && rhs_type.is_string()));
   if (lhs_type.is_integer() || lhs_type.is_time() || lhs_type.is_string()) {
@@ -762,11 +783,18 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
       CHECK(rhs_type.is_string());
       CHECK_EQ(lhs_type.get_compression(), rhs_type.get_compression());
       if (lhs_type.get_compression() == kENCODING_NONE) {
-        CHECK_EQ(lhs_lvs.size(), 3);
-        CHECK_EQ(rhs_lvs.size(), 3);
-        auto cmp_func = cgen_state_->module_->getFunction(string_cmp_func(optype));
-        CHECK(cmp_func);
-        return cgen_state_->ir_builder_.CreateCall(cmp_func, std::vector<llvm::Value*>
+        // unpack pointer + length if necessary
+        if (lhs_lvs.size() != 3) {
+          CHECK_EQ(1, lhs_lvs.size());
+          lhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", { lhs_lvs.front() }));
+          lhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", { lhs_lvs.front() }));
+        }
+        if (rhs_lvs.size() != 3) {
+          CHECK_EQ(1, rhs_lvs.size());
+          rhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", { rhs_lvs.front() }));
+          rhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", { rhs_lvs.front() }));
+        }
+        return cgen_state_->emitCall(string_cmp_func(optype),
           { lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2] });
       } else {
         CHECK(optype == kEQ || optype == kNE);
@@ -810,8 +838,28 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   const auto& operand_ti = operand->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
-      // TODO(alex): make it safe, now that we have full type information
       CHECK(ti.is_string());
+      // dictionary encode non-constant
+      if (operand_ti.get_compression() != kENCODING_DICT && !operand_as_const) {
+        CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
+        CHECK_EQ(kENCODING_DICT, ti.get_compression());
+        CHECK_EQ(64, static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth());
+        cgen_state_->must_run_on_cpu_ = true;
+        return cgen_state_->emitExternalCall("string_compress",
+          get_int_type(32, cgen_state_->context_),
+          { operand_lv, ll_int(int64_t(getStringDictionary(ti.get_comp_param()))) });
+      }
+      CHECK_EQ(32, static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth());
+      const auto dd = catalog_->getMetadataForDict(operand_ti.get_comp_param());
+      CHECK(dd);
+      if (ti.get_compression() == kENCODING_NONE) {
+        CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
+        cgen_state_->must_run_on_cpu_ = true;
+        return cgen_state_->emitExternalCall("string_decompress",
+          get_int_type(64, cgen_state_->context_),
+          { operand_lv, ll_int(int64_t(getStringDictionary(operand_ti.get_comp_param()))) });
+      }
+      CHECK(operand_as_const);
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
       return operand_lv;
     }
@@ -1534,8 +1582,9 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   fragmenter->getFragmentsForQuery(query_info);
   const auto& fragments = query_info.fragments;
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
+
   CompilationResult compilation_result_cpu;
-  if (device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::Auto) {
+  auto compile_on_cpu = [&]() {
     try {
       compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
@@ -1549,7 +1598,12 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         hoist_literals, ExecutorDeviceType::CPU, opt_level,
         cat.get_dataMgr().cudaMgr_, false, row_set_mem_owner);
     }
+  };
+
+  if (device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::Auto) {
+    compile_on_cpu();
   }
+
   CompilationResult compilation_result_gpu;
   if (device_type == ExecutorDeviceType::GPU || (device_type == ExecutorDeviceType::Auto &&
       cat.get_dataMgr().gpusPresent())) {
@@ -1569,6 +1623,14 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         false, row_set_mem_owner);
     }
   }
+
+  if (cgen_state_->must_run_on_cpu_) {
+    if (device_type == ExecutorDeviceType::GPU) {  // override user choice
+      compile_on_cpu();
+    }
+    device_type = ExecutorDeviceType::CPU;
+  }
+
   for (const auto target_expr : get_agg_target_exprs(plan)) {
     plan_state_->target_exprs_.push_back(target_expr);
   }
@@ -2229,6 +2291,10 @@ Executor::CompilationResult Executor::compilePlan(
 
   for (const auto& agg_info : agg_infos) {
     plan_state_->init_agg_vals_.push_back(std::get<2>(agg_info));
+  }
+
+  if (device_type == ExecutorDeviceType::GPU && cgen_state_->must_run_on_cpu_) {
+    return {};
   }
 
   return Executor::CompilationResult {

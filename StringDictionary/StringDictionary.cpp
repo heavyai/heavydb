@@ -63,11 +63,11 @@ StringDictionary::StringDictionary(
     unsigned string_id = 0;
     for (string_id = 0; string_id < str_count; ++string_id) {
       const auto recovered = getStringFromStorage(string_id);
-      if (recovered.second) {
+      if (std::get<2>(recovered)) {
         // hit the canary, recovery finished
         break;
       }
-      getOrAddImpl(recovered.first, true);
+      getOrAddImpl(std::string(std::get<0>(recovered), std::get<1>(recovered)), true);
     }
     if (bytes % sizeof(StringIdxEntry) != 0) {
       LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
@@ -99,6 +99,12 @@ std::string StringDictionary::getString(int32_t string_id) const {
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringChecked(string_id);
+}
+
+std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const {
+  CHECK_LE(0, string_id);
+  CHECK_LT(string_id, static_cast<int32_t>(str_count_));
+  return getStringBytesChecked(string_id);
 }
 
 __attribute__((always_inline))
@@ -139,8 +145,14 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) {
 
 std::string StringDictionary::getStringChecked(const int string_id) const {
   const auto str_canary = getStringFromStorage(string_id);
-  CHECK(!str_canary.second);
-  return str_canary.first;
+  CHECK(!std::get<2>(str_canary));
+  return std::string(std::get<0>(str_canary), std::get<1>(str_canary));
+}
+
+std::pair<char*, size_t> StringDictionary::getStringBytesChecked(const int string_id) const {
+  const auto str_canary = getStringFromStorage(string_id);
+  CHECK(!std::get<2>(str_canary));
+  return std::make_pair(std::get<0>(str_canary), std::get<1>(str_canary));
 }
 
 namespace {
@@ -201,16 +213,16 @@ void StringDictionary::appendToStorage(const std::string& str) {
   memcpy(offset_map_ + str_count_, &str_meta, sizeof(str_meta));
 }
 
-std::pair<std::string, bool> StringDictionary::getStringFromStorage(const int string_id) const {
+std::tuple<char*, size_t, bool> StringDictionary::getStringFromStorage(const int string_id) const {
   CHECK_GE(payload_fd_, 0);
   CHECK_GE(offset_fd_, 0);
   CHECK_GE(string_id, 0);
   const StringIdxEntry* str_meta = offset_map_ + string_id;
   if (str_meta->size == 0xffff) {
     // hit the canary
-    return std::make_pair("", true);
+    return std::make_tuple(nullptr, 0, true);
   }
-  return std::make_pair(std::string { payload_map_ + str_meta->off, str_meta->size }, false);
+  return std::make_tuple(payload_map_ + str_meta->off, str_meta->size, false);
 }
 
 void StringDictionary::addPayloadCapacity() {

@@ -53,4 +53,10 @@ double fixed_width_double_decode_noinline(
     const int8_t* byte_stream,
     const int64_t pos);
 
+extern "C"
+int8_t* extract_str_ptr_noinline(const uint64_t str_and_len);
+
+extern "C"
+int32_t extract_str_len_noinline(const uint64_t str_and_len);
+
 #endif  // QUERYENGINE_RUNTIMEFUNCTIONS_H

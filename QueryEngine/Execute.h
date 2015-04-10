@@ -254,6 +254,7 @@ private:
       , row_func_(nullptr)
       , context_(llvm::getGlobalContext())
       , ir_builder_(context_)
+      , must_run_on_cpu_(false)
       , literal_bytes_(0) {}
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant, const int dict_id) {
@@ -341,6 +342,7 @@ private:
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
+    bool must_run_on_cpu_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {

@@ -446,6 +446,32 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
   }
+  for (auto dt : { ExecutorDeviceType::CPU }) {
+    c("SELECT COUNT(*) FROM test WHERE str LIKE '%%%';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba%';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str LIKE '%eal_bar';", dt);
+    c("SELECT * FROM test WHERE str LIKE '%';", dt);
+    c("SELECT * FROM test WHERE str LIKE 'f%%';", dt);
+    c("SELECT * FROM test WHERE str LIKE 'f%\%';", dt);
+    c("SELECT * FROM test WHERE str LIKE '@f%%' ESCAPE '@';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba_' or str LIKE 'fo_';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
+    c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
+    c("SELECT COUNT(*) FROM test WHERE str > 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str > 'fo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str >= 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' < str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'fo' < str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' <= str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE str = 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' = str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE str <> 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'bar' <> str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE str = 'foo' OR str = 'bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str = real_str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE str <> str;", dt);
+    ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
+  }
 }
 
 TEST(Select, StringsNoneEncoding) {

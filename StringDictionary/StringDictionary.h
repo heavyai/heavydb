@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <string>
+#include <tuple>
 #include <vector>
 
 
@@ -20,6 +21,7 @@ public:
   int32_t getOrAdd(const std::string& str);
   int32_t get(const std::string& str) const;
   std::string getString(int32_t string_id) const;
+  std::pair<char*, size_t> getStringBytes(int32_t string_id) const;
 
 private:
   struct StringIdxEntry {
@@ -31,9 +33,10 @@ private:
   void increaseCapacity();
   int32_t getOrAddImpl(const std::string& str, bool recover);
   std::string getStringChecked(const int string_id) const;
+  std::pair<char*, size_t> getStringBytesChecked(const int string_id) const;
   int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data) const;
   void appendToStorage(const std::string& str);
-  std::pair<std::string, bool> getStringFromStorage(const int string_id) const;
+  std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const;
   void addPayloadCapacity();
   void addOffsetCapacity();
   size_t addStorageCapacity(int fd);
