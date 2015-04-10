@@ -115,8 +115,35 @@ int main(int argc, char **argv) {
                     std::cout << col_val.datum.str_val;
                     break;
                   case TDatumType::TIME:
-                    std::cout << std::to_string(col_val.datum.int_val);
-                    break;
+                    {
+                      time_t t = (time_t)col_val.datum.int_val;
+                      std::tm tm_struct;
+                      gmtime_r(&t, &tm_struct);
+                      char buf[9];
+                      strftime(buf, 9, "%T", &tm_struct);
+                      std::cout << buf;
+                      break;
+                    }
+                  case TDatumType::TIMESTAMP:
+                    {
+                      time_t t = (time_t)col_val.datum.int_val;
+                      std::tm tm_struct;
+                      gmtime_r(&t, &tm_struct);
+                      char buf[20];
+                      strftime(buf, 20, "%F %T", &tm_struct);
+                      std::cout << buf;
+                      break;
+                    }
+                  case TDatumType::DATE:
+                    {
+                      time_t t = (time_t)col_val.datum.int_val;
+                      std::tm tm_struct;
+                      gmtime_r(&t, &tm_struct);
+                      char buf[11];
+                      strftime(buf, 11, "%F", &tm_struct);
+                      std::cout << buf;
+                      break;
+                    }
                   default:
                     std::cerr << "Unknown column type." << std::endl;
                 }

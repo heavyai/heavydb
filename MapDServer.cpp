@@ -29,17 +29,30 @@ using boost::shared_ptr;
 namespace {
 
 TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
-  if (type_info.is_integer()) {
-    return TDatumType::INT;
-  }
-  if (type_info.is_string()) {
-    return TDatumType::STR;
-  }
-  if (type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE) {
-    return TDatumType::REAL;
-  }
-  if (type_info.is_time()) {
-    return TDatumType::TIME;
+  switch (type_info.get_type()) {
+    case kBOOLEAN:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+      return TDatumType::INT;
+    case kNUMERIC:
+    case kDECIMAL:
+      CHECK(false);
+    case kFLOAT:
+    case kDOUBLE:
+      return TDatumType::REAL;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      return TDatumType::STR;
+    case kTIME:
+      return TDatumType::TIME;
+    case kTIMESTAMP:
+      return TDatumType::TIMESTAMP;
+    case kDATE:
+      return TDatumType::DATE;
+    default:
+      break;
   }
   CHECK(false);
 }
