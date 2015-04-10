@@ -521,7 +521,7 @@ std::vector<llvm::Value*> Executor::codegen(
 std::pair<llvm::Value*, llvm::Value*>
 Executor::colByteStream(const int col_id, const bool fetch_column, const bool hoist_literals) {
   auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
-  CHECK_GE(in_arg_list.size(), 4);
+  CHECK_GE(in_arg_list.size(), 3);
   size_t arg_idx = 0;
   size_t pos_idx = 0;
   llvm::Value* pos_arg { nullptr };
