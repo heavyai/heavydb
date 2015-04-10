@@ -52,7 +52,7 @@ namespace {
 				CHECK(boost::filesystem::exists(base_path));
 				auto system_db_file = base_path / "mapd_catalogs" / MAPD_SYSTEM_DB ;
 				auto data_dir = base_path / "mapd_data";
-				dataMgr = new Data_Namespace::DataMgr(data_dir.string());
+				dataMgr = new Data_Namespace::DataMgr(data_dir.string(), false); // false is for useGpus
 				if (!boost::filesystem::exists(system_db_file)) {
 					SysCatalog syscat(base_path.string(), *dataMgr, true);
 					syscat.initDB();
