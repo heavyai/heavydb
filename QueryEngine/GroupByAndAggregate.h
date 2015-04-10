@@ -395,11 +395,7 @@ private:
     const Analyzer::Expr* target_expr,
     const bool hoist_literals);
 
-  llvm::Value* toDoublePrecision(llvm::Value* val);
-
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
-
-  llvm::Function* getFunction(const std::string& name) const;
 
   Executor* executor_;
   const Planner::Plan* plan_;

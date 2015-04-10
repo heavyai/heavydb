@@ -460,6 +460,16 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str IS NOT NULL;", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str > 'real_bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str > 'real_fo';", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str >= 'real_bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'real_bar' < real_str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'real_fo' < real_str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'real_bar' <= real_str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str = 'real_bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'real_bar' = real_str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str <> 'real_bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE 'real_bar' <> real_str;", dt);
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str ILIKE 'rEaL_f%%';", dt)));
   }
 }

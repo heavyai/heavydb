@@ -86,7 +86,7 @@ private:
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
@@ -300,13 +300,47 @@ private:
       return pos_arg;
     }
 
+    llvm::Value* addStringConstant(const std::string& str) {
+      auto str_lv = ir_builder_.CreateGlobalString(
+        str, "str_const_" + std::to_string(std::hash<std::string>()(str)));
+      auto i8_ptr = llvm::PointerType::get(get_int_type(8, context_), 0);
+      str_constants_.push_back(str_lv);
+      str_lv = ir_builder_.CreateBitCast(str_lv, i8_ptr);
+      return str_lv;
+    }
+
+    // look up a runtime function based on the name, return type and type of
+    // the arguments and call it; x64 only, don't call from GPU codegen
+    llvm::Value* emitExternalCall(const std::string& fname,
+                                  llvm::Type* ret_type,
+                                  const std::vector<llvm::Value*> args) {
+      std::vector<llvm::Type*> arg_types;
+      for (const auto arg : args) {
+        arg_types.push_back(arg->getType());
+      }
+      auto func_ty = llvm::FunctionType::get(ret_type, arg_types, false);
+      auto func_p = module_->getOrInsertFunction(fname, func_ty);
+      CHECK(func_p);
+      llvm::Value* result = ir_builder_.CreateCall(func_p, args);
+      // check the assumed type
+      CHECK_EQ(result->getType(), ret_type);
+      return result;
+    }
+
+    llvm::Value* emitCall(const std::string& fname,
+                          const std::vector<llvm::Value*>& args) {
+      auto f = module_->getFunction(fname);
+      CHECK(f);
+      return ir_builder_.CreateCall(f, args);
+    }
+
     llvm::Module* module_;
     llvm::Function* row_func_;
     llvm::LLVMContext& context_;
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
-    std::vector<llvm::Value*> like_patterns_;
+    std::vector<llvm::Value*> str_constants_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {

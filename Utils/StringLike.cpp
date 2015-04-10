@@ -8,6 +8,7 @@
  **/
 
 #include "StringLike.h"
+#include <stdint.h>
 
 enum LikeStatus {
   kLIKE_TRUE,
@@ -118,4 +119,50 @@ bool string_ilike(const char *str, int str_len, const char *pattern, int pat_len
   // @TODO(wei/alex) add runtime error handling
   LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, true);
   return status == kLIKE_TRUE;
+}
+
+extern "C" DEVICE
+int32_t StringCompare(const char* s1, const int32_t s1_len, const char* s2, const int32_t s2_len) {
+  const char* s1_ = s1;
+  const char* s2_ = s2;
+
+  while (s1_ < s1 + s1_len && s2_ < s2 + s2_len && *s1_ == *s2_) {
+    s1_++;
+    s2_++;
+  }
+
+  unsigned char c1 = (s1_ < s1 + s1_len) ? (*(unsigned char*) s1_) : 0;
+  unsigned char c2 = (s2_ < s2 + s2_len) ? (*(unsigned char*) s2_) : 0;
+
+  return c1 - c2;
+}
+
+extern "C" DEVICE
+bool string_lt(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+  return StringCompare(lhs, lhs_len, rhs, rhs_len) < 0;
+}
+
+extern "C" DEVICE
+bool string_le(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+  return StringCompare(lhs, lhs_len, rhs, rhs_len) <= 0;
+}
+
+extern "C" DEVICE
+bool string_gt(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+  return StringCompare(lhs, lhs_len, rhs, rhs_len) > 0;
+}
+
+extern "C" DEVICE
+bool string_ge(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+  return StringCompare(lhs, lhs_len, rhs, rhs_len) >= 0;
+}
+
+extern "C" DEVICE
+bool string_eq(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+  return StringCompare(lhs, lhs_len, rhs, rhs_len) == 0;
+}
+
+extern "C" DEVICE
+bool string_ne(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
+  return StringCompare(lhs, lhs_len, rhs, rhs_len) != 0;
 }

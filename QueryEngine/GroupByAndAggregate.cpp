@@ -998,11 +998,6 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
   return agg_out_start_ptr;
 }
 
-llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
-                                           const std::vector<llvm::Value*>& args) {
-  return LL_BUILDER.CreateCall(getFunction(fname), args);
-}
-
 namespace {
 
 std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
@@ -1164,10 +1159,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     : executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, hoist_literals);
 }
 
-llvm::Function* GroupByAndAggregate::getFunction(const std::string& name) const {
-  auto f = executor_->cgen_state_->module_->getFunction(name);
-  CHECK(f);
-  return f;
+llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname, const std::vector<llvm::Value*>& args) {
+  return executor_->cgen_state_->emitCall(fname, args);
 }
 
 #undef ROW_FUNC

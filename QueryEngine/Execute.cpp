@@ -325,11 +325,7 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   CHECK(like_expr_arg_const->get_type_info().is_string());
   CHECK_EQ(kENCODING_NONE, like_expr_arg_const->get_type_info().get_compression());
   const auto like_pattern = *like_expr_arg_const->get_constval().stringval;
-  llvm::Value* like_pattern_lv = cgen_state_->ir_builder_.CreateGlobalString(
-    like_pattern, "like_pattern_" + std::to_string(std::hash<std::string>()(like_pattern)));
-  cgen_state_->like_patterns_.push_back(like_pattern_lv);
-  auto i8_ptr = llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0);
-  like_pattern_lv = cgen_state_->ir_builder_.CreateBitCast(like_pattern_lv, i8_ptr);
+  auto like_pattern_lv = cgen_state_->addStringConstant(like_pattern);
   auto like_pattern_len = like_expr_arg_const->get_constval().stringval->size();
   llvm::Value* like_pattern_len_lv = ll_int(static_cast<int32_t>(like_pattern_len));
   auto string_like_fn = expr->get_is_ilike()
@@ -460,16 +456,9 @@ std::vector<llvm::Value*> Executor::codegen(
       col_var->get_type_info().get_compression() == kENCODING_NONE) {
     // real (not dictionary-encoded) strings; store the pointer to the payload
     uses_str_none_enc_ = true;
-    auto i8_ptr = llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0);
-    auto string_decode_ft = llvm::FunctionType::get(
-      get_int_type(64, cgen_state_->context_),
-      std::vector<llvm::Type*> { i8_ptr, get_int_type(64, cgen_state_->context_) },
-      false);
-    auto string_decode_fn = cgen_state_->module_->getOrInsertFunction("string_decode", string_decode_ft);
-    CHECK(string_decode_fn);
-    auto ptr_and_len = cgen_state_->ir_builder_.CreateCall(
-      string_decode_fn,
-      std::vector<llvm::Value*> { col_byte_stream, pos_arg });
+    auto ptr_and_len = cgen_state_->emitExternalCall(
+      "string_decode", get_int_type(64, cgen_state_->context_),
+      { col_byte_stream, pos_arg });
     // Unpack the pointer + length, see string_decode function.
     llvm::Value* str_lv = cgen_state_->ir_builder_.CreateCall(
       cgen_state_->module_->getFunction("extract_str_ptr"),
@@ -538,11 +527,11 @@ Executor::colByteStream(const int col_id, const bool fetch_column, const bool ho
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::Constant* constant,
-                               const int dict_id,
-                               const bool hoist_literals) {
+std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
+                                            const int dict_id,
+                                            const bool hoist_literals) {
   const auto& type_info = constant->get_type_info();
-  if (hoist_literals) {
+  if (hoist_literals && (!type_info.is_string() || type_info.get_compression() == kENCODING_DICT)) {
     auto arg_it = cgen_state_->row_func_->arg_begin();
     while (arg_it != cgen_state_->row_func_->arg_end()) {
       if (arg_it->getType()->isIntegerTy()) {
@@ -569,27 +558,32 @@ llvm::Value* Executor::codegen(const Analyzer::Constant* constant,
     auto lit_lv = cgen_state_->ir_builder_.CreateLoad(
       cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
     if (type_info.get_type() == kBOOLEAN) {
-      return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
-        lit_lv, ll_int(int8_t(0)));
+      return { cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
+        lit_lv, ll_int(int8_t(0))) };
     }
-    return lit_lv;
+    return { lit_lv };
   }
   switch (type_info.get_type()) {
   case kBOOLEAN:
-    return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval);
+    return { llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval) };
   case kSMALLINT:
   case kINT:
   case kBIGINT:
   case kTIME:
   case kTIMESTAMP:
   case kDATE:
-    return codegenIntConst(constant);
+    return { codegenIntConst(constant) };
   case kFLOAT:
-    return llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), constant->get_constval().floatval);
+    return { llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), constant->get_constval().floatval) };
   case kDOUBLE:
-    return llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), constant->get_constval().doubleval);
+    return { llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), constant->get_constval().doubleval) };
   case kVARCHAR: {
-    return ll_int(getStringDictionary(dict_id)->get(*constant->get_constval().stringval));
+    const auto& str_const = *constant->get_constval().stringval;
+    if (dict_id > 0) {
+      return { ll_int(getStringDictionary(dict_id)->get(str_const)) };
+    }
+    return { ll_int(int64_t(0)),
+      cgen_state_->addStringConstant(str_const), ll_int(static_cast<int32_t>(str_const.size())) };
   }
   default:
     CHECK(false);
@@ -729,6 +723,29 @@ llvm::CmpInst::Predicate llvm_fcmp_pred(const SQLOps op_type) {
 
 }  // namespace
 
+namespace {
+
+std::string string_cmp_func(const SQLOps optype) {
+  switch (optype) {
+  case kLT:
+    return "string_lt";
+  case kLE:
+    return "string_le";
+  case kGT:
+    return "string_gt";
+  case kGE:
+    return "string_ge";
+  case kEQ:
+    return "string_eq";
+  case kNE:
+    return "string_ne";
+  default:
+    CHECK(false);
+  }
+}
+
+}  // namespace
+
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_COMPARISON(optype));
@@ -736,18 +753,29 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
-  const auto lhs_lv = codegen(lhs, true, hoist_literals).front();
-  const auto rhs_lv = codegen(rhs, true, hoist_literals).front();
+  const auto lhs_lvs = codegen(lhs, true, hoist_literals);
+  const auto rhs_lvs = codegen(rhs, true, hoist_literals);
   CHECK((lhs_type.get_type() == rhs_type.get_type()) ||
         (lhs_type.is_string() && rhs_type.is_string()));
   if (lhs_type.is_integer() || lhs_type.is_time() || lhs_type.is_string()) {
     if (lhs_type.is_string()) {
-      CHECK(optype == kEQ || optype == kNE);
+      CHECK(rhs_type.is_string());
+      CHECK_EQ(lhs_type.get_compression(), rhs_type.get_compression());
+      if (lhs_type.get_compression() == kENCODING_NONE) {
+        CHECK_EQ(lhs_lvs.size(), 3);
+        CHECK_EQ(rhs_lvs.size(), 3);
+        auto cmp_func = cgen_state_->module_->getFunction(string_cmp_func(optype));
+        CHECK(cmp_func);
+        return cgen_state_->ir_builder_.CreateCall(cmp_func, std::vector<llvm::Value*>
+          { lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2] });
+      } else {
+        CHECK(optype == kEQ || optype == kNE);
+      }
     }
-    return cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lv, rhs_lv);
+    return cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front());
   }
   if (lhs_type.get_type() == kFLOAT || lhs_type.get_type() == kDOUBLE) {
-    return cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lv, rhs_lv);
+    return cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front());
   }
   CHECK(false);
 }
@@ -777,7 +805,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   // For dictionary encoded constants, the cast holds the dictionary id
   // information as the compression parameter; handle this case separately.
   const auto operand_lv = operand_as_const
-    ? codegen(operand_as_const, ti.get_comp_param(), hoist_literals)
+    ? codegen(operand_as_const, ti.get_comp_param(), hoist_literals).front()
     : codegen(operand, true, hoist_literals).front();
   const auto& operand_ti = operand->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
@@ -2356,6 +2384,12 @@ declare i64 @ExtractFromTime(i32, i64);
 declare i64 @string_decode(i8*, i64);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
+declare i1 @string_lt(i8*, i32, i8*, i32);
+declare i1 @string_le(i8*, i32, i8*, i32);
+declare i1 @string_gt(i8*, i32, i8*, i32);
+declare i1 @string_ge(i8*, i32, i8*, i32);
+declare i1 @string_eq(i8*, i32, i8*, i32);
+declare i1 @string_ne(i8*, i32, i8*, i32);
 declare i32 @merge_error_code(i32, i32*);
 
 )";
@@ -2403,7 +2437,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
 
-  for (const auto like_pattern : cgen_state_->like_patterns_) {
+  for (const auto like_pattern : cgen_state_->str_constants_) {
     like_pattern->print(os);
   }
 
