@@ -468,7 +468,7 @@ std::vector<llvm::Value*> Executor::codegen(
       std::vector<llvm::Value*> { ptr_and_len });
     auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
       local_col_id,
-      std::vector<llvm::Value*> { str_lv, len_lv }));
+      std::vector<llvm::Value*> { ptr_and_len, str_lv, len_lv }));
     CHECK(it_ok.second);
     return { ptr_and_len, str_lv, len_lv };
   }

@@ -1049,6 +1049,12 @@ void GroupByAndAggregate::codegenAggCalls(
     const auto agg_info = target_info(target_expr);
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     auto target_lvs = codegenAggArg(target_expr, hoist_literals);
+    if (target_lvs.size() == 3) {
+      // none encoding string, pop the packed pointer + length since
+      // it's only useful for IS NULL checks and assumed to be only
+      // two components (pointer and length) for the purpose of projection
+      target_lvs.erase(target_lvs.begin());
+    }
     if (target_lvs.size() < agg_fn_names.size()) {
       CHECK_EQ(1, target_lvs.size());
       CHECK_EQ(2, agg_fn_names.size());
