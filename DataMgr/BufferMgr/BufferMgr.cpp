@@ -79,6 +79,7 @@ namespace Buffer_Namespace {
         auto evictIt = evictStart;
         size_t numPages = 0;
         size_t startPage = evictStart->startPage;
+        //cout << "Evicting from slab " << slabNum << " at start page " << startPage << endl;
         while (numPages < numPagesRequested) {
             if (evictIt->memStatus == USED) {
                 assert (evictIt->buffer->getPinCount() < 1);

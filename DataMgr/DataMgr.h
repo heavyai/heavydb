@@ -30,7 +30,7 @@ namespace Data_Namespace {
         friend class FileMgr; 
 
         public:
-            DataMgr(const std::string &dataDir);
+            DataMgr(const std::string &dataDir, const bool useGpus = false);
             ~DataMgr();
             AbstractBuffer * createChunkBuffer(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0);
             AbstractBuffer * getChunkBuffer(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId = 0,  const size_t numBytes = 0);

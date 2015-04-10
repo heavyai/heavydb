@@ -26,12 +26,18 @@ using namespace File_Namespace;
 
 namespace Data_Namespace {
 
-    DataMgr::DataMgr(const string &dataDir): dataDir_(dataDir) {
-        try {
-            cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
-            hasGpus_ = true;
+    DataMgr::DataMgr(const string &dataDir, const bool useGpus): dataDir_(dataDir) {
+        if (useGpus) {
+            try {
+                cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
+                hasGpus_ = true;
+            }
+            catch (std::runtime_error &error) {
+                hasGpus_ = false;
+                cudaMgr_ = 0;
+            }
         }
-        catch (std::runtime_error &error) {
+        else {
             hasGpus_ = false;
             cudaMgr_ = 0;
         }
@@ -76,11 +82,11 @@ namespace Data_Namespace {
         bufferMgrs_.resize(2);
         bufferMgrs_[0].push_back(new FileMgr (0, dataDir_)); 
         levelSizes_.push_back(1);
-        size_t cpuMemory = getTotalSystemMemory() * 0.75; // should get free memory instead of this ugly heuristic
+        size_t cpuMemory = getTotalSystemMemory() * 0.65; // should get free memory instead of this ugly heuristic
         //cout << "Max Cpu Buffer Pool size: " << static_cast<float> (cpuMemory) / (1 << 30) << " GB CPU memory" << endl;
         if (hasGpus_) {
             bufferMgrs_.resize(3);
-            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CUDA_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CUDA_HOST, cudaMgr_, 1L << 30,512,bufferMgrs_[0][0]));
             levelSizes_.push_back(1);
             int numGpus = cudaMgr_->getDeviceCount();
             for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -93,7 +99,7 @@ namespace Data_Namespace {
             levelSizes_.push_back(numGpus);
         }
         else {
-            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CPU_HOST, cudaMgr_, 1 << 30,512,bufferMgrs_[0][0]));
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CPU_HOST, cudaMgr_, 1L << 30,512,bufferMgrs_[0][0]));
             levelSizes_.push_back(1);
         }
     }

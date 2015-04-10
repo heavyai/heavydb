@@ -85,7 +85,7 @@ public:
     std::cout << "MapDHandler initialized" << std::endl; 
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string()));
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), executor_device_type_ == ExecutorDeviceType::GPU || executor_device_type_ == ExecutorDeviceType::Auto)); // second param is whether to initialize GPU buffer pool
     Catalog_Namespace::SysCatalog sys_cat(base_data_path_, *data_mgr_);
     Catalog_Namespace::UserMetadata user_meta;
     CHECK(sys_cat.getMetadataForUser(user_, user_meta));

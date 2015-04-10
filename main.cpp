@@ -252,7 +252,7 @@ main(int argc, char* argv[])
 		return 1;
 	}
 
-	Data_Namespace::DataMgr dataMgr (base_path + "/mapd_data/"); 
+	Data_Namespace::DataMgr dataMgr (base_path + "/mapd_data/", true); // second param is to set up gpu buffer pool - yes in this case
 	SysCatalog sys_cat(base_path, dataMgr);
 	UserMetadata user;
 	if (!sys_cat.getMetadataForUser(user_name, user)) {
