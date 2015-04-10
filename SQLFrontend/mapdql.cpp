@@ -94,8 +94,17 @@ int main(int argc, char **argv) {
           linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
         try {
           client.select(_return, line);
+          bool not_first = false;
+          for (auto p : _return.proj_info) {
+            if (not_first)
+              std::cout << "|";
+            else
+              not_first = true;
+            std::cout << p.proj_name;
+          }
+          std::cout << std::endl;
           for (auto row : _return.rows) {
-            bool not_first = false;
+            not_first = false;
             for (auto col_val : row.cols) {
               if (not_first)
                 std::cout << "|";
