@@ -34,9 +34,70 @@ void completion(const char *buf, linenoiseCompletions *lc) {
     }
 }
 
+static void
+process_backslash_commands(const char *command, MapDClient &client)
+{
+  switch (command[1]) {
+    case 'h':
+      std::cout << "\\t List all tables.\n";
+      std::cout << "\\d <table> List all columns of table.\n";
+      std::cout << "\\q Quit.\n";
+      return;
+    case 'd':
+      {
+        if (command[2] != ' ') {
+          std::cerr << "Invalid \\d command usage.  Do \\d <table name>" << std::endl;
+          return;
+        }
+        ColumnTypes _return;
+        std::string table_name(command+3);
+        client.getColumnTypes(_return, table_name);
+        for (auto p : _return) {
+          std::cout << p.first << " ";
+          switch (p.second.type) {
+            case TDatumType::INT:
+              std::cout << "INTEGER\n";
+              break;
+            case TDatumType::REAL:
+              std::cout << "DOUBLE\n";
+              break;
+            case TDatumType::STR:
+              std::cout << "STRING\n";
+              break;
+            case TDatumType::TIME:
+              std::cout << "TIME\n";
+              break;
+            case TDatumType::TIMESTAMP:
+              std::cout << "TIMESTAMP\n";
+              break;
+            case TDatumType::DATE:
+              std::cout << "DATE\n";
+              break;
+            default:
+              std::cerr << "Invalid Column Type.\n";
+          }
+        }
+        return;
+      }
+    case 't':
+      {
+        std::vector<std::string> _return;
+        client.getTables(_return);
+        for (auto p : _return)
+          std::cout << p << std::endl;
+        return;
+      }
+    case 'q':
+    default:
+      std::cerr << "Invalid backslash command: " << command << std::endl;
+  }
+}
+
 int main(int argc, char **argv) {
   std::string server_host("localhost");
   int port = 9091;
+  std::string delimiter("|");
+  bool print_header = true;
   char *line;
   QueryResult _return;
 
@@ -45,6 +106,8 @@ int main(int argc, char **argv) {
 	po::options_description desc("Options");
 	desc.add_options()
 		("help,h", "Print help messages ")
+    ("no-header,n", "Do not print query result header")
+    ("delimiter,d", po::value<std::string>(&delimiter), "Field delimiter in row output (default is |)")
     ("server,s", po::value<std::string>(&server_host), "MapD Server Hostname (default localhost)")
     ("port,p", po::value<int>(&port), "Port number (default 9091)");
 
@@ -54,9 +117,11 @@ int main(int argc, char **argv) {
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: mapdql [{-p|--port} <port number>] [{-s|--server} <server host>]\n";
+			std::cout << "Usage: mapdql [{-p|--port} <port number>] [{-s|--server} <server host>] [{--no-header|-n}] [{--delimiter|-d}]\n";
 			return 0;
 		}
+    if (vm.count("no-header"))
+      print_header = false;
 
 		po::notify(vm);
 	}
@@ -92,26 +157,28 @@ int main(int argc, char **argv) {
         swap(_return, empty);
       }
       /* Do something with the string. */
-      if (line[0] != '\0' && line[0] != '/') {
+      if (line[0] != '\0' && line[0] != '\\') {
           // printf("echo: '%s'\n", line);
           linenoiseHistoryAdd(line); /* Add to the history. */
           linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
         try {
           client.select(_return, line);
           bool not_first = false;
-          for (auto p : _return.proj_info) {
-            if (not_first)
-              std::cout << "|";
-            else
-              not_first = true;
-            std::cout << p.proj_name;
+          if (print_header) {
+            for (auto p : _return.proj_info) {
+              if (not_first)
+                std::cout << delimiter;
+              else
+                not_first = true;
+              std::cout << p.proj_name;
+            }
+            std::cout << std::endl;
           }
-          std::cout << std::endl;
           for (auto row : _return.rows) {
             not_first = false;
             for (auto col_val : row.cols) {
               if (not_first)
-                std::cout << "|";
+                std::cout << delimiter;
               else
                 not_first = true;
               if (col_val.is_null)
@@ -167,12 +234,14 @@ int main(int argc, char **argv) {
         catch (MapDException &e) {
           std::cerr << e.error_msg << std::endl;
         }
-      } else if (!strncmp(line,"/historylen",11)) {
+      } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);
           linenoiseHistorySetMaxLen(len);
-      } else if (line[0] == '/') {
-          printf("Unreconized command: %s\n", line);
+      } else if (line[0] == '\\' && line[1] == 'q')
+        break;
+      else if (line[0] == '\\') {
+          process_backslash_commands(line, client);
       }
       free(line);
   }
