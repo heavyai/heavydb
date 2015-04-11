@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if ! ps aux | grep -v grep | grep mapd_server
+then
+    ./mapd_server data --cpu &
+fi
+
+if ! ps aux | grep -v grep | grep mapd_http_server
+then
+    ./mapd_http_server &
+fi
+
+curdir=`pwd`
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --allow-file-access-from-files "file:///${curdir}/mapd-explorer/index.html" & > /dev/null
