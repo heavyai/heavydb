@@ -20,7 +20,7 @@ class FixedLengthEncoder : public Encoder {
                 //std::cout << "Min: " << dataMin << " Max: " <<  dataMax << std::endl;
                 encodedData.get()[i] = static_cast <V>(unencodedData[i]);
                 if (unencodedData[i] != encodedData.get()[i]) {
-                    throw std::runtime_error ("Fixed encoding failed, Unencoded: " + std::to_string(unencodedData[i]) + " encoded: " + std::to_string(encodedData.get()[i]));
+                    std::cerr << "Fixed encoding failed, Unencoded: " + std::to_string(unencodedData[i]) + " encoded: " + std::to_string(encodedData.get()[i]);
                 }
                 else {
                     dataMin = std::min(dataMin,unencodedData[i]);
