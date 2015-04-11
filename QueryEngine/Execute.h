@@ -408,7 +408,6 @@ private:
   std::unique_ptr<PlanState> plan_state_;
 
   bool is_nested_;
-  bool uses_str_none_enc_;
 
   static const int max_gpu_count { 8 };
   std::mutex gpu_exec_mutex_[max_gpu_count];

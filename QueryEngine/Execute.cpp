@@ -90,7 +90,6 @@ SQLTypeInfo ResultRow::agg_type(const size_t idx) const {
 Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x)
   : cgen_state_(new CgenState())
   , is_nested_(false)
-  , uses_str_none_enc_(false)
   , block_size_x_(block_size_x)
   , grid_size_x_(grid_size_x)
   , db_id_(db_id)
@@ -344,7 +343,6 @@ int32_t string_compress(const int64_t ptr_and_len, const int64_t string_dict_han
 }
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
-  uses_str_none_enc_ = true;
   char escape_char { '\\' };
   if (expr->get_escape_expr()) {
     auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
@@ -495,7 +493,6 @@ std::vector<llvm::Value*> Executor::codegen(
   if (col_var->get_type_info().is_string() &&
       col_var->get_type_info().get_compression() == kENCODING_NONE) {
     // real (not dictionary-encoded) strings; store the pointer to the payload
-    uses_str_none_enc_ = true;
     auto ptr_and_len = cgen_state_->emitExternalCall(
       "string_decode", get_int_type(64, cgen_state_->context_),
       { col_byte_stream, pos_arg });
@@ -2404,7 +2401,7 @@ Executor::CompilationResult Executor::compilePlan(
     device_type == ExecutorDeviceType::CPU
       ? optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_)
       : optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_,
-                              is_group_by || uses_str_none_enc_, cuda_mgr),
+                              is_group_by, cuda_mgr),
     cgen_state_->getLiterals(),
     query_mem_desc
   };
@@ -2591,9 +2588,9 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
         if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
             get_gv_call.getCalledFunction()->getName() == "string_decode") {
-          llvm::AttributeSet no_inline;
-          no_inline = no_inline.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
-          cgen_state_->row_func_->setAttributes(no_inline);
+          llvm::AttributeSet no_inline_attrs;
+          no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
+          cgen_state_->row_func_->setAttributes(no_inline_attrs);
           row_func_not_inlined = true;
           break;
         }
