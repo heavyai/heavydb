@@ -108,7 +108,8 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
-    const size_t max_groups_buffer_entry_count);
+    const size_t max_groups_buffer_entry_count,
+    int32_t* error_code);
   std::vector<ResultRow> executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
@@ -117,14 +118,16 @@ private:
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
     std::shared_ptr<RowSetMemoryOwner>,
-    const size_t max_groups_buffer_entry_count);
+    const size_t max_groups_buffer_entry_count,
+    int32_t* error_code);
   std::vector<ResultRow> executeResultPlan(
     const Planner::Result* result_plan,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
-    const size_t max_groups_buffer_entry_count);
+    const size_t max_groups_buffer_entry_count,
+    int32_t* error_code);
   std::vector<ResultRow> executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
@@ -132,7 +135,8 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
-    const size_t max_groups_buffer_entry_count);
+    const size_t max_groups_buffer_entry_count,
+    int32_t* error_code);
 
   struct CompilationResult {
     std::vector<void*> native_functions;
@@ -140,7 +144,7 @@ private:
     QueryMemoryDescriptor query_mem_desc;
   };
 
-  void executePlanWithGroupBy(
+  int32_t executePlanWithGroupBy(
     const CompilationResult&,
     const bool hoist_literals,
     std::vector<ResultRow>& results,

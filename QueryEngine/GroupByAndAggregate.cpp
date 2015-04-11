@@ -390,7 +390,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     Data_Namespace::DataMgr* data_mgr,
     const unsigned block_size_x,
     const unsigned grid_size_x,
-    const int device_id) const {
+    const int device_id,
+    int32_t* error_code) const {
   data_mgr->cudaMgr_->setContext(device_id);
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
@@ -427,7 +428,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     copy_to_gpu(data_mgr, init_agg_vals_dev_ptr, &init_agg_vals[0],
       init_agg_vals.size() * sizeof(int64_t), device_id);
   }
-  std::vector<int32_t> error_code(block_size_x);
+  std::vector<int32_t> error_codes(block_size_x);
   CUdeviceptr error_code_dev_ptr { 0 };
   {
     const unsigned block_size_y = 1;
@@ -439,8 +440,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id);
-      error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_code[0]), device_id);
-      copy_to_gpu(data_mgr, error_code_dev_ptr, &error_code[0], grid_size_x * sizeof(error_code[0]), device_id);
+      error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id);
+      copy_to_gpu(data_mgr, error_code_dev_ptr, &error_codes[0], grid_size_x * sizeof(error_codes[0]), device_id);
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
@@ -470,11 +471,13 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        nullptr, kernel_params, nullptr));
       }
       copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
-      copy_from_gpu(data_mgr, &error_code[0], error_code_dev_ptr, grid_size_x * sizeof(error_code[0]), device_id);
-      for (const auto err : error_code) {
+      copy_from_gpu(data_mgr, &error_codes[0], error_code_dev_ptr, grid_size_x * sizeof(error_codes[0]), device_id);
+      *error_code = 0;
+      for (const auto err : error_codes) {
         if (err) {
-          auto it = std::max_element(error_code.begin(), error_code.end());
-          throw GroupBySlotsError { -*it };
+          auto it = std::max_element(error_codes.begin(), error_codes.end());
+          *error_code = *it;
+          break;
         }
       }
     } else {

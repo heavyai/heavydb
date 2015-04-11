@@ -294,7 +294,8 @@ public:
     Data_Namespace::DataMgr* data_mgr,
     const unsigned block_size_x,
     const unsigned grid_size_x,
-    const int device_id) const;
+    const int device_id,
+    int32_t* error_code) const;
 
 private:
   void initGroups(int64_t* groups_buffer,
@@ -527,9 +528,5 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   }
   return col_widths;
 }
-
-struct GroupBySlotsError {
-  int32_t last_known_good_position;
-};
 
 #endif // QUERYENGINE_GROUPBYANDAGGREGATE_H
