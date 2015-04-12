@@ -38,55 +38,254 @@
 #include <boost/filesystem/path.hpp>
 
 
-AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) const {
-  CHECK_GE(idx, 0);
-  CHECK_LT(idx, agg_kinds_.size());
-  CHECK_EQ(agg_results_idx_.size(), agg_kinds_.size());
-  CHECK_EQ(agg_results_idx_.size(), agg_types_.size());
-  const auto agg_info = agg_kinds_[idx];
+TargetValue ResultRows::get(const size_t row_idx,
+                            const size_t col_idx,
+                            const bool translate_strings) const {
+  CHECK_GE(row_idx, 0);
+  CHECK_LT(row_idx, target_values_.size());
+  CHECK_GE(col_idx, 0);
+  CHECK_LT(col_idx, targets_.size());
+  const auto agg_info = targets_[col_idx];
   if (agg_info.agg_kind == kAVG) {
-    CHECK(!agg_types_[idx].is_string());
-    CHECK_LT(idx, agg_results_.size() - 1);
-    auto actual_idx = agg_results_idx_[idx];
-    return agg_types_[idx].is_integer()
-      ? AggResult(
-          static_cast<double>(*boost::get<int64_t>(&agg_results_[actual_idx])) /
-          static_cast<double>(*boost::get<int64_t>(&agg_results_[actual_idx + 1])))
-      : AggResult(
-          *reinterpret_cast<const double*>(boost::get<int64_t>(&agg_results_[actual_idx])) /
-          static_cast<double>(*boost::get<int64_t>(&agg_results_[actual_idx + 1])));
-  } else {
-    CHECK_LT(idx, agg_results_.size());
-    CHECK(agg_types_[idx].is_number() || agg_types_[idx].is_string() ||
-          agg_types_[idx].is_time() || agg_types_[idx].is_boolean());
-    auto actual_idx = agg_results_idx_[idx];
-    if (agg_types_[idx].is_integer() || agg_types_[idx].is_time() || agg_types_[idx].is_boolean()) {
-      if (agg_info.is_distinct) {
-        return AggResult(bitmap_set_size(*boost::get<int64_t>(&agg_results_[actual_idx]), idx,
-          row_set_mem_owner_->count_distinct_descriptors_));
-      }
-      return AggResult(*boost::get<int64_t>(&agg_results_[actual_idx]));
-    } else if (agg_types_[idx].is_string()) {
-      if (agg_types_[idx].get_compression() == kENCODING_DICT) {
-        const int dict_id = agg_types_[idx].get_comp_param();
-        return translate_strings
-          ? AggResult(executor_->getStringDictionary(dict_id)->getString(
-              *boost::get<int64_t>(&agg_results_[actual_idx])))
-          : AggResult(*boost::get<int64_t>(&agg_results_[actual_idx]));
-      } else {
-        CHECK_EQ(kENCODING_NONE, agg_types_[idx].get_compression());
-        return AggResult(*boost::get<std::string>(&agg_results_[actual_idx]));
-      }
-    } else {
-      CHECK(agg_types_[idx].is_fp());
-      return AggResult(*reinterpret_cast<const double*>(boost::get<int64_t>(&agg_results_[actual_idx])));
+    CHECK(!targets_[col_idx].sql_type.is_string());
+    const auto& row_vals = target_values_[row_idx];
+    CHECK_LT(col_idx, row_vals.size());
+    const auto pair_p = boost::get<std::pair<int64_t, int64_t>>(&(row_vals[col_idx]));
+    CHECK(pair_p);
+    return pair_to_double(*pair_p, targets_[col_idx].sql_type.is_integer());
+  }
+  if (targets_[col_idx].sql_type.is_integer() ||
+      targets_[col_idx].sql_type.is_boolean() ||
+      targets_[col_idx].sql_type.is_time()) {
+    if (agg_info.is_distinct) {
+      return TargetValue(bitmap_set_size(*boost::get<int64_t>(&target_values_[row_idx][col_idx]), col_idx,
+        row_set_mem_owner_->count_distinct_descriptors_));
     }
+    CHECK_LT(col_idx, target_values_[row_idx].size());
+    const auto v = target_values_[row_idx][col_idx];
+    const auto pi = boost::get<int64_t>(&v);
+    CHECK(pi);
+    return *pi;
+  } else if (targets_[col_idx].sql_type.is_string()) {
+    if (targets_[col_idx].sql_type.get_compression() == kENCODING_DICT) {
+      const int dict_id = targets_[col_idx].sql_type.get_comp_param();
+      return translate_strings
+        ? TargetValue(executor_->getStringDictionary(dict_id)->getString(
+            *boost::get<int64_t>(&target_values_[row_idx][col_idx])))
+        : TargetValue(*boost::get<int64_t>(&target_values_[row_idx][col_idx]));
+    } else {
+      CHECK_EQ(kENCODING_NONE, targets_[col_idx].sql_type.get_compression());
+      return TargetValue(*boost::get<std::string>(&target_values_[row_idx][col_idx]));
+    }
+  } else {
+    CHECK(targets_[col_idx].sql_type.is_fp());
+    return TargetValue(*reinterpret_cast<const double*>(
+      boost::get<int64_t>(&target_values_[row_idx][col_idx])));
   }
   CHECK(false);
 }
 
-SQLTypeInfo ResultRow::agg_type(const size_t idx) const {
-  return agg_types_[idx];
+void ResultRows::reduce(const ResultRows& other_results) {
+  if (other_results.empty()) {
+    return;
+  }
+  if (empty()) {
+    *this = other_results;
+    return;
+  }
+
+  auto reduce_impl = [this](InternalTargetValue* crt_val, const InternalTargetValue* new_val,
+      const TargetInfo& agg_info, const size_t agg_col_idx) {
+    CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_time() ||
+          agg_info.sql_type.get_type() == kBOOLEAN || agg_info.sql_type.is_string() ||
+          agg_info.sql_type.get_type() == kFLOAT || agg_info.sql_type.get_type() == kDOUBLE);
+    switch (agg_info.agg_kind) {
+    case kSUM:
+    case kCOUNT:
+    case kAVG:
+      if (agg_info.is_distinct) {
+        CHECK(agg_info.is_agg);
+        CHECK_EQ(kCOUNT, agg_info.agg_kind);
+        auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(agg_col_idx);
+        CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
+        if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
+          auto old_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(crt_val));
+          auto new_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(new_val));
+          bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
+        } else {
+          CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
+          auto old_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(crt_val));
+          auto new_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(new_val));
+          old_set->insert(new_set->begin(), new_set->end());
+          new_set->insert(old_set->begin(), old_set->end());
+        }
+        break;
+      }
+      if (agg_info.agg_kind == kAVG) {
+        auto old_avg_p = boost::get<std::pair<int64_t, int64_t>>(crt_val);
+        CHECK(old_avg_p);
+        auto new_avg_p = boost::get<std::pair<int64_t, int64_t>>(new_val);
+        CHECK(new_avg_p);
+        if (agg_info.sql_type.is_fp()) {
+          agg_sum_double(
+            &old_avg_p->first,
+            *reinterpret_cast<const double*>(&new_avg_p->first));
+        } else {
+          agg_sum(&old_avg_p->first, new_avg_p->first);
+        }
+        agg_sum(&old_avg_p->second, new_avg_p->second);
+        break;
+      }
+      if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time()) {
+        agg_sum(
+          boost::get<int64_t>(crt_val),
+          *boost::get<int64_t>(new_val));
+      } else {
+        agg_sum_double(
+          boost::get<int64_t>(crt_val),
+          *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+      }
+      break;
+    case kMIN:
+      if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time() || agg_info.sql_type.is_boolean()) {
+        agg_min(
+          boost::get<int64_t>(crt_val),
+          *boost::get<int64_t>(new_val));
+      } else {
+        agg_min_double(
+          boost::get<int64_t>(crt_val),
+          *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+      }
+      break;
+    case kMAX:
+      if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time()) {
+        agg_max(
+          boost::get<int64_t>(crt_val),
+          *boost::get<int64_t>(new_val));
+      } else {
+        agg_max_double(
+          boost::get<int64_t>(crt_val),
+          *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+      }
+      break;
+    default:
+      CHECK(false);
+    }
+  };
+
+  if (simple_keys_.empty() && multi_keys_.empty()) {
+    CHECK_EQ(1, size());
+    CHECK_EQ(1, other_results.size());
+    auto& crt_results = target_values_.front();
+    const auto& new_results = other_results.target_values_.front();
+    for (size_t agg_col_idx = 0; agg_col_idx < colCount(); ++agg_col_idx) {
+      const auto agg_info = targets_[agg_col_idx];
+      reduce_impl(&crt_results[agg_col_idx], &new_results[agg_col_idx],
+        agg_info, agg_col_idx);
+    }
+    return;
+  }
+
+  CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
+  createReductionMap();
+  other_results.createReductionMap();
+  for (const auto& kv : other_results.as_map_) {
+    auto it = as_map_.find(kv.first);
+    if (it == as_map_.end()) {
+      as_map_.insert(std::make_pair(kv.first, kv.second));
+      continue;
+    }
+    auto& old_agg_results = it->second;
+    CHECK_EQ(old_agg_results.size(), kv.second.size());
+    const size_t agg_col_count = old_agg_results.size();
+    for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+      const auto agg_info = targets_[agg_col_idx];
+      reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+    }
+  }
+  for (const auto& kv : other_results.as_unordered_map_) {
+    auto it = as_unordered_map_.find(kv.first);
+    if (it == as_unordered_map_.end()) {
+      as_unordered_map_.insert(std::make_pair(kv.first, kv.second));
+      continue;
+    }
+    auto& old_agg_results = it->second;
+    CHECK_EQ(old_agg_results.size(), kv.second.size());
+    const size_t agg_col_count = old_agg_results.size();
+    for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+      const auto agg_info = targets_[agg_col_idx];
+      reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+    }
+  }
+  CHECK(simple_keys_.empty() != multi_keys_.empty());
+  target_values_.clear();
+  target_values_.reserve(std::max(as_map_.size(), as_unordered_map_.size()));
+  if (simple_keys_.empty()) {
+    multi_keys_.clear();
+    multi_keys_.reserve(as_map_.size());
+    for (const auto& kv : as_map_) {
+      multi_keys_.push_back(kv.first);
+      target_values_.push_back(kv.second);
+    }
+  } else {
+    simple_keys_.clear();
+    simple_keys_.reserve(as_unordered_map_.size());
+    for (const auto& kv : as_unordered_map_) {
+      simple_keys_.push_back(kv.first);
+      target_values_.push_back(kv.second);
+    }
+  }
+}
+
+void ResultRows::sort(const Planner::Sort* sort_plan) {
+  const auto& target_list = sort_plan->get_targetlist();
+  const auto& order_entries = sort_plan->get_order_entries();
+  // TODO(alex): check the semantics for order by multiple columns
+  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
+    CHECK_GE(order_entry.tle_no, 1);
+    CHECK_LE(order_entry.tle_no, target_list.size());
+    auto compare = [this, &order_entry](const TargetValues& lhs, const TargetValues& rhs) {
+      // The compare function must define a strict weak ordering, which means
+      // we can't use the overloaded less than operator for boost::variant since
+      // there's not greater than counterpart. If we naively use "not less than"
+      // as the compare function for descending order, std::sort will trigger
+      // a segmentation fault (or corrupt memory).
+      const auto is_int = targets_[order_entry.tle_no - 1].sql_type.is_integer();
+      const auto is_dict = targets_[order_entry.tle_no - 1].sql_type.is_string() &&
+        targets_[order_entry.tle_no - 1].sql_type.get_compression() == kENCODING_DICT;
+      const auto lhs_v = lhs[order_entry.tle_no - 1];
+      const auto rhs_v = rhs[order_entry.tle_no - 1];
+      const auto lhs_ip = boost::get<int64_t>(&lhs_v);
+      if (lhs_ip) {
+        const auto rhs_ip = boost::get<int64_t>(&rhs_v);
+        CHECK(rhs_ip);
+        if (is_dict) {
+          auto string_dict = executor_->getStringDictionary(
+            targets_[order_entry.tle_no - 1].sql_type.get_comp_param());
+          auto lhs_str = string_dict->getString(*lhs_ip);
+          auto rhs_str = string_dict->getString(*rhs_ip);
+          return order_entry.is_desc ? lhs_str > rhs_str : lhs_str < rhs_str;
+        }
+        return order_entry.is_desc ? *lhs_ip > *rhs_ip : *lhs_ip < *rhs_ip;
+      } else {
+        const auto lhs_fp = boost::get<std::pair<int64_t, int64_t>>(&lhs_v);
+        if (lhs_fp) {
+          const auto rhs_fp = boost::get<std::pair<int64_t, int64_t>>(&rhs_v);
+          CHECK(rhs_fp);
+          return order_entry.is_desc
+            ? pair_to_double(*lhs_fp, is_int) > pair_to_double(*rhs_fp, is_int)
+            : pair_to_double(*lhs_fp, is_int) < pair_to_double(*rhs_fp, is_int);
+        } else {
+          const auto lhs_sp = boost::get<std::string>(&lhs_v);
+          CHECK(lhs_sp);
+          const auto rhs_sp = boost::get<std::string>(&rhs_v);
+          CHECK(rhs_sp);
+          return order_entry.is_desc ? *lhs_sp > *rhs_sp : *lhs_sp < *rhs_sp;
+        }
+      }
+    };
+    std::sort(target_values_.begin(), target_values_.end(), compare);
+  }
 }
 
 Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x,
@@ -129,7 +328,7 @@ const ColumnDescriptor* get_column_descriptor(
 
 }  // namespace
 
-std::vector<ResultRow> Executor::executeSelectPlan(
+ResultRows Executor::executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,
     const bool hoist_literals,
@@ -143,7 +342,8 @@ std::vector<ResultRow> Executor::executeSelectPlan(
     if (limit) {
       auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
         row_set_mem_owner, max_groups_buffer_entry_guess, error_code);
-      return std::vector<ResultRow>(rows.begin(), rows.begin() + std::min(limit, static_cast<int64_t>(rows.size())));
+      rows.keepFirstN(limit);
+      return rows;
     }
     return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat, row_set_mem_owner,
       max_groups_buffer_entry_guess, error_code);
@@ -153,7 +353,8 @@ std::vector<ResultRow> Executor::executeSelectPlan(
     if (limit) {
       auto rows = executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
         cat, max_groups_buffer_entry_guess, error_code);
-      return std::vector<ResultRow>(rows.begin(), rows.begin() + std::min(limit, static_cast<int64_t>(rows.size())));
+      rows.keepFirstN(limit);
+      return rows;
     }
     return executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
       cat, max_groups_buffer_entry_guess, error_code);
@@ -174,7 +375,7 @@ std::vector<ResultRow> Executor::executeSelectPlan(
  * TODO(alex): check we haven't introduced a regression with the new translator.
  */
 
-std::vector<ResultRow> Executor::execute(
+ResultRows Executor::execute(
     const Planner::RootPlan* root_plan,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
@@ -202,7 +403,7 @@ std::vector<ResultRow> Executor::execute(
   }
   case kINSERT: {
     executeSimpleInsert(root_plan);
-    return {};
+    return ResultRows({}, nullptr, nullptr);
   }
   default:
     CHECK(false);
@@ -1311,134 +1512,28 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64
 
 }  // namespace
 
-Executor::ResultRows Executor::reduceMultiDeviceResults(
-    const std::vector<Executor::ResultRows>& results_per_device,
+ResultRows Executor::reduceMultiDeviceResults(
+    const std::vector<ResultRows>& results_per_device,
     const QueryMemoryDescriptor& query_mem_desc,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   if (results_per_device.empty()) {
-    return {};
+    return ResultRows({}, nullptr, nullptr);
   }
-  std::map<
-    decltype(results_per_device.front().front().value_tuple()),
-    decltype(results_per_device.front().front().agg_results_)
-  > reduced_results_map;
-  Executor::ResultRows reduced_results_vec;
 
-  decltype(results_per_device.front().front().agg_results_idx_) agg_results_idx;
-  decltype(results_per_device.front().front().agg_kinds_) agg_kinds;
-  decltype(results_per_device.front().front().agg_types_) agg_types;
+  auto reduced_results = results_per_device.front();
 
-  for (const auto& device_results : results_per_device) {
-    for (const auto& row : device_results) {
-      // cache / check the shape of the results;
-      if (agg_results_idx.empty()) {
-        agg_results_idx = row.agg_results_idx_;
-      } else {
-        CHECK(agg_results_idx == row.agg_results_idx_);
-      }
-      if (agg_kinds.empty()) {
-        agg_kinds = row.agg_kinds_;
-        CHECK(agg_types.empty());
-        agg_types = row.agg_types_;
-      } else {
-        CHECK(agg_types == row.agg_types_);
-      }
-      auto it = reduced_results_map.find(row.value_tuple_);
-      if (it == reduced_results_map.end()) {
-        reduced_results_map.insert(std::make_pair(row.value_tuple_, row.agg_results_));
-      } else {
-        auto& old_agg_results = it->second;
-        CHECK_EQ(old_agg_results.size(), row.agg_results_.size());
-        const size_t agg_col_count = row.size();
-        for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
-          const auto agg_info = row.agg_kinds_[agg_col_idx];
-          const auto agg_type = row.agg_types_[agg_col_idx];
-          CHECK(agg_type.is_integer() || agg_type.is_time() || agg_type.is_string() ||
-                agg_type.get_type() == kFLOAT || agg_type.get_type() == kDOUBLE || agg_type.get_type() == kBOOLEAN);
-          const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
-          switch (agg_info.agg_kind) {
-          case kSUM:
-          case kCOUNT:
-          case kAVG:
-            if (agg_info.is_distinct) {
-              CHECK(agg_info.is_agg);
-              CHECK_EQ(kCOUNT, agg_info.agg_kind);
-              auto count_distinct_desc_it = query_mem_desc.count_distinct_descriptors_.find(agg_col_idx);
-              CHECK(count_distinct_desc_it != query_mem_desc.count_distinct_descriptors_.end());
-              if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
-                auto old_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&old_agg_results[actual_col_idx]));
-                auto new_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
-                bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
-              } else {
-                CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
-                auto old_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(&old_agg_results[actual_col_idx]));
-                auto new_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
-                old_set->insert(new_set->begin(), new_set->end());
-                new_set->insert(old_set->begin(), old_set->end());
-              }
-              break;
-            }
-            if (agg_type.is_integer() || agg_type.is_time()) {
-              agg_sum(
-                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
-                *boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
-            } else {
-              agg_sum_double(
-                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
-                *reinterpret_cast<const double*>(boost::get<int64_t>(&row.agg_results_[actual_col_idx])));
-            }
-            if (agg_info.agg_kind == kAVG) {
-              *boost::get<int64_t>(&old_agg_results[actual_col_idx + 1]) +=
-                *boost::get<int64_t>(&row.agg_results_[actual_col_idx + 1]);
-            }
-            break;
-          case kMIN:
-            if (agg_type.is_integer() || agg_type.is_time() || agg_type.is_boolean()) {
-              agg_min(
-                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
-                *boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
-            } else {
-              agg_min_double(
-                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
-                *reinterpret_cast<const double*>(boost::get<int64_t>(&row.agg_results_[actual_col_idx])));
-            }
-            break;
-          case kMAX:
-            if (agg_type.is_integer() || agg_type.is_time()) {
-              agg_max(
-                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
-                *boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
-            } else {
-              agg_max_double(
-                boost::get<int64_t>(&old_agg_results[actual_col_idx]),
-                *reinterpret_cast<const double*>(boost::get<int64_t>(&row.agg_results_[actual_col_idx])));
-            }
-            break;
-          default:
-            CHECK(false);
-          }
-        }
-      }
-    }
+  for (size_t i = 1; i < results_per_device.size(); ++i) {
+    reduced_results.reduce(results_per_device[i]);
   }
-  // now flatten the reduced map
-  for (const auto& kv : reduced_results_map) {
-    ResultRow row(this, row_set_mem_owner);
-    row.value_tuple_ = kv.first;
-    row.agg_results_ = kv.second;
-    row.agg_results_idx_ = agg_results_idx;
-    row.agg_kinds_ = agg_kinds;
-    row.agg_types_ = agg_types;
-    reduced_results_vec.push_back(row);
-  }
-  return reduced_results_vec;
+
+  return reduced_results;
 }
 
 namespace {
 
 class ColumnarResults {
 public:
-  ColumnarResults(const std::vector<ResultRow>& rows,
+  ColumnarResults(const ResultRows& rows,
                   const size_t num_columns,
                   const std::vector<SQLTypeInfo>& target_types)
     : column_buffers_(num_columns)
@@ -1451,10 +1546,8 @@ public:
         malloc(num_rows_ * (get_bit_width(target_types[i].get_type()) / 8)));
     }
     for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
-      const auto& row = rows[row_idx];
-      CHECK_EQ(row.size(), num_columns);
       for (size_t i = 0; i < num_columns; ++i) {
-        const auto col_val = row.agg_result(i, false);
+        const auto col_val = rows.get(row_idx, i, false);
         auto i64_p = boost::get<int64_t>(&col_val);
         if (i64_p) {
           switch (get_bit_width(target_types[i].get_type())) {
@@ -1568,17 +1661,20 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
   return result;
 }
 
-Executor::ResultRows results_union(const std::vector<Executor::ResultRows>& results_per_device) {
-  Executor::ResultRows all_results;
-  for (const auto& device_result : results_per_device) {
-    all_results.insert(all_results.end(), device_result.begin(), device_result.end());
+ResultRows results_union(const std::vector<ResultRows>& results_per_device) {
+  if (results_per_device.empty()) {
+    return ResultRows({}, nullptr, nullptr);
+  }
+  auto all_results = results_per_device.front();
+  for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
+    all_results.append(results_per_device[dev_idx]);
   }
   return all_results;
 }
 
 }  // namespace
 
-std::vector<ResultRow> Executor::executeResultPlan(
+ResultRows Executor::executeResultPlan(
     const Planner::Result* result_plan,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
@@ -1591,7 +1687,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
     nullptr, max_groups_buffer_entry_guess, error_code);
   if (*error_code) {
-    return {};
+    return ResultRows({}, nullptr, nullptr);
   }
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
@@ -1653,7 +1749,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   return query_exe_context->groupBufferToResults(0, target_exprs);
 }
 
-std::vector<ResultRow> Executor::executeSortPlan(
+ResultRows Executor::executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
     const bool hoist_literals,
@@ -1666,49 +1762,14 @@ std::vector<ResultRow> Executor::executeSortPlan(
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
     error_code);
-  const auto& target_list = sort_plan->get_targetlist();
-  const auto& order_entries = sort_plan->get_order_entries();
-  // TODO(alex): check the semantics for order by multiple columns
-  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
-    CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(order_entry.tle_no, target_list.size());
-    auto compare = [&order_entry](const ResultRow& lhs, const ResultRow& rhs) {
-      // The compare function must define a strict weak ordering, which means
-      // we can't use the overloaded less than operator for boost::variant since
-      // there's not greater than counterpart. If we naively use "not less than"
-      // as the compare function for descending order, std::sort will trigger
-      // a segmentation fault (or corrupt memory).
-      const auto lhs_v = lhs.agg_result(order_entry.tle_no - 1);
-      const auto rhs_v = rhs.agg_result(order_entry.tle_no - 1);
-      const auto lhs_ip = boost::get<int64_t>(&lhs_v);
-      if (lhs_ip) {
-        const auto rhs_ip = boost::get<int64_t>(&rhs_v);
-        CHECK(rhs_ip);
-        return order_entry.is_desc ? *lhs_ip > *rhs_ip : *lhs_ip < *rhs_ip;
-      } else {
-        const auto lhs_fp = boost::get<double>(&lhs_v);
-        if (lhs_fp) {
-          const auto rhs_fp = boost::get<double>(&rhs_v);
-          CHECK(rhs_fp);
-          return order_entry.is_desc ? *lhs_fp > *rhs_fp : *lhs_fp < *rhs_fp;
-        } else {
-          const auto lhs_sp = boost::get<std::string>(&lhs_v);
-          CHECK(lhs_sp);
-          const auto rhs_sp = boost::get<std::string>(&rhs_v);
-          CHECK(rhs_sp);
-          return order_entry.is_desc ? *lhs_sp > *rhs_sp : *lhs_sp < *rhs_sp;
-        }
-      }
-    };
-    std::sort(rows_to_sort.begin(), rows_to_sort.end(), compare);
+  rows_to_sort.sort(sort_plan);
+  if (limit) {
+    rows_to_sort.keepFirstN(limit);
   }
-  return limit
-    ? decltype(rows_to_sort)(rows_to_sort.begin(), rows_to_sort.begin() +
-      std::min(limit, static_cast<int64_t>(rows_to_sort.size())))
-    : rows_to_sort;
+  return rows_to_sort;
 }
 
-std::vector<ResultRow> Executor::executeAggScanPlan(
+ResultRows Executor::executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
     const bool hoist_literals,
@@ -1841,7 +1902,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs,
         row_set_mem_owner, error_code]
         (const ExecutorDeviceType chosen_device_type, int chosen_device_id) {
-      ResultRows device_results;
+      ResultRows device_results({}, nullptr, nullptr);
       std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
       const auto& fragment = fragments[i];
       auto num_rows = static_cast<int64_t>(fragment.numTuples);
@@ -1983,7 +2044,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
 int32_t Executor::executePlanWithoutGroupBy(
     const CompilationResult& compilation_result,
     const bool hoist_literals,
-    std::vector<ResultRow>& results,
+    ResultRows& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,
@@ -2004,43 +2065,29 @@ int32_t Executor::executePlanWithoutGroupBy(
       col_buffers, num_rows, plan_state_->init_agg_vals_,
       data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
   }
+  results = ResultRows(target_exprs, this, query_exe_context->row_set_mem_owner_);
+  results.beginRow();
   size_t out_vec_idx = 0;
-  ResultRow result_row(this, query_exe_context->row_set_mem_owner_);
   for (const auto target_expr : target_exprs) {
-    const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
-    CHECK(agg_expr);
-    result_row.agg_results_idx_.push_back(result_row.agg_results_.size());
-    const auto agg_info = target_info(agg_expr);
-    result_row.agg_kinds_.push_back(agg_info);
+    const auto agg_info = target_info(target_expr);
+    CHECK(agg_info.is_agg);
+    const auto val1 = reduce_results(
+      agg_info.agg_kind,
+      target_expr->get_type_info().get_type(),
+      out_vec[out_vec_idx],
+      device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1);
     if (agg_info.agg_kind == kAVG) {
-      CHECK(agg_expr->get_arg());
-      result_row.agg_types_.push_back(agg_expr->get_arg()->get_type_info());
-      CHECK(!target_expr->get_type_info().is_string());
-      result_row.agg_results_.push_back(
-        reduce_results(
-          agg_info.agg_kind,
-          target_expr->get_type_info().get_type(),
-          out_vec[out_vec_idx],
-          device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
-      result_row.agg_results_.push_back(
-        reduce_results(
-          agg_info.agg_kind,
-          target_expr->get_type_info().get_type(),
-          out_vec[out_vec_idx + 1],
-          device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
-      out_vec_idx += 2;
-    } else {
-      result_row.agg_types_.push_back(target_expr->get_type_info());
-      CHECK(!target_expr->get_type_info().is_string());
-      result_row.agg_results_.push_back(reduce_results(
+      ++out_vec_idx;
+      results.addValue(val1, reduce_results(
         agg_info.agg_kind,
         target_expr->get_type_info().get_type(),
         out_vec[out_vec_idx],
         device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
-      ++out_vec_idx;
+    } else {
+      results.addValue(val1);
     }
+    ++out_vec_idx;
   }
-  results.push_back(result_row);
   for (auto out : out_vec) {
     delete[] out;
   }
@@ -2050,7 +2097,7 @@ int32_t Executor::executePlanWithoutGroupBy(
 int32_t Executor::executePlanWithGroupBy(
     const CompilationResult& compilation_result,
     const bool hoist_literals,
-    std::vector<ResultRow>& results,
+    ResultRows& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,

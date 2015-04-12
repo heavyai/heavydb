@@ -7,6 +7,7 @@
 #include "../Shared/sqltypes.h"
 
 #include <boost/noncopyable.hpp>
+#include <boost/range/adaptor/reversed.hpp>
 #include <boost/variant.hpp>
 #include <glog/logging.h>
 #include <llvm/IR/Function.h>
@@ -37,11 +38,7 @@ enum class GroupByMemSharing {
 
 struct QueryMemoryDescriptor;
 
-typedef boost::variant<int64_t, double, std::string> AggResult;
-
-inline bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  return target - eps < v && v < target + eps;
-}
+typedef boost::variant<int64_t, double, std::string> TargetValue;
 
 struct TargetInfo {
   bool is_agg;
@@ -147,93 +144,9 @@ inline void bitmap_set_unify(int8_t* lhs, int8_t* rhs, const size_t bitmap_sz) {
   }
 }
 
-class ResultRow {
-public:
-  ResultRow(
-    const Executor* executor,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
-    : executor_(executor)
-    , row_set_mem_owner_(row_set_mem_owner) {}
+typedef std::vector<int64_t> ValueTuple;
 
-  AggResult agg_result(const size_t idx, const bool translate_strings = true) const;
-
-  SQLTypeInfo agg_type(const size_t idx) const;
-
-  size_t size() const {
-    return agg_results_idx_.size();
-  }
-
-  std::vector<int64_t> value_tuple() const {
-    return value_tuple_;
-  }
-
-  bool operator==(const ResultRow& r) const {
-    if (size() != r.size()) {
-      return false;
-    }
-    for (size_t idx = 0; idx < size(); ++idx) {
-      const auto lhs_val = agg_result(idx);
-      const auto rhs_val = r.agg_result(idx);
-      {
-        const auto lhs_pd = boost::get<double>(&lhs_val);
-        if (lhs_pd) {
-          const auto rhs_pd = boost::get<double>(&rhs_val);
-          if (!rhs_pd) {
-            return false;
-          }
-          if (!approx_eq(*lhs_pd, *rhs_pd)) {
-            return false;
-          }
-        } else {
-          if (lhs_val < rhs_val || rhs_val < lhs_val) {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
-  }
-
-private:
-  // TODO(alex): support for strings
-  std::vector<int64_t> value_tuple_;
-  std::vector<boost::variant<int64_t, std::string>> agg_results_;
-  std::vector<size_t> agg_results_idx_;
-  std::vector<TargetInfo> agg_kinds_;
-  std::vector<SQLTypeInfo> agg_types_;
-  const Executor* executor_;
-  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-
-  friend class Executor;
-  friend class QueryExecutionContext;
-};
-
-inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
-  const auto agg_result = row.agg_result(i);
-  const auto agg_ti = row.agg_type(i);
-  if (agg_ti.is_time()) {
-    Datum datum;
-    datum.timeval = *boost::get<int64_t>(&agg_result);
-    return DatumToString(datum, agg_ti);
-  }
-  if (agg_ti.is_boolean()) {
-    const auto bool_val = *boost::get<int64_t>(&agg_result);
-    return bool_val < 0 ? "NULL" : (bool_val ? "true" : "false");
-  }
-  auto iptr = boost::get<int64_t>(&agg_result);
-  if (iptr) {
-    return std::to_string(*iptr);
-  }
-  auto dptr = boost::get<double>(&agg_result);
-  if (dptr) {
-    return std::to_string(*dptr);
-  }
-  auto sptr = boost::get<std::string>(&agg_result);
-  CHECK(sptr);
-  return *sptr;
-}
-
-struct ChunkIter;
+class ChunkIter;
 
 class RowSetMemoryOwner : boost::noncopyable {
 public:
@@ -267,9 +180,216 @@ private:
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::mutex state_mutex_;
 
-  friend class ResultRow;
   friend class QueryExecutionContext;
+  friend class ResultRows;
 };
+
+inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
+  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+  if (!agg_expr) {
+    return { false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT), false, false };
+  }
+  const auto agg_type = agg_expr->get_aggtype();
+  const auto agg_arg = agg_expr->get_arg();
+  if (!agg_arg) {
+    CHECK_EQ(kCOUNT, agg_type);
+    CHECK(!agg_expr->get_is_distinct());
+    return { true, kCOUNT, SQLTypeInfo(kBIGINT), false, false };
+  }
+  const auto& agg_arg_ti = agg_arg->get_type_info();
+  bool is_distinct { false };
+  if (agg_expr->get_aggtype() == kCOUNT) {
+    CHECK(agg_expr->get_is_distinct());
+    CHECK(!agg_arg_ti.is_fp());
+    is_distinct = true;
+  }
+  // TODO(alex): null support for all types
+  bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
+  return {
+    true, agg_expr->get_aggtype(),
+    agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info(),
+    skip_null, is_distinct
+  };
+}
+
+__attribute__((always_inline))
+inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const bool is_int) {
+  return is_int
+    ? static_cast<double>(fp_pair.first) / static_cast<double>(fp_pair.second)
+    : *reinterpret_cast<const double*>(&fp_pair.first) / static_cast<double>(fp_pair.second);
+}
+
+class ResultRows {
+public:
+  ResultRows(const std::vector<Analyzer::Expr*>& targets,
+             const Executor* executor,
+             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    : executor_(executor)
+    , row_set_mem_owner_(row_set_mem_owner) {
+    for (const auto target_expr : targets) {
+      const auto agg_info = target_info(target_expr);
+      targets_.push_back(agg_info);
+    }
+  }
+
+  void beginRow() {
+    target_values_.emplace_back();
+  }
+
+  void beginRow(const int64_t key) {
+    CHECK(multi_keys_.empty());
+    simple_keys_.push_back(key);
+    target_values_.emplace_back();
+  }
+
+  void beginRow(const std::vector<int64_t>& key) {
+    CHECK(simple_keys_.empty());
+    multi_keys_.push_back(key);
+    target_values_.emplace_back();
+  }
+
+  void addValues(const std::vector<int64_t>& vals) {
+    for (const auto val : vals) {
+      target_values_.back().emplace_back(val);
+    }
+  }
+
+  void addValue(const int64_t val) {
+    target_values_.back().emplace_back(val);
+  }
+
+  // used for kAVG
+  void addValue(const int64_t val1, const int64_t val2) {
+    target_values_.back().emplace_back(std::make_pair(val1, val2));
+  }
+
+  void addValue(const std::string& val) {
+    target_values_.back().emplace_back(val);
+  }
+
+  void discardRow() {
+    CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
+    if (!simple_keys_.empty()) {
+      simple_keys_.pop_back();
+    } else {
+      multi_keys_.pop_back();
+    }
+    target_values_.pop_back();
+  }
+
+  void append(const ResultRows& more_results) {
+    simple_keys_.insert(simple_keys_.end(),
+      more_results.simple_keys_.begin(), more_results.simple_keys_.end());
+    multi_keys_.insert(multi_keys_.end(),
+      more_results.multi_keys_.begin(), more_results.multi_keys_.end());
+    target_values_.insert(target_values_.end(),
+      more_results.target_values_.begin(), more_results.target_values_.end());
+  }
+
+  void reduce(const ResultRows& other_results);
+
+  void sort(const Planner::Sort* sort_plan);
+
+  void keepFirstN(const size_t n) {
+    if (n >= size()) {
+      return;
+    }
+    target_values_.resize(n);
+  }
+
+  size_t size() const {
+    return target_values_.size();
+  }
+
+  size_t colCount() const {
+    return targets_.size();
+  }
+
+  bool empty() const {
+    return !size();
+  }
+
+  TargetValue get(const size_t row_idx,
+                const size_t col_idx,
+                const bool translate_strings) const;
+
+  SQLTypeInfo getType(const size_t col_idx) const {
+    return targets_[col_idx].sql_type;
+  }
+
+  bool operator==(const ResultRows& r) const {
+    if (size() != r.size()) {
+      return false;
+    }
+    for (size_t row_idx = 0; row_idx < size(); ++row_idx) {
+      for (size_t col_idx = 0; col_idx < colCount(); ++col_idx) {
+        const auto lhs_val = get(row_idx, col_idx, true);
+        const auto rhs_val = r.get(row_idx, col_idx, true);
+        const auto lhs_pd = boost::get<std::pair<int64_t, int64_t>>(&lhs_val);
+        if (lhs_pd) {
+          const auto rhs_pd = boost::get<std::pair<int64_t, int64_t>>(&rhs_val);
+          if (!rhs_pd) {
+            return false;
+          }
+          if (lhs_pd->first != rhs_pd->first || lhs_pd->second != rhs_pd->second) {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+private:
+  void createReductionMap() const {
+    if (!as_map_.empty() || !as_unordered_map_.empty()) {
+      return;
+    }
+    CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
+    for (size_t i = 0; i < simple_keys_.size(); ++i) {
+      as_unordered_map_.insert(std::make_pair(simple_keys_[i], target_values_[i]));
+    }
+    for (size_t i = 0; i < multi_keys_.size(); ++i) {
+      as_map_.insert(std::make_pair(multi_keys_[i], target_values_[i]));
+    }
+  }
+
+  std::vector<TargetInfo> targets_;
+  std::vector<int64_t> simple_keys_;
+  typedef std::vector<int64_t> MultiKey;
+  std::vector<MultiKey> multi_keys_;
+  typedef boost::variant<int64_t, std::pair<int64_t, int64_t>, std::string> InternalTargetValue;
+  typedef std::vector<InternalTargetValue> TargetValues;
+  std::vector<TargetValues> target_values_;
+  mutable std::map<MultiKey, TargetValues> as_map_;
+  mutable std::unordered_map<int64_t, TargetValues> as_unordered_map_;
+  const Executor* executor_;
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+};
+
+inline std::string row_col_to_string(const ResultRows& rows, const size_t row_idx, const size_t i) {
+  const auto agg_result = rows.get(row_idx, i, true);
+  const auto agg_ti = rows.getType(i);
+  if (agg_ti.is_time()) {
+    Datum datum;
+    datum.timeval = *boost::get<int64_t>(&agg_result);
+    return DatumToString(datum, agg_ti);
+  }
+  if (agg_ti.is_boolean()) {
+    const auto bool_val = *boost::get<int64_t>(&agg_result);
+    return bool_val < 0 ? "NULL" : (bool_val ? "true" : "false");
+  }
+  auto iptr = boost::get<int64_t>(&agg_result);
+  if (iptr) {
+    return std::to_string(*iptr);
+  }
+  auto dptr = boost::get<double>(&agg_result);
+  if (dptr) {
+    return std::to_string(*dptr);
+  }
+  auto sptr = boost::get<std::string>(&agg_result);
+  CHECK(sptr);
+  return *sptr;
+}
 
 class QueryExecutionContext : boost::noncopyable {
 public:
@@ -285,8 +405,8 @@ public:
   ~QueryExecutionContext();
 
   // TOOD(alex): get rid of targets parameter
-  std::vector<ResultRow> getRowSet(const std::vector<Analyzer::Expr*>& targets) const;
-  std::vector<ResultRow> groupBufferToResults(const size_t i, const std::vector<Analyzer::Expr*>& targets) const;
+  ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets) const;
+  ResultRows groupBufferToResults(const size_t i, const std::vector<Analyzer::Expr*>& targets) const;
 
   std::vector<int64_t*> launchGpuCode(
     const std::vector<void*>& cu_functions,
@@ -483,30 +603,6 @@ inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) 
 }
 
 }  // namespace
-
-inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-  if (!agg_expr) {
-    return { false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT), false, false };
-  }
-  const auto agg_type = agg_expr->get_aggtype();
-  const auto agg_arg = agg_expr->get_arg();
-  if (!agg_arg) {
-    CHECK_EQ(kCOUNT, agg_type);
-    CHECK(!agg_expr->get_is_distinct());
-    return { true, kCOUNT, SQLTypeInfo(kBIGINT), false, false };
-  }
-  const auto& agg_arg_ti = agg_arg->get_type_info();
-  bool is_distinct { false };
-  if (agg_expr->get_aggtype() == kCOUNT) {
-    CHECK(agg_expr->get_is_distinct());
-    CHECK(!agg_arg_ti.is_fp());
-    is_distinct = true;
-  }
-  // TODO(alex): null support for all types
-  bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
-  return { true, agg_expr->get_aggtype(), agg_arg_ti, skip_null, is_distinct };
-}
 
 template<class T>
 inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {

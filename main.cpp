@@ -310,9 +310,9 @@ main(int argc, char* argv[])
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
 					if (debug) plan->print();
 					if (execute) {
-						std::vector<ResultRow> results;
-						std::vector<ResultRow> results_cpu;
 						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
+						ResultRows results({}, nullptr, nullptr);
+						ResultRows results_cpu({}, nullptr, nullptr);
 						{
 							auto ms = measure<>::execution([&]() {
 								results_cpu = executor->execute(plan, true, ExecutorDeviceType::CPU);
@@ -322,7 +322,7 @@ main(int argc, char* argv[])
 							}
 						}
 						if (cat.get_dataMgr().gpusPresent() && plan->get_stmt_type() == kSELECT) {
-							std::vector<ResultRow> results_gpu;
+							ResultRows results_gpu({}, nullptr, nullptr);
 							{
 								auto ms = measure<>::execution([&]() {
 									results_gpu = executor->execute(plan, true, ExecutorDeviceType::GPU);
@@ -331,16 +331,16 @@ main(int argc, char* argv[])
 									cout << "Query took " << ms << " ms to execute." << endl;
 								}
 							}
+							results = results_gpu;
 							//CHECK(results_cpu == results_gpu);
-							results.swap(results_gpu);
 						} else {
-							results.swap(results_cpu);
+							results = results_cpu;
 						}
 						if (!results.empty()) {
-							for (const auto& row : results) {
-								cout << fixed << setprecision(13) << row_col_to_string(row, 0);
-								for (size_t i = 1; i < row.size(); ++i) {
-									cout << "|" << row_col_to_string(row, i);
+							for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+								cout << fixed << setprecision(13) << row_col_to_string(results, row_idx, 0);
+								for (size_t i = 1; i < results.colCount(); ++i) {
+									cout << "|" << row_col_to_string(results, row_idx, i);
 								}
 								cout << endl;
 							}

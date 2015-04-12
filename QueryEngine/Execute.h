@@ -66,9 +66,8 @@ public:
     const size_t grid_size_x = 12);
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
-  typedef std::vector<ResultRow> ResultRows;
 
-  std::vector<ResultRow> execute(
+  ResultRows execute(
     const Planner::RootPlan* root_plan,
     const bool hoist_literals = true,
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
@@ -108,7 +107,7 @@ private:
   std::pair<llvm::Value*, llvm::Value*>
   colByteStream(const int col_id, const bool fetch_column, const bool hoist_literals);
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
-  std::vector<ResultRow> executeSelectPlan(
+  ResultRows executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,
     const bool hoist_literals,
@@ -117,7 +116,7 @@ private:
     const Catalog_Namespace::Catalog&,
     const size_t max_groups_buffer_entry_count,
     int32_t* error_code);
-  std::vector<ResultRow> executeAggScanPlan(
+  ResultRows executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
     const bool hoist_literals,
@@ -127,7 +126,7 @@ private:
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
     int32_t* error_code);
-  std::vector<ResultRow> executeResultPlan(
+  ResultRows executeResultPlan(
     const Planner::Result* result_plan,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
@@ -135,7 +134,7 @@ private:
     const Catalog_Namespace::Catalog&,
     const size_t max_groups_buffer_entry_count,
     int32_t* error_code);
-  std::vector<ResultRow> executeSortPlan(
+  ResultRows executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
     const bool hoist_literals,
@@ -154,7 +153,7 @@ private:
   int32_t executePlanWithGroupBy(
     const CompilationResult&,
     const bool hoist_literals,
-    std::vector<ResultRow>& results,
+    ResultRows& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
@@ -167,7 +166,7 @@ private:
   int32_t executePlanWithoutGroupBy(
     const CompilationResult&,
     const bool hoist_literals,
-    std::vector<ResultRow>& results,
+    ResultRows& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
     std::vector<const int8_t*>& col_buffers,

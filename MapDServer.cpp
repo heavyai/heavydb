@@ -195,7 +195,7 @@ public:
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
-        std::vector<ResultRow> results;
+        ResultRows results({}, nullptr, nullptr);
         execute_time += measure<>::execution([&]() {
           results = executor->execute(root_plan,true,executor_device_type_);
         });
@@ -217,13 +217,13 @@ public:
             ++i;
           }
         }
-        for (const auto& row : results) {
+        for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
           TResultRow trow;
-          for (size_t i = 0; i < row.size(); ++i) {
+          for (size_t i = 0; i < results.colCount(); ++i) {
             ColumnValue col_val;
-            const auto agg_result = row.agg_result(i);
+            const auto agg_result = results.get(row_idx, i, true);
             if (boost::get<int64_t>(&agg_result)) {
-              col_val.type = type_to_thrift(row.agg_type(i));
+              col_val.type = type_to_thrift(results.getType(i));
               col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
               switch (targets[i]->get_expr()->get_type_info().get_type()) {
                 case kBOOLEAN:

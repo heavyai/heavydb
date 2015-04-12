@@ -42,7 +42,7 @@ Catalog_Namespace::Catalog *get_catalog() {
 
 std::unique_ptr<Catalog_Namespace::Catalog> g_cat(get_catalog());
 
-vector<ResultRow> run_multiple_agg(
+ResultRows run_multiple_agg(
     const string& query_str,
     const ExecutorDeviceType device_type) {
   SQLParser parser;
@@ -64,14 +64,14 @@ vector<ResultRow> run_multiple_agg(
   return executor->execute(plan, true, device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 
-AggResult run_simple_agg(
+TargetValue run_simple_agg(
     const string& query_str,
     const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type).front().agg_result(0);
+  return run_multiple_agg(query_str, device_type).get(0, 0, true);
 }
 
 template<class T>
-T v(const AggResult& r) {
+T v(const TargetValue& r) {
   auto p = boost::get<T>(&r);
   CHECK(p);
   return *p;
@@ -95,6 +95,10 @@ bool skip_tests(const ExecutorDeviceType device_type) {
   return device_type == ExecutorDeviceType::GPU && !g_cat->get_dataMgr().gpusPresent();
 }
 
+bool approx_eq(const double v, const double target, const double eps = 0.01) {
+  return target - eps < v && v < target + eps;
+}
+
 class SQLiteComparator {
 public:
   SQLiteComparator() : connector_("main", "") {}
@@ -112,15 +116,15 @@ public:
       ASSERT_EQ(0, num_rows);
       return;
     }
-    ASSERT_EQ(connector_.getNumCols(), mapd_results.front().size());
+    ASSERT_EQ(connector_.getNumCols(), mapd_results.colCount());
     const int num_cols { static_cast<int>(connector_.getNumCols()) };
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
         const auto ref_col_type = connector_.columnTypes[col_idx];
-        const auto mapd_variant = mapd_results[row_idx].agg_result(col_idx);
+        const auto mapd_variant = mapd_results.get(row_idx, col_idx, true);
         switch (ref_col_type) {
         case SQLITE_INTEGER: {
-          ASSERT_TRUE(mapd_results[row_idx].agg_type(col_idx).is_integer());
+          ASSERT_TRUE(mapd_results.getType(col_idx).is_integer());
           const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
           const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
           ASSERT_NE(nullptr, mapd_as_int_p);
@@ -129,9 +133,9 @@ public:
           break;
         }
         case SQLITE_FLOAT: {
-          ASSERT_TRUE(mapd_results[row_idx].agg_type(col_idx).is_integer() ||
-                      mapd_results[row_idx].agg_type(col_idx).get_type() == kFLOAT ||
-                      mapd_results[row_idx].agg_type(col_idx).get_type() == kDOUBLE);
+          ASSERT_TRUE(mapd_results.getType(col_idx).is_integer() ||
+                      mapd_results.getType(col_idx).get_type() == kFLOAT ||
+                      mapd_results.getType(col_idx).get_type() == kDOUBLE);
           const auto ref_val = connector_.getData<double>(row_idx, col_idx);
           const auto mapd_as_double_p = boost::get<double>(&mapd_variant);
           ASSERT_NE(nullptr, mapd_as_double_p);
@@ -140,17 +144,17 @@ public:
           break;
         }
         case SQLITE_TEXT: {
-          ASSERT_TRUE(mapd_results[row_idx].agg_type(col_idx).is_string() ||
-                      mapd_results[row_idx].agg_type(col_idx).is_time() ||
-                      mapd_results[row_idx].agg_type(col_idx).is_boolean());
+          ASSERT_TRUE(mapd_results.getType(col_idx).is_string() ||
+                      mapd_results.getType(col_idx).is_time() ||
+                      mapd_results.getType(col_idx).is_boolean());
           const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-          if (mapd_results[row_idx].agg_type(col_idx).is_string()) {
+          if (mapd_results.getType(col_idx).is_string()) {
             const auto mapd_as_str_p = boost::get<std::string>(&mapd_variant);
             ASSERT_NE(nullptr, mapd_as_str_p);
             const auto mapd_val = *mapd_as_str_p;
             ASSERT_EQ(ref_val, mapd_val);
           } else {
-            const auto mapd_type = mapd_results[row_idx].agg_type(col_idx).get_type();
+            const auto mapd_type = mapd_results.getType(col_idx).get_type();
             switch (mapd_type) {
               case kTIMESTAMP:
               case kDATE: {
@@ -387,12 +391,14 @@ TEST(Select, OrderBy) {
     const auto rows = run_multiple_agg(
       "SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;", dt);
     CHECK_EQ(rows.size(), std::min(5, static_cast<int>(g_num_rows)));
-    for (const auto& row : rows) {
-      CHECK_EQ(row.size(), 4);
-      ASSERT_TRUE(v<int64_t>(row.agg_result(0)) == 8 || v<int64_t>(row.agg_result(0)) == 7);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), 43);
-      ASSERT_EQ(v<int64_t>(row.agg_result(2)), 1104);
-      ASSERT_TRUE(v<int64_t>(row.agg_result(3)) == 344 || v<int64_t>(row.agg_result(3)) == 301);
+    CHECK_EQ(rows.colCount(), 4);
+    for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
+      ASSERT_TRUE(v<int64_t>(rows.get(row_idx, 0, true)) == 8 ||
+                  v<int64_t>(rows.get(row_idx, 0, true)) == 7);
+      ASSERT_EQ(v<int64_t>(rows.get(row_idx, 1, true)), 43);
+      ASSERT_EQ(v<int64_t>(rows.get(row_idx, 2, true)), 1104);
+      ASSERT_TRUE(v<int64_t>(rows.get(row_idx, 3, true)) == 344 ||
+                  v<int64_t>(rows.get(row_idx, 3, true)) == 301);
     }
   }
 }
@@ -416,14 +422,12 @@ TEST(Select, ComplexQueries) {
       dt);
     ASSERT_EQ(rows.size(), 2);
     {
-      const auto row = rows[0];
-      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 51);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+      ASSERT_EQ(v<int64_t>(rows.get(0, 0, true)), 51);
+      ASSERT_EQ(v<int64_t>(rows.get(0, 1, true)), -59 * g_num_rows / 2);
     }
     {
-      const auto row = rows[1];
-      ASSERT_EQ(v<int64_t>(row.agg_result(0)), 50);
-      ASSERT_EQ(v<int64_t>(row.agg_result(1)), -59 * g_num_rows / 2);
+      ASSERT_EQ(v<int64_t>(rows.get(1, 0, true)), 50);
+      ASSERT_EQ(v<int64_t>(rows.get(1, 1, true)), -59 * g_num_rows / 2);
     }
   }
 }
