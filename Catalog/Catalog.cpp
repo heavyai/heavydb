@@ -273,6 +273,7 @@ void Catalog::buildMaps() {
 void
 Catalog::addTableToMap(TableDescriptor &td, const list<ColumnDescriptor> &columns, const list<DictDescriptor> &dicts)
 {
+  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
 	TableDescriptor *new_td = new TableDescriptor();
 	*new_td = td;
 	tableDescriptorMap_[td.tableName] = new_td;
@@ -295,6 +296,7 @@ Catalog::addTableToMap(TableDescriptor &td, const list<ColumnDescriptor> &column
 void 
 Catalog::removeTableFromMap(const string &tableName, int tableId) 
 {
+  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
 	TableDescriptorMapById::iterator tableDescIt = tableDescriptorMapById_.find(tableId);
 	if (tableDescIt == tableDescriptorMapById_.end())
 			throw runtime_error ("Table " + tableName + " does not exist.");
@@ -329,6 +331,7 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
 void
 Catalog::instantiateFragmenter(TableDescriptor *td) const
 {
+  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
 	// instatiion table fragmenter upon first use
 	// assume only insert order fragmenter is supported
 	assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);

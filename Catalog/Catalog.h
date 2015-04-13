@@ -17,7 +17,7 @@
 #include <map>
 #include <list>
 #include <utility>
-#include <boost/lexical_cast.hpp>
+#include <mutex>
 #include <cstdint>
 
 #include "../SqliteConnector/SqliteConnector.h"
@@ -173,6 +173,7 @@ class Catalog {
         UserMetadata currentUser_;
         DBMetadata currentDB_;
 				Data_Namespace::DataMgr &dataMgr_;
+        std::mutex cat_mutex_;
 };
 
 /*
