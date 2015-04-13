@@ -191,11 +191,12 @@ int main(int argc, char **argv) {
 
 	po::variables_map vm;
 	po::positional_options_description positionalOptions;
+  positionalOptions.add("db", 1);
 
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: mapdql [--db <database>][{--user|-u} <user>][{--passwd|-p} <password>][{-p|--port} <port number>] [{-s|--server} <server host>] [{--no-header|-n}] [{--delimiter|-d}]\n";
+			std::cout << "Usage: mapdql [<database>][{--user|-u} <user>][{--passwd|-p} <password>][--port <port number>] [{-s|--server} <server host>] [{--no-header|-n}] [{--delimiter|-d}]\n";
 			return 0;
 		}
     if (vm.count("no-header"))
