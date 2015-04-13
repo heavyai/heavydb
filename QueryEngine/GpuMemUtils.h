@@ -40,6 +40,7 @@ struct QueryMemoryDescriptor;
 GpuQueryMemory create_dev_group_by_buffers(
     Data_Namespace::DataMgr* data_mgr,
     const std::vector<int64_t*>& group_by_buffers,
+    const std::vector<int64_t*>& small_group_by_buffers,
     const QueryMemoryDescriptor&,
     const unsigned block_size_x,
     const unsigned grid_size_x,

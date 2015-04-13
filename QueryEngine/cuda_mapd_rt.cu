@@ -144,7 +144,7 @@ __device__ int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                             const int64_t min_key,
                                             const int32_t agg_col_count,
                                             const int64_t* init_vals) {
-  int64_t off = (key - min_key) * (1 + agg_col_count);
+  int64_t off = key - min_key;
   if (0 <= off && off < small_groups_buffer_qw_count) {
     return get_group_value_fast(small_groups_buffer, key, min_key, agg_col_count);
   }

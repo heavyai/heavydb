@@ -68,7 +68,7 @@ QueryExecutionContext::QueryExecutionContext(
     }
     if (query_mem_desc_.getSmallBufferSizeBytes()) {
       auto group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSizeBytes()));
-      memcpy(group_by_small_buffer, &group_by_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
+      memcpy(group_by_small_buffer, &group_by_small_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
       small_group_by_buffers_.push_back(group_by_small_buffer);
       for (size_t j = 1; j < step; ++j) {
         small_group_by_buffers_.push_back(nullptr);
@@ -438,7 +438,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     if (query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0) {  // group by path
       CHECK(!group_by_buffers_.empty());
       auto gpu_query_mem = create_dev_group_by_buffers(
-        data_mgr, group_by_buffers_, query_mem_desc_,
+        data_mgr, group_by_buffers_, small_group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id);
       error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id);
       copy_to_gpu(data_mgr, error_code_dev_ptr, &error_codes[0], grid_size_x * sizeof(error_codes[0]), device_id);

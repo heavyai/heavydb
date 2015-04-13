@@ -96,6 +96,7 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(
 GpuQueryMemory create_dev_group_by_buffers(
     Data_Namespace::DataMgr* data_mgr,
     const std::vector<int64_t*>& group_by_buffers,
+    const std::vector<int64_t*>& small_group_by_buffers,
     const QueryMemoryDescriptor& query_mem_desc,
     const unsigned block_size_x,
     const unsigned grid_size_x,
@@ -104,7 +105,7 @@ GpuQueryMemory create_dev_group_by_buffers(
     data_mgr, group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id, false);
   if (query_mem_desc.getSmallBufferSizeBytes()) {
     auto small_dev_group_by_buffers = create_dev_group_by_buffers(
-      data_mgr, group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id, true);
+      data_mgr, small_group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id, true);
     return { dev_group_by_buffers, small_dev_group_by_buffers };
   }
   return GpuQueryMemory { dev_group_by_buffers };
