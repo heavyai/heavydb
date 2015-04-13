@@ -24,9 +24,35 @@ class MapDHandler : virtual public MapDIf {
 public:
   MapDHandler(MapDClient &client) : client_(client) {}
 
-  void select(QueryResult& _return, const std::string& query_str) {
+  SessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
+    SessionId session = -1;
     try {
-    client_.select(_return, query_str);
+      session = client_.connect(user, passwd, dbname);
+    }
+    catch (std::exception &e) {
+      std::cerr << "connect caught exception: " << e.what() << std::endl;
+      MapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+    return session;
+  }
+
+  void disconnect(SessionId session) {
+    try {
+      client_.disconnect(session);
+    }
+    catch (std::exception &e) {
+      std::cerr << "disconnect caught exception: " << e.what() << std::endl;
+      MapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
+  void select(QueryResult& _return, const SessionId session, const std::string& query_str) {
+    try {
+    client_.select(_return, session, query_str);
     }
     catch (std::exception &e) {
       std::cerr << "select caught exception: " << e.what() << std::endl;
@@ -36,9 +62,9 @@ public:
     }
   }
 
-  void getColumnTypes(ColumnTypes& _return, const std::string& table_name) {
+  void getColumnTypes(ColumnTypes& _return, const SessionId session, const std::string& table_name) {
     try {
-    client_.getColumnTypes(_return, table_name);
+    client_.getColumnTypes(_return, session, table_name);
     }
     catch (std::exception &e) {
       std::cerr << "getColumnTypes caught exception: " << e.what() << std::endl;
@@ -48,10 +74,10 @@ public:
     }
   }
 
-  void getTables(std::vector<std::string> & _return)
+  void getTables(std::vector<std::string> & _return, const SessionId session)
   {
     try {
-    client_.getTables(_return);
+    client_.getTables(_return, session);
     }
     catch (std::exception &e) {
       std::cerr << "getTables caught exception: " << e.what() << std::endl;
@@ -59,6 +85,16 @@ public:
       ex.error_msg = e.what();
       throw ex;
     }
+  }
+
+  void getUsers(std::vector<std::string> & _return)
+  {
+    client_.getUsers(_return);
+  }
+
+  void getDatabases(std::vector<DBInfo> & _return)
+  {
+    client_.getDatabases(_return);
   }
 
 private:

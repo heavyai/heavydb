@@ -36,10 +36,16 @@ struct TResultRow {
 typedef list<TResultRow> TResultRowSet
 typedef list<ProjInfo> TResultProjInfo
 typedef map<string, ColumnType> ColumnTypes
+typedef i64 SessionId
 
 struct QueryResult {
   1: TResultProjInfo proj_info
   2: TResultRowSet rows
+}
+
+struct DBInfo {
+  1: string db_name
+  2: string db_owner
 }
 
 exception MapDException {
@@ -47,7 +53,11 @@ exception MapDException {
 }
 
 service MapD {
-  QueryResult select(1: string query) throws (1: MapDException e)
-  ColumnTypes getColumnTypes(1: string table_name) throws (1: MapDException e)
-  list<string> getTables();
+  SessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: MapDException e)
+  void disconnect(1: SessionId session) throws (1: MapDException e)
+  QueryResult select(1: SessionId session, 2: string query) throws (1: MapDException e)
+  ColumnTypes getColumnTypes(1: SessionId session, 2: string table_name) throws (1: MapDException e)
+  list<string> getTables(1: SessionId session)
+  list<string> getUsers()
+  list<DBInfo> getDatabases()
 }

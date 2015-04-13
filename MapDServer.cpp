@@ -16,6 +16,8 @@
 #include <string>
 #include <fstream>
 #include <sys/time.h>
+#include <random>
+#include <map>
 
 
 using namespace ::apache::thrift;
@@ -67,9 +69,11 @@ double dtime() {
     return (tseconds);
 }
 
+#define INVALID_SESSION_ID  -1
+
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(const std::string& base_data_path, const std::string &db_name, const std::string& executor_device) : base_data_path_(base_data_path), db_name_(db_name) {
+  MapDHandler(const std::string& base_data_path, const std::string& executor_device) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT64_MAX) {
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
         std::cout << "GPU Mode" << std::endl; 
@@ -82,23 +86,73 @@ public:
         executor_device_type_ = ExecutorDeviceType::CPU;
         std::cout << "CPU Mode" << std::endl; 
     }
-    std::cout << "MapDHandler initialized" << std::endl; 
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), executor_device_type_ == ExecutorDeviceType::GPU || executor_device_type_ == ExecutorDeviceType::Auto)); // second param is whether to initialize GPU buffer pool
-    Catalog_Namespace::SysCatalog sys_cat(base_data_path_, *data_mgr_);
-    Catalog_Namespace::UserMetadata user_meta;
-    CHECK(sys_cat.getMetadataForUser(user_, user_meta));
-    CHECK_EQ(user_meta.passwd, pass_);
-    Catalog_Namespace::DBMetadata db_meta;
-    CHECK(sys_cat.getMetadataForDB(db_name_, db_meta));
-    CHECK(user_meta.isSuper || user_meta.userId == db_meta.dbOwner);
-    cat_.reset(new Catalog_Namespace::Catalog(base_data_path_, user_meta, db_meta, *data_mgr_));
+    sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, *data_mgr_));
     logFile.open("mapd_log.txt", std::ios::out | std::ios::app);
   }
 
-  void select(QueryResult& _return, const std::string& query_str) {
+  SessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
+    Catalog_Namespace::UserMetadata user_meta;
+    if (!sys_cat_->getMetadataForUser(user, user_meta)) {
+      MapDException ex;
+      ex.error_msg = std::string("User ") + user + " does not exist.";
+      throw ex;
+    }
+    if (user_meta.passwd != passwd) {
+      MapDException ex;
+      ex.error_msg = std::string("Password for User ") + user + " is incorrect.";
+      throw ex;
+    }
+    Catalog_Namespace::DBMetadata db_meta;
+    if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
+      MapDException ex;
+      ex.error_msg = std::string("Database ") + dbname + " does not exist.";
+      throw ex;
+    }
+    if (!user_meta.isSuper && user_meta.userId != db_meta.dbOwner) {
+      MapDException ex;
+      ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
+      throw ex;
+    }
+    SessionId session = INVALID_SESSION_ID;
+    while (true) {
+      session = session_id_dist_(random_gen_);
+      auto session_it = sessions_.find(session);
+      if (session_it == sessions_.end())
+        break;
+    }
+    auto cat_it = cat_map_.find(dbname);
+    if (cat_it == cat_map_.end()) {
+      Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, user_meta, db_meta, *data_mgr_);
+      cat_map_[dbname].reset(cat);
+      sessions_[session] = cat_map_[dbname];
+    } else
+      sessions_[session] = cat_it->second;
+    return session;
+  }
 
+  void disconnect(const SessionId session) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      MapDException ex;
+      ex.error_msg = "Session not valid.";
+      throw ex;
+    }
+    sessions_.erase(session_it);
+  }
+
+  void select(QueryResult& _return, const SessionId session, const std::string& query_str) {
+
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      MapDException ex;
+      ex.error_msg = "Session not valid.";
+      throw ex;
+    }
+    auto cat = session_it->second.get(); 
+    CHECK(cat);
     logFile << query_str << '\t';
     double tStart = dtime();
     SQLParser parser;
@@ -115,12 +169,12 @@ public:
       std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
       Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
       if (ddl != nullptr) {
-        ddl->execute(*cat_);
+        ddl->execute(*cat);
       } else {
         auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
         Analyzer::Query query;
-        dml->analyze(*cat_, query);
-        Planner::Optimizer optimizer(query, *cat_);
+        dml->analyze(*cat, query);
+        Planner::Optimizer optimizer(query, *cat);
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
@@ -208,14 +262,22 @@ public:
     
   }
 
-  void getColumnTypes(ColumnTypes& _return, const std::string& table_name) {
-    auto td = cat_->getMetadataForTable(table_name);
+  void getColumnTypes(ColumnTypes& _return, const SessionId session, const std::string& table_name) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      MapDException ex;
+      ex.error_msg = "Session not valid.";
+      throw ex;
+    }
+    auto cat = session_it->second.get(); 
+    CHECK(cat);
+    auto td = cat->getMetadataForTable(table_name);
     if (!td) {
       MapDException ex;
       ex.error_msg = "Table doesn't exist";
       throw ex;
     }
-    const auto col_descriptors = cat_->getAllColumnMetadataForTable(td->tableId);
+    const auto col_descriptors = cat->getAllColumnMetadataForTable(td->tableId);
     for (const auto cd : col_descriptors) {
       ColumnType col_type;
       col_type.type = type_to_thrift(cd->columnType);
@@ -224,25 +286,55 @@ public:
     }
   }
 
-  void getTables(std::vector<std::string> & table_names) {
-    const auto tables = cat_->getAllTableMetadata();
+  void getTables(std::vector<std::string> & table_names, const SessionId session) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      MapDException ex;
+      ex.error_msg = "Session not valid.";
+      throw ex;
+    }
+    auto cat = session_it->second.get(); 
+    CHECK(cat);
+    const auto tables = cat->getAllTableMetadata();
     for (const auto td : tables) {
       table_names.push_back(td->tableName);
     }
   }
 
+  void getUsers(std::vector<std::string> &user_names) {
+    std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
+    for (auto u : user_list) {
+      user_names.push_back(u.userName);
+    }
+  }
+
+  void getDatabases(std::vector<DBInfo> &dbinfos) {
+    std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
+    std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
+    for (auto d : db_list) {
+      DBInfo dbinfo;
+      dbinfo.db_name = d.dbName;
+      for (auto u : user_list) {
+        if (d.dbOwner == u.userId) {
+          dbinfo.db_owner = u.userName;
+          break;
+        }
+      }
+      dbinfos.push_back(dbinfo);
+    }
+  }
+
 private:
-  std::unique_ptr<Catalog_Namespace::Catalog> cat_;
+  std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
+  std::map<SessionId, std::shared_ptr<Catalog_Namespace::Catalog>> sessions_;
+  std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
   std::ofstream logFile;
 
-
   const std::string base_data_path_;
-  const std::string db_name_;
-  const std::string user_ { MAPD_ROOT_USER };
-  const std::string pass_ { MAPD_ROOT_PASSWD_DEFAULT };
   ExecutorDeviceType executor_device_type_;
-  //const std::string executor_device_type_;
+  std::default_random_engine random_gen_;
+  std::uniform_int_distribution<int64_t> session_id_dist_;
 };
 
 int main(int argc, char **argv) {
@@ -306,7 +398,7 @@ int main(int argc, char **argv) {
     std::cerr << "MapD database " << db_name << " does not exist." << std::endl;
     return 1;
   }
-  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, db_name, device));
+  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());

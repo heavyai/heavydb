@@ -34,13 +34,25 @@ void completion(const char *buf, linenoiseCompletions *lc) {
     }
 }
 
+#define INVALID_SESSION_ID -1
+
+struct ClientContext {
+  std::string user_name;
+  std::string passwd;
+  std::string db_name;
+  SessionId session;
+};
+
 static void
-process_backslash_commands(const char *command, MapDClient &client)
+process_backslash_commands(char *command, MapDClient &client, ClientContext &context)
 {
   switch (command[1]) {
     case 'h':
+      std::cout << "\\u List all users.\n";
+      std::cout << "\\l List all databases.\n";
       std::cout << "\\t List all tables.\n";
       std::cout << "\\d <table> List all columns of table.\n";
+      std::cout << "\\c <database> <user> <password>.\n";
       std::cout << "\\q Quit.\n";
       return;
     case 'd':
@@ -51,7 +63,7 @@ process_backslash_commands(const char *command, MapDClient &client)
         }
         ColumnTypes _return;
         std::string table_name(command+3);
-        client.getColumnTypes(_return, table_name);
+        client.getColumnTypes(_return, context.session, table_name);
         for (auto p : _return) {
           std::cout << p.first << " ";
           switch (p.second.type) {
@@ -82,12 +94,69 @@ process_backslash_commands(const char *command, MapDClient &client)
     case 't':
       {
         std::vector<std::string> _return;
-        client.getTables(_return);
+        try {
+          client.getTables(_return, context.session);
+        }
+        catch (MapDException &e) {
+          std::cerr << e.error_msg << std::endl;
+          return;
+        }
         for (auto p : _return)
           std::cout << p << std::endl;
         return;
       }
-    case 'q':
+    case 'c':
+      {
+        if (command[2] != ' ') {
+          std::cerr << "Invalid \\c command usage.  Do \\c <database> <user> <password>" << std::endl;
+          return;
+        }
+        char *db = strtok(command+3, " ");
+        char *user = strtok(NULL, " ");
+        char *passwd = strtok(NULL, " ");
+        if (db == NULL || user == NULL || passwd == NULL) {
+          std::cerr << "Invalid \\c command usage.  Do \\c <database> <user> <password>" << std::endl;
+          return;
+        }
+        if (context.session != INVALID_SESSION_ID) {
+          try {
+            client.disconnect(context.session);
+            std::cout << "Disconnected from database " << context.db_name << std::endl;
+          }
+          catch (MapDException &e) {
+            std::cerr << e.error_msg << std::endl;
+          }
+        }
+        context.db_name = db;
+        context.user_name = user;
+        context.passwd = passwd;
+        try {
+          context.session = client.connect(context.user_name, context.passwd, context.db_name);
+          std::cout << "Connected to database " << context.db_name << std::endl;
+        }
+        catch (MapDException &e) {
+          std::cerr << e.error_msg << std::endl;
+          context.session = INVALID_SESSION_ID;
+        }
+      }
+      break;
+    case 'u':
+      {
+        std::vector<std::string> _return;
+        client.getUsers(_return);
+        for (auto p : _return)
+          std::cout << p << std::endl;
+        return;
+      }
+    case 'l':
+      {
+        std::vector<DBInfo> _return;
+        client.getDatabases(_return);
+        std::cout << "Database | Owner" << std::endl;
+        for (auto p : _return)
+          std::cout << p.db_name << " | " << p.db_owner << std::endl;
+        return;
+      }
     default:
       std::cerr << "Invalid backslash command: " << command << std::endl;
   }
@@ -100,6 +169,12 @@ int main(int argc, char **argv) {
   bool print_header = true;
   char *line;
   QueryResult _return;
+  ClientContext context;
+  std::string db_name;
+  std::string user_name;
+  std::string passwd;
+
+  context.session = INVALID_SESSION_ID;
 
 	namespace po = boost::program_options;
 
@@ -108,8 +183,11 @@ int main(int argc, char **argv) {
 		("help,h", "Print help messages ")
     ("no-header,n", "Do not print query result header")
     ("delimiter,d", po::value<std::string>(&delimiter), "Field delimiter in row output (default is |)")
+    ("db", po::value<std::string>(&context.db_name), "Database name")
+    ("user,u", po::value<std::string>(&context.user_name), "User name")
+    ("passwd,p", po::value<std::string>(&context.passwd), "Password")
     ("server,s", po::value<std::string>(&server_host), "MapD Server Hostname (default localhost)")
-    ("port,p", po::value<int>(&port), "Port number (default 9091)");
+    ("port", po::value<int>(&port), "Port number (default 9091)");
 
 	po::variables_map vm;
 	po::positional_options_description positionalOptions;
@@ -117,11 +195,15 @@ int main(int argc, char **argv) {
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: mapdql [{-p|--port} <port number>] [{-s|--server} <server host>] [{--no-header|-n}] [{--delimiter|-d}]\n";
+			std::cout << "Usage: mapdql [--db <database>][{--user|-u} <user>][{--passwd|-p} <password>][{-p|--port} <port number>] [{-s|--server} <server host>] [{--no-header|-n}] [{--delimiter|-d}]\n";
 			return 0;
 		}
     if (vm.count("no-header"))
       print_header = false;
+    if (vm.count("db") && (!vm.count("user") || !vm.count("passwd"))) {
+      std::cerr << "Must specify a user name and password to access database " << context.db_name << std::endl;
+      return 1;
+    }
 
 		po::notify(vm);
 	}
@@ -136,6 +218,18 @@ int main(int argc, char **argv) {
   shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   MapDClient client(protocol);
   transport->open();
+
+  if (context.db_name.empty()) {
+    std::cout << "Not connected to any database.  Only \\u and \\l commands are allowed in this state.  See \\h for help." << std::endl;
+  } else {
+    try {
+      context.session = client.connect(context.user_name, context.passwd, context.db_name);
+      std::cout << "Connected to database " << context.db_name << std::endl;
+    }
+    catch (MapDException &e) {
+      std::cerr << e.error_msg << std::endl;
+    }
+  }
 
   /* Set the completion callback. This will be called every time the
    * user uses the <tab> key. */
@@ -161,8 +255,14 @@ int main(int argc, char **argv) {
           // printf("echo: '%s'\n", line);
           linenoiseHistoryAdd(line); /* Add to the history. */
           linenoiseHistorySave("mapdql_history.txt"); /* Save the history on disk. */
+        if (context.session == INVALID_SESSION_ID) {
+          std::cerr << "Not connected to any MapD databases." << std::endl;
+          continue;
+        }
         try {
-          client.select(_return, line);
+          client.select(_return, context.session, line);
+          if (_return.proj_info.empty() || _return.rows.empty())
+            continue;
           bool not_first = false;
           if (print_header) {
             for (auto p : _return.proj_info) {
@@ -241,11 +341,19 @@ int main(int argc, char **argv) {
       } else if (line[0] == '\\' && line[1] == 'q')
         break;
       else if (line[0] == '\\') {
-          process_backslash_commands(line, client);
+          process_backslash_commands(line, client, context);
       }
       free(line);
   }
 
+  if (context.session != INVALID_SESSION_ID) {
+    try {
+      client.disconnect(context.session);
+    }
+    catch (MapDException &e) {
+      std::cerr << e.error_msg << std::endl;
+    }
+  }
   transport->close();
   return 0;
 }
