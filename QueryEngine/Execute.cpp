@@ -1677,7 +1677,8 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
   }
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
-  std::vector<ResultRows> all_fragment_results(fragments.size());
+  std::vector<ResultRows> all_fragment_results;
+  all_fragment_results.reserve(fragments.size());
   std::vector<std::thread> query_threads;
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
