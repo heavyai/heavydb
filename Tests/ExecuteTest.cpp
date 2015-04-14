@@ -538,8 +538,13 @@ TEST(Select, Time) {
 TEST(Select, In) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
-    c("select count(*) from test where z in (101, 102);", dt);
-    c("select count(*) from test where z in (201, 202);", dt);
+    c("SELECT COUNT(*) FROM test WHERE x IN (7, 8);", dt);
+    c("SELECT COUNT(*) FROM test WHERE x IN (9, 10);", dt);
+    c("SELECT COUNT(*) FROM test WHERE z IN (101, 102);", dt);
+    c("SELECT COUNT(*) FROM test WHERE z IN (201, 202);", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str IN ('real_foo', 'real_bar');", dt);
+    c("SELECT COUNT(*) FROM test WHERE real_str IN ('real_foo', 'real_bar', 'real_baz', 'foo');", dt);
+    c("SELECT COUNT(*) FROM test WHERE str IN ('foo', 'bar', 'real_foo');", dt);
   }
 }
 
