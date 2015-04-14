@@ -530,6 +530,14 @@ TEST(Select, Time) {
   }
 }
 
+TEST(Select, In) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    c("select count(*) from test where z in (101, 102);", dt);
+    c("select count(*) from test where z in (201, 202);", dt);
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
