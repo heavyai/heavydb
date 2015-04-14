@@ -36,7 +36,7 @@ struct TResultRow {
 typedef list<TResultRow> TResultRowSet
 typedef list<ProjInfo> TResultProjInfo
 typedef map<string, ColumnType> ColumnTypes
-typedef i64 SessionId
+typedef i32 SessionId
 
 struct QueryResult {
   1: TResultProjInfo proj_info

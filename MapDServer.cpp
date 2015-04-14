@@ -73,7 +73,7 @@ double dtime() {
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(const std::string& base_data_path, const std::string& executor_device) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT64_MAX) {
+  MapDHandler(const std::string& base_data_path, const std::string& executor_device) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX) {
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
         std::cout << "GPU Mode" << std::endl; 
