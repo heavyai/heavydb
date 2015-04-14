@@ -646,7 +646,10 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   case kTEXT:
   case kCHAR:
   case kVARCHAR:
-    CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
+    if (col_ti.get_compression() != kENCODING_DICT) {
+      CHECK_EQ(kENCODING_NONE, col_ti.get_compression());
+      throw std::runtime_error("Group by / distinct not supported for none-encoding strings");
+    }
   case kSMALLINT:
   case kINT:
   case kBIGINT: {
