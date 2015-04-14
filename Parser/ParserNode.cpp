@@ -372,17 +372,33 @@ namespace Parser {
   InValues::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
   {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-    bool dict_comp = arg_expr->get_type_info().get_compression() == kENCODING_DICT || arg_expr->get_type_info().get_compression() == kENCODING_TOKDICT;
+    SQLTypeInfo ti = arg_expr->get_type_info();
+    bool dict_comp = ti.get_compression() == kENCODING_DICT || ti.get_compression() == kENCODING_TOKDICT;
     std::list<Analyzer::Expr*> *value_exprs = new std::list<Analyzer::Expr*>();
     for (auto p : *value_list) {
       Analyzer::Expr *e = p->analyze(catalog, query, allow_tlist_ref);
+      if (ti != e->get_type_info()) {
+        if (ti.is_string() && e->get_type_info().is_string())
+          ti = Analyzer::BinOper::common_string_type(ti, e->get_type_info());
+        else if (ti.is_number() && e->get_type_info().is_number())
+          ti = Analyzer::BinOper::common_numeric_type(ti, e->get_type_info());
+        else
+          throw std::runtime_error("IN expressions must contain compatible types.");
+      }
       if (dict_comp)
         value_exprs->push_back(e->add_cast(arg_expr->get_type_info()));
       else
         value_exprs->push_back(e);
     }
-    if (!dict_comp)
+    if (!dict_comp) {
       arg_expr = arg_expr->decompress();
+      arg_expr = arg_expr->add_cast(ti);
+      std::list<Analyzer::Expr*> cast_vals;
+      for (auto p : *value_exprs) {
+        cast_vals.push_back(p->add_cast(ti));
+      }
+      value_exprs->swap(cast_vals);
+    }
     Analyzer::Expr *result = new Analyzer::InValues(arg_expr, value_exprs);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
