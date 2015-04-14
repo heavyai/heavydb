@@ -1511,6 +1511,9 @@ std::vector<ResultRow> Executor::executeResultPlan(
   CHECK(agg_plan);
   auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
     nullptr, max_groups_buffer_entry_guess, error_code);
+  if (*error_code) {
+    return {};
+  }
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
   std::vector<AggInfo> agg_infos;
@@ -1543,7 +1546,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
     GroupByColRangeType::OneColGuessedRange, false, false,
     { sizeof(int64_t) },
     get_col_byte_widths(target_exprs),
-    max_groups_buffer_entry_guess,
+    result_rows.size(),
     small_groups_buffer_entry_count_,
     0, GroupByMemSharing::Shared
   };
@@ -1558,7 +1561,7 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr, max_groups_buffer_entry_guess);
+    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr, result_rows.size());
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
