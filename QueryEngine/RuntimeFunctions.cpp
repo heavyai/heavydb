@@ -371,6 +371,11 @@ int32_t extract_str_len_noinline(const uint64_t str_and_len) {
   return extract_str_len(str_and_len);
 }
 
+extern "C" __attribute__((always_inline))
+uint64_t string_pack(const int8_t* ptr, const int32_t len) {
+  return (reinterpret_cast<const uint64_t>(ptr) & 0xffffffffffff) | (static_cast<const uint64_t>(len) << 48);
+}
+
 #ifdef __clang__
 #include "ExtractFromTime.cpp"
 #include "../Utils/StringLike.cpp"

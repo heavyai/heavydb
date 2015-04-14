@@ -638,7 +638,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
   CHECK(false);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool hoist_literals) {
+std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool hoist_literals) {
   // Generate a "projection" function which takes the case conditions and
   // values as arguments, interleaved. The 'else' expression is the last one.
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
@@ -647,14 +647,20 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
   std::vector<llvm::Type*> case_arg_types;
   const auto case_ti = case_expr->get_type_info();
   llvm::Type* case_llvm_type = nullptr;
+  bool is_real_str = false;
   if (case_ti.is_integer() || case_ti.is_time()) {
     case_llvm_type = get_int_type(get_bit_width(case_ti.get_type()), cgen_state_->context_);
   } else if (case_ti.is_fp()) {
     case_llvm_type = case_ti.get_type() == kFLOAT
       ? llvm::Type::getFloatTy(cgen_state_->context_)
       : llvm::Type::getDoubleTy(cgen_state_->context_);
-  } else {
-    CHECK(false);
+  } else if (case_ti.is_string()) {
+    if (case_ti.get_compression() == kENCODING_DICT) {
+      case_llvm_type = get_int_type(8 * case_ti.get_size(), cgen_state_->context_);
+    } else {
+      is_real_str = true;
+      case_llvm_type = get_int_type(64, cgen_state_->context_);
+    }
   }
   CHECK(case_llvm_type);
   for (const auto& expr_pair : expr_pair_list) {
@@ -702,10 +708,29 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
   // Reverse the actual arguments to compensate for this, then call the function.
   for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
     case_func_args.push_back(codegen(expr_pair.first, true, hoist_literals).front());
-    case_func_args.push_back(codegen(expr_pair.second, true, hoist_literals).front());
+    auto branch_val_lvs = codegen(expr_pair.second, true, hoist_literals);
+    if (is_real_str && dynamic_cast<const Analyzer::Constant*>(expr_pair.second)) {
+      CHECK_EQ(3, branch_val_lvs.size());
+      case_func_args.push_back(cgen_state_->emitCall("string_pack", { branch_val_lvs[1], branch_val_lvs[2] }));
+    } else {
+      CHECK_EQ(1, branch_val_lvs.size());
+      case_func_args.push_back(branch_val_lvs.front());
+    }
   }
-  case_func_args.push_back(codegen(else_expr, true, hoist_literals).front());
-  return cgen_state_->ir_builder_.CreateCall(case_func, case_func_args);
+  auto else_lvs = codegen(else_expr, true, hoist_literals);
+  if (is_real_str && dynamic_cast<const Analyzer::Constant*>(else_expr)) {
+    CHECK_EQ(3, else_lvs.size());
+    case_func_args.push_back(cgen_state_->emitCall("string_pack", { else_lvs[1], else_lvs[2] }));
+  } else {
+    case_func_args.push_back(else_lvs.front());
+  }
+  llvm::Value* case_val = cgen_state_->ir_builder_.CreateCall(case_func, case_func_args);
+  std::vector<llvm::Value*> ret_vals { case_val };
+  if (is_real_str) {
+    ret_vals.push_back(cgen_state_->emitCall("extract_str_ptr", { case_val }));
+    ret_vals.push_back(cgen_state_->emitCall("extract_str_len", { case_val }));
+  }
+  return ret_vals;
 }
 
 llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const bool hoist_literals) {

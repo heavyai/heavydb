@@ -87,7 +87,7 @@ private:
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const bool hoist_literals);
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::InValues*, const bool hoist_literals);
