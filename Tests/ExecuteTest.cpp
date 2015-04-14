@@ -449,8 +449,6 @@ TEST(Select, Strings) {
     c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NULL;", dt);
     c("SELECT COUNT(*) FROM test WHERE str IS NOT NULL;", dt);
-  }
-  for (auto dt : { ExecutorDeviceType::CPU }) {
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%eal_bar';", dt);
