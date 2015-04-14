@@ -90,7 +90,9 @@ private:
   llvm::Value* codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::InValues*, const bool hoist_literals);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegenCmp(const SQLOps, const Analyzer::Expr*, const Analyzer::Expr*, const bool hoist_literals);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenLogical(const Analyzer::UOper*, const bool hoist_literals);

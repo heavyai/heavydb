@@ -309,6 +309,10 @@ std::vector<llvm::Value*> Executor::codegen(
   if (like_expr) {
     return { codegen(like_expr, hoist_literals) };
   }
+  auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
+  if (in_expr) {
+    return { codegen(in_expr, hoist_literals) };
+  }
   CHECK(false);
 }
 
@@ -377,6 +381,14 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     like_pattern_len_lv,
     ll_int(int8_t(escape_char))
   });
+}
+
+llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const bool hoist_literals) {
+  llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
+  for (auto in_val : *expr->get_value_list()) {
+    result = cgen_state_->ir_builder_.CreateOr(result, codegenCmp(kEQ, expr->get_arg(), in_val, hoist_literals));
+  }
+  return result;
 }
 
 llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
@@ -783,9 +795,16 @@ std::string string_cmp_func(const SQLOps optype) {
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
-  CHECK(IS_COMPARISON(optype));
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
+  return codegenCmp(optype, lhs, rhs, hoist_literals);
+}
+
+llvm::Value* Executor::codegenCmp(const SQLOps optype,
+                                  const Analyzer::Expr* lhs,
+                                  const Analyzer::Expr* rhs,
+                                  const bool hoist_literals) {
+  CHECK(IS_COMPARISON(optype));
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
   auto lhs_lvs = codegen(lhs, true, hoist_literals);
