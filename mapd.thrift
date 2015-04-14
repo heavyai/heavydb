@@ -57,7 +57,7 @@ service MapD {
   void disconnect(1: SessionId session) throws (1: MapDException e)
   QueryResult select(1: SessionId session, 2: string query) throws (1: MapDException e)
   ColumnTypes getColumnTypes(1: SessionId session, 2: string table_name) throws (1: MapDException e)
-  list<string> getTables(1: SessionId session)
+  list<string> getTables(1: SessionId session) throws (1: MapDException e)
   list<string> getUsers()
   list<DBInfo> getDatabases()
 }
