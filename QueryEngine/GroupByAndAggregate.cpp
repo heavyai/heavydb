@@ -474,9 +474,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       copy_from_gpu(data_mgr, &error_codes[0], error_code_dev_ptr, grid_size_x * sizeof(error_codes[0]), device_id);
       *error_code = 0;
       for (const auto err : error_codes) {
-        if (err) {
-          auto it = std::max_element(error_codes.begin(), error_codes.end());
-          *error_code = *it;
+        if (err && (!*error_code || err > *error_code)) {
+          *error_code = err;
           break;
         }
       }
