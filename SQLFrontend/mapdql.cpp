@@ -53,6 +53,11 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
       std::cout << "\\t List all tables.\n";
       std::cout << "\\d <table> List all columns of table.\n";
       std::cout << "\\c <database> <user> <password>.\n";
+      std::cout << "\\multiline Set multi-line command line mode.\n";
+      std::cout << "\\singleline Set single-line command line mode.\n";
+      std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
+      std::cout << "\\timing Print timing information.\n";
+      std::cout << "\\notiming Do not print timing information.\n";
       std::cout << "\\q Quit.\n";
       return;
     case 'd':
@@ -167,6 +172,7 @@ int main(int argc, char **argv) {
   int port = 9091;
   std::string delimiter("|");
   bool print_header = true;
+  bool print_timing = false;
   char *line;
   QueryResult _return;
   ClientContext context;
@@ -182,6 +188,7 @@ int main(int argc, char **argv) {
 	desc.add_options()
 		("help,h", "Print help messages ")
     ("no-header,n", "Do not print query result header")
+    ("timing,t", "Print timing information")
     ("delimiter,d", po::value<std::string>(&delimiter), "Field delimiter in row output (default is |)")
     ("db", po::value<std::string>(&context.db_name), "Database name")
     ("user,u", po::value<std::string>(&context.user_name), "User name")
@@ -201,6 +208,8 @@ int main(int argc, char **argv) {
 		}
     if (vm.count("no-header"))
       print_header = false;
+    if (vm.count("timing"))
+      print_timing = true;
     if (vm.count("db") && (!vm.count("user") || !vm.count("passwd"))) {
       std::cerr << "Must specify a user name and password to access database " << context.db_name << std::endl;
       return 1;
@@ -261,7 +270,7 @@ int main(int argc, char **argv) {
           continue;
         }
         try {
-          client.select(_return, context.session, line);
+          client.sql_execute(_return, context.session, line);
           if (_return.proj_info.empty() || _return.rows.empty())
             continue;
           bool not_first = false;
@@ -331,6 +340,8 @@ int main(int argc, char **argv) {
             }
           std::cout << std::endl;
           }
+          if (print_timing)
+            std::cout << "Execution time: " << _return.execution_time_ms << " miliseconds" << std::endl;
         }
         catch (MapDException &e) {
           std::cerr << e.error_msg << std::endl;
@@ -339,6 +350,16 @@ int main(int argc, char **argv) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);
           linenoiseHistorySetMaxLen(len);
+      } else if (!strncmp(line,"\\multiline", 10)) {
+        linenoiseSetMultiLine(1);
+      } else if (!strncmp(line,"\\singleline", 11)) {
+        linenoiseSetMultiLine(0);
+      } else if (!strncmp(line,"\\keycodes", 9)) {
+        linenoisePrintKeyCodes();
+      } else if (!strncmp(line,"\\timing", 7)) {
+        print_timing = true;
+      } else if (!strncmp(line,"\\notiming", 9)) {
+        print_timing = false;
       } else if (line[0] == '\\' && line[1] == 'q')
         break;
       else if (line[0] == '\\') {

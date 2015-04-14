@@ -50,9 +50,9 @@ public:
     }
   }
 
-  void select(QueryResult& _return, const SessionId session, const std::string& query_str) {
+  void sql_execute(QueryResult& _return, const SessionId session, const std::string& query_str) {
     try {
-    client_.select(_return, session, query_str);
+    client_.sql_execute(_return, session, query_str);
     }
     catch (std::exception &e) {
       std::cerr << "select caught exception: " << e.what() << std::endl;

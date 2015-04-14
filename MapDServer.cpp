@@ -9,6 +9,7 @@
 #include "QueryEngine/Execute.h"
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
+#include "Shared/measure.h"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -18,6 +19,8 @@
 #include <sys/time.h>
 #include <random>
 #include <map>
+#include <chrono>
+#include <ctime>
 
 
 using namespace ::apache::thrift;
@@ -61,14 +64,6 @@ TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
 
 }
 
-double dtime() {
-    double tseconds = 0.0;
-    struct timeval mytime;
-    gettimeofday(&mytime,(struct timezone*)0);
-    tseconds = (double)(mytime.tv_sec + mytime.tv_usec*1.0e-6);
-    return (tseconds);
-}
-
 #define INVALID_SESSION_ID  -1
 
 class MapDHandler : virtual public MapDIf {
@@ -91,6 +86,11 @@ public:
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), executor_device_type_ == ExecutorDeviceType::GPU || executor_device_type_ == ExecutorDeviceType::Auto)); // second param is whether to initialize GPU buffer pool
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, *data_mgr_));
     logFile.open("mapd_log.txt", std::ios::out | std::ios::app);
+  }
+  ~MapDHandler() {
+    std::time_t cur_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    logFile << std::ctime(&cur_time) << " mapd_server exits." << std::endl;
+    logFile.close();
   }
 
   SessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
@@ -130,20 +130,26 @@ public:
       sessions_[session] = cat_map_[dbname];
     } else
       sessions_[session] = cat_it->second;
+    std::time_t cur_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    logFile << std::ctime(&cur_time) << " Connected to database " << dbname << std::endl;
     return session;
   }
 
   void disconnect(const SessionId session) {
     auto session_it = sessions_.find(session);
+    std::string dbname;
     if (session_it == sessions_.end()) {
       MapDException ex;
       ex.error_msg = "Session not valid.";
       throw ex;
     }
+    dbname = session_it->second->get_currentDB().dbName;
     sessions_.erase(session_it);
+    std::time_t cur_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    logFile << std::ctime(&cur_time) << " Disconnected from database " << dbname << std::endl;
   }
 
-  void select(QueryResult& _return, const SessionId session, const std::string& query_str) {
+  void sql_execute(QueryResult& _return, const SessionId session, const std::string& query_str) {
 
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
@@ -154,7 +160,8 @@ public:
     auto cat = session_it->second.get(); 
     CHECK(cat);
     logFile << query_str << '\t';
-    double tStart = dtime();
+    auto execute_time = measure<>::execution([]() {});
+    auto total_time = measure<>::execution([&]() {
     SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
     std::string last_parsed;
@@ -164,12 +171,15 @@ public:
       ex.error_msg = "Syntax error at: " + last_parsed;
       throw ex;
     }
+    execute_time = 0;
     for (auto stmt : parse_trees) {
       try {
       std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
       Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
       if (ddl != nullptr) {
-        ddl->execute(*cat);
+        execute_time += measure<>::execution([&]() {
+          ddl->execute(*cat);
+        });
       } else {
         auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
         Analyzer::Query query;
@@ -178,7 +188,10 @@ public:
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
-        const auto results = executor->execute(root_plan,true,executor_device_type_);
+        std::vector<ResultRow> results;
+        execute_time += measure<>::execution([&]() {
+          results = executor->execute(root_plan,true,executor_device_type_);
+        });
         const auto plan = root_plan->get_plan();
         const auto& targets = plan->get_targetlist();
         {
@@ -188,7 +201,7 @@ public:
           for (const auto target : targets) {
             proj_info.proj_name = target->get_resname();
             if (proj_info.proj_name.empty()) {
-              proj_info.proj_name = std::to_string(i);
+              proj_info.proj_name = "_result_" + std::to_string(i + 1);
             }
             const auto& target_ti = target->get_expr()->get_type_info();
             proj_info.proj_type.type = type_to_thrift(target_ti);
@@ -256,10 +269,9 @@ public:
         throw ex;
     }
     }
-    double tStop = dtime();
-    double tElapsed = (tStop - tStart) * 1000;
-    logFile << tElapsed << "\n";
-    
+    });
+    _return.execution_time_ms = execute_time;
+    logFile << total_time << "\t" << execute_time << "\n";
   }
 
   void getColumnTypes(ColumnTypes& _return, const SessionId session, const std::string& table_name) {

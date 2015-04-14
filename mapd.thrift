@@ -41,6 +41,7 @@ typedef i32 SessionId
 struct QueryResult {
   1: TResultProjInfo proj_info
   2: TResultRowSet rows
+  3: i64 execution_time_ms
 }
 
 struct DBInfo {
@@ -55,7 +56,7 @@ exception MapDException {
 service MapD {
   SessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: MapDException e)
   void disconnect(1: SessionId session) throws (1: MapDException e)
-  QueryResult select(1: SessionId session, 2: string query) throws (1: MapDException e)
+  QueryResult sql_execute(1: SessionId session, 2: string query) throws (1: MapDException e)
   ColumnTypes getColumnTypes(1: SessionId session, 2: string table_name) throws (1: MapDException e)
   list<string> getTables(1: SessionId session) throws (1: MapDException e)
   list<string> getUsers()
