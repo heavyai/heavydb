@@ -378,6 +378,8 @@ namespace Parser {
       Analyzer::Expr *e = p->analyze(catalog, query, allow_tlist_ref);
       if (dict_comp)
         value_exprs->push_back(e->add_cast(arg_expr->get_type_info()));
+      else
+        value_exprs->push_back(e);
     }
     if (!dict_comp)
       arg_expr = arg_expr->decompress();
