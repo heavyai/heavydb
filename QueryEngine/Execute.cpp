@@ -143,6 +143,11 @@ std::vector<ResultRow> Executor::executeSelectPlan(
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
+    if (limit) {
+      auto rows = executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
+        cat, max_groups_buffer_entry_guess, error_code);
+      return std::vector<ResultRow>(rows.begin(), rows.begin() + std::min(limit, static_cast<int64_t>(rows.size())));
+    }
     return executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
       cat, max_groups_buffer_entry_guess, error_code);
   }
