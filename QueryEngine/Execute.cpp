@@ -645,16 +645,25 @@ llvm::Value* Executor::codegen(const Analyzer::CaseExpr* case_expr, const bool h
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
   std::vector<llvm::Type*> case_arg_types;
-  const auto case_type = case_expr->get_type_info().get_type();
-  CHECK(case_expr->get_type_info().is_integer());
-  const auto case_llvm_type = get_int_type(get_bit_width(case_type), cgen_state_->context_);
+  const auto case_ti = case_expr->get_type_info();
+  llvm::Type* case_llvm_type = nullptr;
+  if (case_ti.is_integer() || case_ti.is_time()) {
+    case_llvm_type = get_int_type(get_bit_width(case_ti.get_type()), cgen_state_->context_);
+  } else if (case_ti.is_fp()) {
+    case_llvm_type = case_ti.get_type() == kFLOAT
+      ? llvm::Type::getFloatTy(cgen_state_->context_)
+      : llvm::Type::getDoubleTy(cgen_state_->context_);
+  } else {
+    CHECK(false);
+  }
+  CHECK(case_llvm_type);
   for (const auto& expr_pair : expr_pair_list) {
     CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
     case_arg_types.push_back(llvm::Type::getInt1Ty(cgen_state_->context_));
-    CHECK_EQ(expr_pair.second->get_type_info().get_type(), case_type);
+    CHECK(expr_pair.second->get_type_info() == case_ti);
     case_arg_types.push_back(case_llvm_type);
   }
-  CHECK_EQ(else_expr->get_type_info().get_type(), case_type);
+  CHECK(else_expr->get_type_info() == case_ti);
   case_arg_types.push_back(case_llvm_type);
   auto ft = llvm::FunctionType::get(
     case_llvm_type,
