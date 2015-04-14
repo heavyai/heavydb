@@ -1363,13 +1363,15 @@ class ColumnarResults {
 public:
   ColumnarResults(const std::vector<ResultRow>& rows,
                   const size_t num_columns,
-                  const std::vector<SQLTypes>& target_types)
+                  const std::vector<SQLTypeInfo>& target_types)
     : column_buffers_(num_columns)
     , num_rows_(rows.size()) {
     column_buffers_.resize(num_columns);
     for (size_t i = 0; i < num_columns; ++i) {
+      CHECK(!target_types[i].is_string() || (target_types[i].get_compression() == kENCODING_DICT &&
+        target_types[i].get_size() == 4));
       column_buffers_[i] = static_cast<const int8_t*>(
-        malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
+        malloc(num_rows_ * (get_bit_width(target_types[i].get_type()) / 8)));
     }
     for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
       const auto& row = rows[row_idx];
@@ -1378,7 +1380,7 @@ public:
         const auto col_val = row.agg_result(i, false);
         auto i64_p = boost::get<int64_t>(&col_val);
         if (i64_p) {
-          switch (get_bit_width(target_types[i])) {
+          switch (get_bit_width(target_types[i].get_type())) {
           case 16:
             ((int16_t*) column_buffers_[i])[row_idx] = *i64_p;
             break;
@@ -1392,9 +1394,9 @@ public:
             CHECK(false);
           }
         } else {
-          CHECK(target_types[i] == kFLOAT || target_types[i] == kDOUBLE);
+          CHECK(target_types[i].get_type() == kFLOAT || target_types[i].get_type() == kDOUBLE);
           auto double_p = boost::get<double>(&col_val);
-          switch (target_types[i]) {
+          switch (target_types[i].get_type()) {
           case kFLOAT:
             ((float*) column_buffers_[i])[row_idx] = static_cast<float>(*double_p);
             break;
@@ -1526,11 +1528,10 @@ std::vector<ResultRow> Executor::executeResultPlan(
   }
   const int in_col_count { static_cast<int>(agg_plan->get_targetlist().size()) };
   const size_t in_agg_count { targets.size() };
-  std::vector<SQLTypes> target_types;
+  std::vector<SQLTypeInfo> target_types;
   std::vector<int64_t> init_agg_vals(in_col_count);
   for (auto in_col : agg_plan->get_targetlist()) {
-    // TODO(alex): make sure the compression is going to be set properly
-    target_types.push_back(in_col->get_expr()->get_type_info().get_type());
+    target_types.push_back(in_col->get_expr()->get_type_info());
   }
   ColumnarResults result_columns(result_rows, in_col_count, target_types);
   std::vector<llvm::Value*> col_heads;
