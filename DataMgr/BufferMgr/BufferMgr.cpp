@@ -458,6 +458,8 @@ namespace Buffer_Namespace {
     /// Returns a pointer to the Buffer holding the chunk, if it exists; otherwise,
     /// throws a runtime_error.
     AbstractBuffer* BufferMgr::getBuffer(const ChunkKey &key, const size_t numBytes) {
+        std::lock_guard < std::mutex > lock (globalMutex_); // hack for now
+
         std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); 
         std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
         

@@ -101,6 +101,7 @@ namespace Buffer_Namespace {
         std::mutex sizedSegsMutex_;  
         std::mutex unsizedSegsMutex_;  
         std::mutex bufferIdMutex_;  
+        std::mutex globalMutex_;  
         
         std::map<ChunkKey, BufferList::iterator> chunkIndex_;
         size_t maxBufferSize_;   /// max number of bytes allocated for the buffer poo
