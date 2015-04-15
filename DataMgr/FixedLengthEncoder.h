@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <memory>
+#include <glog/logging.h>
 
 template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {
@@ -20,7 +21,7 @@ class FixedLengthEncoder : public Encoder {
                 //std::cout << "Min: " << dataMin << " Max: " <<  dataMax << std::endl;
                 encodedData.get()[i] = static_cast <V>(unencodedData[i]);
                 if (unencodedData[i] != encodedData.get()[i]) {
-                    std::cerr << "Fixed encoding failed, Unencoded: " + std::to_string(unencodedData[i]) + " encoded: " + std::to_string(encodedData.get()[i]);
+                    LOG(ERROR) << "Fixed encoding failed, Unencoded: " + std::to_string(unencodedData[i]) + " encoded: " + std::to_string(encodedData.get()[i]);
                 }
                 else {
                     dataMin = std::min(dataMin,unencodedData[i]);

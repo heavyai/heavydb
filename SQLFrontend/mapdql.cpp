@@ -248,6 +248,8 @@ int main(int argc, char **argv) {
   /* Load history from file. The history file is just a plain text file
    * where entries are separated by newlines. */
   linenoiseHistoryLoad("mapdql_history.txt"); /* Load the history at startup */
+  /* default to multi-line mode */
+  linenoiseSetMultiLine(1);
 
   /* Now this is the main loop of the typical linenoise-based application.
    * The call to linenoise() will block as long as the user types something

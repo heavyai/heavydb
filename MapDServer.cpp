@@ -19,8 +19,7 @@
 #include <sys/time.h>
 #include <random>
 #include <map>
-#include <chrono>
-#include <ctime>
+#include <glog/logging.h>
 
 
 using namespace ::apache::thrift;
@@ -85,12 +84,9 @@ public:
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), executor_device_type_ == ExecutorDeviceType::GPU || executor_device_type_ == ExecutorDeviceType::Auto)); // second param is whether to initialize GPU buffer pool
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, *data_mgr_));
-    logFile.open("mapd_log.txt", std::ios::out | std::ios::app);
   }
   ~MapDHandler() {
-    std::time_t cur_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    logFile << std::ctime(&cur_time) << " mapd_server exits." << std::endl;
-    logFile.close();
+    LOG(INFO) << "mapd_server exits." << std::endl;
   }
 
   SessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
@@ -98,22 +94,26 @@ public:
     if (!sys_cat_->getMetadataForUser(user, user_meta)) {
       MapDException ex;
       ex.error_msg = std::string("User ") + user + " does not exist.";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     if (user_meta.passwd != passwd) {
       MapDException ex;
       ex.error_msg = std::string("Password for User ") + user + " is incorrect.";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     Catalog_Namespace::DBMetadata db_meta;
     if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
       MapDException ex;
       ex.error_msg = std::string("Database ") + dbname + " does not exist.";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     if (!user_meta.isSuper && user_meta.userId != db_meta.dbOwner) {
       MapDException ex;
       ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     SessionId session = INVALID_SESSION_ID;
@@ -130,8 +130,7 @@ public:
       sessions_[session] = cat_map_[dbname];
     } else
       sessions_[session] = cat_it->second;
-    std::time_t cur_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    logFile << std::ctime(&cur_time) << " Connected to database " << dbname << std::endl;
+    LOG(INFO) << "Connected to database " << dbname << std::endl;
     return session;
   }
 
@@ -141,12 +140,12 @@ public:
     if (session_it == sessions_.end()) {
       MapDException ex;
       ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     dbname = session_it->second->get_currentDB().dbName;
     sessions_.erase(session_it);
-    std::time_t cur_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    logFile << std::ctime(&cur_time) << " Disconnected from database " << dbname << std::endl;
+    LOG(INFO) << "Disconnected from database " << dbname << std::endl;
   }
 
   void sql_execute(QueryResult& _return, const SessionId session, const std::string& query_str) {
@@ -155,11 +154,12 @@ public:
     if (session_it == sessions_.end()) {
       MapDException ex;
       ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     auto cat = session_it->second.get(); 
     CHECK(cat);
-    logFile << query_str << '\t';
+    LOG(INFO) << query_str;
     auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
     SQLParser parser;
@@ -169,6 +169,7 @@ public:
     if (num_errors > 0) {
       MapDException ex;
       ex.error_msg = "Syntax error at: " + last_parsed;
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     execute_time = 0;
@@ -266,12 +267,13 @@ public:
     catch (std::exception &e) {
         MapDException ex;
         ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
         throw ex;
     }
     }
     });
     _return.execution_time_ms = execute_time;
-    logFile << total_time << "\t" << execute_time << "\n";
+    LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << execute_time<< " (ms)";
   }
 
   void getColumnTypes(ColumnTypes& _return, const SessionId session, const std::string& table_name) {
@@ -279,6 +281,7 @@ public:
     if (session_it == sessions_.end()) {
       MapDException ex;
       ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     auto cat = session_it->second.get(); 
@@ -287,6 +290,7 @@ public:
     if (!td) {
       MapDException ex;
       ex.error_msg = "Table doesn't exist";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     const auto col_descriptors = cat->getAllColumnMetadataForTable(td->tableId);
@@ -303,6 +307,7 @@ public:
     if (session_it == sessions_.end()) {
       MapDException ex;
       ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     auto cat = session_it->second.get(); 
@@ -341,7 +346,6 @@ private:
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<SessionId, std::shared_ptr<Catalog_Namespace::Catalog>> sessions_;
   std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
-  std::ofstream logFile;
 
   const std::string base_data_path_;
   ExecutorDeviceType executor_device_type_;
@@ -410,6 +414,11 @@ int main(int argc, char **argv) {
     std::cerr << "MapD database " << db_name << " does not exist." << std::endl;
     return 1;
   }
+  const auto log_path = boost::filesystem::path(base_path) / "mapd_log";
+  (void)boost::filesystem::create_directory(log_path);
+  FLAGS_log_dir = log_path.c_str();
+  // Initialize Google's logging library.
+  google::InitGoogleLogging(argv[0]);
   shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
@@ -420,7 +429,7 @@ int main(int argc, char **argv) {
   try {
     server.serve();
   } catch (std::exception &e) {
-    std::cerr << "Exception: " << e.what() << std::endl;
+    LOG(ERROR) << "Exception: " << e.what() << std::endl;
   }
   return 0;
 }

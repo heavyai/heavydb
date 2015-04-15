@@ -136,7 +136,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
   @TODO(wei) do error handling
   */
   if (in_quote)
-    std::cerr << "unmatched quote." << std::endl;
+    LOG(ERROR) << "unmatched quote.";
   return p;
 }
 
@@ -188,10 +188,10 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
     std::cout << std::endl;
     */
     if (row.size() != col_descs.size()) {
-    std::cerr << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
+    LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
     for (auto p : row)
-        std::cout << p << ", ";
-      std::cout << std::endl;
+        std::cerr << p << ", ";
+    std::cerr << std::endl;
       continue;
     }
     us = measure<std::chrono::microseconds>::execution([&]() {
@@ -268,8 +268,8 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
         ++col_idx;
       }
       row_count++;
-    } catch (const std::exception&) {
-      std::cerr << "input exception throw." << std::endl;
+    } catch (const std::exception &e) {
+      LOG(ERROR) << "input exception thrown: " << e.what();
     }
     });
     total_str_to_val_time_us += us;
@@ -294,7 +294,7 @@ find_end(const char *buffer, size_t size, const CopyParams &copy_params)
   ;
 
   if (i < 0)
-    std::cerr << "No line delimiter in block." << std::endl;
+    LOG(ERROR) << "No line delimiter in block.";
   return i + 1;
 }
 
@@ -330,7 +330,7 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
     try {
       table_desc->fragmenter->insertData(ins_data);
     } catch (std::exception &e) {
-      std::cerr << "Fragmenter Insert Exception: " << e.what() << std::endl;
+      LOG(ERROR) << "Fragmenter Insert Exception: " << e.what();
       set_load_failed(true);
     }
   }
