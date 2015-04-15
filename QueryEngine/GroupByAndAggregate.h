@@ -229,7 +229,7 @@ inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
   return *sptr;
 }
 
-class ChunkIter;
+struct ChunkIter;
 
 class RowSetMemoryOwner : boost::noncopyable {
 public:
