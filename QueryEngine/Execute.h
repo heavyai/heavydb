@@ -222,11 +222,12 @@ private:
                                  std::unique_ptr<GpuCompilationContext>>> CodeCacheVal;
   std::vector<void*> getCodeFromCache(
     const CodeCacheKey&,
-    const std::map<CodeCacheKey, CodeCacheVal>&);
+    const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>&);
   void addCodeToCache(
     const CodeCacheKey&,
     const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>&,
-    std::map<CodeCacheKey, CodeCacheVal>&);
+    llvm::Module*,
+    std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>&);
 
   std::vector<int8_t> serializeLiterals(const Executor::LiteralValues& literals);
 
@@ -419,8 +420,8 @@ private:
   mutable std::unordered_map<int, std::unique_ptr<StringDictionary>> str_dicts_;
   mutable std::mutex str_dicts_mutex_;
 
-  std::map<CodeCacheKey, CodeCacheVal> cpu_code_cache_;
-  std::map<CodeCacheKey, CodeCacheVal> gpu_code_cache_;
+  std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> cpu_code_cache_;
+  std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> gpu_code_cache_;
 
   const size_t small_groups_buffer_entry_count_ { 512 };
   const unsigned block_size_x_;

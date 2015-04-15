@@ -153,27 +153,28 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
 
   auto row_process_name = unique_name("row_process", is_nested);
   auto func_row_process = mod->getFunction(row_process_name);
-  CHECK(!func_row_process);
 
-  func_row_process = Function::Create(
-    /*Type=*/FuncTy_5,
-    /*Linkage=*/GlobalValue::ExternalLinkage,
-    /*Name=*/row_process_name, mod); // (external, no body)
-  func_row_process->setCallingConv(CallingConv::C);
+  if (!func_row_process) {
+    func_row_process = Function::Create(
+      /*Type=*/FuncTy_5,
+      /*Linkage=*/GlobalValue::ExternalLinkage,
+      /*Name=*/row_process_name, mod); // (external, no body)
+    func_row_process->setCallingConv(CallingConv::C);
 
-  AttributeSet func_row_process_PAL;
-  {
-    SmallVector<AttributeSet, 4> Attrs;
-    AttributeSet PAS;
+    AttributeSet func_row_process_PAL;
     {
-      AttrBuilder B;
-      PAS = AttributeSet::get(mod->getContext(), ~0U, B);
-    }
+      SmallVector<AttributeSet, 4> Attrs;
+      AttributeSet PAS;
+      {
+        AttrBuilder B;
+        PAS = AttributeSet::get(mod->getContext(), ~0U, B);
+      }
 
-    Attrs.push_back(PAS);
-    func_row_process_PAL = AttributeSet::get(mod->getContext(), Attrs);
+      Attrs.push_back(PAS);
+      func_row_process_PAL = AttributeSet::get(mod->getContext(), Attrs);
+    }
+    func_row_process->setAttributes(func_row_process_PAL);
   }
-  func_row_process->setAttributes(func_row_process_PAL);
 
   return func_row_process;
 }

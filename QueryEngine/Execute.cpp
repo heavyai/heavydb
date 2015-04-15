@@ -2506,11 +2506,13 @@ std::string serialize_llvm_object(const T* llvm_obj) {
 
 std::vector<void*> Executor::getCodeFromCache(
     const CodeCacheKey& key,
-    const std::map<CodeCacheKey, CodeCacheVal>& cache) {
+    const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>& cache) {
   auto it = cache.find(key);
   if (it != cache.end()) {
+    delete cgen_state_->module_;
+    cgen_state_->module_ = it->second.second;
     std::vector<void*> native_functions;
-    for (auto& native_code : it->second) {
+    for (auto& native_code : it->second.first) {
       native_functions.push_back(std::get<0>(native_code));
     }
     return native_functions;
@@ -2524,7 +2526,8 @@ void Executor::addCodeToCache(const CodeCacheKey& key,
                                 llvm::ExecutionEngine*,
                                 GpuCompilationContext*>
                               >& native_code,
-                              std::map<CodeCacheKey, CodeCacheVal>& cache) {
+                              llvm::Module* module,
+                              std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>& cache) {
   CHECK(!native_code.empty());
   CodeCacheVal cache_val;
   for (const auto& native_func : native_code) {
@@ -2532,7 +2535,7 @@ void Executor::addCodeToCache(const CodeCacheKey& key,
       std::unique_ptr<llvm::ExecutionEngine>(std::get<1>(native_func)),
       std::unique_ptr<GpuCompilationContext>(std::get<2>(native_func)));
   }
-  auto it_ok = cache.insert(std::make_pair(key, std::move(cache_val)));
+  auto it_ok = cache.insert(std::make_pair(key, std::make_pair(std::move(cache_val), module)));
   CHECK(it_ok.second);
 }
 
@@ -2573,7 +2576,7 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
 
   auto native_code = execution_engine->getPointerToFunction(query_func);
   CHECK(native_code);
-  addCodeToCache(key, { { std::make_tuple(native_code, execution_engine, nullptr) } }, cpu_code_cache_);
+  addCodeToCache(key, { { std::make_tuple(native_code, execution_engine, nullptr) } }, module, cpu_code_cache_);
 
   return { native_code };
 }
@@ -2717,7 +2720,7 @@ R"(
     cached_functions.emplace_back(native_code, nullptr, gpu_context);
   }
 
-  addCodeToCache(key, cached_functions, gpu_code_cache_);
+  addCodeToCache(key, cached_functions, module, gpu_code_cache_);
 
   return native_functions;
 }
