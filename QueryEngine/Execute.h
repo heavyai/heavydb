@@ -284,6 +284,8 @@ private:
         return getOrAddLiteral(constant->get_constval().floatval);
       case kDOUBLE:
         return getOrAddLiteral(constant->get_constval().doubleval);
+      case kCHAR:
+      case kTEXT:
       case kVARCHAR:
         return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id));
       case kTIME:

@@ -581,7 +581,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
                                             const int dict_id,
                                             const bool hoist_literals) {
   const auto& type_info = constant->get_type_info();
-  if (hoist_literals && (!type_info.is_string() || type_info.get_compression() == kENCODING_DICT)) {
+  if (hoist_literals && (!type_info.is_string() || dict_id > 0)) {
     auto arg_it = cgen_state_->row_func_->arg_begin();
     while (arg_it != cgen_state_->row_func_->arg_end()) {
       if (arg_it->getType()->isIntegerTy()) {
