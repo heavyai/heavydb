@@ -356,8 +356,8 @@ private:
 int main(int argc, char **argv) {
   int port = 9091;
   std::string base_path;
-  std::string db_name(MAPD_SYSTEM_DB);
   std::string device("auto");
+  bool flush_log = false;
 
 	namespace po = boost::program_options;
 
@@ -365,27 +365,28 @@ int main(int argc, char **argv) {
 	desc.add_options()
 		("help,h", "Print help messages ")
 		("path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")
-		("db", po::value<std::string>(&db_name), "Database name")
+    ("flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")
     ("cpu", "Run on CPU only")
     ("gpu", "Run on GPUs")
     ("port,p", po::value<int>(&port), "Port number (default 9091)");
 
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("path", 1);
-	positionalOptions.add("db", 1);
 
 	po::variables_map vm;
 
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port number>]\n";
+			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port number>][--flush-log]\n";
 			return 0;
 		}
 		if (vm.count("cpu"))
 			device = "cpu";
     if (vm.count("gpu"))
       device = "gpu";
+    if (vm.count("flush-log"))
+      flush_log = true;
 
 		po::notify(vm);
 	}
@@ -409,14 +410,16 @@ int main(int argc, char **argv) {
     std::cerr << "MapD data directory does not exist at " << base_path << ". Run initdb" << std::endl;
     return 1;
   }
-  const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / db_name;
+  const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_SYSTEM_DB;
   if (!boost::filesystem::exists(db_file)) {
-    std::cerr << "MapD database " << db_name << " does not exist." << std::endl;
+    std::cerr << "MapD database " << MAPD_SYSTEM_DB << " does not exist." << std::endl;
     return 1;
   }
   const auto log_path = boost::filesystem::path(base_path) / "mapd_log";
   (void)boost::filesystem::create_directory(log_path);
   FLAGS_log_dir = log_path.c_str();
+  if (flush_log)
+    FLAGS_logbuflevel=-1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
   shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device));

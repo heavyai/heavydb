@@ -68,6 +68,7 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
         }
         ColumnTypes _return;
         std::string table_name(command+3);
+        try {
         client.getColumnTypes(_return, context.session, table_name);
         for (auto p : _return) {
           std::cout << p.first << " ";
@@ -94,6 +95,13 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
               std::cerr << "Invalid Column Type.\n";
           }
         }
+        }
+        catch (MapDException &e) {
+          std::cerr << e.error_msg << std::endl;
+        }
+        catch (TException &te) {
+          std::cerr << "Thrift error: " << te.what() << std::endl;
+        }
         return;
       }
     case 't':
@@ -101,13 +109,15 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
         std::vector<std::string> _return;
         try {
           client.getTables(_return, context.session);
+          for (auto p : _return)
+            std::cout << p << std::endl;
         }
         catch (MapDException &e) {
           std::cerr << e.error_msg << std::endl;
-          return;
         }
-        for (auto p : _return)
-          std::cout << p << std::endl;
+        catch (TException &te) {
+          std::cerr << "Thrift error: " << te.what() << std::endl;
+        }
         return;
       }
     case 'c':
@@ -131,6 +141,9 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
           catch (MapDException &e) {
             std::cerr << e.error_msg << std::endl;
           }
+          catch (TException &te) {
+            std::cerr << "Thrift error: " << te.what() << std::endl;
+          }
         }
         context.db_name = db;
         context.user_name = user;
@@ -143,23 +156,36 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
           std::cerr << e.error_msg << std::endl;
           context.session = INVALID_SESSION_ID;
         }
+        catch (TException &te) {
+          std::cerr << "Thrift error: " << te.what() << std::endl;
+        }
       }
       break;
     case 'u':
       {
         std::vector<std::string> _return;
-        client.getUsers(_return);
-        for (auto p : _return)
-          std::cout << p << std::endl;
+        try {
+          client.getUsers(_return);
+          for (auto p : _return)
+            std::cout << p << std::endl;
+        }
+        catch (TException &te) {
+          std::cerr << "Thrift error: " << te.what() << std::endl;
+        }
         return;
       }
     case 'l':
       {
         std::vector<DBInfo> _return;
-        client.getDatabases(_return);
-        std::cout << "Database | Owner" << std::endl;
-        for (auto p : _return)
-          std::cout << p.db_name << " | " << p.db_owner << std::endl;
+        try {
+          client.getDatabases(_return);
+          std::cout << "Database | Owner" << std::endl;
+          for (auto p : _return)
+            std::cout << p.db_name << " | " << p.db_owner << std::endl;
+        }
+        catch (TException &te) {
+          std::cerr << "Thrift error: " << te.what() << std::endl;
+        }
         return;
       }
     default:
@@ -238,6 +264,9 @@ int main(int argc, char **argv) {
     }
     catch (MapDException &e) {
       std::cerr << e.error_msg << std::endl;
+    }
+    catch (TException &te) {
+      std::cerr << "Thrift error: " << te.what() << std::endl;
     }
   }
 
@@ -348,6 +377,9 @@ int main(int argc, char **argv) {
         catch (MapDException &e) {
           std::cerr << e.error_msg << std::endl;
         }
+        catch (TException &te) {
+          std::cerr << "Thrift error: " << te.what() << std::endl;
+        }
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);
@@ -376,6 +408,9 @@ int main(int argc, char **argv) {
     }
     catch (MapDException &e) {
       std::cerr << e.error_msg << std::endl;
+    }
+    catch (TException &te) {
+      std::cerr << "Thrift error: " << te.what() << std::endl;
     }
   }
   transport->close();

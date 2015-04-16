@@ -29,6 +29,9 @@ public:
     try {
       session = client_.connect(user, passwd, dbname);
     }
+    catch (TException &te) {
+      std::cerr << "Thrift exception: " << te.what() << std::endl;
+    }
     catch (std::exception &e) {
       std::cerr << "connect caught exception: " << e.what() << std::endl;
       MapDException ex;
@@ -42,6 +45,9 @@ public:
     try {
       client_.disconnect(session);
     }
+    catch (TException &te) {
+      std::cerr << "Thrift exception: " << te.what() << std::endl;
+    }
     catch (std::exception &e) {
       std::cerr << "disconnect caught exception: " << e.what() << std::endl;
       MapDException ex;
@@ -54,6 +60,9 @@ public:
     try {
     client_.sql_execute(_return, session, query_str);
     }
+    catch (TException &te) {
+      std::cerr << "Thrift exception: " << te.what() << std::endl;
+    }
     catch (std::exception &e) {
       std::cerr << "select caught exception: " << e.what() << std::endl;
       MapDException ex;
@@ -65,6 +74,9 @@ public:
   void getColumnTypes(ColumnTypes& _return, const SessionId session, const std::string& table_name) {
     try {
     client_.getColumnTypes(_return, session, table_name);
+    }
+    catch (TException &te) {
+      std::cerr << "Thrift exception: " << te.what() << std::endl;
     }
     catch (std::exception &e) {
       std::cerr << "getColumnTypes caught exception: " << e.what() << std::endl;
@@ -79,6 +91,9 @@ public:
     try {
     client_.getTables(_return, session);
     }
+    catch (TException &te) {
+      std::cerr << "Thrift exception: " << te.what() << std::endl;
+    }
     catch (std::exception &e) {
       std::cerr << "getTables caught exception: " << e.what() << std::endl;
       MapDException ex;
@@ -89,12 +104,22 @@ public:
 
   void getUsers(std::vector<std::string> & _return)
   {
+    try {
     client_.getUsers(_return);
+    }
+    catch (TException &te) {
+      std::cerr << "Thrift exception: " << te.what() << std::endl;
+    }
   }
 
   void getDatabases(std::vector<DBInfo> & _return)
   {
+    try {
     client_.getDatabases(_return);
+    }
+    catch (TException &te) {
+      std::cerr << "Thrift exception: " << te.what() << std::endl;
+    }
   }
 
 private:
