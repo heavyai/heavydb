@@ -181,6 +181,9 @@ std::vector<ResultRow> Executor::execute(
     auto rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
       hoist_literals, device_type, opt_level, root_plan->get_catalog(),
       2048, &error_code);
+    if (error_code == ERR_DIV_BY_ZERO) {
+      throw std::runtime_error("Division by zero");
+    }
     if (error_code) {
       rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level, root_plan->get_catalog(),
@@ -1065,7 +1068,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
     case kMULTIPLY:
       return cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
     case kDIVIDE:
-      return cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv);
+      return codegenDiv(lhs_lv, rhs_lv);
     default:
       CHECK(false);
     }
@@ -1079,12 +1082,34 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
     case kMULTIPLY:
       return cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv);
     case kDIVIDE:
-      return cgen_state_->ir_builder_.CreateFDiv(lhs_lv, rhs_lv);
+      return codegenDiv(lhs_lv, rhs_lv);
     default:
       CHECK(false);
     }
   }
   CHECK(false);
+}
+
+llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv, llvm::Value* rhs_lv) {
+  CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
+  cgen_state_->uses_div_ = true;
+  auto div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
+  auto div_zero = llvm::BasicBlock::Create(cgen_state_->context_, "div_zero", cgen_state_->row_func_);
+  auto zero_const = rhs_lv->getType()->isIntegerTy()
+    ? llvm::ConstantInt::get(rhs_lv->getType(), 0, true)
+    : llvm::ConstantFP::get(rhs_lv->getType(), 0.);
+  cgen_state_->ir_builder_.CreateCondBr(zero_const->getType()->isFloatingPointTy()
+    ? cgen_state_->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_ONE, rhs_lv, zero_const)
+    : cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE, rhs_lv, zero_const),
+    div_ok, div_zero);
+  cgen_state_->ir_builder_.SetInsertPoint(div_ok);
+  auto ret = zero_const->getType()->isIntegerTy()
+    ? cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv)
+    : cgen_state_->ir_builder_.CreateFDiv(lhs_lv, rhs_lv);
+  cgen_state_->ir_builder_.SetInsertPoint(div_zero);
+  cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.SetInsertPoint(div_ok);
+  return ret;
 }
 
 namespace {
@@ -1124,11 +1149,11 @@ std::vector<int64_t*> launch_query_cpu_code(
       int64_t** out,
       int64_t** out2,
       int32_t* resume_row_index);
+    *error_code = 0;
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
-        &out_vec[0], nullptr, nullptr);
+        &out_vec[0], nullptr, error_code);
     } else {
-      *error_code = 0;
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
         &group_by_buffers[0], &small_group_by_buffers[0], error_code);
     }
@@ -1140,9 +1165,10 @@ std::vector<int64_t*> launch_query_cpu_code(
       int64_t** out,
       int64_t** out2,
       int32_t* resume_row_index);
+    *error_code = 0;
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0],
-        nullptr, nullptr);
+        nullptr, error_code);
     } else {
       *error_code = 0;
       reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0],
@@ -1835,27 +1861,27 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
         chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
       auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
         plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
+      int32_t err { 0 };
       if (groupby_exprs.empty()) {
-        executePlanWithoutGroupBy(
+        err = executePlanWithoutGroupBy(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan), chosen_device_type,
           col_buffers, query_exe_context.get(),
           num_rows, &cat.get_dataMgr(), chosen_device_id);
       } else {
-        int err = executePlanWithGroupBy(
+        err = executePlanWithGroupBy(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), chosen_device_type, col_buffers,
           query_exe_context.get(), num_rows,
           &cat.get_dataMgr(), chosen_device_id,
           dynamic_cast<const Planner::Scan*>(plan) && limit ? limit : 0);
-        if (err) {
-          std::lock_guard<std::mutex> lock(reduce_mutex);
-          *error_code = err;
-        }
       }
       {
         std::lock_guard<std::mutex> lock(reduce_mutex);
+        if (err) {
+          *error_code = err;
+        }
         all_fragment_results.push_back(device_results);
       }
       if (device_type == ExecutorDeviceType::Auto) {
@@ -1908,7 +1934,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     : results_union(all_fragment_results);
 }
 
-void Executor::executePlanWithoutGroupBy(
+int32_t Executor::executePlanWithoutGroupBy(
     const CompilationResult& compilation_result,
     const bool hoist_literals,
     std::vector<ResultRow>& results,
@@ -1919,21 +1945,18 @@ void Executor::executePlanWithoutGroupBy(
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id) {
+  int32_t error_code { 0 };
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   if (device_type == ExecutorDeviceType::CPU) {
-    int32_t error_code { 0 };
     out_vec = launch_query_cpu_code(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {}, &error_code);
-    CHECK(!error_code);
   } else {
-    int32_t error_code { 0 };
     out_vec = query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, plan_state_->init_agg_vals_,
       data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
-    CHECK(!error_code);
   }
   size_t out_vec_idx = 0;
   ResultRow result_row(this, query_exe_context->row_set_mem_owner_);
@@ -1975,6 +1998,7 @@ void Executor::executePlanWithoutGroupBy(
   for (auto out : out_vec) {
     delete[] out;
   }
+  return error_code;
 }
 
 int32_t Executor::executePlanWithGroupBy(
@@ -2421,7 +2445,7 @@ Executor::CompilationResult Executor::compilePlan(
           auto& error_code_arg = query_func->getArgumentList().back();
           err_lv = ir_builder.CreateCall(cgen_state_->module_->getFunction("merge_error_code"),
             std::vector<llvm::Value*> { err_lv, &error_code_arg });
-          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, err_lv, ll_int(int32_t(0)));
+          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
           auto& last_bb = query_func->back();
           llvm::ReplaceInstWithInst(&br_instr, llvm::BranchInst::Create(&last_bb, new_bb, err_lv));
           done_splitting = true;
@@ -2430,6 +2454,25 @@ Executor::CompilationResult Executor::compilePlan(
       }
     }
     CHECK(done_splitting);
+  }
+
+  if (!needs_error_check && cgen_state_->uses_div_) {
+    bool done_div_zero_check = false;
+    for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
+      if (!llvm::isa<llvm::CallInst>(*it)) {
+        continue;
+      }
+      auto& filter_call = llvm::cast<llvm::CallInst>(*it);
+      if (std::string(filter_call.getCalledFunction()->getName()) == unique_name("row_process", is_nested_)) {
+        done_div_zero_check = true;
+        auto& error_code_arg = query_func->getArgumentList().back();
+        ++it;
+        llvm::CallInst::Create(cgen_state_->module_->getFunction("merge_error_code"),
+          std::vector<llvm::Value*> { &filter_call, &error_code_arg }, "", &*it);
+        break;
+      }
+    }
+    CHECK(done_div_zero_check);
   }
 
   // iterate through all the instruction in the query template function and

@@ -95,6 +95,7 @@ private:
   llvm::Value* codegenCmp(const SQLOps, const Analyzer::Expr*, const Analyzer::Expr*, const bool hoist_literals);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegenDiv(llvm::Value*, llvm::Value*);
   llvm::Value* codegenLogical(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
@@ -159,7 +160,7 @@ private:
     Data_Namespace::DataMgr*,
     const int device_id,
     const int64_t limit);
-  void executePlanWithoutGroupBy(
+  int32_t executePlanWithoutGroupBy(
     const CompilationResult&,
     const bool hoist_literals,
     std::vector<ResultRow>& results,
@@ -268,6 +269,7 @@ private:
       , context_(llvm::getGlobalContext())
       , ir_builder_(context_)
       , must_run_on_cpu_(false)
+      , uses_div_(false)
       , literal_bytes_(0) {}
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant, const int dict_id) {
@@ -358,6 +360,7 @@ private:
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
     bool must_run_on_cpu_;
+    bool uses_div_;
   private:
     template<class T>
     size_t getOrAddLiteral(const T& val) {
@@ -433,6 +436,7 @@ private:
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;
 
+  static const int32_t ERR_DIV_BY_ZERO { 1 };
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;

@@ -278,7 +278,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   Value* ptr_unused = args++;
   ptr_unused->setName("unused");
   Value* ptr_error_code = args++;
-  ptr_error_code->setName("unused_error_code");
+  ptr_error_code->setName("error_code");
 
   BasicBlock* label_120 = BasicBlock::Create(mod->getContext(), "", func_query_template, 0);
   BasicBlock* label__lr_ph = BasicBlock::Create(mod->getContext(), ".lr.ph", func_query_template, 0);

@@ -429,7 +429,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       init_agg_vals.size() * sizeof(int64_t), device_id);
   }
   std::vector<int32_t> error_codes(block_size_x);
-  CUdeviceptr error_code_dev_ptr { 0 };
+  auto error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id);
+  copy_to_gpu(data_mgr, error_code_dev_ptr, &error_codes[0], grid_size_x * sizeof(error_codes[0]), device_id);
   {
     const unsigned block_size_y = 1;
     const unsigned block_size_z = 1;
@@ -440,8 +441,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, small_group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id);
-      error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id);
-      copy_to_gpu(data_mgr, error_code_dev_ptr, &error_codes[0], grid_size_x * sizeof(error_codes[0]), device_id);
       if (hoist_literals) {
         void* kernel_params[] = {
           &col_buffers_dev_ptr,

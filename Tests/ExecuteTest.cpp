@@ -547,6 +547,19 @@ TEST(Select, In) {
   }
 }
 
+TEST(Select, DivByZero) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    EXPECT_THROW(run_multiple_agg("SELECT x / 0 FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct x / 0) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT f / 0. FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT d / 0. FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT f / (f - f) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY y / (x - x);", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY z, y / (x - x);", dt), std::runtime_error);
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
