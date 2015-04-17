@@ -22,7 +22,7 @@ using boost::shared_ptr;
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(MapDClient &client) : client_(client) {}
+  MapDHandler(TTransport &transport, MapDClient &client) : client_(client), transport_(transport) {}
 
   SessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
     SessionId session = -1;
@@ -30,7 +30,19 @@ public:
       session = client_.connect(user, passwd, dbname);
     }
     catch (TException &te) {
-      std::cerr << "Thrift exception: " << te.what() << std::endl;
+      try {
+        transport_.open();
+        session = client_.connect(user, passwd, dbname);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    }
+    catch (MapDException &e) {
+      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "connect caught exception: " << e.what() << std::endl;
@@ -50,18 +62,36 @@ public:
     }
     catch (std::exception &e) {
       std::cerr << "disconnect caught exception: " << e.what() << std::endl;
-      MapDException ex;
-      ex.error_msg = e.what();
-      throw ex;
     }
   }
 
   void sql_execute(QueryResult& _return, const SessionId session, const std::string& query_str) {
     try {
-    client_.sql_execute(_return, session, query_str);
+      client_.sql_execute(_return, session, query_str);
     }
     catch (TException &te) {
-      std::cerr << "Thrift exception: " << te.what() << std::endl;
+      try {
+        transport_.open();
+        client_.sql_execute(_return, session, query_str);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+      catch (MapDException &e) {
+        throw e;
+      }
+      catch (std::exception &e) {
+        std::cerr << "select caught exception: " << e.what() << std::endl;
+        MapDException ex;
+        ex.error_msg = e.what();
+        throw ex;
+      }
+    }
+    catch (MapDException &e) {
+      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "select caught exception: " << e.what() << std::endl;
@@ -73,10 +103,31 @@ public:
 
   void getColumnTypes(ColumnTypes& _return, const SessionId session, const std::string& table_name) {
     try {
-    client_.getColumnTypes(_return, session, table_name);
+      client_.getColumnTypes(_return, session, table_name);
     }
     catch (TException &te) {
-      std::cerr << "Thrift exception: " << te.what() << std::endl;
+      try {
+        transport_.open();
+        client_.getColumnTypes(_return, session, table_name);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+      catch (MapDException &e) {
+        throw e;
+      }
+      catch (std::exception &e) {
+        std::cerr << "getColumnTypes caught exception: " << e.what() << std::endl;
+        MapDException ex;
+        ex.error_msg = e.what();
+        throw ex;
+      }
+    }
+    catch (MapDException &e) {
+      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "getColumnTypes caught exception: " << e.what() << std::endl;
@@ -89,10 +140,31 @@ public:
   void getTables(std::vector<std::string> & _return, const SessionId session)
   {
     try {
-    client_.getTables(_return, session);
+      client_.getTables(_return, session);
     }
     catch (TException &te) {
-      std::cerr << "Thrift exception: " << te.what() << std::endl;
+      try {
+        transport_.open();
+        client_.getTables(_return, session);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+      catch (MapDException &e) {
+        throw e;
+      }
+      catch (std::exception &e) {
+        std::cerr << "getTables caught exception: " << e.what() << std::endl;
+        MapDException ex;
+        ex.error_msg = e.what();
+        throw ex;
+      }
+    }
+    catch (MapDException &e) {
+      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "getTables caught exception: " << e.what() << std::endl;
@@ -105,25 +177,44 @@ public:
   void getUsers(std::vector<std::string> & _return)
   {
     try {
-    client_.getUsers(_return);
+      client_.getUsers(_return);
     }
     catch (TException &te) {
-      std::cerr << "Thrift exception: " << te.what() << std::endl;
+      try {
+        transport_.open();
+        client_.getUsers(_return);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
     }
   }
 
   void getDatabases(std::vector<DBInfo> & _return)
   {
     try {
-    client_.getDatabases(_return);
+      client_.getDatabases(_return);
     }
     catch (TException &te) {
-      std::cerr << "Thrift exception: " << te.what() << std::endl;
+      try {
+        transport_.open();
+        client_.getDatabases(_return);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
     }
   }
 
 private:
   MapDClient &client_;
+  TTransport &transport_;
 };
 
 int main(int argc, char **argv) {
@@ -161,7 +252,7 @@ int main(int argc, char **argv) {
   shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   MapDClient client(protocol);
   transport->open();
-  shared_ptr<MapDHandler> handler(new MapDHandler(client));
+  shared_ptr<MapDHandler> handler(new MapDHandler(*transport, client));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new THttpServerTransportFactory());

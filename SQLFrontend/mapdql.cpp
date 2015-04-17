@@ -40,11 +40,80 @@ struct ClientContext {
   std::string user_name;
   std::string passwd;
   std::string db_name;
+  TTransport &transport;
+  MapDClient &client;
   SessionId session;
+  QueryResult query_return;
+  std::vector<std::string> names_return;
+  std::vector<DBInfo> dbinfos_return;
+  ColumnTypes columns_return;
+
+  ClientContext(TTransport &t, MapDClient &c) : transport(t), client(c), session(INVALID_SESSION_ID) {}
 };
 
+enum ThriftService {
+  kCONNECT,
+  kDISCONNECT,
+  kSQL,
+  kGET_COLUMNS,
+  kGET_TABLES,
+  kGET_DATABASES,
+  kGET_USERS
+};
+
+static bool
+thrift_with_retry(ThriftService which_service, ClientContext &context, char *arg)
+{
+  try {
+    switch (which_service) {
+      case kCONNECT:
+        context.session = context.client.connect(context.user_name, context.passwd, context.db_name);
+        break;
+      case kDISCONNECT:
+        context.client.disconnect(context.session);
+        break;
+      case kSQL:
+        context.client.sql_execute(context.query_return, context.session, arg);
+        break;
+      case kGET_COLUMNS:
+        context.client.getColumnTypes(context.columns_return, context.session, arg);
+        break;
+      case kGET_TABLES:
+        context.client.getTables(context.names_return, context.session);
+        break;
+      case kGET_DATABASES:
+        context.client.getDatabases(context.dbinfos_return);
+        break;
+      case kGET_USERS:
+        context.client.getUsers(context.names_return);
+        break;
+    }
+  }
+  catch (MapDException &e) {
+    std::cerr << e.error_msg << std::endl;
+    return false;
+  }
+  catch (TException &te) {
+    try {
+      context.transport.open();
+      if (which_service == kDISCONNECT)
+        return false;
+      if (which_service != kCONNECT) {
+        if (!thrift_with_retry(kCONNECT, context, nullptr))
+          return false;
+      }
+      return thrift_with_retry(which_service, context, arg);
+    }
+    catch (TException &te1) {
+      std::cerr << "Thrift error: " << te1.what() << std::endl;
+      return false;
+    }
+  }
+  return true;
+}
+
 static void
-process_backslash_commands(char *command, MapDClient &client, ClientContext &context)
+process_backslash_commands(char *command, ClientContext &context)
 {
   switch (command[1]) {
     case 'h':
@@ -66,58 +135,40 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
           std::cerr << "Invalid \\d command usage.  Do \\d <table name>" << std::endl;
           return;
         }
-        ColumnTypes _return;
         std::string table_name(command+3);
-        try {
-        client.getColumnTypes(_return, context.session, table_name);
-        for (auto p : _return) {
-          std::cout << p.first << " ";
-          switch (p.second.type) {
-            case TDatumType::INT:
-              std::cout << "INTEGER\n";
-              break;
-            case TDatumType::REAL:
-              std::cout << "DOUBLE\n";
-              break;
-            case TDatumType::STR:
-              std::cout << "STRING\n";
-              break;
-            case TDatumType::TIME:
-              std::cout << "TIME\n";
-              break;
-            case TDatumType::TIMESTAMP:
-              std::cout << "TIMESTAMP\n";
-              break;
-            case TDatumType::DATE:
-              std::cout << "DATE\n";
-              break;
-            default:
-              std::cerr << "Invalid Column Type.\n";
+        if (thrift_with_retry(kGET_COLUMNS, context, command+3))
+          for (auto p : context.columns_return) {
+            std::cout << p.first << " ";
+            switch (p.second.type) {
+              case TDatumType::INT:
+                std::cout << "INTEGER\n";
+                break;
+              case TDatumType::REAL:
+                std::cout << "DOUBLE\n";
+                break;
+              case TDatumType::STR:
+                std::cout << "STRING\n";
+                break;
+              case TDatumType::TIME:
+                std::cout << "TIME\n";
+                break;
+              case TDatumType::TIMESTAMP:
+                std::cout << "TIMESTAMP\n";
+                break;
+              case TDatumType::DATE:
+                std::cout << "DATE\n";
+                break;
+              default:
+                std::cerr << "Invalid Column Type.\n";
+            }
           }
-        }
-        }
-        catch (MapDException &e) {
-          std::cerr << e.error_msg << std::endl;
-        }
-        catch (TException &te) {
-          std::cerr << "Thrift error: " << te.what() << std::endl;
-        }
         return;
       }
     case 't':
       {
-        std::vector<std::string> _return;
-        try {
-          client.getTables(_return, context.session);
-          for (auto p : _return)
+        if (thrift_with_retry(kGET_TABLES, context, nullptr))
+          for (auto p : context.names_return)
             std::cout << p << std::endl;
-        }
-        catch (MapDException &e) {
-          std::cerr << e.error_msg << std::endl;
-        }
-        catch (TException &te) {
-          std::cerr << "Thrift error: " << te.what() << std::endl;
-        }
         return;
       }
     case 'c':
@@ -134,57 +185,29 @@ process_backslash_commands(char *command, MapDClient &client, ClientContext &con
           return;
         }
         if (context.session != INVALID_SESSION_ID) {
-          try {
-            client.disconnect(context.session);
+          if (thrift_with_retry(kDISCONNECT, context, nullptr))
             std::cout << "Disconnected from database " << context.db_name << std::endl;
-          }
-          catch (MapDException &e) {
-            std::cerr << e.error_msg << std::endl;
-          }
-          catch (TException &te) {
-            std::cerr << "Thrift error: " << te.what() << std::endl;
-          }
         }
         context.db_name = db;
         context.user_name = user;
         context.passwd = passwd;
-        try {
-          context.session = client.connect(context.user_name, context.passwd, context.db_name);
+        if (thrift_with_retry(kCONNECT, context, nullptr))
           std::cout << "Connected to database " << context.db_name << std::endl;
-        }
-        catch (MapDException &e) {
-          std::cerr << e.error_msg << std::endl;
-          context.session = INVALID_SESSION_ID;
-        }
-        catch (TException &te) {
-          std::cerr << "Thrift error: " << te.what() << std::endl;
-        }
       }
       break;
     case 'u':
       {
-        std::vector<std::string> _return;
-        try {
-          client.getUsers(_return);
-          for (auto p : _return)
+        if (thrift_with_retry(kGET_USERS, context, nullptr))
+          for (auto p : context.names_return)
             std::cout << p << std::endl;
-        }
-        catch (TException &te) {
-          std::cerr << "Thrift error: " << te.what() << std::endl;
-        }
         return;
       }
     case 'l':
       {
-        std::vector<DBInfo> _return;
-        try {
-          client.getDatabases(_return);
+        if (thrift_with_retry(kGET_DATABASES, context, nullptr)) {
           std::cout << "Database | Owner" << std::endl;
-          for (auto p : _return)
+          for (auto p : context.dbinfos_return)
             std::cout << p.db_name << " | " << p.db_owner << std::endl;
-        }
-        catch (TException &te) {
-          std::cerr << "Thrift error: " << te.what() << std::endl;
         }
         return;
       }
@@ -201,10 +224,14 @@ int main(int argc, char **argv) {
   bool print_timing = false;
   char *line;
   QueryResult _return;
-  ClientContext context;
   std::string db_name;
   std::string user_name;
   std::string passwd;
+  shared_ptr<TTransport> socket(new TSocket(server_host, port));
+  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  MapDClient c(protocol);
+  ClientContext context(*transport, c);
 
   context.session = INVALID_SESSION_ID;
 
@@ -249,25 +276,13 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-  shared_ptr<TTransport> socket(new TSocket(server_host, port));
-  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  MapDClient client(protocol);
   transport->open();
 
   if (context.db_name.empty()) {
     std::cout << "Not connected to any database.  Only \\u and \\l commands are allowed in this state.  See \\h for help." << std::endl;
   } else {
-    try {
-      context.session = client.connect(context.user_name, context.passwd, context.db_name);
+    if (thrift_with_retry(kCONNECT, context, nullptr))
       std::cout << "Connected to database " << context.db_name << std::endl;
-    }
-    catch (MapDException &e) {
-      std::cerr << e.error_msg << std::endl;
-    }
-    catch (TException &te) {
-      std::cerr << "Thrift error: " << te.what() << std::endl;
-    }
   }
 
   /* Set the completion callback. This will be called every time the
@@ -300,13 +315,12 @@ int main(int argc, char **argv) {
           std::cerr << "Not connected to any MapD databases." << std::endl;
           continue;
         }
-        try {
-          client.sql_execute(_return, context.session, line);
-          if (_return.proj_info.empty() || _return.rows.empty())
+        if (thrift_with_retry(kSQL, context, line)) {
+          if (context.query_return.proj_info.empty() || context.query_return.rows.empty())
             continue;
           bool not_first = false;
           if (print_header) {
-            for (auto p : _return.proj_info) {
+            for (auto p : context.query_return.proj_info) {
               if (not_first)
                 std::cout << delimiter;
               else
@@ -315,7 +329,7 @@ int main(int argc, char **argv) {
             }
             std::cout << std::endl;
           }
-          for (auto row : _return.rows) {
+          for (auto row : context.query_return.rows) {
             not_first = false;
             for (auto col_val : row.cols) {
               if (not_first)
@@ -372,13 +386,7 @@ int main(int argc, char **argv) {
           std::cout << std::endl;
           }
           if (print_timing)
-            std::cout << "Execution time: " << _return.execution_time_ms << " miliseconds" << std::endl;
-        }
-        catch (MapDException &e) {
-          std::cerr << e.error_msg << std::endl;
-        }
-        catch (TException &te) {
-          std::cerr << "Thrift error: " << te.what() << std::endl;
+            std::cout << "Execution time: " << context.query_return.execution_time_ms << " miliseconds" << std::endl;
         }
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
@@ -397,21 +405,13 @@ int main(int argc, char **argv) {
       } else if (line[0] == '\\' && line[1] == 'q')
         break;
       else if (line[0] == '\\') {
-          process_backslash_commands(line, client, context);
+          process_backslash_commands(line, context);
       }
       free(line);
   }
 
   if (context.session != INVALID_SESSION_ID) {
-    try {
-      client.disconnect(context.session);
-    }
-    catch (MapDException &e) {
-      std::cerr << e.error_msg << std::endl;
-    }
-    catch (TException &te) {
-      std::cerr << "Thrift error: " << te.what() << std::endl;
-    }
+    (void)thrift_with_retry(kDISCONNECT, context, nullptr);
   }
   transport->close();
   return 0;

@@ -53,12 +53,16 @@ exception MapDException {
   1: string error_msg
 }
 
+exception ThriftException {
+  1: string error_msg
+}
+
 service MapD {
-  SessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: MapDException e)
-  void disconnect(1: SessionId session) throws (1: MapDException e)
-  QueryResult sql_execute(1: SessionId session, 2: string query) throws (1: MapDException e)
-  ColumnTypes getColumnTypes(1: SessionId session, 2: string table_name) throws (1: MapDException e)
-  list<string> getTables(1: SessionId session) throws (1: MapDException e)
-  list<string> getUsers()
-  list<DBInfo> getDatabases()
+  SessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: MapDException e 2: ThriftException te)
+  void disconnect(1: SessionId session) throws (1: MapDException e 2: ThriftException te)
+  QueryResult sql_execute(1: SessionId session, 2: string query) throws (1: MapDException e 2: ThriftException te)
+  ColumnTypes getColumnTypes(1: SessionId session, 2: string table_name) throws (1: MapDException e 2: ThriftException te)
+  list<string> getTables(1: SessionId session) throws (1: MapDException e 2: ThriftException te)
+  list<string> getUsers() throws (1: ThriftException te)
+  list<DBInfo> getDatabases() throws (1: ThriftException te)
 }
