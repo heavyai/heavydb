@@ -37,6 +37,7 @@ namespace {
 TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
   switch (type_info.get_type()) {
     case kBOOLEAN:
+      return TDatumType::BOOL;
     case kSMALLINT:
     case kINT:
     case kBIGINT:

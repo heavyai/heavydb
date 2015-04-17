@@ -57,9 +57,10 @@ AggResult ResultRow::agg_result(const size_t idx, const bool translate_strings) 
           static_cast<double>(*boost::get<int64_t>(&agg_results_[actual_idx + 1])));
   } else {
     CHECK_LT(idx, agg_results_.size());
-    CHECK(agg_types_[idx].is_number() || agg_types_[idx].is_string() || agg_types_[idx].is_time());
+    CHECK(agg_types_[idx].is_number() || agg_types_[idx].is_string() ||
+          agg_types_[idx].is_time() || agg_types_[idx].is_boolean());
     auto actual_idx = agg_results_idx_[idx];
-    if (agg_types_[idx].is_integer() || agg_types_[idx].is_time()) {
+    if (agg_types_[idx].is_integer() || agg_types_[idx].is_time() || agg_types_[idx].is_boolean()) {
       if (agg_info.is_distinct) {
         return AggResult(bitmap_set_size(*boost::get<int64_t>(&agg_results_[actual_idx]), idx,
           row_set_mem_owner_->count_distinct_descriptors_));
@@ -2102,6 +2103,12 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
     switch (cd->columnType.get_type()) {
+    case kBOOLEAN: {
+      auto col_data = reinterpret_cast<int8_t*>(malloc(sizeof(int8_t)));
+      *col_data = col_datum.boolval ? 1 : 0;
+      col_buffers[col_ids[col_idx]] = col_data;
+      break;
+    }
     case kSMALLINT: {
       auto col_data = reinterpret_cast<int16_t*>(malloc(sizeof(int16_t)));
       *col_data = col_datum.smallintval;

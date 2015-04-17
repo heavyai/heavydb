@@ -216,6 +216,9 @@ inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
     datum.timeval = *boost::get<int64_t>(&agg_result);
     return DatumToString(datum, agg_ti);
   }
+  if (agg_ti.is_boolean()) {
+    return *boost::get<int64_t>(&agg_result) ? "true" : "false";
+  }
   auto iptr = boost::get<int64_t>(&agg_result);
   if (iptr) {
     return std::to_string(*iptr);
@@ -413,6 +416,8 @@ namespace {
 
 inline size_t get_bit_width(const SQLTypes type) {
   switch (type) {
+    case kBOOLEAN:
+      return 8;
     case kSMALLINT:
       return 16;
     case kINT:

@@ -205,7 +205,8 @@ int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_strea
       : fixed_width_double_decode_noinline(byte_stream, pos);
     return *reinterpret_cast<int64_t*>(&fval);
   }
-  CHECK(type_info.is_integer() || type_info.is_time() || (type_info.is_string() && enc_type == kENCODING_DICT));
+  CHECK(type_info.is_integer() || type_info.is_time() || type_info.is_boolean() ||
+        (type_info.is_string() && enc_type == kENCODING_DICT));
   size_t type_bitwidth = get_bit_width(col_var->get_type_info().get_type());
   if (col_var->get_type_info().get_compression() == kENCODING_FIXED) {
     type_bitwidth = col_var->get_type_info().get_comp_param();

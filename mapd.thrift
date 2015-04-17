@@ -4,7 +4,8 @@ enum TDatumType {
   STR,
   TIME,
   TIMESTAMP,
-  DATE
+  DATE,
+  BOOL
 }
 
 union TDatum {

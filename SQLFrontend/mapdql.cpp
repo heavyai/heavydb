@@ -379,6 +379,9 @@ int main(int argc, char **argv) {
                       std::cout << buf;
                       break;
                     }
+                  case TDatumType::BOOL:
+                    std::cout << (col_val.datum.int_val ? "true" : "false");
+                    break;
                   default:
                     std::cerr << "Unknown column type." << std::endl;
                 }

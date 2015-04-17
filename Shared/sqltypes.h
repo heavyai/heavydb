@@ -141,6 +141,7 @@ class SQLTypeInfo {
     inline bool is_fp() const { return type == kFLOAT || type == kDOUBLE; }
     inline bool is_number() const { return IS_NUMBER(type); }
     inline bool is_time() const { return IS_TIME(type); }
+    inline bool is_boolean() const { return type == kBOOLEAN; }
 
 		inline bool is_varlen() const { return IS_STRING(type) && compression != kENCODING_DICT; }
 
