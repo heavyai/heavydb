@@ -17,6 +17,8 @@
 #include <string>
 #include <fstream>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <random>
 #include <map>
 #include <glog/logging.h>
@@ -415,6 +417,21 @@ int main(int argc, char **argv) {
     std::cerr << "MapD database " << MAPD_SYSTEM_DB << " does not exist." << std::endl;
     return 1;
   }
+
+  while (true) {
+    auto pid = fork();
+    CHECK(pid >= 0);
+    if (pid == 0) {
+      break;
+    }
+    for (auto fd = sysconf(_SC_OPEN_MAX); fd > 0; --fd) {
+      close(fd);
+    }
+    int status { 0 };
+    CHECK_NE(-1, waitpid(pid, &status, 0));
+    LOG(ERROR) << "Server exit code: " << status;
+  }
+
   const auto log_path = boost::filesystem::path(base_path) / "mapd_log";
   (void)boost::filesystem::create_directory(log_path);
   FLAGS_log_dir = log_path.c_str();
