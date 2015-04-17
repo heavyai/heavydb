@@ -23,6 +23,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
+#include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
@@ -87,23 +88,28 @@ SQLTypeInfo ResultRow::agg_type(const size_t idx) const {
   return agg_types_[idx];
 }
 
-Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x)
+Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x,
+                   const std::string& debug_dir, const std::string& debug_file)
   : cgen_state_(new CgenState())
   , is_nested_(false)
   , block_size_x_(block_size_x)
   , grid_size_x_(grid_size_x)
+  , debug_dir_(debug_dir)
+  , debug_file_(debug_file)
   , db_id_(db_id)
   , catalog_(nullptr) {}
 
 std::shared_ptr<Executor> Executor::getExecutor(
     const int db_id,
+    const std::string& debug_dir,
+    const std::string& debug_file,
     const size_t block_size_x,
     const size_t grid_size_x) {
   auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
   if (it != executors_.end()) {
     return it->second;
   }
-  auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x);
+  auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file);
   auto it_ok = executors_.insert(std::make_pair(std::make_tuple(db_id, block_size_x, grid_size_x), executor));
   CHECK(it_ok.second);
   return executor;
@@ -2516,12 +2522,17 @@ Executor::CompilationResult Executor::compilePlan(
 namespace {
 
 void optimizeIR(llvm::Function* query_func, llvm::Module* module,
-                const bool hoist_literals, const ExecutorOptLevel opt_level) {
+                const bool hoist_literals, const ExecutorOptLevel opt_level,
+                const std::string& debug_dir, const std::string& debug_file) {
   llvm::legacy::PassManager pass_manager;
   pass_manager.add(llvm::createAlwaysInlinerPass());
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createInstructionSimplifierPass());
   pass_manager.add(llvm::createInstructionCombiningPass());
+  if (!debug_dir.empty()) {
+    CHECK(!debug_file.empty());
+    pass_manager.add(llvm::createDebugIRPass(false, false, debug_dir, debug_file));
+  }
   if (hoist_literals) {
     pass_manager.add(llvm::createLICMPass());
   }
@@ -2592,7 +2603,7 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
     return cached_code;
   }
   // run optimizations
-  optimizeIR(query_func, module, hoist_literals, opt_level);
+  optimizeIR(query_func, module, hoist_literals, opt_level, debug_dir_, debug_file_);
 
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
@@ -2708,7 +2719,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   }
 
   // run optimizations
-  optimizeIR(query_func, module, hoist_literals, opt_level);
+  optimizeIR(query_func, module, hoist_literals, opt_level, "", "");
 
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);

@@ -199,6 +199,7 @@ main(int argc, char* argv[])
 	bool debug = false;
 	bool execute = false;
 	bool timer = false;
+	bool jit_debug = false;
 	namespace po = boost::program_options;
 
 	po::options_description desc("Options");
@@ -209,6 +210,7 @@ main(int argc, char* argv[])
 		("user,u", po::value<string>(&user_name)->required(), "User name")
 		("passwd,p", po::value<string>(&passwd)->required(), "Password")
 		("debug,d", "Verbose debug mode")
+		("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
 		("execute,e", "Execute queries")
 		("timer,t", "Show query time information");
 
@@ -230,6 +232,8 @@ main(int argc, char* argv[])
 			execute = true;
 		if (vm.count("timer"))
 			timer = true;
+		if (vm.count("jit-debug"))
+			jit_debug = true;
 
 		po::notify(vm);
 	}
@@ -308,7 +312,7 @@ main(int argc, char* argv[])
 					if (execute) {
 						std::vector<ResultRow> results;
 						std::vector<ResultRow> results_cpu;
-						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId);
+						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
 						{
 							auto ms = measure<>::execution([&]() {
 								results_cpu = executor->execute(plan, true, ExecutorDeviceType::CPU);

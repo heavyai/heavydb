@@ -55,10 +55,13 @@ class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
     "Host hardware not supported, unexpected size of float / double.");
 public:
-  Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x);
+  Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x,
+           const std::string& debug_dir, const std::string& debug_file);
 
   static std::shared_ptr<Executor> getExecutor(
     const int db_id,
+    const std::string& debug_dir = "",
+    const std::string& debug_file = "",
     const size_t block_size_x = 1024,
     const size_t grid_size_x = 12);
 
@@ -429,6 +432,8 @@ private:
   const size_t small_groups_buffer_entry_count_ { 512 };
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
+  const std::string debug_dir_;
+  const std::string debug_file_;
 
   const int db_id_;
   const Catalog_Namespace::Catalog* catalog_;

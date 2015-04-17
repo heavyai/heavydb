@@ -69,7 +69,7 @@ TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(const std::string& base_data_path, const std::string& executor_device) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX) {
+  MapDHandler(const std::string& base_data_path, const std::string& executor_device, const bool jit_debug) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX), jit_debug_(jit_debug) {
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
         std::cout << "GPU Mode" << std::endl; 
@@ -190,7 +190,7 @@ public:
         Planner::Optimizer optimizer(query, *cat);
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId);
+        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
         std::vector<ResultRow> results;
         execute_time += measure<>::execution([&]() {
           results = executor->execute(root_plan,true,executor_device_type_);
@@ -353,6 +353,7 @@ private:
   ExecutorDeviceType executor_device_type_;
   std::default_random_engine random_gen_;
   std::uniform_int_distribution<int64_t> session_id_dist_;
+  bool jit_debug_;
 };
 
 int main(int argc, char **argv) {
@@ -360,6 +361,7 @@ int main(int argc, char **argv) {
   std::string base_path;
   std::string device("auto");
   bool flush_log = false;
+  bool jit_debug = false;
 
 	namespace po = boost::program_options;
 
@@ -368,6 +370,7 @@ int main(int argc, char **argv) {
 		("help,h", "Print help messages ")
 		("path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")
     ("flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")
+    ("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
     ("cpu", "Run on CPU only")
     ("gpu", "Run on GPUs")
     ("port,p", po::value<int>(&port), "Port number (default 9091)");
@@ -389,6 +392,8 @@ int main(int argc, char **argv) {
       device = "gpu";
     if (vm.count("flush-log"))
       flush_log = true;
+    if (vm.count("jit-debug"))
+      jit_debug = true;
 
 		po::notify(vm);
 	}
@@ -439,7 +444,7 @@ int main(int argc, char **argv) {
     FLAGS_logbuflevel=-1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
-  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device));
+  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device, jit_debug));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
