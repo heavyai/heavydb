@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <cstring>
+#include <glog/logging.h>
 #include "../Catalog/Catalog.h"
 #include "../Shared/sqltypes.h"
 #include "Analyzer.h"
@@ -111,7 +112,7 @@ namespace Analyzer {
   Subquery::deep_copy() const
   {
     // not supported yet.
-    assert(false);
+    CHECK(false);
     return nullptr;
   }
 
@@ -187,7 +188,7 @@ namespace Analyzer {
                   *new_right_type = SQLTypeInfo(kTIMESTAMP, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
                   break;
                 default:
-                  assert(false);
+                  CHECK(false);
               }
               break;
             case kTIME:
@@ -203,7 +204,7 @@ namespace Analyzer {
                   *new_right_type = SQLTypeInfo(kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
                   break;
                 default:
-                  assert(false);
+                  CHECK(false);
               }
               break;
             case kDATE:
@@ -220,11 +221,11 @@ namespace Analyzer {
                   throw std::runtime_error("Cannont compare between DATE and TIME.");
                   break;
                 default:
-                  assert(false);
+                  CHECK(false);
               }
               break;
             default:
-              assert(false);
+              CHECK(false);
           }
         } else if (left_type.is_string() && right_type.is_time()) {
           *new_left_type = right_type;
@@ -261,7 +262,7 @@ namespace Analyzer {
   BinOper::common_string_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
   {
     SQLTypeInfo common_type;
-    assert(type1.is_string() && type2.is_string());
+    CHECK(type1.is_string() && type2.is_string());
     if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
       common_type.set_type(kTEXT);
       return common_type;
@@ -275,7 +276,7 @@ namespace Analyzer {
   BinOper::common_numeric_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
   {
     SQLTypeInfo common_type;
-    assert(type1.is_number() && type2.is_number());
+    CHECK(type1.is_number() && type2.is_number());
     if (type1.get_type() == type2.get_type()) {
       common_type.set_type(type1.get_type());
       common_type.set_dimension(std::max(type1.get_dimension(), type2.get_dimension()));
@@ -304,7 +305,7 @@ namespace Analyzer {
           common_type.set_scale(type2.get_scale());
           break;
         default:
-          assert(false);
+          CHECK(false);
         }
         break;
       case kINT:
@@ -328,7 +329,7 @@ namespace Analyzer {
             common_type.set_scale(type2.get_scale());
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kBIGINT:
@@ -352,7 +353,7 @@ namespace Analyzer {
             common_type.set_scale(type2.get_scale());
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kFLOAT:
@@ -374,7 +375,7 @@ namespace Analyzer {
             common_type.set_type(kFLOAT);
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kDOUBLE:
@@ -388,7 +389,7 @@ namespace Analyzer {
             common_type.set_type(kDOUBLE);
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kNUMERIC:
@@ -422,11 +423,11 @@ namespace Analyzer {
             common_type.set_dimension(std::max(type1.get_dimension() - type1.get_scale(), type2.get_dimension() - type2.get_scale()) + common_type.get_scale());
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
         default:
-          assert(false);
+          CHECK(false);
     }
     return common_type;
   }
@@ -479,7 +480,7 @@ namespace Analyzer {
               constval.bigintval *= 10;
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kSMALLINT:
@@ -505,7 +506,7 @@ namespace Analyzer {
               constval.bigintval *= 10;
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kBIGINT:
@@ -530,7 +531,7 @@ namespace Analyzer {
               constval.bigintval *= 10;
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kDOUBLE:
@@ -556,7 +557,7 @@ namespace Analyzer {
             constval.bigintval = (int64_t)constval.doubleval;
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kFLOAT:
@@ -582,7 +583,7 @@ namespace Analyzer {
             constval.bigintval = (int64_t)constval.floatval;
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kNUMERIC:
@@ -623,7 +624,7 @@ namespace Analyzer {
             }
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kTIMESTAMP:
@@ -650,7 +651,7 @@ namespace Analyzer {
               constval.bigintval *= 10;
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       case kBOOLEAN:
@@ -677,11 +678,11 @@ namespace Analyzer {
               constval.bigintval *= 10;
             break;
           default:
-            assert(false);
+            CHECK(false);
         }
         break;
       default:
-        assert(false);
+        CHECK(false);
     }
     type_info = new_type_info;
   }
@@ -737,11 +738,49 @@ namespace Analyzer {
       throw std::runtime_error("Invalid cast.");
   }
 
+  void
+  Constant::set_null_value()
+  {
+    switch (type_info.get_type()) {
+      case kBOOLEAN:
+        constval.boolval = NULL_BOOLEAN;
+        break;
+      case kINT:
+        constval.intval = NULL_INT;
+        break;
+      case kSMALLINT:
+        constval.smallintval = NULL_SMALLINT;
+        break;
+      case kBIGINT:
+      case kNUMERIC:
+      case kDECIMAL:
+        constval.bigintval = NULL_BIGINT;
+        break;
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE:
+        if (sizeof(time_t) == 4)
+          constval.timeval = NULL_INT;
+        else
+          constval.timeval = NULL_BIGINT;
+        break;
+      case kVARCHAR:
+      case kCHAR:
+      case kTEXT:
+        //@TODO(wei) use empty string as null for now
+        constval.stringval = new std::string();
+        break;
+      default:
+        CHECK(false);
+    }
+  }
+
   Expr *
   Constant::add_cast(const SQLTypeInfo &new_type_info)
   {
     if (is_null) {
       type_info = new_type_info;
+      set_null_value();
       return this;
     }
     if (new_type_info.get_compression() != type_info.get_compression()) {
@@ -760,7 +799,7 @@ namespace Analyzer {
   Subquery::add_cast(const SQLTypeInfo &new_type_info)
   {
     // not supported yet.
-    assert(false);
+    CHECK(false);
     return nullptr;
   }
 
@@ -1057,7 +1096,7 @@ namespace Analyzer {
   InValues::rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const
   {
     // should never be called
-    assert(false);
+    CHECK(false);
     return nullptr;
   }
 
@@ -1180,9 +1219,9 @@ namespace Analyzer {
       case kTIMESTAMP:
         return val1.timeval == val2.timeval;
       default:
-        assert(false); 
+        CHECK(false); 
     }
-    assert(false);
+    CHECK(false);
     return false;
   }
 
