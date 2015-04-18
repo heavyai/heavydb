@@ -217,7 +217,8 @@ inline std::string row_col_to_string(const ResultRow& row, const size_t i) {
     return DatumToString(datum, agg_ti);
   }
   if (agg_ti.is_boolean()) {
-    return *boost::get<int64_t>(&agg_result) ? "true" : "false";
+    const auto bool_val = *boost::get<int64_t>(&agg_result);
+    return bool_val < 0 ? "NULL" : (bool_val ? "true" : "false");
   }
   auto iptr = boost::get<int64_t>(&agg_result);
   if (iptr) {

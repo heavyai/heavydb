@@ -561,7 +561,7 @@ std::vector<llvm::Value*> Executor::codegen(
     dec_val_cast = dec_val;
   }
   if (col_var->get_type_info().is_boolean()) {
-    dec_val_cast = cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE, dec_val_cast, ll_int(int8_t(0)));
+    dec_val_cast = cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGT, dec_val_cast, ll_int(int8_t(0)));
   }
   CHECK(dec_val_cast);
   auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
