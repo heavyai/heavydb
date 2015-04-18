@@ -141,8 +141,7 @@ public:
         }
         case SQLITE_TEXT: {
           ASSERT_TRUE(mapd_results[row_idx].agg_type(col_idx).is_string() ||
-                      mapd_results[row_idx].agg_type(col_idx).is_time() ||
-                      mapd_results[row_idx].agg_type(col_idx).is_boolean());
+                      mapd_results[row_idx].agg_type(col_idx).is_time());
           const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
           if (mapd_results[row_idx].agg_type(col_idx).is_string()) {
             const auto mapd_as_str_p = boost::get<std::string>(&mapd_variant);
@@ -165,16 +164,6 @@ public:
                 }
                 const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
                 ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
-                break;
-              }
-              case kBOOLEAN: {
-                const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
-                if (ref_val == "t") {
-                  ASSERT_EQ(1, *mapd_as_int_p);
-                } else {
-                  CHECK_EQ("f", ref_val);
-                  ASSERT_EQ(0, *mapd_as_int_p);
-                }
                 break;
               }
               case kTIME: {
@@ -571,19 +560,6 @@ TEST(Select, DivByZero) {
   }
 }
 
-TEST(Select, BooleanColumn) {
-  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
-    SKIP_NO_GPU();
-    ASSERT_EQ(g_num_rows + g_num_rows / 2, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE b;", dt)));
-    ASSERT_EQ(g_num_rows / 2, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE NOT b;", dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND b;", dt)));
-    ASSERT_EQ(0, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE x < 8 AND NOT b;", dt)));
-    ASSERT_EQ(7, v<int64_t>(run_simple_agg("SELECT MAX(x) FROM test WHERE b = BOOLEAN 't';", dt)));
-    ASSERT_EQ(g_num_rows + g_num_rows / 2, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE b;", dt)));
-    ASSERT_EQ(3 * g_num_rows, v<int64_t>(run_simple_agg("SELECT SUM(2 * CAST(x = 7 AS INT)) FROM test;", dt)));
-  }
-}
-
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
@@ -592,27 +568,27 @@ int main(int argc, char** argv)
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test {
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16));" };
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16));" };
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date, fx int);");
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date, fx int);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
   }
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13T222315', '15:13:14', '1999-09-09', 9);" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 1.1, 2.2, 'foo', 'real_foo', '2014-12-13T222315', '15:13:14', '1999-09-09', 9);" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13T222315', '15:13:14', '1999-09-09', 10);" };
+    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 1.2, 2.4, 'bar', 'real_bar', '2014-12-13T222315', '15:13:14', '1999-09-09', 10);" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13T222315', '15:13:14', '1999-09-09', 11);" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 1.3, 2.6, 'baz', 'real_baz', '2014-12-13T222315', '15:13:14', '1999-09-09', 11);" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
