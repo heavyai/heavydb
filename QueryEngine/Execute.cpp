@@ -444,6 +444,8 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
   switch (enc_type) {
   case kENCODING_NONE:
     switch (type_info.get_type()) {
+    case kBOOLEAN:
+      return std::make_shared<FixedWidthInt>(1);
     case kSMALLINT:
       return std::make_shared<FixedWidthInt>(2);
     case kINT:
@@ -558,6 +560,9 @@ std::vector<llvm::Value*> Executor::codegen(
     }
     dec_val_cast = dec_val;
   }
+  if (col_var->get_type_info().is_boolean()) {
+    dec_val_cast = cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE, dec_val_cast, ll_int(int8_t(0)));
+  }
   CHECK(dec_val_cast);
   auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
     local_col_id,
@@ -604,7 +609,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     const auto val_bits = get_bit_width(type_info.get_type());
     CHECK_EQ(0, val_bits % 8);
     llvm::Type* val_ptr_type { nullptr };
-    if (type_info.is_integer() || type_info.is_time() || type_info.is_string()) {
+    if (type_info.is_integer() || type_info.is_time() || type_info.is_string() || type_info.is_boolean()) {
       val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
     } else {
       CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
@@ -860,7 +865,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   auto rhs_lvs = codegen(rhs, true, hoist_literals);
   CHECK((lhs_type.get_type() == rhs_type.get_type()) ||
         (lhs_type.is_string() && rhs_type.is_string()));
-  if (lhs_type.is_integer() || lhs_type.is_time() || lhs_type.is_string()) {
+  if (lhs_type.is_integer() || lhs_type.is_time() || lhs_type.is_boolean() || lhs_type.is_string()) {
     if (lhs_type.is_string()) {
       CHECK(rhs_type.is_string());
       CHECK_EQ(lhs_type.get_compression(), rhs_type.get_compression());
@@ -914,7 +919,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   const auto operand_as_const = dynamic_cast<const Analyzer::Constant*>(operand);
   // For dictionary encoded constants, the cast holds the dictionary id
   // information as the compression parameter; handle this case separately.
-  const auto operand_lv = operand_as_const
+  auto operand_lv = operand_as_const
     ? codegen(operand_as_const, ti.get_comp_param(), hoist_literals).front()
     : codegen(operand, true, hoist_literals).front();
   const auto& operand_ti = operand->get_type_info();
@@ -945,7 +950,11 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
       return operand_lv;
     }
-    CHECK(operand_ti.is_integer() || operand_ti.is_time());
+    CHECK(operand_ti.is_integer() || operand_ti.is_time() || operand_ti.is_boolean());
+    if (operand_ti.is_boolean()) {
+      operand_lv = cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE, operand_lv, ll_int(int8_t(0)));
+      operand_lv = cgen_state_->ir_builder_.CreateZExt(operand_lv, get_int_type(8, cgen_state_->context_));
+    }
     if (ti.is_integer() || ti.is_time()) {
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
       const auto target_width = get_bit_width(ti.get_type());
