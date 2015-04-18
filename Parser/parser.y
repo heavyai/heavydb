@@ -776,6 +776,16 @@ case_exp: CASE when_then_list opt_else_expr END
 	{
 		$<nodeval>$ = new CaseExpr(reinterpret_cast<std::list<ExprPair*>*>($<listval>2), dynamic_cast<Expr*>($<nodeval>3));
 	}
+  | IF '(' general_exp ',' general_exp ',' general_exp ')'
+  {
+    std::list<ExprPair*> *when_then_list = new std::list<ExprPair*>(1, new ExprPair(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>5)));
+    $<nodeval>$ = new CaseExpr(when_then_list, dynamic_cast<Expr*>($<nodeval>7));
+  }
+  | IF '(' general_exp ',' general_exp ')'
+  {
+    std::list<ExprPair*> *when_then_list = new std::list<ExprPair*>(1, new ExprPair(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>5)));
+    $<nodeval>$ = new CaseExpr(when_then_list, nullptr);
+  }
 	;
 
 extract_exp: EXTRACT '(' NAME FROM scalar_exp ')'
