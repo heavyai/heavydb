@@ -257,7 +257,7 @@ column_constraint_def:
 	|	DEFAULT literal { $<nodeval>$ = new ColumnConstraintDef(false, false, false, dynamic_cast<Literal*>($<nodeval>2)); }
 	|	DEFAULT NULLX { $<nodeval>$ = new ColumnConstraintDef(false, false, false, new NullLiteral()); }
 	|	DEFAULT USER { $<nodeval>$ = new ColumnConstraintDef(false, false, false, new UserLiteral()); }
-	|	CHECK '(' search_condition ')' { $<nodeval>$ = new ColumnConstraintDef(dynamic_cast<Expr*>($<nodeval>3)); }
+	|	CHECK '(' general_exp ')' { $<nodeval>$ = new ColumnConstraintDef(dynamic_cast<Expr*>($<nodeval>3)); }
 	|	REFERENCES table { $<nodeval>$ = new ColumnConstraintDef($<stringval>2, nullptr); }
 	|	REFERENCES table '(' column ')' { $<nodeval>$ = new ColumnConstraintDef($<stringval>2, $<stringval>4); }
 	;
@@ -284,7 +284,7 @@ table_constraint_def:
     if (!boost::iequals(*$<stringval>2, "key"))
       throw std::runtime_error("Syntax error at " + *$<stringval>2);
     $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, $<slistval>9);   }
-	|	CHECK '(' search_condition ')'
+	|	CHECK '(' general_exp ')'
 	{ $<nodeval>$ = new CheckDef(dynamic_cast<Expr*>($<nodeval>3)); }
 	;
 
@@ -525,7 +525,7 @@ assignment_commalist:
 	;
 
 assignment:
-		column EQUAL scalar_exp 
+		column EQUAL general_exp 
 		{ $<nodeval>$ = new Assignment($<stringval>1, dynamic_cast<Expr*>($<nodeval>3)); }
 	;
 
@@ -624,7 +624,7 @@ table_ref:
 	;
 
 where_clause:
-		WHERE search_condition { $<nodeval>$ = $<nodeval>2; }
+		WHERE general_exp { $<nodeval>$ = $<nodeval>2; }
 	;
 
 opt_group_by_clause:
@@ -633,8 +633,8 @@ opt_group_by_clause:
 	;
 
 exp_commalist:
-		scalar_exp { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
-	|	exp_commalist ',' scalar_exp
+		general_exp { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+	|	exp_commalist ',' general_exp
 	{
 		$<listval>$ = $<listval>1;
 		$<listval>$->push_back($<nodeval>3);
@@ -643,19 +643,19 @@ exp_commalist:
 
 opt_having_clause:
 		/* empty */ { $<nodeval>$ = nullptr; }
-	|	HAVING search_condition { $<nodeval>$ = $<nodeval>2; }
+	|	HAVING general_exp { $<nodeval>$ = $<nodeval>2; }
 	;
 
 	/* search conditions */
 
-search_condition:
-	|	search_condition OR search_condition
+general_exp:
+	|	general_exp OR general_exp
 	{ $<nodeval>$ = new OperExpr(kOR, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
-	|	search_condition AND search_condition
+	|	general_exp AND general_exp
 	{ $<nodeval>$ = new OperExpr(kAND, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
-	|	NOT search_condition
+	|	NOT general_exp
 	{ $<nodeval>$ = new OperExpr(kNOT, dynamic_cast<Expr*>($<nodeval>2), nullptr); }
-	|	'(' search_condition ')' { $<nodeval>$ = $<nodeval>2; }
+	|	'(' general_exp ')' { $<nodeval>$ = $<nodeval>2; }
 	|	predicate { $<nodeval>$ = $<nodeval>1; }
 	;
 
@@ -757,18 +757,18 @@ subquery:
 	;
 
 when_then_list:
-		WHEN search_condition THEN scalar_exp
+		WHEN general_exp THEN general_exp
 		{
 			$<listval>$ = new std::list<Node*>(1, new ExprPair(dynamic_cast<Expr*>($<nodeval>2), dynamic_cast<Expr*>($<nodeval>4)));
 		}
-		| when_then_list WHEN search_condition THEN scalar_exp
+		| when_then_list WHEN general_exp THEN general_exp
 		{
 			$<listval>$ = $<listval>1;
 			$<listval>$->push_back(new ExprPair(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>5)));
 		}
 		;
 opt_else_expr :
-		ELSE scalar_exp { $<nodeval>$ = $<nodeval>2; }
+		ELSE general_exp { $<nodeval>$ = $<nodeval>2; }
 		| /* empty */ { $<nodeval>$ = nullptr; }
 		;
 
@@ -797,15 +797,15 @@ scalar_exp:
 	|	column_ref { $<nodeval>$ = $<nodeval>1; }
 	|	function_ref { $<nodeval>$ = $<nodeval>1; }
 	|	'(' scalar_exp ')' { $<nodeval>$ = $<nodeval>2; }
-	| CAST '(' scalar_exp AS data_type ')'
+	| CAST '(' general_exp AS data_type ')'
 	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
 	| case_exp { $<nodeval>$ = $<nodeval>1; }
   | extract_exp { $<nodeval>$ = $<nodeval>1; }
 	;
 
-select_entry: scalar_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }
-	| scalar_exp NAME { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), $<stringval>2); }
-	| scalar_exp AS NAME { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), $<stringval>3); }
+select_entry: general_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }
+	| general_exp NAME { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), $<stringval>2); }
+	| general_exp AS NAME { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), $<stringval>3); }
 	;
 
 select_entry_commalist:
@@ -834,9 +834,9 @@ parameter_ref:
 
 function_ref:
 		NAME '(' '*' ')' { $<nodeval>$ = new FunctionRef($<stringval>1); }
-	|	NAME '(' DISTINCT scalar_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, true, dynamic_cast<Expr*>($<nodeval>4)); }
-	|	NAME '(' ALL scalar_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, dynamic_cast<Expr*>($<nodeval>4)); }
-	|	NAME '(' scalar_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, dynamic_cast<Expr*>($<nodeval>3)); }
+	|	NAME '(' DISTINCT general_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, true, dynamic_cast<Expr*>($<nodeval>4)); }
+	|	NAME '(' ALL general_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, dynamic_cast<Expr*>($<nodeval>4)); }
+	|	NAME '(' general_exp ')' { $<nodeval>$ = new FunctionRef($<stringval>1, dynamic_cast<Expr*>($<nodeval>3)); }
 	;
 
 literal:
