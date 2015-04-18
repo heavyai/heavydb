@@ -164,80 +164,82 @@ namespace Analyzer {
         throw std::runtime_error("non-boolean operands cannot be used in logic operations.");
       result_type.set_type(kBOOLEAN);
     } else if (IS_COMPARISON(op)) {
-      if (left_type.is_number() && right_type.is_number()) {
-        common_type = common_numeric_type(left_type, right_type);
-        *new_left_type = common_type;
-        new_left_type->set_notnull(left_type.get_notnull());
-        *new_right_type = common_type;
-        new_right_type->set_notnull(right_type.get_notnull());
-      } else if (left_type.is_time() && right_type.is_time()) {
-        switch (left_type.get_type()) {
-          case kTIMESTAMP:
-            switch (right_type.get_type()) {
-              case kTIME:
-                throw std::runtime_error("Cannont compare between TIMESTAMP and TIME.");
-                break;
-              case kDATE:
-                *new_left_type = left_type;
-                *new_right_type = left_type;
-                break;
-              case kTIMESTAMP:
-                *new_left_type = SQLTypeInfo(kTIMESTAMP, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, left_type.get_notnull());
-                *new_right_type = SQLTypeInfo(kTIMESTAMP, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
-                break;
-              default:
-                assert(false);
-            }
-            break;
-          case kTIME:
-            switch (right_type.get_type()) {
-              case kTIMESTAMP:
-                throw std::runtime_error("Cannont compare between TIME and TIMESTAMP.");
-                break;
-              case kDATE:
-                throw std::runtime_error("Cannont compare between TIME and DATE.");
-                break;
-              case kTIME:
-                *new_left_type = SQLTypeInfo(kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, left_type.get_notnull());
-                *new_right_type = SQLTypeInfo(kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
-                break;
-              default:
-                assert(false);
-            }
-            break;
-          case kDATE:
-            switch (right_type.get_type()) {
-              case kTIMESTAMP:
-                *new_left_type = right_type;
-                *new_right_type = right_type;
-                break;
-              case kDATE:
-                *new_left_type =  left_type;
-                *new_right_type = left_type;
-                break;
-              case kTIME:
-                throw std::runtime_error("Cannont compare between DATE and TIME.");
-                break;
-              default:
-                assert(false);
-            }
-            break;
-          default:
-            assert(false);
-        }
-      } else if (left_type.is_string() && right_type.is_time()) {
-        *new_left_type = right_type;
-        new_left_type->set_notnull(left_type.get_notnull());
-        *new_right_type = right_type;
-      } else if (left_type.is_time() && right_type.is_string()) {
-        *new_left_type = left_type;
-        *new_right_type = left_type;
-        new_right_type->set_notnull(right_type.get_notnull());
-      } else if (left_type.is_string() && right_type.is_string()) {
-        *new_left_type = left_type;
-        *new_right_type = right_type;
-      } else
-        throw std::runtime_error("Cannot compare between " + left_type.get_type_name() + " and " + right_type.get_type_name());
+      if (left_type != right_type) {
+        if (left_type.is_number() && right_type.is_number()) {
+          common_type = common_numeric_type(left_type, right_type);
+          *new_left_type = common_type;
+          new_left_type->set_notnull(left_type.get_notnull());
+          *new_right_type = common_type;
+          new_right_type->set_notnull(right_type.get_notnull());
+        } else if (left_type.is_time() && right_type.is_time()) {
+          switch (left_type.get_type()) {
+            case kTIMESTAMP:
+              switch (right_type.get_type()) {
+                case kTIME:
+                  throw std::runtime_error("Cannont compare between TIMESTAMP and TIME.");
+                  break;
+                case kDATE:
+                  *new_left_type = left_type;
+                  *new_right_type = left_type;
+                  break;
+                case kTIMESTAMP:
+                  *new_left_type = SQLTypeInfo(kTIMESTAMP, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, left_type.get_notnull());
+                  *new_right_type = SQLTypeInfo(kTIMESTAMP, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
+                  break;
+                default:
+                  assert(false);
+              }
+              break;
+            case kTIME:
+              switch (right_type.get_type()) {
+                case kTIMESTAMP:
+                  throw std::runtime_error("Cannont compare between TIME and TIMESTAMP.");
+                  break;
+                case kDATE:
+                  throw std::runtime_error("Cannont compare between TIME and DATE.");
+                  break;
+                case kTIME:
+                  *new_left_type = SQLTypeInfo(kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, left_type.get_notnull());
+                  *new_right_type = SQLTypeInfo(kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, right_type.get_notnull());
+                  break;
+                default:
+                  assert(false);
+              }
+              break;
+            case kDATE:
+              switch (right_type.get_type()) {
+                case kTIMESTAMP:
+                  *new_left_type = right_type;
+                  *new_right_type = right_type;
+                  break;
+                case kDATE:
+                  *new_left_type =  left_type;
+                  *new_right_type = left_type;
+                  break;
+                case kTIME:
+                  throw std::runtime_error("Cannont compare between DATE and TIME.");
+                  break;
+                default:
+                  assert(false);
+              }
+              break;
+            default:
+              assert(false);
+          }
+        } else if (left_type.is_string() && right_type.is_time()) {
+          *new_left_type = right_type;
+          new_left_type->set_notnull(left_type.get_notnull());
+          *new_right_type = right_type;
+        } else if (left_type.is_time() && right_type.is_string()) {
+          *new_left_type = left_type;
+          *new_right_type = left_type;
+          new_right_type->set_notnull(right_type.get_notnull());
+        } else if (left_type.is_string() && right_type.is_string()) {
+          *new_left_type = left_type;
+          *new_right_type = right_type;
+        } else
+          throw std::runtime_error("Cannot compare between " + left_type.get_type_name() + " and " + right_type.get_type_name());
+      }
       result_type.set_type(kBOOLEAN);
     } else if (IS_ARITHMETIC(op)) {
       if (!left_type.is_number() || !right_type.is_number())

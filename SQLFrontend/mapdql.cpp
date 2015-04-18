@@ -158,6 +158,9 @@ process_backslash_commands(char *command, ClientContext &context)
               case TDatumType::DATE:
                 std::cout << "DATE\n";
                 break;
+              case TDatumType::BOOL:
+                std::cout << "BOOLEAN\n";
+                break;
               default:
                 std::cerr << "Invalid Column Type.\n";
             }

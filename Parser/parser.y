@@ -667,6 +667,7 @@ predicate:
 	|	in_predicate { $<nodeval>$ = $<nodeval>1; }
 	|	all_or_any_predicate { $<nodeval>$ = $<nodeval>1; }
 	|	existence_test { $<nodeval>$ = $<nodeval>1; }
+  | scalar_exp { $<nodeval>$ = $<nodeval>1; }
 	;
 
 comparison_predicate:
