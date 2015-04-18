@@ -1038,6 +1038,25 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
   }
 }
 
+namespace {
+
+int64_t inline_int_null_val(const SQLTypes type) {
+  switch (type) {
+  case kBOOLEAN:
+    return std::numeric_limits<int8_t>::min();
+  case kSMALLINT:
+    return std::numeric_limits<int16_t>::min();
+  case kINT:
+    return std::numeric_limits<int32_t>::min();
+  case kBIGINT:
+    return std::numeric_limits<int64_t>::min();
+  default:
+    CHECK(false);
+  }
+}
+
+}  // namespace
+
 llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   auto type = type_info.get_type();
   if (type_info.is_string()) {
@@ -1055,10 +1074,11 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   }
   switch (type) {
   case kSMALLINT:
-    return ll_int(std::numeric_limits<int16_t>::min());
+    return ll_int(static_cast<int16_t>(inline_int_null_val(type)));
   case kINT:
-    return ll_int(std::numeric_limits<int32_t>::min());
+    return ll_int(static_cast<int32_t>(inline_int_null_val(type)));
   case kBIGINT:
+    return ll_int(inline_int_null_val(type));
   case kTIME:
   case kTIMESTAMP:
   case kDATE:
@@ -2117,25 +2137,33 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     switch (cd->columnType.get_type()) {
     case kBOOLEAN: {
       auto col_data = reinterpret_cast<int8_t*>(malloc(sizeof(int8_t)));
-      *col_data = col_datum.boolval ? 1 : 0;
+      *col_data = col_cv->get_is_null()
+        ? inline_int_null_val(cd->columnType.get_type())
+        : (col_datum.boolval ? 1 : 0);
       col_buffers[col_ids[col_idx]] = col_data;
       break;
     }
     case kSMALLINT: {
       auto col_data = reinterpret_cast<int16_t*>(malloc(sizeof(int16_t)));
-      *col_data = col_datum.smallintval;
+      *col_data = col_cv->get_is_null()
+        ? inline_int_null_val(cd->columnType.get_type())
+        : col_datum.smallintval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
     case kINT: {
       auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
-      *col_data = col_datum.intval;
+      *col_data = col_cv->get_is_null()
+        ? inline_int_null_val(cd->columnType.get_type())
+        : col_datum.intval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
     case kBIGINT: {
       auto col_data = reinterpret_cast<int64_t*>(malloc(sizeof(int64_t)));
-      *col_data = col_datum.bigintval;
+      *col_data = col_cv->get_is_null()
+        ? inline_int_null_val(cd->columnType.get_type())
+        : col_datum.bigintval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
     }
