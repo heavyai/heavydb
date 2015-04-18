@@ -1257,7 +1257,7 @@ namespace Parser {
       case kTIMESTAMP:
       case kTIME:
         if (param1 == -1)
-          param1 = 6; // default precision is 6
+          param1 = 0; // default precision is 0
         if (param1 > 0) { // @TODO(wei) support sub-second precision later.
           if (type == kTIMESTAMP)
             throw std::runtime_error("Only TIMESTAMP(0) is supported now.");

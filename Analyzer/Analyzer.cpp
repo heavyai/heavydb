@@ -723,6 +723,8 @@ namespace Analyzer {
   void
   Constant::do_cast(const SQLTypeInfo &new_type_info)
   {
+    if (type_info == new_type_info)
+      return;
     if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP || type_info.get_type() == kBOOLEAN)) {
       cast_number(new_type_info);
     } else if (new_type_info.is_string() && type_info.is_string()) {
