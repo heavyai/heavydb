@@ -663,7 +663,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
   // values as arguments, interleaved. The 'else' expression is the last one.
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   const auto else_expr = case_expr->get_else_expr();
-  CHECK(else_expr);
   std::vector<llvm::Type*> case_arg_types;
   const auto case_ti = case_expr->get_type_info();
   llvm::Type* case_llvm_type = nullptr;
@@ -689,7 +688,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
     CHECK(expr_pair.second->get_type_info() == case_ti);
     case_arg_types.push_back(case_llvm_type);
   }
-  CHECK(else_expr->get_type_info() == case_ti);
+  CHECK(!else_expr || else_expr->get_type_info() == case_ti);
   case_arg_types.push_back(case_llvm_type);
   auto ft = llvm::FunctionType::get(
     case_llvm_type,
@@ -737,7 +736,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
       case_func_args.push_back(branch_val_lvs.front());
     }
   }
-  auto else_lvs = codegen(else_expr, true, hoist_literals);
+  Analyzer::Constant null_expr(case_ti, true, Datum {});
+  auto else_lvs = codegen(else_expr ? else_expr : &null_expr, true, hoist_literals);
   if (is_real_str && dynamic_cast<const Analyzer::Constant*>(else_expr)) {
     CHECK_EQ(3, else_lvs.size());
     case_func_args.push_back(cgen_state_->emitCall("string_pack", { else_lvs[1], else_lvs[2] }));
@@ -1019,6 +1019,9 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {
   const auto& type_info = constant->get_type_info();
+  if (constant->get_is_null()) {
+    return inlineIntNull(type_info);
+  }
   switch (type_info.get_type()) {
   case kSMALLINT:
     return ll_int(constant->get_constval().smallintval);
