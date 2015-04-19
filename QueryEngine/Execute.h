@@ -193,7 +193,8 @@ private:
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const bool allow_lazy_fetch,
     std::shared_ptr<RowSetMemoryOwner>,
-    const size_t max_groups_buffer_entry_count);
+    const size_t max_groups_buffer_entry_count,
+    const int64_t scan_limit);
 
   void nukeOldState(const bool allow_lazy_fetch);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,

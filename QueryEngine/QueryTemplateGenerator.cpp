@@ -138,6 +138,7 @@ llvm::Function* row_process(llvm::Module* mod, const size_t aggr_col_count,
   } else {  // group by query
     FuncTy_5_args.push_back(PointerTy_6);  // groups buffer
     FuncTy_5_args.push_back(PointerTy_6);  // small groups buffer
+    FuncTy_5_args.push_back(PointerTy_6);  // max matched
   }
 
   FuncTy_5_args.push_back(PointerTy_6);  // aggregate init values
@@ -201,6 +202,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   if (hoist_literals) {
     FuncTy_8_args.push_back(PointerTy_1);
   }
+  FuncTy_8_args.push_back(PointerTy_6);
   FuncTy_8_args.push_back(PointerTy_6);
 
   FuncTy_8_args.push_back(PointerTy_6);
@@ -271,6 +273,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   }
   Value* ptr_row_count_ptr = args++;
   ptr_row_count_ptr->setName("row_count_ptr");
+  Value* ptr_max_matched_ptr = args++;
+  ptr_max_matched_ptr->setName("max_matched_ptr");
   Value* ptr_agg_init_val = args++;
   ptr_agg_init_val->setName("agg_init_val");
   Value* ptr_out = args++;
@@ -397,7 +401,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
 llvm::Function* query_group_by_template(llvm::Module* mod,
                                         const bool is_nested, const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
-                                        const ExecutorDeviceType device_type) {
+                                        const ExecutorDeviceType device_type,
+                                        const bool check_scan_limit) {
   using namespace llvm;
 
   auto func_pos_start = pos_start(mod);
@@ -425,6 +430,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   if (hoist_literals) {
     FuncTy_12_args.push_back(PointerTy_1);
   }
+  FuncTy_12_args.push_back(PointerTy_6);
   FuncTy_12_args.push_back(PointerTy_6);
   FuncTy_12_args.push_back(PointerTy_6);
   PointerType* PointerTy_13 = PointerType::get(PointerTy_6, 0);
@@ -507,6 +513,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   }
   Value* ptr_row_count_ptr_144 = args++;
   ptr_row_count_ptr_144->setName("row_count_ptr");
+  Value* ptr_max_matched_ptr = args++;
+  ptr_max_matched_ptr->setName("max_matched_ptr");
   Value* ptr_agg_init_val_145 = args++;
   ptr_agg_init_val_145->setName("agg_init_val");
   Value* ptr_group_by_buffers = args++;
@@ -525,6 +533,10 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   // Block  (label_146)
   LoadInst* int64_150 = new LoadInst(ptr_row_count_ptr_144, "", false, label_146);
   int64_150->setAlignment(8);
+  LoadInst* max_matched = new LoadInst(ptr_max_matched_ptr, "", false, label_146);
+  int64_150->setAlignment(8);
+  auto crt_matched_ptr = new AllocaInst(IntegerType::get(mod->getContext(), 64), "crt_matched", label_146);
+  new StoreInst(ConstantInt::get(IntegerType::get(mod->getContext(), 64), 0), crt_matched_ptr, false, label_146);
   CallInst* int32_151 = CallInst::Create(func_pos_start, "", label_146);
   int32_151->setCallingConv(CallingConv::C);
   int32_151->setTailCall(true);
@@ -575,6 +587,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   std::vector<Value*> void_162_params;
   void_162_params.push_back(ptr_156);
   void_162_params.push_back(small_ptr_155);
+  void_162_params.push_back(crt_matched_ptr);
   void_162_params.push_back(ptr_agg_init_val_145);
   void_162_params.push_back(int64_pos_01_160);
   if (hoist_literals) {
@@ -589,7 +602,14 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
 
   BinaryOperator* int64_163 = BinaryOperator::Create(Instruction::Add, int64_pos_01_160, int64_158, "", label_148);
   ICmpInst* int1_164 = new ICmpInst(*label_148, ICmpInst::ICMP_SLT, int64_163, int64_150, "");
-  BranchInst::Create(label_148, label___crit_edge_loopexit, int1_164, label_148);
+  if (check_scan_limit) {
+    ICmpInst* limit_not_reached = new ICmpInst(*label_148, ICmpInst::ICMP_SLT,
+      new LoadInst(crt_matched_ptr, "", false, label_148), max_matched, "");
+    BranchInst::Create(label_148, label___crit_edge_loopexit,
+      BinaryOperator::Create(BinaryOperator::And, int1_164, limit_not_reached, "", label_148), label_148);
+  } else {
+    BranchInst::Create(label_148, label___crit_edge_loopexit, int1_164, label_148);
+  }
 
   // Block ._crit_edge.loopexit (label___crit_edge_loopexit)
   BranchInst::Create(label___crit_edge_149, label___crit_edge_loopexit);

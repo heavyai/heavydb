@@ -367,6 +367,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const std::vector<int8_t>& literal_buff,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
+    const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     Data_Namespace::DataMgr* data_mgr,
     const unsigned block_size_x,
@@ -396,10 +397,17 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     literals_dev_ptr = alloc_gpu_mem(data_mgr, literal_buff.size(), device_id);
     copy_to_gpu(data_mgr, literals_dev_ptr, &literal_buff[0], literal_buff.size(), device_id);
   }
-  CUdeviceptr num_rows_dev_ptr;
+  CUdeviceptr num_rows_dev_ptr { 0 };
   {
     num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
     copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows,
+      sizeof(int64_t), device_id);
+  }
+  CUdeviceptr max_matched_dev_ptr { 0 };
+  {
+    int64_t max_matched { scan_limit };
+    max_matched_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
+    copy_to_gpu(data_mgr, max_matched_dev_ptr, &max_matched,
       sizeof(int64_t), device_id);
   }
   CUdeviceptr init_agg_vals_dev_ptr;
@@ -427,6 +435,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &col_buffers_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
+          &max_matched_dev_ptr,
           &init_agg_vals_dev_ptr,
           &gpu_query_mem.group_by_buffers.first,
           &gpu_query_mem.small_group_by_buffers.first,
@@ -440,6 +449,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
           &num_rows_dev_ptr,
+          &max_matched_dev_ptr,
           &init_agg_vals_dev_ptr,
           &gpu_query_mem.group_by_buffers.first,
           &gpu_query_mem.small_group_by_buffers.first,
@@ -476,6 +486,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           &col_buffers_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
+          &max_matched_dev_ptr,
           &init_agg_vals_dev_ptr,
           &out_vec_dev_ptr,
           &unused_dev_ptr,
@@ -488,6 +499,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         void* kernel_params[] = {
           &col_buffers_dev_ptr,
           &num_rows_dev_ptr,
+          &max_matched_dev_ptr,
           &init_agg_vals_dev_ptr,
           &out_vec_dev_ptr,
           &unused_dev_ptr,
@@ -668,12 +680,14 @@ GroupByAndAggregate::GroupByAndAggregate(
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const size_t max_groups_buffer_entry_count)
+    const size_t max_groups_buffer_entry_count,
+    const int64_t scan_limit)
   : executor_(executor)
   , plan_(plan)
   , query_info_(query_info)
   , row_set_mem_owner_(row_set_mem_owner)
-  , max_groups_buffer_entry_count_(max_groups_buffer_entry_count) {
+  , max_groups_buffer_entry_count_(max_groups_buffer_entry_count)
+  , scan_limit_(scan_limit) {
   CHECK(plan_);
 }
 
@@ -750,7 +764,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
         col_range_info.hash_type_, false, false,
         group_col_widths, agg_col_widths,
         max_groups_buffer_entry_count,
-        executor_->small_groups_buffer_entry_count_,
+        scan_limit_ ? scan_limit_ : executor_->small_groups_buffer_entry_count_,
         col_range_info.min, GroupByMemSharing::Shared,
         count_distinct_descriptors
       };
@@ -882,6 +896,14 @@ bool GroupByAndAggregate::codegen(
     DiamondCodegen filter_cfg(filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast());
 
     if (is_group_by) {
+      if (scan_limit_) {
+        auto arg_it = ROW_FUNC->arg_begin();
+        ++arg_it;
+        ++arg_it;
+        auto crt_matched = LL_BUILDER.CreateLoad(arg_it);
+        LL_BUILDER.CreateStore(LL_BUILDER.CreateAdd(crt_matched, executor_->ll_int(int64_t(1))), arg_it);
+      }
+
       auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
       if (query_mem_desc.usesGetGroupValueFast()) {
         // Don't generate null checks if the group slot is guaranteed to be non-null,
@@ -969,6 +991,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       }
       agg_out_start_ptr = emitCall(get_group_fn_name, get_group_fn_args);
     } else {
+      ++arg_it;
       agg_out_start_ptr = emitCall(
         "get_group_value_one_key",
         {
@@ -997,6 +1020,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       // store the sub-key to the buffer
       LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
     }
+    ++arg_it;
     agg_out_start_ptr = emitCall(
       "get_group_value",
       {

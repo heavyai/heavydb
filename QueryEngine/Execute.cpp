@@ -326,6 +326,10 @@ const ColumnDescriptor* get_column_descriptor(
   return col_desc;
 }
 
+int64_t get_scan_limit(const Planner::Plan* plan, const int64_t limit) {
+  return dynamic_cast<const Planner::Scan*>(plan) && limit ? limit : 0;
+}
+
 }  // namespace
 
 ResultRows Executor::executeSelectPlan(
@@ -340,8 +344,9 @@ ResultRows Executor::executeSelectPlan(
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
     auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
     if (limit) {
+      const int64_t scan_limit { get_scan_limit(plan, limit) };
       auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
-        row_set_mem_owner, max_groups_buffer_entry_guess, error_code);
+        row_set_mem_owner, scan_limit ? scan_limit : max_groups_buffer_entry_guess, error_code);
       rows.keepFirstN(limit);
       return rows;
     }
@@ -1375,6 +1380,7 @@ std::vector<int64_t*> launch_query_cpu_code(
     const std::vector<int8_t>& literal_buff,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
+    const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     std::vector<int64_t*> group_by_buffers,
     std::vector<int64_t*> small_group_by_buffers,
@@ -1392,34 +1398,36 @@ std::vector<int64_t*> launch_query_cpu_code(
       const int8_t** col_buffers,
       const int8_t* literals,
       const int64_t* num_rows,
+      const int64_t* max_matched,
       const int64_t* init_agg_value,
       int64_t** out,
       int64_t** out2,
       int32_t* resume_row_index);
     *error_code = 0;
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
-        &out_vec[0], nullptr, error_code);
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0],
+        &num_rows, &scan_limit, &init_agg_vals[0], &out_vec[0], nullptr, error_code);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0], &num_rows, &init_agg_vals[0],
-        &group_by_buffers[0], &small_group_by_buffers[0], error_code);
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0],
+        &num_rows, &scan_limit, &init_agg_vals[0], &group_by_buffers[0], &small_group_by_buffers[0], error_code);
     }
   } else {
     typedef void (*agg_query)(
       const int8_t** col_buffers,
       const int64_t* num_rows,
+      const int64_t* max_matched,
       const int64_t* init_agg_value,
       int64_t** out,
       int64_t** out2,
       int32_t* resume_row_index);
     *error_code = 0;
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0], &out_vec[0],
-        nullptr, error_code);
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &scan_limit,
+        &init_agg_vals[0], &out_vec[0], nullptr, error_code);
     } else {
       *error_code = 0;
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &init_agg_vals[0],
-        &group_by_buffers[0], &small_group_by_buffers[0], error_code);
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &scan_limit,
+        &init_agg_vals[0], &group_by_buffers[0], &small_group_by_buffers[0], error_code);
     }
   }
   return out_vec;
@@ -1725,7 +1733,7 @@ ResultRows Executor::executeResultPlan(
     0, GroupByMemSharing::Shared
   };
   auto query_func = query_group_by_template(cgen_state_->module_, is_nested_,
-    hoist_literals, query_mem_desc, ExecutorDeviceType::CPU);
+    hoist_literals, query_mem_desc, ExecutorDeviceType::CPU, false);
   std::tie(row_func, col_heads) = create_row_function(
     in_col_count, in_agg_count, hoist_literals, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
@@ -1735,7 +1743,7 @@ ResultRows Executor::executeResultPlan(
   }
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr, result_rows.size());
+    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr, result_rows.size(), 0);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
@@ -1743,7 +1751,7 @@ ResultRows Executor::executeResultPlan(
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   *error_code = 0;
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
-    column_buffers, result_columns.size(), init_agg_vals,
+    column_buffers, result_columns.size(), 0, init_agg_vals,
     query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, error_code);
   CHECK(!*error_code);
   return query_exe_context->groupBufferToResults(0, target_exprs);
@@ -1819,6 +1827,8 @@ ResultRows Executor::executeAggScanPlan(
 
   const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
 
+  const int64_t scan_limit { get_scan_limit(plan, limit) };
+
   CompilationResult compilation_result_cpu;
   auto compile_on_cpu = [&]() {
     try {
@@ -1826,13 +1836,15 @@ ResultRows Executor::executeAggScanPlan(
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level,
-        cat.get_dataMgr().cudaMgr_, true, row_set_mem_owner, max_groups_buffer_entry_guess);
+        cat.get_dataMgr().cudaMgr_, true, row_set_mem_owner,
+        max_groups_buffer_entry_guess, scan_limit);
     } catch (...) {
       compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level,
-        cat.get_dataMgr().cudaMgr_, false, row_set_mem_owner, max_groups_buffer_entry_guess);
+        cat.get_dataMgr().cudaMgr_, false, row_set_mem_owner,
+        max_groups_buffer_entry_guess, scan_limit);
     }
   };
 
@@ -1849,14 +1861,14 @@ ResultRows Executor::executeAggScanPlan(
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
-        true, row_set_mem_owner, max_groups_buffer_entry_guess);
+        true, row_set_mem_owner, max_groups_buffer_entry_guess, scan_limit);
     } catch (...) {
       compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
         hoist_literals, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
-        false, row_set_mem_owner, max_groups_buffer_entry_guess);
+        false, row_set_mem_owner, max_groups_buffer_entry_guess, scan_limit);
     }
   }
 
@@ -1896,7 +1908,7 @@ ResultRows Executor::executeAggScanPlan(
     if (skipFragment(fragments[i], simple_quals)) {
       continue;
     }
-    auto dispatch = [this, plan, limit, current_dbid, device_type, i, table_id,
+    auto dispatch = [this, plan, scan_limit, current_dbid, device_type, i, table_id,
         &available_cpus, &available_gpus, &reduce_mutex, &scheduler_cv, &scheduler_mutex,
         &str_dec_mutex, &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
         &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs,
@@ -1982,7 +1994,7 @@ ResultRows Executor::executeAggScanPlan(
           groupby_exprs.size(), chosen_device_type, col_buffers,
           query_exe_context.get(), num_rows,
           &cat.get_dataMgr(), chosen_device_id,
-          dynamic_cast<const Planner::Scan*>(plan) && limit ? limit : 0);
+          scan_limit);
       }
       {
         std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -2058,11 +2070,11 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
       compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers, num_rows, plan_state_->init_agg_vals_, {}, {}, &error_code);
+      col_buffers, num_rows, 0, plan_state_->init_agg_vals_, {}, {}, &error_code);
   } else {
     out_vec = query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers, num_rows, plan_state_->init_agg_vals_,
+      col_buffers, num_rows, 0, plan_state_->init_agg_vals_,
       data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
   }
   results = ResultRows(target_exprs, this, query_exe_context->row_set_mem_owner_);
@@ -2106,7 +2118,7 @@ int32_t Executor::executePlanWithGroupBy(
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
-    const int64_t limit) {
+    const int64_t scan_limit) {
   CHECK(results.empty());
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
@@ -2117,17 +2129,16 @@ int32_t Executor::executePlanWithGroupBy(
   int32_t error_code { 0 };
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
-      num_rows, plan_state_->init_agg_vals_,
+      num_rows, scan_limit, plan_state_->init_agg_vals_,
       query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, &error_code);
   } else {
     query_exe_context->launchGpuCode(
-      compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers,
-      num_rows, plan_state_->init_agg_vals_,
+      compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
+      num_rows, scan_limit, plan_state_->init_agg_vals_,
       data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
   }
   results = query_exe_context->getRowSet(target_exprs);
-  if (error_code && (!limit || results.size() < static_cast<size_t>(limit))) {
+  if (error_code && (!scan_limit || results.size() < static_cast<size_t>(scan_limit))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
   return 0;
@@ -2382,6 +2393,8 @@ void set_row_func_argnames(llvm::Function* row_func,
     ++arg_it;
     arg_it->setName("small_group_by_buff");
     ++arg_it;
+    arg_it->setName("crt_match");
+    ++arg_it;
   }
 
   arg_it->setName("agg_init_val");
@@ -2419,6 +2432,8 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     // group by buffer
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
     // small group by buffer
+    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    // current match count
     row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
   }
 
@@ -2477,10 +2492,12 @@ Executor::CompilationResult Executor::compilePlan(
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const bool allow_lazy_fetch,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const size_t max_groups_buffer_entry_guess) {
+    const size_t max_groups_buffer_entry_guess,
+    const int64_t scan_limit) {
   nukeOldState(allow_lazy_fetch);
 
-  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner, max_groups_buffer_entry_guess);
+  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner,
+    max_groups_buffer_entry_guess, scan_limit);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor(max_groups_buffer_entry_guess);
 
   if (device_type == ExecutorDeviceType::GPU &&
@@ -2498,7 +2515,7 @@ Executor::CompilationResult Executor::compilePlan(
 
   const bool is_group_by { !query_mem_desc.group_col_widths.empty() };
   auto query_func = is_group_by
-    ? query_group_by_template(cgen_state_->module_, is_nested_, hoist_literals, query_mem_desc, device_type)
+    ? query_group_by_template(cgen_state_->module_, is_nested_, hoist_literals, query_mem_desc, device_type, scan_limit)
     : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
@@ -2846,6 +2863,7 @@ R"(
                       i8*,
                       i64*,
                       i64*,
+                      i64*,
                       i64**,
                       i64**,
                       i32*)* @%s, metadata !"kernel", i32 1}
@@ -2853,6 +2871,7 @@ R"(
 R"(
 !nvvm.annotations = !{!0}
 !0 = metadata !{void (i8**,
+                      i64*,
                       i64*,
                       i64*,
                       i64**,

@@ -414,6 +414,7 @@ public:
     const std::vector<int8_t>& literal_buff,
     std::vector<const int8_t*> col_buffers,
     const int64_t num_rows,
+    const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     Data_Namespace::DataMgr* data_mgr,
     const unsigned block_size_x,
@@ -460,7 +461,8 @@ public:
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     std::shared_ptr<RowSetMemoryOwner>,
-    const size_t max_groups_buffer_entry_count);
+    const size_t max_groups_buffer_entry_count,
+    const int64_t scan_limit);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count);
 
@@ -531,6 +533,7 @@ private:
   const Fragmenter_Namespace::QueryInfo& query_info_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const size_t max_groups_buffer_entry_count_;
+  const int64_t scan_limit_;
 };
 
 namespace {
