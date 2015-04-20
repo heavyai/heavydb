@@ -1347,7 +1347,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(
           const auto agg_info = row.agg_kinds_[agg_col_idx];
           const auto agg_type = row.agg_types_[agg_col_idx];
           CHECK(agg_type.is_integer() || agg_type.is_time() || agg_type.is_string() ||
-                agg_type.get_type() == kFLOAT || agg_type.get_type() == kDOUBLE);
+                agg_type.get_type() == kFLOAT || agg_type.get_type() == kDOUBLE || agg_type.get_type() == kBOOLEAN);
           const size_t actual_col_idx = row.agg_results_idx_[agg_col_idx];
           switch (agg_info.agg_kind) {
           case kSUM:
@@ -1386,7 +1386,7 @@ Executor::ResultRows Executor::reduceMultiDeviceResults(
             }
             break;
           case kMIN:
-            if (agg_type.is_integer() || agg_type.is_time()) {
+            if (agg_type.is_integer() || agg_type.is_time() || agg_type.is_boolean()) {
               agg_min(
                 boost::get<int64_t>(&old_agg_results[actual_col_idx]),
                 *boost::get<int64_t>(&row.agg_results_[actual_col_idx]));
