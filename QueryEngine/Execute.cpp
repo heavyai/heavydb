@@ -1957,7 +1957,7 @@ std::vector<ResultRow> Executor::executeAggScanPlan(
     if (!agg_plan) {
       dispatch(chosen_device_type, chosen_device_id);
       result_rows_count += all_fragment_results.back().size();
-      if (result_rows_count >= static_cast<size_t>(limit)) {
+      if (limit && result_rows_count >= static_cast<size_t>(limit)) {
         break;
       }
     } else {
