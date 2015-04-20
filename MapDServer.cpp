@@ -73,19 +73,22 @@ public:
   MapDHandler(const std::string& base_data_path, const std::string& executor_device, const bool jit_debug) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX), jit_debug_(jit_debug) {
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
-        LOG(INFO) << "GPU Mode" << std::endl; 
+        LOG(INFO) << "Started in GPU Mode" << std::endl; 
+        cpu_mode_only_ = false;
     }
     else if (executor_device == "auto") {
         executor_device_type_ = ExecutorDeviceType::Auto;
-        LOG(INFO) << "Auto Mode" << std::endl; 
+        LOG(INFO) << "Started in Auto Mode" << std::endl; 
+        cpu_mode_only_ = false;
     }
     else {
         executor_device_type_ = ExecutorDeviceType::CPU;
-        LOG(INFO) << "CPU Mode" << std::endl; 
+        LOG(INFO) << "Started in CPU Mode" << std::endl; 
+        cpu_mode_only_ = true;
     }
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), executor_device_type_ == ExecutorDeviceType::GPU || executor_device_type_ == ExecutorDeviceType::Auto)); // second param is whether to initialize GPU buffer pool
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_)); // second param is whether to initialize GPU buffer pool
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, *data_mgr_));
   }
   ~MapDHandler() {
@@ -347,6 +350,11 @@ public:
   void set_execution_mode(const TExecuteMode::type mode) {
     switch (mode) {
       case TExecuteMode::GPU:
+        if (cpu_mode_only_) {
+          MapDException e;
+          e.error_msg = "Cannot switch to GPU mode in a server started in CPU-only mode.";
+          throw e;
+        }
         executor_device_type_ = ExecutorDeviceType::GPU;
         LOG(INFO) << "Client sets GPU mode.";
         break;
@@ -355,6 +363,11 @@ public:
         executor_device_type_ = ExecutorDeviceType::CPU;
         break;
       case TExecuteMode::AUTO:
+        if (cpu_mode_only_) {
+          MapDException e;
+          e.error_msg = "Cannot switch to Auto mode in a server started in CPU-only mode.";
+          throw e;
+        }
         LOG(INFO) << "Client sets Auto mode.";
         executor_device_type_ = ExecutorDeviceType::Auto;
         break;
@@ -372,6 +385,7 @@ private:
   std::default_random_engine random_gen_;
   std::uniform_int_distribution<int64_t> session_id_dist_;
   bool jit_debug_;
+  bool cpu_mode_only_;
 };
 
 int main(int argc, char **argv) {
