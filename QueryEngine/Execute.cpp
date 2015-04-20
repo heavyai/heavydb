@@ -1011,6 +1011,7 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
   const auto operand = uoper->get_operand();
   CHECK(operand->get_type_info().is_integer() ||
         operand->get_type_info().is_boolean() ||
+        operand->get_type_info().is_time() ||
         operand->get_type_info().is_string());
   // if the type is inferred as non null, short-circuit to false
   if (operand->get_type_info().get_notnull()) {
