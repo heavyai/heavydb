@@ -212,6 +212,24 @@ public:
     }
   }
 
+  void set_execution_mode(const TExecuteMode::type mode) {
+    try {
+      client_.set_execution_mode(mode);
+    }
+    catch (TException &te) {
+      try {
+        transport_.open();
+        client_.set_execution_mode(mode);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    }
+  }
+
 private:
   MapDClient &client_;
   TTransport &transport_;

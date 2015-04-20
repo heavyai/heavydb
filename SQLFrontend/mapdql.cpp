@@ -47,8 +47,9 @@ struct ClientContext {
   std::vector<std::string> names_return;
   std::vector<DBInfo> dbinfos_return;
   ColumnTypes columns_return;
+  TExecuteMode::type execution_mode;
 
-  ClientContext(TTransport &t, MapDClient &c) : transport(t), client(c), session(INVALID_SESSION_ID) {}
+  ClientContext(TTransport &t, MapDClient &c) : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::AUTO) {}
 };
 
 enum ThriftService {
@@ -58,7 +59,8 @@ enum ThriftService {
   kGET_COLUMNS,
   kGET_TABLES,
   kGET_DATABASES,
-  kGET_USERS
+  kGET_USERS,
+  kSET_EXECUTION_MODE
 };
 
 static bool
@@ -86,6 +88,9 @@ thrift_with_retry(ThriftService which_service, ClientContext &context, char *arg
         break;
       case kGET_USERS:
         context.client.getUsers(context.names_return);
+        break;
+      case kSET_EXECUTION_MODE:
+        context.client.set_execution_mode(context.execution_mode);
         break;
     }
   }
@@ -122,6 +127,9 @@ process_backslash_commands(char *command, ClientContext &context)
       std::cout << "\\t List all tables.\n";
       std::cout << "\\d <table> List all columns of table.\n";
       std::cout << "\\c <database> <user> <password>.\n";
+      std::cout << "\\gpu Execute in GPU mode's.\n";
+      std::cout << "\\cpu Execute in CPU mode's.\n";
+      std::cout << "\\auto Execute in Auto mode.\n";
       std::cout << "\\multiline Set multi-line command line mode.\n";
       std::cout << "\\singleline Set single-line command line mode.\n";
       std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
@@ -391,9 +399,20 @@ int main(int argc, char **argv) {
             }
           std::cout << std::endl;
           }
-          if (print_timing)
+          if (print_timing) {
+            std::cout << context.query_return.rows.size() << " rows returned." << std::endl;
             std::cout << "Execution time: " << context.query_return.execution_time_ms << " miliseconds" << std::endl;
+          }
         }
+      } else if (!strncmp(line,"\\cpu",4)) {
+        context.execution_mode = TExecuteMode::CPU;
+        (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
+      } else if (!strncmp(line,"\\gpu",4)) {
+        context.execution_mode = TExecuteMode::GPU;
+        (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
+      } else if (!strncmp(line,"\\auto",5)) {
+        context.execution_mode = TExecuteMode::AUTO;
+        (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);

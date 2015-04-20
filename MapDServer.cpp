@@ -73,15 +73,15 @@ public:
   MapDHandler(const std::string& base_data_path, const std::string& executor_device, const bool jit_debug) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX), jit_debug_(jit_debug) {
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
-        std::cout << "GPU Mode" << std::endl; 
+        LOG(INFO) << "GPU Mode" << std::endl; 
     }
     else if (executor_device == "auto") {
         executor_device_type_ = ExecutorDeviceType::Auto;
-        std::cout << "Auto Mode" << std::endl; 
+        LOG(INFO) << "Auto Mode" << std::endl; 
     }
     else {
         executor_device_type_ = ExecutorDeviceType::CPU;
-        std::cout << "CPU Mode" << std::endl; 
+        LOG(INFO) << "CPU Mode" << std::endl; 
     }
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
@@ -341,6 +341,23 @@ public:
         }
       }
       dbinfos.push_back(dbinfo);
+    }
+  }
+
+  void set_execution_mode(const TExecuteMode::type mode) {
+    switch (mode) {
+      case TExecuteMode::GPU:
+        executor_device_type_ = ExecutorDeviceType::GPU;
+        LOG(INFO) << "Client sets GPU mode.";
+        break;
+      case TExecuteMode::CPU:
+        LOG(INFO) << "Client sets CPU mode.";
+        executor_device_type_ = ExecutorDeviceType::CPU;
+        break;
+      case TExecuteMode::AUTO:
+        LOG(INFO) << "Client sets Auto mode.";
+        executor_device_type_ = ExecutorDeviceType::Auto;
+        break;
     }
   }
 

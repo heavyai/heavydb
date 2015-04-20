@@ -8,6 +8,12 @@ enum TDatumType {
   BOOL
 }
 
+enum TExecuteMode {
+  AUTO,
+  GPU,
+  CPU
+}
+
 union TDatum {
   1: i64 int_val,
   2: double real_val,
@@ -66,4 +72,5 @@ service MapD {
   list<string> getTables(1: SessionId session) throws (1: MapDException e 2: ThriftException te)
   list<string> getUsers() throws (1: ThriftException te)
   list<DBInfo> getDatabases() throws (1: ThriftException te)
+  void set_execution_mode(1: TExecuteMode mode) throws (1: ThriftException te)
 }
