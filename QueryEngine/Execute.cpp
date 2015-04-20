@@ -2837,9 +2837,11 @@ llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
   if (val->getType()->isIntegerTy()) {
     auto val_width = static_cast<llvm::IntegerType*>(val->getType())->getBitWidth();
     CHECK_LE(val_width, 64);
+    const auto cast_op = val_width == 1
+      ? llvm::Instruction::CastOps::ZExt
+      : llvm::Instruction::CastOps::SExt;
     return val_width < 64
-      ? cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt, val,
-                                            get_int_type(64, cgen_state_->context_))
+      ? cgen_state_->ir_builder_.CreateCast(cast_op, val, get_int_type(64, cgen_state_->context_))
       : val;
   }
   // real (not dictionary-encoded) strings; store the pointer to the payload
