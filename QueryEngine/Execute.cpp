@@ -560,9 +560,6 @@ std::vector<llvm::Value*> Executor::codegen(
     }
     dec_val_cast = dec_val;
   }
-  if (col_var->get_type_info().is_boolean()) {
-    dec_val_cast = cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGT, dec_val_cast, ll_int(int8_t(0)));
-  }
   CHECK(dec_val_cast);
   auto it_ok = cgen_state_->fetch_cache_.insert(std::make_pair(
     local_col_id,
@@ -622,15 +619,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
       arg_it, ll_int(lit_off));
     auto lit_lv = cgen_state_->ir_builder_.CreateLoad(
       cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
-    if (type_info.get_type() == kBOOLEAN) {
-      return { cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE,
-        lit_lv, ll_int(int8_t(0))) };
-    }
     return { lit_lv };
   }
   switch (type_info.get_type()) {
   case kBOOLEAN:
-    return { llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), constant->get_constval().boolval) };
+    return { llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), constant->get_constval().boolval) };
   case kSMALLINT:
   case kINT:
   case kBIGINT:
@@ -726,7 +719,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
   // (code generation is easier this way because of how 'BasicBlock::Create' works).
   // Reverse the actual arguments to compensate for this, then call the function.
   for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
-    case_func_args.push_back(codegen(expr_pair.first, true, hoist_literals).front());
+    case_func_args.push_back(toBool(codegen(expr_pair.first, true, hoist_literals).front()));
     auto branch_val_lvs = codegen(expr_pair.second, true, hoist_literals);
     if (is_real_str && dynamic_cast<const Analyzer::Constant*>(expr_pair.second)) {
       CHECK_EQ(3, branch_val_lvs.size());
@@ -900,8 +893,8 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const b
   CHECK(IS_LOGIC(optype));
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  const auto lhs_lv = codegen(lhs, true, hoist_literals).front();
-  const auto rhs_lv = codegen(rhs, true, hoist_literals).front();
+  const auto lhs_lv = toBool(codegen(lhs, true, hoist_literals).front());
+  const auto rhs_lv = toBool(codegen(rhs, true, hoist_literals).front());
   switch (optype) {
   case kAND:
     return cgen_state_->ir_builder_.CreateAnd(lhs_lv, rhs_lv);
@@ -910,6 +903,15 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const b
   default:
     CHECK(false);
   }
+}
+
+llvm::Value* Executor::toBool(llvm::Value* lv) {
+  CHECK(lv->getType()->isIntegerTy());
+  if (static_cast<llvm::IntegerType*>(lv->getType())->getBitWidth() > 1) {
+    return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGT, lv,
+      llvm::ConstantInt::get(lv->getType(), 0));
+  }
+  return lv;
 }
 
 llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hoist_literals) {
@@ -996,7 +998,7 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool h
   const auto optype = uoper->get_optype();
   CHECK(optype == kNOT || optype == kUMINUS || optype == kISNULL);
   const auto operand = uoper->get_operand();
-  const auto operand_lv = codegen(operand, true, hoist_literals).front();
+  const auto operand_lv = toBool(codegen(operand, true, hoist_literals).front());
   switch (optype) {
   case kNOT:
     return cgen_state_->ir_builder_.CreateNot(operand_lv);
@@ -1007,7 +1009,9 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool h
 
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool hoist_literals) {
   const auto operand = uoper->get_operand();
-  CHECK(operand->get_type_info().is_integer() || operand->get_type_info().is_string());
+  CHECK(operand->get_type_info().is_integer() ||
+        operand->get_type_info().is_boolean() ||
+        operand->get_type_info().is_string());
   // if the type is inferred as non null, short-circuit to false
   if (operand->get_type_info().get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
@@ -1073,6 +1077,8 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
     }
   }
   switch (type) {
+  case kBOOLEAN:
+    return ll_int(static_cast<int8_t>(inline_int_null_val(type)));
   case kSMALLINT:
     return ll_int(static_cast<int16_t>(inline_int_null_val(type)));
   case kINT:
@@ -2469,10 +2475,10 @@ Executor::CompilationResult Executor::compilePlan(
 
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, true, hoist_literals).front());
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
   }
   for (auto expr : quals) {
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, codegen(expr, true, hoist_literals).front());
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
