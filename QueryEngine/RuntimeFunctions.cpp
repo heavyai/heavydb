@@ -294,7 +294,7 @@ int64_t* get_group_value(int64_t* groups_buffer,
   if (matching_group) {
     return matching_group;
   }
-  auto h_probe = h + 1;
+  auto h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
     matching_group = get_matching_group_value(groups_buffer, h_probe, key, key_qw_count, agg_col_count, init_vals);
     if (matching_group) {
