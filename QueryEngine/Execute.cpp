@@ -97,6 +97,10 @@ int64_t inline_int_null_val(const SQLTypes type) {
     return std::numeric_limits<int32_t>::min();
   case kBIGINT:
     return std::numeric_limits<int64_t>::min();
+  case kTIMESTAMP:
+  case kTIME:
+  case kDATE:
+    return std::numeric_limits<int64_t>::min();
   default:
     CHECK(false);
   }
