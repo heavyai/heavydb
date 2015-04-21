@@ -75,26 +75,44 @@ double fixed_width_double_decode_noinline(
 
 // arithmetic operator implementations
 
-#define DEF_ARITH_NULLABLE(type, opname, opsym)                                           \
-extern "C" __attribute__((always_inline))                                                 \
-type opname##_##type##_nullable(const type lhs, const type rhs, const int64_t null_val) { \
-  if (lhs != null_val && rhs != null_val) {                                               \
-    return lhs opsym rhs;                                                                 \
-  }                                                                                       \
-  return null_val;                                                                        \
+#define DEF_ARITH_NULLABLE(type, opname, opsym)                                            \
+extern "C" __attribute__((always_inline))                                                  \
+type opname##_##type##_nullable(const type lhs, const type rhs, const int64_t null_val) {  \
+  if (lhs != null_val && rhs != null_val) {                                                \
+    return lhs opsym rhs;                                                                  \
+  }                                                                                        \
+  return null_val;                                                                         \
 }
 
-#define DEF_ARITH_NULLABLE_ALL_OPS(type) \
-DEF_ARITH_NULLABLE(type, add, +)         \
-DEF_ARITH_NULLABLE(type, sub, -)         \
-DEF_ARITH_NULLABLE(type, mul, *)         \
-DEF_ARITH_NULLABLE(type, div, /)
+#define DEF_CMP_NULLABLE(type, opname, opsym)                                                                            \
+extern "C" __attribute__((always_inline))                                                                                \
+int8_t opname##_##type##_nullable(const type lhs, const type rhs, const int64_t null_val, const int8_t null_bool_val) {  \
+  if (lhs != null_val && rhs != null_val) {                                                                              \
+    return lhs opsym rhs;                                                                                                \
+  }                                                                                                                      \
+  return null_bool_val;                                                                                                  \
+}
+
+#define DEF_ARITH_NULLABLE_ALL_OPS(type)  \
+DEF_ARITH_NULLABLE(type, add, +)          \
+DEF_ARITH_NULLABLE(type, sub, -)          \
+DEF_ARITH_NULLABLE(type, mul, *)          \
+DEF_ARITH_NULLABLE(type, div, /)          \
+DEF_CMP_NULLABLE(type, eq, ==)            \
+DEF_CMP_NULLABLE(type, ne, !=)            \
+DEF_CMP_NULLABLE(type, lt, <)             \
+DEF_CMP_NULLABLE(type, gt, >)             \
+DEF_CMP_NULLABLE(type, le, <=)            \
+DEF_CMP_NULLABLE(type, ge, >=)
 
 DEF_ARITH_NULLABLE_ALL_OPS(int16_t)
 DEF_ARITH_NULLABLE_ALL_OPS(int32_t)
 DEF_ARITH_NULLABLE_ALL_OPS(int64_t)
+DEF_CMP_NULLABLE(int8_t, eq, ==)
+DEF_CMP_NULLABLE(int8_t, ne, !=)
 
 #undef DEF_ARITH_NULLABLE_ALL_OPS
+#undef DEF_CMP_NULLABLE
 #undef DEF_ARITH_NULLABLE
 
 // aggregator implementations

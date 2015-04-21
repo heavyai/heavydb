@@ -607,7 +607,8 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const bool hoist_literals) {
   llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
   for (auto in_val : *expr->get_value_list()) {
-    result = cgen_state_->ir_builder_.CreateOr(result, codegenCmp(kEQ, expr->get_arg(), in_val, hoist_literals));
+    result = cgen_state_->ir_builder_.CreateOr(result,
+      toBool(codegenCmp(kEQ, expr->get_arg(), in_val, hoist_literals)));
   }
   return result;
 }
@@ -1002,6 +1003,25 @@ llvm::CmpInst::Predicate llvm_icmp_pred(const SQLOps op_type) {
   }
 }
 
+std::string icmp_name(const SQLOps op_type) {
+  switch (op_type) {
+  case kEQ:
+    return "eq";
+  case kNE:
+    return "ne";
+  case kLT:
+    return "lt";
+  case kGT:
+    return "gt";
+  case kLE:
+    return "le";
+  case kGE:
+    return "ge";
+  default:
+    CHECK(false);
+  }
+}
+
 llvm::CmpInst::Predicate llvm_fcmp_pred(const SQLOps op_type) {
   switch (op_type) {
   case kEQ:
@@ -1053,22 +1073,41 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   return codegenCmp(optype, lhs, rhs, hoist_literals);
 }
 
+namespace {
+
+int64_t inline_int_null_val(const SQLTypes type) {
+  switch (type) {
+  case kBOOLEAN:
+    return std::numeric_limits<int8_t>::min();
+  case kSMALLINT:
+    return std::numeric_limits<int16_t>::min();
+  case kINT:
+    return std::numeric_limits<int32_t>::min();
+  case kBIGINT:
+    return std::numeric_limits<int64_t>::min();
+  default:
+    CHECK(false);
+  }
+}
+
+}  // namespace
+
 llvm::Value* Executor::codegenCmp(const SQLOps optype,
                                   const Analyzer::Expr* lhs,
                                   const Analyzer::Expr* rhs,
                                   const bool hoist_literals) {
   CHECK(IS_COMPARISON(optype));
-  const auto& lhs_type = lhs->get_type_info();
-  const auto& rhs_type = rhs->get_type_info();
+  const auto& lhs_ti = lhs->get_type_info();
+  const auto& rhs_ti = rhs->get_type_info();
   auto lhs_lvs = codegen(lhs, true, hoist_literals);
   auto rhs_lvs = codegen(rhs, true, hoist_literals);
-  CHECK((lhs_type.get_type() == rhs_type.get_type()) ||
-        (lhs_type.is_string() && rhs_type.is_string()));
-  if (lhs_type.is_integer() || lhs_type.is_time() || lhs_type.is_boolean() || lhs_type.is_string()) {
-    if (lhs_type.is_string()) {
-      CHECK(rhs_type.is_string());
-      CHECK_EQ(lhs_type.get_compression(), rhs_type.get_compression());
-      if (lhs_type.get_compression() == kENCODING_NONE) {
+  CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
+        (lhs_ti.is_string() && rhs_ti.is_string()));
+  if (lhs_ti.is_integer() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string()) {
+    if (lhs_ti.is_string()) {
+      CHECK(rhs_ti.is_string());
+      CHECK_EQ(lhs_ti.get_compression(), rhs_ti.get_compression());
+      if (lhs_ti.get_compression() == kENCODING_NONE) {
         // unpack pointer + length if necessary
         if (lhs_lvs.size() != 3) {
           CHECK_EQ(1, lhs_lvs.size());
@@ -1086,9 +1125,33 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
         CHECK(optype == kEQ || optype == kNE);
       }
     }
-    return cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front());
+    const bool not_null { lhs_ti.get_notnull() && rhs_ti.get_notnull() };
+    const std::string int_typename { "int" + std::to_string(get_bit_width(lhs_ti.get_type())) + "_t" };
+    auto lhs_type = lhs_ti.get_type();
+    // TODO(alex): refactor this
+    if (lhs_ti.is_string()) {
+      CHECK_EQ(kENCODING_DICT, lhs_ti.get_compression());
+      CHECK_EQ(4, lhs_ti.get_size());
+      lhs_type = kINT;
+    } else if (lhs_ti.is_time()) {
+      switch (lhs_ti.get_size()) {
+      case 4:
+        lhs_type = kINT;
+        break;
+      case 8:
+        lhs_type = kBIGINT;
+        break;
+      default:
+        CHECK(false);
+      }
+    }
+    return not_null
+      ? cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
+      : cgen_state_->emitCall(icmp_name(optype) + "_" + int_typename + "_nullable",
+        { lhs_lvs.front(), rhs_lvs.front(), ll_int(inline_int_null_val(lhs_type)),
+          inlineIntNull(SQLTypeInfo(kBOOLEAN)) });
   }
-  if (lhs_type.get_type() == kFLOAT || lhs_type.get_type() == kDOUBLE) {
+  if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
     return cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front());
   }
   CHECK(false);
@@ -1160,8 +1223,11 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
     }
     CHECK(operand_ti.is_integer() || operand_ti.is_time() || operand_ti.is_boolean());
     if (operand_ti.is_boolean()) {
-      CHECK(operand_lv->getType()->isIntegerTy(1));
-      operand_lv = cgen_state_->ir_builder_.CreateZExt(operand_lv, get_int_type(8, cgen_state_->context_));
+      CHECK(operand_lv->getType()->isIntegerTy(1) ||
+            operand_lv->getType()->isIntegerTy(8));
+      if (operand_lv->getType()->isIntegerTy(1)) {
+        operand_lv = cgen_state_->ir_builder_.CreateZExt(operand_lv, get_int_type(8, cgen_state_->context_));
+      }
     }
     if (ti.is_integer() || ti.is_time()) {
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
@@ -1248,25 +1314,6 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
     CHECK(false);
   }
 }
-
-namespace {
-
-int64_t inline_int_null_val(const SQLTypes type) {
-  switch (type) {
-  case kBOOLEAN:
-    return std::numeric_limits<int8_t>::min();
-  case kSMALLINT:
-    return std::numeric_limits<int16_t>::min();
-  case kINT:
-    return std::numeric_limits<int32_t>::min();
-  case kBIGINT:
-    return std::numeric_limits<int64_t>::min();
-  default:
-    CHECK(false);
-  }
-}
-
-}  // namespace
 
 llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   auto type = type_info.get_type();
