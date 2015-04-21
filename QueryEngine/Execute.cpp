@@ -1312,15 +1312,33 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
   const auto rhs_lv = codegen(rhs, true, hoist_literals).front();
   CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   if (lhs_type.is_integer()) {
+    const std::string int_typename { "int" + std::to_string(get_bit_width(lhs_type.get_type())) + "_t" };
+    const bool not_null { lhs_type.get_notnull() && rhs_type.get_notnull() };
     switch (optype) {
     case kMINUS:
-      return cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv);
+      if (not_null) {
+        return cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv);
+      } else {
+        return cgen_state_->emitCall("sub_" + int_typename + "_nullable",
+          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type.get_type())) });
+      }
     case kPLUS:
-      return cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv);
+      if (not_null) {
+        return cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv);
+      } else {
+        return cgen_state_->emitCall("add_" + int_typename + "_nullable",
+          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type.get_type())) });
+      }
     case kMULTIPLY:
-      return cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
+      if (not_null) {
+        return cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
+      } else {
+        return cgen_state_->emitCall("mul_" + int_typename + "_nullable",
+          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type.get_type())) });
+      }
     case kDIVIDE:
-      return codegenDiv(lhs_lv, rhs_lv);
+      return codegenDiv(lhs_lv, rhs_lv,
+        not_null ? "" : int_typename, inline_int_null_val(lhs_type.get_type()));
     default:
       CHECK(false);
     }
@@ -1334,7 +1352,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
     case kMULTIPLY:
       return cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv);
     case kDIVIDE:
-      return codegenDiv(lhs_lv, rhs_lv);
+      return codegenDiv(lhs_lv, rhs_lv, "", 0);
     default:
       CHECK(false);
     }
@@ -1342,7 +1360,8 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
   CHECK(false);
 }
 
-llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv, llvm::Value* rhs_lv) {
+llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv, llvm::Value* rhs_lv,
+    const std::string& int_typename, const int64_t null_val) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   cgen_state_->uses_div_ = true;
   auto div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
@@ -1356,7 +1375,9 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv, llvm::Value* rhs_lv) {
     div_ok, div_zero);
   cgen_state_->ir_builder_.SetInsertPoint(div_ok);
   auto ret = zero_const->getType()->isIntegerTy()
-    ? cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv)
+    ? (int_typename.empty()
+        ? cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv)
+        : cgen_state_->emitCall("div_" + int_typename + "_nullable", { lhs_lv, rhs_lv, ll_int(null_val) }))
     : cgen_state_->ir_builder_.CreateFDiv(lhs_lv, rhs_lv);
   cgen_state_->ir_builder_.SetInsertPoint(div_zero);
   cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));
