@@ -226,7 +226,7 @@ namespace Parser {
   }
   
   Analyzer::Expr *
-  NullLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  NullLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Analyzer::Constant *c = new Analyzer::Constant(kNULLT, true);
     Datum d;
@@ -236,7 +236,7 @@ namespace Parser {
   }
   
   Analyzer::Expr *
-  StringLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  StringLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     SQLTypeInfo ti;
     ti.set_type(kVARCHAR);
@@ -248,7 +248,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  IntLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  IntLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     SQLTypes t;
     Datum d;
@@ -267,7 +267,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  FixedPtLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  FixedPtLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     SQLTypeInfo ti;
     ti.set_type(kNUMERIC);
@@ -278,7 +278,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  FloatLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  FloatLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Datum d;
     d.floatval = floatval;
@@ -286,7 +286,7 @@ namespace Parser {
   }
   
   Analyzer::Expr *
-  DoubleLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  DoubleLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Datum d;
     d.doubleval = doubleval;
@@ -294,14 +294,14 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  UserLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  UserLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     throw std::runtime_error("USER literal not supported yet.");
     return nullptr;
   }
 
   Analyzer::Expr *
-  OperExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  OperExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     SQLTypeInfo result_type, left_type, right_type;
     SQLTypeInfo new_left_type, new_right_type;
@@ -345,14 +345,14 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  SubqueryExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  SubqueryExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     throw std::runtime_error("Subqueries are not supported yet.");
     return nullptr;
   }
 
   Analyzer::Expr *
-  IsNullExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  IsNullExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     Analyzer::Expr *result = new Analyzer::UOper(kBOOLEAN, kISNULL, arg_expr);
@@ -362,14 +362,14 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  InSubquery::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  InSubquery::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     throw std::runtime_error("Subqueries are not supported yet.");
     return nullptr;
   }
 
   Analyzer::Expr *
-  InValues::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  InValues::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     SQLTypeInfo ti = arg_expr->get_type_info();
@@ -406,7 +406,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  BetweenExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  BetweenExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     Analyzer::Expr *lower_expr = lower->analyze(catalog, query, allow_tlist_ref);
@@ -431,7 +431,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  LikeExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  LikeExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     Analyzer::Expr *like_expr = like_string->analyze(catalog, query, allow_tlist_ref);
@@ -461,14 +461,14 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  ExistsExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  ExistsExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     throw std::runtime_error("Subqueries are not supported yet.");
     return nullptr;
   }
 
   Analyzer::Expr *
-  ColumnRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  ColumnRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     int table_id;
     int rte_idx;
@@ -497,7 +497,7 @@ namespace Parser {
           throw std::runtime_error("Column name " + *column + " is ambiguous.");
         i++;
       }
-      if (cd == nullptr && allow_tlist_ref) {
+      if (cd == nullptr && allow_tlist_ref != TlistRefType::TLIST_NONE) {
         // check if this is a reference to a targetlist entry
         bool found = false;
         int varno;
@@ -518,7 +518,10 @@ namespace Parser {
             if (v->get_which_row() == Analyzer::Var::kGROUPBY)
               return v->deep_copy();
           }
-          return new Analyzer::Var(tle->get_expr()->get_type_info(), Analyzer::Var::kOUTPUT, varno);
+          if (allow_tlist_ref == TlistRefType::TLIST_COPY)
+            return tle->get_expr()->deep_copy();
+          else
+            return new Analyzer::Var(tle->get_expr()->get_type_info(), Analyzer::Var::kOUTPUT, varno);
         }
       }
       if (cd == nullptr)
@@ -528,7 +531,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  FunctionRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const 
+  FunctionRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     SQLTypeInfo result_type;
     SQLAgg agg_type;
@@ -575,7 +578,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  CastExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const
+  CastExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const
   {
     target_type->check_type();
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
@@ -596,7 +599,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  CaseExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const
+  CaseExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const
   {
     SQLTypeInfo ti;
     std::list<std::pair<Analyzer::Expr*, Analyzer::Expr*>> expr_pair_list;
@@ -662,7 +665,7 @@ namespace Parser {
   }
 
   Analyzer::Expr *
-  ExtractExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, bool allow_tlist_ref) const
+  ExtractExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const
   {
     ExtractField fieldno;
     if (boost::iequals(*field, "year"))
@@ -731,7 +734,7 @@ namespace Parser {
   {
     Analyzer::Expr *p = nullptr;
     if (having_clause != nullptr) {
-      p = having_clause->analyze(catalog, query, true);
+      p = having_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_REF);
       if (p->get_type_info().get_type() != kBOOLEAN)
         throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
       p->check_group_by(query.get_group_by());
@@ -761,7 +764,7 @@ namespace Parser {
             throw std::runtime_error("Ordinal number in GROUP BY cannot reference an expression containing aggregate functions.");
           gexpr = new Analyzer::Var(tlist[varno-1]->get_expr()->get_type_info(), Analyzer::Var::kOUTPUT, varno);
         } else {
-          gexpr = c->analyze(catalog, query, true);
+          gexpr = c->analyze(catalog, query, Expr::TlistRefType::TLIST_REF);
         }
         if (typeid(*gexpr) == typeid(Analyzer::Var)) {
           Analyzer::Var *v = dynamic_cast<Analyzer::Var*>(gexpr);
@@ -796,7 +799,7 @@ namespace Parser {
       query.set_where_predicate(nullptr);
       return;
     }
-    Analyzer::Expr *p = where_clause->analyze(catalog, query);
+    Analyzer::Expr *p = where_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
     if (p->get_type_info().get_type() != kBOOLEAN)
       throw std::runtime_error("Only boolean expressions can be in WHERE clause.");
     query.set_where_predicate(p);
