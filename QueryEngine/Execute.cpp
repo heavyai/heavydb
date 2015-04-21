@@ -1263,7 +1263,12 @@ llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const bool ho
   CHECK_EQ(uoper->get_optype(), kUMINUS);
   const auto operand_lv = codegen(uoper->get_operand(), true, hoist_literals).front();
   CHECK(operand_lv->getType()->isIntegerTy());
-  return cgen_state_->ir_builder_.CreateNeg(operand_lv);
+  const auto& ti = uoper->get_type_info();
+  const std::string int_typename { "int" + std::to_string(get_bit_width(ti.get_type())) + "_t" };
+  return ti.get_notnull()
+    ? cgen_state_->ir_builder_.CreateNeg(operand_lv)
+    : cgen_state_->emitCall("uminus_" + int_typename + "_nullable",
+      { operand_lv, inlineIntNull(ti) });
 }
 
 llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool hoist_literals) {

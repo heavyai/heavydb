@@ -115,6 +115,18 @@ DEF_CMP_NULLABLE(int8_t, ne, !=)
 #undef DEF_CMP_NULLABLE
 #undef DEF_ARITH_NULLABLE
 
+#define DEF_UMINUS_NULLABLE(type)                                            \
+extern "C" __attribute__((always_inline))                                    \
+type uminus_##type##_nullable(const type operand, const int64_t null_val) {  \
+  return -operand;                                                           \
+}
+
+DEF_UMINUS_NULLABLE(int16_t)
+DEF_UMINUS_NULLABLE(int32_t)
+DEF_UMINUS_NULLABLE(int64_t)
+
+#undef DEF_UMINUS_NULLABLE
+
 // aggregator implementations
 
 extern "C" __attribute__((always_inline))
