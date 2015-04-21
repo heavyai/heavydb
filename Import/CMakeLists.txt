@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wno-attributes -O3 -g")
 set(csv_import_source_files
-    CsvImport.cpp
-    csv_parser.cpp
     Importer.cpp
     )
 

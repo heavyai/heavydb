@@ -24,7 +24,7 @@ using namespace Planner;
 
 namespace {
 	SysCatalog *gsys_cat = nullptr;
-	Catalog *gcat = nullptr;
+  SessionInfo *gsession = nullptr;
 	Data_Namespace::DataMgr *dataMgr = nullptr;
 
 	class SQLTestEnv : public ::testing::Environment {
@@ -43,7 +43,6 @@ namespace {
 				gsys_cat = new SysCatalog(base_path.string(), *dataMgr);
 				UserMetadata user;
 				CHECK(gsys_cat->getMetadataForUser(MAPD_ROOT_USER, user));
-				gsys_cat->set_currentUser(user);
 				if (!gsys_cat->getMetadataForUser("gtest", user)) {
 					gsys_cat->createUser("gtest", "test!test!", false);
 					CHECK(gsys_cat->getMetadataForUser("gtest", user));
@@ -53,14 +52,15 @@ namespace {
 					gsys_cat->createDatabase("gtest_db", user.userId);
 					CHECK(gsys_cat->getMetadataForDB("gtest_db", db));
 				}
-				gcat = new Catalog(base_path.string(), user, db, *dataMgr);
+				Catalog *cat = new Catalog(base_path.string(), db, *dataMgr);
+        gsession = new SessionInfo(std::shared_ptr<Catalog>(cat), user);
 			}
 			virtual void TearDown()
 			{
 				if (gsys_cat != nullptr)
 					delete gsys_cat;
-				if (gcat != nullptr)
-					delete gcat;
+				if (gsession != nullptr)
+					delete gsession;
 				if (dataMgr != nullptr)
 					delete dataMgr;
 			}
@@ -77,7 +77,7 @@ namespace {
 		unique_ptr<Stmt> stmt_ptr(stmt); // make sure it's deleted
 		Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt *>(stmt);
 		CHECK(ddl != nullptr);
-		ddl->execute(*gcat);
+		ddl->execute(*gsession);
 	}
 
 	RootPlan *plan_dml(const string &input_str)
@@ -92,8 +92,8 @@ namespace {
 		Parser::DMLStmt *dml = dynamic_cast<Parser::DMLStmt *>(stmt);
 		CHECK(dml != nullptr);
 		Query query;
-		dml->analyze(*gcat, query);
-		Optimizer optimizer(query, *gcat);
+		dml->analyze(gsession->get_catalog(), query);
+		Optimizer optimizer(query, gsession->get_catalog());
 		RootPlan *plan = optimizer.optimize();
 		return plan;
 	}
@@ -101,16 +101,16 @@ namespace {
 
 TEST(ParseAnalyzePlan, Create) {
 	ASSERT_NO_THROW(run_ddl("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m timestamp(0), n time(0), o date, p varchar(255) encoding token_dict);"););
-	ASSERT_TRUE(gcat->getMetadataForTable("fat") != nullptr);
+	ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("fat") != nullptr);
 	ASSERT_NO_THROW(run_ddl("create table if not exists skinny (a smallint, b int, c bigint);"););
-	ASSERT_TRUE(gcat->getMetadataForTable("skinny") != nullptr);
+	ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("skinny") != nullptr);
 	ASSERT_NO_THROW(run_ddl("create table if not exists smallfrag (a int, b text, c bigint) with (fragment_size = 1000, page_size = 512);"););
-	const TableDescriptor *td = gcat->getMetadataForTable("smallfrag");
+	const TableDescriptor *td = gsession->get_catalog().getMetadataForTable("smallfrag");
 	EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
 	ASSERT_NO_THROW(run_ddl("create table if not exists testdict (a varchar(100) encoding dict(8), b text encoding token_dict(16), c text encoding dict);"););
-	td = gcat->getMetadataForTable("testdict");
-  const ColumnDescriptor *cd = gcat->getMetadataForColumn(td->tableId, "a");
-  const DictDescriptor *dd = gcat->getMetadataForDict(cd->columnType.get_comp_param());
+	td = gsession->get_catalog().getMetadataForTable("testdict");
+  const ColumnDescriptor *cd = gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
+  const DictDescriptor *dd = gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
   EXPECT_EQ(dd->dictNBits, 8);
 }

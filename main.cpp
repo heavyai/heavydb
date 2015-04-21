@@ -276,7 +276,8 @@ main(int argc, char* argv[])
 		cerr << "User " << user_name << " is not authorized to access database " << db_name << std::endl;
 		return 1;
 	}
-	Catalog cat(base_path, user, db, dataMgr);
+	Catalog cat(base_path, db, dataMgr);
+  SessionInfo session(std::shared_ptr<Catalog>(&cat), user);
 	while (true) {
 		try {
 			cout << "mapd> ";
@@ -300,7 +301,7 @@ main(int argc, char* argv[])
 				unique_ptr<Stmt> stmt_ptr(stmt); // make sure it's deleted
 				Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt *>(stmt);
 				if ( ddl != nullptr)
-					ddl->execute(cat);
+					ddl->execute(session);
 				else {
 					Parser::DMLStmt *dml = dynamic_cast<Parser::DMLStmt*>(stmt);
 					Query query;

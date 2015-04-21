@@ -37,8 +37,6 @@ SysCatalog::initDB()
 void
 SysCatalog::createUser(const string &name, const string &passwd, bool issuper)
 {
-	if (!currentUser_.isSuper)
-		throw runtime_error("Only super user can create new users.");
 	UserMetadata user;
 	if (getMetadataForUser(name, user))
 		throw runtime_error("User " + name + " already exists.");
@@ -48,8 +46,6 @@ SysCatalog::createUser(const string &name, const string &passwd, bool issuper)
 void
 SysCatalog::dropUser(const string &name)
 {
-	if (!currentUser_.isSuper)
-		throw runtime_error("Only super user can drop users.");
 	UserMetadata user;
 	if (!getMetadataForUser(name, user))
 		throw runtime_error("User " + name + " does not exist.");
@@ -57,19 +53,14 @@ SysCatalog::dropUser(const string &name)
 }
 
 void
-SysCatalog::alterUser(const string &name, const string *passwd, bool *is_superp)
+SysCatalog::alterUser(const int32_t userid, const string *passwd, bool *is_superp)
 {
-	UserMetadata user;
-	if (!getMetadataForUser(name, user))
-		throw runtime_error("User " + name + " does not exist.");
-	if (!currentUser_.isSuper && currentUser_.userId != user.userId)
-		throw runtime_error("Only user super can change another user's password.");
 	if (passwd != nullptr && is_superp != nullptr)
-		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "', issuper = " + std::to_string(*is_superp) + " WHERE userid = " + std::to_string(user.userId));
+		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "', issuper = " + std::to_string(*is_superp) + " WHERE userid = " + std::to_string(userid));
 	else if (passwd != nullptr)
-		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "' WHERE userid = " + std::to_string(user.userId));
+		sqliteConnector_.query("UPDATE mapd_users SET passwd = '" + *passwd + "' WHERE userid = " + std::to_string(userid));
 	else if (is_superp != nullptr)
-		sqliteConnector_.query("UPDATE mapd_users SET issuper = " + std::to_string(*is_superp) + " WHERE userid = " + std::to_string(user.userId));
+		sqliteConnector_.query("UPDATE mapd_users SET issuper = " + std::to_string(*is_superp) + " WHERE userid = " + std::to_string(userid));
 }
 
 void
@@ -87,16 +78,11 @@ SysCatalog::createDatabase(const string &name, int owner)
 }
 
 void
-SysCatalog::dropDatabase(const string &name)
+SysCatalog::dropDatabase(const int32_t dbid, const std::string &name)
 {
-	DBMetadata db;
-	if (!getMetadataForDB(name, db))
-		throw runtime_error("Database " + name + " does not exist.");
-	if (!currentUser_.isSuper && currentUser_.userId != db.dbOwner)
-		throw runtime_error("Only the super user or the owner can drop database.");
-	sqliteConnector_.query("DELETE FROM mapd_databases WHERE name = '" + name + "'");
+	sqliteConnector_.query("DELETE FROM mapd_databases WHERE dbid = " + std::to_string(dbid));
 	boost::filesystem::remove(basePath_+"/mapd_catalogs/" + name);
-	ChunkKey chunkKeyPrefix = {db.dbId};
+	ChunkKey chunkKeyPrefix = {dbid};
 	dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);
     dataMgr_.checkpoint();
 }
@@ -164,12 +150,9 @@ Catalog::Catalog(const string &basePath, const string &dbname, Data_Namespace::D
 {
 		if (!is_initdb)
 			buildMaps();
-		else {
-			currentUser_ = UserMetadata(MAPD_ROOT_USER_ID, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT, true);
-		}
 }
 
-Catalog::Catalog(const string &basePath, const UserMetadata &curUser, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentUser_(curUser), currentDB_(curDB), dataMgr_(dataMgr) 
+Catalog::Catalog(const string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentDB_(curDB), dataMgr_(dataMgr) 
 {
     buildMaps();
 }

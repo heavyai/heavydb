@@ -131,11 +131,11 @@ public:
     }
     auto cat_it = cat_map_.find(dbname);
     if (cat_it == cat_map_.end()) {
-      Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, user_meta, db_meta, *data_mgr_);
+      Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, db_meta, *data_mgr_);
       cat_map_[dbname].reset(cat);
-      sessions_[session] = cat_map_[dbname];
+      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta));;
     } else
-      sessions_[session] = cat_it->second;
+      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it->second, user_meta));
     LOG(INFO) << "Connected to database " << dbname << std::endl;
     return session;
   }
@@ -149,7 +149,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    dbname = session_it->second->get_currentDB().dbName;
+    dbname = session_it->second->get_catalog().get_currentDB().dbName;
     sessions_.erase(session_it);
     LOG(INFO) << "Disconnected from database " << dbname << std::endl;
   }
@@ -163,8 +163,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    auto cat = session_it->second.get(); 
-    CHECK(cat);
+    auto &cat = session_it->second->get_catalog();
     LOG(INFO) << query_str;
     auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
@@ -185,13 +184,13 @@ public:
       Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
       if (ddl != nullptr) {
         execute_time += measure<>::execution([&]() {
-          ddl->execute(*cat);
+          ddl->execute(*session_it->second);
         });
       } else {
         auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
         Analyzer::Query query;
-        dml->analyze(*cat, query);
-        Planner::Optimizer optimizer(query, *cat);
+        dml->analyze(cat, query);
+        Planner::Optimizer optimizer(query, cat);
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
@@ -290,16 +289,15 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    auto cat = session_it->second.get(); 
-    CHECK(cat);
-    auto td = cat->getMetadataForTable(table_name);
+    auto &cat = session_it->second->get_catalog(); 
+    auto td = cat.getMetadataForTable(table_name);
     if (!td) {
       MapDException ex;
       ex.error_msg = "Table doesn't exist";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    const auto col_descriptors = cat->getAllColumnMetadataForTable(td->tableId);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId);
     for (const auto cd : col_descriptors) {
       ColumnType col_type;
       col_type.type = type_to_thrift(cd->columnType);
@@ -316,9 +314,8 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    auto cat = session_it->second.get(); 
-    CHECK(cat);
-    const auto tables = cat->getAllTableMetadata();
+    auto &cat = session_it->second->get_catalog(); 
+    const auto tables = cat.getAllTableMetadata();
     for (const auto td : tables) {
       table_names.push_back(td->tableName);
     }
@@ -377,7 +374,7 @@ public:
 private:
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
-  std::map<SessionId, std::shared_ptr<Catalog_Namespace::Catalog>> sessions_;
+  std::map<SessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
   std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 
   const std::string base_data_path_;

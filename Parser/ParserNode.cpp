@@ -1275,8 +1275,9 @@ namespace Parser {
   }
 
   void
-  CreateTableStmt::execute(Catalog_Namespace::Catalog &catalog)
+  CreateTableStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     if (catalog.getMetadataForTable(*table) != nullptr) {
       if (if_not_exists)
         return;
@@ -1419,8 +1420,9 @@ namespace Parser {
   }
 
   void
-  DropTableStmt::execute(Catalog_Namespace::Catalog &catalog)
+  DropTableStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*table);
     if (td == nullptr) {
       if (if_exists)
@@ -1433,8 +1435,9 @@ namespace Parser {
   }
 
   void
-  CopyTableStmt::execute(Catalog_Namespace::Catalog &catalog)
+  CopyTableStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*table);
     if (td == nullptr)
       throw std::runtime_error("Table " + *table + " does not exist.");
@@ -1505,8 +1508,9 @@ namespace Parser {
   }
 
   void
-  CreateViewStmt::execute(Catalog_Namespace::Catalog &catalog)
+  CreateViewStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     if (catalog.getMetadataForTable(*view_name) != nullptr) {
       if (if_not_exists)
         return;
@@ -1586,8 +1590,9 @@ namespace Parser {
   }
 
   void
-  RefreshViewStmt::execute(Catalog_Namespace::Catalog &catalog)
+  RefreshViewStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
     if (td == nullptr)
       throw std::runtime_error("Materialied view " + *view_name + " does not exist.");
@@ -1614,8 +1619,9 @@ namespace Parser {
   }
 
   void
-  DropViewStmt::execute(Catalog_Namespace::Catalog &catalog)
+  DropViewStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
     if (td == nullptr) {
       if (if_exists)
@@ -1648,12 +1654,13 @@ namespace Parser {
   }
 
   void
-  CreateDBStmt::execute(Catalog_Namespace::Catalog &catalog)
+  CreateDBStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
       throw std::runtime_error("Must be in the system database to create databases.");
     Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-    int ownerId = catalog.get_currentUser().userId;
+    int ownerId = session.get_currentUser().userId;
     if (name_value_list != nullptr) {
       for (auto p : *name_value_list) {
         if (boost::iequals(*p->get_name(), "owner")) {
@@ -1673,17 +1680,26 @@ namespace Parser {
   }
 
   void
-  DropDBStmt::execute(Catalog_Namespace::Catalog &catalog)
+  DropDBStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
       throw std::runtime_error("Must be in the system database to drop databases.");
     Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-    syscat.dropDatabase(*db_name);
+    Catalog_Namespace::DBMetadata db;
+    if (!syscat.getMetadataForDB(*db_name, db))
+      throw std::runtime_error("Database " + *db_name + " does not exist.");
+
+    if (!session.get_currentUser().isSuper && session.get_currentUser().userId != db.dbOwner)
+      throw std::runtime_error("Only the super user or the owner can drop database.");
+
+    syscat.dropDatabase(db.dbId, *db_name);
   }
 
   void
-  CreateUserStmt::execute(Catalog_Namespace::Catalog &catalog)
+  CreateUserStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     std::string passwd;
     bool is_super = false;
     for (auto p : *name_value_list) {
@@ -1708,6 +1724,8 @@ namespace Parser {
       throw std::runtime_error("Must have a password for CREATE USER.");
     if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
       throw std::runtime_error("Must be in the system database to create users.");
+    if (!session.get_currentUser().isSuper)
+        throw std::runtime_error("Only super user can create new users.");
     Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
     syscat.createUser(*user_name, passwd, is_super);
   }
@@ -1723,8 +1741,9 @@ namespace Parser {
   }
 
   void
-  AlterUserStmt::execute(Catalog_Namespace::Catalog &catalog)
+  AlterUserStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     const std::string *passwd = nullptr;
     bool is_super = false;
     bool *is_superp = nullptr;
@@ -1749,14 +1768,22 @@ namespace Parser {
         throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() + ".  Should be PASSWORD or IS_SUPER.");
     }
     Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
-    syscat.alterUser(*user_name, passwd, is_superp);
+    Catalog_Namespace::UserMetadata user;
+    if (!syscat.getMetadataForUser(*user_name, user))
+      throw std::runtime_error("User " + *user_name + " does not exist.");
+    if (!session.get_currentUser().isSuper && session.get_currentUser().userId != user.userId)
+      throw std::runtime_error("Only user super can change another user's password.");
+    syscat.alterUser(user.userId, passwd, is_superp);
   }
 
   void
-  DropUserStmt::execute(Catalog_Namespace::Catalog &catalog)
+  DropUserStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
+    auto &catalog = session.get_catalog();
     if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
       throw std::runtime_error("Must be in the system database to drop users.");
+    if (!session.get_currentUser().isSuper)
+      throw std::runtime_error("Only super user can drop users.");
     Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
     syscat.dropUser(*user_name);
   }

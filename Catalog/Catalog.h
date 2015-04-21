@@ -109,7 +109,7 @@ class Catalog {
          * metadata - expects for this directory to already exist
          */
 
-        Catalog(const std::string &basePath, const UserMetadata &curUser, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr);
+        Catalog(const std::string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr);
 
         /**
          * @brief Destructor - deletes all
@@ -147,8 +147,6 @@ class Catalog {
          std::list <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
 				 std::list<const TableDescriptor *> getAllTableMetadata() const;
-         const UserMetadata &get_currentUser() const { return currentUser_; }
-         void set_currentUser(const UserMetadata &user) { currentUser_ = user; }
          const DBMetadata &get_currentDB() const { return currentDB_; }
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 				 Data_Namespace::DataMgr &get_dataMgr() const { return dataMgr_; }
@@ -170,7 +168,6 @@ class Catalog {
         ColumnDescriptorMapById columnDescriptorMapById_;
         DictDescriptorMapById dictDescriptorMapById_;
         SqliteConnector sqliteConnector_;
-        UserMetadata currentUser_;
         DBMetadata currentDB_;
 				Data_Namespace::DataMgr &dataMgr_;
         std::mutex cat_mutex_;
@@ -187,15 +184,28 @@ class SysCatalog : public Catalog {
 		void initDB();
 		void createUser(const std::string &name, const std::string &passwd, bool issuper);
 		void dropUser(const std::string &name);
-		void alterUser(const std::string &name, const std::string *passwd, bool *is_superp);
+		void alterUser(const int32_t userid, const std::string *passwd, bool *is_superp);
 		void createDatabase(const std::string &dbname, int owner);
-		void dropDatabase(const std::string &dbname);
+		void dropDatabase(const int32_t dbid, const std::string &name);
 		bool getMetadataForUser(const std::string &name, UserMetadata &user);
 		bool getMetadataForDB(const std::string &name, DBMetadata &db);
 		std::list<DBMetadata> getAllDBMetadata();
 		std::list<UserMetadata> getAllUserMetadata();
 };
 
+/*
+ * @type SessionInfo
+ * @brief a user session
+ */
+class SessionInfo {
+  public:
+    SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata &user) : catalog_(cat), currentUser_(user) {}
+    Catalog &get_catalog() const { return *catalog_; };
+    const UserMetadata &get_currentUser() const { return currentUser_; }
+  private:
+    std::shared_ptr<Catalog> catalog_;
+    UserMetadata currentUser_;
+};
 
 } // Catalog_Namespace
 

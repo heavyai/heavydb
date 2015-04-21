@@ -20,7 +20,7 @@ using namespace std;
 
 namespace {
 
-Catalog_Namespace::Catalog *get_catalog() {
+Catalog_Namespace::SessionInfo *get_session() {
   string db_name { MAPD_SYSTEM_DB };
   string user_name { "mapd" };
   string passwd { "HyperInteractive" };
@@ -37,10 +37,11 @@ Catalog_Namespace::Catalog *get_catalog() {
   Catalog_Namespace::DBMetadata db;
   CHECK(sys_cat.getMetadataForDB(db_name, db));
   CHECK(user.isSuper || (user.userId == db.dbOwner));
-  return new Catalog_Namespace::Catalog(base_path.string(), user, db, *dataMgr);
+  Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_path.string(), db, *dataMgr);
+  return new Catalog_Namespace::SessionInfo(std::shared_ptr<Catalog_Namespace::Catalog>(cat), user);
 }
 
-std::unique_ptr<Catalog_Namespace::Catalog> g_cat(get_catalog());
+std::unique_ptr<Catalog_Namespace::SessionInfo> g_session(get_session());
 
 ResultRows run_multiple_agg(
     const string& query_str,
@@ -56,11 +57,12 @@ ResultRows run_multiple_agg(
   CHECK(!ddl);
   Parser::DMLStmt *dml = dynamic_cast<Parser::DMLStmt*>(stmt);
   Analyzer::Query query;
-  dml->analyze(*g_cat, query);
-  Planner::Optimizer optimizer(query, *g_cat);
+  auto &g_cat = g_session->get_catalog();
+  dml->analyze(g_cat, query);
+  Planner::Optimizer optimizer(query, g_cat);
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
-  auto executor = Executor::getExecutor(g_cat->get_currentDB().dbId, "", "", 8, 8);
+  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId, "", "", 8, 8);
   return executor->execute(plan, true, device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 
@@ -88,11 +90,11 @@ void run_ddl_statement(const string& create_table_stmt) {
   Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt *>(stmt);
   CHECK(ddl);
   if ( ddl != nullptr)
-    ddl->execute(*g_cat);
+    ddl->execute(*g_session);
 }
 
 bool skip_tests(const ExecutorDeviceType device_type) {
-  return device_type == ExecutorDeviceType::GPU && !g_cat->get_dataMgr().gpusPresent();
+  return device_type == ExecutorDeviceType::GPU && !g_session->get_catalog().get_dataMgr().gpusPresent();
 }
 
 bool approx_eq(const double v, const double target, const double eps = 0.01) {

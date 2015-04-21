@@ -451,7 +451,7 @@ namespace Parser {
    */
   class DDLStmt : public Stmt {
     public:
-      virtual void execute(Catalog_Namespace::Catalog &catalog) = 0;
+      virtual void execute(Catalog_Namespace::SessionInfo &session) = 0;
   };
 
   /*
@@ -603,7 +603,7 @@ namespace Parser {
       virtual ~CreateTableStmt();
       const std::string *get_table() const { return table; }
       const std::list<TableElement*> *get_table_element_list() const { return table_element_list; }
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *table;
       std::list<TableElement*> *table_element_list;
@@ -620,7 +620,7 @@ namespace Parser {
       DropTableStmt(std::string *tab, bool i) : table(tab), if_exists(i) {}
       virtual ~DropTableStmt() { delete table; }
       const std::string *get_table() const { return table; }
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *table;
       bool if_exists;
@@ -634,7 +634,7 @@ namespace Parser {
     public:
       CopyTableStmt(std::string *t, std::string *f, std::list<NameValueAssign*> *o) : table(t), file_path(f), options(o) {}
       virtual ~CopyTableStmt();
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *table;
       std::string *file_path;
@@ -759,7 +759,7 @@ namespace Parser {
       const std::list<std::string*> *get_column_list() const { return column_list; }
       const QuerySpec *get_query() const { return query; }
       bool get_checkoption() const { return checkoption; }
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *view_name;
       std::list<std::string*> *column_list;
@@ -774,7 +774,7 @@ namespace Parser {
     public:
       explicit RefreshViewStmt(std::string *v) : view_name(v) {}
       virtual ~RefreshViewStmt() { delete view_name; }
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *view_name;
   };
@@ -788,7 +788,7 @@ namespace Parser {
       DropViewStmt(std::string *v, bool i) : view_name(v), if_exists(i) {}
       virtual ~DropViewStmt() { delete view_name; };
       const std::string *get_view_name() const { return view_name; }
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *view_name;
       bool if_exists;
@@ -802,7 +802,7 @@ namespace Parser {
     public:
       CreateDBStmt(std::string *n, std::list<NameValueAssign*> *l) : db_name(n), name_value_list(l) {}
       virtual ~CreateDBStmt(); 
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *db_name;
       std::list<NameValueAssign*> *name_value_list;
@@ -816,7 +816,7 @@ namespace Parser {
     public:
       explicit DropDBStmt(std::string *n) : db_name(n) {}
       virtual ~DropDBStmt() { delete db_name; }
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *db_name;
   };
@@ -829,7 +829,7 @@ namespace Parser {
     public:
       CreateUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
       virtual ~CreateUserStmt();
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *user_name;
       std::list<NameValueAssign*> *name_value_list;
@@ -843,7 +843,7 @@ namespace Parser {
     public:
       AlterUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
       virtual ~AlterUserStmt();
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *user_name;
       std::list<NameValueAssign*> *name_value_list;
@@ -857,7 +857,7 @@ namespace Parser {
     public:
       DropUserStmt(std::string *n) : user_name(n) {}
       virtual ~DropUserStmt() { delete user_name; }
-      virtual void execute(Catalog_Namespace::Catalog &catalog);
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
       std::string *user_name;
   };

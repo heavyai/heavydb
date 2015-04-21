@@ -27,7 +27,7 @@ using namespace Fragmenter_Namespace;
 
 namespace {
 	SysCatalog *gsys_cat = nullptr;
-	Catalog *gcat = nullptr;
+	SessionInfo *gsession = nullptr;
 	Data_Namespace::DataMgr *dataMgr = nullptr;
 
 	void run_ddl(const string &input_str)
@@ -41,7 +41,7 @@ namespace {
 		unique_ptr<Stmt> stmt_ptr(stmt); // make sure it's deleted
 		Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt *>(stmt);
 		CHECK(ddl != nullptr);
-		ddl->execute(*gcat);
+		ddl->execute(*gsession);
 	}
 
 	class SQLTestEnv : public ::testing::Environment {
@@ -60,7 +60,6 @@ namespace {
 				gsys_cat = new SysCatalog(base_path.string(), *dataMgr);
 				UserMetadata user;
 				CHECK(gsys_cat->getMetadataForUser(MAPD_ROOT_USER, user));
-				gsys_cat->set_currentUser(user);
 				if (!gsys_cat->getMetadataForUser("gtest", user)) {
 					gsys_cat->createUser("gtest", "test!test!", false);
 					CHECK(gsys_cat->getMetadataForUser("gtest", user));
@@ -70,14 +69,15 @@ namespace {
 					gsys_cat->createDatabase("gtest_db", user.userId);
 					CHECK(gsys_cat->getMetadataForDB("gtest_db", db));
 				}
-				gcat = new Catalog(base_path.string(), user, db, *dataMgr);
+				Catalog *cat = new Catalog(base_path.string(), db, *dataMgr);
+        gsession = new SessionInfo(std::shared_ptr<Catalog>(cat), user);
 			}
 			virtual void TearDown()
 			{
 				if (gsys_cat != nullptr)
 					delete gsys_cat;
-				if (gcat != nullptr)
-					delete gcat;
+				if (gsession != nullptr)
+					delete gsession;
 				if (dataMgr != nullptr)
 					delete dataMgr;
 			}
@@ -86,7 +86,7 @@ namespace {
 	bool
 	load_data_test(string table_name, size_t num_rows)
 	{
-		vector<size_t> insert_col_hashs = populate_table_random(table_name, num_rows, *gcat);
+		vector<size_t> insert_col_hashs = populate_table_random(table_name, num_rows, gsession->get_catalog());
     return true;
 	}
 

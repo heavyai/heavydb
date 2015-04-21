@@ -27,7 +27,7 @@ using namespace Fragmenter_Namespace;
 
 namespace {
 	SysCatalog *gsys_cat = nullptr;
-	Catalog *gcat = nullptr;
+	SessionInfo *gsession = nullptr;
 	Data_Namespace::DataMgr *dataMgr = nullptr;
 
 	void run_ddl(const string &input_str)
@@ -41,7 +41,7 @@ namespace {
 		unique_ptr<Stmt> stmt_ptr(stmt); // make sure it's deleted
 		Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt *>(stmt);
 		CHECK(ddl != nullptr);
-		ddl->execute(*gcat);
+		ddl->execute(*gsession);
 	}
 
 	class SQLTestEnv : public ::testing::Environment {
@@ -60,7 +60,6 @@ namespace {
 				gsys_cat = new SysCatalog(base_path.string(), *dataMgr);
 				UserMetadata user;
 				CHECK(gsys_cat->getMetadataForUser(MAPD_ROOT_USER, user));
-				gsys_cat->set_currentUser(user);
 				if (!gsys_cat->getMetadataForUser("gtest", user)) {
 					gsys_cat->createUser("gtest", "test!test!", false);
 					CHECK(gsys_cat->getMetadataForUser("gtest", user));
@@ -70,14 +69,15 @@ namespace {
 					gsys_cat->createDatabase("gtest_db", user.userId);
 					CHECK(gsys_cat->getMetadataForDB("gtest_db", db));
 				}
-				gcat = new Catalog(base_path.string(), user, db, *dataMgr);
+				Catalog *cat = new Catalog(base_path.string(), db, *dataMgr);
+        gsession = new SessionInfo(std::shared_ptr<Catalog>(cat), user);
 			}
 			virtual void TearDown()
 			{
 				if (gsys_cat != nullptr)
 					delete gsys_cat;
-				if (gcat != nullptr)
-					delete gcat;
+				if (gsession != nullptr)
+					delete gsession;
 				if (dataMgr != nullptr)
 					delete dataMgr;
 			}
@@ -86,13 +86,13 @@ namespace {
 	bool
 	storage_test(const string &table_name, size_t num_rows)
 	{
-		vector<size_t> insert_col_hashs = populate_table_random(table_name, num_rows, *gcat);
+		vector<size_t> insert_col_hashs = populate_table_random(table_name, num_rows, gsession->get_catalog());
 		// cout << "insert hashs: ";
 		// for (auto h : insert_col_hashs)
 			// cout << h << " ";
 		// cout << endl;
-		vector<size_t> scan_col_hashs = scan_table_return_hash(table_name, *gcat);
-		vector<size_t> scan_col_hashs2 = scan_table_return_hash_non_iter(table_name, *gcat);
+		vector<size_t> scan_col_hashs = scan_table_return_hash(table_name, gsession->get_catalog());
+		vector<size_t> scan_col_hashs2 = scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
 		// cout << "scan hashs: ";
 		// for (auto h : scan_col_hashs)
 			// cout << h << " ";
@@ -105,12 +105,14 @@ namespace {
 #define SMALL		10000000
 #define LARGE		100000000
 
+/*
 TEST(StorageSmall,DISABLED_Numbers) {
 	ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
 	ASSERT_NO_THROW(run_ddl("create table numbers (a smallint, b int, c bigint, d numeric(7,3), e double, f float) with (fragment_size = 1000, page_size = 1024);"););
 	EXPECT_TRUE(storage_test("numbers", SMALL));
 	ASSERT_NO_THROW(run_ddl("drop table numbers;"););
 }
+*/
 
 TEST(StorageLarge, Numbers) {
 	ASSERT_NO_THROW(run_ddl("drop table if exists numbers;"););
