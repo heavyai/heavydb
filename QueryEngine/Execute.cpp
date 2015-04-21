@@ -87,7 +87,13 @@ TargetValue ResultRows::get(const size_t row_idx,
 
 namespace {
 
-int64_t inline_int_null_val(const SQLTypes type) {
+int64_t inline_int_null_val(const SQLTypeInfo& ti) {
+  auto type = ti.get_type();
+  if (ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    CHECK_EQ(4, ti.get_size());
+    type = kINT;
+  }
   switch (type) {
   case kBOOLEAN:
     return std::numeric_limits<int8_t>::min();
@@ -175,7 +181,7 @@ void ResultRows::reduce(const ResultRows& other_results) {
           agg_min_skip_val(
             boost::get<int64_t>(crt_val),
             *boost::get<int64_t>(new_val),
-            inline_int_null_val(agg_info.sql_type.get_type()));
+            inline_int_null_val(agg_info.sql_type));
         } else {
           agg_min(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
         }
@@ -191,7 +197,7 @@ void ResultRows::reduce(const ResultRows& other_results) {
           agg_max_skip_val(
             boost::get<int64_t>(crt_val),
             *boost::get<int64_t>(new_val),
-            inline_int_null_val(agg_info.sql_type.get_type()));
+            inline_int_null_val(agg_info.sql_type));
         } else {
           agg_max(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
         }
@@ -1162,7 +1168,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
     return not_null
       ? cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
       : cgen_state_->emitCall(icmp_name(optype) + "_" + int_typename + "_nullable",
-        { lhs_lvs.front(), rhs_lvs.front(), ll_int(inline_int_null_val(lhs_type)),
+        { lhs_lvs.front(), rhs_lvs.front(), ll_int(inline_int_null_val(lhs_ti)),
           inlineIntNull(SQLTypeInfo(kBOOLEAN)) });
   }
   if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
@@ -1339,9 +1345,7 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   if (type_info.is_string()) {
     switch (type_info.get_compression()) {
     case kENCODING_DICT: {
-      CHECK_EQ(4, type_info.get_size());
-      type = kINT;
-      break;
+      return ll_int(static_cast<int32_t>(inline_int_null_val(type_info)));
     }
     case kENCODING_NONE:
       return ll_int(int64_t(0));
@@ -1351,17 +1355,17 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   }
   switch (type) {
   case kBOOLEAN:
-    return ll_int(static_cast<int8_t>(inline_int_null_val(type)));
+    return ll_int(static_cast<int8_t>(inline_int_null_val(type_info)));
   case kSMALLINT:
-    return ll_int(static_cast<int16_t>(inline_int_null_val(type)));
+    return ll_int(static_cast<int16_t>(inline_int_null_val(type_info)));
   case kINT:
-    return ll_int(static_cast<int32_t>(inline_int_null_val(type)));
+    return ll_int(static_cast<int32_t>(inline_int_null_val(type_info)));
   case kBIGINT:
-    return ll_int(inline_int_null_val(type));
+    return ll_int(inline_int_null_val(type_info));
   case kTIME:
   case kTIMESTAMP:
   case kDATE:
-    return ll_int(std::numeric_limits<int64_t>::min());
+    return ll_int(inline_int_null_val(type_info));
   default:
     CHECK(false);
   }
@@ -1386,25 +1390,25 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
         return cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv);
       } else {
         return cgen_state_->emitCall("sub_" + int_typename + "_nullable",
-          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type.get_type())) });
+          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
       }
     case kPLUS:
       if (not_null) {
         return cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv);
       } else {
         return cgen_state_->emitCall("add_" + int_typename + "_nullable",
-          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type.get_type())) });
+          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
       }
     case kMULTIPLY:
       if (not_null) {
         return cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
       } else {
         return cgen_state_->emitCall("mul_" + int_typename + "_nullable",
-          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type.get_type())) });
+          { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
       }
     case kDIVIDE:
       return codegenDiv(lhs_lv, rhs_lv,
-        not_null ? "" : int_typename, inline_int_null_val(lhs_type.get_type()));
+        not_null ? "" : int_typename, inline_int_null_val(lhs_type));
     default:
       CHECK(false);
     }
@@ -1541,13 +1545,13 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypeInfo& ti) {
   case kMIN: {
     const double max_double { std::numeric_limits<double>::max() };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
-      ? (ti.get_notnull() ? std::numeric_limits<int64_t>::max() : inline_int_null_val(ti.get_type()))
+      ? (ti.get_notnull() ? std::numeric_limits<int64_t>::max() : inline_int_null_val(ti))
       : *reinterpret_cast<const int64_t*>(&max_double);
   }
   case kMAX: {
     const auto min_double { std::numeric_limits<double>::min() };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
-      ? (ti.get_notnull() ? std::numeric_limits<int64_t>::min() : inline_int_null_val(ti.get_type()))
+      ? (ti.get_notnull() ? std::numeric_limits<int64_t>::min() : inline_int_null_val(ti))
       : *reinterpret_cast<const int64_t*>(&min_double);
   }
   default:
@@ -2297,7 +2301,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     case kBOOLEAN: {
       auto col_data = reinterpret_cast<int8_t*>(malloc(sizeof(int8_t)));
       *col_data = col_cv->get_is_null()
-        ? inline_int_null_val(cd->columnType.get_type())
+        ? inline_int_null_val(cd->columnType)
         : (col_datum.boolval ? 1 : 0);
       col_buffers[col_ids[col_idx]] = col_data;
       break;
@@ -2305,7 +2309,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     case kSMALLINT: {
       auto col_data = reinterpret_cast<int16_t*>(malloc(sizeof(int16_t)));
       *col_data = col_cv->get_is_null()
-        ? inline_int_null_val(cd->columnType.get_type())
+        ? inline_int_null_val(cd->columnType)
         : col_datum.smallintval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
@@ -2313,7 +2317,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     case kINT: {
       auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
       *col_data = col_cv->get_is_null()
-        ? inline_int_null_val(cd->columnType.get_type())
+        ? inline_int_null_val(cd->columnType)
         : col_datum.intval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
@@ -2321,7 +2325,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     case kBIGINT: {
       auto col_data = reinterpret_cast<int64_t*>(malloc(sizeof(int64_t)));
       *col_data = col_cv->get_is_null()
-        ? inline_int_null_val(cd->columnType.get_type())
+        ? inline_int_null_val(cd->columnType)
         : col_datum.bigintval;
       col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
       break;
