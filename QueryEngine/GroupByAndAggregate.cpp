@@ -763,8 +763,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
   case GroupByColRangeType::Scan: {
     if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
         col_range_info.hash_type_ == GroupByColRangeType::Scan ||
-        col_range_info.max - col_range_info.min >=
-        static_cast<int64_t>(max_groups_buffer_entry_count)) {
+        col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count)) {
       return {
         executor_,
         col_range_info.hash_type_, false, false,

@@ -46,7 +46,7 @@ __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   }
 }
 
-#define EMPTY_KEY -9223372036854775808L
+#define EMPTY_KEY 9223372036854775807L
 
 extern "C"
 __device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
