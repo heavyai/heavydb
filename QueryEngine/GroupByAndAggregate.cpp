@@ -638,10 +638,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   case kTEXT:
   case kCHAR:
   case kVARCHAR:
-    if (col_ti.get_compression() != kENCODING_DICT) {
-      CHECK_EQ(kENCODING_NONE, col_ti.get_compression());
-      throw std::runtime_error("Group by / distinct not supported for none-encoding strings");
-    }
+    CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
   case kSMALLINT:
   case kINT:
   case kBIGINT: {
@@ -675,6 +672,19 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
 #define LL_INT(v) executor_->ll_int(v)
 #define ROW_FUNC executor_->cgen_state_->row_func_
 
+namespace {
+
+std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+  // For non-aggregate (scan only) plans, execute them like a group by
+  // row index -- the null pointer means row index to Executor::codegen().
+  return agg_plan
+    ? agg_plan->get_groupby_list()
+    : std::list<Analyzer::Expr*> { nullptr };
+}
+
+}  // namespace
+
 GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
     const Planner::Plan* plan,
@@ -689,20 +699,16 @@ GroupByAndAggregate::GroupByAndAggregate(
   , max_groups_buffer_entry_count_(max_groups_buffer_entry_count)
   , scan_limit_(scan_limit) {
   CHECK(plan_);
+  for (const auto groupby_expr : group_by_exprs(plan_)) {
+    if (!groupby_expr) {
+      continue;
+    }
+    const auto& groupby_ti = groupby_expr->get_type_info();
+    if (groupby_ti.is_string() && groupby_ti.get_compression() != kENCODING_DICT) {
+      throw std::runtime_error("Group by / distinct not supported for none-encoding strings");
+    }
+  }
 }
-
-namespace {
-
-std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
-  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
-  // For non-aggregate (scan only) plans, execute them like a group by
-  // row index -- the null pointer means row index to Executor::codegen().
-  return agg_plan
-    ? agg_plan->get_groupby_list()
-    : std::list<Analyzer::Expr*> { nullptr };
-}
-
-}  // namespace
 
 QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count) {
   auto group_col_widths = get_col_byte_widths(group_by_exprs(plan_));
