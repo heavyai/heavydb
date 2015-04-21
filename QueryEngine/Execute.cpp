@@ -85,6 +85,25 @@ TargetValue ResultRows::get(const size_t row_idx,
   CHECK(false);
 }
 
+namespace {
+
+int64_t inline_int_null_val(const SQLTypes type) {
+  switch (type) {
+  case kBOOLEAN:
+    return std::numeric_limits<int8_t>::min();
+  case kSMALLINT:
+    return std::numeric_limits<int16_t>::min();
+  case kINT:
+    return std::numeric_limits<int32_t>::min();
+  case kBIGINT:
+    return std::numeric_limits<int64_t>::min();
+  default:
+    CHECK(false);
+  }
+}
+
+}  // namespace
+
 void ResultRows::reduce(const ResultRows& other_results) {
   if (other_results.empty()) {
     return;
@@ -148,9 +167,14 @@ void ResultRows::reduce(const ResultRows& other_results) {
       break;
     case kMIN:
       if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time() || agg_info.sql_type.is_boolean()) {
-        agg_min(
-          boost::get<int64_t>(crt_val),
-          *boost::get<int64_t>(new_val));
+        if (agg_info.skip_null_val) {
+          agg_min_skip_val(
+            boost::get<int64_t>(crt_val),
+            *boost::get<int64_t>(new_val),
+            inline_int_null_val(agg_info.sql_type.get_type()));
+        } else {
+          agg_min(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
+        }
       } else {
         agg_min_double(
           boost::get<int64_t>(crt_val),
@@ -159,9 +183,14 @@ void ResultRows::reduce(const ResultRows& other_results) {
       break;
     case kMAX:
       if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time()) {
-        agg_max(
-          boost::get<int64_t>(crt_val),
-          *boost::get<int64_t>(new_val));
+        if (agg_info.skip_null_val) {
+          agg_max_skip_val(
+            boost::get<int64_t>(crt_val),
+            *boost::get<int64_t>(new_val),
+            inline_int_null_val(agg_info.sql_type.get_type()));
+        } else {
+          agg_max(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
+        }
       } else {
         agg_max_double(
           boost::get<int64_t>(crt_val),
@@ -1073,25 +1102,6 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   return codegenCmp(optype, lhs, rhs, hoist_literals);
 }
 
-namespace {
-
-int64_t inline_int_null_val(const SQLTypes type) {
-  switch (type) {
-  case kBOOLEAN:
-    return std::numeric_limits<int8_t>::min();
-  case kSMALLINT:
-    return std::numeric_limits<int16_t>::min();
-  case kINT:
-    return std::numeric_limits<int32_t>::min();
-  case kBIGINT:
-    return std::numeric_limits<int64_t>::min();
-  default:
-    CHECK(false);
-  }
-}
-
-}  // namespace
-
 llvm::Value* Executor::codegenCmp(const SQLOps optype,
                                   const Analyzer::Expr* lhs,
                                   const Analyzer::Expr* rhs,
@@ -1515,7 +1525,8 @@ std::vector<int64_t*> launch_query_cpu_code(
 #endif
 
 // TODO(alex): proper types for aggregate
-int64_t init_agg_val(const SQLAgg agg, const SQLTypes target_type) {
+int64_t init_agg_val(const SQLAgg agg, const SQLTypeInfo& ti) {
+  const auto target_type = ti.get_type();
   switch (agg) {
   case kAVG:
   case kSUM:
@@ -1526,13 +1537,13 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypes target_type) {
   case kMIN: {
     const double max_double { std::numeric_limits<double>::max() };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
-      ? std::numeric_limits<int64_t>::max()
+      ? (ti.get_notnull() ? std::numeric_limits<int64_t>::max() : inline_int_null_val(ti.get_type()))
       : *reinterpret_cast<const int64_t*>(&max_double);
   }
   case kMAX: {
     const auto min_double { std::numeric_limits<double>::min() };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
-      ? std::numeric_limits<int64_t>::min()
+      ? (ti.get_notnull() ? std::numeric_limits<int64_t>::min() : inline_int_null_val(ti.get_type()))
       : *reinterpret_cast<const int64_t*>(&min_double);
   }
   default:
@@ -1541,16 +1552,16 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypes target_type) {
 }
 
 // TODO(alex): remove
-int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64_t* out_vec, const size_t out_vec_sz) {
+int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* out_vec, const size_t out_vec_sz) {
   switch (agg) {
   case kAVG:
   case kSUM:
   case kCOUNT:
-    if (IS_INTEGER(target_type) || IS_TIME(target_type)) {
-      return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg, target_type));
+    if (ti.is_integer() || ti.is_time()) {
+      return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg, ti));
     } else {
-      CHECK(target_type == kDOUBLE || target_type == kFLOAT);
-      const int64_t agg_init_val = init_agg_val(agg, target_type);
+      CHECK(ti.is_fp());
+      const int64_t agg_init_val = init_agg_val(agg, ti);
       double r = *reinterpret_cast<const double*>(&agg_init_val);
       for (size_t i = 0; i < out_vec_sz; ++i) {
         r += *reinterpret_cast<const double*>(&out_vec[i]);
@@ -1558,12 +1569,15 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64
       return *reinterpret_cast<const int64_t*>(&r);
     }
   case kMIN: {
-    if (IS_INTEGER(target_type) || IS_TIME(target_type)) {
-      const int64_t& (*f)(const int64_t&, const int64_t&) = std::min<int64_t>;
-      return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg, target_type), f);
+    const int64_t agg_init_val = init_agg_val(agg, ti);
+    if (ti.is_integer() || ti.is_time()) {
+      int64_t agg_result = agg_init_val;
+      for (size_t i = 0; i < out_vec_sz; ++i) {
+        agg_min_skip_val(&agg_result, out_vec[i], agg_init_val);
+      }
+      return agg_result;
     } else {
-      CHECK(target_type == kDOUBLE || target_type == kFLOAT);
-      const int64_t agg_init_val = init_agg_val(agg, target_type);
+      CHECK(ti.is_fp());
       double r = *reinterpret_cast<const double*>(&agg_init_val);
       for (size_t i = 0; i < out_vec_sz; ++i) {
         r = std::min<const double>(*reinterpret_cast<const double*>(&r), *reinterpret_cast<const double*>(&out_vec[i]));
@@ -1572,12 +1586,15 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypes target_type, const int64
     }
   }
   case kMAX: {
-    if (IS_INTEGER(target_type) || IS_TIME(target_type)) {
-      const int64_t& (*f)(const int64_t&, const int64_t&) = std::max<int64_t>;
-      return std::accumulate(out_vec, out_vec + out_vec_sz, init_agg_val(agg, target_type), f);
+    const int64_t agg_init_val = init_agg_val(agg, ti);
+    if (ti.is_integer() || ti.is_time()) {
+      int64_t agg_result = agg_init_val;
+      for (size_t i = 0; i < out_vec_sz; ++i) {
+        agg_max_skip_val(&agg_result, out_vec[i], agg_init_val);
+      }
+      return agg_result;
     } else {
-      CHECK(target_type == kDOUBLE || target_type == kFLOAT);
-      const int64_t agg_init_val = init_agg_val(agg, target_type);
+      CHECK(ti.is_fp());
       double r = *reinterpret_cast<const double*>(&agg_init_val);
       for (size_t i = 0; i < out_vec_sz; ++i) {
         r = std::max<const double>(*reinterpret_cast<const double*>(&r), *reinterpret_cast<const double*>(&out_vec[i]));
@@ -1704,7 +1721,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
     }
     CHECK(target_type_info.is_integer() || target_type_info.is_time() || target_type == kFLOAT || target_type == kDOUBLE);
     const auto agg_type = agg_expr->get_aggtype();
-    const auto agg_init_val = init_agg_val(agg_type, target_type);
+    const auto agg_init_val = init_agg_val(agg_type, target_type_info);
     switch (agg_type) {
     case kAVG: {
       const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
@@ -2158,14 +2175,14 @@ int32_t Executor::executePlanWithoutGroupBy(
     CHECK(agg_info.is_agg);
     const auto val1 = reduce_results(
       agg_info.agg_kind,
-      target_expr->get_type_info().get_type(),
+      target_expr->get_type_info(),
       out_vec[out_vec_idx],
       device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1);
     if (agg_info.agg_kind == kAVG) {
       ++out_vec_idx;
       results.addValue(val1, reduce_results(
         agg_info.agg_kind,
-        target_expr->get_type_info().get_type(),
+        target_expr->get_type_info(),
         out_vec[out_vec_idx],
         device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
     } else {

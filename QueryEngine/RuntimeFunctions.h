@@ -25,6 +25,12 @@ void agg_max_double(int64_t* agg, const double val);
 extern "C"
 void agg_min_double(int64_t* agg, const double val);
 
+extern "C"
+void agg_max_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val);
+
+extern "C"
+void agg_min_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val);
+
 #define EMPTY_KEY std::numeric_limits<int64_t>::min()
 
 extern "C"

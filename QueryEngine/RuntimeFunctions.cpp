@@ -183,7 +183,12 @@ void agg_count_distinct_bitmap_skip_val(int64_t* agg, const int64_t val, const i
 extern "C" __attribute__((always_inline))                                                 \
 void base_agg_func##_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
   if (val != skip_val) {                                                                  \
-    base_agg_func(agg, val);                                                              \
+    const int64_t old_agg = *agg;                                                         \
+    if (old_agg != skip_val) {                                                            \
+      base_agg_func(agg, val);                                                            \
+    } else {                                                                              \
+      *agg = val;                                                                         \
+    }                                                                                     \
   }                                                                                       \
 }
 
