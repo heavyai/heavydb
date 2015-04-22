@@ -65,11 +65,10 @@ struct CountDistinctDescriptor {
   const Executor* executor_;
   CountDistinctImplType impl_type_;
   int64_t min_val;
-  int64_t max_val;
+  int64_t bitmap_sz_bits;
 
   size_t bitmapSizeBytes() const {
     CHECK(impl_type_ == CountDistinctImplType::Bitmap);
-    int64_t bitmap_sz_bits = max_val - min_val + 1;
     return bitmap_size_bytes(bitmap_sz_bits);
   }
 };

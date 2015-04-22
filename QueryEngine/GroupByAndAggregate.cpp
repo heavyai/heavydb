@@ -140,11 +140,10 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
       CHECK(count_distinct_it != query_mem_desc_.count_distinct_descriptors_.end());
       const auto& count_distinct_desc = count_distinct_it->second;
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-        const size_t bitmap_sz = count_distinct_desc.max_val - count_distinct_desc.min_val + 1;
         if (deferred) {
-          agg_bitmap_size[init_agg_idx] = bitmap_sz;
+          agg_bitmap_size[init_agg_idx] = count_distinct_desc.bitmap_sz_bits;
         } else {
-          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctBitmap(bitmap_sz);
+          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctBitmap(count_distinct_desc.bitmap_sz_bits);
         }
       } else {
         CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
@@ -724,13 +723,20 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       CHECK_EQ(kCOUNT, agg_info.agg_kind);
       const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
       auto arg_range_info = getExprRangeInfo(agg_expr->get_arg(), query_info_.fragments);
+      CountDistinctImplType count_distinct_impl_type { CountDistinctImplType::StdSet };
+      int64_t bitmap_sz_bits { 0 };
+      if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange) {
+        count_distinct_impl_type = CountDistinctImplType::Bitmap;
+        bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
+        if (bitmap_sz_bits <= 0) {
+          count_distinct_impl_type = CountDistinctImplType::StdSet;
+        }
+      }
       CountDistinctDescriptor count_distinct_desc {
         executor_,
-        (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange)
-          ? CountDistinctImplType::Bitmap
-          : CountDistinctImplType::StdSet,
+        count_distinct_impl_type,
         arg_range_info.min,
-        arg_range_info.max
+        bitmap_sz_bits
       };
       auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_idx, count_distinct_desc));
       CHECK(it_ok.second);
