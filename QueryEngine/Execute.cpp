@@ -1314,17 +1314,23 @@ llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool h
 
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool hoist_literals) {
   const auto operand = uoper->get_operand();
-  CHECK(operand->get_type_info().is_integer() ||
-        operand->get_type_info().is_boolean() ||
-        operand->get_type_info().is_time() ||
-        operand->get_type_info().is_string());
+  const auto& ti = operand->get_type_info();
+  CHECK(ti.is_integer() ||
+        ti.is_boolean() ||
+        ti.is_time() ||
+        ti.is_string() ||
+        ti.is_fp());
   // if the type is inferred as non null, short-circuit to false
-  if (operand->get_type_info().get_notnull()) {
+  if (ti.get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, true, hoist_literals).front();
+  if (ti.is_fp()) {
+    return cgen_state_->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
+      operand_lv, ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE));
+  }
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
-    operand_lv, inlineIntNull(operand->get_type_info()));
+    operand_lv, inlineIntNull(ti));
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {
