@@ -1200,6 +1200,7 @@ namespace Parser {
           throw std::runtime_error("Column " + *c + " does not exist.");
         result_col_list.push_back(cd->columnId);
       }
+      throw std::runtime_error("Insert into a subset of columns is not supported yet.");
     }
     query.set_result_col_list(result_col_list);
   }
@@ -1214,6 +1215,11 @@ namespace Parser {
       Analyzer::Expr *e = v->analyze(catalog, query);
       const ColumnDescriptor *cd = catalog.getMetadataForColumn(query.get_result_table_id(), *it);
       assert (cd != nullptr);
+      if (cd->columnType.get_notnull()) {
+        Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(e);
+        if (c != nullptr && c->get_is_null())
+          throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
+      }
       e = e->add_cast(cd->columnType);
       tlist.push_back(new Analyzer::TargetEntry("", e));
       ++it;

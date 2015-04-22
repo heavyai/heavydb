@@ -160,9 +160,9 @@ TEST(ParseAnalyzePlan, Select) {
 
 TEST(ParseAnalyzePlan, Insert) {
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny values (12345, 100000000, 100000000000);")); } );
-	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny (b, c) values (22222, 33333333333333333);")); } );
+	//EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny (b, c) values (22222, 33333333333333333);")); } );
 	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny select 2*a, 2*b, 2*c from skinny;")); } );
-	EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into fat (m, n, o) values ('2014-12-13T222315', '15:13:14', '1999-09-09');")); } );
+	//EXPECT_NO_THROW( { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into fat (m, n, o) values ('2014-12-13T222315', '15:13:14', '1999-09-09');")); } );
 }
 
 TEST(ParseAnalyzePlan, Views) {
