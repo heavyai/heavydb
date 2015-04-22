@@ -649,7 +649,7 @@ opt_having_clause:
 	/* search conditions */
 
 general_exp:
-	|	general_exp OR general_exp
+	general_exp OR general_exp
 	{ $<nodeval>$ = new OperExpr(kOR, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	general_exp AND general_exp
 	{ $<nodeval>$ = new OperExpr(kAND, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
