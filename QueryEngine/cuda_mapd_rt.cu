@@ -287,12 +287,7 @@ __device__ void agg_id_double_shared(int64_t* agg, const double val) {
 extern "C"                                                                                                  \
 __device__ void base_agg_func##_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
   if (val != skip_val) {                                                                                    \
-    const int64_t old_agg = *agg;                                                                           \
-    if (old_agg != skip_val) {                                                                              \
-      base_agg_func##_shared(agg, val);                                                                     \
-    } else {                                                                                                \
-      *agg = val;                                                                                           \
-    }                                                                                                       \
+    base_agg_func##_shared(agg, val);                                                                       \
   }                                                                                                         \
 }
 
@@ -340,6 +335,67 @@ extern "C"
 __device__ void agg_max_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
   if (val != skip_val) {
     atomicMax64SkipVal(agg, val, skip_val);
+  }
+}
+
+#undef DEF_SKIP_AGG
+
+#define DEF_SKIP_AGG(base_agg_func)                                                                       \
+extern "C"                                                                                                \
+__device__ void base_agg_func##_skip_val_shared(int64_t* agg, const double val, const double skip_val) {  \
+  if (val != skip_val) {                                                                                  \
+    base_agg_func##_shared(agg, val);                                                                     \
+  }                                                                                                       \
+}
+
+DEF_SKIP_AGG(agg_count_double)
+DEF_SKIP_AGG(agg_sum_double)
+
+__device__ double atomicMinDblSkipVal(double* address, double val, const double skip_val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*) address;
+    unsigned long long int old = *address_as_ull;
+    unsigned long long int skip_val_as_ull = *((unsigned long long int*) &skip_val);
+    unsigned long long int assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed, assumed == skip_val_as_ull
+          ? *((unsigned long long int*) &val) : __double_as_longlong(min(val, __longlong_as_double(assumed))));
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+extern "C"
+__device__ void agg_min_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {
+  if (val != skip_val) {
+    atomicMinDblSkipVal(reinterpret_cast<double*>(agg), val, skip_val);
+  }
+}
+
+__device__ double atomicMaxDblSkipVal(double* address, double val, const double skip_val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*) address;
+    unsigned long long int old = *address_as_ull;
+    unsigned long long int skip_val_as_ull = *((unsigned long long int*) &skip_val);
+    unsigned long long int assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed, assumed == skip_val_as_ull
+          ? *((unsigned long long int*) &val) : __double_as_longlong(max(val, __longlong_as_double(assumed))));
+    } while (assumed != old);
+
+    return __longlong_as_double(old);
+}
+
+extern "C"
+__device__ void agg_max_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {
+  if (val != skip_val) {
+    atomicMaxDblSkipVal(reinterpret_cast<double*>(agg), val, skip_val);
   }
 }
 

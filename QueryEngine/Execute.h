@@ -113,6 +113,7 @@ private:
   std::pair<llvm::Value*, llvm::Value*>
   colByteStream(const int col_id, const bool fetch_column, const bool hoist_literals);
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
+  llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
   ResultRows executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,

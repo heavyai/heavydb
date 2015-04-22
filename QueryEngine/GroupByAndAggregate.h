@@ -202,8 +202,7 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
     CHECK(!agg_arg_ti.is_fp());
     is_distinct = true;
   }
-  // TODO(alex): null support for all types
-  bool skip_null = !agg_arg_ti.get_notnull() && (agg_arg_ti.is_integer() || agg_arg_ti.is_time());
+  bool skip_null = !agg_arg_ti.get_notnull();
   return {
     true, agg_expr->get_aggtype(),
     agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info(),

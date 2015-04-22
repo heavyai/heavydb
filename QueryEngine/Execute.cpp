@@ -111,6 +111,19 @@ int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   }
 }
 
+double inline_fp_null_val(const SQLTypeInfo& ti) {
+  CHECK(ti.is_fp());
+  const auto type = ti.get_type();
+  switch (type) {
+  case kFLOAT:
+    return NULL_FLOAT;
+  case kDOUBLE:
+    return NULL_DOUBLE;
+  default:
+    CHECK(false);
+  }
+}
+
 }  // namespace
 
 void ResultRows::reduce(const ResultRows& other_results) {
@@ -185,9 +198,16 @@ void ResultRows::reduce(const ResultRows& other_results) {
           agg_min(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
         }
       } else {
-        agg_min_double(
-          boost::get<int64_t>(crt_val),
-          *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+        if (agg_info.skip_null_val) {
+          agg_min_double_skip_val(
+            boost::get<int64_t>(crt_val),
+            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)),
+            inline_fp_null_val(agg_info.sql_type));
+        } else {
+          agg_min_double(
+            boost::get<int64_t>(crt_val),
+            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+        }
       }
       break;
     case kMAX:
@@ -201,9 +221,16 @@ void ResultRows::reduce(const ResultRows& other_results) {
           agg_max(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
         }
       } else {
-        agg_max_double(
-          boost::get<int64_t>(crt_val),
-          *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+        if (agg_info.skip_null_val) {
+          agg_max_double_skip_val(
+            boost::get<int64_t>(crt_val),
+            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)),
+            inline_fp_null_val(agg_info.sql_type));
+        } else {
+          agg_max_double(
+            boost::get<int64_t>(crt_val),
+            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+        }
       }
       break;
     default:
@@ -1384,6 +1411,18 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   }
 }
 
+llvm::ConstantFP* Executor::inlineFpNull(const SQLTypeInfo& type_info) {
+  CHECK(type_info.is_fp());
+  switch (type_info.get_type()) {
+  case kFLOAT:
+    return ll_fp(NULL_FLOAT);
+  case kDOUBLE:
+    return ll_fp(NULL_DOUBLE);
+  default:
+    CHECK(false);
+  }
+}
+
 llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_ARITHMETIC(optype));
@@ -1568,15 +1607,21 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypeInfo& ti) {
   }
   case kMIN: {
     const double max_double { std::numeric_limits<double>::max() };
+    const double null_double { ti.is_fp() ? inline_fp_null_val(ti) : 0. };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
       ? (ti.get_notnull() ? std::numeric_limits<int64_t>::max() : inline_int_null_val(ti))
-      : *reinterpret_cast<const int64_t*>(&max_double);
+      : (ti.get_notnull()
+          ? *reinterpret_cast<const int64_t*>(&max_double)
+          : *reinterpret_cast<const int64_t*>(&null_double));
   }
   case kMAX: {
     const auto min_double { std::numeric_limits<double>::min() };
+    const double null_double { ti.is_fp() ? inline_fp_null_val(ti) : 0. };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
       ? (ti.get_notnull() ? std::numeric_limits<int64_t>::min() : inline_int_null_val(ti))
-      : *reinterpret_cast<const int64_t*>(&min_double);
+      : (ti.get_notnull()
+          ? *reinterpret_cast<const int64_t*>(&min_double)
+          : *reinterpret_cast<const int64_t*>(&null_double));
   }
   default:
     CHECK(false);
@@ -1610,11 +1655,13 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* o
       return agg_result;
     } else {
       CHECK(ti.is_fp());
-      double r = *reinterpret_cast<const double*>(&agg_init_val);
+      int64_t agg_result = agg_init_val;
       for (size_t i = 0; i < out_vec_sz; ++i) {
-        r = std::min<const double>(*reinterpret_cast<const double*>(&r), *reinterpret_cast<const double*>(&out_vec[i]));
+        agg_min_double_skip_val(&agg_result,
+          *reinterpret_cast<const double*>(&out_vec[i]),
+          *reinterpret_cast<const double*>(&agg_init_val));
       }
-      return *reinterpret_cast<const int64_t*>(&r);
+      return agg_result;
     }
   }
   case kMAX: {
@@ -1626,12 +1673,13 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* o
       }
       return agg_result;
     } else {
-      CHECK(ti.is_fp());
-      double r = *reinterpret_cast<const double*>(&agg_init_val);
+      int64_t agg_result = agg_init_val;
       for (size_t i = 0; i < out_vec_sz; ++i) {
-        r = std::max<const double>(*reinterpret_cast<const double*>(&r), *reinterpret_cast<const double*>(&out_vec[i]));
+        agg_max_double_skip_val(&agg_result,
+          *reinterpret_cast<const double*>(&out_vec[i]),
+          *reinterpret_cast<const double*>(&agg_init_val));
       }
-      return *reinterpret_cast<const int64_t*>(&r);
+      return agg_result;
     }
   }
   default:
@@ -2896,15 +2944,19 @@ declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*)
 declare void @agg_count_shared(i64*, i64);
 declare void @agg_count_skip_val_shared(i64*, i64, i64);
 declare void @agg_count_double_shared(i64*, double);
+declare void @agg_count_double_skip_val_shared(i64*, double, double);
 declare void @agg_sum_shared(i64*, i64);
 declare void @agg_sum_skip_val_shared(i64*, i64, i64);
 declare void @agg_sum_double_shared(i64*, double);
+declare void @agg_sum_double_skip_val_shared(i64*, double, double);
 declare void @agg_max_shared(i64*, i64);
 declare void @agg_max_skip_val_shared(i64*, i64, i64);
 declare void @agg_max_double_shared(i64*, double);
+declare void @agg_max_double_skip_val_shared(i64*, double, double);
 declare void @agg_min_shared(i64*, i64);
 declare void @agg_min_skip_val_shared(i64*, i64, i64);
 declare void @agg_min_double_shared(i64*, double);
+declare void @agg_min_double_skip_val_shared(i64*, double, double);
 declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_double_shared(i64*, double);
 declare i64 @ExtractFromTime(i32, i64);

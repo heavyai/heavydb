@@ -181,6 +181,14 @@ void agg_count_distinct_bitmap_skip_val(int64_t* agg, const int64_t val, const i
   }
 }
 
+#define DEF_SKIP_AGG_ADD(base_agg_func)                                                   \
+extern "C" __attribute__((always_inline))                                                 \
+void base_agg_func##_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
+  if (val != skip_val) {                                                                  \
+    base_agg_func(agg, val);                                                              \
+  }                                                                                       \
+}
+
 #define DEF_SKIP_AGG(base_agg_func)                                                       \
 extern "C" __attribute__((always_inline))                                                 \
 void base_agg_func##_skip_val(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
@@ -194,14 +202,15 @@ void base_agg_func##_skip_val(int64_t* agg, const int64_t val, const int64_t ski
   }                                                                                       \
 }
 
-DEF_SKIP_AGG(agg_count)
-DEF_SKIP_AGG(agg_sum)
+DEF_SKIP_AGG_ADD(agg_count)
+DEF_SKIP_AGG_ADD(agg_sum)
 DEF_SKIP_AGG(agg_max)
 DEF_SKIP_AGG(agg_min)
 
+#undef DEF_SKIP_AGG_ADD
 #undef DEF_SKIP_AGG
 
-// TODO(alex): fix signature, implement the rest
+// TODO(alex): fix signature
 
 extern "C" __attribute__((always_inline))
 void agg_count_double(int64_t* agg, const double val) {
@@ -231,23 +240,57 @@ void agg_id_double(int64_t* agg, const double val) {
   *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
+#define DEF_SKIP_AGG_ADD(base_agg_func)                                                   \
+extern "C" __attribute__((always_inline))                                                 \
+void base_agg_func##_skip_val(int64_t* agg, const double val, const double skip_val) {    \
+  if (val != skip_val) {                                                                  \
+    base_agg_func(agg, val);                                                              \
+  }                                                                                       \
+}
+
+#define DEF_SKIP_AGG(base_agg_func)                                                       \
+extern "C" __attribute__((always_inline))                                                 \
+void base_agg_func##_skip_val(int64_t* agg, const double val, const double skip_val) {    \
+  if (val != skip_val) {                                                                  \
+    const int64_t old_agg = *agg;                                                         \
+    if (old_agg != *reinterpret_cast<const int64_t*>(&skip_val)) {                        \
+      base_agg_func(agg, val);                                                            \
+    } else {                                                                              \
+      *agg = *reinterpret_cast<const int64_t*>(&val);                                     \
+    }                                                                                     \
+  }                                                                                       \
+}
+
+DEF_SKIP_AGG_ADD(agg_count_double)
+DEF_SKIP_AGG_ADD(agg_sum_double)
+DEF_SKIP_AGG(agg_max_double)
+DEF_SKIP_AGG(agg_min_double)
+
+#undef DEF_SKIP_AGG_ADD
+#undef DEF_SKIP_AGG
+
 // Shared memory aggregators. Should never be called,
 // real implementations are in cuda_mapd_rt.cu.
 
-#define DEF_SHARED_AGG_STUBS(base_agg_func)                                                      \
-extern "C" __attribute__((noinline))                                                             \
-void base_agg_func##_shared(int64_t* agg, const int64_t val) {                                   \
-  abort();                                                                                       \
-}                                                                                                \
-                                                                                                 \
-extern "C" __attribute__((noinline))                                                             \
-void base_agg_func##_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
-  abort();                                                                                       \
-}                                                                                                \
-                                                                                                 \
-extern "C" __attribute__((noinline))                                                             \
-void base_agg_func##_double_shared(int64_t* agg, const double val) {                             \
-  abort();                                                                                       \
+#define DEF_SHARED_AGG_STUBS(base_agg_func)                                                           \
+extern "C" __attribute__((noinline))                                                                  \
+void base_agg_func##_shared(int64_t* agg, const int64_t val) {                                        \
+  abort();                                                                                            \
+}                                                                                                     \
+                                                                                                      \
+extern "C" __attribute__((noinline))                                                                  \
+void base_agg_func##_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {       \
+  abort();                                                                                            \
+}                                                                                                     \
+                                                                                                      \
+extern "C" __attribute__((noinline))                                                                  \
+void base_agg_func##_double_shared(int64_t* agg, const double val) {                                  \
+  abort();                                                                                            \
+}                                                                                                     \
+                                                                                                      \
+extern "C" __attribute__((noinline))                                                                  \
+void base_agg_func##_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {  \
+  abort();                                                                                            \
 }
 
 DEF_SHARED_AGG_STUBS(agg_count)
