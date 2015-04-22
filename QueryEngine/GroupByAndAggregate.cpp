@@ -19,6 +19,7 @@ QueryExecutionContext::QueryExecutionContext(
     const std::vector<const int8_t*>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
   : query_mem_desc_(query_mem_desc)
+  , init_agg_vals_(executor->plan_state_->init_agg_vals_)
   , executor_(executor)
   , device_type_(device_type)
   , device_id_(device_id)
@@ -143,14 +144,14 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
         if (deferred) {
           agg_bitmap_size[init_agg_idx] = count_distinct_desc.bitmap_sz_bits;
         } else {
-          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctBitmap(count_distinct_desc.bitmap_sz_bits);
+          init_agg_vals_[init_agg_idx] = allocateCountDistinctBitmap(count_distinct_desc.bitmap_sz_bits);
         }
       } else {
         CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
         if (deferred) {
           agg_bitmap_size[init_agg_idx] = -1;
         } else {
-          executor_->plan_state_->init_agg_vals_[init_agg_idx] = allocateCountDistinctSet();
+          init_agg_vals_[init_agg_idx] = allocateCountDistinctSet();
         }
       }
     }

@@ -433,6 +433,7 @@ private:
   int64_t allocateCountDistinctSet();
 
   const QueryMemoryDescriptor& query_mem_desc_;
+  std::vector<int64_t> init_agg_vals_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
   const int device_id_;

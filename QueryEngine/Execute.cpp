@@ -2192,11 +2192,11 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(
       compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers, num_rows, 0, plan_state_->init_agg_vals_, {}, {}, &error_code);
+      col_buffers, num_rows, 0, query_exe_context->init_agg_vals_, {}, {}, &error_code);
   } else {
     out_vec = query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers, num_rows, 0, plan_state_->init_agg_vals_,
+      col_buffers, num_rows, 0, query_exe_context->init_agg_vals_,
       data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
   }
   results = ResultRows(target_exprs, this, query_exe_context->row_set_mem_owner_);
@@ -2251,12 +2251,12 @@ int32_t Executor::executePlanWithGroupBy(
   int32_t error_code { 0 };
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
-      num_rows, scan_limit, plan_state_->init_agg_vals_,
+      num_rows, scan_limit, query_exe_context->init_agg_vals_,
       query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, &error_code);
   } else {
     query_exe_context->launchGpuCode(
       compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
-      num_rows, scan_limit, plan_state_->init_agg_vals_,
+      num_rows, scan_limit, query_exe_context->init_agg_vals_,
       data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
   }
   results = query_exe_context->getRowSet(target_exprs);

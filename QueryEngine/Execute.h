@@ -452,7 +452,6 @@ private:
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
-  friend class ResultRow;
 };
 
 #endif // QUERYENGINE_EXECUTE_H
