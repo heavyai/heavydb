@@ -98,7 +98,7 @@ private:
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* toBool(llvm::Value*);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
-  llvm::Value* codegenDiv(llvm::Value*, llvm::Value*, const std::string& int_typename, const int64_t null_val);
+  llvm::Value* codegenDiv(llvm::Value*, llvm::Value*, const std::string& null_typename, const SQLTypeInfo&);
   llvm::Value* codegenLogical(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
