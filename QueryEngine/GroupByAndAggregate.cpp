@@ -602,6 +602,9 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
       CHECK_GT(crt_col_cardinality, 0);
       cardinality *= crt_col_cardinality;
     }
+    if (cardinality > 10000000) {  // more than 10M groups is a lot
+      return { GroupByColRangeType::MultiCol, 0, 0 };
+    }
     return { GroupByColRangeType::MultiColKnownCardinality, 0, cardinality };
   }
   return getExprRangeInfo(groupby_exprs.front(), fragments);
