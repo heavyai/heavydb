@@ -13,6 +13,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <glog/logging.h>
 #include "../Shared/measure.h"
 #include "Importer.h"
 
@@ -203,9 +204,11 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
           is_null = true;
         switch (cd->columnType.get_type()) {
         case kBOOLEAN: {
-          if (is_null)
+          if (is_null) {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addBoolean(NULL_BOOLEAN);
-          else {
+          } else {
             SQLTypeInfo ti = cd->columnType;
             Datum d = StringToDatum(row[col_idx], ti);
             import_buffers[col_idx]->addBoolean((int8_t)d.boolval);
@@ -215,40 +218,57 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
         case kSMALLINT:
           if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
             import_buffers[col_idx]->addSmallint((int16_t)std::atoi(row[col_idx].c_str()));
-          } else
+          } else {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
+          }
           break;
         case kINT:
           if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
             import_buffers[col_idx]->addInt(std::atoi(row[col_idx].c_str()));
-          } else
+          } else {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addInt(NULL_INT);
+          }
           break;
         case kBIGINT:
           if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
             import_buffers[col_idx]->addBigint(std::atoll(row[col_idx].c_str()));
-          } else
+          } else {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addBigint(NULL_BIGINT);
+          }
           break;
         case kFLOAT:
           if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
             import_buffers[col_idx]->addFloat((float)std::atof(row[col_idx].c_str()));
-          } else
+          } else {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addFloat(NULL_FLOAT);
+          }
           break;
         case kDOUBLE:
           if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
             import_buffers[col_idx]->addDouble(std::atof(row[col_idx].c_str()));
-          } else
+          } else {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addDouble(NULL_DOUBLE);
+          }
           break;
         case kTEXT:
         case kVARCHAR:
         case kCHAR: {
           // @TODO(wei) for now, use empty string for nulls
-          if (is_null)
+          if (is_null) {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addString(std::string());
-          else
+          } else
             import_buffers[col_idx]->addString(row[col_idx]);
           break;
         }
@@ -259,8 +279,11 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
             SQLTypeInfo ti = cd->columnType;
             Datum d = StringToDatum(row[col_idx], ti);
             import_buffers[col_idx]->addTime(d.timeval);
-          } else
+          } else {
+            if (cd->columnType.get_notnull())
+              throw std::runtime_error("NULL for column " + cd->columnName);
             import_buffers[col_idx]->addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+          }
           break;
         default:
           CHECK(false);
@@ -269,7 +292,7 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
       }
       row_count++;
     } catch (const std::exception &e) {
-      LOG(ERROR) << "input exception thrown: " << e.what();
+      LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
     }
     });
     total_str_to_val_time_us += us;
@@ -281,7 +304,7 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
   }
   });
   if (debug_timing && row_count > 0) {
-    std::cout << "Thread" << std::this_thread::get_id() << ":" << row_count << " rows inserted in " << (double)ms/1000.0 << "sec, Insert Time: " << (double)load_ms/1000.0 << "sec, get_row: " << (double)total_get_row_time_us/1000000.0 << "sec, str_to_val: " << (double)total_str_to_val_time_us/1000000.0 << "sec" << std::endl;
+    LOG(INFO) << "Thread" << std::this_thread::get_id() << ":" << row_count << " rows inserted in " << (double)ms/1000.0 << "sec, Insert Time: " << (double)load_ms/1000.0 << "sec, get_row: " << (double)total_get_row_time_us/1000000.0 << "sec, str_to_val: " << (double)total_str_to_val_time_us/1000000.0 << "sec" << std::endl;
   }
 }
 
@@ -380,7 +403,7 @@ Importer::import()
     for (i = 0; i < size && buffer[which_buf][i] != copy_params.line_delim; i++)
     ;
     if (i == size)
-      std::cout << "No line delimiter in block." << std::endl;
+      LOG(WARNING) << "No line delimiter in block." << std::endl;
     begin_pos = i + 1;
   }
   while (size > 0) {
@@ -421,7 +444,7 @@ Importer::import()
       catalog.get_dataMgr().checkpoint();
   });
   if (debug_timing)
-    std::cout << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;
+    LOG(INFO) << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;
 
   free(buffer[0]);
   buffer[0] = nullptr;

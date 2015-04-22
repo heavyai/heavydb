@@ -9,7 +9,6 @@
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 #include "CudaMgr/CudaMgr.h"
-#include "Import/CsvImport.h"
 
 #include <boost/range/adaptor/reversed.hpp>
 #include <llvm/ExecutionEngine/MCJIT.h>
