@@ -1123,6 +1123,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   auto rhs_lvs = codegen(rhs, true, hoist_literals);
   CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
         (lhs_ti.is_string() && rhs_ti.is_string()));
+  const bool not_null { lhs_ti.get_notnull() && rhs_ti.get_notnull() };
   if (lhs_ti.is_integer() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string()) {
     if (lhs_ti.is_string()) {
       CHECK(rhs_ti.is_string());
@@ -1145,7 +1146,6 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
         CHECK(optype == kEQ || optype == kNE);
       }
     }
-    const bool not_null { lhs_ti.get_notnull() && rhs_ti.get_notnull() };
     const std::string int_typename { "int" + std::to_string(get_bit_width(lhs_ti.get_type())) + "_t" };
     auto lhs_type = lhs_ti.get_type();
     // TODO(alex): refactor this
@@ -1172,7 +1172,15 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
           inlineIntNull(SQLTypeInfo(kBOOLEAN)) });
   }
   if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
-    return cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front());
+    const std::string fp_typename { lhs_ti.get_type() == kFLOAT ? "float" : "double" };
+    return not_null
+      ? cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
+      : cgen_state_->emitCall(icmp_name(optype) + "_" + fp_typename + "_nullable",
+        {
+          lhs_lvs.front(), rhs_lvs.front(),
+          lhs_ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE),
+          inlineIntNull(SQLTypeInfo(kBOOLEAN))
+        });
   }
   CHECK(false);
 }
