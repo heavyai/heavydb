@@ -84,6 +84,12 @@ private:
     return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(
       get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
   }
+  llvm::ConstantFP* ll_fp(const float v) {
+    return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), v));
+  }
+  llvm::ConstantFP* ll_fp(const double v) {
+    return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), v));
+  }
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
@@ -98,7 +104,7 @@ private:
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* toBool(llvm::Value*);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
-  llvm::Value* codegenDiv(llvm::Value*, llvm::Value*, const std::string& int_typename, const int64_t null_val);
+  llvm::Value* codegenDiv(llvm::Value*, llvm::Value*, const std::string& null_typename, const SQLTypeInfo&);
   llvm::Value* codegenLogical(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);

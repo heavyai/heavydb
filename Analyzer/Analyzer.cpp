@@ -770,6 +770,12 @@ namespace Analyzer {
         //@TODO(wei) use empty string as null for now
         constval.stringval = new std::string();
         break;
+      case kFLOAT:
+        constval.floatval = NULL_FLOAT;
+        break;
+      case kDOUBLE:
+        constval.doubleval = NULL_DOUBLE;
+        break;
       default:
         CHECK(false);
     }
