@@ -46,7 +46,7 @@ __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   }
 }
 
-#define EMPTY_KEY -9223372036854775808L
+#define EMPTY_KEY 9223372036854775807L
 
 extern "C"
 __device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
@@ -161,8 +161,6 @@ __device__ int64_t atomicMax64(int64_t* address, int64_t val)
         assumed = old;
         old = atomicCAS(address_as_ull, assumed,
                         max((long long) val, (long long) assumed));
-
-    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
     } while (assumed != old);
 
     return old;
@@ -178,8 +176,6 @@ __device__ int64_t atomicMin64(int64_t* address, int64_t val)
         assumed = old;
         old = atomicCAS(address_as_ull, assumed,
                         min((long long) val, (long long) assumed));
-
-    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
     } while (assumed != old);
 
     return old;
@@ -232,8 +228,6 @@ __device__ double atomicMin(double* address, double val)
         old = atomicCAS(address_as_ull, assumed,
                         __double_as_longlong(min(val,
                                __longlong_as_double(assumed))));
-
-    // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
     } while (assumed != old);
 
     return __longlong_as_double(old);
@@ -293,14 +287,61 @@ __device__ void agg_id_double_shared(int64_t* agg, const double val) {
 extern "C"                                                                                                  \
 __device__ void base_agg_func##_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
   if (val != skip_val) {                                                                                    \
-    base_agg_func##_shared(agg, val);                                                                       \
+    const int64_t old_agg = *agg;                                                                           \
+    if (old_agg != skip_val) {                                                                              \
+      base_agg_func##_shared(agg, val);                                                                     \
+    } else {                                                                                                \
+      *agg = val;                                                                                           \
+    }                                                                                                       \
   }                                                                                                         \
 }
 
 DEF_SKIP_AGG(agg_count)
 DEF_SKIP_AGG(agg_sum)
-DEF_SKIP_AGG(agg_max)
-DEF_SKIP_AGG(agg_min)
+
+__device__ int64_t atomicMin64SkipVal(int64_t* address, int64_t val, const int64_t skip_val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        assumed == skip_val ? val : min((long long) val, (long long) assumed));
+    } while (assumed != old);
+
+    return old;
+}
+
+extern "C"
+__device__ void agg_min_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
+  if (val != skip_val) {
+    atomicMin64SkipVal(agg, val, skip_val);
+  }
+}
+
+__device__ int64_t atomicMax64SkipVal(int64_t* address, int64_t val, const int64_t skip_val)
+{
+    unsigned long long int* address_as_ull =
+                              (unsigned long long int*)address;
+    unsigned long long int old = *address_as_ull, assumed;
+
+    do {
+        assumed = old;
+        old = atomicCAS(address_as_ull, assumed,
+                        assumed == skip_val ? val : max((long long) val, (long long) assumed));
+    } while (assumed != old);
+
+    return old;
+}
+
+extern "C"
+__device__ void agg_max_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
+  if (val != skip_val) {
+    atomicMax64SkipVal(agg, val, skip_val);
+  }
+}
 
 #undef DEF_SKIP_AGG
 
