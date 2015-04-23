@@ -1820,32 +1820,47 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
       }
       continue;
     }
-    CHECK(target_type_info.is_integer() || target_type_info.is_time() || target_type == kFLOAT || target_type == kDOUBLE);
     const auto agg_type = agg_expr->get_aggtype();
     const auto agg_init_val = init_agg_val(agg_type, target_type_info);
     switch (agg_type) {
     case kAVG: {
       const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
-      const auto agg_arg_type = agg_arg_type_info.get_type();
-      CHECK(agg_arg_type_info.is_integer() || agg_arg_type == kFLOAT || agg_arg_type == kDOUBLE);
+      if (!agg_arg_type_info.is_integer() && !agg_arg_type_info.is_fp()) {
+        throw std::runtime_error("AVG is only valid on integer and floating point");
+      }
       result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, target_idx);
       result.emplace_back((agg_arg_type_info.is_integer() || agg_arg_type_info.is_time()) ? "agg_count" : "agg_count_double",
                           agg_expr->get_arg(), agg_init_val, target_idx);
       break;
    }
-    case kMIN:
+    case kMIN: {
+      const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
+      if (agg_arg_type_info.is_string()) {
+        throw std::runtime_error("MIN on strings not supported yet");
+      }
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_min" : "agg_min_double",
                           agg_expr->get_arg(), agg_init_val, target_idx);
       break;
-    case kMAX:
+    }
+    case kMAX: {
+      const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
+      if (agg_arg_type_info.is_string()) {
+        throw std::runtime_error("MAX on strings not supported yet");
+      }
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_max" : "agg_max_double",
                           agg_expr->get_arg(), agg_init_val, target_idx);
       break;
-    case kSUM:
+    }
+    case kSUM: {
+      const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
+      if (!agg_arg_type_info.is_integer() && !agg_arg_type_info.is_fp()) {
+        throw std::runtime_error("SUM is only valid on integer and floating point");
+      }
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_sum" : "agg_sum_double",
                           agg_expr->get_arg(), agg_init_val, target_idx);
       break;
+    }
     case kCOUNT:
       result.emplace_back(
         agg_expr->get_is_distinct() ? "agg_count_distinct" : "agg_count",
