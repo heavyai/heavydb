@@ -38,7 +38,7 @@ enum class GroupByMemSharing {
 
 struct QueryMemoryDescriptor;
 
-typedef boost::variant<int64_t, double, std::string> TargetValue;
+typedef boost::variant<int64_t, double, std::string, void*> TargetValue;
 
 struct TargetInfo {
   bool is_agg;
@@ -265,6 +265,10 @@ public:
     target_values_.back().emplace_back(val);
   }
 
+  void addValue() {
+    target_values_.back().emplace_back(nullptr);
+  }
+
   void discardRow() {
     CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
     if (!simple_keys_.empty()) {
@@ -355,7 +359,7 @@ private:
   std::vector<int64_t> simple_keys_;
   typedef std::vector<int64_t> MultiKey;
   std::vector<MultiKey> multi_keys_;
-  typedef boost::variant<int64_t, std::pair<int64_t, int64_t>, std::string> InternalTargetValue;
+  typedef boost::variant<int64_t, std::pair<int64_t, int64_t>, std::string, void*> InternalTargetValue;
   typedef std::vector<InternalTargetValue> TargetValues;
   std::vector<TargetValues> target_values_;
   mutable std::map<MultiKey, TargetValues> as_map_;
@@ -385,8 +389,12 @@ inline std::string row_col_to_string(const ResultRows& rows, const size_t row_id
     return std::to_string(*dptr);
   }
   auto sptr = boost::get<std::string>(&agg_result);
-  CHECK(sptr);
-  return *sptr;
+  if (sptr) {
+    return *sptr;
+  }
+  auto nptr = boost::get<void*>(&agg_result);
+  CHECK(nptr && !*nptr);
+  return "NULL";
 }
 
 class QueryExecutionContext : boost::noncopyable {

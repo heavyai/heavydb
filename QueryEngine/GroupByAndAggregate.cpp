@@ -316,17 +316,29 @@ ResultRows QueryExecutionContext::groupBufferToResults(
               reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(col_buffers_[col_id])),
               str_ptr, false, &vd, &is_end);
             CHECK(!is_end);
-            results.addValue(std::string(reinterpret_cast<char*>(vd.pointer), vd.length));
+            if (!vd.is_null) {
+              results.addValue(std::string(reinterpret_cast<char*>(vd.pointer), vd.length));
+            } else {
+              results.addValue();
+            }
           } else {
             CHECK(device_type_ == ExecutorDeviceType::CPU ||
                   device_type_ == ExecutorDeviceType::GPU);
             if (device_type_ == ExecutorDeviceType::CPU) {
-              results.addValue(std::string(reinterpret_cast<char*>(str_ptr), str_len));
+              if (str_ptr) {
+                results.addValue(std::string(reinterpret_cast<char*>(str_ptr), str_len));
+              } else {
+                results.addValue();
+              }
             } else {
-              std::vector<int8_t> cpu_buffer(str_len);
-              auto& data_mgr = executor_->catalog_->get_dataMgr();
-              copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(str_ptr), str_len, device_id_);
-              results.addValue(std::string(reinterpret_cast<char*>(&cpu_buffer[0]), str_len));
+              if (str_ptr) {
+                std::vector<int8_t> cpu_buffer(str_len);
+                auto& data_mgr = executor_->catalog_->get_dataMgr();
+                copy_from_gpu(&data_mgr, &cpu_buffer[0], static_cast<CUdeviceptr>(str_ptr), str_len, device_id_);
+                results.addValue(std::string(reinterpret_cast<char*>(&cpu_buffer[0]), str_len));
+              } else {
+                results.addValue();
+              }
             }
           }
           out_vec_idx += 2;

@@ -68,13 +68,19 @@ TargetValue ResultRows::get(const size_t row_idx,
   } else if (targets_[col_idx].sql_type.is_string()) {
     if (targets_[col_idx].sql_type.get_compression() == kENCODING_DICT) {
       const int dict_id = targets_[col_idx].sql_type.get_comp_param();
-      return translate_strings
-        ? TargetValue(executor_->getStringDictionary(dict_id)->getString(
-            *boost::get<int64_t>(&target_values_[row_idx][col_idx])))
-        : TargetValue(*boost::get<int64_t>(&target_values_[row_idx][col_idx]));
+      const auto string_id = *boost::get<int64_t>(&target_values_[row_idx][col_idx]);
+      if (!translate_strings) {
+        return TargetValue(string_id);
+      }
+      return string_id == NULL_INT
+        ? TargetValue(nullptr)
+        : TargetValue(executor_->getStringDictionary(dict_id)->getString(string_id));
     } else {
       CHECK_EQ(kENCODING_NONE, targets_[col_idx].sql_type.get_compression());
-      return TargetValue(*boost::get<std::string>(&target_values_[row_idx][col_idx]));
+      auto null_p = boost::get<void*>(&target_values_[row_idx][col_idx]);
+      return null_p
+        ? TargetValue(nullptr)
+        : TargetValue(*boost::get<std::string>(&target_values_[row_idx][col_idx]));
     }
   } else {
     CHECK(targets_[col_idx].sql_type.is_fp());
@@ -616,6 +622,9 @@ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
 
 extern "C"
 uint64_t string_decompress(const int32_t string_id, const int64_t string_dict_handle) {
+  if (string_id == NULL_INT) {
+    return 0;
+  }
   auto string_dict = reinterpret_cast<const StringDictionary*>(string_dict_handle);
   auto string_bytes = string_dict->getStringBytes(string_id);
   CHECK(string_bytes.first);
@@ -2428,10 +2437,14 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
         break;
       case kENCODING_DICT: {
-        const int dict_id = cd->columnType.get_comp_param();
-        const int32_t str_id = getStringDictionary(dict_id)->getOrAdd(*col_datum.stringval);
         auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
-        *col_data = str_id;
+        if (col_cv->get_is_null()) {
+          *col_data = NULL_INT;
+        } else {
+          const int dict_id = cd->columnType.get_comp_param();
+          const int32_t str_id = getStringDictionary(dict_id)->getOrAdd(*col_datum.stringval);
+          *col_data = str_id;
+        }
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }

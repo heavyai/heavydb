@@ -258,10 +258,14 @@ public:
               }
             } else {
               auto s = boost::get<std::string>(&agg_result);
-              CHECK(s);
               col_val.type = TDatumType::STR;
-              col_val.datum.str_val = *s;
-              col_val.is_null = s->empty();
+              if (s) {
+                col_val.datum.str_val = *s;
+              } else {
+                auto null_p = boost::get<void*>(&agg_result);
+                CHECK(null_p && !*null_p);
+              }
+              col_val.is_null = !s;
             }
             trow.cols.push_back(col_val);
           }
