@@ -1186,7 +1186,6 @@ namespace Parser {
       throw std::runtime_error("Table " + *table + " does not exist.");
     if (td->isView && !td->isMaterialized)
       throw std::runtime_error("Insert to views is not supported yet.");
-    Analyzer::RangeTblEntry *rte = new Analyzer::RangeTblEntry(*table, td, nullptr);
     query.set_result_table_id(td->tableId);
     std::list<int> result_col_list;
     if (column_list == nullptr) {

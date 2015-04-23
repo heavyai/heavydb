@@ -8,6 +8,7 @@
 #include "File.h"
 #include "FileMgr.h"
 #include <map>
+#include <glog/logging.h>
 
 #define METADATA_PAGE_SIZE 4096
 
@@ -18,7 +19,7 @@ namespace File_Namespace {
 
     FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize, const ChunkKey &chunkKey, const size_t initialSize) : AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(pageSize), chunkKey_(chunkKey) {
         // Create a new FileBuffer
-        assert(fm_);
+        CHECK(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
         //@todo reintroduce initialSize - need to develop easy way of
@@ -37,7 +38,7 @@ namespace File_Namespace {
     }
 
     FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
-        assert(fm_);
+        CHECK(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
     }
@@ -48,7 +49,7 @@ namespace File_Namespace {
     FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), /* pageSize_(pageSize),*/chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
-        assert(fm_);
+        CHECK(fm_);
         calcHeaderBuffer();
         //MultiPage multiPage(pageSize_); // why was this here?
         int lastPageId = -1;
@@ -65,12 +66,12 @@ namespace File_Namespace {
                 if (curPageId != lastPageId) {
                     if (lastPageId == -1) {
                         // If we are on first real page
-                        assert(metadataPages_.pageVersions.back().fileId != -1); // was initialized
+                        CHECK(metadataPages_.pageVersions.back().fileId != -1); // was initialized
                         readMetadata(metadataPages_.pageVersions.back());
                         pageDataSize_ = pageSize_-reservedHeaderSize_;
 
                     }
-                    assert (curPageId == lastPageId + 1);
+                    CHECK (curPageId == lastPageId + 1);
                     MultiPage multiPage(pageSize_);
                     multiPages_.push_back(multiPage);
                     lastPageId = curPageId;
@@ -144,19 +145,19 @@ namespace File_Namespace {
         size_t startPage = offset / pageDataSize_;
         size_t startPageOffset = offset % pageDataSize_;
         size_t numPagesToRead = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_;
-        assert (startPage + numPagesToRead <= multiPages_.size());
+        CHECK (startPage + numPagesToRead <= multiPages_.size());
         size_t bytesLeft = numBytes;
 
         // Traverse the logical pages
         for (size_t pageNum = startPage; pageNum < startPage  + numPagesToRead; ++pageNum) {
 
-            assert(multiPages_[pageNum].pageSize == pageSize_);
+            CHECK(multiPages_[pageNum].pageSize == pageSize_);
             Page page = multiPages_[pageNum].current();
             //printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", page.fileId, page.pageNum, pageDataSize_);
 
             //FILE *f = fm_->files_[page.fileId]->f;
             FILE *f = fm_->getFileForFileId(page.fileId);
-            assert(f);
+            CHECK(f);
 
             // Read the page into the destination (dst) buffer at its
             // current (cur) location
@@ -170,20 +171,20 @@ namespace File_Namespace {
             curPtr += bytesRead;
             bytesLeft -= bytesRead;
         }
-        assert (bytesLeft == 0);
+        CHECK (bytesLeft == 0);
     }
 
     void FileBuffer::copyPage(Page &srcPage, Page &destPage, const size_t numBytes, const size_t offset) { 
         //FILE *srcFile = fm_->files_[srcPage.fileId]->f;
         //FILE *destFile = fm_->files_[destPage.fileId]->f;
-        assert(offset + numBytes < pageDataSize_);
+        CHECK(offset + numBytes < pageDataSize_);
         FILE *srcFile = fm_->getFileForFileId(srcPage.fileId); 
         FILE *destFile = fm_->getFileForFileId(destPage.fileId); 
         int8_t * buffer = new int8_t [numBytes]; 
         size_t bytesRead = File_Namespace::read(srcFile,srcPage.pageNum * pageSize_ + offset+reservedHeaderSize_, numBytes, buffer);
-        assert(bytesRead == numBytes);
+        CHECK(bytesRead == numBytes);
         size_t bytesWritten = File_Namespace::write(destFile,destPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
-        assert(bytesWritten == numBytes);
+        CHECK(bytesWritten == numBytes);
         delete [] buffer;
     }
 
@@ -223,7 +224,7 @@ namespace File_Namespace {
         vector <int> typeData (NUM_METADATA); // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
         fread((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         int version = typeData[0];
-        assert(version == METADATA_VERSION); // add backward compatibility code here
+        CHECK(version == METADATA_VERSION); // add backward compatibility code here
         hasEncoder = static_cast <bool> (typeData[1]);
         if (hasEncoder) {
             sqlType.set_type(static_cast<SQLTypes> (typeData[2]));
@@ -306,7 +307,7 @@ namespace File_Namespace {
                 // epoch for this page - just grab this page
                 page = multiPages_[pageNum].current();
             }
-            assert(page.fileId >= 0); // make sure page was initialized
+            CHECK(page.fileId >= 0); // make sure page was initialized
             FILE *f = fm_->getFileForFileId(page.fileId);
             size_t bytesWritten;
             if (pageNum == startPage) {
@@ -322,7 +323,7 @@ namespace File_Namespace {
             //    writeHeader(page,0,multiPages_[0].epochs.back());
             //}
         }
-        assert (bytesLeft == 0);
+        CHECK (bytesLeft == 0);
     }
 
     void FileBuffer::write(int8_t * src,  const size_t numBytes, const size_t offset, const MemoryLevel srcBufferType, const int deviceId) {
@@ -382,7 +383,7 @@ namespace File_Namespace {
                 // epoch for this page - just grab this page
                 page = multiPages_[pageNum].current();
             }
-            assert(page.fileId >= 0); // make sure page was initialized
+            CHECK(page.fileId >= 0); // make sure page was initialized
             FILE *f = fm_->getFileForFileId(page.fileId);
             size_t bytesWritten;
             if (pageNum == startPage) {
@@ -400,7 +401,7 @@ namespace File_Namespace {
                 //size_ = offset + numBytes;
             }
         }
-        assert (bytesLeft == 0);
+        CHECK (bytesLeft == 0);
     }
 
 

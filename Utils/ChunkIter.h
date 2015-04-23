@@ -8,7 +8,8 @@
 
 #include "../Shared/sqltypes.h"
 
-struct ChunkIter {
+class ChunkIter {
+public:
     SQLTypeInfo type_info;
     int8_t *second_buf;
 		int8_t *current_pos;

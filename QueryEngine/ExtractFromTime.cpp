@@ -1,7 +1,7 @@
 #include "ExtractFromTime.h"
 
 #ifndef __CUDACC__
-#include <assert.h>
+#include <glog/logging.h>
 #endif
 
 /*
@@ -41,7 +41,7 @@ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
 #ifdef __CUDACC__
       return -1;
 #else
-      assert(false);
+      CHECK(false);
 #endif
   }
 }

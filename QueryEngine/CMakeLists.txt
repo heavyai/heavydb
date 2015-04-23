@@ -67,4 +67,4 @@ add_custom_command(
     ARGS --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
-target_link_libraries(group_by_hash_test "-lgtest -pthread")
+target_link_libraries(group_by_hash_test "-lgtest -pthread -lglog")

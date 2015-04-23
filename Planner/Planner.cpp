@@ -81,7 +81,6 @@ namespace Planner {
 		SQLStmtType stmt_type = query.get_stmt_type();
 		int result_table_id = 0;
 		std::list<int> result_col_list;
-		Analyzer::RangeTblEntry *result_rte;
 		switch (stmt_type) {
 			case kSELECT:
 				// nothing to do for SELECT for now

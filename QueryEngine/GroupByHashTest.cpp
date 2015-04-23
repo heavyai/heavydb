@@ -41,8 +41,6 @@ private:
   const size_t size_;
 };
 
-#define EMPTY_KEY std::numeric_limits<int64_t>::min()
-
 TEST(InitTest, OneKey) {
   const int32_t groups_buffer_entry_count { 10 };
   const int32_t key_qw_count { 1 };

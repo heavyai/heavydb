@@ -14,6 +14,7 @@
 #include <utility>
 #include <list>
 #include <set>
+#include <glog/logging.h>
 #include "../Shared/sqltypes.h"
 #include "../Shared/sqldefs.h"
 #include "../Catalog/Catalog.h"
@@ -275,15 +276,15 @@ namespace Analyzer {
       // void set_plan(Plan *p) { plan = p; } // subquery plan is set by the optimizer
       virtual Expr *add_cast(const SQLTypeInfo &new_type_info);
       virtual Expr *deep_copy() const;
-      virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const { assert(false); }
-      virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { assert(false); }
-      virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { assert(false); }
-      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { assert(false); }
-      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { assert(false); }
-      virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { assert(false); }
-      virtual bool operator==(const Expr &rhs) const { assert(false); return false;}
+      virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const { CHECK(false); }
+      virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { CHECK(false); }
+      virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { CHECK(false); }
+      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { CHECK(false); }
+      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { CHECK(false); }
+      virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { CHECK(false); }
+      virtual bool operator==(const Expr &rhs) const { CHECK(false); return false;}
       virtual void print() const;
-      virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const { assert(false); }
+      virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const { CHECK(false); }
     private:
       Query *parsetree; // parse tree of the subquery
       // Plan *plan; // query plan for the subquery.  to be filled in lazily.
