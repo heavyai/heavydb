@@ -1499,7 +1499,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
         : cgen_state_->emitCall("add_" + fp_typename + "_nullable", { lhs_lv, rhs_lv, fp_null });
     case kMULTIPLY:
       return not_null
-        ? cgen_state_->ir_builder_.CreateFAdd(lhs_lv, rhs_lv)
+        ? cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv)
         : cgen_state_->emitCall("mul_" + fp_typename + "_nullable", { lhs_lv, rhs_lv, fp_null });
     case kDIVIDE:
       return codegenDiv(lhs_lv, rhs_lv, not_null ? "" : fp_typename, lhs_type);
