@@ -163,7 +163,7 @@ DatumToString(Datum d, const SQLTypeInfo &ti)
 		case kSMALLINT:
 			return std::to_string(d.smallintval);
 		case kBIGINT:
-			return std::to_string(d.smallintval);
+			return std::to_string(d.bigintval);
 		case kFLOAT:
 			return std::to_string(d.floatval);
 		case kDOUBLE:
