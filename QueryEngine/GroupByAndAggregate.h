@@ -199,7 +199,6 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   bool is_distinct { false };
   if (agg_expr->get_aggtype() == kCOUNT) {
     CHECK(agg_expr->get_is_distinct());
-    CHECK(!agg_arg_ti.is_fp());
     is_distinct = true;
   }
   bool skip_null = !agg_arg_ti.get_notnull();

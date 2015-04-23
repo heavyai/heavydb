@@ -720,7 +720,7 @@ GroupByAndAggregate::GroupByAndAggregate(
     }
     const auto& groupby_ti = groupby_expr->get_type_info();
     if (groupby_ti.is_string() && groupby_ti.get_compression() != kENCODING_DICT) {
-      throw std::runtime_error("Group by / distinct not supported for none-encoding strings");
+      throw std::runtime_error("Group by not supported for none-encoding strings");
     }
   }
 }
@@ -738,6 +738,10 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       CHECK(agg_info.is_agg);
       CHECK_EQ(kCOUNT, agg_info.agg_kind);
       const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
+      const auto& arg_ti = agg_expr->get_arg()->get_type_info();
+      if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
+        throw std::runtime_error("Count distinct not supported for none-encoding strings");
+      }
       auto arg_range_info = getExprRangeInfo(agg_expr->get_arg(), query_info_.fragments);
       CountDistinctImplType count_distinct_impl_type { CountDistinctImplType::StdSet };
       int64_t bitmap_sz_bits { 0 };
@@ -1210,6 +1214,11 @@ void GroupByAndAggregate::codegenCountDistinct(
     const bool is_group_by,
     const int32_t agg_out_off) {
   const auto agg_info = target_info(target_expr);
+  const auto& arg_ti = static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
+  if (arg_ti.is_fp()) {
+    agg_args.back() = executor_->cgen_state_->ir_builder_.CreateBitCast(agg_args.back(),
+      get_int_type(64, executor_->cgen_state_->context_));
+  }
   CHECK(device_type == ExecutorDeviceType::CPU);
   auto it_count_distinct = query_mem_desc.count_distinct_descriptors_.find(target_idx);
   CHECK(it_count_distinct != query_mem_desc.count_distinct_descriptors_.end());
@@ -1219,8 +1228,12 @@ void GroupByAndAggregate::codegenCountDistinct(
     agg_args.push_back(LL_INT(static_cast<int64_t>(it_count_distinct->second.min_val)));
   }
   if (agg_info.skip_null_val) {
+    auto null_lv = executor_->toDoublePrecision(arg_ti.is_fp()
+      ? static_cast<llvm::Value*>(executor_->inlineFpNull(arg_ti))
+      : static_cast<llvm::Value*>(executor_->inlineIntNull(arg_ti)));
+    null_lv = executor_->cgen_state_->ir_builder_.CreateBitCast(
+      null_lv, get_int_type(64, executor_->cgen_state_->context_));
     agg_fname += "_skip_val";
-    auto null_lv = executor_->toDoublePrecision(executor_->inlineIntNull(agg_info.sql_type));
     agg_args.push_back(null_lv);
   }
   if (it_count_distinct->second.impl_type_ == CountDistinctImplType::Bitmap) {

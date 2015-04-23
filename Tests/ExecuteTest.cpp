@@ -370,9 +370,14 @@ TEST(Select, CountDistinct) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     c("SELECT COUNT(distinct x) FROM test;", dt);
+    c("SELECT COUNT(distinct b) FROM test;", dt);
+    c("SELECT COUNT(distinct f) FROM test;", dt);
+    c("SELECT COUNT(distinct d) FROM test;", dt);
+    c("SELECT COUNT(distinct str) FROM test;", dt);
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct x) FROM test GROUP BY y;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct x + 1) FROM test GROUP BY y;", dt);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt), std::runtime_error);
   }
 }
 
