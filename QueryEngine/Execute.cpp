@@ -665,17 +665,20 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   auto like_pattern_lv = cgen_state_->addStringConstant(like_pattern);
   auto like_pattern_len = like_expr_arg_const->get_constval().stringval->size();
   llvm::Value* like_pattern_len_lv = ll_int(static_cast<int32_t>(like_pattern_len));
-  auto string_like_fn = expr->get_is_ilike()
-    ? cgen_state_->module_->getFunction("string_ilike")
-    : cgen_state_->module_->getFunction("string_like");
-  CHECK(string_like_fn);
-  return cgen_state_->ir_builder_.CreateCall(string_like_fn, std::vector<llvm::Value*> {
+  const bool is_nullable { !expr->get_arg()->get_type_info().get_notnull() };
+  std::vector<llvm::Value*> str_like_args {
     str_lv[1],
     str_lv[2],
     like_pattern_lv,
     like_pattern_len_lv,
     ll_int(int8_t(escape_char))
-  });
+  };
+  std::string fn_name { expr->get_is_ilike() ? "string_ilike" : "string_like" };
+  if (is_nullable) {
+    fn_name += "_nullable";
+    str_like_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN)));
+  }
+  return cgen_state_->emitCall(fn_name, str_like_args);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const bool hoist_literals) {
@@ -1175,8 +1178,11 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
           rhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", { rhs_lvs.front() }));
           rhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", { rhs_lvs.front() }));
         }
-        return cgen_state_->emitCall(string_cmp_func(optype),
-          { lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2] });
+        std::vector<llvm::Value*> str_cmp_args { lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2] };
+        if (!not_null) {
+          str_cmp_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN)));
+        }
+        return cgen_state_->emitCall(string_cmp_func(optype) + (not_null ? "" : "_nullable"), str_cmp_args);
       } else {
         CHECK(optype == kEQ || optype == kNE);
       }
@@ -2982,12 +2988,20 @@ declare i64 @ExtractFromTime(i32, i64);
 declare i64 @string_decode(i8*, i64);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
+declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
+declare i8 @string_ilike_nullable(i8*, i32, i8*, i32, i8, i8);
 declare i1 @string_lt(i8*, i32, i8*, i32);
 declare i1 @string_le(i8*, i32, i8*, i32);
 declare i1 @string_gt(i8*, i32, i8*, i32);
 declare i1 @string_ge(i8*, i32, i8*, i32);
 declare i1 @string_eq(i8*, i32, i8*, i32);
 declare i1 @string_ne(i8*, i32, i8*, i32);
+declare i8 @string_lt_nullable(i8*, i32, i8*, i32, i8);
+declare i8 @string_le_nullable(i8*, i32, i8*, i32, i8);
+declare i8 @string_gt_nullable(i8*, i32, i8*, i32, i8);
+declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
+declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
+declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i32 @merge_error_code(i32, i32*);
 
 )";

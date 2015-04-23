@@ -27,7 +27,9 @@ lowercase(char c)
 
 // internal recursive function for performing LIKE matching.
 DEVICE static LikeStatus
-string_like_match(const char *str, int str_len, const char *pattern, int pat_len, char escape_char, bool is_ilike)
+string_like_match(const char *str, const int32_t str_len,
+                  const char *pattern, const int32_t pat_len,
+                  const char escape_char, const bool is_ilike)
 {
   const char *s = str;
   int slen = str_len;
@@ -106,7 +108,9 @@ string_like_match(const char *str, int str_len, const char *pattern, int pat_len
  * not handled for now.
  */
 extern "C" DEVICE
-bool string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char)
+bool string_like(const char *str, const int32_t str_len,
+                 const char *pattern, const int32_t pat_len,
+                 const char escape_char)
 {
   // @TODO(wei/alex) add runtime error handling
   LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, false);
@@ -114,7 +118,9 @@ bool string_like(const char *str, int str_len, const char *pattern, int pat_len,
 }
 
 extern "C" DEVICE
-bool string_ilike(const char *str, int str_len, const char *pattern, int pat_len, char escape_char)
+bool string_ilike(const char *str, const int32_t str_len,
+                  const char *pattern, const int32_t pat_len,
+                  const char escape_char)
 {
   // @TODO(wei/alex) add runtime error handling
   LikeStatus status = string_like_match(str, str_len, pattern, pat_len, escape_char, true);
@@ -136,6 +142,22 @@ int32_t StringCompare(const char* s1, const int32_t s1_len, const char* s2, cons
 
   return c1 - c2;
 }
+
+#define STR_LIKE_NULLABLE(base_func)                                           \
+extern "C" DEVICE                                                              \
+int8_t base_func##_nullable(const char* lhs, const int32_t lhs_len,            \
+                            const char* rhs, const int32_t rhs_len,            \
+                            const char escape_char, const int8_t bool_null) {  \
+  if (!lhs || !rhs) {                                                          \
+    return bool_null;                                                          \
+  }                                                                            \
+  return base_func(lhs, lhs_len, rhs, rhs_len, escape_char) ? 1 : 0;           \
+}
+
+STR_LIKE_NULLABLE(string_like)
+STR_LIKE_NULLABLE(string_ilike)
+
+#undef STR_LIKE_NULLABLE
 
 extern "C" DEVICE
 bool string_lt(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
@@ -166,3 +188,21 @@ extern "C" DEVICE
 bool string_ne(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len) {
   return StringCompare(lhs, lhs_len, rhs, rhs_len) != 0;
 }
+
+#define STR_CMP_NULLABLE(base_func)                                                                                                    \
+extern "C" DEVICE                                                                                                                      \
+int8_t base_func##_nullable(const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len, const int8_t bool_null) {  \
+  if (!lhs || !rhs) {                                                                                                                  \
+    return bool_null;                                                                                                                  \
+  }                                                                                                                                    \
+  return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                                                                \
+}
+
+STR_CMP_NULLABLE(string_lt)
+STR_CMP_NULLABLE(string_le)
+STR_CMP_NULLABLE(string_gt)
+STR_CMP_NULLABLE(string_ge)
+STR_CMP_NULLABLE(string_eq)
+STR_CMP_NULLABLE(string_ne)
+
+#undef STR_CMP_NULLABLE
