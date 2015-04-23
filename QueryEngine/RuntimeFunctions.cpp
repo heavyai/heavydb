@@ -120,12 +120,14 @@ DEF_CMP_NULLABLE(int8_t, int64_t, ne, !=)
 #define DEF_UMINUS_NULLABLE(type, null_type)                                   \
 extern "C" __attribute__((always_inline))                                      \
 type uminus_##type##_nullable(const type operand, const null_type null_val) {  \
-  return -operand;                                                             \
+  return operand == null_val ? null_val : -operand;                            \
 }
 
 DEF_UMINUS_NULLABLE(int16_t, int64_t)
 DEF_UMINUS_NULLABLE(int32_t, int64_t)
 DEF_UMINUS_NULLABLE(int64_t, int64_t)
+DEF_UMINUS_NULLABLE(float, float)
+DEF_UMINUS_NULLABLE(double, double)
 
 #undef DEF_UMINUS_NULLABLE
 

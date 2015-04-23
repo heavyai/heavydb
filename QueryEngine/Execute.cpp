@@ -1316,13 +1316,19 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
 llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const bool hoist_literals) {
   CHECK_EQ(uoper->get_optype(), kUMINUS);
   const auto operand_lv = codegen(uoper->get_operand(), true, hoist_literals).front();
-  CHECK(operand_lv->getType()->isIntegerTy());
   const auto& ti = uoper->get_type_info();
-  const std::string int_typename { "int" + std::to_string(get_bit_width(ti.get_type())) + "_t" };
+  const std::string operand_typename { ti.is_fp()
+    ? (ti.get_type() == kFLOAT ? "float" : "double")
+    : "int" + std::to_string(get_bit_width(ti.get_type())) + "_t"
+  };
   return ti.get_notnull()
     ? cgen_state_->ir_builder_.CreateNeg(operand_lv)
-    : cgen_state_->emitCall("uminus_" + int_typename + "_nullable",
-      { operand_lv, inlineIntNull(ti) });
+    : cgen_state_->emitCall("uminus_" + operand_typename + "_nullable", {
+        operand_lv,
+        ti.is_fp()
+          ? static_cast<llvm::Value*>(inlineFpNull(ti))
+          : static_cast<llvm::Value*>(inlineIntNull(ti))
+      });
 }
 
 llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool hoist_literals) {
@@ -1607,7 +1613,7 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypeInfo& ti) {
   }
   case kMIN: {
     const double max_double { std::numeric_limits<double>::max() };
-    const double null_double { ti.is_fp() ? inline_fp_null_val(ti) : 0. };
+    const double null_double { inline_fp_null_val(ti) };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
       ? (ti.get_notnull() ? std::numeric_limits<int64_t>::max() : inline_int_null_val(ti))
       : (ti.get_notnull()
@@ -1616,7 +1622,7 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypeInfo& ti) {
   }
   case kMAX: {
     const auto min_double { std::numeric_limits<double>::min() };
-    const double null_double { ti.is_fp() ? inline_fp_null_val(ti) : 0. };
+    const double null_double { inline_fp_null_val(ti) };
     return (IS_INTEGER(target_type) || IS_TIME(target_type))
       ? (ti.get_notnull() ? std::numeric_limits<int64_t>::min() : inline_int_null_val(ti))
       : (ti.get_notnull()
