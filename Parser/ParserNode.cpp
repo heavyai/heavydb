@@ -887,7 +887,11 @@ namespace Parser {
   SelectStmt::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
   {
     query.set_stmt_type(kSELECT);
+    if (limit <= 0)
+      throw std::runtime_error("LIMIT must be positive.");
     query.set_limit(limit);
+    if (offset < 0)
+      throw std::runtime_error("OFFSET cannot be negative.");
     query.set_offset(offset);
     query_expr->analyze(catalog, query);
     if (orderby_clause == nullptr && !query.get_is_distinct()) {
