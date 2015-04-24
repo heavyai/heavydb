@@ -888,6 +888,8 @@ namespace Parser {
   {
     query.set_stmt_type(kSELECT);
     query.set_limit(limit);
+    if (offset < 0)
+      throw std::runtime_error("OFFSET cannot be negative.");
     query.set_offset(offset);
     query_expr->analyze(catalog, query);
     if (orderby_clause == nullptr && !query.get_is_distinct()) {

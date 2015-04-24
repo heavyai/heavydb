@@ -551,7 +551,7 @@ opt_where_clause:
 	;
 
 opt_limit_clause:
-		LIMIT INTNUM { $<intval>$ = $<intval>2; }
+		LIMIT INTNUM { $<intval>$ = $<intval>2; if ($<intval>$ <= 0) throw std::runtime_error("LIMIT must be positive."); }
 	| LIMIT ALL { $<intval>$ = 0; /* 0 means ALL */ }
 	| /* empty */ { $<intval>$ = 0; /* 0 means ALL */ }
 	;

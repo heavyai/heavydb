@@ -170,12 +170,20 @@ public:
     SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
     std::string last_parsed;
-    int num_errors = parser.parse(query_str, parse_trees, last_parsed);
-    if (num_errors > 0) {
-      MapDException ex;
-      ex.error_msg = "Syntax error at: " + last_parsed;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+    try {
+      int num_errors = parser.parse(query_str, parse_trees, last_parsed);
+      if (num_errors > 0) {
+        MapDException ex;
+        ex.error_msg = "Syntax error at: " + last_parsed;
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+    }
+    catch (std::exception &e) {
+        MapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
     }
     execute_time = 0;
     for (auto stmt : parse_trees) {
