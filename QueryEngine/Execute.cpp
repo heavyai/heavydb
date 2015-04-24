@@ -2164,7 +2164,7 @@ ResultRows Executor::executeAggScanPlan(
         const bool is_real_string = cd->columnType.is_string() &&
           cd->columnType.get_compression() == kENCODING_NONE;
         if (is_real_string) {
-          chunk_iterators.push_back(chunk->begin_iterator());
+          chunk_iterators.push_back(chunk->begin_iterator(chunk_meta_it->second));
           auto& chunk_iter = chunk_iterators.back();
           if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
             col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);

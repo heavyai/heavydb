@@ -153,7 +153,7 @@ namespace Chunk_NS {
   }
 
   ChunkIter
-  Chunk::begin_iterator(int start_idx, int skip) const
+  Chunk::begin_iterator(const ChunkMetadata& chunk_metadata, int start_idx, int skip) const
   {
     ChunkIter it;
     it.type_info = column_desc->columnType;
@@ -168,9 +168,7 @@ namespace Chunk_NS {
       it.end_pos = buffer->getMemoryPtr() + buffer->size();
       it.second_buf = nullptr;
     }
-    ChunkMetadata chunkMetadata;
-    buffer->encoder->getMetadata(chunkMetadata);
-    it.num_elems = chunkMetadata.numElements;
+    it.num_elems = chunk_metadata.numElements;
     return it;
   }
 }

@@ -30,9 +30,9 @@ using namespace Chunk_NS;
 using namespace Data_Namespace;
 
 void
-scan_chunk(const Chunk &chunk, size_t &hash, bool use_iter)
+scan_chunk(const ChunkMetadata& chunk_metadata, const Chunk &chunk, size_t &hash, bool use_iter)
 {
-	ChunkIter cit = chunk.begin_iterator(0, 1);
+	ChunkIter cit = chunk.begin_iterator(chunk_metadata, 0, 1);
 	VarlenDatum vd;
 	bool is_end;
 	const ColumnDescriptor *cd = chunk.get_column_desc();
@@ -135,7 +135,7 @@ scan_table_return_hash(const string &table_name, const Catalog &cat)
       auto ms = measure<>::execution([&]() 
       {
 			std::shared_ptr<Chunk> chunkp = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
-			scan_chunk(*chunkp, col_hashs[i], true);
+			scan_chunk(chunk_meta_it->second, *chunkp, col_hashs[i], true);
       // call Chunk destructor here
       } );
       elapsed_time += ms;
@@ -165,7 +165,7 @@ scan_table_return_hash_non_iter(const string &table_name, const Catalog &cat)
       auto ms = measure<>::execution([&]() 
       {
 			std::shared_ptr<Chunk> chunkp = Chunk::getChunk(cd, &cat.get_dataMgr(), chunk_key, CPU_LEVEL, frag.deviceIds[static_cast<int>(CPU_LEVEL)], chunk_meta_it->second.numBytes, chunk_meta_it->second.numElements);
-			scan_chunk(*chunkp, col_hashs[i], false);
+			scan_chunk(chunk_meta_it->second, *chunkp, col_hashs[i], false);
       // call Chunk destructor here
       } );
       elapsed_time += ms;

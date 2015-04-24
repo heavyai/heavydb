@@ -36,7 +36,7 @@ namespace Chunk_NS {
 				for (auto cd : colDescs)
 					chunkVec.push_back(Chunk(cd));
 			}
-			ChunkIter begin_iterator(int start_idx = 0, int skip = 1) const;
+			ChunkIter begin_iterator(const ChunkMetadata&, int start_idx = 0, int skip = 1) const;
 			ChunkMetadata appendData(DataBlockPtr &srcData, const size_t numAppendElems, const size_t startIdx);
 			void createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0);
 			void getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0, const size_t num_bytes = 0, const size_t num_elems = 0);
