@@ -285,6 +285,9 @@ void ResultRows::sort(const Planner::Sort* sort_plan) {
         entry_ti.get_compression() == kENCODING_DICT;
       const auto lhs_v = lhs[order_entry.tle_no - 1];
       const auto rhs_v = rhs[order_entry.tle_no - 1];
+      if (isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v)) {
+        return false;
+      }
       if (isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v)) {
         return order_entry.nulls_first;
       }
