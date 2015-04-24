@@ -17,7 +17,9 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
   const size_t agg_col_count { targets_.size() };
   std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
   std::vector<int64_t> agg_vals(agg_col_count, 0);
-  for (int64_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
+  simple_keys_.reserve(groups_buffer_entry_count);
+  target_values_.reserve(groups_buffer_entry_count);
+  for (int32_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
     memset(&partial_agg_vals[0], 0, agg_col_count * sizeof(partial_agg_vals[0]));
     memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
     beginRow(bin + min_val);
@@ -119,27 +121,20 @@ QueryExecutionContext::QueryExecutionContext(
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer, &group_by_buffer_template[0], query_mem_desc_.getBufferSizeBytes(device_type_));
     }
+    row_set_mem_owner_->addGroupByBuffer(group_by_buffer);
     group_by_buffers_.push_back(group_by_buffer);
     for (size_t j = 1; j < step; ++j) {
       group_by_buffers_.push_back(nullptr);
     }
     if (query_mem_desc_.getSmallBufferSizeBytes()) {
       auto group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSizeBytes()));
+      row_set_mem_owner_->addGroupByBuffer(group_by_small_buffer);
       memcpy(group_by_small_buffer, &group_by_small_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
       small_group_by_buffers_.push_back(group_by_small_buffer);
       for (size_t j = 1; j < step; ++j) {
         small_group_by_buffers_.push_back(nullptr);
       }
     }
-  }
-}
-
-QueryExecutionContext::~QueryExecutionContext() {
-  for (auto group_by_buffer : group_by_buffers_) {
-    free(group_by_buffer);
-  }
-  for (auto small_group_by_buffer : small_group_by_buffers_) {
-    free(small_group_by_buffer);
   }
 }
 
@@ -280,15 +275,15 @@ ResultRows QueryExecutionContext::groupBufferToResults(
   const size_t agg_col_count { query_mem_desc_.agg_col_widths.size() };
   auto impl = [group_by_col_count, agg_col_count, this, &targets](
       const size_t groups_buffer_entry_count,
-      const int64_t* group_by_buffer) {
-    ResultRows results(targets, executor_, row_set_mem_owner_);
+      int64_t* group_by_buffer) {
     if (query_mem_desc_.keyless_hash) {
       CHECK_EQ(1, group_by_col_count);
       CHECK_EQ(targets.size(), agg_col_count);
       const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
-      results.addKeylessGroupByBuffer(group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count);
-      return results;
+      return ResultRows(targets, executor_, row_set_mem_owner_,
+        group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count);
     }
+    ResultRows results(targets, executor_, row_set_mem_owner_);
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
       const size_t key_off = (group_by_col_count + agg_col_count) * bin;
       if (group_by_buffer[key_off] == EMPTY_KEY) {
@@ -376,6 +371,9 @@ ResultRows QueryExecutionContext::groupBufferToResults(
   }
   CHECK_LT(i, group_by_buffers_.size());
   auto more_results = impl(query_mem_desc_.entry_count, group_by_buffers_[i]);
+  if (query_mem_desc_.keyless_hash) {
+    return more_results;
+  }
   results.append(more_results);
   return results;
 }

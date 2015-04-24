@@ -131,6 +131,54 @@ void ResultRows::reduce(const ResultRows& other_results) {
     return;
   }
 
+  if (group_by_buffer_) {
+    CHECK(other_results.group_by_buffer_);
+    const size_t agg_col_count { targets_.size() };
+    for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
+      const auto& agg_info = targets_[target_idx];
+      CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
+      CountDistinctImplType count_distinct_type { CountDistinctImplType::Bitmap };
+      size_t bitmap_sz_bytes { 0 };
+      if (agg_info.is_distinct) {
+        CHECK(agg_info.is_agg);
+        CHECK_EQ(kCOUNT, agg_info.agg_kind);
+        auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(target_idx);
+        CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
+        count_distinct_type = count_distinct_desc_it->second.impl_type_;
+        bitmap_sz_bytes = count_distinct_desc_it->second.bitmapSizeBytes();
+      }
+      for (int32_t bin = 0; bin < groups_buffer_entry_count_; ++bin) {
+        size_t group_by_buffer_base_idx { bin * warp_count_ * agg_col_count + target_idx };
+        for (int8_t warp_idx = 0; warp_idx < warp_count_; ++warp_idx) {
+          const auto val = other_results.group_by_buffer_[group_by_buffer_base_idx];
+          if (agg_info.is_agg) {
+            if (agg_info.is_distinct) {
+              if (count_distinct_type == CountDistinctImplType::Bitmap) {
+                auto old_set = reinterpret_cast<int8_t*>(group_by_buffer_[group_by_buffer_base_idx]);
+                auto new_set = reinterpret_cast<int8_t*>(val);
+                bitmap_set_unify(new_set, old_set, bitmap_sz_bytes);
+              } else {
+                CHECK(count_distinct_type == CountDistinctImplType::StdSet);
+                auto old_set = reinterpret_cast<std::set<int64_t>*>(group_by_buffer_[group_by_buffer_base_idx]);
+                auto new_set = reinterpret_cast<std::set<int64_t>*>(val);
+                old_set->insert(new_set->begin(), new_set->end());
+                new_set->insert(old_set->begin(), old_set->end());
+              }
+            } else {
+              group_by_buffer_[group_by_buffer_base_idx] += val;
+            }
+          } else {
+            if (val) {
+              group_by_buffer_[group_by_buffer_base_idx] = val;
+            }
+          }
+          group_by_buffer_base_idx += agg_col_count;
+        }
+      }
+    }
+    return;
+  }
+
   auto reduce_impl = [this](InternalTargetValue* crt_val, const InternalTargetValue* new_val,
       const TargetInfo& agg_info, const size_t agg_col_idx) {
     CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_time() ||
@@ -298,14 +346,15 @@ void ResultRows::reduce(const ResultRows& other_results) {
   }
 }
 
-void ResultRows::sort(const Planner::Sort* sort_plan) {
+void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
+  const bool use_heap { order_entries.size() == 1 && !sort_plan->get_remove_duplicates() && top_n };
   // TODO(alex): check the semantics for order by multiple columns
   for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
     CHECK_GE(order_entry.tle_no, 1);
     CHECK_LE(order_entry.tle_no, target_list.size());
-    auto compare = [this, &order_entry](const TargetValues& lhs, const TargetValues& rhs) {
+    auto compare = [this, &order_entry, use_heap](const TargetValues& lhs, const TargetValues& rhs) {
       // The compare function must define a strict weak ordering, which means
       // we can't use the overloaded less than operator for boost::variant since
       // there's not greater than counterpart. If we naively use "not less than"
@@ -326,6 +375,7 @@ void ResultRows::sort(const Planner::Sort* sort_plan) {
       if (isNull(entry_ti, rhs_v) && !isNull(entry_ti, lhs_v)) {
         return !order_entry.nulls_first;
       }
+      const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
       const auto lhs_ip = boost::get<int64_t>(&lhs_v);
       if (lhs_ip) {
         const auto rhs_ip = boost::get<int64_t>(&rhs_v);
@@ -335,15 +385,15 @@ void ResultRows::sort(const Planner::Sort* sort_plan) {
           auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param());
           auto lhs_str = string_dict->getString(*lhs_ip);
           auto rhs_str = string_dict->getString(*rhs_ip);
-          return order_entry.is_desc ? lhs_str > rhs_str : lhs_str < rhs_str;
+          return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
-        return order_entry.is_desc ? *lhs_ip > *rhs_ip : *lhs_ip < *rhs_ip;
+        return use_desc_cmp ? *lhs_ip > *rhs_ip : *lhs_ip < *rhs_ip;
       } else {
         const auto lhs_fp = boost::get<std::pair<int64_t, int64_t>>(&lhs_v);
         if (lhs_fp) {
           const auto rhs_fp = boost::get<std::pair<int64_t, int64_t>>(&rhs_v);
           CHECK(rhs_fp);
-          return order_entry.is_desc
+          return use_desc_cmp
             ? pair_to_double(*lhs_fp, is_int) > pair_to_double(*rhs_fp, is_int)
             : pair_to_double(*lhs_fp, is_int) < pair_to_double(*rhs_fp, is_int);
         } else {
@@ -351,10 +401,22 @@ void ResultRows::sort(const Planner::Sort* sort_plan) {
           CHECK(lhs_sp);
           const auto rhs_sp = boost::get<std::string>(&rhs_v);
           CHECK(rhs_sp);
-          return order_entry.is_desc ? *lhs_sp > *rhs_sp : *lhs_sp < *rhs_sp;
+          return use_desc_cmp ? *lhs_sp > *rhs_sp : *lhs_sp < *rhs_sp;
         }
       }
     };
+    if (use_heap) {
+      std::make_heap(target_values_.begin(), target_values_.end(), compare);
+      decltype(target_values_) top_target_values;
+      top_target_values.reserve(top_n);
+      for (int64_t i = 0; i < top_n && !target_values_.empty(); ++i) {
+        top_target_values.push_back(target_values_.front());
+        std::pop_heap(target_values_.begin(), target_values_.end(), compare);
+        target_values_.pop_back();
+      }
+      target_values_.swap(top_target_values);
+      return;
+    }
     std::sort(target_values_.begin(), target_values_.end(), compare);
     if (sort_plan->get_remove_duplicates()) {
       std::sort(target_values_.begin(), target_values_.end());
@@ -1894,8 +1956,9 @@ ResultRows Executor::executeResultPlan(
     int32_t* error_code) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   auto result_rows = executeAggScanPlan(agg_plan, 0, 0, hoist_literals, device_type, opt_level, cat,
-    nullptr, max_groups_buffer_entry_guess, error_code);
+    row_set_mem_owner, max_groups_buffer_entry_guess, error_code);
   if (*error_code) {
     return ResultRows({}, nullptr, nullptr);
   }
@@ -1945,11 +2008,11 @@ ResultRows Executor::executeResultPlan(
   }
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, nullptr, false, nullptr, result_rows.size(), 0);
+    ExecutorDeviceType::CPU, opt_level, nullptr, false, row_set_mem_owner, result_rows.size(), 0);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
-    ExecutorDeviceType::CPU, 0, {}, nullptr);
+    ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   *error_code = 0;
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
@@ -1973,7 +2036,7 @@ ResultRows Executor::executeSortPlan(
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
     error_code);
-  rows_to_sort.sort(sort_plan);
+  rows_to_sort.sort(sort_plan, limit + offset);
   if (limit || offset) {
     rows_to_sort.dropFirstN(offset);
     if (limit) {
@@ -2255,9 +2318,19 @@ ResultRows Executor::executeAggScanPlan(
     child.join();
   }
   cat.get_dataMgr().freeAllBuffers();
-  return agg_plan
-    ? reduceMultiDeviceResults(all_fragment_results, compilation_result_cpu.query_mem_desc, row_set_mem_owner)
-    : results_union(all_fragment_results);
+  if (agg_plan) {
+    auto reduced_results = reduceMultiDeviceResults(
+      all_fragment_results, compilation_result_cpu.query_mem_desc, row_set_mem_owner);
+    if (reduced_results.group_by_buffer_) {
+      reduced_results.addKeylessGroupByBuffer(
+        reduced_results.group_by_buffer_,
+        reduced_results.groups_buffer_entry_count_,
+        reduced_results.min_val_,
+        reduced_results.warp_count_);
+    }
+    return reduced_results;
+  }
+  return results_union(all_fragment_results);
 }
 
 int32_t Executor::executePlanWithoutGroupBy(
