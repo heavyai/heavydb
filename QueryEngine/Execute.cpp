@@ -285,6 +285,9 @@ void ResultRows::sort(const Planner::Sort* sort_plan) {
         entry_ti.get_compression() == kENCODING_DICT;
       const auto lhs_v = lhs[order_entry.tle_no - 1];
       const auto rhs_v = rhs[order_entry.tle_no - 1];
+      if (isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v)) {
+        return false;
+      }
       if (isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v)) {
         return order_entry.nulls_first;
       }
@@ -375,6 +378,7 @@ int64_t get_scan_limit(const Planner::Plan* plan, const int64_t limit) {
 ResultRows Executor::executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,
+    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
@@ -383,22 +387,28 @@ ResultRows Executor::executeSelectPlan(
     int32_t* error_code) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
     auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
-    if (limit) {
+    if (limit || offset) {
       const int64_t scan_limit { get_scan_limit(plan, limit) };
-      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
-        row_set_mem_owner, scan_limit ? scan_limit : max_groups_buffer_entry_guess, error_code);
-      rows.keepFirstN(limit);
+      auto rows = executeAggScanPlan(plan, limit, offset, hoist_literals, device_type, opt_level, cat,
+        row_set_mem_owner, scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess, error_code);
+      rows.dropFirstN(offset);
+      if (limit) {
+        rows.keepFirstN(limit);
+      }
       return rows;
     }
-    return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat, row_set_mem_owner,
-      max_groups_buffer_entry_guess, error_code);
+    return executeAggScanPlan(plan, limit, offset, hoist_literals, device_type, opt_level, cat,
+      row_set_mem_owner, max_groups_buffer_entry_guess, error_code);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
-    if (limit) {
+    if (limit || offset) {
       auto rows = executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
         cat, max_groups_buffer_entry_guess, error_code);
-      rows.keepFirstN(limit);
+      rows.dropFirstN(offset);
+      if (limit) {
+        rows.keepFirstN(limit);
+      }
       return rows;
     }
     return executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
@@ -406,7 +416,7 @@ ResultRows Executor::executeSelectPlan(
   }
   const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
   if (sort_plan) {
-    return executeSortPlan(sort_plan, limit, hoist_literals, device_type, opt_level,
+    return executeSortPlan(sort_plan, limit, offset, hoist_literals, device_type, opt_level,
       cat, max_groups_buffer_entry_guess, error_code);
   }
   CHECK(false);
@@ -432,13 +442,13 @@ ResultRows Executor::execute(
   case kSELECT: {
     int32_t error_code { 0 };
     auto rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
-      hoist_literals, device_type, opt_level, root_plan->get_catalog(),
+      root_plan->get_offset(), hoist_literals, device_type, opt_level, root_plan->get_catalog(),
       2048, &error_code);
     if (error_code == ERR_DIV_BY_ZERO) {
       throw std::runtime_error("Division by zero");
     }
     if (error_code) {
-      rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
+      rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level, root_plan->get_catalog(),
         0, &error_code);
       CHECK(!error_code);
@@ -1867,7 +1877,7 @@ ResultRows Executor::executeResultPlan(
     int32_t* error_code) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
-  auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
+  auto result_rows = executeAggScanPlan(agg_plan, 0, 0, hoist_literals, device_type, opt_level, cat,
     nullptr, max_groups_buffer_entry_guess, error_code);
   if (*error_code) {
     return ResultRows({}, nullptr, nullptr);
@@ -1935,6 +1945,7 @@ ResultRows Executor::executeResultPlan(
 ResultRows Executor::executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
+    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
@@ -1942,12 +1953,15 @@ ResultRows Executor::executeSortPlan(
     const size_t max_groups_buffer_entry_guess,
     int32_t* error_code) {
   *error_code = 0;
-  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0,
+  auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
     error_code);
   rows_to_sort.sort(sort_plan);
-  if (limit) {
-    rows_to_sort.keepFirstN(limit);
+  if (limit || offset) {
+    rows_to_sort.dropFirstN(offset);
+    if (limit) {
+      rows_to_sort.keepFirstN(limit);
+    }
   }
   return rows_to_sort;
 }
@@ -1955,6 +1969,7 @@ ResultRows Executor::executeSortPlan(
 ResultRows Executor::executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
+    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type_in,
     const ExecutorOptLevel opt_level,
