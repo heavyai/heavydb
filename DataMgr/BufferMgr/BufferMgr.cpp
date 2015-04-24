@@ -54,9 +54,7 @@ namespace Buffer_Namespace {
         // ChunkPageSize here is just for recording dirty pages
         {
             std::lock_guard < std::mutex > lock (chunkIndexMutex_);
-            if (chunkIndex_.find(chunkKey) != chunkIndex_.end()) {
-                throw std::runtime_error("Chunk already exists");
-            }
+            assert(chunkIndex_.find(chunkKey) == chunkIndex_.end());
             BufferSeg bufferSeg(BufferSeg(-1,0,USED));
             bufferSeg.chunkKey = chunkKey;
             std::lock_guard < std::mutex > unsizedSegsLock (unsizedSegsMutex_);
@@ -457,6 +455,7 @@ namespace Buffer_Namespace {
     /// throws a runtime_error.
     AbstractBuffer* BufferMgr::getBuffer(const ChunkKey &key, const size_t numBytes) {
         std::lock_guard < std::mutex > lock (globalMutex_); // hack for now
+        //cout << "Get buffer - bytes: " << numBytes << endl;
 
         std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); 
         std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
@@ -500,6 +499,7 @@ namespace Buffer_Namespace {
     void BufferMgr::fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
         std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); 
         std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        //cout << "Fetch buffer bytes: " << numBytes << endl;
         
         auto bufferIt = chunkIndex_.find(key);
         bool foundBuffer = bufferIt != chunkIndex_.end();
@@ -507,21 +507,26 @@ namespace Buffer_Namespace {
         AbstractBuffer * buffer;
         if (!foundBuffer) {
             sizedSegsLock.unlock();
-            if (parentMgr_ == 0) {
-                throw std::runtime_error("Chunk does not exist");
-            }
+            assert (parentMgr_ != 0);
             buffer = createBuffer(key,pageSize_,numBytes); // will pin buffer
             try {
                 parentMgr_->fetchBuffer(key, buffer, numBytes);
             }
             catch (std::runtime_error &error) {
-                deleteBuffer(key);
-                throw std::runtime_error("Fetch chunk - Could not find chunk in buffer pool or parent buffer pools");
+                assert(false);
             }
         }
         else {
             buffer = bufferIt->second->buffer;
             buffer->pin();
+            if (numBytes > buffer->size()) {
+                try {
+                    parentMgr_-> fetchBuffer(key, buffer, numBytes);
+                }
+                catch (std::runtime_error &error) {
+                    assert(false);
+                }
+            }
             sizedSegsLock.unlock();
         }
         size_t chunkSize = numBytes == 0 ? buffer->size() : numBytes;
@@ -552,10 +557,7 @@ namespace Buffer_Namespace {
         }
         size_t oldBufferSize = buffer->size();
         size_t newBufferSize = numBytes == 0 ? srcBuffer->size() : numBytes;
-
-        if (buffer->isDirty()) {
-            throw std::runtime_error("Chunk inconsistency");
-        }
+        assert(!buffer->isDirty());
 
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
