@@ -467,6 +467,7 @@ namespace Buffer_Namespace {
         bool foundBuffer = bufferIt != chunkIndex_.end();
         chunkIndexLock.unlock();
         if (foundBuffer) {
+            assert(bufferIt->second->buffer);
             bufferIt->second->buffer->pin();
             sizedSegsLock.unlock();
             bufferIt->second->lastTouched = bufferEpoch_++; // race
