@@ -463,6 +463,8 @@ ResultRows Executor::execute(
   default:
     CHECK(false);
   }
+  CHECK(false);
+  return ResultRows({}, nullptr, {});
 }
 
 StringDictionary* Executor::getStringDictionary(const int dict_id) const {
@@ -1167,24 +1169,6 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
       }
     }
     const std::string int_typename { "int" + std::to_string(get_bit_width(lhs_ti.get_type())) + "_t" };
-    auto lhs_type = lhs_ti.get_type();
-    // TODO(alex): refactor this
-    if (lhs_ti.is_string()) {
-      CHECK_EQ(kENCODING_DICT, lhs_ti.get_compression());
-      CHECK_EQ(4, lhs_ti.get_size());
-      lhs_type = kINT;
-    } else if (lhs_ti.is_time()) {
-      switch (lhs_ti.get_size()) {
-      case 4:
-        lhs_type = kINT;
-        break;
-      case 8:
-        lhs_type = kBIGINT;
-        break;
-      default:
-        CHECK(false);
-      }
-    }
     return not_null
       ? cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
       : cgen_state_->emitCall(icmp_name(optype) + "_" + int_typename + "_nullable",
@@ -1203,6 +1187,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
         });
   }
   CHECK(false);
+  return nullptr;
 }
 
 llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
