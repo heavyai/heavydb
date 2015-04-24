@@ -90,48 +90,6 @@ TargetValue ResultRows::get(const size_t row_idx,
   CHECK(false);
 }
 
-namespace {
-
-int64_t inline_int_null_val(const SQLTypeInfo& ti) {
-  auto type = ti.get_type();
-  if (ti.is_string()) {
-    CHECK_EQ(kENCODING_DICT, ti.get_compression());
-    CHECK_EQ(4, ti.get_size());
-    type = kINT;
-  }
-  switch (type) {
-  case kBOOLEAN:
-    return std::numeric_limits<int8_t>::min();
-  case kSMALLINT:
-    return std::numeric_limits<int16_t>::min();
-  case kINT:
-    return std::numeric_limits<int32_t>::min();
-  case kBIGINT:
-    return std::numeric_limits<int64_t>::min();
-  case kTIMESTAMP:
-  case kTIME:
-  case kDATE:
-    return std::numeric_limits<int64_t>::min();
-  default:
-    CHECK(false);
-  }
-}
-
-double inline_fp_null_val(const SQLTypeInfo& ti) {
-  CHECK(ti.is_fp());
-  const auto type = ti.get_type();
-  switch (type) {
-  case kFLOAT:
-    return NULL_FLOAT;
-  case kDOUBLE:
-    return NULL_DOUBLE;
-  default:
-    CHECK(false);
-  }
-}
-
-}  // namespace
-
 void ResultRows::reduce(const ResultRows& other_results) {
   if (other_results.empty()) {
     return;
@@ -321,18 +279,25 @@ void ResultRows::sort(const Planner::Sort* sort_plan) {
       // there's not greater than counterpart. If we naively use "not less than"
       // as the compare function for descending order, std::sort will trigger
       // a segmentation fault (or corrupt memory).
-      const auto is_int = targets_[order_entry.tle_no - 1].sql_type.is_integer();
-      const auto is_dict = targets_[order_entry.tle_no - 1].sql_type.is_string() &&
-        targets_[order_entry.tle_no - 1].sql_type.get_compression() == kENCODING_DICT;
+      const auto& entry_ti = targets_[order_entry.tle_no - 1].sql_type;
+      const auto is_int = entry_ti.is_integer();
+      const auto is_dict = entry_ti.is_string() &&
+        entry_ti.get_compression() == kENCODING_DICT;
       const auto lhs_v = lhs[order_entry.tle_no - 1];
       const auto rhs_v = rhs[order_entry.tle_no - 1];
+      if (isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v)) {
+        return order_entry.nulls_first;
+      }
+      if (isNull(entry_ti, rhs_v) && !isNull(entry_ti, lhs_v)) {
+        return !order_entry.nulls_first;
+      }
       const auto lhs_ip = boost::get<int64_t>(&lhs_v);
       if (lhs_ip) {
         const auto rhs_ip = boost::get<int64_t>(&rhs_v);
         CHECK(rhs_ip);
         if (is_dict) {
-          auto string_dict = executor_->getStringDictionary(
-            targets_[order_entry.tle_no - 1].sql_type.get_comp_param());
+          CHECK_EQ(4, entry_ti.get_size());
+          auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param());
           auto lhs_str = string_dict->getString(*lhs_ip);
           auto rhs_str = string_dict->getString(*rhs_ip);
           return order_entry.is_desc ? lhs_str > rhs_str : lhs_str < rhs_str;

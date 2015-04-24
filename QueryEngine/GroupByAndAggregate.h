@@ -216,6 +216,48 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const b
     : *reinterpret_cast<const double*>(&fp_pair.first) / static_cast<double>(fp_pair.second);
 }
 
+namespace {
+
+inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
+  auto type = ti.get_type();
+  if (ti.is_string()) {
+    CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    CHECK_EQ(4, ti.get_size());
+    type = kINT;
+  }
+  switch (type) {
+  case kBOOLEAN:
+    return std::numeric_limits<int8_t>::min();
+  case kSMALLINT:
+    return std::numeric_limits<int16_t>::min();
+  case kINT:
+    return std::numeric_limits<int32_t>::min();
+  case kBIGINT:
+    return std::numeric_limits<int64_t>::min();
+  case kTIMESTAMP:
+  case kTIME:
+  case kDATE:
+    return std::numeric_limits<int64_t>::min();
+  default:
+    CHECK(false);
+  }
+}
+
+inline double inline_fp_null_val(const SQLTypeInfo& ti) {
+  CHECK(ti.is_fp());
+  const auto type = ti.get_type();
+  switch (type) {
+  case kFLOAT:
+    return NULL_FLOAT;
+  case kDOUBLE:
+    return NULL_DOUBLE;
+  default:
+    CHECK(false);
+  }
+}
+
+}  // namespace
+
 class ResultRows {
 public:
   ResultRows(const std::vector<Analyzer::Expr*>& targets,
@@ -354,11 +396,33 @@ private:
     }
   }
 
+  typedef boost::variant<int64_t, std::pair<int64_t, int64_t>, std::string, void*> InternalTargetValue;
+
+  static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
+    switch (val.which()) {
+    case 0: {
+      if (!ti.is_fp()) {
+        return *boost::get<int64_t>(&val) == inline_int_null_val(ti);
+      }
+      const auto null_val = inline_fp_null_val(ti);
+      return *boost::get<int64_t>(&val) == *reinterpret_cast<const int64_t*>(&null_val);
+    }
+    case 1:
+      return boost::get<std::pair<int64_t, int64_t>>(&val)->first == 0;
+    case 2:
+      return false;
+    case 3:
+      CHECK(!*boost::get<void*>(&val));
+      return true;
+    default:
+      CHECK(false);
+    }
+  }
+
   std::vector<TargetInfo> targets_;
   std::vector<int64_t> simple_keys_;
   typedef std::vector<int64_t> MultiKey;
   std::vector<MultiKey> multi_keys_;
-  typedef boost::variant<int64_t, std::pair<int64_t, int64_t>, std::string, void*> InternalTargetValue;
   typedef std::vector<InternalTargetValue> TargetValues;
   std::vector<TargetValues> target_values_;
   mutable std::map<MultiKey, TargetValues> as_map_;
