@@ -275,23 +275,16 @@ public:
     target_values_.emplace_back();
   }
 
-  void beginRow(const int64_t key) {
-    CHECK(multi_keys_.empty());
-    simple_keys_.push_back(key);
-    target_values_.emplace_back();
-  }
-
   void beginRow(const std::vector<int64_t>& key) {
     CHECK(simple_keys_.empty());
     multi_keys_.push_back(key);
     target_values_.emplace_back();
   }
 
-  void addValues(const std::vector<int64_t>& vals) {
-    for (const auto val : vals) {
-      target_values_.back().emplace_back(val);
-    }
-  }
+  void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
+                               const int32_t groups_buffer_entry_count,
+                               const int64_t min_val,
+                               const int8_t warp_count);
 
   void addValue(const int64_t val) {
     target_values_.back().emplace_back(val);
@@ -308,16 +301,6 @@ public:
 
   void addValue() {
     target_values_.back().emplace_back(nullptr);
-  }
-
-  void discardRow() {
-    CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
-    if (!simple_keys_.empty()) {
-      simple_keys_.pop_back();
-    } else {
-      multi_keys_.pop_back();
-    }
-    target_values_.pop_back();
   }
 
   void append(const ResultRows& more_results) {
@@ -394,6 +377,28 @@ public:
     return true;
   }
 private:
+  void beginRow(const int64_t key) {
+    CHECK(multi_keys_.empty());
+    simple_keys_.push_back(key);
+    target_values_.emplace_back();
+  }
+
+  void addValues(const std::vector<int64_t>& vals) {
+    for (const auto val : vals) {
+      target_values_.back().emplace_back(val);
+    }
+  }
+
+  void discardRow() {
+    CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
+    if (!simple_keys_.empty()) {
+      simple_keys_.pop_back();
+    } else {
+      multi_keys_.pop_back();
+    }
+    target_values_.pop_back();
+  }
+
   void createReductionMap() const {
     if (!as_map_.empty() || !as_unordered_map_.empty()) {
       return;

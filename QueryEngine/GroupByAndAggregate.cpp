@@ -10,6 +10,62 @@
 #include <thread>
 
 
+void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
+                                         const int32_t groups_buffer_entry_count,
+                                         const int64_t min_val,
+                                         const int8_t warp_count) {
+  const size_t agg_col_count { targets_.size() };
+  std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
+  std::vector<int64_t> agg_vals(agg_col_count, 0);
+  for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
+    memset(&partial_agg_vals[0], 0, agg_col_count * sizeof(partial_agg_vals[0]));
+    memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
+    beginRow(bin + min_val);
+    bool discard_row = true;
+    size_t group_by_buffer_base_idx { warp_count * bin * agg_col_count };
+    for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
+      bool discard_partial_result = true;
+      for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
+        const auto& agg_info = targets_[target_idx];
+        CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
+        partial_agg_vals[target_idx] = group_by_buffer[group_by_buffer_base_idx + target_idx];
+        auto partial_bin_val = partial_agg_vals[target_idx];
+        if (agg_info.is_distinct) {
+          CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
+          partial_bin_val = bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
+        }
+        if (agg_info.is_agg && partial_bin_val) {
+          discard_partial_result = false;
+        }
+      }
+      group_by_buffer_base_idx += agg_col_count;
+      if (discard_partial_result) {
+        continue;
+      }
+      discard_row = false;
+      for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
+        const auto& agg_info = targets_[target_idx];
+        auto partial_bin_val = partial_agg_vals[target_idx];
+        if (agg_info.is_agg) {
+          CHECK_EQ(kCOUNT, agg_info.agg_kind);
+          agg_vals[target_idx] += partial_bin_val;
+        } else {
+          if (agg_vals[target_idx]) {
+            CHECK_EQ(agg_vals[target_idx], partial_bin_val);
+          } else {
+            agg_vals[target_idx] = partial_bin_val;
+          }
+        }
+      }
+    }
+    if (discard_row) {
+      discardRow();
+      continue;
+    }
+    addValues(agg_vals);
+  }
+}
+
 QueryExecutionContext::QueryExecutionContext(
     const QueryMemoryDescriptor& query_mem_desc,
     const std::vector<int64_t>& init_agg_vals,
@@ -229,57 +285,8 @@ ResultRows QueryExecutionContext::groupBufferToResults(
     if (query_mem_desc_.keyless_hash) {
       CHECK_EQ(1, group_by_col_count);
       CHECK_EQ(targets.size(), agg_col_count);
-      std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
-      std::vector<int64_t> agg_vals(agg_col_count, 0);
-      for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
-        const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
-        memset(&partial_agg_vals[0], 0, agg_col_count * sizeof(partial_agg_vals[0]));
-        memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
-        results.beginRow(bin + query_mem_desc_.min_val);
-        bool discard_row = true;
-        size_t group_by_buffer_base_idx { warp_count * bin * agg_col_count };
-        for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
-          bool discard_partial_result = true;
-          for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-            const auto agg_info = target_info(targets[target_idx]);
-            CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
-            partial_agg_vals[target_idx] = group_by_buffer[group_by_buffer_base_idx + target_idx];
-            auto partial_bin_val = partial_agg_vals[target_idx];
-            if (agg_info.is_distinct) {
-              CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
-              partial_bin_val = bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
-            }
-            if (agg_info.is_agg && partial_bin_val) {
-              discard_partial_result = false;
-            }
-          }
-          group_by_buffer_base_idx += agg_col_count;
-          if (discard_partial_result) {
-            continue;
-          }
-          discard_row = false;
-          for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-            const auto target_expr = targets[target_idx];
-            const auto agg_info = target_info(target_expr);
-            auto partial_bin_val = partial_agg_vals[target_idx];
-            if (agg_info.is_agg) {
-              CHECK_EQ(kCOUNT, agg_info.agg_kind);
-              agg_vals[target_idx] += partial_bin_val;
-            } else {
-              if (agg_vals[target_idx]) {
-                CHECK_EQ(agg_vals[target_idx], partial_bin_val);
-              } else {
-                agg_vals[target_idx] = partial_bin_val;
-              }
-            }
-          }
-        }
-        if (discard_row) {
-          results.discardRow();
-          continue;
-        }
-        results.addValues(agg_vals);
-      }
+      const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
+      results.addKeylessGroupByBuffer(group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count);
       return results;
     }
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
