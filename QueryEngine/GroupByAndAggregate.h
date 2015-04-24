@@ -340,6 +340,17 @@ public:
     target_values_.resize(n);
   }
 
+  void dropFirstN(const size_t n) {
+    if (!n) {
+      return;
+    }
+    if (n >= target_values_.size()) {
+      decltype(target_values_)().swap(target_values_);
+      return;
+    }
+    decltype(target_values_)(target_values_.begin() + n, target_values_.end()).swap(target_values_);
+  }
+
   size_t size() const {
     return target_values_.size();
   }

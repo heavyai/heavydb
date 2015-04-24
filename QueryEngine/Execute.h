@@ -117,6 +117,7 @@ private:
   ResultRows executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,
+    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
@@ -126,6 +127,7 @@ private:
   ResultRows executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
+    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
@@ -144,6 +146,7 @@ private:
   ResultRows executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
+    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
