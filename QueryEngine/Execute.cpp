@@ -321,6 +321,10 @@ void ResultRows::sort(const Planner::Sort* sort_plan) {
       }
     };
     std::sort(target_values_.begin(), target_values_.end(), compare);
+    if (sort_plan->get_remove_duplicates()) {
+      std::sort(target_values_.begin(), target_values_.end());
+      target_values_.erase(std::unique(target_values_.begin(), target_values_.end()), target_values_.end());
+    }
   }
 }
 
