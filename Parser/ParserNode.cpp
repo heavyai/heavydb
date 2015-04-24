@@ -886,31 +886,42 @@ namespace Parser {
     query.set_limit(limit);
     query.set_offset(offset);
     query_expr->analyze(catalog, query);
-    if (orderby_clause == nullptr) {
+    if (orderby_clause == nullptr && !query.get_is_distinct()) {
       query.set_order_by(nullptr);
       return;
     }
     const std::vector<Analyzer::TargetEntry*> &tlist = query.get_targetlist();
     std::list<Analyzer::OrderEntry> *order_by = new std::list<Analyzer::OrderEntry>();
-    for (auto p : *orderby_clause) {
-      int tle_no = p->get_colno();
-      if (tle_no == 0) {
-        // use column name
-        // search through targetlist for matching name
-        const std::string *name = p->get_column()->get_column();
-        tle_no = 1;
-        bool found = false;
-        for (auto tle : tlist) {
-          if (tle->get_resname() == *name) {
-            found = true;
-            break;
+    if (orderby_clause != nullptr) {
+      for (auto p : *orderby_clause) {
+        int tle_no = p->get_colno();
+        if (tle_no == 0) {
+          // use column name
+          // search through targetlist for matching name
+          const std::string *name = p->get_column()->get_column();
+          tle_no = 1;
+          bool found = false;
+          for (auto tle : tlist) {
+            if (tle->get_resname() == *name) {
+              found = true;
+              break;
+            }
+            tle_no++;
           }
-          tle_no++;
+          if (!found)
+            throw std::runtime_error("invalid name in order by: " + *name);
         }
-        if (!found)
-          throw std::runtime_error("invalid name in order by: " + *name);
+        order_by->push_back(Analyzer::OrderEntry(tle_no, p->get_is_desc(), p->get_nulls_first()));
       }
-      order_by->push_back(Analyzer::OrderEntry(tle_no, p->get_is_desc(), p->get_nulls_first()));
+    }
+    if (query.get_is_distinct()) {
+      // extend order_by to include all targetlist entries.
+      for (int i = 1; i <= tlist.size(); i++) {
+        bool in_orderby = false;
+        std::for_each(order_by->begin(), order_by->end(), [&in_orderby, i](const Analyzer::OrderEntry &oe) { in_orderby = in_orderby || (i == oe.tle_no); });
+        if (!in_orderby)
+          order_by->push_back(Analyzer::OrderEntry(i, false, false));
+      }
     }
     query.set_order_by(order_by);
   }
