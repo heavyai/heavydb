@@ -561,12 +561,16 @@ namespace Parser {
     else if (boost::iequals(*name, "avg")) {
       agg_type = kAVG;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      if (!arg_expr->get_type_info().is_number())
+        throw std::runtime_error("Cannot compute AVG on non-number-type arguments.");
       arg_expr = arg_expr->decompress();
       result_type.set_type(kDOUBLE);
     }
     else if (boost::iequals(*name, "sum")) {
       agg_type = kSUM;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      if (!arg_expr->get_type_info().is_number())
+        throw std::runtime_error("Cannot compute SUM on non-number-type arguments.");
       arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info();
     }
