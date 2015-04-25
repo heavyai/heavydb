@@ -2749,13 +2749,34 @@ Executor::CompilationResult Executor::compilePlan(
   // generate the code for the filter
   allocateLocalColumnIds(scan_cols);
 
+  std::vector<Analyzer::Expr*> deferred_quals;
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
+    if (dynamic_cast<Analyzer::LikeExpr*>(expr)) {
+      deferred_quals.push_back(expr);
+      continue;
+    }
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
   }
   for (auto expr : quals) {
+    if (dynamic_cast<Analyzer::LikeExpr*>(expr)) {
+      deferred_quals.push_back(expr);
+      continue;
+    }
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
   }
+
+  auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
+  auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
+  cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
+  cgen_state_->ir_builder_.SetInsertPoint(sc_false);
+  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+  cgen_state_->ir_builder_.SetInsertPoint(sc_true);
+
+  for (auto expr : deferred_quals) {
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
+  }
+
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
   const bool needs_error_check = group_by_and_aggregate.codegen(filter_lv, device_type, hoist_literals);
