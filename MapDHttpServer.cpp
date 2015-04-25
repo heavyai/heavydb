@@ -29,6 +29,9 @@ public:
     try {
       session = client_.connect(user, passwd, dbname);
     }
+    catch (MapDException &e) {
+      throw e;
+    }
     catch (TException &te) {
       try {
         transport_.open();
@@ -40,9 +43,6 @@ public:
         thrift_exception.error_msg = te1.what();
         throw thrift_exception;
       }
-    }
-    catch (MapDException &e) {
-      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "connect caught exception: " << e.what() << std::endl;
@@ -69,10 +69,16 @@ public:
     try {
       client_.sql_execute(_return, session, query_str);
     }
+    catch (MapDException &e) {
+      throw e;
+    }
     catch (TException &te) {
       try {
         transport_.open();
         client_.sql_execute(_return, session, query_str);
+      }
+      catch (MapDException &e) {
+        throw e;
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -80,18 +86,12 @@ public:
         thrift_exception.error_msg = te1.what();
         throw thrift_exception;
       }
-      catch (MapDException &e) {
-        throw e;
-      }
       catch (std::exception &e) {
         std::cerr << "select caught exception: " << e.what() << std::endl;
         MapDException ex;
         ex.error_msg = e.what();
         throw ex;
       }
-    }
-    catch (MapDException &e) {
-      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "select caught exception: " << e.what() << std::endl;
@@ -105,10 +105,16 @@ public:
     try {
       client_.getColumnTypes(_return, session, table_name);
     }
+    catch (MapDException &e) {
+      throw e;
+    }
     catch (TException &te) {
       try {
         transport_.open();
         client_.getColumnTypes(_return, session, table_name);
+      }
+      catch (MapDException &e) {
+        throw e;
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -116,18 +122,12 @@ public:
         thrift_exception.error_msg = te1.what();
         throw thrift_exception;
       }
-      catch (MapDException &e) {
-        throw e;
-      }
       catch (std::exception &e) {
         std::cerr << "getColumnTypes caught exception: " << e.what() << std::endl;
         MapDException ex;
         ex.error_msg = e.what();
         throw ex;
       }
-    }
-    catch (MapDException &e) {
-      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "getColumnTypes caught exception: " << e.what() << std::endl;
@@ -142,10 +142,16 @@ public:
     try {
       client_.getTables(_return, session);
     }
+    catch (MapDException &e) {
+      throw e;
+    }
     catch (TException &te) {
       try {
         transport_.open();
         client_.getTables(_return, session);
+      }
+      catch (MapDException &e) {
+        throw e;
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -153,18 +159,12 @@ public:
         thrift_exception.error_msg = te1.what();
         throw thrift_exception;
       }
-      catch (MapDException &e) {
-        throw e;
-      }
       catch (std::exception &e) {
         std::cerr << "getTables caught exception: " << e.what() << std::endl;
         MapDException ex;
         ex.error_msg = e.what();
         throw ex;
       }
-    }
-    catch (MapDException &e) {
-      throw e;
     }
     catch (std::exception &e) {
       std::cerr << "getTables caught exception: " << e.what() << std::endl;

@@ -121,7 +121,11 @@ char *loadProgramSource(const char *filename, size_t *size) {
     stat(filename, &statbuf);
     source = (char *) malloc(statbuf.st_size + 1);
     if (source) {
-      fread(source, statbuf.st_size, 1, fh);
+      size_t bytes_read = fread(source, statbuf.st_size, 1, fh);
+      if (bytes_read < static_cast<size_t>(statbuf.st_size)) {
+        fprintf(stderr, "Error reading file %s\n", filename);
+        exit(-1);
+      }
       source[statbuf.st_size] = 0;
       *size = statbuf.st_size + 1;
     }

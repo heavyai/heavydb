@@ -44,7 +44,7 @@ class StringNoneEncoder : public Encoder {
 
         void readMetadata(FILE *f) {
             // assumes pointer is already in right place
-            fread((int8_t *)&numElems,sizeof(size_t),1,f); 
+            CHECK_RET(fread((int8_t *)&numElems,sizeof(size_t),1,f));
         }
 
         void copyMetadata(const Encoder * copyFromEncoder) {

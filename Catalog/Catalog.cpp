@@ -177,7 +177,7 @@ void Catalog::buildMaps() {
     string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
     sqliteConnector_.query(dictQuery);
     size_t numRows = sqliteConnector_.getNumRows();
-    for (int r = 0; r < numRows; ++r) {
+    for (size_t r = 0; r < numRows; ++r) {
 				int dictId = sqliteConnector_.getData<int>(r,0);
         std::string dictName = sqliteConnector_.getData<string>(r,1);
 				int dictNBits = sqliteConnector_.getData<int>(r,2);
@@ -189,7 +189,7 @@ void Catalog::buildMaps() {
     string tableQuery("SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions from mapd_tables");
     sqliteConnector_.query(tableQuery);
     numRows = sqliteConnector_.getNumRows();
-    for (int r = 0; r < numRows; ++r) {
+    for (size_t r = 0; r < numRows; ++r) {
 				TableDescriptor *td = new TableDescriptor();
 				td->tableId = sqliteConnector_.getData<int>(r,0);
         td->tableName = sqliteConnector_.getData<string>(r,1);
@@ -215,7 +215,7 @@ void Catalog::buildMaps() {
     string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, size, chunks from mapd_columns");
     sqliteConnector_.query(columnQuery);
     numRows = sqliteConnector_.getNumRows();
-    for (int r = 0; r < numRows; ++r) {
+    for (size_t r = 0; r < numRows; ++r) {
 				ColumnDescriptor *cd = new ColumnDescriptor();
 				cd->tableId = sqliteConnector_.getData<int>(r,0);
 				cd->columnId = sqliteConnector_.getData<int>(r,1);
@@ -241,7 +241,7 @@ void Catalog::buildMaps() {
 		string viewQuery("SELECT tableid, sql, materialized, storage, refresh FROM mapd_views");
 		sqliteConnector_.query(viewQuery);
     numRows = sqliteConnector_.getNumRows();
-    for (int r = 0; r < numRows; ++r) {
+    for (size_t r = 0; r < numRows; ++r) {
 				int32_t tableId = sqliteConnector_.getData<int>(r,0);
 				TableDescriptor *td = tableDescriptorMapById_[tableId];
 				td->viewSQL = sqliteConnector_.getData<string>(r,1);

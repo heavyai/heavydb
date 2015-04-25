@@ -49,8 +49,8 @@ namespace File_Namespace {
         for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
             delete chunkIt->second;
         }
-        for (int i = 0; i < files_.size(); ++i) {
-            delete files_[i];
+        for (auto file_info : files_) {
+          delete file_info;
         }
     }
 
@@ -459,7 +459,7 @@ namespace File_Namespace {
         FileInfo *fInfo = new FileInfo (fileId, f, pageSize, numPages,false); // false means don't init file
         
         fInfo->openExistingFile(headerVec,epoch_);
-        if (fileId >= files_.size()) {
+        if (fileId >= static_cast<int>(files_.size())) {
             files_.resize(fileId+1);
         }
         files_[fileId] = fInfo;

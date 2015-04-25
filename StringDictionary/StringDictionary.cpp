@@ -84,17 +84,14 @@ StringDictionary::~StringDictionary() {
   close(offset_fd_);
 }
 
-__attribute__((always_inline))
 int32_t StringDictionary::getOrAdd(const std::string& str) {
   return getOrAddImpl(str, false);
 }
 
-__attribute__((always_inline))
 int32_t StringDictionary::get(const std::string& str) const {
   return str_ids_[computeBucket(str, str_ids_)];
 }
 
-__attribute__((always_inline))
 std::string StringDictionary::getString(int32_t string_id) const {
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
@@ -107,7 +104,6 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) con
   return getStringBytesChecked(string_id);
 }
 
-__attribute__((always_inline))
 bool StringDictionary::fillRateIsHigh() const {
   return str_ids_.size() <= str_count_ * 2;
 }

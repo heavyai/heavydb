@@ -51,7 +51,7 @@ class StringTokDictEncoder : public Encoder {
             }
           }
           size_t data_size = 0;
-          for (int n = start_idx; n < start_idx + numAppendElems; n++) {
+          for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
             size_t len = (*srcData)[n].size() * sizeof(T);
             data_size += len;
           }
@@ -62,7 +62,7 @@ class StringTokDictEncoder : public Encoder {
           std::unique_ptr<int8_t> gc_inbuf(inbuf);
           for (size_t num_appended = 0; num_appended < numAppendElems; ) {
             StringOffsetT *p = (StringOffsetT*)inbuf;
-            int i;
+            size_t i;
             for (i = 0; num_appended < numAppendElems && i < inbuf_size/sizeof(StringOffsetT); i++, num_appended++) {
               p[i] = last_offset + (*srcData)[num_appended + start_idx].size() * sizeof(T);
               last_offset = p[i];
@@ -110,12 +110,12 @@ class StringTokDictEncoder : public Encoder {
 
         void writeMetadata(FILE *f) {
             // assumes pointer is already in right place
-            fwrite((int8_t *)&numElems,sizeof(size_t),1,f); 
+            CHECK_RET(fwrite((int8_t *)&numElems,sizeof(size_t),1,f));
         }
 
         void readMetadata(FILE *f) {
             // assumes pointer is already in right place
-            fread((int8_t *)&numElems,sizeof(size_t),1,f); 
+            CHECK_RET(fread((int8_t *)&numElems,sizeof(size_t),1,f));
         }
 
         void copyMetadata(const Encoder * copyFromEncoder) {
