@@ -34,7 +34,7 @@ StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int
 		}
 	}
 	size_t data_size = 0;
-	for (int n = start_idx; n < start_idx + numAppendElems; n++) {
+	for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
 		size_t len = (*srcData)[n].length();
 		data_size += len;
 	}
@@ -45,7 +45,7 @@ StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int
 	std::unique_ptr<int8_t> gc_inbuf(inbuf);
 	for (size_t num_appended = 0; num_appended < numAppendElems; ) {
 		StringOffsetT *p = (StringOffsetT*)inbuf;
-		int i;
+		size_t i;
 		for (i = 0; num_appended < numAppendElems && i < inbuf_size/sizeof(StringOffsetT); i++, num_appended++) {
 			p[i] = last_offset + (*srcData)[num_appended + start_idx].length();
 			last_offset = p[i];

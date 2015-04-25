@@ -691,7 +691,8 @@ namespace Analyzer {
   Constant::cast_string(const SQLTypeInfo &new_type_info)
   {
     std::string *s = constval.stringval;
-    if (s != nullptr && new_type_info.get_type() != kTEXT && new_type_info.get_dimension() < s->length()) {
+    if (s != nullptr && new_type_info.get_type() != kTEXT &&
+        static_cast<size_t>(new_type_info.get_dimension()) < s->length()) {
       // truncate string
       constval.stringval = new std::string(s->substr(0, new_type_info.get_dimension()));
       delete s;
@@ -714,7 +715,8 @@ namespace Analyzer {
   {
     constval.stringval = new std::string();
     *constval.stringval = DatumToString(constval, type_info);
-    if (str_type_info.get_type() != kTEXT && constval.stringval->length() > str_type_info.get_dimension()) {
+    if (str_type_info.get_type() != kTEXT &&
+        constval.stringval->length() > static_cast<size_t>(str_type_info.get_dimension())) {
       // truncate the string
       *constval.stringval = constval.stringval->substr(0, str_type_info.get_dimension());
     }

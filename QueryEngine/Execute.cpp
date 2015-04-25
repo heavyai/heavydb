@@ -37,6 +37,17 @@
 #include <boost/filesystem/path.hpp>
 
 
+namespace {
+
+__attribute__((always_inline))
+inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const bool is_int) {
+  return is_int
+    ? static_cast<double>(fp_pair.first) / static_cast<double>(fp_pair.second)
+    : *reinterpret_cast<const double*>(&fp_pair.first) / static_cast<double>(fp_pair.second);
+}
+
+}  // namespace
+
 TargetValue ResultRows::get(const size_t row_idx,
                             const size_t col_idx,
                             const bool translate_strings) const {
@@ -88,6 +99,27 @@ TargetValue ResultRows::get(const size_t row_idx,
       boost::get<int64_t>(&target_values_[row_idx][col_idx])));
   }
   CHECK(false);
+}
+
+bool ResultRows::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
+  switch (val.which()) {
+  case 0: {
+    if (!ti.is_fp()) {
+      return *boost::get<int64_t>(&val) == inline_int_null_val(ti);
+    }
+    const auto null_val = inline_fp_null_val(ti);
+    return *boost::get<int64_t>(&val) == *reinterpret_cast<const int64_t*>(&null_val);
+  }
+  case 1:
+    return boost::get<std::pair<int64_t, int64_t>>(&val)->first == 0;
+  case 2:
+    return false;
+  case 3:
+    CHECK(!*boost::get<void*>(&val));
+    return true;
+  default:
+    CHECK(false);
+  }
 }
 
 void ResultRows::reduce(const ResultRows& other_results) {

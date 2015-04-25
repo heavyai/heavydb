@@ -48,7 +48,7 @@ namespace Data_Namespace {
     DataMgr::~DataMgr() {
         int numLevels = bufferMgrs_.size();
         for (int level = numLevels - 1; level >= 0; --level) {
-            for (int device = 0; device < bufferMgrs_[level].size(); device++) {
+            for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {
                 delete bufferMgrs_[level][device];
             }
         }

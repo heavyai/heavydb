@@ -111,7 +111,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
         }
         size_t numRowsToInsert = min(rowsLeftInCurrentFragment, numRowsLeft);
         // for each column, append the data in the appropriate insert buffer
-        for (int i = 0; i < insertDataStruct.columnIds.size(); ++i) {
+        for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
             int columnId = insertDataStruct.columnIds[i];
             auto colMapIt = columnMap_.find(columnId);
             assert(colMapIt != columnMap_.end());

@@ -33,7 +33,7 @@ random_fill_int16(int8_t *buf, size_t num_elems)
     uniform_int_distribution<int16_t> dist(INT16_MIN, INT16_MAX);
 		int16_t *p = (int16_t*)buf; 
 		size_t hash = 0;
-		for (int i = 0; i < num_elems; i++) {
+		for (size_t i = 0; i < num_elems; i++) {
 			p[i] = dist(gen);
 			boost::hash_combine(hash, p[i]);
 		}
@@ -47,7 +47,7 @@ random_fill_int32(int8_t *buf, size_t num_elems)
     uniform_int_distribution<int32_t> dist(INT32_MIN, INT32_MAX);
 		int32_t *p = (int32_t*)buf; 
 		size_t hash = 0;
-		for (int i = 0; i < num_elems; i++) {
+		for (size_t i = 0; i < num_elems; i++) {
 			p[i] = dist(gen);
 			boost::hash_combine(hash, p[i]);
 		}
@@ -61,7 +61,7 @@ random_fill_int64(int8_t *buf, size_t num_elems)
     uniform_int_distribution<int64_t> dist(INT64_MIN, INT64_MAX);
 		int64_t *p = (int64_t*)buf; 
 		size_t hash = 0;
-		for (int i = 0; i < num_elems; i++) {
+		for (size_t i = 0; i < num_elems; i++) {
 			p[i] = dist(gen);
 			boost::hash_combine(hash, p[i]);
 		}
@@ -75,7 +75,7 @@ random_fill_float(int8_t *buf, size_t num_elems)
     uniform_real_distribution<float> dist(FLT_MIN, FLT_MAX);
 		float *p = (float*)buf; 
 		size_t hash = 0;
-		for (int i = 0; i < num_elems; i++) {
+		for (size_t i = 0; i < num_elems; i++) {
 			p[i] = dist(gen);
 			boost::hash_combine(hash, p[i]);
 		}
@@ -89,7 +89,7 @@ random_fill_double(int8_t *buf, size_t num_elems)
     uniform_real_distribution<double> dist(DBL_MIN, DBL_MAX);
 		double *p = (double*)buf; 
 		size_t hash = 0;
-		for (int i = 0; i < num_elems; i++) {
+		for (size_t i = 0; i < num_elems; i++) {
 			p[i] = dist(gen);
 			boost::hash_combine(hash, p[i]);
 		}
@@ -105,7 +105,7 @@ random_fill_string(vector<string> &stringVec, size_t num_elems, int max_len, siz
     uniform_int_distribution<> len_dist(0, max_len);
 		size_t hash = 0;
 		std::hash<std::string> string_hash;
-		for (int n = 0; n < num_elems; n++) {
+		for (size_t n = 0; n < num_elems; n++) {
 			int len = len_dist(gen);
 			string s(len, ' ');
 			for (int i = 0; i < len; i++)
@@ -125,7 +125,7 @@ random_fill_int8array(vector<vector<int8_t>> &stringVec, size_t num_elems, int m
     uniform_int_distribution<int8_t> dist(INT8_MIN, INT8_MAX);
     uniform_int_distribution<> len_dist(0, max_len);
 		size_t hash = 0;
-		for (int n = 0; n < num_elems; n++) {
+		for (size_t n = 0; n < num_elems; n++) {
 			int len = len_dist(gen);
 			vector<int8_t> s(len);
 			for (int i = 0; i < len; i++) {
@@ -145,7 +145,7 @@ random_fill_int16array(vector<vector<int16_t>> &stringVec, size_t num_elems, int
     uniform_int_distribution<int16_t> dist(INT16_MIN, INT16_MAX);
     uniform_int_distribution<> len_dist(0, max_len/2);
 		size_t hash = 0;
-		for (int n = 0; n < num_elems; n++) {
+		for (size_t n = 0; n < num_elems; n++) {
 			int len = len_dist(gen);
 			vector<int16_t> s(len);
 			for (int i = 0; i < len; i++) {
@@ -165,7 +165,7 @@ random_fill_int32array(vector<vector<int32_t>> &stringVec, size_t num_elems, int
     uniform_int_distribution<int32_t> dist(INT32_MIN, INT32_MAX);
     uniform_int_distribution<> len_dist(0, max_len/4);
 		size_t hash = 0;
-		for (int n = 0; n < num_elems; n++) {
+		for (size_t n = 0; n < num_elems; n++) {
 			int len = len_dist(gen);
 			vector<int32_t> s(len);
 			for (int i = 0; i < len; i++) {

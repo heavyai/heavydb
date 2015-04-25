@@ -75,7 +75,7 @@ void SqliteConnector::query_with_text_param (const std::string &queryString, con
         }
         if (atFirstResult_) {
             numCols_ = sqlite3_column_count(stmt);
-            for (int c = 0; c < numCols_; ++c) {
+            for (size_t c = 0; c < numCols_; ++c) {
                 columnNames.push_back(sqlite3_column_name(stmt,c));
                 columnTypes.push_back(sqlite3_column_type(stmt,c));
             }
@@ -83,7 +83,7 @@ void SqliteConnector::query_with_text_param (const std::string &queryString, con
             atFirstResult_ = false;
         }
         numRows_++;
-        for (int c = 0; c < numCols_; ++c) {
+        for (size_t c = 0; c < numCols_; ++c) {
             auto col_text = reinterpret_cast<const char*>(sqlite3_column_text(stmt,c));
             if (col_text) {
                 results_[c].push_back(col_text); // b/c sqlite returns unsigned char* which can't be used in constructor of string
@@ -117,7 +117,7 @@ void SqliteConnector::query (const std::string &queryString) {
         }
         if (atFirstResult_) {
             numCols_ = sqlite3_column_count(stmt);
-            for (int c = 0; c < numCols_; ++c) {
+            for (size_t c = 0; c < numCols_; ++c) {
                 columnNames.push_back(sqlite3_column_name(stmt,c));
                 columnTypes.push_back(sqlite3_column_type(stmt,c));
             }
@@ -125,7 +125,7 @@ void SqliteConnector::query (const std::string &queryString) {
             atFirstResult_ = false;
         }
         numRows_++;
-        for (int c = 0; c < numCols_; ++c) {
+        for (size_t c = 0; c < numCols_; ++c) {
             auto col_text = reinterpret_cast<const char*>(sqlite3_column_text(stmt,c));
             if (col_text) {
                 results_[c].push_back(col_text); // b/c sqlite returns unsigned char* which can't be used in constructor of string

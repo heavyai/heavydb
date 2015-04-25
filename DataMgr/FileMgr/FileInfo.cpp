@@ -1,10 +1,13 @@
 #include "FileInfo.h"
 #include "Page.h"
 #include "File.h"
+#include <glog/logging.h>
 #include <iostream>
 
 #include <utility>
 using namespace std;
+
+#define CHECK_RET(x) CHECK_GE(x, 0)
 
 namespace File_Namespace {
 
@@ -38,7 +41,7 @@ namespace File_Namespace {
         for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
             int headerSize;
             fseek(f, pageNum*pageSize, SEEK_SET);
-            fread((int8_t *)(&headerSize),sizeof(int),1,f);
+            CHECK_RET(fread((int8_t *)(&headerSize),sizeof(int),1,f));
             if (headerSize != 0) {
                 // headerSize doesn't include headerSize itself
                 // We're tying ourself to headers of ints here
@@ -52,11 +55,11 @@ namespace File_Namespace {
                 //size_t chunkSize;
                 // We don't want to read headerSize in our header - so start
                 // reading 4 bytes past it
-                fread((int8_t *)(&chunkKey[0]),headerSize - 2*sizeof(int),1,f);
+                CHECK_RET(fread((int8_t *)(&chunkKey[0]),headerSize - 2*sizeof(int),1,f));
                 //cout << "Chunk key: " << chunkKey[0] << endl;
-                fread((int8_t *)(&pageId),sizeof(int),1,f);
+                CHECK_RET(fread((int8_t *)(&pageId),sizeof(int),1,f));
                 //cout << "Page id: " << pageId << endl;
-                fread((int8_t *)(&versionEpoch),sizeof(int),1,f);
+                CHECK_RET(fread((int8_t *)(&versionEpoch),sizeof(int),1,f));
                 //read(f,pageNum*pageSize+sizeof(int),headerSize-2*sizeof(int),(int8_t *)(&chunkKey[0]));
                 //read(f,pageNum*pageSize+sizeof(int) + headerSize - 2*sizeof(int),sizeof(int),(int8_t *)(&pageId));
                 //read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(int),sizeof(int),(int8_t *)(&versionEpoch));

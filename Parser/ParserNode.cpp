@@ -470,9 +470,9 @@ namespace Parser {
   Analyzer::Expr *
   ColumnRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
-    int table_id;
-    int rte_idx;
-    const ColumnDescriptor *cd;
+    int table_id { 0 };
+    int rte_idx { 0 };
+    const ColumnDescriptor *cd { nullptr };
     if (column == nullptr)
       throw std::runtime_error("invalid column name *.");
     if (table != nullptr) {
@@ -762,7 +762,7 @@ namespace Parser {
           if (i == nullptr)
             throw std::runtime_error("Invalid literal in GROUP BY clause.");
           int varno = (int)i->get_intval();
-          if (varno <= 0 || varno > tlist.size())
+          if (varno <= 0 || varno > static_cast<int>(tlist.size()))
             throw std::runtime_error("Invalid ordinal number in GROUP BY clause.");
           if (tlist[varno-1]->get_expr()->get_contains_agg())
             throw std::runtime_error("Ordinal number in GROUP BY cannot reference an expression containing aggregate functions.");
@@ -922,7 +922,7 @@ namespace Parser {
     }
     if (query.get_is_distinct()) {
       // extend order_by to include all targetlist entries.
-      for (int i = 1; i <= tlist.size(); i++) {
+      for (int i = 1; i <= static_cast<int>(tlist.size()); i++) {
         bool in_orderby = false;
         std::for_each(order_by->begin(), order_by->end(), [&in_orderby, i](const Analyzer::OrderEntry &oe) { in_orderby = in_orderby || (i == oe.tle_no); });
         if (!in_orderby)

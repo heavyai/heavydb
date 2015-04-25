@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 #set( CMAKE_CXX_FLAGS "-g -std=c++11 -Wall -O3 -pthread ${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/nvvm/lib -L/usr/local/cuda/nvvm/lib64")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-strict-aliasing")
 FIND_PACKAGE( Boost COMPONENTS filesystem program_options system REQUIRED )
 set(llvm_config_cmd "llvm-config")
 set(llvm_config_inc_arg "--includedir")

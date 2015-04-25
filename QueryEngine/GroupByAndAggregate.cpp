@@ -17,7 +17,7 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
   const size_t agg_col_count { targets_.size() };
   std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
   std::vector<int64_t> agg_vals(agg_col_count, 0);
-  for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
+  for (int64_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
     memset(&partial_agg_vals[0], 0, agg_col_count * sizeof(partial_agg_vals[0]));
     memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
     beginRow(bin + min_val);
@@ -858,6 +858,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
   default:
     CHECK(false);
   }
+  CHECK(false);
+  return {};
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {

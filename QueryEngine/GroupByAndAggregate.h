@@ -209,13 +209,6 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   };
 }
 
-__attribute__((always_inline))
-inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const bool is_int) {
-  return is_int
-    ? static_cast<double>(fp_pair.first) / static_cast<double>(fp_pair.second)
-    : *reinterpret_cast<const double*>(&fp_pair.first) / static_cast<double>(fp_pair.second);
-}
-
 namespace {
 
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
@@ -414,26 +407,7 @@ private:
 
   typedef boost::variant<int64_t, std::pair<int64_t, int64_t>, std::string, void*> InternalTargetValue;
 
-  static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
-    switch (val.which()) {
-    case 0: {
-      if (!ti.is_fp()) {
-        return *boost::get<int64_t>(&val) == inline_int_null_val(ti);
-      }
-      const auto null_val = inline_fp_null_val(ti);
-      return *boost::get<int64_t>(&val) == *reinterpret_cast<const int64_t*>(&null_val);
-    }
-    case 1:
-      return boost::get<std::pair<int64_t, int64_t>>(&val)->first == 0;
-    case 2:
-      return false;
-    case 3:
-      CHECK(!*boost::get<void*>(&val));
-      return true;
-    default:
-      CHECK(false);
-    }
-  }
+  static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
   std::vector<TargetInfo> targets_;
   std::vector<int64_t> simple_keys_;

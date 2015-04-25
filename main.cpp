@@ -74,8 +74,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
           QueryInfo query_info;
           td->fragmenter->getFragmentsForQuery(query_info);
           cout << "Chunk Stats for " + table_name + "." + col_name << ":" << std::endl;
-          for (int i = 0; i < query_info.fragments.size(); i++) {
-            const auto& frag = query_info.fragments[i];
+          for (const auto& frag : query_info.fragments) {
             auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);
             const ChunkMetadata &chunkMetadata = chunk_meta_it->second;
             cout << "(" << cat.get_currentDB().dbId << "," << td->tableId << "," << cd->columnId << "," << frag.fragmentId << ") ";

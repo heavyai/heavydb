@@ -73,19 +73,19 @@ scan_chunk(const ChunkMetadata& chunk_metadata, const Chunk &chunk, size_t &hash
           switch (cd->columnType.get_elem_size()) {
             case 1: {
               int8_t *p = (int8_t*)vd.pointer;
-              for (int i = 0; i < vd.length/sizeof(int8_t); i++)
+              for (size_t i = 0; i < vd.length/sizeof(int8_t); i++)
                 boost::hash_combine(hash, p[i]);
               break;
             }
             case 2: {
               int16_t *p = (int16_t*)vd.pointer;
-              for (int i = 0; i < vd.length/sizeof(int16_t); i++)
+              for (size_t i = 0; i < vd.length/sizeof(int16_t); i++)
                 boost::hash_combine(hash, p[i]);
               break;
             }
             case 4: {
               int32_t *p = (int32_t*)vd.pointer;
-              for (int i = 0; i < vd.length/sizeof(int32_t); i++)
+              for (size_t i = 0; i < vd.length/sizeof(int32_t); i++)
                 boost::hash_combine(hash, p[i]);
               break;
             }
