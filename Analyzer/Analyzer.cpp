@@ -263,12 +263,30 @@ namespace Analyzer {
   {
     SQLTypeInfo common_type;
     CHECK(type1.is_string() && type2.is_string());
+    // if type1 and type2 have the same DICT encoding then keep it
+    // otherwise, they must be decompressed
+    if (type1.get_compression() == kENCODING_DICT && 
+        type2.get_compression() == kENCODING_DICT) {
+      if (type1.get_comp_param() == type2.get_comp_param() ||
+         type1.get_comp_param() == TRANSIENT_DICT(type2.get_comp_param())) {
+        common_type.set_compression(kENCODING_DICT);
+        common_type.set_comp_param(std::min(type1.get_comp_param(), type2.get_comp_param()));
+      }
+      else
+        common_type.set_comp_param(0);
+    } else if (type1.get_compression() == kENCODING_DICT && type2.get_compression() == kENCODING_NONE) {
+      common_type.set_comp_param(type1.get_comp_param());
+    } else if (type1.get_compression() == kENCODING_NONE && type2.get_compression() == kENCODING_DICT) {
+      common_type.set_comp_param(type2.get_comp_param());
+    } else
+      common_type.set_comp_param(std::max(type1.get_comp_param(), type2.get_comp_param())); // preserve previous comp_param if set
     if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
       common_type.set_type(kTEXT);
       return common_type;
     }
     common_type.set_type(kVARCHAR);
     common_type.set_dimension(std::max(type1.get_dimension(), type2.get_dimension()));
+    common_type.set_fixed_size();
     return common_type;
   }
 
@@ -429,6 +447,7 @@ namespace Analyzer {
         default:
           CHECK(false);
     }
+    common_type.set_fixed_size();
     return common_type;
   }
 
@@ -448,8 +467,18 @@ namespace Analyzer {
   {
     if (new_type_info == type_info)
       return this;
+    if (new_type_info.is_string() && type_info.is_string() &&
+        new_type_info.get_compression() == kENCODING_DICT &&
+        type_info.get_compression() == kENCODING_DICT &&
+        (new_type_info.get_comp_param() == type_info.get_comp_param() ||
+         new_type_info.get_comp_param() == TRANSIENT_DICT(type_info.get_comp_param())))
+      return this;
     if (!type_info.is_castable(new_type_info))
       throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " + new_type_info.get_type_name());
+    // @TODO(wei) temporary restriction until executor can support this.
+    if (typeid(*this) != typeid(Constant) &&
+        new_type_info.is_string() && new_type_info.get_compression() == kENCODING_DICT && new_type_info.get_comp_param() <= TRANSIENT_DICT_ID)
+      throw std::runtime_error("Internal error: Cannot apply transient dictionary encoding to non-literal expression yet.");
     return new UOper(new_type_info, contains_agg, kCAST, this);
   }
 
@@ -800,6 +829,48 @@ namespace Analyzer {
       return Expr::add_cast(new_type_info);
     }
     do_cast(new_type_info);
+    return this;
+  }
+
+  Expr *
+  UOper::add_cast(const SQLTypeInfo &new_type_info)
+  {
+    if (optype != kCAST)
+      return Expr::add_cast(new_type_info);
+    if (type_info.is_string() && new_type_info.is_string() &&
+        new_type_info.get_compression() == kENCODING_DICT &&
+        type_info.get_compression() == kENCODING_NONE) {
+      const SQLTypeInfo oti = operand->get_type_info();
+      if (oti.is_string() && oti.get_compression() == kENCODING_DICT &&
+          (oti.get_comp_param() == new_type_info.get_comp_param() ||
+           oti.get_comp_param() == TRANSIENT_DICT(new_type_info.get_comp_param()))) {
+        Expr *result = operand;
+        operand = nullptr;
+        delete this;
+        return result;
+      }
+    }
+    return Expr::add_cast(new_type_info);
+  }
+
+  Expr *
+  CaseExpr::add_cast(const SQLTypeInfo &new_type_info)
+  {
+    SQLTypeInfo ti = new_type_info;
+    if (new_type_info.is_string() &&
+        new_type_info.get_compression() == kENCODING_DICT &&
+        new_type_info.get_comp_param() == TRANSIENT_DICT_ID &&
+        type_info.is_string() &&
+        type_info.get_compression() == kENCODING_NONE &&
+        type_info.get_comp_param() > TRANSIENT_DICT_ID)
+      ti.set_comp_param(TRANSIENT_DICT(type_info.get_comp_param()));
+
+    for (auto &p : expr_pair_list) {
+      p.second = p.second->add_cast(ti);
+    }
+    if (else_expr != nullptr)
+      else_expr = else_expr->add_cast(ti);
+    type_info = ti;
     return this;
   }
 
@@ -1381,7 +1452,7 @@ namespace Analyzer {
         op = "EXISTS ";
         break;
       case kCAST:
-        op = "CAST " + type_info.get_type_name() + " " + type_info.get_compression_name() + " ";
+        op = "CAST " + type_info.get_type_name() + " " + type_info.get_compression_name() + "(" + std::to_string(type_info.get_comp_param()) + ") ";
         break;
       default:
         break;

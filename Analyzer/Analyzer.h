@@ -204,7 +204,7 @@ namespace Analyzer {
     public:
       UOper(const SQLTypeInfo &ti, bool has_agg, SQLOps o, Expr *p) : Expr(ti, has_agg), optype(o), operand(p) {}
       UOper(SQLTypes t, SQLOps o, Expr *p) : Expr(t), optype(o), operand(p) {}
-      virtual ~UOper() { delete operand; }
+      virtual ~UOper() { if (operand != nullptr) delete operand; }
       SQLOps get_optype() const { return optype; }
       const Expr *get_operand() const { return operand; }
       virtual void check_group_by(const std::list<Expr*> *groupby) const;
@@ -218,6 +218,7 @@ namespace Analyzer {
       virtual bool operator==(const Expr &rhs) const;
       virtual void print() const;
       virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
+      virtual Expr *add_cast(const SQLTypeInfo &new_type_info);
     private:
       SQLOps optype; // operator type, e.g., kUMINUS, kISNULL, kEXISTS
       Expr *operand; // operand expression
@@ -395,6 +396,7 @@ namespace Analyzer {
       virtual bool operator==(const Expr &rhs) const;
       virtual void print() const;
       virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
+      virtual Expr *add_cast(const SQLTypeInfo &new_type_info);
     private:
       std::list<std::pair<Expr*, Expr*>> expr_pair_list; // a pair of expressions for each WHEN expr1 THEN expr2.  expr1 must be of boolean type.  all expr2's must be of compatible types and will be promoted to the common type.
       Expr *else_expr; // expression for ELSE.  nullptr if omitted.

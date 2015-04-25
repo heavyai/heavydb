@@ -770,8 +770,18 @@ namespace Parser {
         } else {
           gexpr = c->analyze(catalog, query, Expr::TlistRefType::TLIST_REF);
         }
+        const SQLTypeInfo gti = gexpr->get_type_info();
+        bool set_new_type = false;
+        SQLTypeInfo ti(gti);
+        if (gti.is_string() && gti.get_compression() == kENCODING_NONE) {
+          set_new_type = true;
+          ti.set_compression(kENCODING_DICT);
+          ti.set_comp_param(TRANSIENT_DICT_ID);
+          ti.set_fixed_size();
+        }
+        Analyzer::Var *v = nullptr;
         if (typeid(*gexpr) == typeid(Analyzer::Var)) {
-          Analyzer::Var *v = dynamic_cast<Analyzer::Var*>(gexpr);
+          v = dynamic_cast<Analyzer::Var*>(gexpr);
           int n = v->get_varno();
           gexpr = tlist[n - 1]->get_expr();
           Analyzer::ColumnVar *cv = dynamic_cast<Analyzer::ColumnVar*>(gexpr);
@@ -783,7 +793,13 @@ namespace Parser {
           v->set_varno(gexpr_no);
           tlist[n - 1]->set_expr(v);
         }
-        groupby->push_back(gexpr);
+        if (set_new_type) {
+          Analyzer::Expr *new_e = gexpr->add_cast(ti);
+          groupby->push_back(new_e);
+          if (v != nullptr)
+            v->set_type_info(new_e->get_type_info());
+        } else
+          groupby->push_back(gexpr);
         gexpr_no++;
       }
     }
