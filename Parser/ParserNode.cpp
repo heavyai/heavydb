@@ -793,6 +793,20 @@ namespace Parser {
         e->check_group_by(groupby);
       }
     }
+    if (groupby != nullptr) {
+      std::list<Analyzer::Expr*> newgb_list;
+      for (auto e : *groupby) {
+        const SQLTypeInfo &eti = e->get_type_info();
+        if (eti.is_string() && eti.get_compression() == kENCODING_NONE) {
+          SQLTypeInfo ti(eti);
+          ti.set_compression(kENCODING_DICT);
+          ti.set_comp_param(TRANSIENT_DICT_ID);
+          newgb_list.push_back(e->add_cast(ti));
+        } else
+          newgb_list.push_back(e);
+      }
+      groupby->swap(newgb_list);
+    }
     query.set_group_by(groupby);
   }
 
