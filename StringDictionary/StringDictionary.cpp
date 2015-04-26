@@ -33,13 +33,15 @@ StringDictionary::StringDictionary(
     const std::string& folder,
     const bool recover,
     size_t initial_capacity)
-  : folder_(folder)
-  , str_count_(0)
+  : str_count_(0)
   , str_ids_(initial_capacity, INVALID_STR_ID)
   , payload_fd_(-1), offset_fd_(-1)
   , offset_map_(nullptr), payload_map_(nullptr)
   , offset_file_size_(0), payload_file_size_(0)
   , payload_file_off_(0) {
+  if (folder.empty()) {
+    return;
+  }
   // initial capacity must be a power of two for efficient bucket computation
   CHECK_EQ(0, (initial_capacity & (initial_capacity - 1)));
   boost::filesystem::path storage_path(folder);
@@ -88,16 +90,52 @@ int32_t StringDictionary::getOrAdd(const std::string& str) {
   return getOrAddImpl(str, false);
 }
 
+int32_t StringDictionary::getOrAddTransient(const std::string& str) {
+  boost::unique_lock<boost::shared_mutex> write_lock(rw_mutex_);
+  auto transient_id = getUnlocked(str);
+  if (transient_id != INVALID_STR_ID) {
+    return transient_id;
+  }
+  const auto it = transient_str_to_int_.find(str);
+  if (it != transient_str_to_int_.end()) {
+    return it->second;
+  }
+  transient_id = -(transient_str_to_int_.size() + 2);  // make sure it's not INVALID_STR_ID
+  {
+    auto it_ok = transient_str_to_int_.insert(std::make_pair(str, transient_id));
+    CHECK(it_ok.second);
+  }
+  {
+    auto it_ok = transient_int_to_str_.insert(std::make_pair(transient_id, str));
+    CHECK(it_ok.second);
+  }
+  return transient_id;
+}
+
 int32_t StringDictionary::get(const std::string& str) const {
   boost::shared_lock<boost::shared_mutex> read_lock(rw_mutex_);
-  return str_ids_[computeBucket(str, str_ids_)];
+  return getUnlocked(str);
+}
+
+int32_t StringDictionary::getUnlocked(const std::string& str) const {
+  auto str_id = str_ids_[computeBucket(str, str_ids_)];
+  if (str_id != INVALID_STR_ID || transient_str_to_int_.empty()) {
+    return str_id;
+  }
+  auto it = transient_str_to_int_.find(str);
+  return it != transient_str_to_int_.end() ? it->second : INVALID_STR_ID;
 }
 
 std::string StringDictionary::getString(int32_t string_id) const {
   boost::shared_lock<boost::shared_mutex> read_lock(rw_mutex_);
-  CHECK_LE(0, string_id);
-  CHECK_LT(string_id, static_cast<int32_t>(str_count_));
-  return getStringChecked(string_id);
+  if (string_id >= 0) {
+    CHECK_LT(string_id, static_cast<int32_t>(str_count_));
+    return getStringChecked(string_id);
+  }
+  CHECK_NE(INVALID_STR_ID, string_id);
+  auto it = transient_int_to_str_.find(string_id);
+  CHECK(it != transient_int_to_str_.end());
+  return it->second;
 }
 
 std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const {
@@ -105,6 +143,12 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) con
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringBytesChecked(string_id);
+}
+
+void StringDictionary::clearTransient() {
+  boost::unique_lock<boost::shared_mutex> write_lock(rw_mutex_);
+  decltype(transient_int_to_str_)().swap(transient_int_to_str_);
+  decltype(transient_str_to_int_)().swap(transient_str_to_int_);
 }
 
 bool StringDictionary::fillRateIsHigh() const {

@@ -14,6 +14,7 @@
 #include <llvm/IR/Value.h>
 
 #include <mutex>
+#include <unordered_set>
 #include <unordered_map>
 #include <set>
 #include <vector>
@@ -147,6 +148,18 @@ typedef std::vector<int64_t> ValueTuple;
 
 class ChunkIter;
 
+class DictStrLiteralsOwner {
+public:
+  DictStrLiteralsOwner(StringDictionary* string_dict) : string_dict_(string_dict) {}
+
+  ~DictStrLiteralsOwner() {
+    string_dict_->clearTransient();
+  }
+
+private:
+  StringDictionary* string_dict_;
+};
+
 class RowSetMemoryOwner : boost::noncopyable {
 public:
   void setCountDistinctDescriptors(const CountDistinctDescriptors& count_distinct_descriptors) {
@@ -176,6 +189,21 @@ public:
     return &strings_.back();
   }
 
+  void addStringDict(StringDictionary* str_dict) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    auto it = str_dict_owned_.find(str_dict);
+    if (it != str_dict_owned_.end()) {
+      return;
+    }
+    str_dict_owned_.insert(str_dict);
+    str_dict_owners_.emplace_back(new DictStrLiteralsOwner(str_dict));
+  }
+
+  void addLiteralStringDict(std::shared_ptr<StringDictionary> lit_str_dict) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    lit_str_dict_ = lit_str_dict;
+  }
+
   ~RowSetMemoryOwner() {
     for (auto count_distinct_buffer : count_distinct_bitmaps_) {
       free(count_distinct_buffer);
@@ -186,6 +214,11 @@ public:
     for (auto group_by_buffer : group_by_buffers_) {
       free(group_by_buffer);
     }
+    decltype(str_dict_owners_)().swap(str_dict_owners_);
+    decltype(str_dict_owned_)().swap(str_dict_owned_);
+    if (lit_str_dict_) {
+      lit_str_dict_->clearTransient();
+    }
   }
 private:
   CountDistinctDescriptors count_distinct_descriptors_;
@@ -193,6 +226,9 @@ private:
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
   std::list<std::string> strings_;
+  std::unordered_set<StringDictionary*> str_dict_owned_;
+  std::vector<std::unique_ptr<DictStrLiteralsOwner>> str_dict_owners_;
+  std::shared_ptr<StringDictionary> lit_str_dict_;
   std::mutex state_mutex_;
 
   friend class QueryExecutionContext;

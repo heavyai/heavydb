@@ -73,7 +73,9 @@ public:
     const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
     const ExecutorOptLevel = ExecutorOptLevel::Default);
 
-  StringDictionary* getStringDictionary(const int dictId) const;
+  StringDictionary* getStringDictionary(
+    const int dictId,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
   typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>> LiteralValue;
   typedef std::vector<Executor::LiteralValue> LiteralValues;
@@ -94,7 +96,11 @@ private:
   llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const bool hoist_literals);
-  std::vector<llvm::Value*> codegen(const Analyzer::Constant*, const int dict_id, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(
+    const Analyzer::Constant*,
+    const EncodingType enc_type,
+    const int dict_id,
+    const bool hoist_literals);
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
@@ -428,15 +434,26 @@ private:
       return columns_to_fetch_.find(do_not_fetch_column->get_column_id()) == columns_to_fetch_.end();
     }
   };
+
+  struct RowSetHolder {
+    RowSetHolder(Executor* executor) : executor_(executor) {}
+
+    ~RowSetHolder() {
+      executor_->row_set_mem_owner_ = nullptr;
+    }
+    Executor* executor_;
+  };
+
   std::unique_ptr<PlanState> plan_state_;
+  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
   bool is_nested_;
 
   static const int max_gpu_count { 8 };
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
-  mutable std::unordered_map<int, StringDictionary*> str_dicts_;
-  mutable std::mutex str_dicts_mutex_;
+  mutable std::shared_ptr<StringDictionary> lit_str_dict_;
+  mutable std::mutex str_dict_mutex_;
 
   std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> cpu_code_cache_;
   std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> gpu_code_cache_;

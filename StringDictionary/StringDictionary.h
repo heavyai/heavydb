@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <map>
 #include <boost/thread/shared_mutex.hpp>
 #include <string>
 #include <tuple>
@@ -20,9 +21,12 @@ public:
   ~StringDictionary();
 
   int32_t getOrAdd(const std::string& str);
+  int32_t getOrAddTransient(const std::string& str);
   int32_t get(const std::string& str) const;
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const;
+
+  void clearTransient();
 
 private:
   struct StringIdxEntry {
@@ -33,6 +37,7 @@ private:
   bool fillRateIsHigh() const;
   void increaseCapacity();
   int32_t getOrAddImpl(const std::string& str, bool recover);
+  int32_t getUnlocked(const std::string& str) const;
   std::string getStringChecked(const int string_id) const;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const;
   int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data) const;
@@ -42,7 +47,6 @@ private:
   void addOffsetCapacity();
   size_t addStorageCapacity(int fd);
 
-  const std::string folder_;
   size_t str_count_;
   std::vector<int32_t> str_ids_;
   std::string offsets_path_;
@@ -53,6 +57,8 @@ private:
   size_t offset_file_size_;
   size_t payload_file_size_;
   size_t payload_file_off_;
+  std::map<int32_t, std::string> transient_int_to_str_;
+  std::map<std::string, int32_t> transient_str_to_int_;
   mutable boost::shared_mutex rw_mutex_;
 
   static char* CANARY_BUFFER;

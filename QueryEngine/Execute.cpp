@@ -92,11 +92,11 @@ ResultRows Executor::executeSelectPlan(
     const size_t max_groups_buffer_entry_guess,
     int32_t* error_code) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
-    auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+    row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
     if (limit || offset) {
       const int64_t scan_limit { get_scan_limit(plan, limit) };
       auto rows = executeAggScanPlan(plan, limit, offset, hoist_literals, device_type, opt_level, cat,
-        row_set_mem_owner, scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess, error_code);
+        row_set_mem_owner_, scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess, error_code);
       rows.dropFirstN(offset);
       if (limit) {
         rows.keepFirstN(limit);
@@ -104,7 +104,7 @@ ResultRows Executor::executeSelectPlan(
       return rows;
     }
     return executeAggScanPlan(plan, limit, offset, hoist_literals, device_type, opt_level, cat,
-      row_set_mem_owner, max_groups_buffer_entry_guess, error_code);
+      row_set_mem_owner_, max_groups_buffer_entry_guess, error_code);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -144,6 +144,7 @@ ResultRows Executor::execute(
   catalog_ = &root_plan->get_catalog();
   const auto stmt_type = root_plan->get_stmt_type();
   std::lock_guard<std::mutex> lock(execute_mutex_);
+  RowSetHolder row_set_holder(this);
   switch (stmt_type) {
   case kSELECT: {
     int32_t error_code { 0 };
@@ -173,19 +174,26 @@ ResultRows Executor::execute(
   return ResultRows({}, nullptr, {});
 }
 
-StringDictionary* Executor::getStringDictionary(const int dict_id) const {
+StringDictionary* Executor::getStringDictionary(
+    const int dict_id_in,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
+  const int dict_id { dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in };
   CHECK(catalog_);
   const auto dd = catalog_->getMetadataForDict(dict_id);
-  CHECK(dd);
-  CHECK_EQ(32, dd->dictNBits);
-  std::lock_guard<std::mutex> lock(str_dicts_mutex_);
-  const auto dict_it = str_dicts_.find(dict_id);
-  if (dict_it != str_dicts_.end()) {
-    return dict_it->second;
+  std::lock_guard<std::mutex> lock(str_dict_mutex_);
+  if (dd) {
+    if (row_set_mem_owner) {
+      CHECK(dd->stringDict);
+      row_set_mem_owner->addStringDict(dd->stringDict);
+    }
+    CHECK_EQ(32, dd->dictNBits);
+    return dd->stringDict;
   }
-  auto dict_it_ok = str_dicts_.insert(std::make_pair(dict_id, dd->stringDict));
-  CHECK(dict_it_ok.second);
-  return dict_it_ok.first->second;
+  CHECK_EQ(0, dict_id);
+  if (!lit_str_dict_) {
+    lit_str_dict_.reset(new StringDictionary(""));
+  }
+  return lit_str_dict_.get();
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& literals) {
@@ -238,7 +246,9 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionary(p->second)->get(p->first);
+        const auto str_id = p->second > 0
+          ? getStringDictionary(p->second, row_set_mem_owner_)->get(p->first)
+          : getStringDictionary(p->second, row_set_mem_owner_)->getOrAddTransient(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -273,7 +283,7 @@ std::vector<llvm::Value*> Executor::codegen(
     // The dictionary encoding case should be handled by the parent expression
     // (cast, for now), here is too late to know the dictionary id
     CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
-    return { codegen(constant, -1, hoist_literals) };
+    return { codegen(constant, constant->get_type_info().get_compression(), 0, hoist_literals) };
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
@@ -560,10 +570,11 @@ Executor::colByteStream(const int col_id, const bool fetch_column, const bool ho
 }
 
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
+                                            const EncodingType enc_type,
                                             const int dict_id,
                                             const bool hoist_literals) {
   const auto& type_info = constant->get_type_info();
-  if (hoist_literals && (!type_info.is_string() || dict_id > 0)) {
+  if (hoist_literals && (!type_info.is_string() || enc_type == kENCODING_DICT)) {
     auto arg_it = cgen_state_->row_func_->arg_begin();
     while (arg_it != cgen_state_->row_func_->arg_end()) {
       if (arg_it->getType()->isIntegerTy()) {
@@ -609,8 +620,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
   case kCHAR:
   case kTEXT: {
     const auto& str_const = *constant->get_constval().stringval;
-    if (dict_id > 0) {
-      return { ll_int(getStringDictionary(dict_id)->get(str_const)) };
+    if (enc_type == kENCODING_DICT) {
+      return { ll_int(dict_id > 0
+        ? getStringDictionary(dict_id, row_set_mem_owner_)->get(str_const)
+        : getStringDictionary(dict_id, row_set_mem_owner_)->getOrAddTransient(str_const)) };
     }
     return { ll_int(int64_t(0)),
       cgen_state_->addStringConstant(str_const), ll_int(static_cast<int32_t>(str_const.size())) };
@@ -932,7 +945,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   // For dictionary encoded constants, the cast holds the dictionary id
   // information as the compression parameter; handle this case separately.
   auto operand_lv = operand_as_const
-    ? codegen(operand_as_const, ti.get_comp_param(), hoist_literals).front()
+    ? codegen(operand_as_const, ti.get_compression(), ti.get_comp_param(), hoist_literals).front()
     : codegen(operand, true, hoist_literals).front();
   const auto& operand_ti = operand->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
@@ -946,17 +959,15 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
         cgen_state_->must_run_on_cpu_ = true;
         return cgen_state_->emitExternalCall("string_compress",
           get_int_type(32, cgen_state_->context_),
-          { operand_lv, ll_int(int64_t(getStringDictionary(ti.get_comp_param()))) });
+          { operand_lv, ll_int(int64_t(getStringDictionary(ti.get_comp_param(), row_set_mem_owner_))) });
       }
       CHECK_EQ(32, static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth());
-      const auto dd = catalog_->getMetadataForDict(operand_ti.get_comp_param());
-      CHECK(dd);
       if (ti.get_compression() == kENCODING_NONE) {
         CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
         cgen_state_->must_run_on_cpu_ = true;
         return cgen_state_->emitExternalCall("string_decompress",
           get_int_type(64, cgen_state_->context_),
-          { operand_lv, ll_int(int64_t(getStringDictionary(operand_ti.get_comp_param()))) });
+          { operand_lv, ll_int(int64_t(getStringDictionary(operand_ti.get_comp_param(), row_set_mem_owner_))) });
       }
       CHECK(operand_as_const);
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
@@ -1397,6 +1408,8 @@ ResultRows Executor::reduceMultiDeviceResults(
     reduced_results.reduce(results_per_device[i]);
   }
 
+  row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
+
   return reduced_results;
 }
 
@@ -1570,9 +1583,9 @@ ResultRows Executor::executeResultPlan(
     int32_t* error_code) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
-  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
+  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   auto result_rows = executeAggScanPlan(agg_plan, 0, 0, hoist_literals, device_type, opt_level, cat,
-    row_set_mem_owner, max_groups_buffer_entry_guess, error_code);
+    row_set_mem_owner_, max_groups_buffer_entry_guess, error_code);
   if (*error_code) {
     return ResultRows({}, nullptr, nullptr);
   }
@@ -1622,11 +1635,11 @@ ResultRows Executor::executeResultPlan(
   }
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
     result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
-    ExecutorDeviceType::CPU, opt_level, nullptr, false, row_set_mem_owner, result_rows.size(), 0);
+    ExecutorDeviceType::CPU, opt_level, nullptr, false, row_set_mem_owner_, result_rows.size(), 0);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
-    ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner);
+    ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   *error_code = 0;
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
@@ -2152,7 +2165,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
           *col_data = NULL_INT;
         } else {
           const int dict_id = cd->columnType.get_comp_param();
-          const int32_t str_id = getStringDictionary(dict_id)->getOrAdd(*col_datum.stringval);
+          const int32_t str_id = getStringDictionary(dict_id, row_set_mem_owner_)->getOrAdd(*col_datum.stringval);
           *col_data = str_id;
         }
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
