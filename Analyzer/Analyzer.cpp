@@ -263,15 +263,6 @@ namespace Analyzer {
   {
     SQLTypeInfo common_type;
     CHECK(type1.is_string() && type2.is_string());
-    //@TODO(wei) if one of the string is DICT encoded, encode the other one too
-    //may not be the best thing to do for all cases
-    if (type1.get_compression() == kENCODING_DICT && type2.get_compression() == kENCODING_NONE) {
-      common_type = type1;
-      common_type.set_comp_param(TRANSIENT_DICT(type1.get_comp_param()));
-    } else if (type1.get_compression() == kENCODING_NONE && type2.get_compression() == kENCODING_DICT) {
-      common_type = type2;
-      common_type.set_comp_param(TRANSIENT_DICT(type2.get_comp_param()));
-    }
     if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
       common_type.set_type(kTEXT);
       return common_type;
@@ -809,18 +800,6 @@ namespace Analyzer {
       return Expr::add_cast(new_type_info);
     }
     do_cast(new_type_info);
-    return this;
-  }
-
-  Expr *
-  CaseExpr::add_cast(const SQLTypeInfo &new_type_info)
-  {
-    for (auto &p : expr_pair_list) {
-      p.second = p.second->add_cast(new_type_info);
-    }
-    if (else_expr != nullptr)
-      else_expr = else_expr->add_cast(new_type_info);
-    type_info = new_type_info;
     return this;
   }
 
@@ -1402,7 +1381,7 @@ namespace Analyzer {
         op = "EXISTS ";
         break;
       case kCAST:
-        op = "CAST " + type_info.get_type_name() + " " + type_info.get_compression_name() + "(" + std::to_string(type_info.get_comp_param()) + ") ";
+        op = "CAST " + type_info.get_type_name() + " " + type_info.get_compression_name() + " ";
         break;
       default:
         break;
