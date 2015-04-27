@@ -470,6 +470,31 @@ private:
     bool isStr() const {
       return ty == ITVType::Str;
     }
+
+    bool operator<(const InternalTargetValue& other) const {
+      switch (ty) {
+      case ITVType::Int:
+        CHECK(other.ty == ITVType::Int);
+        return i1 < other.i1;
+      case ITVType::Pair:
+        CHECK(other.ty == ITVType::Pair);
+        if (i1 != other.i1) {
+          return i1 < other.i1;
+        }
+        return i2 < other.i2;
+      case ITVType::Str:
+        CHECK(other.ty == ITVType::Str);
+        return strVal() < other.strVal();
+      case ITVType::Null:
+        return false;
+      default:
+        CHECK(false);
+      }
+    }
+
+    bool operator==(const InternalTargetValue& other) const {
+      return !(*this < other || other < *this);
+    }
   };
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
