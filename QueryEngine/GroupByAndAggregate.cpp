@@ -140,86 +140,66 @@ void ResultRows::reduce(const ResultRows& other_results) {
         auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(agg_col_idx);
         CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
         if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
-          auto old_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(crt_val));
-          auto new_set = reinterpret_cast<int8_t*>(*boost::get<int64_t>(new_val));
+          auto old_set = reinterpret_cast<int8_t*>(crt_val->i1);
+          auto new_set = reinterpret_cast<int8_t*>(new_val->i1);
           bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
         } else {
           CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
-          auto old_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(crt_val));
-          auto new_set = reinterpret_cast<std::set<int64_t>*>(*boost::get<int64_t>(new_val));
+          auto old_set = reinterpret_cast<std::set<int64_t>*>(crt_val->i1);
+          auto new_set = reinterpret_cast<std::set<int64_t>*>(new_val->i1);
           old_set->insert(new_set->begin(), new_set->end());
           new_set->insert(old_set->begin(), old_set->end());
         }
         break;
       }
       if (agg_info.agg_kind == kAVG) {
-        auto old_avg_p = boost::get<std::pair<int64_t, int64_t>>(crt_val);
-        CHECK(old_avg_p);
-        auto new_avg_p = boost::get<std::pair<int64_t, int64_t>>(new_val);
-        CHECK(new_avg_p);
+        CHECK(crt_val->isPair());
+        CHECK(new_val->isPair());
         if (agg_info.sql_type.is_fp()) {
           agg_sum_double(
-            &old_avg_p->first,
-            *reinterpret_cast<const double*>(&new_avg_p->first));
+            &crt_val->i1,
+            *reinterpret_cast<const double*>(&new_val->i1));
         } else {
-          agg_sum(&old_avg_p->first, new_avg_p->first);
+          agg_sum(&crt_val->i1, new_val->i1);
         }
-        agg_sum(&old_avg_p->second, new_avg_p->second);
+        agg_sum(&crt_val->i2, new_val->i2);
         break;
       }
       if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time()) {
-        agg_sum(
-          boost::get<int64_t>(crt_val),
-          *boost::get<int64_t>(new_val));
+        agg_sum(&crt_val->i1, new_val->i1);
       } else {
-        agg_sum_double(
-          boost::get<int64_t>(crt_val),
-          *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+        agg_sum_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
       }
       break;
     case kMIN:
       if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time() || agg_info.sql_type.is_boolean()) {
         if (agg_info.skip_null_val) {
-          agg_min_skip_val(
-            boost::get<int64_t>(crt_val),
-            *boost::get<int64_t>(new_val),
-            inline_int_null_val(agg_info.sql_type));
+          agg_min_skip_val(&crt_val->i1, new_val->i1, inline_int_null_val(agg_info.sql_type));
         } else {
-          agg_min(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
+          agg_min(&crt_val->i1, new_val->i1);
         }
       } else {
         if (agg_info.skip_null_val) {
-          agg_min_double_skip_val(
-            boost::get<int64_t>(crt_val),
-            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)),
+          agg_min_double_skip_val(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1),
             inline_fp_null_val(agg_info.sql_type));
         } else {
-          agg_min_double(
-            boost::get<int64_t>(crt_val),
-            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+          agg_min_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
         }
       }
       break;
     case kMAX:
       if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time()) {
         if (agg_info.skip_null_val) {
-          agg_max_skip_val(
-            boost::get<int64_t>(crt_val),
-            *boost::get<int64_t>(new_val),
-            inline_int_null_val(agg_info.sql_type));
+          agg_max_skip_val(&crt_val->i1, new_val->i1, inline_int_null_val(agg_info.sql_type));
         } else {
-          agg_max(boost::get<int64_t>(crt_val), *boost::get<int64_t>(new_val));
+          agg_max(&crt_val->i1, new_val->i1);
         }
       } else {
         if (agg_info.skip_null_val) {
-          agg_max_double_skip_val(
-            boost::get<int64_t>(crt_val),
-            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)),
+          agg_max_double_skip_val(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1),
             inline_fp_null_val(agg_info.sql_type));
         } else {
-          agg_max_double(
-            boost::get<int64_t>(crt_val),
-            *reinterpret_cast<const double*>(boost::get<int64_t>(new_val)));
+          agg_max_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
         }
       }
       break;
@@ -333,32 +313,25 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
         return !order_entry.nulls_first;
       }
       const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
-      const auto lhs_ip = boost::get<int64_t>(&lhs_v);
-      if (lhs_ip) {
-        const auto rhs_ip = boost::get<int64_t>(&rhs_v);
-        CHECK(rhs_ip);
+      if (lhs_v.isInt()) {
+        CHECK(rhs_v.isInt());
         if (is_dict) {
           CHECK_EQ(4, entry_ti.get_size());
           auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param());
-          auto lhs_str = string_dict->getString(*lhs_ip);
-          auto rhs_str = string_dict->getString(*rhs_ip);
+          auto lhs_str = string_dict->getString(lhs_v.i1);
+          auto rhs_str = string_dict->getString(rhs_v.i1);
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
-        return use_desc_cmp ? *lhs_ip > *rhs_ip : *lhs_ip < *rhs_ip;
+        return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
       } else {
-        const auto lhs_fp = boost::get<std::pair<int64_t, int64_t>>(&lhs_v);
-        if (lhs_fp) {
-          const auto rhs_fp = boost::get<std::pair<int64_t, int64_t>>(&rhs_v);
-          CHECK(rhs_fp);
+        if (lhs_v.isPair()) {
+          CHECK(rhs_v.isPair());
           return use_desc_cmp
-            ? pair_to_double(*lhs_fp, is_int) > pair_to_double(*rhs_fp, is_int)
-            : pair_to_double(*lhs_fp, is_int) < pair_to_double(*rhs_fp, is_int);
+            ? pair_to_double({ lhs_v.i1, lhs_v.i2 }, is_int) > pair_to_double({ rhs_v.i1, rhs_v.i2 }, is_int)
+            : pair_to_double({ lhs_v.i1, lhs_v.i2 }, is_int) < pair_to_double({ rhs_v.i1, rhs_v.i2 }, is_int);
         } else {
-          const auto lhs_sp = boost::get<std::string>(&lhs_v);
-          CHECK(lhs_sp);
-          const auto rhs_sp = boost::get<std::string>(&rhs_v);
-          CHECK(rhs_sp);
-          return use_desc_cmp ? *lhs_sp > *rhs_sp : *lhs_sp < *rhs_sp;
+          CHECK(lhs_v.isStr() && rhs_v.isStr());
+          return use_desc_cmp ? lhs_v.strVal() > rhs_v.strVal() : lhs_v.strVal() < rhs_v.strVal();
         }
       }
     };
@@ -376,8 +349,8 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
     }
     std::sort(target_values_.begin(), target_values_.end(), compare);
     if (sort_plan->get_remove_duplicates()) {
-      std::sort(target_values_.begin(), target_values_.end());
-      target_values_.erase(std::unique(target_values_.begin(), target_values_.end()), target_values_.end());
+      std::sort(target_values_.begin(), target_values_.end(), compare);
+      target_values_.erase(std::unique(target_values_.begin(), target_values_.end(), compare), target_values_.end());
     }
   }
 }
@@ -394,26 +367,24 @@ TargetValue ResultRows::get(const size_t row_idx,
     CHECK(!targets_[col_idx].sql_type.is_string());
     const auto& row_vals = target_values_[row_idx];
     CHECK_LT(col_idx, row_vals.size());
-    const auto pair_p = boost::get<std::pair<int64_t, int64_t>>(&(row_vals[col_idx]));
-    CHECK(pair_p);
-    return pair_to_double(*pair_p, targets_[col_idx].sql_type.is_integer());
+    CHECK(row_vals[col_idx].isPair());
+    return pair_to_double({ row_vals[col_idx].i1, row_vals[col_idx].i2 }, targets_[col_idx].sql_type.is_integer());
   }
   if (targets_[col_idx].sql_type.is_integer() ||
       targets_[col_idx].sql_type.is_boolean() ||
       targets_[col_idx].sql_type.is_time()) {
     if (agg_info.is_distinct) {
-      return TargetValue(bitmap_set_size(*boost::get<int64_t>(&target_values_[row_idx][col_idx]), col_idx,
+      return TargetValue(bitmap_set_size(target_values_[row_idx][col_idx].i1, col_idx,
         row_set_mem_owner_->count_distinct_descriptors_));
     }
     CHECK_LT(col_idx, target_values_[row_idx].size());
     const auto v = target_values_[row_idx][col_idx];
-    const auto pi = boost::get<int64_t>(&v);
-    CHECK(pi);
-    return *pi;
+    CHECK(v.isInt());
+    return v.i1;
   } else if (targets_[col_idx].sql_type.is_string()) {
     if (targets_[col_idx].sql_type.get_compression() == kENCODING_DICT) {
       const int dict_id = targets_[col_idx].sql_type.get_comp_param();
-      const auto string_id = *boost::get<int64_t>(&target_values_[row_idx][col_idx]);
+      const auto string_id = target_values_[row_idx][col_idx].i1;
       if (!translate_strings) {
         return TargetValue(string_id);
       }
@@ -422,38 +393,33 @@ TargetValue ResultRows::get(const size_t row_idx,
         : TargetValue(executor_->getStringDictionary(dict_id)->getString(string_id));
     } else {
       CHECK_EQ(kENCODING_NONE, targets_[col_idx].sql_type.get_compression());
-      auto null_p = boost::get<void*>(&target_values_[row_idx][col_idx]);
-      return null_p
+      return target_values_[row_idx][col_idx].isNull()
         ? TargetValue(nullptr)
-        : TargetValue(*boost::get<std::string>(&target_values_[row_idx][col_idx]));
+        : TargetValue(target_values_[row_idx][col_idx].strVal());
     }
   } else {
     CHECK(targets_[col_idx].sql_type.is_fp());
-    return TargetValue(*reinterpret_cast<const double*>(
-      boost::get<int64_t>(&target_values_[row_idx][col_idx])));
+    return TargetValue(*reinterpret_cast<const double*>(&target_values_[row_idx][col_idx].i1));
   }
   CHECK(false);
 }
 
 bool ResultRows::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
-  switch (val.which()) {
-  case 0: {
+  if (val.isInt()) {
     if (!ti.is_fp()) {
-      return *boost::get<int64_t>(&val) == inline_int_null_val(ti);
+      return val.i1 == inline_int_null_val(ti);
     }
     const auto null_val = inline_fp_null_val(ti);
-    return *boost::get<int64_t>(&val) == *reinterpret_cast<const int64_t*>(&null_val);
+    return val.i1 == *reinterpret_cast<const int64_t*>(&null_val);
   }
-  case 1:
-    return boost::get<std::pair<int64_t, int64_t>>(&val)->first == 0;
-  case 2:
+  if (val.isPair()) {
+    return val.i2 == 0;
+  }
+  if (val.isStr()) {
     return false;
-  case 3:
-    CHECK(!*boost::get<void*>(&val));
-    return true;
-  default:
-    CHECK(false);
   }
+  CHECK(val.isNull());
+  return true;
 }
 
 QueryExecutionContext::QueryExecutionContext(
