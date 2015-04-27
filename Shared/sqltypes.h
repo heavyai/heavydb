@@ -102,9 +102,6 @@ enum EncodingType {
 #define NULL_FLOAT      FLT_MIN
 #define NULL_DOUBLE     DBL_MIN
 
-#define TRANSIENT_DICT_ID 0
-#define TRANSIENT_DICT(ID) (-(ID))
-#define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
 
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
@@ -150,10 +147,10 @@ class SQLTypeInfo {
 
 
     DEVICE inline bool operator!=(const SQLTypeInfo &rhs) const {
-      return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || (comp_param != rhs.get_comp_param() && comp_param != TRANSIENT_DICT(rhs.get_comp_param()));
+      return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || comp_param != rhs.get_comp_param();
     }
     DEVICE inline bool operator==(const SQLTypeInfo &rhs) const {
-      return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && (comp_param == rhs.get_comp_param() || comp_param == TRANSIENT_DICT(rhs.get_comp_param()));
+      return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && comp_param == rhs.get_comp_param();
     }
     DEVICE inline void operator=(const SQLTypeInfo &rhs) {
       type = rhs.get_type();
