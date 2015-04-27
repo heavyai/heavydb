@@ -278,6 +278,7 @@ namespace Analyzer {
     }
     common_type.set_type(kVARCHAR);
     common_type.set_dimension(std::max(type1.get_dimension(), type2.get_dimension()));
+    common_type.set_fixed_size();
     return common_type;
   }
 
@@ -438,6 +439,7 @@ namespace Analyzer {
         default:
           CHECK(false);
     }
+    common_type.set_fixed_size();
     return common_type;
   }
 

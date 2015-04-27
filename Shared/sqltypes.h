@@ -352,7 +352,7 @@ class SQLTypeInfo {
         case kVARCHAR:
         case kCHAR:
           if (compression == kENCODING_DICT)
-            return 0; // means unknown.  will have to be set from DictDescriptor
+            return sizeof(int32_t); // @TODO(wei) must check DictDescriptor
           break;
 				default:
 					break;

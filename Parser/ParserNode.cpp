@@ -801,6 +801,7 @@ namespace Parser {
           SQLTypeInfo ti(eti);
           ti.set_compression(kENCODING_DICT);
           ti.set_comp_param(TRANSIENT_DICT_ID);
+          ti.set_fixed_size();
           newgb_list.push_back(e->add_cast(ti));
         } else
           newgb_list.push_back(e);
