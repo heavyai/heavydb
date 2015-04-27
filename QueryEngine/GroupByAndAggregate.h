@@ -165,6 +165,11 @@ public:
     count_distinct_sets_.push_back(count_distinct_set);
   }
 
+  void addGroupByBuffer(int64_t* group_by_buffer) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    group_by_buffers_.push_back(group_by_buffer);
+  }
+
   ~RowSetMemoryOwner() {
     for (auto count_distinct_buffer : count_distinct_bitmaps_) {
       free(count_distinct_buffer);
@@ -172,11 +177,15 @@ public:
     for (auto count_distinct_set : count_distinct_sets_) {
       delete count_distinct_set;
     }
+    for (auto group_by_buffer : group_by_buffers_) {
+      free(group_by_buffer);
+    }
   }
 private:
   CountDistinctDescriptors count_distinct_descriptors_;
   std::vector<int8_t*> count_distinct_bitmaps_;
   std::vector<std::set<int64_t>*> count_distinct_sets_;
+  std::vector<int64_t*> group_by_buffers_;
   std::mutex state_mutex_;
 
   friend class QueryExecutionContext;
@@ -255,9 +264,17 @@ class ResultRows {
 public:
   ResultRows(const std::vector<Analyzer::Expr*>& targets,
              const Executor* executor,
-             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+             int64_t* group_by_buffer = nullptr,
+             const int32_t groups_buffer_entry_count = 0,
+             const int64_t min_val = 0,
+             const int8_t warp_count = 0)
     : executor_(executor)
-    , row_set_mem_owner_(row_set_mem_owner) {
+    , row_set_mem_owner_(row_set_mem_owner)
+    , group_by_buffer_(group_by_buffer)
+    , groups_buffer_entry_count_(groups_buffer_entry_count)
+    , min_val_(min_val)
+    , warp_count_(warp_count) {
     for (const auto target_expr : targets) {
       const auto agg_info = target_info(target_expr);
       targets_.push_back(agg_info);
@@ -307,7 +324,7 @@ public:
 
   void reduce(const ResultRows& other_results);
 
-  void sort(const Planner::Sort* sort_plan);
+  void sort(const Planner::Sort* sort_plan, const int64_t top_n);
 
   void keepFirstN(const size_t n) {
     if (n >= size()) {
@@ -336,7 +353,7 @@ public:
   }
 
   bool empty() const {
-    return !size();
+    return !size() && !group_by_buffer_;
   }
 
   TargetValue get(const size_t row_idx,
@@ -377,6 +394,7 @@ private:
   }
 
   void addValues(const std::vector<int64_t>& vals) {
+    target_values_.reserve(vals.size());
     for (const auto val : vals) {
       target_values_.back().emplace_back(val);
     }
@@ -419,6 +437,13 @@ private:
   mutable std::unordered_map<int64_t, TargetValues> as_unordered_map_;
   const Executor* executor_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+
+  int64_t* group_by_buffer_;
+  int32_t groups_buffer_entry_count_;
+  int64_t min_val_;
+  int8_t warp_count_;
+
+  friend class Executor;
 };
 
 inline std::string row_col_to_string(const ResultRows& rows, const size_t row_idx, const size_t i) {
@@ -461,7 +486,6 @@ public:
     const int device_id,
     const std::vector<const int8_t*>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
-  ~QueryExecutionContext();
 
   // TOOD(alex): get rid of targets parameter
   ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets) const;
