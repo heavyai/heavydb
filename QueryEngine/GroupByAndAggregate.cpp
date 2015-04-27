@@ -348,10 +348,10 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
       return;
     }
     std::sort(target_values_.begin(), target_values_.end(), compare);
-    if (sort_plan->get_remove_duplicates()) {
-      std::sort(target_values_.begin(), target_values_.end(), compare);
-      target_values_.erase(std::unique(target_values_.begin(), target_values_.end(), compare), target_values_.end());
-    }
+  }
+  if (sort_plan->get_remove_duplicates()) {
+    std::sort(target_values_.begin(), target_values_.end());
+    target_values_.erase(std::unique(target_values_.begin(), target_values_.end()), target_values_.end());
   }
 }
 
