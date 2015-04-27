@@ -170,6 +170,12 @@ public:
     group_by_buffers_.push_back(group_by_buffer);
   }
 
+  std::string* addString(const std::string& str) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    strings_.emplace_back(str);
+    return &strings_.back();
+  }
+
   ~RowSetMemoryOwner() {
     for (auto count_distinct_buffer : count_distinct_bitmaps_) {
       free(count_distinct_buffer);
@@ -186,6 +192,7 @@ private:
   std::vector<int8_t*> count_distinct_bitmaps_;
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
+  std::list<std::string> strings_;
   std::mutex state_mutex_;
 
   friend class QueryExecutionContext;
@@ -302,15 +309,15 @@ public:
 
   // used for kAVG
   void addValue(const int64_t val1, const int64_t val2) {
-    target_values_.back().emplace_back(std::make_pair(val1, val2));
+    target_values_.back().emplace_back(val1, val2);
   }
 
   void addValue(const std::string& val) {
-    target_values_.back().emplace_back(val);
+    target_values_.back().emplace_back(row_set_mem_owner_->addString(val));
   }
 
   void addValue() {
-    target_values_.back().emplace_back(nullptr);
+    target_values_.back().emplace_back();
   }
 
   void append(const ResultRows& more_results) {
@@ -423,7 +430,47 @@ private:
     }
   }
 
-  typedef boost::variant<int64_t, std::pair<int64_t, int64_t>, std::string, void*> InternalTargetValue;
+  struct InternalTargetValue {
+    int64_t i1;
+    int64_t i2;
+
+    enum class ITVType {
+      Int,
+      Pair,
+      Str,
+      Null
+    };
+
+    ITVType ty;
+
+    explicit InternalTargetValue(const int64_t i1_) : i1(i1_), ty(ITVType::Int) {}
+
+    explicit InternalTargetValue(const int64_t i1_, const int64_t i2_) : i1(i1_), i2(i2_), ty(ITVType::Pair) {}
+
+    explicit InternalTargetValue(const std::string* s) : i1(reinterpret_cast<int64_t>(s)), ty(ITVType::Str) {}
+
+    explicit InternalTargetValue() : ty(ITVType::Null) {}
+
+    std::string strVal() const {
+      return *reinterpret_cast<std::string*>(i1);
+    }
+
+    bool isInt() const {
+      return ty == ITVType::Int;
+    }
+
+    bool isPair() const {
+      return ty == ITVType::Pair;
+    }
+
+    bool isNull() const {
+      return ty == ITVType::Null;
+    }
+
+    bool isStr() const {
+      return ty == ITVType::Str;
+    }
+  };
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
