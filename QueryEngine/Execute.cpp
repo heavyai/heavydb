@@ -181,12 +181,11 @@ StringDictionary* Executor::getStringDictionary(const int dict_id) const {
   std::lock_guard<std::mutex> lock(str_dicts_mutex_);
   const auto dict_it = str_dicts_.find(dict_id);
   if (dict_it != str_dicts_.end()) {
-    return dict_it->second.get();
+    return dict_it->second;
   }
-  auto dict_it_ok = str_dicts_.insert(std::make_pair(dict_id,
-    std::unique_ptr<StringDictionary>(new StringDictionary(dd->dictFolderPath))));
+  auto dict_it_ok = str_dicts_.insert(std::make_pair(dict_id, dd->stringDict));
   CHECK(dict_it_ok.second);
-  return dict_it_ok.first->second.get();
+  return dict_it_ok.first->second;
 }
 
 std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& literals) {

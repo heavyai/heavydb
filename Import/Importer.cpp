@@ -373,7 +373,7 @@ Importer::import()
     if (cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_DICT) {
       const auto dd = catalog.getMetadataForDict(cd->columnType.get_comp_param());
       CHECK(dd);
-      dict_map[cd->columnId] = std::unique_ptr<StringDictionary>(new StringDictionary(dd->dictFolderPath));
+      dict_map[cd->columnId] = dd->stringDict;
     }
   }
   insert_data.numRows = 0;

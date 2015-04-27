@@ -270,7 +270,7 @@ class Importer {
     StringDictionary *get_string_dict(const ColumnDescriptor *cd) const { 
       if (!cd->columnType.is_string() || cd->columnType.get_compression() != kENCODING_DICT)
         return nullptr;
-      return dict_map.at(cd->columnId).get();
+      return dict_map.at(cd->columnId);
     }
     void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count);
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> &get_import_buffers_vec() { return import_buffers_vec; }
@@ -289,7 +289,7 @@ class Importer {
     int which_buf;
     std::list <const ColumnDescriptor *> column_descs;
     Fragmenter_Namespace::InsertData insert_data;
-    std::map<int, std::shared_ptr<StringDictionary>> dict_map;
+    std::map<int, StringDictionary*> dict_map;
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
     bool load_failed;
 };

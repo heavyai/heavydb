@@ -304,6 +304,8 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
       DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
       DictDescriptor *dd = dictIt->second;
       dictDescriptorMapById_.erase(dictIt);
+      if (dd->stringDict != nullptr)
+        delete dd->stringDict;
       boost::filesystem::remove_all(dd->dictFolderPath);
       delete dd;
     }
@@ -314,7 +316,6 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
 void
 Catalog::instantiateFragmenter(TableDescriptor *td) const
 {
-  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
 	// instatiion table fragmenter upon first use
 	// assume only insert order fragmenter is supported
 	assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
@@ -332,8 +333,11 @@ const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) c
         return nullptr;
     }
 		TableDescriptor *td = tableDescIt->second;
-		if (td->fragmenter == nullptr)
-			instantiateFragmenter(td);
+    {
+      std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+      if (td->fragmenter == nullptr)
+        instantiateFragmenter(td);
+    }
     return td; // returns pointer to table descriptor
 }
 
@@ -343,8 +347,11 @@ const TableDescriptor * Catalog::getMetadataForTable (int tableId) const  {
         return nullptr;
     }
 		TableDescriptor *td = tableDescIt->second;
-		if (td->fragmenter == nullptr)
-			instantiateFragmenter(td);
+    {
+      std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+      if (td->fragmenter == nullptr)
+        instantiateFragmenter(td);
+    }
     return td; // returns pointer to table descriptor
 }
 
@@ -355,6 +362,11 @@ Catalog::getMetadataForDict(int dictId) const {
         return nullptr;
     }
 		DictDescriptor *dd = dictDescIt->second;
+    {
+      std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+      if (dd->stringDict == nullptr)
+        dd->stringDict = new StringDictionary(dd->dictFolderPath);
+    }
     return dd;
 }
 

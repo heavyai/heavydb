@@ -434,7 +434,7 @@ private:
   static const int max_gpu_count { 8 };
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
-  mutable std::unordered_map<int, std::unique_ptr<StringDictionary>> str_dicts_;
+  mutable std::unordered_map<int, StringDictionary*> str_dicts_;
   mutable std::mutex str_dicts_mutex_;
 
   std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> cpu_code_cache_;

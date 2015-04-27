@@ -4,6 +4,7 @@
 #include <cassert>
 #include <string>
 #include "../Shared/sqltypes.h"
+#include "../StringDictionary/StringDictionary.h"
 
 /**
  * @type DictDescriptor
@@ -17,8 +18,8 @@ struct DictDescriptor {
     int dictNBits;
     bool dictIsShared;
     std::string dictFolderPath;
-
-    DictDescriptor(int id, const std::string &name, int nbits, bool shared, std::string &fname) : dictId(id), dictName(name), dictNBits(nbits), dictIsShared(shared), dictFolderPath(fname) {}
+    StringDictionary *stringDict;
+    DictDescriptor(int id, const std::string &name, int nbits, bool shared, std::string &fname) : dictId(id), dictName(name), dictNBits(nbits), dictIsShared(shared), dictFolderPath(fname), stringDict(nullptr) {}
 };
 
 #endif // DICT_DESCRIPTOR
