@@ -283,6 +283,9 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const b
 
 }  // namespace
 
+#define LIKELY(x)       __builtin_expect((x),1)
+#define UNLIKELY(x)     __builtin_expect((x),0)
+
 void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
@@ -301,21 +304,21 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
       const auto is_int = entry_ti.is_integer();
       const auto is_dict = entry_ti.is_string() &&
         entry_ti.get_compression() == kENCODING_DICT;
-      const auto lhs_v = lhs[order_entry.tle_no - 1];
-      const auto rhs_v = rhs[order_entry.tle_no - 1];
-      if (isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v)) {
+      const auto& lhs_v = lhs[order_entry.tle_no - 1];
+      const auto& rhs_v = rhs[order_entry.tle_no - 1];
+      if (UNLIKELY(isNull(entry_ti, lhs_v) && isNull(entry_ti, rhs_v))) {
         return false;
       }
-      if (isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v)) {
+      if (UNLIKELY(isNull(entry_ti, lhs_v) && !isNull(entry_ti, rhs_v))) {
         return order_entry.nulls_first;
       }
-      if (isNull(entry_ti, rhs_v) && !isNull(entry_ti, lhs_v)) {
+      if (UNLIKELY(isNull(entry_ti, rhs_v) && !isNull(entry_ti, lhs_v))) {
         return !order_entry.nulls_first;
       }
       const bool use_desc_cmp = use_heap ? !order_entry.is_desc : order_entry.is_desc;
-      if (lhs_v.isInt()) {
+      if (LIKELY(lhs_v.isInt())) {
         CHECK(rhs_v.isInt());
-        if (is_dict) {
+        if (UNLIKELY(is_dict)) {
           CHECK_EQ(4, entry_ti.get_size());
           auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param());
           auto lhs_str = string_dict->getString(lhs_v.i1);
@@ -354,6 +357,9 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
     target_values_.erase(std::unique(target_values_.begin(), target_values_.end()), target_values_.end());
   }
 }
+
+#undef UNLIKELY
+#undef LIKELY
 
 TargetValue ResultRows::get(const size_t row_idx,
                             const size_t col_idx,
