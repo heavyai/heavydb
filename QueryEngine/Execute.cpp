@@ -1633,7 +1633,7 @@ ResultRows Executor::executeResultPlan(
     column_buffers, result_columns.size(), 0, init_agg_vals,
     query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, error_code);
   CHECK(!*error_code);
-  return query_exe_context->groupBufferToResults(0, target_exprs);
+  return query_exe_context->groupBufferToResults(0, target_exprs, false);
 }
 
 ResultRows Executor::executeSortPlan(
@@ -1878,7 +1878,7 @@ ResultRows Executor::executeAggScanPlan(
           groupby_exprs.size(), chosen_device_type, col_buffers,
           query_exe_context.get(), num_rows,
           &cat.get_dataMgr(), chosen_device_id,
-          scan_limit);
+          scan_limit, device_type == ExecutorDeviceType::Auto);
       }
       {
         std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -2012,7 +2012,8 @@ int32_t Executor::executePlanWithGroupBy(
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
-    const int64_t scan_limit) {
+    const int64_t scan_limit,
+    const bool was_auto_device) {
   CHECK(results.empty());
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
@@ -2031,7 +2032,7 @@ int32_t Executor::executePlanWithGroupBy(
       num_rows, scan_limit, query_exe_context->init_agg_vals_,
       data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
   }
-  results = query_exe_context->getRowSet(target_exprs);
+  results = query_exe_context->getRowSet(target_exprs, was_auto_device);
   if (error_code && (!scan_limit || results.size() < static_cast<size_t>(scan_limit))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
