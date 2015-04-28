@@ -14,6 +14,7 @@
 #include "Parser/ParserNode.h"
 #include "Planner/Planner.h"
 #include "QueryEngine/Execute.h"
+#include "Shared/release.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -211,6 +212,7 @@ main(int argc, char* argv[])
 		("debug,d", "Verbose debug mode")
 		("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
 		("execute,e", "Execute queries")
+    ("version,v", "Print MapD Version")
 		("timer,t", "Show query time information");
 
 	po::positional_options_description positionalOptions;
@@ -222,7 +224,11 @@ main(int argc, char* argv[])
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			cout << "Usage: mapd -u <user name> -p <password> <catalog path> [<database name>]\n";
+			cout << "Usage: mapd -u <user name> -p <password> <catalog path> [<database name>][--version|-v]\n";
+			return 0;
+		}
+		if (vm.count("version")) {
+			cout << "MapD Version: " << MapDRelease << std::endl;
 			return 0;
 		}
 		if (vm.count("debug"))

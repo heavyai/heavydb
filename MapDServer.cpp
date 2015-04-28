@@ -10,6 +10,7 @@
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
 #include "Shared/measure.h"
+#include "Shared/release.h"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -71,19 +72,20 @@ TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
 class MapDHandler : virtual public MapDIf {
 public:
   MapDHandler(const std::string& base_data_path, const std::string& executor_device, const bool jit_debug) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX), jit_debug_(jit_debug) {
+        LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
-        LOG(INFO) << "Started in GPU Mode" << std::endl; 
+        LOG(INFO) << " Started in GPU Mode" << std::endl; 
         cpu_mode_only_ = false;
     }
     else if (executor_device == "auto") {
         executor_device_type_ = ExecutorDeviceType::Auto;
-        LOG(INFO) << "Started in Auto Mode" << std::endl; 
+        LOG(INFO) << " Started in Auto Mode" << std::endl; 
         cpu_mode_only_ = false;
     }
     else {
         executor_device_type_ = ExecutorDeviceType::CPU;
-        LOG(INFO) << "Started in CPU Mode" << std::endl; 
+        LOG(INFO) << " Started in CPU Mode" << std::endl; 
         cpu_mode_only_ = true;
     }
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
@@ -414,6 +416,7 @@ int main(int argc, char **argv) {
     ("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
     ("cpu", "Run on CPU only")
     ("gpu", "Run on GPUs")
+    ("version,v", "Print Release Version Number")
     ("port,p", po::value<int>(&port), "Port number (default 9091)");
 
 	po::positional_options_description positionalOptions;
@@ -424,9 +427,13 @@ int main(int argc, char **argv) {
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port number>][--flush-log]\n";
+			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port number>][--flush-log][--version|-v]\n";
 			return 0;
 		}
+		if (vm.count("version")) {
+			std::cout << "MapD Version: " << MapDRelease << std::endl;
+      return 0;
+    }
 		if (vm.count("cpu"))
 			device = "cpu";
     if (vm.count("gpu"))

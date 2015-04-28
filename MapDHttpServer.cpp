@@ -11,6 +11,7 @@
 #include <string>
 #include <iostream>
 
+#include "Shared/release.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -244,6 +245,7 @@ int main(int argc, char **argv) {
 	po::options_description desc("Options");
 	desc.add_options()
 		("help,h", "Print help messages ")
+    ("version,v", "Print MapD Release Version")
     ("server,s", po::value<int>(&server_port), "MapD Server port number (default 9091)")
     ("port,p", po::value<int>(&port), "Port number (default 9090)");
 
@@ -253,7 +255,11 @@ int main(int argc, char **argv) {
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: mapd_http_server [{-p|--port} <port number>] [{-s|--server} <port number>]\n";
+			std::cout << "Usage: mapd_http_server [{-p|--port} <port number>] [{-s|--server} <port number>][--version|-v]\n";
+			return 0;
+		}
+		if (vm.count("version")) {
+			std::cout << "MapD Version: " << MapDRelease << std::endl;
 			return 0;
 		}
 
