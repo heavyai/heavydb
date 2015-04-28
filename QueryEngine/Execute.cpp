@@ -691,9 +691,12 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
   for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
     case_func_args.push_back(toBool(codegen(expr_pair.first, true, hoist_literals).front()));
     auto branch_val_lvs = codegen(expr_pair.second, true, hoist_literals);
-    if (is_real_str && dynamic_cast<const Analyzer::Constant*>(expr_pair.second)) {
-      CHECK_EQ(3, branch_val_lvs.size());
-      case_func_args.push_back(cgen_state_->emitCall("string_pack", { branch_val_lvs[1], branch_val_lvs[2] }));
+    if (is_real_str) {
+      if (branch_val_lvs.size() == 3) {
+        case_func_args.push_back(cgen_state_->emitCall("string_pack", { branch_val_lvs[1], branch_val_lvs[2] }));
+      } else {
+        case_func_args.push_back(branch_val_lvs.front());
+      }
     } else {
       CHECK_EQ(1, branch_val_lvs.size());
       case_func_args.push_back(branch_val_lvs.front());
