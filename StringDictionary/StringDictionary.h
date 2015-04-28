@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <boost/thread/shared_mutex.hpp>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -52,6 +53,7 @@ private:
   size_t offset_file_size_;
   size_t payload_file_size_;
   size_t payload_file_off_;
+  mutable boost::shared_mutex rw_mutex_;
 
   static char* CANARY_BUFFER;
 };

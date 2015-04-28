@@ -89,16 +89,19 @@ int32_t StringDictionary::getOrAdd(const std::string& str) {
 }
 
 int32_t StringDictionary::get(const std::string& str) const {
+  boost::shared_lock<boost::shared_mutex> read_lock(rw_mutex_);
   return str_ids_[computeBucket(str, str_ids_)];
 }
 
 std::string StringDictionary::getString(int32_t string_id) const {
+  boost::shared_lock<boost::shared_mutex> read_lock(rw_mutex_);
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringChecked(string_id);
 }
 
 std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const {
+  boost::shared_lock<boost::shared_mutex> read_lock(rw_mutex_);
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringBytesChecked(string_id);
@@ -121,13 +124,15 @@ void StringDictionary::increaseCapacity() {
 }
 
 int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) {
-  if (fillRateIsHigh()) {
-    // resize when more than 50% is full
-    increaseCapacity();
-  }
+  boost::unique_lock<boost::shared_mutex> write_lock(rw_mutex_);
   CHECK(str.size() <= MAX_STRLEN);
-  const int32_t bucket = computeBucket(str, str_ids_);
+  int32_t bucket = computeBucket(str, str_ids_);
   if (str_ids_[bucket] == INVALID_STR_ID) {
+    if (fillRateIsHigh()) {
+      // resize when more than 50% is full
+      increaseCapacity();
+      bucket = computeBucket(str, str_ids_);
+    }
     if (recover) {
       payload_file_off_ += str.size();
     } else {
