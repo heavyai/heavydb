@@ -172,7 +172,8 @@ private:
     const int64_t num_rows,
     Data_Namespace::DataMgr*,
     const int device_id,
-    const int64_t limit);
+    const int64_t limit,
+    const bool was_auto_device);
   int32_t executePlanWithoutGroupBy(
     const CompilationResult&,
     const bool hoist_literals,

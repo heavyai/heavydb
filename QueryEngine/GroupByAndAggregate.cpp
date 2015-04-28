@@ -590,16 +590,18 @@ int64_t QueryExecutionContext::allocateCountDistinctSet() {
   return reinterpret_cast<int64_t>(count_distinct_set);
 }
 
-ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& targets) const {
+ResultRows QueryExecutionContext::getRowSet(
+    const std::vector<Analyzer::Expr*>& targets,
+    const bool was_auto_device) const {
   std::vector<ResultRows> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(1, num_buffers_);
-    return groupBufferToResults(0, targets);
+    return groupBufferToResults(0, targets, was_auto_device);
   }
   size_t step { query_mem_desc_.threadsShareMemory() ? executor_->block_size_x_ : 1 };
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
-    results_per_sm.emplace_back(groupBufferToResults(i, targets));
+    results_per_sm.emplace_back(groupBufferToResults(i, targets, was_auto_device));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(results_per_sm, query_mem_desc_, row_set_mem_owner_);
@@ -630,18 +632,25 @@ int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_strea
 
 ResultRows QueryExecutionContext::groupBufferToResults(
     const size_t i,
-    const std::vector<Analyzer::Expr*>& targets) const {
+    const std::vector<Analyzer::Expr*>& targets,
+    const bool was_auto_device) const {
   const size_t group_by_col_count { query_mem_desc_.group_col_widths.size() };
   const size_t agg_col_count { query_mem_desc_.agg_col_widths.size() };
-  auto impl = [group_by_col_count, agg_col_count, this, &targets](
+  auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets](
       const size_t groups_buffer_entry_count,
       int64_t* group_by_buffer) {
     if (query_mem_desc_.keyless_hash) {
       CHECK_EQ(1, group_by_col_count);
       CHECK_EQ(targets.size(), agg_col_count);
       const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
-      return ResultRows(targets, executor_, row_set_mem_owner_,
-        group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count);
+      if (!query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU) || !was_auto_device) {
+        return ResultRows(targets, executor_, row_set_mem_owner_,
+          group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count);
+      }
+      // Can't do the fast reduction in auto mode for interleaved bins, warp count isn't the same
+      ResultRows results(targets, executor_, row_set_mem_owner_);
+      results.addKeylessGroupByBuffer(group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count);
+      return results;
     }
     ResultRows results(targets, executor_, row_set_mem_owner_);
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {

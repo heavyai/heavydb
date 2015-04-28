@@ -560,8 +560,11 @@ public:
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   // TOOD(alex): get rid of targets parameter
-  ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets) const;
-  ResultRows groupBufferToResults(const size_t i, const std::vector<Analyzer::Expr*>& targets) const;
+  ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets, const bool was_auto_device) const;
+  ResultRows groupBufferToResults(
+    const size_t i,
+    const std::vector<Analyzer::Expr*>& targets,
+    const bool was_auto_device) const;
 
   std::vector<int64_t*> launchGpuCode(
     const std::vector<void*>& cu_functions,
