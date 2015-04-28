@@ -339,7 +339,6 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
         p.stringsPtr = string_payload_ptr;
       } else {
         CHECK_EQ(kENCODING_DICT, import_buff->getTypeInfo().get_compression());
-        std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
         for (const auto& str : *string_payload_ptr) {
           import_buff->addDictEncodedString(str);
         }
