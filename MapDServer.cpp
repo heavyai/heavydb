@@ -75,17 +75,17 @@ public:
         LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
-        LOG(INFO) << " Started in GPU Mode" << std::endl; 
+        LOG(INFO) << "Started in GPU Mode" << std::endl; 
         cpu_mode_only_ = false;
     }
-    else if (executor_device == "auto") {
-        executor_device_type_ = ExecutorDeviceType::Auto;
-        LOG(INFO) << " Started in Auto Mode" << std::endl; 
+    else if (executor_device == "hybrid") {
+        executor_device_type_ = ExecutorDeviceType::Hybrid;
+        LOG(INFO) << "Started in Hybrid Mode" << std::endl; 
         cpu_mode_only_ = false;
     }
     else {
         executor_device_type_ = ExecutorDeviceType::CPU;
-        LOG(INFO) << " Started in CPU Mode" << std::endl; 
+        LOG(INFO) << "Started in CPU Mode" << std::endl; 
         cpu_mode_only_ = true;
     }
     const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
@@ -373,14 +373,14 @@ public:
         LOG(INFO) << "Client sets CPU mode.";
         executor_device_type_ = ExecutorDeviceType::CPU;
         break;
-      case TExecuteMode::AUTO:
+      case TExecuteMode::HYBRID:
         if (cpu_mode_only_) {
           MapDException e;
-          e.error_msg = "Cannot switch to Auto mode in a server started in CPU-only mode.";
+          e.error_msg = "Cannot switch to Hybrid mode in a server started in CPU-only mode.";
           throw e;
         }
-        LOG(INFO) << "Client sets Auto mode.";
-        executor_device_type_ = ExecutorDeviceType::Auto;
+        LOG(INFO) << "Client sets Hybrid mode.";
+        executor_device_type_ = ExecutorDeviceType::Hybrid;
         break;
     }
   }
@@ -402,7 +402,7 @@ private:
 int main(int argc, char **argv) {
   int port = 9091;
   std::string base_path;
-  std::string device("auto");
+  std::string device("gpu");
   bool flush_log = false;
   bool jit_debug = false;
 
@@ -415,7 +415,8 @@ int main(int argc, char **argv) {
     ("flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")
     ("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
     ("cpu", "Run on CPU only")
-    ("gpu", "Run on GPUs")
+    ("gpu", "Run on GPUs (Default)")
+    ("hybrid", "Run on both CPU and GPUs")
     ("version,v", "Print Release Version Number")
     ("port,p", po::value<int>(&port), "Port number (default 9091)");
 
@@ -438,6 +439,8 @@ int main(int argc, char **argv) {
 			device = "cpu";
     if (vm.count("gpu"))
       device = "gpu";
+    if (vm.count("hybrid"))
+      device = "hybrid";
     if (vm.count("flush-log"))
       flush_log = true;
     if (vm.count("jit-debug"))

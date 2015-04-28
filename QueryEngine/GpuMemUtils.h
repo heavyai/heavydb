@@ -58,7 +58,7 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
 enum class ExecutorDeviceType {
   CPU,
   GPU,
-  Auto
+  Hybrid
 };
 
 // TODO(alex): remove

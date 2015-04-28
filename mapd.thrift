@@ -9,7 +9,7 @@ enum TDatumType {
 }
 
 enum TExecuteMode {
-  AUTO,
+  HYBRID,
   GPU,
   CPU
 }

@@ -50,7 +50,7 @@ struct ClientContext {
   ColumnTypes columns_return;
   TExecuteMode::type execution_mode;
 
-  ClientContext(TTransport &t, MapDClient &c) : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::AUTO) {}
+  ClientContext(TTransport &t, MapDClient &c) : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
 };
 
 enum ThriftService {
@@ -130,7 +130,7 @@ process_backslash_commands(char *command, ClientContext &context)
       std::cout << "\\c <database> <user> <password>.\n";
       std::cout << "\\gpu Execute in GPU mode's.\n";
       std::cout << "\\cpu Execute in CPU mode's.\n";
-      std::cout << "\\auto Execute in Auto mode.\n";
+      std::cout << "\\hybrid Execute in Hybrid mode.\n";
       std::cout << "\\multiline Set multi-line command line mode.\n";
       std::cout << "\\singleline Set single-line command line mode.\n";
       std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
@@ -416,8 +416,8 @@ int main(int argc, char **argv) {
       } else if (!strncmp(line,"\\gpu",4)) {
         context.execution_mode = TExecuteMode::GPU;
         (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
-      } else if (!strncmp(line,"\\auto",5)) {
-        context.execution_mode = TExecuteMode::AUTO;
+      } else if (!strncmp(line,"\\hybrid",5)) {
+        context.execution_mode = TExecuteMode::HYBRID;
         (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */

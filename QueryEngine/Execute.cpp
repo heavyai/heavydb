@@ -1732,12 +1732,12 @@ ResultRows Executor::executeAggScanPlan(
     }
   };
 
-  if (device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::Auto) {
+  if (device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::Hybrid) {
     compile_on_cpu();
   }
 
   CompilationResult compilation_result_gpu;
-  if (device_type == ExecutorDeviceType::GPU || (device_type == ExecutorDeviceType::Auto &&
+  if (device_type == ExecutorDeviceType::GPU || (device_type == ExecutorDeviceType::Hybrid &&
       cat.get_dataMgr().gpusPresent())) {
     try {
       compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
@@ -1805,7 +1805,7 @@ ResultRows Executor::executeAggScanPlan(
       const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
         ? Data_Namespace::GPU_LEVEL
         : Data_Namespace::CPU_LEVEL;
-      if (device_type != ExecutorDeviceType::Auto) {
+      if (device_type != ExecutorDeviceType::Hybrid) {
         chosen_device_id = fragment.deviceIds[static_cast<int>(memory_level)];
       }
       CHECK_GE(chosen_device_id, 0);
@@ -1859,7 +1859,7 @@ ResultRows Executor::executeAggScanPlan(
           col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
         }
       }
-      CHECK(chosen_device_type != ExecutorDeviceType::Auto);
+      CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
       const CompilationResult& compilation_result =
         chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
       auto query_exe_context = compilation_result.query_mem_desc.getQueryExecutionContext(
@@ -1887,7 +1887,7 @@ ResultRows Executor::executeAggScanPlan(
         }
         all_fragment_results.push_back(device_results);
       }
-      if (device_type == ExecutorDeviceType::Auto) {
+      if (device_type == ExecutorDeviceType::Hybrid) {
         std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
         if (chosen_device_type == ExecutorDeviceType::CPU) {
           ++available_cpus;
@@ -1902,7 +1902,7 @@ ResultRows Executor::executeAggScanPlan(
     };
     auto chosen_device_type = device_type;
     int chosen_device_id = 0;
-    if (device_type == ExecutorDeviceType::Auto) {
+    if (device_type == ExecutorDeviceType::Hybrid) {
       std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
       scheduler_cv.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
         return available_cpus || !available_gpus.empty();
