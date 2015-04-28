@@ -844,6 +844,8 @@ namespace Parser {
             const ColumnDescriptor *col_desc = catalog.getMetadataForColumn(colvar->get_table_id(), colvar->get_column_id());
             resname = col_desc->columnName;
           }
+          if (e->get_type_info().get_type() == kNULLT)
+            throw std::runtime_error("Untyped NULL in SELECT clause.  Use CAST to specify a type.");
           Analyzer::TargetEntry *tle = new Analyzer::TargetEntry(resname, e);
           tlist.push_back(tle);
         }
