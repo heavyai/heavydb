@@ -1878,7 +1878,7 @@ ResultRows Executor::executeAggScanPlan(
           groupby_exprs.size(), chosen_device_type, col_buffers,
           query_exe_context.get(), num_rows,
           &cat.get_dataMgr(), chosen_device_id,
-          scan_limit, device_type == ExecutorDeviceType::Auto);
+          scan_limit, device_type == ExecutorDeviceType::Hybrid);
       }
       {
         std::lock_guard<std::mutex> lock(reduce_mutex);
