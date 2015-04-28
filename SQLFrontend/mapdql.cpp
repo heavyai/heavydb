@@ -24,6 +24,7 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
+const std::string MapDQLRelease("0.1");
 
 using boost::shared_ptr;
 
@@ -251,6 +252,7 @@ int main(int argc, char **argv) {
 	po::options_description desc("Options");
 	desc.add_options()
 		("help,h", "Print help messages ")
+    ("version,v", "Print mapdql version number")
     ("no-header,n", "Do not print query result header")
     ("timing,t", "Print timing information")
     ("delimiter,d", po::value<std::string>(&delimiter), "Field delimiter in row output (default is |)")
@@ -268,6 +270,10 @@ int main(int argc, char **argv) {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
 			std::cout << "Usage: mapdql [<database>][{--user|-u} <user>][{--passwd|-p} <password>][--port <port number>] [{-s|--server} <server host>] [{--no-header|-n}] [{--delimiter|-d}]\n";
+			return 0;
+		}
+		if (vm.count("version")) {
+			std::cout << "MapDQL Version: " << MapDQLRelease << std::endl;
 			return 0;
 		}
     if (vm.count("no-header"))
