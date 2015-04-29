@@ -619,6 +619,14 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
   case kVARCHAR:
   case kCHAR:
   case kTEXT: {
+    CHECK(constant->get_constval().stringval || constant->get_is_null());
+    if (constant->get_is_null()) {
+      return {
+        ll_int(int64_t(0)),
+        llvm::Constant::getNullValue(get_int_type(8, cgen_state_->context_)),
+        ll_int(int32_t(0))
+      };
+    }
     const auto& str_const = *constant->get_constval().stringval;
     if (enc_type == kENCODING_DICT) {
       return { ll_int(dict_id > 0
