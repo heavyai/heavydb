@@ -652,6 +652,12 @@ namespace Parser {
     }
     if (else_expr != nullptr)
       else_e = else_e->add_cast(ti);
+    else {
+      Datum d;
+      d.stringval = new std::string();
+      // always create an else expr so that executor doesn't need to worry about it
+      else_e = new Analyzer::Constant(ti, true, d);
+    }
     return new Analyzer::CaseExpr(ti, has_agg, cast_expr_pair_list, else_e);
   }
 
