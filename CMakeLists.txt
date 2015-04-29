@@ -54,7 +54,6 @@ add_custom_command(
     COMMAND thrift
     ARGS -gen cpp -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift)
 
-find_package(Git)
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/Shared/release.h ${CMAKE_CURRENT_BINARY_DIR}/MAPD_GIT_HASH.txt
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h

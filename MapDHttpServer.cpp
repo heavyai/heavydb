@@ -11,7 +11,7 @@
 #include <string>
 #include <iostream>
 
-#include "Shared/release.h"
+#include "MapDRelease.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
