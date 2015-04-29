@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 2.8)
 
 PROJECT			(mapd_exe)
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
+#if (CMAKE_BUILD_TYPE MATCHES "[Rr][Ee][Ll][Ee][Aa][Ss][Ee]")
+#  message("release mode")
+#endif(CMAKE_BUILD_TYPE MATCHES "[Rr][Ee][Ll][Ee][Aa][Ss][Ee]")
+
+set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -pthread ${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/nvvm/lib -L/usr/local/cuda/nvvm/lib64")
 FIND_PACKAGE( Boost COMPONENTS filesystem program_options thread system REQUIRED )
 set(llvm_config_cmd "llvm-config")
@@ -32,14 +36,14 @@ ADD_SUBDIRECTORY    (Utils)
 ADD_SUBDIRECTORY    (Tests)
 ADD_SUBDIRECTORY    (SQLFrontend)
 
-set(mapd_source_files main.cpp)
+set(mapd_source_files main.cpp ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
 add_executable(mapd ${mapd_source_files})
 
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(mapd_server_source_files MapDServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
-set(mapd_http_server_source_files MapDHttpServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp)
+set(mapd_server_source_files MapDServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
+set(mapd_http_server_source_files MapDHttpServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
 
 add_executable(mapd_server ${mapd_server_source_files})
 add_executable(mapd_http_server ${mapd_http_server_source_files})
@@ -49,6 +53,12 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp
     COMMAND thrift
     ARGS -gen cpp -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift)
+
+find_package(Git)
+add_custom_command(
+    DEPENDS ${CMAKE_SOURCE_DIR}/Shared/release.h
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h
+    COMMAND sed -e \"s/MAPD_GIT_HASH/`${GIT_EXECUTABLE} log -1 --pretty=format:%h`/\" ${CMAKE_SOURCE_DIR}/Shared/release.h > ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
 
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)

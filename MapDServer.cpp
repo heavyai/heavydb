@@ -10,7 +10,7 @@
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
 #include "Shared/measure.h"
-#include "Shared/release.h"
+#include "MapDRelease.h"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>

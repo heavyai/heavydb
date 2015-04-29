@@ -14,7 +14,7 @@
 #include "Parser/ParserNode.h"
 #include "Planner/Planner.h"
 #include "QueryEngine/Execute.h"
-#include "Shared/release.h"
+#include "MapDRelease.h"
 
 using namespace std;
 using namespace Catalog_Namespace;
