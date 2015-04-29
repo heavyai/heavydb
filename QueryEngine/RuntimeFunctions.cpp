@@ -131,6 +131,36 @@ DEF_UMINUS_NULLABLE(double, double)
 
 #undef DEF_UMINUS_NULLABLE
 
+#define DEF_CAST_NULLABLE(from_type, to_type)                                             \
+extern "C" __attribute__((always_inline))                                                 \
+to_type cast_##from_type##_to_##to_type##_nullable(                                       \
+    const from_type operand, const from_type from_null_val, const to_type to_null_val) {  \
+  return operand == from_null_val ? to_null_val : operand;                                \
+}
+
+#define DEF_CAST_NULLABLE_BIDIR(type1, type2)  \
+DEF_CAST_NULLABLE(type1, type2)                \
+DEF_CAST_NULLABLE(type2, type1)
+
+DEF_CAST_NULLABLE_BIDIR(int8_t, int16_t)
+DEF_CAST_NULLABLE_BIDIR(int8_t, int32_t)
+DEF_CAST_NULLABLE_BIDIR(int8_t, int64_t)
+DEF_CAST_NULLABLE_BIDIR(int16_t, int32_t)
+DEF_CAST_NULLABLE_BIDIR(int16_t, int64_t)
+DEF_CAST_NULLABLE_BIDIR(int32_t, int64_t)
+DEF_CAST_NULLABLE_BIDIR(float, double)
+DEF_CAST_NULLABLE_BIDIR(float, int8_t)
+DEF_CAST_NULLABLE_BIDIR(float, int16_t)
+DEF_CAST_NULLABLE_BIDIR(float, int32_t)
+DEF_CAST_NULLABLE_BIDIR(float, int64_t)
+DEF_CAST_NULLABLE_BIDIR(double, int8_t)
+DEF_CAST_NULLABLE_BIDIR(double, int16_t)
+DEF_CAST_NULLABLE_BIDIR(double, int32_t)
+DEF_CAST_NULLABLE_BIDIR(double, int64_t)
+
+#undef DEF_CAST_NULLABLE_BIDIR
+#undef DEF_CAST_NULLABLE
+
 // aggregator implementations
 
 extern "C" __attribute__((always_inline))

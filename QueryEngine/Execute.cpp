@@ -984,11 +984,20 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
     if (ti.is_integer() || ti.is_time()) {
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
       const auto target_width = get_bit_width(ti.get_type());
-      return cgen_state_->ir_builder_.CreateCast(target_width > operand_width
+      if (target_width == operand_width) {
+        return operand_lv;
+      }
+      if (operand_ti.get_notnull()) {
+        return cgen_state_->ir_builder_.CreateCast(target_width > operand_width
             ? llvm::Instruction::CastOps::SExt
             : llvm::Instruction::CastOps::Trunc,
           operand_lv,
           get_int_type(target_width, cgen_state_->context_));
+      }
+      const std::string from_tname { "int" + std::to_string(get_bit_width(operand_ti.get_type())) + "_t" };
+      const std::string to_tname { "int" + std::to_string(get_bit_width(ti.get_type())) + "_t" };
+      return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+        { operand_lv, inlineIntNull(operand_ti), inlineIntNull(ti) });
     } else {
       CHECK(ti.get_type() == kFLOAT || ti.get_type() == kDOUBLE);
       return cgen_state_->ir_builder_.CreateSIToFP(operand_lv, ti.get_type() == kFLOAT
@@ -998,17 +1007,40 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   } else {
     CHECK(operand_ti.get_type() == kFLOAT ||
           operand_ti.get_type() == kDOUBLE);
+    if (operand_ti == ti) {
+      return operand_lv;
+    }
     CHECK(operand_lv->getType()->isFloatTy() || operand_lv->getType()->isDoubleTy());
-    if (ti.get_type() == kDOUBLE) {
-      return cgen_state_->ir_builder_.CreateFPExt(
-        operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
-    } else if (ti.is_integer()) {
-      return cgen_state_->ir_builder_.CreateFPToSI(operand_lv,
-        get_int_type(get_bit_width(ti.get_type()), cgen_state_->context_));
+    if (operand_ti.get_notnull()) {
+      if (ti.get_type() == kDOUBLE) {
+        return cgen_state_->ir_builder_.CreateFPExt(
+          operand_lv, llvm::Type::getDoubleTy(cgen_state_->context_));
+      } else if (ti.get_type() == kFLOAT) {
+        return cgen_state_->ir_builder_.CreateFPTrunc(
+          operand_lv, llvm::Type::getFloatTy(cgen_state_->context_));
+      } else if (ti.is_integer()) {
+        return cgen_state_->ir_builder_.CreateFPToSI(operand_lv,
+          get_int_type(get_bit_width(ti.get_type()), cgen_state_->context_));
+      } else {
+        CHECK(false);
+      }
     } else {
-      CHECK(false);
+      const std::string from_tname { operand_ti.get_type() == kFLOAT ? "float" : "double" };
+      if (ti.is_fp()) {
+        const std::string to_tname { ti.get_type() == kFLOAT ? "float" : "double" };
+        return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+          { operand_lv, inlineFpNull(operand_ti), inlineFpNull(ti) });
+      } else if (ti.is_integer()) {
+        const std::string to_tname { "int" + std::to_string(get_bit_width(ti.get_type())) + "_t" };
+        return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
+          { operand_lv, inlineFpNull(operand_ti), inlineIntNull(ti) });
+      } else {
+        CHECK(false);
+      }
     }
   }
+  CHECK(false);
+  return nullptr;
 }
 
 llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const bool hoist_literals) {
