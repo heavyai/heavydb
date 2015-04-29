@@ -297,24 +297,38 @@ private:
       const auto& type_info = constant->get_type_info();
       switch (type_info.get_type()) {
       case kBOOLEAN:
-        return getOrAddLiteral(constant->get_constval().boolval);
+        return getOrAddLiteral(constant->get_is_null()
+          ? int8_t(inline_int_null_val(type_info))
+          : int8_t(constant->get_constval().boolval));
       case kSMALLINT:
-        return getOrAddLiteral(constant->get_constval().smallintval);
+        return getOrAddLiteral(constant->get_is_null()
+          ? int16_t(inline_int_null_val(type_info))
+          : constant->get_constval().smallintval);
       case kINT:
-        return getOrAddLiteral(constant->get_constval().intval);
+        return getOrAddLiteral(constant->get_is_null()
+          ? int32_t(inline_int_null_val(type_info))
+          : constant->get_constval().intval);
       case kBIGINT:
-        return getOrAddLiteral(constant->get_constval().bigintval);
+        return getOrAddLiteral(constant->get_is_null()
+          ? int64_t(inline_int_null_val(type_info))
+          : constant->get_constval().bigintval);
       case kFLOAT:
-        return getOrAddLiteral(constant->get_constval().floatval);
+        return getOrAddLiteral(constant->get_is_null()
+          ? float(inline_fp_null_val(type_info))
+          : constant->get_constval().floatval);
       case kDOUBLE:
-        return getOrAddLiteral(constant->get_constval().doubleval);
+        return getOrAddLiteral(constant->get_is_null()
+          ? inline_fp_null_val(type_info)
+          : constant->get_constval().doubleval);
       case kCHAR:
       case kTEXT:
       case kVARCHAR:
+        // TODO(alex): support null
         return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id));
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
+        // TODO(alex): support null
         return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval));
       default:
         CHECK(false);

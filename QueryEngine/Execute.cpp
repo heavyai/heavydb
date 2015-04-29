@@ -724,6 +724,9 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
     }
   }
   Analyzer::Constant null_expr(case_ti, true, Datum {});
+  if (!else_expr) {
+    cgen_state_->getOrAddLiteral(&null_expr, case_ti.get_comp_param());
+  }
   auto else_lvs = codegen(else_expr ? else_expr : &null_expr, true, hoist_literals);
   if (is_real_str && dynamic_cast<const Analyzer::Constant*>(else_expr)) {
     CHECK_EQ(3, else_lvs.size());
