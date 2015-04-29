@@ -55,10 +55,8 @@ add_custom_command(
     ARGS -gen cpp -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift)
 
 find_package(Git)
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/Shared/release.h
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h
-    COMMAND sed -e \"s/MAPD_GIT_HASH/`${GIT_EXECUTABLE} log -1 --pretty=format:%h`/\" ${CMAKE_SOURCE_DIR}/Shared/release.h > ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
+execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --pretty=format:%h OUTPUT_VARIABLE MAPD_GIT_HASH)
+configure_file(${CMAKE_SOURCE_DIR}/Shared/release.h ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h})
 
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
