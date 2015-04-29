@@ -5,7 +5,7 @@
 #undef yyFlexLexer
 #include <cstdint>
 #include <cstdio>
-#include <../Shared/sqldefs.h>
+#include "../Shared/sqldefs.h"
 #include "parser.h"
 
 #define yylval (dynamic_cast<SQLLexer*>(this)->yylval)
