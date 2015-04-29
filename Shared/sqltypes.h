@@ -8,6 +8,8 @@
 #ifndef SQLTYPES_H
 #define SQLTYPES_H
 
+#include "funcannotations.h"
+
 #include <stdint.h>
 #include <ctime>
 #include <cfloat>
@@ -51,12 +53,6 @@ typedef union {
 	std::string *stringval; // string value
 #endif
 } Datum;
-
-#ifdef __CUDACC__
-#define DEVICE __device__
-#else
-#define DEVICE
-#endif
 
 struct VarlenDatum {
 	int length;
