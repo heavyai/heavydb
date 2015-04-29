@@ -11,6 +11,6 @@
 #include <string>
 
 #define MAPD_RELEASE_NO   std::string("0.1.")
-const std::string MapDRelease(MAPD_RELEASE_NO + "MAPD_GIT_HASH");
+const std::string MapDRelease(MAPD_RELEASE_NO + "${MAPD_GIT_HASH}");
 
 #endif // RELEASE_H
