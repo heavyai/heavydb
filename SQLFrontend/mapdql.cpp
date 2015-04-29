@@ -49,6 +49,7 @@ struct ClientContext {
   std::vector<DBInfo> dbinfos_return;
   ColumnTypes columns_return;
   TExecuteMode::type execution_mode;
+  std::string version;
 
   ClientContext(TTransport &t, MapDClient &c) : transport(t), client(c), session(INVALID_SESSION_ID), execution_mode(TExecuteMode::GPU) {}
 };
@@ -61,7 +62,8 @@ enum ThriftService {
   kGET_TABLES,
   kGET_DATABASES,
   kGET_USERS,
-  kSET_EXECUTION_MODE
+  kSET_EXECUTION_MODE,
+  kGET_VERSION
 };
 
 static bool
@@ -92,6 +94,9 @@ thrift_with_retry(ThriftService which_service, ClientContext &context, char *arg
         break;
       case kSET_EXECUTION_MODE:
         context.client.set_execution_mode(context.execution_mode);
+        break;
+      case kGET_VERSION:
+        context.client.getVersion(context.version);
         break;
     }
   }
@@ -136,6 +141,7 @@ process_backslash_commands(char *command, ClientContext &context)
       std::cout << "\\historylen <number> Set history buffer size (default 100).\n";
       std::cout << "\\timing Print timing information.\n";
       std::cout << "\\notiming Do not print timing information.\n";
+      std::cout << "\\version Print MapD Server version.\n";
       std::cout << "\\q Quit.\n";
       return;
     case 'd':
@@ -419,6 +425,12 @@ int main(int argc, char **argv) {
       } else if (!strncmp(line,"\\hybrid",5)) {
         context.execution_mode = TExecuteMode::HYBRID;
         (void)thrift_with_retry(kSET_EXECUTION_MODE, context, nullptr);
+      } else if (!strncmp(line,"\\version",8)) {
+        if (thrift_with_retry(kGET_VERSION, context, nullptr)) {
+          std::cout << "MapD Server Version: " << context.version << std::endl;
+        } else {
+          std::cout << "Cannot connect to MapD Server." << std::endl;
+        }
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);

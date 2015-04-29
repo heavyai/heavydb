@@ -213,6 +213,24 @@ public:
     }
   }
 
+  void getVersion(std::string &version) {
+    try {
+      client_.getVersion(version);
+    }
+    catch (TException &te) {
+      try {
+        transport_.open();
+        client_.getVersion(version);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    }
+  }
+
   void set_execution_mode(const TExecuteMode::type mode) {
     try {
       client_.set_execution_mode(mode);

@@ -73,4 +73,5 @@ service MapD {
   list<string> getUsers() throws (1: ThriftException te)
   list<DBInfo> getDatabases() throws (1: ThriftException te)
   void set_execution_mode(1: TExecuteMode mode) throws (1: MapDException e 2: ThriftException te)
+  string getVersion() throws (1: ThriftException te)
 }

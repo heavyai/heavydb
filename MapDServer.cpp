@@ -342,6 +342,10 @@ public:
     }
   }
 
+  void getVersion(std::string &version) {
+    version =  MapDRelease;
+  }
+
   void getDatabases(std::vector<DBInfo> &dbinfos) {
     std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
