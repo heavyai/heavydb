@@ -623,7 +623,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     if (constant->get_is_null()) {
       return {
         ll_int(int64_t(0)),
-        llvm::Constant::getNullValue(get_int_type(8, cgen_state_->context_)),
+        llvm::Constant::getNullValue(llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0)),
         ll_int(int32_t(0))
       };
     }
