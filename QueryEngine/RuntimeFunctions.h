@@ -41,10 +41,10 @@ void agg_min_double_skip_val(int64_t* agg, const double val, const double skip_v
 
 extern "C"
 int64_t* get_group_value(int64_t* groups_buffer,
-                         const int32_t groups_buffer_entry_count,
+                         const uint32_t groups_buffer_entry_count,
                          const int64_t* key,
-                         const int32_t key_qw_count,
-                         const int32_t agg_col_count,
+                         const uint32_t key_qw_count,
+                         const uint32_t agg_col_count,
                          const int64_t* init_val = nullptr);
 
 // Regular fixed_width_*_decode are only available from the JIT,

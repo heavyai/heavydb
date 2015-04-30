@@ -393,10 +393,10 @@ void init_group_by_buffer_impl(int64_t* groups_buffer,
 
 extern "C" __attribute__((always_inline))
 int64_t* get_matching_group_value(int64_t* groups_buffer,
-                                  const int32_t h,
+                                  const uint32_t h,
                                   const int64_t* key,
-                                  const int32_t key_qw_count,
-                                  const int32_t agg_col_count,
+                                  const uint32_t key_qw_count,
+                                  const uint32_t agg_col_count,
                                   const int64_t* init_vals) {
   auto off = h * (key_qw_count + agg_col_count);
   if (groups_buffer[off] == EMPTY_KEY) {
@@ -415,7 +415,7 @@ extern "C" __attribute__((always_inline))
 int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
                                       const int64_t key,
                                       const int64_t min_key,
-                                      const int32_t agg_col_count) {
+                                      const uint32_t agg_col_count) {
   return groups_buffer + agg_col_count * (key - min_key);
 }
 
@@ -423,9 +423,9 @@ extern "C" __attribute__((always_inline))
 int64_t* get_group_value_fast_keyless_semiprivate(int64_t* groups_buffer,
                                                   const int64_t key,
                                                   const int64_t min_key,
-                                                  const int32_t agg_col_count,
-                                                  const int8_t thread_warp_idx,
-                                                  const int8_t warp_size) {
+                                                  const uint32_t agg_col_count,
+                                                  const uint8_t thread_warp_idx,
+                                                  const uint8_t warp_size) {
   return groups_buffer + agg_col_count * (warp_size * (key - min_key) + thread_warp_idx);
 }
 

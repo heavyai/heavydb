@@ -51,13 +51,13 @@ __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
 extern "C"
 __device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
                                           const int64_t* init_vals,
-                                          const int32_t groups_buffer_entry_count,
-                                          const int32_t key_qw_count,
-                                          const int32_t agg_col_count) {
+                                          const uint32_t groups_buffer_entry_count,
+                                          const uint32_t key_qw_count,
+                                          const uint32_t agg_col_count) {
   const int32_t start = threadIdx.x;
   const int32_t step = blockDim.x;
-  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
-  for (int32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
+  uint32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
+  for (uint32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
     groups_buffer[i] = EMPTY_KEY;
   }
   __syncthreads();
@@ -65,12 +65,12 @@ __device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
 
 extern "C"
 __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
-                                             const int32_t h,
+                                             const uint32_t h,
                                              const int64_t* key,
-                                             const int32_t key_qw_count,
-                                             const int32_t agg_col_count,
+                                             const uint32_t key_qw_count,
+                                             const uint32_t agg_col_count,
                                              const int64_t* init_vals) {
-  int64_t off = h * (key_qw_count + agg_col_count);
+  uint32_t off = h * (key_qw_count + agg_col_count);
   {
     const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off),
       EMPTY_KEY, *key);
@@ -81,7 +81,7 @@ __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
   }
   __syncthreads();
   bool match = true;
-  for (int64_t i = 0; i < key_qw_count; ++i) {
+  for (uint32_t i = 0; i < key_qw_count; ++i) {
     if (groups_buffer[off + i] != key[i]) {
       match = false;
       break;
