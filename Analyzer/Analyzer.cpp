@@ -807,6 +807,9 @@ namespace Analyzer {
       case kDOUBLE:
         constval.doubleval = NULL_DOUBLE;
         break;
+      case kNULLT:
+        constval.bigintval = 0;
+        break;
       default:
         CHECK(false);
     }

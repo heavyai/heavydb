@@ -173,9 +173,9 @@ namespace Analyzer {
    */
   class Constant : public Expr {
     public:
-      Constant(SQLTypes t, bool n) : Expr (t), is_null(n) {}
-      Constant(SQLTypes t, bool n, Datum v) : Expr (t), is_null(n), constval(v) {}
-      Constant(const SQLTypeInfo &ti, bool n, Datum v) : Expr(ti), is_null(n), constval(v) {}
+      Constant(SQLTypes t, bool n) : Expr (t), is_null(n) { if (n) set_null_value(); }
+      Constant(SQLTypes t, bool n, Datum v) : Expr (t), is_null(n), constval(v) { if (n) set_null_value(); }
+      Constant(const SQLTypeInfo &ti, bool n, Datum v) : Expr(ti), is_null(n), constval(v) { if (n) set_null_value(); }
       virtual ~Constant();
       bool get_is_null() const { return is_null; }
       Datum get_constval() const { return constval; }

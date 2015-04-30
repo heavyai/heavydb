@@ -229,9 +229,6 @@ namespace Parser {
   NullLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
     Analyzer::Constant *c = new Analyzer::Constant(kNULLT, true);
-    Datum d;
-    d.bigintval = 0;
-    c->set_constval(d);
     return c;
   }
   
@@ -654,7 +651,6 @@ namespace Parser {
       else_e = else_e->add_cast(ti);
     else {
       Datum d;
-      d.stringval = new std::string();
       // always create an else expr so that executor doesn't need to worry about it
       else_e = new Analyzer::Constant(ti, true, d);
     }
