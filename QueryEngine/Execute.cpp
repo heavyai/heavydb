@@ -11,7 +11,11 @@
 #include "CudaMgr/CudaMgr.h"
 
 #include <boost/range/adaptor/reversed.hpp>
+#ifdef __x86_64__
+#include <llvm/ExecutionEngine/JIT.h>
+#else
 #include <llvm/ExecutionEngine/MCJIT.h>
+#endif
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
@@ -2699,28 +2703,36 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   // run optimizations
   optimizeIR(query_func, module, hoist_literals, opt_level, debug_dir_, debug_file_);
 
+  llvm::ExecutionEngine* execution_engine { nullptr };
+
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
+#ifndef __x86_64__
   llvm::InitializeAllTargetMCs();
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
+#endif
 
   std::string err_str;
   llvm::EngineBuilder eb(module);
   eb.setErrorStr(&err_str);
+#ifndef __x86_64__
   eb.setUseMCJIT(true);
+#endif
   eb.setEngineKind(llvm::EngineKind::JIT);
   llvm::TargetOptions to;
   to.EnableFastISel = true;
   eb.setTargetOptions(to);
-  auto execution_engine = eb.create();
+  execution_engine = eb.create();
   CHECK(execution_engine);
 
   if (llvm::verifyFunction(*query_func)) {
     LOG(FATAL) << "Generated invalid code. ";
   }
 
+#ifndef __x86_64__
   execution_engine->finalizeObject();
+#endif
 
   auto native_code = execution_engine->getPointerToFunction(query_func);
   CHECK(native_code);
