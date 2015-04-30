@@ -90,6 +90,26 @@ __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
   return match ? groups_buffer + off + key_qw_count : NULL;
 }
 
+extern "C"
+__device__ int64_t* get_matching_group_value_perfect_hash_cas(int64_t* groups_buffer,
+                                                              const uint32_t h,
+                                                              const int64_t* key,
+                                                              const uint32_t key_qw_count,
+                                                              const uint32_t agg_col_count,
+                                                              const int64_t* init_vals) {
+  uint32_t off = h * (key_qw_count + agg_col_count);
+  {
+    const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off),
+      EMPTY_KEY, *key);
+    if (EMPTY_KEY == old) {
+      memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
+      memcpy(groups_buffer + off + key_qw_count, init_vals, agg_col_count * sizeof(*init_vals));
+    }
+  }
+  __syncthreads();
+  return groups_buffer + off + key_qw_count;
+}
+
 #include "GroupByRuntime.cpp"
 
 __device__ int64_t atomicMax64(int64_t* address, int64_t val)

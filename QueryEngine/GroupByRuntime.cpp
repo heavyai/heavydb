@@ -1,7 +1,7 @@
 #include "../Shared/funcannotations.h"
 
 extern "C" ALWAYS_INLINE DEVICE
-uint32_t key_hash(const int64_t* key, const uint32_t key_qw_count, const uint32_t groups_buffer_entry_count) {
+uint32_t key_hash(const int64_t* key, const uint32_t key_qw_count) {
   uint32_t hash = 0;
   for (uint32_t i = 0; i < key_qw_count; ++i) {
     hash = (hash << 5) - hash + key[i];
@@ -16,7 +16,7 @@ int64_t* get_group_value(int64_t* groups_buffer,
                          const uint32_t key_qw_count,
                          const uint32_t agg_col_count,
                          const int64_t* init_vals) {
-  uint32_t h = key_hash(key, key_qw_count, groups_buffer_entry_count) % groups_buffer_entry_count;
+  uint32_t h = key_hash(key, key_qw_count) % groups_buffer_entry_count;
   int64_t* matching_group = get_matching_group_value(groups_buffer, h, key, key_qw_count, agg_col_count, init_vals);
   if (matching_group) {
     return matching_group;

@@ -26,7 +26,7 @@ enum class GroupByColRangeType {
   OneColKnownRange,       // statically known range, only possible for column expressions
   OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
   MultiCol,
-  MultiColKnownCardinality,
+  MultiColPerfectHash,
   Scan,                   // the plan is not a group by plan
 };
 
@@ -680,12 +680,13 @@ private:
                    Executor* executor,
                    const bool chain_to_next,
                    DiamondCodegen* parent = nullptr);
+    void setChainToNext();
     ~DiamondCodegen();
 
     Executor* executor_;
     llvm::BasicBlock* cond_true_;
     llvm::BasicBlock* cond_false_;
-    const bool chain_to_next_;
+    bool chain_to_next_;
     DiamondCodegen* parent_;
   };
 
@@ -693,6 +694,8 @@ private:
     const QueryMemoryDescriptor&,
     const ExecutorDeviceType,
     const bool hoist_literals);
+
+  llvm::Function* codegenPerfectHashFunction();
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
     const std::vector<Fragmenter_Namespace::FragmentInfo>&);

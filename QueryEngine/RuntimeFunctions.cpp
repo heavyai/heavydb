@@ -409,6 +409,33 @@ int64_t* get_matching_group_value(int64_t* groups_buffer,
   return nullptr;
 }
 
+extern "C" __attribute__((always_inline))
+int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer,
+                                               const uint32_t h,
+                                               const int64_t* key,
+                                               const uint32_t key_qw_count,
+                                               const uint32_t agg_col_count) {
+  uint32_t off = h * (key_qw_count + agg_col_count);
+  if (groups_buffer[off] == EMPTY_KEY) {
+    for (uint32_t i = 0; i < key_qw_count; ++i) {
+      groups_buffer[off + i] = key[i];
+    }
+  }
+  return groups_buffer + off + key_qw_count;
+}
+
+extern "C" __attribute__((noinline))
+int64_t* get_matching_group_value_perfect_hash_cas(int64_t* groups_buffer,
+                                                   const uint32_t h,
+                                                   const int64_t* key,
+                                                   const uint32_t key_qw_count,
+                                                   const uint32_t agg_col_count,
+                                                   const int64_t* init_vals) {
+  // Should not be called on CPU
+  return nullptr;
+}
+
+
 #include "GroupByRuntime.cpp"
 
 extern "C" __attribute__((always_inline))

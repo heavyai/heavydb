@@ -991,7 +991,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
     if (cardinality > 10000000) {  // more than 10M groups is a lot
       return { GroupByColRangeType::MultiCol, 0, 0 };
     }
-    return { GroupByColRangeType::MultiColKnownCardinality, 0, cardinality };
+    return { GroupByColRangeType::MultiColPerfectHash, 0, cardinality };
   }
   return getExprRangeInfo(groupby_exprs.front(), fragments);
 }
@@ -1220,12 +1220,12 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       count_distinct_descriptors
     };
   }
-  case GroupByColRangeType::MultiColKnownCardinality: {
+  case GroupByColRangeType::MultiColPerfectHash: {
     return {
       executor_,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
-      static_cast<size_t>(1.5 * col_range_info.max),  // maximum hash load factor of 2/3
+      static_cast<size_t>(col_range_info.max),
       0, 0, GroupByMemSharing::Shared,
       count_distinct_descriptors
     };
@@ -1247,7 +1247,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
   return device_type == ExecutorDeviceType::GPU &&
-    (hash_type == GroupByColRangeType::MultiCol || hash_type == GroupByColRangeType::MultiColKnownCardinality);
+    (hash_type == GroupByColRangeType::MultiCol || hash_type == GroupByColRangeType::MultiColPerfectHash);
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {
@@ -1287,6 +1287,11 @@ GroupByAndAggregate::DiamondCodegen::DiamondCodegen(
   LL_BUILDER.SetInsertPoint(cond_true_);
 }
 
+void GroupByAndAggregate::DiamondCodegen::setChainToNext() {
+  CHECK(!parent_);
+  chain_to_next_ = true;
+}
+
 GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
   if (parent_) {
     LL_BUILDER.CreateBr(parent_->cond_false_);
@@ -1320,7 +1325,10 @@ bool GroupByAndAggregate::codegen(
       }
 
       auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
-      if (query_mem_desc.usesGetGroupValueFast()) {
+      if (query_mem_desc.usesGetGroupValueFast() || query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
+        if (query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
+          filter_cfg.setChainToNext();
+        }
         // Don't generate null checks if the group slot is guaranteed to be non-null,
         // as it's the case for get_group_value_fast* family.
         codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
@@ -1362,8 +1370,6 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
 
-  llvm::Value* agg_out_start_ptr { nullptr };
-
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
 
   // For non-aggregate (scan only) plans, execute them like a group by
@@ -1404,10 +1410,10 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
           get_group_fn_args.push_back(LL_INT(executor_->warpSize()));
         }
       }
-      agg_out_start_ptr = emitCall(get_group_fn_name, get_group_fn_args);
+      return emitCall(get_group_fn_name, get_group_fn_args);
     } else {
       ++arg_it;
-      agg_out_start_ptr = emitCall(
+      return emitCall(
         "get_group_value_one_key",
         {
           groups_buffer,
@@ -1423,7 +1429,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     break;
   }
   case GroupByColRangeType::MultiCol:
-  case GroupByColRangeType::MultiColKnownCardinality: {
+  case GroupByColRangeType::MultiColPerfectHash: {
     auto key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc.group_col_widths.size()));
     // create the key buffer
     auto group_key = LL_BUILDER.CreateAlloca(
@@ -1436,7 +1442,26 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
     }
     ++arg_it;
-    agg_out_start_ptr = emitCall(
+    auto perfect_hash_func = query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash
+      ? codegenPerfectHashFunction()
+      : nullptr;
+    if (perfect_hash_func) {
+      auto hash_lv = LL_BUILDER.CreateCall(perfect_hash_func, std::vector<llvm::Value*> { group_key, key_size_lv });
+      const std::string fname { std::string("get_matching_group_value_perfect_hash") +
+        (device_type == ExecutorDeviceType::GPU ? "_cas" : "") };
+      std::vector<llvm::Value*> fargs {
+        groups_buffer,
+        hash_lv,
+        group_key,
+        key_size_lv,
+        LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))
+      };
+      if (device_type == ExecutorDeviceType::GPU) {
+        fargs.push_back(++arg_it);
+      }
+      return emitCall(fname, fargs);
+    }
+    return emitCall(
       "get_group_value",
       {
         groups_buffer,
@@ -1453,9 +1478,50 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     break;
   }
 
-  CHECK(agg_out_start_ptr);
+  CHECK(false);
+  return nullptr;
+}
 
-  return agg_out_start_ptr;
+llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
+  CHECK(agg_plan);
+  const auto& groupby_exprs = agg_plan->get_groupby_list();
+  CHECK_GT(groupby_exprs.size(), 1);
+  auto ft = llvm::FunctionType::get(
+    get_int_type(32, LL_CONTEXT), std::vector<llvm::Type*> {
+      llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0),
+      get_int_type(32, LL_CONTEXT)
+    },
+    false);
+  auto key_hash_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage,
+    "perfect_key_hash",
+    executor_->cgen_state_->module_);
+  key_hash_func->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
+  auto& key_buff_arg = key_hash_func->getArgumentList().front();
+  llvm::Value* key_buff_lv = &key_buff_arg;
+  auto bb = llvm::BasicBlock::Create(LL_CONTEXT, "entry", key_hash_func);
+  llvm::IRBuilder<> key_hash_func_builder(bb);
+  llvm::Value* hash_lv { llvm::ConstantInt::get(get_int_type(64, LL_CONTEXT), 0) };
+  std::vector<int64_t> cardinalities;
+  for (const auto groupby_expr : groupby_exprs) {
+    auto col_range_info = getExprRangeInfo(groupby_expr, query_info_.fragments);
+    CHECK(col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange);
+    cardinalities.push_back(col_range_info.max - col_range_info.min + 1);
+  }
+  size_t dim_idx = 0;
+  for (const auto groupby_expr : groupby_exprs) {
+    auto key_comp_lv = key_hash_func_builder.CreateLoad(
+      key_hash_func_builder.CreateGEP(key_buff_lv, LL_INT(dim_idx)));
+    auto col_range_info = getExprRangeInfo(groupby_expr, query_info_.fragments);
+    auto crt_term_lv = key_hash_func_builder.CreateSub(key_comp_lv, LL_INT(col_range_info.min));
+    for (size_t prev_dim_idx = 0; prev_dim_idx < dim_idx; ++prev_dim_idx) {
+      crt_term_lv = key_hash_func_builder.CreateMul(crt_term_lv, LL_INT(cardinalities[prev_dim_idx]));
+    }
+    hash_lv = key_hash_func_builder.CreateAdd(hash_lv, crt_term_lv);
+    ++dim_idx;
+  }
+  key_hash_func_builder.CreateRet(key_hash_func_builder.CreateTrunc(hash_lv, get_int_type(32, LL_CONTEXT)));
+  return key_hash_func;
 }
 
 namespace {
@@ -1636,7 +1702,9 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     : executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, hoist_literals);
 }
 
-llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname, const std::vector<llvm::Value*>& args) {
+llvm::Value* GroupByAndAggregate::emitCall(
+    const std::string& fname,
+    const std::vector<llvm::Value*>& args) {
   return executor_->cgen_state_->emitCall(fname, args);
 }
 

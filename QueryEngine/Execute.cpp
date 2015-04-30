@@ -2460,7 +2460,7 @@ Executor::CompilationResult Executor::compilePlan(
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor(max_groups_buffer_entry_guess);
 
   if (device_type == ExecutorDeviceType::GPU &&
-      query_mem_desc.hash_type == GroupByColRangeType::MultiColKnownCardinality) {
+      query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
     const size_t required_memory { (grid_size_x_ * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)) };
     CHECK(catalog_->get_dataMgr().cudaMgr_);
     const size_t max_memory { catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 10 };
@@ -2759,6 +2759,7 @@ declare void @init_group_by_buffer_impl(i64*, i64*, i32, i32, i32);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*);
 declare i64* @get_group_value_fast(i64*, i64, i64, i32);
 declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
+declare i64* @get_matching_group_value_perfect_hash_cas(i64*, i32, i64*, i32, i32, i64*);
 declare void @agg_count_shared(i64*, i64);
 declare void @agg_count_skip_val_shared(i64*, i64, i64);
 declare void @agg_count_double_shared(i64*, double);
@@ -2825,6 +2826,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
       if (llvm::isa<llvm::CallInst>(*it)) {
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
         if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
+            get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash_cas" ||
             get_gv_call.getCalledFunction()->getName() == "string_decode") {
           llvm::AttributeSet no_inline_attrs;
           no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
