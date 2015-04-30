@@ -2885,14 +2885,19 @@ R"(
   std::vector<void*> native_functions;
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>> cached_functions;
 
+  auto ptx = generatePTX(cuda_llir.c_str(), cuda_llir.size(), nullptr);
+  CHECK(ptx);
+
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
-    auto gpu_context = new GpuCompilationContext(cuda_llir, func_name, "./QueryEngine/cuda_mapd_rt.a",
+    auto gpu_context = new GpuCompilationContext(ptx, func_name, "./QueryEngine/cuda_mapd_rt.a",
       device_id, cuda_mgr, block_size_x_);
     auto native_code = gpu_context->kernel();
     CHECK(native_code);
     native_functions.push_back(native_code);
     cached_functions.emplace_back(native_code, nullptr, gpu_context);
   }
+
+  free(ptx);
 
   addCodeToCache(key, cached_functions, module, gpu_code_cache_);
 
