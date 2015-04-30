@@ -280,9 +280,12 @@ std::vector<llvm::Value*> Executor::codegen(
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
+    if (constant->get_type_info().get_compression() == kENCODING_DICT) {
+      CHECK(constant->get_is_null());
+      return { inlineIntNull(constant->get_type_info()) };
+    }
     // The dictionary encoding case should be handled by the parent expression
     // (cast, for now), here is too late to know the dictionary id
-    CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
     return { codegen(constant, constant->get_type_info().get_compression(), 0, hoist_literals) };
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
