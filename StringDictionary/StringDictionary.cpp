@@ -290,3 +290,14 @@ size_t StringDictionary::addStorageCapacity(int fd) {
 }
 
 char* StringDictionary::CANARY_BUFFER { nullptr };
+
+bool
+StringDictionary::checkpoint()
+{
+  bool ret = true;
+  ret = ret && (msync((void*)offset_map_, offset_file_size_, MS_SYNC) == 0);
+  ret = ret && (msync((void*)payload_map_, payload_file_size_, MS_SYNC) == 0);
+  ret = ret && (fsync(offset_fd_) == 0);
+  ret = ret && (fsync(payload_fd_) == 0);
+  return ret;
+}

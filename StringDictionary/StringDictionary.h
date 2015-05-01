@@ -27,6 +27,7 @@ public:
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const;
 
   void clearTransient();
+  bool checkpoint();
 
 private:
   struct StringIdxEntry {

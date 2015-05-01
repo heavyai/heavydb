@@ -149,6 +149,10 @@ public:
     return column_desc_->columnType;
   }
 
+  const ColumnDescriptor *getColumnDesc() const {
+    return column_desc_;
+  }
+
   int8_t* getAsBytes() const {
     switch (column_desc_->columnType.get_type()) {
     case kBOOLEAN:
@@ -182,7 +186,13 @@ public:
     return reinterpret_cast<int8_t*>(&((*string_dict_buffer_)[0]));
   }
 
-  void flush() {
+  bool stringDictCheckpoint() {
+    if (string_dict_ == nullptr)
+      return true;
+    return string_dict_->checkpoint();
+  }
+
+  void clear() {
     switch (column_desc_->columnType.get_type()) {
     case kBOOLEAN: {
       bool_buffer_->clear();

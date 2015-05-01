@@ -171,7 +171,7 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
   const char *buf_end = buffer + total_size;
   std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers = importer->get_import_buffers(thread_id);
   for (const auto& p : import_buffers)
-    p->flush();
+    p->clear();
   std::vector<std::string> row;
   for (const char *p = thread_buf; p < thread_buf_end; p++) {
     {
@@ -439,8 +439,17 @@ Importer::import()
     begin_pos = 0;
   }
   auto ms = measure<>::execution([&] () {
-    if (!load_failed)
-      catalog.get_dataMgr().checkpoint();
+    if (!load_failed) {
+      for (auto &p : import_buffers_vec[0]) {
+        if (!p->stringDictCheckpoint()) {
+          LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
+          load_failed = true;
+          break;
+        }
+      }
+      if (!load_failed)
+        catalog.get_dataMgr().checkpoint();
+    }
   });
   if (debug_timing)
     LOG(INFO) << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;
