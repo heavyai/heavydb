@@ -202,9 +202,22 @@ StringDictionary* Executor::getStringDictionary(
 
 std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& literals) {
   size_t lit_buf_size { 0 };
+  std::vector<std::string> real_strings;
   for (const auto& lit : literals) {
     lit_buf_size = addAligned(lit_buf_size, Executor::literalBytes(lit));
+    if (lit.which() == 7) {
+      const auto p = boost::get<std::string>(&lit);
+      CHECK(p);
+      real_strings.push_back(*p);
+    }
   }
+  CHECK(lit_buf_size <= static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+  int16_t crt_real_str_off = lit_buf_size;
+  for (const auto& real_str: real_strings) {
+    CHECK_LE(real_str.size(), std::numeric_limits<int16_t>::max());
+    lit_buf_size += real_str.size();
+  }
+  unsigned crt_real_str_idx = 0;
   std::vector<int8_t> serialized(lit_buf_size);
   size_t off { 0 };
   for (const auto& lit : literals) {
@@ -254,6 +267,18 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
           ? getStringDictionary(p->second, row_set_mem_owner_)->get(p->first)
           : getStringDictionary(p->second, row_set_mem_owner_)->getOrAddTransient(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
+        break;
+      }
+      case 7: {
+        const auto p = boost::get<std::string>(&lit);
+        CHECK(p);
+        int32_t off_and_len = crt_real_str_off << 16;
+        const auto& crt_real_str = real_strings[crt_real_str_idx];
+        off_and_len |= static_cast<int16_t>(crt_real_str.size());
+        memcpy(&serialized[off - lit_bytes], &off_and_len, lit_bytes);
+        memcpy(&serialized[crt_real_str_off], crt_real_str.data(), crt_real_str.size());
+        ++crt_real_str_idx;
+        crt_real_str_off += crt_real_str.size();
         break;
       }
       default:
@@ -362,18 +387,14 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   }
   auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
   CHECK(like_expr_arg_const);
-  CHECK(like_expr_arg_const->get_type_info().is_string());
-  CHECK_EQ(kENCODING_NONE, like_expr_arg_const->get_type_info().get_compression());
-  const auto like_pattern = *like_expr_arg_const->get_constval().stringval;
-  auto like_pattern_lv = cgen_state_->addStringConstant(like_pattern);
-  auto like_pattern_len = like_expr_arg_const->get_constval().stringval->size();
-  llvm::Value* like_pattern_len_lv = ll_int(static_cast<int32_t>(like_pattern_len));
+  auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, hoist_literals);
+  CHECK_EQ(3, like_expr_arg_lvs.size());
   const bool is_nullable { !expr->get_arg()->get_type_info().get_notnull() };
   std::vector<llvm::Value*> str_like_args {
     str_lv[1],
     str_lv[2],
-    like_pattern_lv,
-    like_pattern_len_lv,
+    like_expr_arg_lvs[1],
+    like_expr_arg_lvs[2],
     ll_int(int8_t(escape_char))
   };
   std::string fn_name { expr->get_is_ilike() ? "string_ilike" : "string_like" };
@@ -576,24 +597,49 @@ Executor::colByteStream(const int col_id, const bool fetch_column, const bool ho
   CHECK(false);
 }
 
+namespace {
+
+llvm::Value* getLiteralBuffArg(llvm::Function* row_func) {
+  auto arg_it = row_func->arg_begin();
+  while (arg_it != row_func->arg_end()) {
+    if (arg_it->getType()->isIntegerTy()) {
+      ++arg_it;
+      break;
+    }
+    ++arg_it;
+  }
+  CHECK(arg_it != row_func->arg_end());
+  return arg_it;
+}
+
+}  // namespace
+
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
                                             const EncodingType enc_type,
                                             const int dict_id,
                                             const bool hoist_literals) {
   const auto& type_info = constant->get_type_info();
-  if (hoist_literals && (!type_info.is_string() || enc_type == kENCODING_DICT)) {
-    auto arg_it = cgen_state_->row_func_->arg_begin();
-    while (arg_it != cgen_state_->row_func_->arg_end()) {
-      if (arg_it->getType()->isIntegerTy()) {
-        ++arg_it;
-        break;
-      }
-      ++arg_it;
+  if (hoist_literals) {
+    auto lit_buff_lv = getLiteralBuffArg(cgen_state_->row_func_);
+    const int16_t lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id);
+    const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(
+      lit_buff_lv, ll_int(lit_off));
+    if (type_info.is_string() && enc_type != kENCODING_DICT) {
+      CHECK_EQ(kENCODING_NONE, type_info.get_compression());
+      CHECK_EQ(4, literalBytes(LiteralValue(std::string(""))));
+      auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(lit_buf_start,
+        llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
+      // packed offset + length, 16 bits each
+      auto off_and_len = cgen_state_->ir_builder_.CreateLoad(off_and_len_ptr);
+      auto off_lv = cgen_state_->ir_builder_.CreateLShr(
+        cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0xffff0000))),
+        ll_int(int32_t(16)));
+      auto len_lv = cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
+      return { ll_int(int64_t(0)), cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, off_lv), len_lv };
     }
-    CHECK(arg_it != cgen_state_->row_func_->arg_end());
+    llvm::Type* val_ptr_type { nullptr };
     const auto val_bits = get_bit_width(type_info.get_type());
     CHECK_EQ(0, val_bits % 8);
-    llvm::Type* val_ptr_type { nullptr };
     if (type_info.is_integer() || type_info.is_time() || type_info.is_string() || type_info.is_boolean()) {
       val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
     } else {
@@ -602,9 +648,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
         ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
         : llvm::Type::getDoublePtrTy(cgen_state_->context_);
     }
-    const int16_t lit_off = cgen_state_->getOrAddLiteral(constant, dict_id);
-    const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(
-      arg_it, ll_int(lit_off));
     auto lit_lv = cgen_state_->ir_builder_.CreateLoad(
       cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
     return { lit_lv };

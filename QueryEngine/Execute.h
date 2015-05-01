@@ -77,8 +77,9 @@ public:
     const int dictId,
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
-  typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double, std::pair<std::string, int>> LiteralValue;
-  typedef std::vector<Executor::LiteralValue> LiteralValues;
+  typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double,
+    std::pair<std::string, int>, std::string> LiteralValue;
+  typedef std::vector<LiteralValue> LiteralValues;
 
 private:
   template<class T>
@@ -269,6 +270,8 @@ private:
         return 8;
       case 6:
         return 4;
+      case 7:
+        return 4;
       default:
         CHECK(false);
     }
@@ -293,7 +296,8 @@ private:
       , uses_div_(false)
       , literal_bytes_(0) {}
 
-    size_t getOrAddLiteral(const Analyzer::Constant* constant, const int dict_id) {
+    size_t getOrAddLiteral(const Analyzer::Constant* constant,
+                           const EncodingType enc_type, const int dict_id) {
       const auto& type_info = constant->get_type_info();
       switch (type_info.get_type()) {
       case kBOOLEAN:
@@ -323,8 +327,12 @@ private:
       case kCHAR:
       case kTEXT:
       case kVARCHAR:
-        // TODO(alex): support null
-        return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id));
+        CHECK(constant->get_constval().stringval);  // TODO(alex): support null
+        if (enc_type == kENCODING_DICT) {
+          return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id));
+        }
+        CHECK_EQ(kENCODING_NONE, enc_type);
+        return getOrAddLiteral(*constant->get_constval().stringval);
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
