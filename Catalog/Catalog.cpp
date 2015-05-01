@@ -256,7 +256,7 @@ void Catalog::buildMaps() {
 void
 Catalog::addTableToMap(TableDescriptor &td, const list<ColumnDescriptor> &columns, const list<DictDescriptor> &dicts)
 {
-  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+  std::lock_guard<std::mutex> lock(cat_mutex_);
 	TableDescriptor *new_td = new TableDescriptor();
 	*new_td = td;
 	tableDescriptorMap_[td.tableName] = new_td;
@@ -279,7 +279,7 @@ Catalog::addTableToMap(TableDescriptor &td, const list<ColumnDescriptor> &column
 void 
 Catalog::removeTableFromMap(const string &tableName, int tableId) 
 {
-  std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+  std::lock_guard<std::mutex> lock(cat_mutex_);
 	TableDescriptorMapById::iterator tableDescIt = tableDescriptorMapById_.find(tableId);
 	if (tableDescIt == tableDescriptorMapById_.end())
 			throw runtime_error ("Table " + tableName + " does not exist.");
@@ -334,7 +334,7 @@ const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) c
     }
 		TableDescriptor *td = tableDescIt->second;
     {
-      std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+      std::lock_guard<std::mutex> lock(cat_mutex_);
       if (td->fragmenter == nullptr)
         instantiateFragmenter(td);
     }
@@ -348,7 +348,7 @@ const TableDescriptor * Catalog::getMetadataForTable (int tableId) const  {
     }
 		TableDescriptor *td = tableDescIt->second;
     {
-      std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+      std::lock_guard<std::mutex> lock(cat_mutex_);
       if (td->fragmenter == nullptr)
         instantiateFragmenter(td);
     }
@@ -363,7 +363,7 @@ Catalog::getMetadataForDict(int dictId) const {
     }
 		DictDescriptor *dd = dictDescIt->second;
     {
-      std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(cat_mutex_));
+      std::lock_guard<std::mutex> lock(cat_mutex_);
       if (dd->stringDict == nullptr)
         dd->stringDict = new StringDictionary(dd->dictFolderPath);
     }

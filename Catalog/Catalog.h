@@ -170,7 +170,7 @@ class Catalog {
         SqliteConnector sqliteConnector_;
         DBMetadata currentDB_;
 				Data_Namespace::DataMgr &dataMgr_;
-        std::mutex cat_mutex_;
+        mutable std::mutex cat_mutex_;
 };
 
 /*
