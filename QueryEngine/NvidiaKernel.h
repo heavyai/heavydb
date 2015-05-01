@@ -4,9 +4,11 @@
 #include <cuda.h>
 #include <string>
 
+char *generatePTX(const char *ll, size_t size, const char *filename);
+
 class GpuCompilationContext {
 public:
-  GpuCompilationContext(const std::string& llir_module,
+  GpuCompilationContext(char* ptx,
                         const std::string& func_name,
                         const std::string& lib_path,
                         const int device_id,
@@ -19,8 +21,7 @@ public:
 private:
   CUmodule module_;
   CUfunction kernel_;
-  CUlinkState link_state;
-  char* ptx;
+  CUlinkState link_state_;
   const int device_id_;
   const void* cuda_mgr_;
 };
