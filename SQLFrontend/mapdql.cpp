@@ -43,11 +43,11 @@ struct ClientContext {
   std::string db_name;
   TTransport &transport;
   MapDClient &client;
-  SessionId session;
-  QueryResult query_return;
+  TSessionId session;
+  TQueryResult query_return;
   std::vector<std::string> names_return;
-  std::vector<DBInfo> dbinfos_return;
-  ColumnTypes columns_return;
+  std::vector<TDBInfo> dbinfos_return;
+  TTableDescriptor columns_return;
   TExecuteMode::type execution_mode;
   std::string version;
 
@@ -81,26 +81,26 @@ thrift_with_retry(ThriftService which_service, ClientContext &context, char *arg
         context.client.sql_execute(context.query_return, context.session, arg);
         break;
       case kGET_COLUMNS:
-        context.client.getColumnTypes(context.columns_return, context.session, arg);
+        context.client.get_table_descriptor(context.columns_return, context.session, arg);
         break;
       case kGET_TABLES:
-        context.client.getTables(context.names_return, context.session);
+        context.client.get_tables(context.names_return, context.session);
         break;
       case kGET_DATABASES:
-        context.client.getDatabases(context.dbinfos_return);
+        context.client.get_databases(context.dbinfos_return);
         break;
       case kGET_USERS:
-        context.client.getUsers(context.names_return);
+        context.client.get_users(context.names_return);
         break;
       case kSET_EXECUTION_MODE:
         context.client.set_execution_mode(context.execution_mode);
         break;
       case kGET_VERSION:
-        context.client.getVersion(context.version);
+        context.client.get_version(context.version);
         break;
     }
   }
-  catch (MapDException &e) {
+  catch (TMapDException &e) {
     std::cerr << e.error_msg << std::endl;
     return false;
   }
@@ -154,7 +154,7 @@ process_backslash_commands(char *command, ClientContext &context)
         if (thrift_with_retry(kGET_COLUMNS, context, command+3))
           for (auto p : context.columns_return) {
             std::cout << p.first << " ";
-            switch (p.second.type) {
+            switch (p.second.col_type.type) {
               case TDatumType::INT:
                 std::cout << "INTEGER\n";
                 break;
@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
   bool print_header = true;
   bool print_timing = false;
   char *line;
-  QueryResult _return;
+  TQueryResult _return;
   std::string db_name;
   std::string user_name;
   std::string passwd;
@@ -326,7 +326,7 @@ int main(int argc, char **argv) {
    * linenoise, so the user needs to free() it. */
   while((line = linenoise("mapd> ")) != NULL) {
       {
-        QueryResult empty;
+        TQueryResult empty;
         swap(_return, empty);
       }
       /* Do something with the string. */
@@ -339,21 +339,22 @@ int main(int argc, char **argv) {
           continue;
         }
         if (thrift_with_retry(kSQL, context, line)) {
-          if (context.query_return.proj_info.empty() || context.query_return.rows.empty())
+          if (context.query_return.row_set.row_desc.empty() || context.query_return.row_set.rows.empty())
             continue;
           bool not_first = false;
           if (print_header) {
-            for (auto p : context.query_return.proj_info) {
+            for (auto p : context.query_return.row_set.row_desc) {
               if (not_first)
                 std::cout << delimiter;
               else
                 not_first = true;
-              std::cout << p.proj_name;
+              std::cout << p.col_name;
             }
             std::cout << std::endl;
           }
-          for (auto row : context.query_return.rows) {
+          for (auto row : context.query_return.row_set.rows) {
             not_first = false;
+            int i = 0;
             for (auto col_val : row.cols) {
               if (not_first)
                 std::cout << delimiter;
@@ -362,7 +363,7 @@ int main(int argc, char **argv) {
               if (col_val.is_null)
                 std::cout << "NULL";
               else
-                switch (col_val.type) {
+                switch (context.query_return.row_set.row_desc[i].col_type.type) {
                   case TDatumType::INT:
                     std::cout << std::to_string(col_val.datum.int_val);
                     break;
@@ -408,11 +409,12 @@ int main(int argc, char **argv) {
                   default:
                     std::cerr << "Unknown column type." << std::endl;
                 }
+              i++;
             }
           std::cout << std::endl;
           }
           if (print_timing) {
-            std::cout << context.query_return.rows.size() << " rows returned." << std::endl;
+            std::cout << context.query_return.row_set.rows.size() << " rows returned." << std::endl;
             std::cout << "Execution time: " << context.query_return.execution_time_ms << " miliseconds" << std::endl;
           }
         }

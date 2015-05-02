@@ -97,34 +97,34 @@ public:
     LOG(INFO) << "mapd_server exits." << std::endl;
   }
 
-  SessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
+  TSessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
     Catalog_Namespace::UserMetadata user_meta;
     if (!sys_cat_->getMetadataForUser(user, user_meta)) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = std::string("User ") + user + " does not exist.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     if (user_meta.passwd != passwd) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = std::string("Password for User ") + user + " is incorrect.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     Catalog_Namespace::DBMetadata db_meta;
     if (!sys_cat_->getMetadataForDB(dbname, db_meta)) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = std::string("Database ") + dbname + " does not exist.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     if (!user_meta.isSuper && user_meta.userId != db_meta.dbOwner) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    SessionId session = INVALID_SESSION_ID;
+    TSessionId session = INVALID_SESSION_ID;
     while (true) {
       session = session_id_dist_(random_gen_);
       auto session_it = sessions_.find(session);
@@ -142,11 +142,11 @@ public:
     return session;
   }
 
-  void disconnect(const SessionId session) {
+  void disconnect(const TSessionId session) {
     auto session_it = sessions_.find(session);
     std::string dbname;
     if (session_it == sessions_.end()) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = "Session not valid.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
@@ -156,11 +156,11 @@ public:
     LOG(INFO) << "Disconnected from database " << dbname << std::endl;
   }
 
-  void sql_execute(QueryResult& _return, const SessionId session, const std::string& query_str) {
+  void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
 
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = "Session not valid.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
@@ -177,13 +177,13 @@ public:
       num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
     }
     catch (std::exception &e) {
-        MapDException ex;
+        TMapDException ex;
         ex.error_msg = std::string("Exception: ") + e.what();
         LOG(ERROR) << ex.error_msg;
         throw ex;
     }
     if (num_parse_errors > 0) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = "Syntax error at: " + last_parsed;
       LOG(ERROR) << ex.error_msg;
       throw ex;
@@ -213,27 +213,26 @@ public:
         const auto& targets = plan->get_targetlist();
         {
           CHECK(plan);
-          ProjInfo proj_info;
+          TColumnType proj_info;
           size_t i = 0;
           for (const auto target : targets) {
-            proj_info.proj_name = target->get_resname();
-            if (proj_info.proj_name.empty()) {
-              proj_info.proj_name = "_result_" + std::to_string(i + 1);
+            proj_info.col_name = target->get_resname();
+            if (proj_info.col_name.empty()) {
+              proj_info.col_name = "result_" + std::to_string(i + 1);
             }
             const auto& target_ti = target->get_expr()->get_type_info();
-            proj_info.proj_type.type = type_to_thrift(target_ti);
-            proj_info.proj_type.nullable = !target_ti.get_notnull();
-            _return.proj_info.push_back(proj_info);
+            proj_info.col_type.type = type_to_thrift(target_ti);
+            proj_info.col_type.nullable = !target_ti.get_notnull();
+            _return.row_set.row_desc.push_back(proj_info);
             ++i;
           }
         }
         for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
-          TResultRow trow;
+          TRow trow;
           for (size_t i = 0; i < results.colCount(); ++i) {
-            ColumnValue col_val;
+            TColumnValue col_val;
             const auto agg_result = results.get(row_idx, i, true);
             if (boost::get<int64_t>(&agg_result)) {
-              col_val.type = type_to_thrift(results.getType(i));
               col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
               switch (targets[i]->get_expr()->get_type_info().get_type()) {
                 case kBOOLEAN:
@@ -260,7 +259,6 @@ public:
                   col_val.is_null = false;
               }
             } else if (boost::get<double>(&agg_result)) {
-              col_val.type = TDatumType::REAL;
               col_val.datum.real_val = *(boost::get<double>(&agg_result));
               if (targets[i]->get_expr()->get_type_info().get_type() == kFLOAT) {
                 col_val.is_null = (col_val.datum.real_val == NULL_FLOAT);
@@ -269,7 +267,6 @@ public:
               }
             } else {
               auto s = boost::get<std::string>(&agg_result);
-              col_val.type = TDatumType::STR;
               if (s) {
                 col_val.datum.str_val = *s;
               } else {
@@ -280,12 +277,12 @@ public:
             }
             trow.cols.push_back(col_val);
           }
-          _return.rows.push_back(trow);
+          _return.row_set.rows.push_back(trow);
         }
       }
     }
     catch (std::exception &e) {
-        MapDException ex;
+        TMapDException ex;
         ex.error_msg = std::string("Exception: ") + e.what();
         LOG(ERROR) << ex.error_msg;
         throw ex;
@@ -296,10 +293,10 @@ public:
     LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << execute_time<< " (ms)";
   }
 
-  void getColumnTypes(ColumnTypes& _return, const SessionId session, const std::string& table_name) {
+  void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = "Session not valid.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
@@ -307,24 +304,24 @@ public:
     auto &cat = session_it->second->get_catalog(); 
     auto td = cat.getMetadataForTable(table_name);
     if (!td) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = "Table doesn't exist";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId);
     for (const auto cd : col_descriptors) {
-      ColumnType col_type;
-      col_type.type = type_to_thrift(cd->columnType);
-      col_type.nullable = !cd->columnType.get_notnull();
+      TColumnType col_type;
+      col_type.col_type.type = type_to_thrift(cd->columnType);
+      col_type.col_type.nullable = !cd->columnType.get_notnull();
       _return.insert(std::make_pair(cd->columnName, col_type));
     }
   }
 
-  void getTables(std::vector<std::string> & table_names, const SessionId session) {
+  void get_tables(std::vector<std::string> & table_names, const TSessionId session) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
-      MapDException ex;
+      TMapDException ex;
       ex.error_msg = "Session not valid.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
@@ -336,22 +333,22 @@ public:
     }
   }
 
-  void getUsers(std::vector<std::string> &user_names) {
+  void get_users(std::vector<std::string> &user_names) {
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto u : user_list) {
       user_names.push_back(u.userName);
     }
   }
 
-  void getVersion(std::string &version) {
+  void get_version(std::string &version) {
     version =  MapDRelease;
   }
 
-  void getDatabases(std::vector<DBInfo> &dbinfos) {
+  void get_databases(std::vector<TDBInfo> &dbinfos) {
     std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto d : db_list) {
-      DBInfo dbinfo;
+      TDBInfo dbinfo;
       dbinfo.db_name = d.dbName;
       for (auto u : user_list) {
         if (d.dbOwner == u.userId) {
@@ -367,7 +364,7 @@ public:
     switch (mode) {
       case TExecuteMode::GPU:
         if (cpu_mode_only_) {
-          MapDException e;
+          TMapDException e;
           e.error_msg = "Cannot switch to GPU mode in a server started in CPU-only mode.";
           throw e;
         }
@@ -380,7 +377,7 @@ public:
         break;
       case TExecuteMode::HYBRID:
         if (cpu_mode_only_) {
-          MapDException e;
+          TMapDException e;
           e.error_msg = "Cannot switch to Hybrid mode in a server started in CPU-only mode.";
           throw e;
         }
@@ -390,10 +387,20 @@ public:
     }
   }
 
+  TLoadId start_load(const TSessionId session, const std::string &table_name) {
+    return 0;
+  }
+
+  void load_table(const TSessionId session, const TLoadId load, const TRowSet &rows) {
+  }
+
+  void end_load(const TSessionId session, const TLoadId load) {
+  }
+
 private:
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
-  std::map<SessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
+  std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
   std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 
   const std::string base_data_path_;
