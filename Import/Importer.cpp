@@ -339,9 +339,7 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
         p.stringsPtr = string_payload_ptr;
       } else {
         CHECK_EQ(kENCODING_DICT, import_buff->getTypeInfo().get_compression());
-        for (const auto& str : *string_payload_ptr) {
-          import_buff->addDictEncodedString(str);
-        }
+        import_buff->addDictEncodedString(*string_payload_ptr);
         p.numbersPtr = import_buff->getStringDictBuffer();
       }
     }

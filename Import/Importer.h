@@ -140,9 +140,9 @@ public:
     time_buffer_->push_back(v);
   }
 
-  void addDictEncodedString(const std::string& v) {
+  void addDictEncodedString(const std::vector<std::string> &stringVec) {
     CHECK(string_dict_);
-    string_dict_buffer_->push_back(string_dict_->getOrAdd(v));
+    string_dict_->addBulk(stringVec, *string_dict_buffer_);
   }
 
   const SQLTypeInfo &getTypeInfo() const {

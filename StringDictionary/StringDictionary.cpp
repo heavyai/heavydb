@@ -63,6 +63,7 @@ StringDictionary::StringDictionary(
     const size_t bytes = file_size(offset_fd_);
     const unsigned str_count = bytes / sizeof(StringIdxEntry);
     unsigned string_id = 0;
+    boost::unique_lock<boost::shared_mutex> write_lock(rw_mutex_);
     for (string_id = 0; string_id < str_count; ++string_id) {
       const auto recovered = getStringFromStorage(string_id);
       if (std::get<2>(recovered)) {
@@ -87,7 +88,16 @@ StringDictionary::~StringDictionary() {
 }
 
 int32_t StringDictionary::getOrAdd(const std::string& str) {
+  boost::unique_lock<boost::shared_mutex> write_lock(rw_mutex_);
   return getOrAddImpl(str, false);
+}
+
+void StringDictionary::addBulk(const std::vector<std::string> &stringVec, std::vector<int32_t> &encodedVec) {
+  encodedVec.reserve(stringVec.size());
+  boost::unique_lock<boost::shared_mutex> write_lock(rw_mutex_);
+  for (const auto &str : stringVec) {
+    encodedVec.push_back(getOrAddImpl(str, false));
+  }
 }
 
 int32_t StringDictionary::getOrAddTransient(const std::string& str) {
@@ -168,7 +178,6 @@ void StringDictionary::increaseCapacity() {
 }
 
 int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) {
-  boost::unique_lock<boost::shared_mutex> write_lock(rw_mutex_);
   CHECK(str.size() <= MAX_STRLEN);
   int32_t bucket = computeBucket(str, str_ids_);
   if (str_ids_[bucket] == INVALID_STR_ID) {
