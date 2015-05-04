@@ -20,7 +20,7 @@ enum LikeStatus {
 DEVICE static int
 inline lowercase(char c)
 {
-  if ('A' <= c & c <= 'Z')
+  if ('A' <= c && c <= 'Z')
     return 'a' + (c - 'A');
   return c;
 }
