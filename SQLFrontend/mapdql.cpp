@@ -456,8 +456,7 @@ int main(int argc, char **argv) {
   }
 
   if (context.session != INVALID_SESSION_ID) {
-    if (thrift_with_retry(kDISCONNECT, context, nullptr))
-      std::cout << "Disconnected from database " << context.db_name << std::endl;
+    (void)thrift_with_retry(kDISCONNECT, context, nullptr);
   }
   transport->close();
   return 0;

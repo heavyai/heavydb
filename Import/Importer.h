@@ -186,10 +186,6 @@ public:
     return reinterpret_cast<int8_t*>(&((*string_dict_buffer_)[0]));
   }
 
-  const StringDictionary *get_string_dict() const {
-    return string_dict_;
-  }
-
   bool stringDictCheckpoint() {
     if (string_dict_ == nullptr)
       return true;

@@ -7,7 +7,7 @@
 #include <unistd.h>
 
 #include <map>
-#include <mutex>
+#include <boost/thread/shared_mutex.hpp>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -28,7 +28,6 @@ public:
 
   void clearTransient();
   bool checkpoint();
-  std::mutex &get_rw_mutex() const { return rw_mutex_; }
 
 private:
   struct StringIdxEntry {
@@ -61,7 +60,7 @@ private:
   size_t payload_file_off_;
   std::map<int32_t, std::string> transient_int_to_str_;
   std::map<std::string, int32_t> transient_str_to_int_;
-  mutable std::mutex rw_mutex_;
+  mutable boost::shared_mutex rw_mutex_;
 
   static char* CANARY_BUFFER;
 };
