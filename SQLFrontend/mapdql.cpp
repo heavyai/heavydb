@@ -209,8 +209,9 @@ process_backslash_commands(char *command, ClientContext &context)
         context.db_name = db;
         context.user_name = user;
         context.passwd = passwd;
-        if (thrift_with_retry(kCONNECT, context, nullptr))
-          std::cout << "Connected to database " << context.db_name << std::endl;
+        if (thrift_with_retry(kCONNECT, context, nullptr)) {
+          std::cout << "User " << context.user_name << " connected to database " << context.db_name << std::endl;
+        }
       }
       break;
     case 'u':
@@ -305,7 +306,7 @@ int main(int argc, char **argv) {
     std::cout << "Not connected to any database.  Only \\u and \\l commands are allowed in this state.  See \\h for help." << std::endl;
   } else {
     if (thrift_with_retry(kCONNECT, context, nullptr))
-      std::cout << "Connected to database " << context.db_name << std::endl;
+      std::cout << "User " << context.user_name << " connected to database " << context.db_name << std::endl;
   }
 
   /* Set the completion callback. This will be called every time the
@@ -456,7 +457,9 @@ int main(int argc, char **argv) {
   }
 
   if (context.session != INVALID_SESSION_ID) {
-    (void)thrift_with_retry(kDISCONNECT, context, nullptr);
+    if (thrift_with_retry(kDISCONNECT, context, nullptr)) {
+      std::cout << "User " << context.user_name << " disconnected from database " << context.db_name << std::endl;
+    }
   }
   transport->close();
   return 0;
