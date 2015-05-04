@@ -449,8 +449,12 @@ namespace Parser {
       escape_char = (*c->get_constval().stringval)[0];
     }
     Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(like_expr);
-    if (c != nullptr)
-      check_like_expr(*c->get_constval().stringval, escape_char);
+    if (c != nullptr) {
+      std::string &pattern = *c->get_constval().stringval;
+      if (is_ilike)
+        std::transform(pattern.begin(), pattern.end(), pattern.begin(), ::tolower);
+      check_like_expr(pattern, escape_char);
+    }
     Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr, is_ilike);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);

@@ -26,6 +26,7 @@ inline lowercase(char c)
 }
 
 // internal recursive function for performing LIKE matching.
+// when is_ilike is true, pattern is assumed to be already converted to all lowercase
 DEVICE static LikeStatus
 string_like_match(const char *str, const int32_t str_len,
                   const char *pattern, const int32_t pat_len,
@@ -42,7 +43,7 @@ string_like_match(const char *str, const int32_t str_len,
       p++; plen--;
       if (plen <= 0)
         return kLIKE_ERROR;
-      if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != lowercase(*p)))
+      if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != *p))
         return kLIKE_FALSE;
     } else if (*p == '%') {
       char firstpat;
@@ -68,7 +69,7 @@ string_like_match(const char *str, const int32_t str_len,
         firstpat = *p;
 
       while (slen > 0) {
-        if ((!is_ilike && *s == firstpat) || (is_ilike && lowercase(*s) == lowercase(firstpat))) {
+        if ((!is_ilike && *s == firstpat) || (is_ilike && lowercase(*s) == firstpat)) {
           LikeStatus status = string_like_match(s, slen, p, plen, escape_char, is_ilike);
           if (status != kLIKE_FALSE)
             return status;
@@ -80,7 +81,7 @@ string_like_match(const char *str, const int32_t str_len,
         s++; slen--;
         p++; plen--;
         continue;
-    } else if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != lowercase(*p)))
+    } else if ((!is_ilike && *s != *p) || (is_ilike && lowercase(*s) != *p))
       return kLIKE_FALSE;
     s++; slen--;
     p++; plen--;
