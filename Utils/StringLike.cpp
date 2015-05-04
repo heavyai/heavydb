@@ -18,7 +18,7 @@ enum LikeStatus {
 };
 
 DEVICE static int
-lowercase(char c)
+inline lowercase(char c)
 {
   if ('A' <= c & c <= 'Z')
     return 'a' + (c - 'A');
@@ -68,7 +68,7 @@ string_like_match(const char *str, const int32_t str_len,
         firstpat = *p;
 
       while (slen > 0) {
-        if (*s == firstpat || (is_ilike && lowercase(*s) == lowercase(firstpat))) {
+        if ((!is_ilike && *s == firstpat) || (is_ilike && lowercase(*s) == lowercase(firstpat))) {
           LikeStatus status = string_like_match(s, slen, p, plen, escape_char, is_ilike);
           if (status != kLIKE_FALSE)
             return status;
