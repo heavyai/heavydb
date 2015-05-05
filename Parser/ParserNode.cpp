@@ -1542,6 +1542,17 @@ namespace Parser {
           else if (str_literal->get_stringval()->length() != 1)
             throw std::runtime_error("Line_delimiter must be a single character string.");
           copy_params.line_delim = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "quoted")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Quoted option must be a boolean.");
+          const std::string *s = str_literal->get_stringval();
+          if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+            copy_params.quoted = true;
+          else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+            copy_params.quoted = false;
+          else
+            throw std::runtime_error("Invalid string for boolean " + *s);
         } else
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

@@ -55,7 +55,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
     if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
       p++;
       has_escape = true;
-    } else if (*p == copy_params.quote) {
+    } else if (copy_params.quoted && *p == copy_params.quote) {
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;
@@ -96,7 +96,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
     if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
       p++;
       has_escape = true;
-    } else if (*p == copy_params.quote) {
+    } else if (copy_params.quoted && *p == copy_params.quote) {
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;

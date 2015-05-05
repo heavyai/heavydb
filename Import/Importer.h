@@ -259,12 +259,13 @@ struct CopyParams {
   char delimiter;
   std::string null_str;
   bool has_header;
+  bool quoted; // does the input have any quoted fields, default to false
   char quote;
   char escape;
   char line_delim;
   int threads;
 
-  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quote('"'), escape('"'), line_delim('\n'), threads(0) {}
+  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), threads(0) {}
 };
 
 class Importer {
