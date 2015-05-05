@@ -150,7 +150,7 @@ ChunkIter_get_next(ChunkIter *it, bool uncompress, VarlenDatum *result, bool *is
 DEVICE void
 ChunkIter_get_nth(ChunkIter *it, int n, bool uncompress, VarlenDatum *result, bool *is_end)
 {
-  if (n >= it->num_elems || n < 0) {
+  if (static_cast<size_t>(n) >= it->num_elems || n < 0) {
     *is_end = true;
     result->length = 0;
     result->pointer = NULL;
