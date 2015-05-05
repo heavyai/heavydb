@@ -108,6 +108,9 @@ struct QueryMemoryDescriptor {
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;
 
+  // TODO(alex): remove
+  bool usesCachedContext() const;
+
   bool threadsShareMemory() const;
 
   bool lazyInitGroups(const ExecutorDeviceType) const;

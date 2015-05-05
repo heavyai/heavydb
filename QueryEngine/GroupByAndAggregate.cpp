@@ -604,7 +604,7 @@ ResultRows QueryExecutionContext::getRowSet(
     results_per_sm.emplace_back(groupBufferToResults(i, targets, was_auto_device));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return executor_->reduceMultiDeviceResults(results_per_sm, query_mem_desc_, row_set_mem_owner_);
+  return executor_->reduceMultiDeviceResults(results_per_sm, row_set_mem_owner_);
 }
 
 namespace {
@@ -1239,6 +1239,10 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
   return (hash_type == GroupByColRangeType::OneColKnownRange && !getSmallBufferSizeBytes());
+}
+
+bool QueryMemoryDescriptor::usesCachedContext() const {
+  return usesGetGroupValueFast() || hash_type == GroupByColRangeType::MultiColPerfectHash;
 }
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
