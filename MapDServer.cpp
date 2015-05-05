@@ -138,7 +138,7 @@ public:
       sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta));;
     } else
       sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it->second, user_meta));
-    LOG(INFO) << "Connected to database " << dbname << std::endl;
+    LOG(INFO) << "User " << user << " connected to database " << dbname << std::endl;
     return session;
   }
 
@@ -153,7 +153,7 @@ public:
     }
     dbname = session_it->second->get_catalog().get_currentDB().dbName;
     sessions_.erase(session_it);
-    LOG(INFO) << "Disconnected from database " << dbname << std::endl;
+    LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname << std::endl;
   }
 
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
