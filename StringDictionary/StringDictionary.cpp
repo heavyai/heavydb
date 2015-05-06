@@ -1,5 +1,4 @@
 #include "StringDictionary.h"
-#include "../Shared/sqltypes.h"
 
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
@@ -179,9 +178,6 @@ void StringDictionary::increaseCapacity() {
 }
 
 int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) {
-  // @TODO(wei) treat empty string as NULL for now
-  if (str.size() == 0)
-    return NULL_INT;
   CHECK(str.size() <= MAX_STRLEN);
   int32_t bucket = computeBucket(str, str_ids_);
   if (str_ids_[bucket] == INVALID_STR_ID) {
