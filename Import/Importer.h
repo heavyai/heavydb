@@ -270,7 +270,7 @@ struct CopyParams {
 
 class Loader {
   public:
-    Loader(const Catalog_Namespace::Catalog &c, const TableDescriptor *t) : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId)), load_failed(false) {};
+    Loader(const Catalog_Namespace::Catalog &c, const TableDescriptor *t) : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId)) {};
     void init();
     const Catalog_Namespace::Catalog &get_catalog() const { return catalog; }
     const TableDescriptor *get_table_desc() const { return table_desc; }
@@ -281,16 +281,14 @@ class Loader {
         return nullptr;
       return dict_map.at(cd->columnId);
     }
-    void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count);
-    bool get_load_failed() const { return load_failed; }
-    void set_load_failed(bool f) { load_failed = f; }
+    bool load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count);
+    void checkpoint() { catalog.get_dataMgr().checkpoint(); }
   private:
     const Catalog_Namespace::Catalog &catalog;
     const TableDescriptor *table_desc;
     std::list <const ColumnDescriptor *> column_descs;
     Fragmenter_Namespace::InsertData insert_data;
     std::map<int, StringDictionary*> dict_map;
-    bool load_failed;
 };
 
 class Importer {
@@ -300,7 +298,7 @@ class Importer {
     void import();
     const CopyParams &get_copy_params() const { return copy_params; }
     const std::list<const ColumnDescriptor *> &get_column_descs() const { return loader.get_column_descs(); }
-    void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) { loader.load(import_buffers, row_count); }
+    void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) { if (!loader.load(import_buffers, row_count)) load_failed = true; }
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> &get_import_buffers_vec() { return import_buffers_vec; }
     std::vector<std::unique_ptr<TypedImportBuffer>> &get_import_buffers(int i) { return import_buffers_vec[i]; }
   private:
@@ -313,6 +311,7 @@ class Importer {
     int which_buf;
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
     Loader loader;
+    bool load_failed;
 };
 
 };

@@ -23,7 +23,7 @@ bool debug_timing = false;
 
 static std::mutex insert_mutex;
 
-Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : file_path(f), copy_params(p), loader(c,t)
+Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : file_path(f), copy_params(p), loader(c,t), load_failed(false)
 {
   file_size = 0;
   max_threads = 0;
@@ -321,11 +321,12 @@ find_end(const char *buffer, size_t size, const CopyParams &copy_params)
   return i + 1;
 }
 
-void
+bool
 Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count)
 {
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
+  bool success = true;
   for (const auto& import_buff : import_buffers) {
     DataBlockPtr p;
     if (import_buff->getTypeInfo().is_number() ||
@@ -351,9 +352,10 @@ Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffe
       table_desc->fragmenter->insertData(ins_data);
     } catch (std::exception &e) {
       LOG(ERROR) << "Fragmenter Insert Exception: " << e.what();
-      set_load_failed(true);
+      success = false;
     }
   }
+  return success;
 }
 
 void
@@ -442,16 +444,16 @@ Importer::import()
     begin_pos = 0;
   }
   auto ms = measure<>::execution([&] () {
-    if (!loader.get_load_failed()) {
+    if (!load_failed) {
       for (auto &p : import_buffers_vec[0]) {
         if (!p->stringDictCheckpoint()) {
           LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
-          loader.set_load_failed(true);
+          load_failed = true;
           break;
         }
       }
-      if (!loader.get_load_failed())
-        loader.get_catalog().get_dataMgr().checkpoint();
+      if (!load_failed)
+        loader.checkpoint();
     }
   });
   if (debug_timing)
