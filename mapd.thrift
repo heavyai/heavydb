@@ -25,6 +25,11 @@ struct TColumnValue {
   2: bool is_null
 }
 
+struct TStringValue {
+  1: string str_val
+  2: bool is_null
+}
+
 struct TTypeInfo {
   1: TDatumType type,
   2: bool nullable
@@ -39,6 +44,10 @@ struct TRow {
   1: list<TColumnValue> cols
 }
 
+struct TStringRow {
+  1: list<TStringValue> cols
+}
+
 struct TRowSet {
   1: TRowDescriptor row_desc
   2: list<TRow> rows
@@ -47,7 +56,6 @@ struct TRowSet {
 typedef list<TColumnType> TRowDescriptor
 typedef map<string, TColumnType> TTableDescriptor
 typedef i32 TSessionId
-typedef byte TLoadId
 
 struct TQueryResult {
   1: TRowSet row_set
@@ -77,7 +85,6 @@ service MapD {
   list<TDBInfo> get_databases() throws (1: ThriftException te)
   void set_execution_mode(1: TExecuteMode mode) throws (1: TMapDException e 2: ThriftException te)
   string get_version() throws (1: ThriftException te)
-  TLoadId start_load(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
-  void load_table(1: TSessionId session, 2: TLoadId load, 3: TRowSet rows) throws (1: TMapDException e 2: ThriftException te)
-  void end_load(1: TSessionId session, 2: TLoadId load) throws (1: TMapDException e 2: ThriftException te)
+  void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows) throws (1: TMapDException e 2: ThriftException te)
+  void load_table_string(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e 2: ThriftException te)
 }

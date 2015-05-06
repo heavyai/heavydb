@@ -387,14 +387,10 @@ public:
     }
   }
 
-  TLoadId start_load(const TSessionId session, const std::string &table_name) {
-    return 0;
+  void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
   }
 
-  void load_table(const TSessionId session, const TLoadId load, const TRowSet &rows) {
-  }
-
-  void end_load(const TSessionId session, const TLoadId load) {
+  void load_table_string(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
   }
 
 private:

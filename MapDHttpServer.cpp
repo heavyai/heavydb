@@ -249,10 +249,9 @@ public:
     }
   }
 
-  TLoadId start_load(const TSessionId session, const std::string &table_name) {
-    TLoadId load_id = -1;
+  void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
     try {
-      load_id = client_.start_load(session, table_name);
+      client_.load_table_binary(session, table_name, rows);
     }
     catch (TMapDException &e) {
       throw e;
@@ -260,7 +259,7 @@ public:
     catch (TException &te) {
       try {
         transport_.open();
-        load_id = client_.start_load(session, table_name);
+        client_.load_table_binary(session, table_name, rows);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -270,44 +269,16 @@ public:
       }
     }
     catch (std::exception &e) {
-      std::cerr << "start_load caught exception: " << e.what() << std::endl;
-      TMapDException ex;
-      ex.error_msg = e.what();
-      throw ex;
-    }
-    return load_id;
-  }
-
-  void end_load(const TSessionId session, const TLoadId load) {
-    try {
-      client_.end_load(session, load);
-    }
-    catch (TMapDException &e) {
-      throw e;
-    }
-    catch (TException &te) {
-      try {
-        transport_.open();
-        client_.end_load(session, load);
-      }
-      catch (TException &te1) {
-        std::cerr << "Thrift exception: " << te1.what() << std::endl;
-        ThriftException thrift_exception;
-        thrift_exception.error_msg = te1.what();
-        throw thrift_exception;
-      }
-    }
-    catch (std::exception &e) {
-      std::cerr << "end_load caught exception: " << e.what() << std::endl;
+      std::cerr << "load_table_binary caught exception: " << e.what() << std::endl;
       TMapDException ex;
       ex.error_msg = e.what();
       throw ex;
     }
   }
 
-  void load_table(const TSessionId session, const TLoadId load, const TRowSet &rows) {
+  void load_table_string(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
     try {
-      client_.load_table(session, load, rows);
+      client_.load_table_string(session, table_name, rows);
     }
     catch (TMapDException &e) {
       throw e;
@@ -315,7 +286,7 @@ public:
     catch (TException &te) {
       try {
         transport_.open();
-        client_.load_table(session, load, rows);
+        client_.load_table_string(session, table_name, rows);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -325,7 +296,7 @@ public:
       }
     }
     catch (std::exception &e) {
-      std::cerr << "load_table caught exception: " << e.what() << std::endl;
+      std::cerr << "load_table_string caught exception: " << e.what() << std::endl;
       TMapDException ex;
       ex.error_msg = e.what();
       throw ex;
