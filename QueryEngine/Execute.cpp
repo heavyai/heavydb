@@ -2834,7 +2834,6 @@ declare void @init_group_by_buffer_impl(i64*, i64*, i32, i32, i32);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*);
 declare i64* @get_group_value_fast(i64*, i64, i64, i32);
 declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
-declare i64* @get_matching_group_value_perfect_hash_cas(i64*, i32, i64*, i32, i32, i64*);
 declare void @agg_count_shared(i64*, i64);
 declare void @agg_count_skip_val_shared(i64*, i64, i64);
 declare void @agg_count_double_shared(i64*, double);
@@ -2901,7 +2900,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
       if (llvm::isa<llvm::CallInst>(*it)) {
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
         if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
-            get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash_cas" ||
+            get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash" ||
             get_gv_call.getCalledFunction()->getName() == "string_decode") {
           llvm::AttributeSet no_inline_attrs;
           no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);

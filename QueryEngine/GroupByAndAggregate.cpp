@@ -1450,19 +1450,13 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       : nullptr;
     if (perfect_hash_func) {
       auto hash_lv = LL_BUILDER.CreateCall(perfect_hash_func, std::vector<llvm::Value*> { group_key, key_size_lv });
-      const std::string fname { std::string("get_matching_group_value_perfect_hash") +
-        (device_type == ExecutorDeviceType::GPU ? "_cas" : "") };
-      std::vector<llvm::Value*> fargs {
+      return emitCall("get_matching_group_value_perfect_hash", {
         groups_buffer,
         hash_lv,
         group_key,
         key_size_lv,
         LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))
-      };
-      if (device_type == ExecutorDeviceType::GPU) {
-        fargs.push_back(++arg_it);
-      }
-      return emitCall(fname, fargs);
+      });
     }
     return emitCall(
       "get_group_value",
