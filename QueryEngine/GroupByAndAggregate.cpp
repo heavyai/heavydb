@@ -1250,8 +1250,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
-  return device_type == ExecutorDeviceType::GPU &&
-    (hash_type == GroupByColRangeType::MultiCol || hash_type == GroupByColRangeType::MultiColPerfectHash);
+  return device_type == ExecutorDeviceType::GPU && hash_type == GroupByColRangeType::MultiCol;
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {
