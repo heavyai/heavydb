@@ -268,14 +268,12 @@ struct CopyParams {
   CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), threads(0) {}
 };
 
-class Importer {
+class Loader {
   public:
-    Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p);
-    ~Importer();
-    void import();
+    Loader(const Catalog_Namespace::Catalog &c, const TableDescriptor *t) : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId)), load_failed(false) {};
+    void init();
     const Catalog_Namespace::Catalog &get_catalog() const { return catalog; }
     const TableDescriptor *get_table_desc() const { return table_desc; }
-    const CopyParams &get_copy_params() const { return copy_params; }
     const std::list<const ColumnDescriptor *> &get_column_descs() const { return column_descs; }
     const Fragmenter_Namespace::InsertData &get_insert_data() const { return insert_data; }
     StringDictionary *get_string_dict(const ColumnDescriptor *cd) const { 
@@ -284,13 +282,28 @@ class Importer {
       return dict_map.at(cd->columnId);
     }
     void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count);
-    std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> &get_import_buffers_vec() { return import_buffers_vec; }
-    std::vector<std::unique_ptr<TypedImportBuffer>> &get_import_buffers(int i) { return import_buffers_vec[i]; }
     bool get_load_failed() const { return load_failed; }
     void set_load_failed(bool f) { load_failed = f; }
   private:
     const Catalog_Namespace::Catalog &catalog;
     const TableDescriptor *table_desc;
+    std::list <const ColumnDescriptor *> column_descs;
+    Fragmenter_Namespace::InsertData insert_data;
+    std::map<int, StringDictionary*> dict_map;
+    bool load_failed;
+};
+
+class Importer {
+  public:
+    Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p);
+    ~Importer();
+    void import();
+    const CopyParams &get_copy_params() const { return copy_params; }
+    const std::list<const ColumnDescriptor *> &get_column_descs() const { return loader.get_column_descs(); }
+    void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) { loader.load(import_buffers, row_count); }
+    std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> &get_import_buffers_vec() { return import_buffers_vec; }
+    std::vector<std::unique_ptr<TypedImportBuffer>> &get_import_buffers(int i) { return import_buffers_vec[i]; }
+  private:
     const std::string &file_path;
     const CopyParams &copy_params;
     size_t file_size;
@@ -298,11 +311,8 @@ class Importer {
     FILE *p_file;
     char *buffer[2];
     int which_buf;
-    std::list <const ColumnDescriptor *> column_descs;
-    Fragmenter_Namespace::InsertData insert_data;
-    std::map<int, StringDictionary*> dict_map;
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
-    bool load_failed;
+    Loader loader;
 };
 
 };

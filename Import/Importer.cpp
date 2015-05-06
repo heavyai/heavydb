@@ -23,7 +23,7 @@ bool debug_timing = false;
 
 static std::mutex insert_mutex;
 
-Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : catalog(c), table_desc(t), file_path(f), copy_params(p), load_failed(false)
+Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : file_path(f), copy_params(p), loader(c,t)
 {
   file_size = 0;
   max_threads = 0;
@@ -322,7 +322,7 @@ find_end(const char *buffer, size_t size, const CopyParams &copy_params)
 }
 
 void
-Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count)
+Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count)
 {
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
@@ -356,13 +356,9 @@ Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buf
   }
 }
 
-#define IMPORT_FILE_BUFFER_SIZE   100000000
-#define MIN_FILE_BUFFER_SIZE      1000000
-
 void
-Importer::import()
+Loader::init()
 {
-  column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
   insert_data.databaseId = catalog.get_currentDB().dbId;
   insert_data.tableId = table_desc->tableId;
   for (auto cd : column_descs) {
@@ -374,6 +370,15 @@ Importer::import()
     }
   }
   insert_data.numRows = 0;
+}
+
+#define IMPORT_FILE_BUFFER_SIZE   100000000
+#define MIN_FILE_BUFFER_SIZE      1000000
+
+void
+Importer::import()
+{
+  loader.init();
   p_file = fopen(file_path.c_str(), "rb");
   (void)fseek(p_file,0,SEEK_END);
   file_size = ftell(p_file);
@@ -386,8 +391,8 @@ Importer::import()
     buffer[1] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
   for (int i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
-    for (const auto cd : column_descs)
-      import_buffers_vec[i].push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, get_string_dict(cd))));
+    for (const auto cd : loader.get_column_descs())
+      import_buffers_vec[i].push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader.get_string_dict(cd))));
   }
   size_t current_pos = 0;
   size_t end_pos;
@@ -437,16 +442,16 @@ Importer::import()
     begin_pos = 0;
   }
   auto ms = measure<>::execution([&] () {
-    if (!load_failed) {
+    if (!loader.get_load_failed()) {
       for (auto &p : import_buffers_vec[0]) {
         if (!p->stringDictCheckpoint()) {
           LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
-          load_failed = true;
+          loader.set_load_failed(true);
           break;
         }
       }
-      if (!load_failed)
-        catalog.get_dataMgr().checkpoint();
+      if (!loader.get_load_failed())
+        loader.get_catalog().get_dataMgr().checkpoint();
     }
   });
   if (debug_timing)
