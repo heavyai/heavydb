@@ -1889,7 +1889,12 @@ ResultRows Executor::executeAggScanPlan(
   std::mutex scheduler_mutex;
   std::mutex reduce_mutex;
   std::mutex str_dec_mutex;
-  size_t context_count = std::max(size_t(available_cpus), available_gpus.size());
+  const size_t context_count { device_type == ExecutorDeviceType::GPU
+    ? available_gpus.size()
+    : device_type == ExecutorDeviceType::Hybrid
+      ? std::max(static_cast<size_t>(available_cpus), available_gpus.size())
+      : static_cast<size_t>(available_cpus)
+  };
   std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts(context_count);
   std::vector<std::mutex> query_context_mutexes(context_count);
   size_t result_rows_count { 0 };
