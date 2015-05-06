@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes -Wno-strict-aliasing")
+set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
     Codec.cpp
     Execute.cpp
