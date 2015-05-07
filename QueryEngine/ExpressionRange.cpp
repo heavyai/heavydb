@@ -34,20 +34,27 @@ ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
   return binOp(other, [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) / y); });
 }
 
+ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const {
+  if (!valid || !other.valid) {
+    return { false, 0, 0 };
+  }
+  return { true, std::min(min, other.min), std::max(max, other.max) };
+}
+
 ExpressionRange getExpressionRange(
     const Analyzer::BinOper* expr,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
 
-ExpressionRange getExpressionRange(
-    const Analyzer::Constant* expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
+ExpressionRange getExpressionRange(const Analyzer::Constant* expr);
 
 ExpressionRange getExpressionRange(
     const Analyzer::ColumnVar* col_expr,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
 
+ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
+
 ExpressionRange getExpressionRange(
-    const Analyzer::LikeExpr* like_expr,
+    const Analyzer::CaseExpr* case_expr,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
 
 ExpressionRange getExpressionRange(
@@ -59,7 +66,7 @@ ExpressionRange getExpressionRange(
   }
   auto constant_expr = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant_expr) {
-    return getExpressionRange(constant_expr, fragments);
+    return getExpressionRange(constant_expr);
   }
   auto column_var_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (column_var_expr) {
@@ -67,7 +74,11 @@ ExpressionRange getExpressionRange(
   }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
-    return getExpressionRange(like_expr, fragments);
+    return getExpressionRange(like_expr);
+  }
+  auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
+  if (case_expr) {
+    return getExpressionRange(case_expr, fragments);
   }
   return { false, 0, 0 };
 }
@@ -92,9 +103,7 @@ ExpressionRange getExpressionRange(
   return { false, 0, 0 };
 }
 
-ExpressionRange getExpressionRange(
-    const Analyzer::Constant* constant_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
   if (constant_expr->get_is_null()) {
     return { false, 0, 0 };
   }
@@ -172,13 +181,28 @@ ExpressionRange getExpressionRange(
   return { false, 0, 0 };
 }
 
-ExpressionRange getExpressionRange(
-    const Analyzer::LikeExpr* like_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+#undef FIND_STAT_FRAG
+
+ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
   const auto& ti = like_expr->get_type_info();
   CHECK(ti.is_boolean());
   const auto& arg_ti = like_expr->get_arg()->get_type_info();
   return { true, arg_ti.get_notnull() ? 0 : inline_int_null_val(ti), 1 };
 }
 
-#undef FIND_STAT_FRAG
+ExpressionRange getExpressionRange(
+    const Analyzer::CaseExpr* case_expr,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+  const auto& expr_pair_list = case_expr->get_expr_pair_list();
+  ExpressionRange expr_range { false, 0, 0 };
+  const auto& case_ti = case_expr->get_type_info();
+  for (const auto& expr_pair : expr_pair_list) {
+    CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
+    CHECK(expr_pair.second->get_type_info() == case_ti);
+    const auto crt_range = getExpressionRange(expr_pair.second, fragments);
+    expr_range = expr_range.valid ? expr_range || crt_range : crt_range;
+  }
+  const auto else_expr = case_expr->get_else_expr();
+  CHECK(else_expr);
+  return expr_range || getExpressionRange(else_expr, fragments);
+}

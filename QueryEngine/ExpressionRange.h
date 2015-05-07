@@ -4,16 +4,18 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Fragmenter/Fragmenter.h"
 
+
 class ExpressionRange {
 public:
   bool valid;
-  const int64_t min;
-  const int64_t max;
+  int64_t min;
+  int64_t max;
 
   ExpressionRange operator+(const ExpressionRange& other) const;
   ExpressionRange operator-(const ExpressionRange& other) const;
   ExpressionRange operator*(const ExpressionRange& other) const;
   ExpressionRange operator/(const ExpressionRange& other) const;
+  ExpressionRange operator||(const ExpressionRange& other) const;
 
 private:
   template<class BinOp>
