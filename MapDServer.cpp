@@ -153,8 +153,8 @@ public:
       throw ex;
     }
     dbname = session_it->second->get_catalog().get_currentDB().dbName;
-    sessions_.erase(session_it);
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname << std::endl;
+    sessions_.erase(session_it);
   }
 
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
@@ -405,7 +405,7 @@ public:
       throw ex;
     }
     Importer_NS::Loader loader(cat, td);
-    if (rows.size() != td->nColumns) {
+    if (rows.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
       ex.error_msg = "Wrong number of columns to load into Table " + table_name;
       LOG(ERROR) << ex.error_msg;
@@ -448,7 +448,7 @@ public:
       throw ex;
     }
     Importer_NS::Loader loader(cat, td);
-    if (rows.size() != td->nColumns) {
+    if (rows.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
       ex.error_msg = "Wrong number of columns to load into Table " + table_name;
       LOG(ERROR) << ex.error_msg;
