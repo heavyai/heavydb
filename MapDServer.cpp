@@ -10,6 +10,7 @@
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
 #include "Shared/measure.h"
+#include "Import/Importer.h"
 #include "MapDRelease.h"
 
 #include <boost/program_options.hpp>
@@ -388,9 +389,89 @@ public:
   }
 
   void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    auto &cat = session_it->second->get_catalog(); 
+    const TableDescriptor *td = cat.getMetadataForTable(table_name);
+    if (td == nullptr) {
+      TMapDException ex;
+      ex.error_msg = "Table " + table_name + " does not exist.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    Importer_NS::Loader loader(cat, td);
+    if (rows.size() != td->nColumns) {
+      TMapDException ex;
+      ex.error_msg = "Wrong number of columns to load into Table " + table_name;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    auto col_descs = loader.get_column_descs();
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    for (auto cd : col_descs) {
+      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+    }
+    for (auto row : rows) {
+      try {
+        int col_idx = 0;
+        for (auto cd : col_descs) {
+          import_buffers[col_idx]->add_value(cd, row.cols[col_idx].datum, row.cols[col_idx].is_null);
+          col_idx++;
+        }
+      } catch (const std::exception &e) {
+        LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
+      }
+    }
+    if (loader.load(import_buffers, rows.size()))
+      loader.checkpoint();
   }
 
   void load_table_string(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    auto &cat = session_it->second->get_catalog(); 
+    const TableDescriptor *td = cat.getMetadataForTable(table_name);
+    if (td == nullptr) {
+      TMapDException ex;
+      ex.error_msg = "Table " + table_name + " does not exist.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    Importer_NS::Loader loader(cat, td);
+    if (rows.size() != td->nColumns) {
+      TMapDException ex;
+      ex.error_msg = "Wrong number of columns to load into Table " + table_name;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    auto col_descs = loader.get_column_descs();
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    for (auto cd : col_descs) {
+      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+    }
+    for (auto row : rows) {
+      try {
+        int col_idx = 0;
+        for (auto cd : col_descs) {
+          import_buffers[col_idx]->add_value(cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null);
+          col_idx++;
+        }
+      } catch (const std::exception &e) {
+        LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
+      }
+    }
+    if (loader.load(import_buffers, rows.size()))
+      loader.checkpoint();
   }
 
 private:

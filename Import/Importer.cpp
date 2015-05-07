@@ -155,6 +155,184 @@ find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &c
   return i;
 }
 
+void
+TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null)
+{
+  switch (cd->columnType.get_type()) {
+  case kBOOLEAN: {
+    if (is_null) {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addBoolean(NULL_BOOLEAN);
+    } else {
+      SQLTypeInfo ti = cd->columnType;
+      Datum d = StringToDatum(val, ti);
+      addBoolean((int8_t)d.boolval);
+    }
+    break;
+  }
+  case kSMALLINT:
+    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+      addSmallint((int16_t)std::atoi(val.c_str()));
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addSmallint(NULL_SMALLINT);
+    }
+    break;
+  case kINT:
+    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+      addInt(std::atoi(val.c_str()));
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addInt(NULL_INT);
+    }
+    break;
+  case kBIGINT:
+    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+      addBigint(std::atoll(val.c_str()));
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addBigint(NULL_BIGINT);
+    }
+    break;
+  case kFLOAT:
+    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+      addFloat((float)std::atof(val.c_str()));
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addFloat(NULL_FLOAT);
+    }
+    break;
+  case kDOUBLE:
+    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+      addDouble(std::atof(val.c_str()));
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addDouble(NULL_DOUBLE);
+    }
+    break;
+  case kTEXT:
+  case kVARCHAR:
+  case kCHAR: {
+    // @TODO(wei) for now, use empty string for nulls
+    if (is_null) {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addString(std::string());
+    } else
+      addString(val);
+    break;
+  }
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    if (!is_null && isdigit(val[0])) {
+      SQLTypeInfo ti = cd->columnType;
+      Datum d = StringToDatum(val, ti);
+      addTime(d.timeval);
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+    }
+    break;
+  default:
+    CHECK(false);
+  }
+}
+
+void
+TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, const bool is_null)
+{
+  switch (cd->columnType.get_type()) {
+  case kBOOLEAN: {
+    if (is_null) {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addBoolean(NULL_BOOLEAN);
+    } else {
+      addBoolean((int8_t)val.int_val);
+    }
+    break;
+  }
+  case kSMALLINT:
+    if (!is_null) {
+      addSmallint((int16_t)val.int_val);
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addSmallint(NULL_SMALLINT);
+    }
+    break;
+  case kINT:
+    if (!is_null) {
+      addInt((int32_t)val.int_val);
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addInt(NULL_INT);
+    }
+    break;
+  case kBIGINT:
+    if (!is_null) {
+      addBigint(val.int_val);
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addBigint(NULL_BIGINT);
+    }
+    break;
+  case kFLOAT:
+    if (!is_null) {
+      addFloat((float)val.real_val);
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addFloat(NULL_FLOAT);
+    }
+    break;
+  case kDOUBLE:
+    if (!is_null) {
+      addDouble(val.real_val);
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addDouble(NULL_DOUBLE);
+    }
+    break;
+  case kTEXT:
+  case kVARCHAR:
+  case kCHAR: {
+    // @TODO(wei) for now, use empty string for nulls
+    if (is_null) {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addString(std::string());
+    } else
+      addString(val.str_val);
+    break;
+  }
+  case kTIME:
+  case kTIMESTAMP:
+  case kDATE:
+    if (!is_null) {
+      addTime((time_t)val.int_val);
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+    }
+    break;
+  default:
+    CHECK(false);
+  }
+}
+
 static void
 import_thread(int thread_id, Importer *importer, const char *buffer, size_t begin_pos, size_t end_pos, size_t total_size)
 {
@@ -202,92 +380,7 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
         bool is_null = (row[col_idx] == copy_params.null_str);
         if (!cd->columnType.is_string() && row[col_idx].empty())
           is_null = true;
-        switch (cd->columnType.get_type()) {
-        case kBOOLEAN: {
-          if (is_null) {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addBoolean(NULL_BOOLEAN);
-          } else {
-            SQLTypeInfo ti = cd->columnType;
-            Datum d = StringToDatum(row[col_idx], ti);
-            import_buffers[col_idx]->addBoolean((int8_t)d.boolval);
-          }
-          break;
-        }
-        case kSMALLINT:
-          if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
-            import_buffers[col_idx]->addSmallint((int16_t)std::atoi(row[col_idx].c_str()));
-          } else {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addSmallint(NULL_SMALLINT);
-          }
-          break;
-        case kINT:
-          if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
-            import_buffers[col_idx]->addInt(std::atoi(row[col_idx].c_str()));
-          } else {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addInt(NULL_INT);
-          }
-          break;
-        case kBIGINT:
-          if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
-            import_buffers[col_idx]->addBigint(std::atoll(row[col_idx].c_str()));
-          } else {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addBigint(NULL_BIGINT);
-          }
-          break;
-        case kFLOAT:
-          if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
-            import_buffers[col_idx]->addFloat((float)std::atof(row[col_idx].c_str()));
-          } else {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addFloat(NULL_FLOAT);
-          }
-          break;
-        case kDOUBLE:
-          if (!is_null && (isdigit(row[col_idx][0]) || row[col_idx][0] == '-')) {
-            import_buffers[col_idx]->addDouble(std::atof(row[col_idx].c_str()));
-          } else {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addDouble(NULL_DOUBLE);
-          }
-          break;
-        case kTEXT:
-        case kVARCHAR:
-        case kCHAR: {
-          // @TODO(wei) for now, use empty string for nulls
-          if (is_null) {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addString(std::string());
-          } else
-            import_buffers[col_idx]->addString(row[col_idx]);
-          break;
-        }
-        case kTIME:
-        case kTIMESTAMP:
-        case kDATE:
-          if (!is_null && isdigit(row[col_idx][0])) {
-            SQLTypeInfo ti = cd->columnType;
-            Datum d = StringToDatum(row[col_idx], ti);
-            import_buffers[col_idx]->addTime(d.timeval);
-          } else {
-            if (cd->columnType.get_notnull())
-              throw std::runtime_error("NULL for column " + cd->columnName);
-            import_buffers[col_idx]->addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
-          }
-          break;
-        default:
-          CHECK(false);
-        }
+        import_buffers[col_idx]->add_value(cd, row[col_idx], is_null);
         ++col_idx;
       }
       row_count++;
@@ -380,7 +473,6 @@ Loader::init()
 void
 Importer::import()
 {
-  loader.init();
   p_file = fopen(file_path.c_str(), "rb");
   (void)fseek(p_file,0,SEEK_END);
   file_size = ftell(p_file);

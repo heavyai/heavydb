@@ -18,6 +18,7 @@
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../StringDictionary/StringDictionary.h"
+#include "gen-cpp/MapD.h"
 
 namespace Importer_NS {
 
@@ -239,6 +240,9 @@ public:
       CHECK(false);
     }
   }
+
+  void add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null);
+  void add_value(const ColumnDescriptor *cd, const TDatum &val, const bool is_null);
 private:
   union {
     std::vector<int8_t>* bool_buffer_;
@@ -270,8 +274,7 @@ struct CopyParams {
 
 class Loader {
   public:
-    Loader(const Catalog_Namespace::Catalog &c, const TableDescriptor *t) : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId)) {};
-    void init();
+    Loader(const Catalog_Namespace::Catalog &c, const TableDescriptor *t) : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId)) { init(); };
     const Catalog_Namespace::Catalog &get_catalog() const { return catalog; }
     const TableDescriptor *get_table_desc() const { return table_desc; }
     const std::list<const ColumnDescriptor *> &get_column_descs() const { return column_descs; }
@@ -289,6 +292,7 @@ class Loader {
     std::list <const ColumnDescriptor *> column_descs;
     Fragmenter_Namespace::InsertData insert_data;
     std::map<int, StringDictionary*> dict_map;
+    void init();
 };
 
 class Importer {
