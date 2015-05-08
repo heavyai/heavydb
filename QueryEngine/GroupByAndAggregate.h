@@ -801,6 +801,9 @@ inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
 }
 
 inline int64_t extract_min_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
+  if (stats.has_nulls) {  // clobber the additional information for now
+    return inline_int_null_val(ti);
+  }
   return extract_from_datum(stats.min, ti);
 }
 
