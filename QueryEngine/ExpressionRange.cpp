@@ -158,6 +158,7 @@ ExpressionRange getExpressionRange(
   case kCHAR:
   case kVARCHAR:
     CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
+  case kBOOLEAN:
   case kSMALLINT:
   case kINT:
   case kBIGINT: {
