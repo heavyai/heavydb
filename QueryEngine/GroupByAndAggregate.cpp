@@ -979,20 +979,24 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
   }
   const auto& groupby_exprs = agg_plan->get_groupby_list();
   if (groupby_exprs.size() != 1) {
-    int64_t cardinality { 1 };
-    for (const auto groupby_expr : groupby_exprs) {
-      auto col_range_info = getExprRangeInfo(groupby_expr, fragments);
-      if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
+    try {
+      checked_int64_t cardinality { 1 };
+      for (const auto groupby_expr : groupby_exprs) {
+        auto col_range_info = getExprRangeInfo(groupby_expr, fragments);
+        if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
+          return { GroupByColRangeType::MultiCol, 0, 0 };
+        }
+        auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1;
+        CHECK_GT(crt_col_cardinality, 0);
+        cardinality *= crt_col_cardinality;
+      }
+      if (cardinality > 10000000) {  // more than 10M groups is a lot
         return { GroupByColRangeType::MultiCol, 0, 0 };
       }
-      auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1;
-      CHECK_GT(crt_col_cardinality, 0);
-      cardinality *= crt_col_cardinality;
-    }
-    if (cardinality > 10000000) {  // more than 10M groups is a lot
+      return { GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality) };
+    } catch (...) {  // overflow when computing cardinality
       return { GroupByColRangeType::MultiCol, 0, 0 };
     }
-    return { GroupByColRangeType::MultiColPerfectHash, 0, cardinality };
   }
   return getExprRangeInfo(groupby_exprs.front(), fragments);
 }

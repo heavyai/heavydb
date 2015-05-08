@@ -1,16 +1,6 @@
 #include "ExpressionRange.h"
 #include "GroupByAndAggregate.h"
 
-#include <boost/multiprecision/cpp_int.hpp>
-
-
-typedef boost::multiprecision::number<
-  boost::multiprecision::cpp_int_backend<
-    64, 64,
-    boost::multiprecision::signed_magnitude,
-    boost::multiprecision::checked,
-    void>
-  > checked_int64_t;
 
 ExpressionRange ExpressionRange::operator+(const ExpressionRange& other) const {
   return binOp(other, [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) + y); });
