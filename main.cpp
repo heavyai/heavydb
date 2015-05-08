@@ -81,7 +81,12 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
             cout << "(" << cat.get_currentDB().dbId << "," << td->tableId << "," << cd->columnId << "," << frag.fragmentId << ") ";
             cout << "numBytes:" << chunkMetadata.numBytes;
             cout << " numElements:" << chunkMetadata.numElements;
+            cout << " has_nulls:" << chunkMetadata.chunkStats.has_nulls;
             switch (cd->columnType.get_type()) {
+              case kBOOLEAN:
+                cout << " min:" << (short)chunkMetadata.chunkStats.min.tinyintval;
+                cout << " max:" << (short)chunkMetadata.chunkStats.max.tinyintval;
+                break;
               case kSMALLINT:
                 cout << " min:" << chunkMetadata.chunkStats.min.smallintval;
                 cout << " max:" << chunkMetadata.chunkStats.max.smallintval;
