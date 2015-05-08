@@ -1943,7 +1943,7 @@ ResultRows Executor::executeAggScanPlan(
           chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
             chunk_key,
             memory_level_for_column,
-            chosen_device_id,
+            memory_level_for_column == Data_Namespace::CPU_LEVEL ? 0 : chosen_device_id,
             chunk_meta_it->second.numBytes,
             chunk_meta_it->second.numElements);
           chunks.push_back(chunk);
