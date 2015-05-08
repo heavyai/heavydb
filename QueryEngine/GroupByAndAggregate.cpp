@@ -1,4 +1,5 @@
 #include "GroupByAndAggregate.h"
+#include "ExpressionRange.h"
 
 #include "Execute.h"
 #include "QueryTemplateGenerator.h"
@@ -978,83 +979,39 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
   }
   const auto& groupby_exprs = agg_plan->get_groupby_list();
   if (groupby_exprs.size() != 1) {
-    int64_t cardinality { 1 };
-    for (const auto groupby_expr : groupby_exprs) {
-      auto col_range_info = getExprRangeInfo(groupby_expr, fragments);
-      if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
+    try {
+      checked_int64_t cardinality { 1 };
+      for (const auto groupby_expr : groupby_exprs) {
+        auto col_range_info = getExprRangeInfo(groupby_expr, fragments);
+        if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
+          return { GroupByColRangeType::MultiCol, 0, 0 };
+        }
+        auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1;
+        CHECK_GT(crt_col_cardinality, 0);
+        cardinality *= crt_col_cardinality;
+      }
+      if (cardinality > 10000000) {  // more than 10M groups is a lot
         return { GroupByColRangeType::MultiCol, 0, 0 };
       }
-      auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1;
-      CHECK_GT(crt_col_cardinality, 0);
-      cardinality *= crt_col_cardinality;
-    }
-    if (cardinality > 10000000) {  // more than 10M groups is a lot
+      return { GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality) };
+    } catch (...) {  // overflow when computing cardinality
       return { GroupByColRangeType::MultiCol, 0, 0 };
     }
-    return { GroupByColRangeType::MultiColPerfectHash, 0, cardinality };
   }
   return getExprRangeInfo(groupby_exprs.front(), fragments);
 }
-
-#define FIND_STAT_FRAG(stat_name)                                                             \
-  const auto stat_name##_frag = std::stat_name##_element(fragments.begin(), fragments.end(),  \
-    [col_id, col_ti](const Fragmenter_Namespace::FragmentInfo& lhs,                           \
-                                 const Fragmenter_Namespace::FragmentInfo& rhs) {             \
-      auto lhs_meta_it = lhs.chunkMetadataMap.find(col_id);                                   \
-      CHECK(lhs_meta_it != lhs.chunkMetadataMap.end());                                       \
-      auto rhs_meta_it = rhs.chunkMetadataMap.find(col_id);                                   \
-      CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());                                       \
-      return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <             \
-             extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);              \
-  });                                                                                         \
-  if (stat_name##_frag == fragments.end()) {                                                  \
-    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };                                                                 \
-  }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
     const Analyzer::Expr* expr,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
 
-  const auto col_expr = dynamic_cast<const Analyzer::ColumnVar*>(expr);
-  if (!col_expr) {
+  const auto expr_range = getExpressionRange(expr, fragments);
+  if (!expr_range.valid) {
     return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
   }
-
-  int col_id = col_expr->get_column_id();
-  const auto& col_ti = col_expr->get_type_info();
-  switch (col_ti.get_type()) {
-  case kTEXT:
-  case kCHAR:
-  case kVARCHAR:
-    CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
-  case kSMALLINT:
-  case kINT:
-  case kBIGINT: {
-    FIND_STAT_FRAG(min);
-    FIND_STAT_FRAG(max);
-    const auto min_it = min_frag->chunkMetadataMap.find(col_id);
-    CHECK(min_it != min_frag->chunkMetadataMap.end());
-    const auto max_it = max_frag->chunkMetadataMap.find(col_id);
-    CHECK(max_it != max_frag->chunkMetadataMap.end());
-    const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
-    const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
-    CHECK_GE(max_val, min_val);
-    return {
-      GroupByColRangeType::OneColKnownRange,
-      min_val,
-      max_val
-    };
-  }
-  case kFLOAT:
-  case kDOUBLE:
-    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
-  default:
-    return { GroupByColRangeType::MultiCol, 0, 0 };
-  }
+  return { GroupByColRangeType::OneColKnownRange, expr_range.min, expr_range.max };
 }
-
-#undef FIND_STAT_FRAG
 
 #define LL_CONTEXT executor_->cgen_state_->context_
 #define LL_BUILDER executor_->cgen_state_->ir_builder_

@@ -20,7 +20,7 @@ using Data_Namespace::AbstractBuffer;
 class StringNoneEncoder : public Encoder {
 
     public:
-        StringNoneEncoder(AbstractBuffer *buffer): Encoder(buffer), index_buf(nullptr), last_offset(-1) {}
+        StringNoneEncoder(AbstractBuffer *buffer): Encoder(buffer), index_buf(nullptr), last_offset(-1), has_nulls(false) {}
 
         ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) {
 						assert(false); // should never be called for strings
@@ -35,20 +35,24 @@ class StringNoneEncoder : public Encoder {
             Encoder::getMetadata(chunkMetadata); // call on parent class
             chunkMetadata.chunkStats.min.stringval = nullptr;
             chunkMetadata.chunkStats.max.stringval = nullptr;
+            chunkMetadata.chunkStats.has_nulls = has_nulls;
         }
 
         void writeMetadata(FILE *f) {
             // assumes pointer is already in right place
             fwrite((int8_t *)&numElems,sizeof(size_t),1,f); 
+            fwrite((int8_t *)&has_nulls,sizeof(bool),1,f); 
         }
 
         void readMetadata(FILE *f) {
             // assumes pointer is already in right place
             CHECK_RET(fread((int8_t *)&numElems,sizeof(size_t),1,f));
+            CHECK_RET(fread((int8_t *)&has_nulls,sizeof(bool),1,f));
         }
 
         void copyMetadata(const Encoder * copyFromEncoder) {
             numElems = copyFromEncoder -> numElems;
+            has_nulls = static_cast<const StringNoneEncoder*>(copyFromEncoder) -> has_nulls;
         }
 
 				AbstractBuffer *get_index_buf() const { return index_buf; }
@@ -56,6 +60,7 @@ class StringNoneEncoder : public Encoder {
 		private:
 			AbstractBuffer *index_buf;
 			StringOffsetT last_offset;
+      bool has_nulls;
 
 }; // class StringNoneEncoder
 

@@ -7,6 +7,7 @@
 struct ChunkStats {
     Datum min;
     Datum max;
+    bool has_nulls;
 };
 
 struct ChunkMetadata {
@@ -15,8 +16,14 @@ struct ChunkMetadata {
     size_t numElements;
     ChunkStats chunkStats;
 
-    template <typename T> void fillChunkStats (const T min, const T max) {
+    template <typename T> void fillChunkStats (const T min, const T max, const bool has_nulls) {
+        chunkStats.has_nulls = has_nulls;
         switch (sqlType.get_type()) {
+            case kBOOLEAN: {
+                chunkStats.min.tinyintval = min;
+                chunkStats.max.tinyintval = max;
+                break;
+            }
             case kSMALLINT: {
                 chunkStats.min.smallintval = min;
                 chunkStats.max.smallintval = max;

@@ -68,8 +68,11 @@ StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int
 			} else if (size + len > inbuf_size)
 				break;
 			char *dest = (char*)inbuf + size;
-			(*srcData)[i].copy(dest, len);
-			size += len;
+      if (len > 0) {
+        (*srcData)[i].copy(dest, len);
+        size += len;
+      } else
+        has_nulls = true;
 		}
 		if (size > 0)
 			buffer_->append(inbuf, size);
