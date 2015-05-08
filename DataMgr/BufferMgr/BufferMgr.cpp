@@ -107,7 +107,7 @@ namespace Buffer_Namespace {
     }
 
     BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator &segIt, const size_t numBytes) { // assumes buffer is already pinned
-        std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); // inefficient but should be ok for now - particularly if different gpus are feeding from different cpu buffer pools
+        //std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); // inefficient but should be ok for now - particularly if different gpus are feeding from different cpu buffer pools
 
         // doesn't resize to be smaller - like std::reserve
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
@@ -162,7 +162,7 @@ namespace Buffer_Namespace {
             //@todo - need to delete chunks around it
         }
         */
-        sizedSegsLock.unlock();
+        //sizedSegsLock.unlock();
         {
             std::lock_guard < std::mutex > lock (chunkIndexMutex_); 
             chunkIndex_[newSegIt->chunkKey] = newSegIt; 
@@ -201,7 +201,9 @@ namespace Buffer_Namespace {
     BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
         size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
         if (numPagesRequested > numPagesPerSlab_) {
-            throw std::runtime_error("Requtested memory allocation larger than slab size.");
+            std::cout << "Pages requested: " << numPagesRequested << std::endl;
+            std::cout << "Pages per slab: " << numPagesPerSlab_ << std::endl;
+            throw std::runtime_error("Requested memory allocation larger than slab size.");
         }
         
         size_t numSlabs = slabSegments_.size();
@@ -436,8 +438,9 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::checkpoint() {
-        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_); // Take this lock early to prevent deadlock with reserveBuffer which needs segsMutex_ and then chunkIndexMutex_
-        std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
+        std::lock_guard < std::mutex > lock (globalMutex_); // hack for now
+        //std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_); // Take this lock early to prevent deadlock with reserveBuffer which needs segsMutex_ and then chunkIndexMutex_
+        //std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
         for (auto bufferIt = chunkIndex_.begin(); bufferIt != chunkIndex_.end(); ++bufferIt) {
             if (bufferIt->second->chunkKey[0] != -1 && bufferIt->second->buffer->isDirty_) { // checks that buffer is actual chunk (not just buffer) and is dirty
                 //cout << "Flushing: ";
@@ -497,6 +500,7 @@ namespace Buffer_Namespace {
 
 
     void BufferMgr::fetchBuffer(const ChunkKey &key, AbstractBuffer *destBuffer, const size_t numBytes) {
+        std::lock_guard < std::mutex > lock (globalMutex_); // hack for now
         std::unique_lock < std::mutex > sizedSegsLock (sizedSegsMutex_); 
         std::unique_lock < std::mutex > chunkIndexLock (chunkIndexMutex_);
         //cout << "Fetch buffer bytes: " << numBytes << endl;

@@ -86,7 +86,7 @@ namespace Data_Namespace {
         //cout << "Max Cpu Buffer Pool size: " << static_cast<float> (cpuMemory) / (1 << 30) << " GB CPU memory" << endl;
         if (hasGpus_) {
             bufferMgrs_.resize(3);
-            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CUDA_HOST, cudaMgr_, 1L << 30,512,bufferMgrs_[0][0]));
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CUDA_HOST, cudaMgr_, 1L << 31,512,bufferMgrs_[0][0]));
             levelSizes_.push_back(1);
             int numGpus = cudaMgr_->getDeviceCount();
             for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
@@ -99,7 +99,7 @@ namespace Data_Namespace {
             levelSizes_.push_back(numGpus);
         }
         else {
-            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CPU_HOST, cudaMgr_, 1L << 30,512,bufferMgrs_[0][0]));
+            bufferMgrs_[1].push_back(new CpuBufferMgr(0,cpuMemory, CPU_HOST, cudaMgr_, 1L << 31,512,bufferMgrs_[0][0]));
             levelSizes_.push_back(1);
         }
     }

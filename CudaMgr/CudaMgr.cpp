@@ -114,7 +114,15 @@ void CudaMgr::copyDeviceToHost(int8_t *hostPtr, const int8_t *devicePtr, const s
 }
 
 void CudaMgr::copyDeviceToDevice(int8_t *destPtr, int8_t *srcPtr, const size_t numBytes, const int destDeviceNum, const int srcDeviceNum) {
-    checkError(cuMemcpyPeer(reinterpret_cast<CUdeviceptr> (destPtr), deviceContexts[destDeviceNum], reinterpret_cast<CUdeviceptr> (srcPtr),deviceContexts[srcDeviceNum],numBytes)); // will we always have peer?
+    //std::cout << "Source device: " << srcDeviceNum << std::endl;
+    //std::cout << "Dest device: " << destDeviceNum << std::endl;
+    if (srcDeviceNum == destDeviceNum) {
+        setContext(srcDeviceNum);
+        checkError(cuMemcpy(reinterpret_cast<CUdeviceptr> (destPtr),reinterpret_cast<CUdeviceptr> (srcPtr), numBytes));
+    }
+    else {
+        checkError(cuMemcpyPeer(reinterpret_cast<CUdeviceptr> (destPtr), deviceContexts[destDeviceNum], reinterpret_cast<CUdeviceptr> (srcPtr),deviceContexts[srcDeviceNum],numBytes)); // will we always have peer?
+    }
 }
 
 

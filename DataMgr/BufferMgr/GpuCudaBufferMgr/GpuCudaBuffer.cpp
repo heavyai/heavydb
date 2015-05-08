@@ -26,10 +26,13 @@ namespace Buffer_Namespace {
 
     void GpuCudaBuffer::writeData(int8_t * const src, const size_t numBytes, const size_t offset, const MemoryLevel srcBufferType, const int srcDeviceId) {
         if (srcBufferType == CPU_LEVEL) {
+            //std::cout << "Writing to GPU from source CPU" << std::endl;
+            
             cudaMgr_->copyHostToDevice(mem_+offset,src,numBytes,deviceId_); // need to replace 0 with gpu num 
 
         }
         else if (srcBufferType == GPU_LEVEL) {
+            //std::cout << "Writing to GPU from source GPU" << std::endl;
             assert(srcDeviceId >= 0);
             cudaMgr_->copyDeviceToDevice(mem_+offset,src,numBytes,deviceId_,srcDeviceId);
             //CudaUtils::copyGpuToGpu(mem_ + offset, src, numBytes, 1, deviceId_);
