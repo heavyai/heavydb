@@ -146,10 +146,10 @@ class SQLTypeInfo {
 
 
     DEVICE inline bool operator!=(const SQLTypeInfo &rhs) const {
-      return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || (comp_param != rhs.get_comp_param() && comp_param != TRANSIENT_DICT(rhs.get_comp_param()));
+      return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || (compression != kENCODING_NONE && comp_param != rhs.get_comp_param() && comp_param != TRANSIENT_DICT(rhs.get_comp_param()));
     }
     DEVICE inline bool operator==(const SQLTypeInfo &rhs) const {
-      return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && (comp_param == rhs.get_comp_param() || comp_param == TRANSIENT_DICT(rhs.get_comp_param()));
+      return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && (compression == kENCODING_NONE || comp_param == rhs.get_comp_param() || comp_param == TRANSIENT_DICT(rhs.get_comp_param()));
     }
     DEVICE inline void operator=(const SQLTypeInfo &rhs) {
       type = rhs.get_type();
