@@ -584,11 +584,13 @@ namespace Buffer_Namespace {
     
     /// client is responsible for deleting memory allocated for b->mem_
     AbstractBuffer* BufferMgr::alloc(const size_t numBytes) {
+        std::lock_guard < std::mutex > lock (globalMutex_); // hack for now
         ChunkKey chunkKey = {-1,getBufferId()};
         return createBuffer(chunkKey, pageSize_, numBytes); 
     }
 
     void BufferMgr::free(AbstractBuffer *buffer) {
+        std::lock_guard < std::mutex > lock (globalMutex_); // hack for now
         Buffer * castedBuffer = dynamic_cast <Buffer *> (buffer); 
         if (castedBuffer == 0) {
             throw std::runtime_error ("Wrong buffer type - expects base class pointer to Buffer type");
