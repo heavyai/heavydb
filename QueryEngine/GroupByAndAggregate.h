@@ -779,6 +779,8 @@ inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* pl
 
 inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
+  case kBOOLEAN:
+    return datum.tinyintval;
   case kSMALLINT:
     return datum.smallintval;
   case kCHAR:
