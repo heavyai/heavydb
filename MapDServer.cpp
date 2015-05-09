@@ -405,7 +405,7 @@ public:
       throw ex;
     }
     Importer_NS::Loader loader(cat, td);
-    if (rows.size() != static_cast<size_t>(td->nColumns)) {
+    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
       ex.error_msg = "Wrong number of columns to load into Table " + table_name;
       LOG(ERROR) << ex.error_msg;
@@ -448,9 +448,9 @@ public:
       throw ex;
     }
     Importer_NS::Loader loader(cat, td);
-    if (rows.size() != static_cast<size_t>(td->nColumns)) {
+    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
-      ex.error_msg = "Wrong number of columns to load into Table " + table_name;
+      ex.error_msg = "Wrong number of columns to load into Table " + table_name + " (" + std::to_string(rows.size()) + " vs " + std::to_string(td->nColumns) + ")";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }

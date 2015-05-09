@@ -11,7 +11,10 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
+#include <fstream>
 #include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/tokenizer.hpp>
 
 #include "gen-cpp/MapD.h"
 #include <thrift/transport/TSocket.h>
@@ -123,6 +126,82 @@ thrift_with_retry(ThriftService which_service, ClientContext &context, char *arg
   return true;
 }
 
+#define LOAD_PATCH_SIZE  10000
+static void
+copy_table(char *filepath, char *table, ClientContext &context)
+{
+  if (context.session == INVALID_SESSION_ID) {
+    std::cerr << "Not connected to any databases." << std::endl;
+    return;
+  }
+  if (!boost::filesystem::exists(filepath)) {
+    std::cerr << "File does not exist." << std::endl;
+    return;
+  }
+  if (!thrift_with_retry(kGET_COLUMNS, context, table)) {
+    std::cerr << "Cannot connect to table." << std::endl;
+    return;
+  }
+  const TTableDescriptor &table_desc = context.columns_return;
+  std::ifstream infile(filepath);
+  std::string line;
+  const char *delim = ",";
+  int l = strlen(filepath);
+  if (l >= 4 && strcmp(filepath+l-4, ".tsv") == 0) {
+    delim = "\t";
+  }
+  std::vector<TStringRow> input_rows;
+  TStringRow row;
+  boost::char_separator<char> sep{delim, "", boost::keep_empty_tokens};
+  try {
+    while (std::getline(infile, line)) {
+      {
+        std::vector<TStringValue> empty;
+        row.cols.swap(empty);
+      }
+      boost::tokenizer<boost::char_separator<char>> tok{line, sep};
+      for (const auto &s : tok) {
+        TStringValue ts;
+        ts.str_val = s;
+        ts.is_null = s.empty();
+        row.cols.push_back(ts);
+      }
+      /*
+      std::cout << "Row: ";
+      for (const auto &p : row.cols) {
+        std::cout << p.str_val << ", ";
+      }
+      std::cout << std::endl;
+      */
+      if (row.cols.size() != table_desc.size()) {
+        std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << table_desc.size() << ") " << line << std::endl;
+        continue;
+      }
+      input_rows.push_back(row);
+      if (input_rows.size() >= LOAD_PATCH_SIZE) {
+        try {
+          context.client.load_table_string(context.session, table, input_rows);
+        }
+        catch (TMapDException &e) {
+          std::cerr << e.error_msg << std::endl;
+        }
+        {
+          std::vector<TStringRow> empty;
+          input_rows.swap(empty);
+        }
+      }
+    }
+    if (input_rows.size() > 0)
+      context.client.load_table_string(context.session, table, input_rows);
+  }
+  catch (TMapDException &e) {
+    std::cerr << e.error_msg << std::endl;
+  }
+  catch (TException &te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
+  }
+}
+
 static void
 process_backslash_commands(char *command, ClientContext &context)
 {
@@ -142,6 +221,7 @@ process_backslash_commands(char *command, ClientContext &context)
       std::cout << "\\timing Print timing information.\n";
       std::cout << "\\notiming Do not print timing information.\n";
       std::cout << "\\version Print MapD Server version.\n";
+      std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
       std::cout << "\\q Quit.\n";
       return;
     case 'd':
@@ -434,6 +514,10 @@ int main(int argc, char **argv) {
         } else {
           std::cout << "Cannot connect to MapD Server." << std::endl;
         }
+      } else if (!strncmp(line,"\\copy",5)) {
+        char *filepath = strtok(line+6, " ");
+        char *table = strtok(NULL, " ");
+        copy_table(filepath, table, context);
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);

@@ -238,7 +238,7 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val,
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
-      addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+      addTime(cd->columnType.get_size() == 4 ? NULL_INT : NULL_BIGINT);
     }
     break;
   default:
