@@ -166,13 +166,22 @@ void InsertOrderFragmenter::getFragmentsForQuery(QueryInfo &queryInfo) {
     queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
     // right now we don't test predicate, so just return (copy of) all fragments 
     {
-        {
-            boost::shared_lock < boost::shared_mutex > readLock (fragmentInfoMutex_);
-            queryInfo.fragments = fragmentInfoVec_; //makes a copy
+        boost::shared_lock < boost::shared_mutex > readLock (fragmentInfoMutex_);
+        queryInfo.fragments = fragmentInfoVec_; //makes a copy
+    }
+    queryInfo.numTuples = 0;
+    auto partIt = queryInfo.fragments.begin();
+    while (partIt != queryInfo.fragments.end()) {
+        if (partIt -> numTuples == 0) { 
+            // this means that a concurrent insert query inserted tuples into a new fragment but when the query came in we didn't have this fragment.
+            // To make sure we don't mess up the executor we delete this
+            // fragment from the metadatamap (fixes earlier bug found
+            // 2015-05-08)
+            partIt = queryInfo.fragments.erase(partIt);
         }
-        queryInfo.numTuples = 0;
-        for (auto partIt = queryInfo.fragments.begin(); partIt != queryInfo.fragments.end(); ++partIt) {
+        else { 
             queryInfo.numTuples += partIt -> numTuples;  
+            ++partIt;
         }
     }
 }
