@@ -102,7 +102,7 @@ namespace File_Namespace {
         virtual AbstractBuffer* alloc(const size_t numBytes);
         virtual void free(AbstractBuffer *buffer);
         //virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
-        Page requestFreePage(size_t pagesize);
+        Page requestFreePage(size_t pagesize, const bool isMetadata);
 
         virtual inline MgrType getMgrType() { return FILE_MGR;};
         inline FileInfo * getFileInfoForFileId(const int fileId) {
@@ -123,7 +123,7 @@ namespace File_Namespace {
          * @param pagesize     The size of each requested page
          * @param pages        A vector containing the free pages obtained by this method
          */
-        void requestFreePages(size_t npages, size_t pagesize, std::vector<Page> &pages);
+        void requestFreePages(size_t npages, size_t pagesize, std::vector<Page> &pages, const bool isMetadata);
 
         virtual void getChunkMetadataVec(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec);
         virtual void getChunkMetadataVecForKeyPrefix(std::vector<std::pair<ChunkKey,ChunkMetadata> > &chunkMetadataVec, const ChunkKey &keyPrefix);

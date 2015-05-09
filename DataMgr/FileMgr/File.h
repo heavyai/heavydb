@@ -9,6 +9,7 @@
 
 #define MAPD_FILE_EXT ".mapd"
 #define MAX_FILE_N_PAGES 256 
+#define MAX_FILE_N_METADATA_PAGES 4096
 
 #include <iostream>
 #include <string>

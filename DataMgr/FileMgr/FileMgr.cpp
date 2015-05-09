@@ -396,7 +396,7 @@ namespace File_Namespace {
     //    throw std::runtime_error("Operation not supported");
     //}
 
-    Page FileMgr::requestFreePage(size_t pageSize) {
+    Page FileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
         std::lock_guard < std::mutex > lock (getPageMutex_);
 
         auto candidateFiles = fileIndex_.equal_range(pageSize);
@@ -409,13 +409,20 @@ namespace File_Namespace {
             }
         }
         // if here then we need to add a file
-        FileInfo *fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
+        FileInfo *fileInfo;
+        if (isMetadata) {
+            fileInfo = createFile(pageSize, MAX_FILE_N_METADATA_PAGES);
+        }
+        else {
+            fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
+        }
         pageNum = fileInfo->getFreePage();
         assert(pageNum != -1);
         return (Page (fileInfo->fileId,pageNum));
     }
 
-    void FileMgr::requestFreePages(size_t numPagesRequested, size_t pageSize, std::vector<Page> &pages) {
+    void FileMgr::requestFreePages(size_t numPagesRequested, size_t pageSize, std::vector<Page> &pages, const bool isMetadata) {
+        // not used currently
         // @todo add method to FileInfo to get more than one page
         std::lock_guard < std::mutex > lock (getPageMutex_);
         auto candidateFiles = fileIndex_.equal_range(pageSize);
@@ -436,7 +443,13 @@ namespace File_Namespace {
             }
         }
         while (numPagesNeeded > 0) {
-            FileInfo *fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
+            FileInfo *fileInfo;
+            if (isMetadata) {
+                fileInfo = createFile(pageSize, MAX_FILE_N_METADATA_PAGES);
+            }
+            else {
+                fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
+            }
             int pageNum;
             do {
                 pageNum = fileInfo->getFreePage();

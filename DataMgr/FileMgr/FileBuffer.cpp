@@ -189,7 +189,7 @@ namespace File_Namespace {
     }
 
     Page FileBuffer::addNewMultiPage(const int epoch) {
-        Page page = fm_->requestFreePage(pageSize_);
+        Page page = fm_->requestFreePage(pageSize_, false);
         MultiPage multiPage(pageSize_);
         multiPage.epochs.push_back(epoch);
         multiPage.pageVersions.push_back(page);
@@ -244,7 +244,7 @@ namespace File_Namespace {
     void FileBuffer::writeMetadata(const int epoch) {
         // Right now stats page is size_ (in bytes), bufferType, encodingType,
         // encodingDataType, numElements
-        Page page = fm_->requestFreePage(METADATA_PAGE_SIZE);
+        Page page = fm_->requestFreePage(METADATA_PAGE_SIZE, true);
         writeHeader(page,-1,epoch,true);
         FILE *f = fm_->getFileForFileId(page.fileId);
         fseek(f, page.pageNum*METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
@@ -368,7 +368,7 @@ namespace File_Namespace {
             else if (multiPages_[pageNum].epochs.back() < epoch) { // need to create new page b/c this current one lags epoch and we can't overwrite it 
     // also need to copy if we are on first or last page
                 Page lastPage = multiPages_[pageNum].current();
-                page = fm_->requestFreePage(pageSize_);
+                page = fm_->requestFreePage(pageSize_, false);
                 multiPages_[pageNum].epochs.push_back(epoch);
                 multiPages_[pageNum].pageVersions.push_back(page);
                 if (pageNum == startPage && startPageOffset > 0) {
