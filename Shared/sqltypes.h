@@ -109,7 +109,7 @@ class SQLTypeInfo {
   public:
     SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p, int es) : type(t), dimension(d), scale(s), notnull(n), compression(c), comp_param(p), size(get_storage_size()), elem_size(es) {}
     SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
-    explicit SQLTypeInfo(SQLTypes t) : type(t), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
+    SQLTypeInfo(SQLTypes t, bool n) : type(t), dimension(0), scale(0), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
     SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0), elem_size(0) {}
 
     DEVICE inline SQLTypes get_type() const { return type; }

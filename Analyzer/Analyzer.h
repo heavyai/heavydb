@@ -30,9 +30,9 @@ namespace Analyzer {
    */
   class Expr {
     public:
-      explicit Expr(SQLTypes t) : type_info(t), contains_agg(false) { }
-      Expr(SQLTypes t, int d) : type_info(t, d, 0, false), contains_agg(false) {}
-      Expr(SQLTypes t, int d, int s) : type_info(t, d, s, false), contains_agg(false) {}
+      Expr(SQLTypes t, bool notnull) : type_info(t, notnull), contains_agg(false) { }
+      Expr(SQLTypes t, int d, bool notnull) : type_info(t, d, 0, notnull), contains_agg(false) {}
+      Expr(SQLTypes t, int d, int s, bool notnull) : type_info(t, d, s, notnull), contains_agg(false) {}
       Expr(const SQLTypeInfo &ti, bool has_agg = false) : type_info(ti), contains_agg(has_agg) {}
       virtual ~Expr() {}
       const SQLTypeInfo &get_type_info() const { return type_info; }
@@ -173,8 +173,8 @@ namespace Analyzer {
    */
   class Constant : public Expr {
     public:
-      Constant(SQLTypes t, bool n) : Expr (t), is_null(n) { if (n) set_null_value(); }
-      Constant(SQLTypes t, bool n, Datum v) : Expr (t), is_null(n), constval(v) { if (n) set_null_value(); }
+      Constant(SQLTypes t, bool n) : Expr (t, !n), is_null(n) { if (n) set_null_value(); }
+      Constant(SQLTypes t, bool n, Datum v) : Expr (t, !n), is_null(n), constval(v) { if (n) set_null_value(); }
       Constant(const SQLTypeInfo &ti, bool n, Datum v) : Expr(ti), is_null(n), constval(v) { if (n) set_null_value(); }
       virtual ~Constant();
       bool get_is_null() const { return is_null; }
@@ -203,7 +203,7 @@ namespace Analyzer {
   class UOper : public Expr {
     public:
       UOper(const SQLTypeInfo &ti, bool has_agg, SQLOps o, Expr *p) : Expr(ti, has_agg), optype(o), operand(p) {}
-      UOper(SQLTypes t, SQLOps o, Expr *p) : Expr(t), optype(o), operand(p) {}
+      UOper(SQLTypes t, SQLOps o, Expr *p) : Expr(t, o == kISNULL ? true : p->get_type_info().get_notnull()), optype(o), operand(p) {}
       virtual ~UOper() { if (operand != nullptr) delete operand; }
       SQLOps get_optype() const { return optype; }
       const Expr *get_operand() const { return operand; }
@@ -233,7 +233,7 @@ namespace Analyzer {
   class BinOper : public Expr {
     public:
       BinOper(const SQLTypeInfo &ti, bool has_agg, SQLOps o, SQLQualifier q, Expr *l, Expr *r) : Expr(ti, has_agg), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
-      BinOper(SQLTypes t, SQLOps o, SQLQualifier q, Expr *l, Expr *r) : Expr(t), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
+      BinOper(SQLTypes t, SQLOps o, SQLQualifier q, Expr *l, Expr *r) : Expr(t, l->get_type_info().get_notnull() && r->get_type_info().get_notnull()), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
       virtual ~BinOper() { delete left_operand; delete right_operand; }
       SQLOps get_optype() const { return optype; }
       SQLQualifier get_qualifier() const { return qualifier; }
@@ -298,7 +298,7 @@ namespace Analyzer {
    */
   class InValues : public Expr {
     public:
-      InValues(Expr *a, std::list<Expr*> *l) : Expr(kBOOLEAN), arg(a), value_list(l) {}
+      InValues(Expr *a, std::list<Expr*> *l) : Expr(kBOOLEAN, true), arg(a), value_list(l) {}
       virtual ~InValues();
       const Expr *get_arg() const { return arg; }
       const std::list<Expr*> *get_value_list() const { return value_list; }
@@ -324,7 +324,7 @@ namespace Analyzer {
    */
   class LikeExpr : public Expr {
     public:
-      LikeExpr(Expr *a, Expr *l, Expr *e, bool i) : Expr(kBOOLEAN), arg(a), like_expr(l), escape_expr(e), is_ilike(i) {}
+      LikeExpr(Expr *a, Expr *l, Expr *e, bool i) : Expr(kBOOLEAN, a->get_type_info().get_notnull()), arg(a), like_expr(l), escape_expr(e), is_ilike(i) {}
       virtual ~LikeExpr() { delete arg; }
       const Expr *get_arg() const { return arg; }
       const Expr *get_like_expr() const { return like_expr; }
@@ -354,7 +354,7 @@ namespace Analyzer {
   class AggExpr : public Expr {
     public:
       AggExpr(const SQLTypeInfo &ti, SQLAgg a, Expr *g, bool d) : Expr(ti, true), aggtype(a), arg(g), is_distinct(d) {}
-      AggExpr(SQLTypes t, SQLAgg a, Expr *g, bool d, int idx) : Expr(SQLTypeInfo(t), true), aggtype(a), arg(g), is_distinct(d) {}
+      AggExpr(SQLTypes t, SQLAgg a, Expr *g, bool d, int idx) : Expr(SQLTypeInfo(t, g == nullptr ? true : g->get_type_info().get_notnull()), true), aggtype(a), arg(g), is_distinct(d) {}
       virtual ~AggExpr() { delete arg; }
       SQLAgg get_aggtype() const { return aggtype; }
       const Expr *get_arg() const { return arg; }

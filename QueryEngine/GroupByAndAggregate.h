@@ -240,15 +240,16 @@ private:
 
 inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+  bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
-    return { false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT), false, false };
+    return { false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT, notnull), false, false };
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();
   if (!agg_arg) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!agg_expr->get_is_distinct());
-    return { true, kCOUNT, SQLTypeInfo(kBIGINT), false, false };
+    return { true, kCOUNT, SQLTypeInfo(kBIGINT, notnull), false, false };
   }
   const auto& agg_arg_ti = agg_arg->get_type_info();
   bool is_distinct { false };

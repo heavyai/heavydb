@@ -400,7 +400,7 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   std::string fn_name { expr->get_is_ilike() ? "string_ilike" : "string_like" };
   if (is_nullable) {
     fn_name += "_nullable";
-    str_like_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN)));
+    str_like_args.push_back(inlineIntNull(expr->get_type_info()));
   }
   return cgen_state_->emitCall(fn_name, str_like_args);
 }
@@ -940,7 +940,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
         }
         std::vector<llvm::Value*> str_cmp_args { lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2] };
         if (!not_null) {
-          str_cmp_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN)));
+          str_cmp_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN, not_null)));
         }
         return cgen_state_->emitCall(string_cmp_func(optype) + (not_null ? "" : "_nullable"), str_cmp_args);
       } else {
@@ -952,7 +952,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
       ? cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
       : cgen_state_->emitCall(icmp_name(optype) + "_" + int_typename + "_nullable",
         { lhs_lvs.front(), rhs_lvs.front(), ll_int(inline_int_null_val(lhs_ti)),
-          inlineIntNull(SQLTypeInfo(kBOOLEAN)) });
+          inlineIntNull(SQLTypeInfo(kBOOLEAN, not_null)) });
   }
   if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
     const std::string fp_typename { lhs_ti.get_type() == kFLOAT ? "float" : "double" };
@@ -962,7 +962,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
         {
           lhs_lvs.front(), rhs_lvs.front(),
           lhs_ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE),
-          inlineIntNull(SQLTypeInfo(kBOOLEAN))
+          inlineIntNull(SQLTypeInfo(kBOOLEAN, not_null))
         });
   }
   CHECK(false);
