@@ -180,7 +180,7 @@ copy_table(char *filepath, char *table, ClientContext &context)
       input_rows.push_back(row);
       if (input_rows.size() >= LOAD_PATCH_SIZE) {
         try {
-          context.client.load_table_string(context.session, table, input_rows);
+          context.client.load_table(context.session, table, input_rows);
         }
         catch (TMapDException &e) {
           std::cerr << e.error_msg << std::endl;
@@ -192,7 +192,7 @@ copy_table(char *filepath, char *table, ClientContext &context)
       }
     }
     if (input_rows.size() > 0)
-      context.client.load_table_string(context.session, table, input_rows);
+      context.client.load_table(context.session, table, input_rows);
   }
   catch (TMapDException &e) {
     std::cerr << e.error_msg << std::endl;

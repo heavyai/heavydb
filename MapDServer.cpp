@@ -431,7 +431,7 @@ public:
       loader.checkpoint();
   }
 
-  void load_table_string(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
+  void load_table(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
