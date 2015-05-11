@@ -80,6 +80,7 @@ SysCatalog::createDatabase(const string &name, int owner)
 void
 SysCatalog::dropDatabase(const int32_t dbid, const std::string &name)
 {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
 	sqliteConnector_.query("DELETE FROM mapd_databases WHERE dbid = " + std::to_string(dbid));
 	boost::filesystem::remove(basePath_+"/mapd_catalogs/" + name);
 	ChunkKey chunkKeyPrefix = {dbid};
@@ -90,6 +91,7 @@ SysCatalog::dropDatabase(const int32_t dbid, const std::string &name)
 bool
 SysCatalog::getMetadataForUser(const string &name, UserMetadata &user)
 {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
 	sqliteConnector_.query("SELECT userid, name, passwd, issuper FROM mapd_users WHERE name = '" + name + "'");
 	int numRows = sqliteConnector_.getNumRows();
 	if (numRows == 0)
@@ -104,6 +106,7 @@ SysCatalog::getMetadataForUser(const string &name, UserMetadata &user)
 list<DBMetadata>
 SysCatalog::getAllDBMetadata()
 {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
 	sqliteConnector_.query("SELECT dbid, name, owner FROM mapd_databases");
 	int numRows = sqliteConnector_.getNumRows();
 	list<DBMetadata> db_list;
@@ -120,6 +123,7 @@ SysCatalog::getAllDBMetadata()
 list<UserMetadata>
 SysCatalog::getAllUserMetadata() 
 {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
 	sqliteConnector_.query("SELECT userid, name, issuper FROM mapd_users");
 	int numRows = sqliteConnector_.getNumRows();
 	list<UserMetadata> user_list;
@@ -136,6 +140,7 @@ SysCatalog::getAllUserMetadata()
 bool
 SysCatalog::getMetadataForDB(const string &name, DBMetadata &db)
 {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
 	sqliteConnector_.query("SELECT dbid, name, owner FROM mapd_databases WHERE name = '" + name + "'");
 	int numRows = sqliteConnector_.getNumRows();
 	if (numRows == 0)
