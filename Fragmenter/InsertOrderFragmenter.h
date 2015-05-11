@@ -20,7 +20,7 @@ namespace Data_Namespace {
     class DataMgr; 
 }
 
-#define DEFAULT_FRAGMENT_SIZE		1000000 // in tuples
+#define DEFAULT_FRAGMENT_SIZE		8000000 // in tuples
 #define DEFAULT_PAGE_SIZE				1048576 // in bytes
 
 namespace Fragmenter_Namespace {
