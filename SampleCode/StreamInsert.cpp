@@ -27,7 +27,7 @@ using boost::shared_ptr;
 
 namespace {
   // anonymous namespace for private functions
-  const int32_t INSERT_BATCH_SIZE = 10000;
+  const size_t INSERT_BATCH_SIZE = 10000;
 
   // reads tab-delimited rows from std::cin and load them to
   // table_name in batches of size INSERT_BATCH_SIZE until done
