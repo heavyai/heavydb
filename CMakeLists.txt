@@ -35,6 +35,7 @@ ADD_SUBDIRECTORY    (Shared)
 ADD_SUBDIRECTORY    (Utils)
 ADD_SUBDIRECTORY    (Tests)
 ADD_SUBDIRECTORY    (SQLFrontend)
+ADD_SUBDIRECTORY    (SampleCode)
 
 set(mapd_source_files main.cpp ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
 add_executable(mapd ${mapd_source_files})
