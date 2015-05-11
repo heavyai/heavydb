@@ -42,11 +42,12 @@
 
 
 Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x,
-                   const std::string& debug_dir, const std::string& debug_file)
+                   const std::string& mapd_root, const std::string& debug_dir, const std::string& debug_file)
   : cgen_state_(new CgenState())
   , is_nested_(false)
   , block_size_x_(block_size_x)
   , grid_size_x_(grid_size_x)
+  , mapd_root_(mapd_root)
   , debug_dir_(debug_dir)
   , debug_file_(debug_file)
   , db_id_(db_id)
@@ -54,6 +55,7 @@ Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid
 
 std::shared_ptr<Executor> Executor::getExecutor(
     const int db_id,
+    const char* mapd_root,
     const std::string& debug_dir,
     const std::string& debug_file,
     const size_t block_size_x,
@@ -62,7 +64,7 @@ std::shared_ptr<Executor> Executor::getExecutor(
   if (it != executors_.end()) {
     return it->second;
   }
-  auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file);
+  auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, mapd_root, debug_dir, debug_file);
   auto it_ok = executors_.insert(std::make_pair(std::make_tuple(db_id, block_size_x, grid_size_x), executor));
   CHECK(it_ok.second);
   return executor;
@@ -2964,8 +2966,12 @@ R"(
   auto ptx = generatePTX(cuda_llir.c_str(), cuda_llir.size(), nullptr);
   CHECK(ptx);
 
+  boost::filesystem::path gpu_rt_path(mapd_root_);
+  gpu_rt_path /= "QueryEngine";
+  gpu_rt_path /= "cuda_mapd_rt.a";
+
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
-    auto gpu_context = new GpuCompilationContext(ptx, func_name, "./QueryEngine/cuda_mapd_rt.a",
+    auto gpu_context = new GpuCompilationContext(ptx, func_name, gpu_rt_path.string(),
       device_id, cuda_mgr, block_size_x_);
     auto native_code = gpu_context->kernel();
     CHECK(native_code);

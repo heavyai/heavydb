@@ -12,6 +12,7 @@
 #include "Shared/measure.h"
 #include "Import/Importer.h"
 #include "MapDRelease.h"
+#include "Shared/mapdpath.h"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -72,7 +73,16 @@ TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(const std::string& base_data_path, const std::string& executor_device, const bool jit_debug) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX), jit_debug_(jit_debug) {
+  MapDHandler(
+      const std::string& mapd_root,
+      const std::string& base_data_path,
+      const std::string& executor_device,
+      const bool jit_debug)
+    : mapd_root_(mapd_root)
+    , base_data_path_(base_data_path)
+    , random_gen_(std::random_device{}())
+    , session_id_dist_(0, INT32_MAX)
+    , jit_debug_(jit_debug) {
         LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
@@ -205,7 +215,8 @@ public:
         Planner::Optimizer optimizer(query, cat);
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
+        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+            mapd_root_.c_str(), jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
         ResultRows results({}, nullptr, nullptr);
         execute_time += measure<>::execution([&]() {
           results = executor->execute(root_plan,true,executor_device_type_);
@@ -480,6 +491,7 @@ private:
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
   std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 
+  const std::string mapd_root_;
   const std::string base_data_path_;
   ExecutorDeviceType executor_device_type_;
   std::default_random_engine random_gen_;
@@ -584,7 +596,7 @@ int main(int argc, char **argv) {
     FLAGS_logbuflevel=-1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
-  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device, jit_debug));
+  shared_ptr<MapDHandler> handler(new MapDHandler(mapd_root_from_exe_path(argv[0]), base_path, device, jit_debug));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
