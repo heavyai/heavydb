@@ -17,6 +17,7 @@
 #include <glog/logging.h>
 #include "../Shared/sqltypes.h"
 #include "../Shared/sqldefs.h"
+#include "../Shared/domain.h"
 #include "../Catalog/Catalog.h"
 
 namespace Analyzer {
@@ -100,6 +101,11 @@ namespace Analyzer {
        * @brief decompress adds cast operator to decompress encoded result
        */
       Expr* decompress();
+      /*
+       * @brief perform domain analysis on Expr and fill in the Domain
+       * information in domain
+       */
+      virtual void get_domain(Domain &domain) {}
 
     protected:
       SQLTypeInfo type_info; // SQLTypeInfo of the return result of this expression
