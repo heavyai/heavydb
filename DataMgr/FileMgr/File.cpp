@@ -103,6 +103,7 @@ namespace File_Namespace {
         //size_t bytesWritten = fwrite(buf, sizeof(int8_t)*size,1, f) * size;
         if (bytesWritten < 1)
             throw std::runtime_error("Error writing buffer to file.");
+        fflush(f);
         return bytesWritten;
     }
     

@@ -13,6 +13,7 @@
 #include "Analyzer/Analyzer.h"
 #include "Parser/ParserNode.h"
 #include "Planner/Planner.h"
+#include "Shared/mapdpath.h"
 #include "QueryEngine/Execute.h"
 #include "MapDRelease.h"
 
@@ -321,7 +322,9 @@ main(int argc, char* argv[])
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
 					if (debug) plan->print();
 					if (execute) {
-						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
+						auto mapd_root = mapd_root_from_exe_path(realpath(argv[0], nullptr));
+						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId,
+							mapd_root.c_str(), jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
 						ResultRows results({}, nullptr, nullptr);
 						ResultRows results_cpu({}, nullptr, nullptr);
 						{

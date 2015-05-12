@@ -364,8 +364,6 @@ namespace File_Namespace {
         if (chunk->isDirty()) {
             throw std::runtime_error("Chunk inconsistency");
         }
-        //std::cout << "Old chunk size: " << oldChunkSize << std::endl;
-        //std::cout << "New chunk size: " << newChunkSize << std::endl;
         if (srcBuffer->isUpdated()) {
             //@todo use dirty flags to only flush pages of chunk that need to
             //be flushed
@@ -506,7 +504,6 @@ namespace File_Namespace {
 
     FILE * FileMgr::getFileForFileId(const int fileId) {
         assert (fileId >= 0);
-        //assert(fileId < nextFileId_);
         return files_[fileId]->f;
     }
     /*

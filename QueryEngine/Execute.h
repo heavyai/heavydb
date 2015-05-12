@@ -56,10 +56,11 @@ class Executor {
     "Host hardware not supported, unexpected size of float / double.");
 public:
   Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x,
-           const std::string& debug_dir, const std::string& debug_file);
+           const std::string& mapd_root, const std::string& debug_dir, const std::string& debug_file);
 
   static std::shared_ptr<Executor> getExecutor(
     const int db_id,
+    const char* mapd_root,
     const std::string& debug_dir = "",
     const std::string& debug_file = "",
     const size_t block_size_x = 1024,
@@ -482,6 +483,7 @@ private:
   const size_t small_groups_buffer_entry_count_ { 512 };
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
+  const std::string mapd_root_;
   const std::string debug_dir_;
   const std::string debug_file_;
 

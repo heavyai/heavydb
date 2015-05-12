@@ -36,6 +36,7 @@ namespace File_Namespace {
         //std::vector<Page*> pages;			/// Page pointers for each page (including free pages)
         std::set<size_t> freePages; 	/// set of page numbers of free pages
         std::mutex freePagesMutex_;  
+        std::mutex readWriteMutex_;  
         
         /// Constructor
         FileInfo(const int fileId, FILE *f, const size_t pageSize, const size_t numPages, const bool init = false);
@@ -50,6 +51,8 @@ namespace File_Namespace {
 
         void freePage(int pageId);
         int getFreePage();
+        size_t write(const size_t offset, const size_t size, int8_t *buf);
+        size_t read(const size_t offset, const size_t size, int8_t *buf);
             
         void openExistingFile(std::vector<HeaderInfo> &headerVec, const int fileMgrEpoch);
         /// Prints a summary of the file to stdout
@@ -62,8 +65,11 @@ namespace File_Namespace {
 
         inline int syncToDisk() {
             fflush(f);
+            #ifdef __APPLE__
+            return fcntl(fileno(f),51);
+            #else
             return fsync(fileno(f));
-            //return fcntl(fileno(f),51);
+            #endif
 
         }
         

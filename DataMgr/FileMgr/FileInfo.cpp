@@ -31,9 +31,19 @@ namespace File_Namespace {
         int headerSize = 0;
         int8_t * headerSizePtr = (int8_t *)(&headerSize);
         for (size_t pageId = 0; pageId < numPages; ++pageId) {
-            write(f,pageId*pageSize,sizeof(int),headerSizePtr);
+            File_Namespace::write(f,pageId*pageSize,sizeof(int),headerSizePtr);
             freePages.insert(pageId);
         }
+    }
+
+    size_t FileInfo::write(const size_t offset, const size_t size, int8_t *buf) {
+        std::lock_guard < std::mutex > lock (readWriteMutex_);
+        return File_Namespace::write(f,offset,size,buf);
+    }
+
+    size_t FileInfo::read(const size_t offset, const size_t size, int8_t *buf) {
+        std::lock_guard < std::mutex > lock (readWriteMutex_);
+        return File_Namespace::read(f,offset,size,buf);
     }
 
     void FileInfo::openExistingFile(std::vector<HeaderInfo> &headerVec, const int fileMgrEpoch) {
@@ -75,7 +85,7 @@ namespace File_Namespace {
                     // First write 0 to first four bytes of
                     // header to mark as free
                     headerSize = 0;
-                    write(f,pageNum*pageSize,sizeof(int),(int8_t *)&headerSize);
+                    File_Namespace::write(f,pageNum*pageSize,sizeof(int),(int8_t *)&headerSize);
                     // Now add page to free list
                     freePages.insert(pageNum);
                     //std::cout << "Not checkpointed" << std::endl;
@@ -96,7 +106,7 @@ namespace File_Namespace {
     void FileInfo::freePage(int pageId) {
         int zeroVal = 0;
         int8_t * zeroAddr = reinterpret_cast<int8_t *> (&zeroVal);
-        write(f,pageId*pageSize,sizeof(int),zeroAddr);
+        File_Namespace::write(f,pageId*pageSize,sizeof(int),zeroAddr);
         std::lock_guard < std::mutex > lock (freePagesMutex_);
         freePages.insert(pageId);
     }

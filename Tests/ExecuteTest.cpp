@@ -5,6 +5,7 @@
 #include "../Parser/ParserNode.h"
 #include "../Planner/Planner.h"
 #include "../QueryEngine/Execute.h"
+#include "../Shared/mapdpath.h"
 #include "../SqliteConnector/SqliteConnector.h"
 
 #include <boost/algorithm/string.hpp>
@@ -43,6 +44,8 @@ Catalog_Namespace::SessionInfo *get_session() {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session(get_session());
 
+std::string g_mapd_root;
+
 ResultRows run_multiple_agg(
     const string& query_str,
     const ExecutorDeviceType device_type) {
@@ -62,7 +65,7 @@ ResultRows run_multiple_agg(
   Planner::Optimizer optimizer(query, g_cat);
   Planner::RootPlan *plan = optimizer.optimize();
   unique_ptr<Planner::RootPlan> plan_ptr(plan); // make sure it's deleted
-  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId, "", "", 8, 8);
+  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId, g_mapd_root.c_str(), "", "", 8, 8);
   return executor->execute(plan, true, device_type, ExecutorOptLevel::LoopStrengthReduction);
 }
 
@@ -602,6 +605,7 @@ TEST(Select, BooleanColumn) {
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
+  g_mapd_root = mapd_root_from_exe_path(argv[0]);
   try {
     const std::string drop_old_test { "DROP TABLE IF EXISTS test;" };
     run_ddl_statement(drop_old_test);
