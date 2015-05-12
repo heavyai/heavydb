@@ -145,6 +145,16 @@ namespace File_Namespace {
         size_t startPage = offset / pageDataSize_;
         size_t startPageOffset = offset % pageDataSize_;
         size_t numPagesToRead = (numBytes + startPageOffset + pageDataSize_ - 1) / pageDataSize_;
+        /*
+        if (startPage + numPagesToRead > multiPages_.size()) {
+            cout << "Start page: " << startPage << endl;
+            cout << "Num pages to read: " << numPagesToRead << endl;
+            cout << "Num multipages: " << multiPages_.size() << endl;
+            cout << "Offset: " << offset << endl;
+            cout << "Num bytes: " << numBytes << endl;
+        }
+        */
+
         CHECK (startPage + numPagesToRead <= multiPages_.size());
         size_t bytesLeft = numBytes;
 
@@ -153,20 +163,19 @@ namespace File_Namespace {
 
             CHECK(multiPages_[pageNum].pageSize == pageSize_);
             Page page = multiPages_[pageNum].current();
-            //printf("read: fileId=%d pageNum=%lu pageSize=%lu\n", page.fileId, page.pageNum, pageDataSize_);
 
             //FILE *f = fm_->files_[page.fileId]->f;
-            FILE *f = fm_->getFileForFileId(page.fileId);
-            CHECK(f);
+            FileInfo *fileInfo = fm_->getFileInfoForFileId(page.fileId);
+            CHECK(fileInfo);
 
             // Read the page into the destination (dst) buffer at its
             // current (cur) location
             size_t bytesRead;
             if (pageNum == startPage) {
-                bytesRead = File_Namespace::read(f, page.pageNum * pageSize_ + startPageOffset + reservedHeaderSize_, min(pageDataSize_ - startPageOffset,bytesLeft), curPtr);
+                bytesRead = fileInfo->read(page.pageNum * pageSize_ + startPageOffset + reservedHeaderSize_, min(pageDataSize_ - startPageOffset,bytesLeft), curPtr);
             }
             else {
-                bytesRead = File_Namespace::read(f, page.pageNum * pageSize_ + reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
+                bytesRead = fileInfo->read(page.pageNum * pageSize_ + reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
             }
             curPtr += bytesRead;
             bytesLeft -= bytesRead;
@@ -178,12 +187,13 @@ namespace File_Namespace {
         //FILE *srcFile = fm_->files_[srcPage.fileId]->f;
         //FILE *destFile = fm_->files_[destPage.fileId]->f;
         CHECK(offset + numBytes < pageDataSize_);
-        FILE *srcFile = fm_->getFileForFileId(srcPage.fileId); 
-        FILE *destFile = fm_->getFileForFileId(destPage.fileId); 
+        FileInfo *srcFileInfo = fm_->getFileInfoForFileId(srcPage.fileId);
+        FileInfo *destFileInfo = fm_->getFileInfoForFileId(destPage.fileId);
+
         int8_t * buffer = new int8_t [numBytes]; 
-        size_t bytesRead = File_Namespace::read(srcFile,srcPage.pageNum * pageSize_ + offset+reservedHeaderSize_, numBytes, buffer);
+        size_t bytesRead = srcFileInfo->read(srcPage.pageNum * pageSize_ + offset+reservedHeaderSize_, numBytes, buffer);
         CHECK(bytesRead == numBytes);
-        size_t bytesWritten = File_Namespace::write(destFile,destPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
+        size_t bytesWritten = destFileInfo->write(destPage.pageNum * pageSize_ + offset + reservedHeaderSize_, numBytes, buffer);
         CHECK(bytesWritten == numBytes);
         delete [] buffer;
     }
@@ -201,19 +211,13 @@ namespace File_Namespace {
         int intHeaderSize = chunkKey_.size() + 3; // does not include chunkSize
         vector <int> header (intHeaderSize);
         // in addition to chunkkey we need size of header, pageId, version
-        //header[0] = (intHeaderSize - 1) * sizeof(int) + sizeof(size_t); // don't need to include size of headerSize value - sizeof(size_t) is for chunkSize
         header[0] = (intHeaderSize - 1) * sizeof(int); // don't need to include size of headerSize value - sizeof(size_t) is for chunkSize
         std::copy(chunkKey_.begin(), chunkKey_.end(), header.begin() + 1);
         header[intHeaderSize-2] = pageId;
         header[intHeaderSize-1] = epoch;
-        FILE *f = fm_->getFileForFileId(page.fileId);
+        FileInfo *fileInfo = fm_->getFileInfoForFileId(page.fileId);
         size_t pageSize = writeMetadata ? METADATA_PAGE_SIZE : pageSize_;
-        File_Namespace::write(f, page.pageNum*pageSize,(intHeaderSize) * sizeof(int),(int8_t *)&header[0]);
-        /*
-        if (writeSize) {
-            File_Namespace::write(f, page.pageNum*pageSize_ + intHeaderSize*sizeof(int),sizeof(size_t),(int8_t *)&size_);
-        }
-        */
+        fileInfo->write(page.pageNum*pageSize,(intHeaderSize) * sizeof(int),(int8_t *)&header[0]);
     }
 
     void FileBuffer::readMetadata(const Page &page) { 
@@ -311,20 +315,16 @@ namespace File_Namespace {
                 page = multiPages_[pageNum].current();
             }
             CHECK(page.fileId >= 0); // make sure page was initialized
-            FILE *f = fm_->getFileForFileId(page.fileId);
+            FileInfo *fileInfo = fm_->getFileInfoForFileId(page.fileId);
             size_t bytesWritten;
             if (pageNum == startPage) {
-                bytesWritten = File_Namespace::write(f,page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_, min (pageDataSize_ - startPageOffset,bytesLeft),curPtr);
+                bytesWritten = fileInfo->write(page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_, min (pageDataSize_ - startPageOffset,bytesLeft),curPtr);
             }
             else {
-                bytesWritten = File_Namespace::write(f, page.pageNum * pageSize_+reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
+                bytesWritten = fileInfo->write(page.pageNum * pageSize_+reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
             }
             curPtr += bytesWritten;
             bytesLeft -= bytesWritten;
-            //if (pageNum == startPage + numPagesToWrite - 1) { // if last page
-            //    //@todo make sure we stay consistent on append cases
-            //    writeHeader(page,0,multiPages_[0].epochs.back());
-            //}
         }
         CHECK (bytesLeft == 0);
     }
@@ -387,13 +387,13 @@ namespace File_Namespace {
                 page = multiPages_[pageNum].current();
             }
             CHECK(page.fileId >= 0); // make sure page was initialized
-            FILE *f = fm_->getFileForFileId(page.fileId);
+            FileInfo *fileInfo = fm_->getFileInfoForFileId(page.fileId);
             size_t bytesWritten;
             if (pageNum == startPage) {
-                bytesWritten = File_Namespace::write(f,page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_, min (pageDataSize_ - startPageOffset,bytesLeft),curPtr);
+                bytesWritten = fileInfo->write(page.pageNum*pageSize_ + startPageOffset + reservedHeaderSize_, min (pageDataSize_ - startPageOffset,bytesLeft),curPtr);
             }
             else {
-                bytesWritten = File_Namespace::write(f, page.pageNum * pageSize_+reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
+                bytesWritten = fileInfo->write(page.pageNum * pageSize_+reservedHeaderSize_, min(pageDataSize_,bytesLeft), curPtr);
             }
             curPtr += bytesWritten;
             bytesLeft -= bytesWritten;
@@ -401,7 +401,6 @@ namespace File_Namespace {
                 //@todo below can lead to undefined - we're overwriting num
                 //bytes valid at checkpoint
                 writeHeader(page,0,multiPages_[0].epochs.back(),true);
-                //size_ = offset + numBytes;
             }
         }
         CHECK (bytesLeft == 0);
