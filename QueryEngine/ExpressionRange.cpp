@@ -191,6 +191,9 @@ ExpressionRange getExpressionRange(
     CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
     CHECK(expr_pair.second->get_type_info() == case_ti);
     const auto crt_range = getExpressionRange(expr_pair.second, fragments);
+    if (!crt_range.valid) {
+      return { false, 0, 0 };
+    }
     expr_range = expr_range.valid ? expr_range || crt_range : crt_range;
   }
   const auto else_expr = case_expr->get_else_expr();
