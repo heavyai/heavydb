@@ -517,7 +517,7 @@ int main(int argc, char **argv) {
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu] [-p <port number>][--flush-log][--version|-v]\n";
+			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port number>][--flush-log][--version|-v]\n";
 			return 0;
 		}
 		if (vm.count("version")) {
