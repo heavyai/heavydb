@@ -15,12 +15,31 @@ typedef boost::multiprecision::number<
     void>
   > checked_int64_t;
 
+enum class ExpressionRangeType {
+  Invalid,
+  Integer,
+  FloatingPoint,
+};
+
+class ExpressionRange;
+
+template<typename T>
+T getMin(const ExpressionRange& other);
+
+template<typename T>
+T getMax(const ExpressionRange& other);
 
 class ExpressionRange {
 public:
-  bool valid;
-  int64_t min;
-  int64_t max;
+  ExpressionRangeType type;
+  union {
+    int64_t int_min;
+    double fp_min;
+  };
+  union {
+    int64_t int_max;
+    double fp_max;
+  };
 
   ExpressionRange operator+(const ExpressionRange& other) const;
   ExpressionRange operator-(const ExpressionRange& other) const;
@@ -29,28 +48,63 @@ public:
   ExpressionRange operator||(const ExpressionRange& other) const;
 
 private:
-  template<class BinOp>
+  template<class T, class BinOp>
   ExpressionRange binOp(const ExpressionRange& other, const BinOp& bin_op) const {
-    if (!valid || !other.valid) {
-      return { false, 0, 0 };
+    if (type == ExpressionRangeType::Invalid || other.type == ExpressionRangeType::Invalid) {
+      return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
     }
     try {
-      std::vector<int64_t> limits {
-        bin_op(min, other.min),
-        bin_op(min, other.max),
-        bin_op(max, other.min),
-        bin_op(max, other.max)
+      std::vector<T> limits {
+        bin_op(getMin<T>(*this), getMin<T>(other)),
+        bin_op(getMin<T>(*this), getMax<T>(other)),
+        bin_op(getMax<T>(*this), getMin<T>(other)),
+        bin_op(getMax<T>(*this), getMax<T>(other))
       };
-      return {
-        true,
-        *std::min_element(limits.begin(), limits.end()),
-        *std::max_element(limits.begin(), limits.end())
-      };
+      ExpressionRange result;
+      result.type =
+        (type == ExpressionRangeType::Integer && other.type == ExpressionRangeType::Integer)
+          ? ExpressionRangeType::Integer
+          : ExpressionRangeType::FloatingPoint;
+      switch (result.type) {
+      case ExpressionRangeType::Integer: {
+        result.int_min = *std::min_element(limits.begin(), limits.end());
+        result.int_max = *std::max_element(limits.begin(), limits.end());
+        break;
+      }
+      case ExpressionRangeType::FloatingPoint: {
+        result.fp_min = *std::min_element(limits.begin(), limits.end());
+        result.fp_max = *std::max_element(limits.begin(), limits.end());
+        break;
+      }
+      default:
+        CHECK(false);
+      }
+      return result;
     } catch (...) {
-      return { false, 0, 0 };
+      return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
     }
   }
 };
+
+template<>
+inline int64_t getMin<int64_t>(const ExpressionRange& e) {
+  return e.int_min;
+}
+
+template<>
+inline double getMin<double>(const ExpressionRange& e) {
+  return e.fp_min;
+}
+
+template<>
+inline int64_t getMax<int64_t>(const ExpressionRange& e) {
+  return e.int_max;
+}
+
+template<>
+inline double getMax<double>(const ExpressionRange& e) {
+  return e.fp_max;
+}
 
 ExpressionRange getExpressionRange(
   const Analyzer::Expr*,

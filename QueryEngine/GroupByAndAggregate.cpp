@@ -1007,10 +1007,17 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
 
   const auto expr_range = getExpressionRange(expr, fragments);
-  if (!expr_range.valid) {
+  switch (expr_range.type) {
+  case ExpressionRangeType::Integer:
+    return { GroupByColRangeType::OneColKnownRange, expr_range.int_min, expr_range.int_max };
+  case ExpressionRangeType::Invalid:
+  case ExpressionRangeType::FloatingPoint:
     return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
+  default:
+    CHECK(false);
   }
-  return { GroupByColRangeType::OneColKnownRange, expr_range.min, expr_range.max };
+  CHECK(false);
+  return { GroupByColRangeType::Scan, 0, 0 };
 }
 
 #define LL_CONTEXT executor_->cgen_state_->context_
