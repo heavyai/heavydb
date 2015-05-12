@@ -53,6 +53,7 @@ mapdql [<database>]
        [{-s|--server} <server host>]
 ```
 `mapdql` is the client-side SQL console. All SQL statements can be submitted to the MapD Server and the results are returned and displayed. The options are:
+
 * `[<database>]`: Database to connect to. Not connected to any database if omitted.
 * `[{--user|-u} <user>]`: User to connect as. Not connected to MapD Server if omitted.
 * `[{--passwd|-p} <password>]`: User password. *Will not be in clear-text in production release*.
@@ -209,7 +210,7 @@ COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 Example:
 ```
 COPY tweets from '/tmp/tweets.csv' WITH (nulls = 'NA');
-COPY tweets from '/tmp/tweets.tsv' with (delimiter = '\t', quoted = 'false');
+COPY tweets from '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'false');
 ```
 ##DML
 ###INSERT
