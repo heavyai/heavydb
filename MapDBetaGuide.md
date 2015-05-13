@@ -30,6 +30,7 @@ This command starts the MapD Server process. `<MapD directory>` must match that 
 * `[--flush-log]`: Flush log files to disk. Useful for `tail -f` on log files.
 * `[--version|-v]`: Prints version number.
 
+`mapd_server` automatically re-spawns itself in case of unexpected termination.  To force termination of `mapd_server` kill -9 all `mapd_server` processes.
 ###mapd_http_server
 
 ```
@@ -77,6 +78,7 @@ In addition to SQL statements `mapdql` also accepts the following list of backsl
 * `\copy <file path> <table>`: Copy data from file on client side to table. The file is assumed to be in CSV format unless the file name ends with `.tsv`.
 * `\q`: Quit.
 
+`mapdql` automatically attempts to reconnect to `mapd_server` in case it restarts due to crashes or human intervention.  There is no need to restart or reconnect.
 ##Users and Databases
 
 Users and databases can only be manipulated when connected to database mapd as a super user.
@@ -203,9 +205,10 @@ COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 * `nulls`: a string pattern indicating a field is NULL. By default, an empty string means NULL.
 * `header`: can be either `'true'` or `'false'` indicating whether the input file has a header line in Line 1 that should be skipped.
 * `escape`: a single-character string for escaping quotes. The default is the quote character itself.
-* `quoted`: `'true'` or `'false'` indicating whether the input file contains quoted fields.
+* `quoted`: `'true'` or `'false'` indicating whether the input file contains quoted fields.  The default is `'false'`.
 * `quote`: a single-character string for quoting a field. The default quote character is double quote `"`. All characters are inside quotes are imported as is except for line delimiters.
 * `line_delimiter` a single-character string for terminating each line. The default is `"\n"`.
+* `threads` number of threads for doing the data importing.  The default is the number of CPU cores on the system.
 
 Example:
 ```
@@ -236,3 +239,5 @@ It supports all the common SELECT features except for the following temporary li
 
 * Only a single table is allowed in FROM clause.
 * Subqueries are not supported.
+##Client Interfaces
+MapD uses [Apache Thrift](https://thrift.apache.org) to generate client-side interfaces.  The *interface definitions* are in \$MAPDHOME/mapd.thrift.  See Apache Thrift documentation on how to generate client-side interfaces for different programming languages with Thrift.  Also see \$MAPDHOME/samples for sample client code.
