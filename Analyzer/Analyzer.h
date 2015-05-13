@@ -17,13 +17,14 @@
 #include <glog/logging.h>
 #include "../Shared/sqltypes.h"
 #include "../Shared/sqldefs.h"
-#include "../Shared/domain.h"
 #include "../Catalog/Catalog.h"
 
 namespace Analyzer {
 
   class ColumnVar;
   class TargetEntry;
+  class Expr;
+  typedef std::list<const Expr*> DomainSet;
 
   /*
    * @type Expr
@@ -102,10 +103,10 @@ namespace Analyzer {
        */
       Expr* decompress();
       /*
-       * @brief perform domain analysis on Expr and fill in the Domain
-       * information in domain
+       * @brief perform domain analysis on Expr and fill in domain
+       * information in domain_set.  Empty domain_set means no information.
        */
-      virtual void get_domain(Domain &domain) {}
+      virtual void get_domain(DomainSet &domain_set) const { domain_set.clear(); }
 
     protected:
       SQLTypeInfo type_info; // SQLTypeInfo of the return result of this expression
@@ -403,6 +404,7 @@ namespace Analyzer {
       virtual void print() const;
       virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
       virtual Expr *add_cast(const SQLTypeInfo &new_type_info);
+      virtual void get_domain(DomainSet &domain_set) const;
     private:
       std::list<std::pair<Expr*, Expr*>> expr_pair_list; // a pair of expressions for each WHEN expr1 THEN expr2.  expr1 must be of boolean type.  all expr2's must be of compatible types and will be promoted to the common type.
       Expr *else_expr; // expression for ELSE.  nullptr if omitted.

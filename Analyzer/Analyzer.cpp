@@ -1763,4 +1763,62 @@ namespace Analyzer {
   {
     from_expr->check_group_by(groupby);
   }
+
+  void
+  CaseExpr::get_domain(DomainSet &domain_set) const
+  {
+    for (const auto &p : expr_pair_list) {
+      const Constant *c = dynamic_cast<const Constant*>(p.second);
+      if (c != nullptr) {
+        c->add_unique(domain_set);
+      } else {
+        const ColumnVar *v = dynamic_cast<const ColumnVar*>(p.second);
+        if (v != nullptr) {
+          v->add_unique(domain_set);
+        } else {
+          const UOper *cast = dynamic_cast<const UOper*>(p.second);
+          if (cast != nullptr && cast->get_optype() == kCAST) {
+            const Constant *c = dynamic_cast<const Constant*>(cast->get_operand());
+            if (c != nullptr) {
+              cast->add_unique(domain_set);
+              continue;
+            } else {
+              const ColumnVar *v = dynamic_cast<const ColumnVar*>(p.second);
+              if (v != nullptr) {
+                v->add_unique(domain_set);
+                continue;
+              }
+            }
+          }
+          p.second->get_domain(domain_set);
+          if (domain_set.empty())
+            return;
+        }
+      }
+    }
+    if (else_expr != nullptr) {
+      const Constant *c = dynamic_cast<const Constant*>(else_expr);
+      if (c != nullptr) {
+        c->add_unique(domain_set);
+      } else {
+        const ColumnVar *v = dynamic_cast<const ColumnVar*>(else_expr);
+        if (v != nullptr) {
+          v->add_unique(domain_set);
+        } else {
+          const UOper *cast = dynamic_cast<const UOper*>(else_expr);
+          if (cast != nullptr && cast->get_optype() == kCAST) {
+            const Constant *c = dynamic_cast<const Constant*>(cast->get_operand());
+            if (c != nullptr)
+              c->add_unique(domain_set);
+            else {
+              const ColumnVar *v = dynamic_cast<const ColumnVar*>(else_expr);
+              if (v != nullptr)
+                v->add_unique(domain_set);
+            }
+          }
+        }
+        else_expr->get_domain(domain_set);
+      }
+    }
+  }
 }
