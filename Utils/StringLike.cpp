@@ -9,7 +9,6 @@
 
 #include "StringLike.h"
 #include <stdint.h>
-#include <iostream>
 
 enum LikeStatus {
   kLIKE_TRUE,
