@@ -46,7 +46,7 @@ add_custom_command(
     ARGS ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenIncludes.cpp ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenEpilogue.cpp > ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp)
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h
+    DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ExtractFromTime.cpp GroupByRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     COMMAND clang++
     ARGS -std=c++11 -O3 -c -S -emit-llvm ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
@@ -63,7 +63,7 @@ add_custom_command(
     ARGS -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
 
 add_custom_command(
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu
+    DEPENDS cuda_mapd_rt.cu GroupByRuntime.cpp ExtractFromTime.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
