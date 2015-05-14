@@ -56,31 +56,6 @@ string_like_match(const char *str, const int32_t str_len,
             return kLIKE_ABORT;
           s++; slen--;
           p++; plen--;
-        } else if (*p == '[') {
-          if (slen <=0)
-            return kLIKE_ABORT;
-          const char *pp = p + 1;
-          int pplen = plen - 1;
-          bool match = false;
-          while (pplen > 0 && *pp != ']') {
-            if ((!is_ilike && *s == *pp) || (is_ilike && lowercase(*s) == *pp)) {
-              match = true;
-              break;
-            }
-            pp++;
-            pplen--;
-          }
-          if (match) {
-            s++; slen--;
-            pplen--;
-            const char *x;
-            for (x = pp + 1; *x != ']' && pplen > 0; x++, pplen--);
-            if (pplen <= 0)
-              return kLIKE_ABORT; // malformed
-            plen -= (x - p + 1);
-            p = x + 1;
-          } else
-            return kLIKE_FALSE;
         } else
           break;
       }
@@ -94,7 +69,24 @@ string_like_match(const char *str, const int32_t str_len,
         firstpat = *p;
 
       while (slen > 0) {
-        if ((!is_ilike && *s == firstpat) || (is_ilike && lowercase(*s) == firstpat)) {
+        bool match = false;
+        if (firstpat == '[') {
+          const char *pp = p + 1;
+          int pplen = plen - 1;
+          while (pplen > 0 && *pp != ']') {
+            if ((!is_ilike && *s == *pp) || (is_ilike && lowercase(*s) == *pp)) {
+              match = true;
+              break;
+            }
+            pp++;
+            pplen--;
+          }
+          if (pplen <= 0)
+            return kLIKE_ERROR; // malformed
+        } else if ((!is_ilike && *s == firstpat) || (is_ilike && lowercase(*s) == firstpat)) {
+          match = true;
+        }
+        if (match) {
           LikeStatus status = string_like_match(s, slen, p, plen, escape_char, is_ilike);
           if (status != kLIKE_FALSE)
             return status;
@@ -124,7 +116,7 @@ string_like_match(const char *str, const int32_t str_len,
         const char *x;
         for (x = pp + 1; *x != ']' && pplen > 0; x++, pplen--);
         if (pplen <= 0)
-          return kLIKE_ABORT; // malformed
+          return kLIKE_ERROR; // malformed
         plen -= (x - p + 1);
         p = x + 1;
         continue;
