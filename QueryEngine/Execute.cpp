@@ -264,9 +264,7 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = p->second > 0
-          ? getStringDictionary(p->second, row_set_mem_owner_)->get(p->first)
-          : getStringDictionary(p->second, row_set_mem_owner_)->getOrAddTransient(p->first);
+        const auto str_id = getStringDictionary(p->second, row_set_mem_owner_)->get(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -680,9 +678,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     }
     const auto& str_const = *constant->get_constval().stringval;
     if (enc_type == kENCODING_DICT) {
-      return { ll_int(dict_id > 0
-        ? getStringDictionary(dict_id, row_set_mem_owner_)->get(str_const)
-        : getStringDictionary(dict_id, row_set_mem_owner_)->getOrAddTransient(str_const)) };
+      return { ll_int(getStringDictionary(dict_id, row_set_mem_owner_)->get(str_const)) };
     }
     return { ll_int(int64_t(0)),
       cgen_state_->addStringConstant(str_const), ll_int(static_cast<int32_t>(str_const.size())) };

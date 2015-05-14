@@ -1815,9 +1815,10 @@ namespace Analyzer {
               if (v != nullptr)
                 v->add_unique(domain_set);
             }
+          } else {
+            else_expr->get_domain(domain_set);
           }
         }
-        else_expr->get_domain(domain_set);
       }
     }
   }

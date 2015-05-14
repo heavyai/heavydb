@@ -1006,7 +1006,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
 
-  const auto expr_range = getExpressionRange(expr, fragments);
+  const auto expr_range = getExpressionRange(expr, fragments, executor_);
   switch (expr_range.type) {
   case ExpressionRangeType::Integer:
     return { GroupByColRangeType::OneColKnownRange, expr_range.int_min, expr_range.int_max };
@@ -1064,7 +1064,34 @@ GroupByAndAggregate::GroupByAndAggregate(
 }
 
 QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count) {
-  auto group_col_widths = get_col_byte_widths(group_by_exprs(plan_));
+  auto group_cols = group_by_exprs(plan_);
+  for (const auto group_expr : group_cols) {
+    const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(group_expr);
+    if (!case_expr) {
+      continue;
+    }
+    Analyzer::DomainSet domain_set;
+    case_expr->get_domain(domain_set);
+    if (domain_set.empty()) {
+      continue;
+    }
+    const auto& case_ti = case_expr->get_type_info();
+    if (case_ti.is_string()) {
+      CHECK_EQ(kENCODING_DICT, case_ti.get_compression());
+      auto sd = executor_->getStringDictionary(case_ti.get_comp_param(), row_set_mem_owner_);
+      CHECK(sd);
+      for (const auto domain_expr : domain_set) {
+        const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(domain_expr);
+        const auto str_lit_expr = cast_expr && cast_expr->get_optype() == kCAST
+          ? dynamic_cast<const Analyzer::Constant*>(cast_expr->get_operand())
+          : dynamic_cast<const Analyzer::Constant*>(domain_expr);
+        if (str_lit_expr && str_lit_expr->get_constval().stringval) {
+          sd->getOrAddTransient(*str_lit_expr->get_constval().stringval);
+        }
+      }
+    }
+  }
+  auto group_col_widths = get_col_byte_widths(group_cols);
   const auto& target_list = plan_->get_targetlist();
   std::vector<Analyzer::Expr*> target_expr_list;
   CountDistinctDescriptors count_distinct_descriptors;
