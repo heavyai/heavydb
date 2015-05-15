@@ -105,8 +105,15 @@ StringToDatum(const std::string &s, SQLTypeInfo &ti)
 				tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
 				if (tp == nullptr)
 					tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct); // accept American date
-				if (tp == nullptr)
-					throw std::runtime_error("Invalid timestamp string " + s);
+				if (tp == nullptr) {
+          try {
+            d.timeval = std::stoll(s);
+            break;
+          }
+          catch (const std::invalid_argument& ia) {
+            throw std::runtime_error("Invalid timestamp string " + s);
+          }
+        }
 				if (*tp == 'T' || *tp == ' ')
 					tp++;
 				else
