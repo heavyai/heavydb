@@ -24,6 +24,8 @@
 #include <random>
 #include <map>
 #include <glog/logging.h>
+#include <signal.h>
+#include <unistd.h>
 
 
 using namespace ::apache::thrift;
@@ -562,6 +564,23 @@ int main(int argc, char **argv) {
     std::cerr << "MapD database " << MAPD_SYSTEM_DB << " does not exist." << std::endl;
     return 1;
   }
+
+  const auto lock_file = boost::filesystem::path(base_path) / "mapd_server_pid.lck";
+  if (boost::filesystem::exists(lock_file)) {
+    std::ifstream lockf;
+    lockf.open(lock_file.c_str());
+    pid_t pid;
+    lockf >> pid;
+    lockf.close();
+    if (kill(pid, 0) == 0) {
+      std::cerr << "Another MapD Server is running on the same MapD directory." << std::endl;
+      return 1;
+    }
+  }
+  std::ofstream lockf;
+  lockf.open(lock_file.c_str(), std::ios::out | std::ios::trunc);
+  lockf << getpid();
+  lockf.close();
 
   while (true) {
     auto pid = fork();

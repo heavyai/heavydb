@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <exception>
 #include <memory>
+#include <unistd.h>
+#include <signal.h>
 #include "boost/program_options.hpp"
 #include "boost/filesystem.hpp"
 #include "DataMgr/DataMgr.h"
@@ -265,6 +267,22 @@ main(int argc, char* argv[])
 		cerr << "MapD not initialized at " + base_path + "\nPlease run initdb first.\n";
 		return 1;
 	}
+  const auto lock_file = boost::filesystem::path(base_path) / "mapd_server_pid.lck";
+  if (boost::filesystem::exists(lock_file)) {
+    std::ifstream lockf;
+    lockf.open(lock_file.c_str());
+    pid_t pid;
+    lockf >> pid;
+    lockf.close();
+    if (kill(pid, 0) == 0) {
+      std::cerr << "Another MapD Server is running on the same MapD directory." << std::endl;
+      return 1;
+    }
+  }
+  std::ofstream lockf;
+  lockf.open(lock_file.c_str(), std::ios::out | std::ios::trunc);
+  lockf << getpid();
+  lockf.close();
 
 	Data_Namespace::DataMgr dataMgr (base_path + "/mapd_data/", true); // second param is to set up gpu buffer pool - yes in this case
 	SysCatalog sys_cat(base_path, dataMgr);
