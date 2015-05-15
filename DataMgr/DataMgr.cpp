@@ -124,7 +124,7 @@ namespace Data_Namespace {
     }
 
     AbstractBuffer * DataMgr::getChunkBuffer(const ChunkKey &key, const MemoryLevel memoryLevel, const int deviceId, const size_t numBytes) {
-        int level = static_cast <int> (memoryLevel);
+        auto level = static_cast<size_t>(memoryLevel);
         assert(level < levelSizes_.size());  // make sure we have a legit buffermgr
         assert(deviceId < levelSizes_[level]); // make sure we have a legit buffermgr
         return bufferMgrs_[level][deviceId]->getBuffer(key, numBytes);
