@@ -199,7 +199,7 @@ class SysCatalog : public Catalog {
  */
 class SessionInfo {
   public:
-    SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata &user) : catalog_(cat), currentUser_(user) {}
+    SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata &user, const ExecutorDeviceType t) : catalog_(cat), currentUser_(user), executor_device_type_(t) {}
     Catalog &get_catalog() const { return *catalog_; };
     const UserMetadata &get_currentUser() const { return currentUser_; }
     const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }
