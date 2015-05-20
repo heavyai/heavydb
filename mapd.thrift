@@ -83,7 +83,7 @@ service MapD {
   list<string> get_tables(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   list<string> get_users() throws (1: ThriftException te)
   list<TDBInfo> get_databases() throws (1: ThriftException te)
-  void set_execution_mode(1: TExecuteMode mode) throws (1: TMapDException e 2: ThriftException te)
+  void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TMapDException e 2: ThriftException te)
   string get_version() throws (1: ThriftException te)
   void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows) throws (1: TMapDException e 2: ThriftException te)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e 2: ThriftException te)

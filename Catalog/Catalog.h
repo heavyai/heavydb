@@ -202,9 +202,12 @@ class SessionInfo {
     SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata &user) : catalog_(cat), currentUser_(user) {}
     Catalog &get_catalog() const { return *catalog_; };
     const UserMetadata &get_currentUser() const { return currentUser_; }
+    const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }
+    void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }
   private:
     std::shared_ptr<Catalog> catalog_;
     UserMetadata currentUser_;
+    ExecutorDeviceType executor_device_type_;
 };
 
 } // Catalog_Namespace

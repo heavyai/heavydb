@@ -14,6 +14,7 @@
 #include "../Catalog/Catalog.h"
 #include "ParserNode.h"
 #include "../Planner/Planner.h"
+#include "../QueryEngine/Execute.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Import/Importer.h"
 #include "../Shared/measure.h"
@@ -132,6 +133,17 @@ namespace Parser {
   CopyTableStmt::~CopyTableStmt()
   {
     delete table;
+    delete file_path;
+    if (options != nullptr) {
+      for (auto p : *options)
+        delete p;
+      delete options;
+    }
+  }
+
+  ExportQueryStmt::~ExportQueryStmt()
+  {
+    delete select_stmt;
     delete file_path;
     if (options != nullptr) {
       for (auto p : *options)
@@ -1562,6 +1574,167 @@ namespace Parser {
       importer.import();
     });
     std::cout << "Total Import Time: " << (double)ms/1000.0 << " Seconds." << std::endl;
+  }
+
+  void
+  ExportQueryStmt::execute(Catalog_Namespace::SessionInfo &session)
+  {
+    auto &catalog = session.get_catalog();
+    auto device_type = session.get_executor_device_type();
+    Importer_NS::CopyParams copy_params;
+    if (options != nullptr) {
+      for (auto p : *options) {
+        if (boost::iequals(*p->get_name(), "delimiter")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Delimiter option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Delimiter must be a single character string.");
+          copy_params.delimiter = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "nulls")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Nulls option must be a string.");
+          copy_params.null_str = *str_literal->get_stringval();
+        } else if (boost::iequals(*p->get_name(), "header")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Header option must be a boolean.");
+          const std::string *s = str_literal->get_stringval();
+          if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+            copy_params.has_header = true;
+          else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+            copy_params.has_header = false;
+          else
+            throw std::runtime_error("Invalid string for boolean " + *s);
+        } else if (boost::iequals(*p->get_name(), "quote")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Quote option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Quote must be a single character string.");
+          copy_params.quote = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "escape")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Escape option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Escape must be a single character string.");
+          copy_params.escape = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "line_delimiter")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Line_delimiter option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Line_delimiter must be a single character string.");
+          copy_params.line_delim = (*str_literal->get_stringval())[0];
+        } else if (boost::iequals(*p->get_name(), "quoted")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Quoted option must be a boolean.");
+          const std::string *s = str_literal->get_stringval();
+          if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+            copy_params.quoted = true;
+          else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+            copy_params.quoted = false;
+          else
+            throw std::runtime_error("Invalid string for boolean " + *s);
+        } else
+          throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
+      }
+    }
+    Analyzer::Query query;
+    select_stmt->analyze(catalog, query);
+    Planner::Optimizer optimizer(query, catalog);
+    auto root_plan = optimizer.optimize();
+    std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);
+    auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
+    ResultRows results({}, nullptr, nullptr);
+    results = executor->execute(root_plan, true, device_type);
+    const auto &targets = root_plan->get_plan()->get_targetlist();
+    std::ofstream outfile;
+    outfile.open(*file_path);
+    for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+      bool not_first = false;
+      for (size_t i = 0; i < results.colCount(); ++i) {
+        bool is_null;
+        const auto agg_result = results.get(row_idx, i, true);
+        if (not_first)
+          outfile << copy_params.delimiter;
+        else
+          not_first = true;
+        if (copy_params.quoted)
+          outfile << copy_params.quote;
+        if (boost::get<int64_t>(&agg_result)) {
+          auto int_val = *(boost::get<int64_t>(&agg_result));
+          switch (targets[i]->get_expr()->get_type_info().get_type()) {
+            case kBOOLEAN:
+              is_null = (int_val == NULL_BOOLEAN);
+              break;
+            case kSMALLINT:
+              is_null = (int_val == NULL_SMALLINT);
+              break;
+            case kINT:
+              is_null = (int_val == NULL_INT);
+              break;
+            case kBIGINT:
+              is_null = (int_val == NULL_BIGINT);
+              break;
+            case kTIME:
+            case kTIMESTAMP:
+            case kDATE:
+              if (sizeof(time_t) == 4)
+                is_null = (int_val == NULL_INT);
+              else
+                is_null = (int_val == NULL_BIGINT);
+              break;
+            default:
+              is_null = false;
+          }
+          if (is_null)
+            outfile << copy_params.null_str;
+          else
+            outfile << int_val;
+        } else if (boost::get<double>(&agg_result)) {
+          auto real_val = *(boost::get<double>(&agg_result));
+          if (targets[i]->get_expr()->get_type_info().get_type() == kFLOAT) {
+            is_null = (real_val == NULL_FLOAT);
+          } else {
+            is_null = (real_val == NULL_DOUBLE);
+          }
+          if (is_null)
+            outfile << copy_params.null_str;
+          else
+            outfile << real_val;
+        } else {
+          auto s = boost::get<std::string>(&agg_result);
+          is_null = !s;
+          if (is_null)
+            outfile << copy_params.null_str;
+          else {
+            if (!copy_params.quoted)
+              outfile << *s;
+            else {
+              size_t q = s->find(copy_params.quote);
+              if (q == std::string::npos)
+                outfile << *s;
+              else {
+                std::string str(*s);
+                while  (q != std::string::npos) {
+                    str.insert(q, 1, copy_params.escape);
+                    q = str.find(copy_params.quote, q + 2);
+                }
+                outfile << str;
+              }
+            }
+          }
+        }
+        if (copy_params.quoted)
+          outfile << copy_params.quote;
+      }
+      outfile << copy_params.line_delim;
+    }
+    outfile.close();
   }
 
   void

@@ -748,6 +748,21 @@ namespace Parser {
   };
 
   /*
+   * @type ExportQueryStmt
+   * @brief COPY ( query ) TO file ...
+   */
+  class ExportQueryStmt : public DDLStmt {
+    public:
+      ExportQueryStmt(SelectStmt *q, std::string *p, std::list<NameValueAssign*> *o) : select_stmt(q), file_path(p), options(o) {}
+      virtual ~ExportQueryStmt();
+      virtual void execute(Catalog_Namespace::SessionInfo &session);
+    private:
+      SelectStmt *select_stmt;
+      std::string *file_path;
+      std::list<NameValueAssign*> *options;
+  };
+
+  /*
    * @type CreateViewStmt
    * @brief CREATE VIEW statement
    */

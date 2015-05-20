@@ -231,14 +231,14 @@ public:
     }
   }
 
-  void set_execution_mode(const TExecuteMode::type mode) {
+  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
     try {
-      client_.set_execution_mode(mode);
+      client_.set_execution_mode(session, mode);
     }
     catch (TException &te) {
       try {
         transport_.open();
-        client_.set_execution_mode(mode);
+        client_.set_execution_mode(session, mode);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;

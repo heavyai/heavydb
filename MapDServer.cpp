@@ -169,6 +169,7 @@ public:
       throw ex;
     }
     auto &cat = session_it->second->get_catalog();
+    auto executor_device_type = session_it->second->get_executor_device_type();
     LOG(INFO) << query_str;
     auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
@@ -210,7 +211,7 @@ public:
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
         ResultRows results({}, nullptr, nullptr);
         execute_time += measure<>::execution([&]() {
-          results = executor->execute(root_plan,true,executor_device_type_);
+          results = executor->execute(root_plan,true, executor_device_type);
         });
         const auto plan = root_plan->get_plan();
         const auto& targets = plan->get_targetlist();
@@ -363,7 +364,15 @@ public:
     }
   }
 
-  void set_execution_mode(const TExecuteMode::type mode) {
+  void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    const std::string &user_name = session_it->second->get_currentUser().userName;
     switch (mode) {
       case TExecuteMode::GPU:
         if (cpu_mode_only_) {
@@ -371,12 +380,12 @@ public:
           e.error_msg = "Cannot switch to GPU mode in a server started in CPU-only mode.";
           throw e;
         }
-        executor_device_type_ = ExecutorDeviceType::GPU;
-        LOG(INFO) << "Client sets GPU mode.";
+        session_it->second->set_executor_device_type(ExecutorDeviceType::GPU);
+        LOG(INFO) << "User " << user_name << " sets GPU mode.";
         break;
       case TExecuteMode::CPU:
-        LOG(INFO) << "Client sets CPU mode.";
-        executor_device_type_ = ExecutorDeviceType::CPU;
+        session_it->second->set_executor_device_type(ExecutorDeviceType::CPU);
+        LOG(INFO) << "User " << user_name << " sets CPU mode.";
         break;
       case TExecuteMode::HYBRID:
         if (cpu_mode_only_) {
@@ -384,8 +393,8 @@ public:
           e.error_msg = "Cannot switch to Hybrid mode in a server started in CPU-only mode.";
           throw e;
         }
-        LOG(INFO) << "Client sets Hybrid mode.";
-        executor_device_type_ = ExecutorDeviceType::Hybrid;
+        session_it->second->set_executor_device_type(ExecutorDeviceType::Hybrid);
+        LOG(INFO) << "User " << user_name << " sets HYBRID mode.";
         break;
     }
   }

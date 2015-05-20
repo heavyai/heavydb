@@ -205,6 +205,10 @@ copy_table_statement:
     {
       $<nodeval>$ = new CopyTableStmt($<stringval>2, $<stringval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5)); 
     }
+    | COPY '(' select_statement ')' TO STRING opt_with_option_list
+    {
+      $<nodeval>$ = new ExportQueryStmt(dynamic_cast<SelectStmt*>($<nodeval>3), $<stringval>6, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7));
+    }
     ;
 
 base_table_element_commalist:

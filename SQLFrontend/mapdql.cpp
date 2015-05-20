@@ -96,7 +96,7 @@ thrift_with_retry(ThriftService which_service, ClientContext &context, char *arg
         context.client.get_users(context.names_return);
         break;
       case kSET_EXECUTION_MODE:
-        context.client.set_execution_mode(context.execution_mode);
+        context.client.set_execution_mode(context.session, context.execution_mode);
         break;
       case kGET_VERSION:
         context.client.get_version(context.version);
