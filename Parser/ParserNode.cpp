@@ -1639,6 +1639,17 @@ namespace Parser {
             copy_params.quoted = false;
           else
             throw std::runtime_error("Invalid string for boolean " + *s);
+        } else if (boost::iequals(*p->get_name(), "header")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Header option must be a boolean.");
+          const std::string *s = str_literal->get_stringval();
+          if (*s == "t" || *s == "true" || *s == "T" || *s == "True")
+            copy_params.has_header = true;
+          else if (*s == "f" || *s == "false" || *s == "F" || *s == "False")
+            copy_params.has_header = false;
+          else
+            throw std::runtime_error("Invalid string for boolean " + *s);
         } else
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
@@ -1654,6 +1665,23 @@ namespace Parser {
     const auto &targets = root_plan->get_plan()->get_targetlist();
     std::ofstream outfile;
     outfile.open(*file_path);
+    if (copy_params.has_header) {
+      bool not_first = false;
+      size_t i = 0;
+      for (const auto &target : targets) {
+        std::string col_name = target->get_resname();
+        if (col_name.empty()) {
+          col_name = "result_" + std::to_string(i + 1);
+        }
+        if (not_first)
+          outfile << copy_params.delimiter;
+        else
+          not_first = true;
+        outfile << col_name;
+        ++i;
+      }
+      outfile << copy_params.line_delim;
+    }
     for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
       bool not_first = false;
       for (size_t i = 0; i < results.colCount(); ++i) {

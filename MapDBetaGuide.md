@@ -30,7 +30,7 @@ This command starts the MapD Server process. `<MapD directory>` must match that 
 * `[--flush-log]`: Flush log files to disk. Useful for `tail -f` on log files.
 * `[--version|-v]`: Prints version number.
 
-`mapd_server` automatically re-spawns itself in case of unexpected termination.  To force termination of `mapd_server` kill -9 all `mapd_server` processes.
+`mapd_server` automatically re-spawns itself in case of unexpected termination.  To force termination of `mapd_server` kill -9 **all** `mapd_server` processes.
 ###mapd_http_server
 
 ```
@@ -69,9 +69,9 @@ In addition to SQL statements `mapdql` also accepts the following list of backsl
 * `\t`: List all tables.
 * `\d <table>`: List all columns of table.
 * `\c <database> <user> <password>`: Connect to a new database.
-* `\gpu`: Switch to GPU mode.
-* `\cpu`: Switch to CPU mode.
-* `\hybrid`: Switch to Hybrid mode.
+* `\gpu`: Switch to GPU mode in the current session.
+* `\cpu`: Switch to CPU mode in the current session.
+* `\hybrid`: Switch to Hybrid mode in the current session.
 * `\timing`: Print timing information.
 * `\notiming`: Do not print timing information.
 * `\version`: Print MapD Server version.
@@ -81,7 +81,7 @@ In addition to SQL statements `mapdql` also accepts the following list of backsl
 `mapdql` automatically attempts to reconnect to `mapd_server` in case it restarts due to crashes or human intervention.  There is no need to restart or reconnect.
 ##Users and Databases
 
-Users and databases can only be manipulated when connected to database mapd as a super user.
+Users and databases can only be manipulated when connected to the MapD system database ``mapd`` as a super user.  MapD ships with a default super user named ``mapd`` with default password ``HyperInteractive``.
 
 ###CREATE USER
 
@@ -106,6 +106,7 @@ ALTER USER <name> (<property> = value, ...);
 ```
 Example:
 ```
+ALTER USER mapd (password = 'MapDIsFast!');
 ALTER USER jason (is_super = 'false', password = 'SilkySmooth');
 ```
 ###CREATE DATABASE
@@ -193,7 +194,7 @@ Example:
 ```
 DROP TABLE IF EXISTS tweets;
 ```
-###COPY
+###COPY FROM
 ```
 COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 ```
@@ -202,7 +203,7 @@ COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 `<property>` in the optional WITH clause can be:
 
 * `delimiter`: a single-character string for the delimiter between input fields. The default is `","`, i.e., as a CSV file.
-* `nulls`: a string pattern indicating a field is NULL. By default, an empty string means NULL.
+* `nulls`: a string pattern indicating a field is NULL. By default, an empty string or \N means NULL.
 * `header`: can be either `'true'` or `'false'` indicating whether the input file has a header line in Line 1 that should be skipped.
 * `escape`: a single-character string for escaping quotes. The default is the quote character itself.
 * `quoted`: `'true'` or `'false'` indicating whether the input file contains quoted fields.  The default is `'false'`.
@@ -214,6 +215,27 @@ Example:
 ```
 COPY tweets from '/tmp/tweets.csv' WITH (nulls = 'NA');
 COPY tweets from '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'false');
+```
+##COPY TO
+```
+COPY ( <SELECT statement> ) TO '<file path>' [WITH (<property> = value, ...)];
+```
+`<file path>` must be a path on the server.  This command exports the results of any SELECT statement to the file.
+
+`<property>` in the optional WITH clause can be:
+
+* `delimiter`: a single-character string for the delimiter between column values. The default is `","`, i.e., as a CSV file.
+* `nulls`: a string pattern indicating a field is NULL. The default is \N.
+* `escape`: a single-character string for escaping quotes. The default is the quote character itself.
+* `quoted`: `'true'` or `'false'` indicating whether all the column values should be output in quotes.  The default is `'false'`.
+* `quote`: a single-character string for quoting a column value. The default quote character is double quote `"`. 
+* `line_delimiter` a single-character string for terminating each line. The default is `"\n"`.
+* `header`: `'true'` or `'false'` indicating whether to output a header line for all the column names.
+
+Example:
+```
+COPY (SELECT * FROM tweets) TO '/tmp/tweets.csv';
+COPY (SELECT * tweets ORDER BY tweet_time LIMIT 10000) TO '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'true');
 ```
 ##DML
 ###INSERT
@@ -239,5 +261,7 @@ It supports all the common SELECT features except for the following temporary li
 
 * Only a single table is allowed in FROM clause.
 * Subqueries are not supported.
+
 ##Client Interfaces
-MapD uses [Apache Thrift](https://thrift.apache.org) to generate client-side interfaces.  The *interface definitions* are in \$MAPDHOME/mapd.thrift.  See Apache Thrift documentation on how to generate client-side interfaces for different programming languages with Thrift.  Also see \$MAPDHOME/samples for sample client code.
+
+MapD uses [Apache Thrift](https://thrift.apache.org) to generate client-side interfaces.  The *interface definitions* are in `$MAPDHOME/mapd.thrift`.  See Apache Thrift documentation on how to generate client-side interfaces for different programming languages with Thrift.  Also see `$MAPDHOME/samples` for sample client code.
