@@ -239,7 +239,5 @@ It supports all the common SELECT features except for the following temporary li
 
 * Only a single table is allowed in FROM clause.
 * Subqueries are not supported.
-
 ##Client Interfaces
-
-MapD uses [Apache Thrift](https://thrift.apache.org) to generate client-side interfaces.  The *interface definitions* are in `$MAPDHOME/mapd.thrift`.  See Apache Thrift documentation on how to generate client-side interfaces for different programming languages with Thrift.  Also see `$MAPDHOME/samples` for sample client code.
+MapD uses [Apache Thrift](https://thrift.apache.org) to generate client-side interfaces.  The *interface definitions* are in \$MAPDHOME/mapd.thrift.  See Apache Thrift documentation on how to generate client-side interfaces for different programming languages with Thrift.  Also see \$MAPDHOME/samples for sample client code.
