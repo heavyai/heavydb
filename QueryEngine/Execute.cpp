@@ -800,20 +800,13 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
     return from_expr;
   }
   CHECK(from_expr->getType()->isIntegerTy(32) || from_expr->getType()->isIntegerTy(64));
-  const auto extract_func = cgen_state_->module_->getFunction("ExtractFromTime");
-  auto arg_it = extract_func->arg_begin();
-  ++arg_it;
-  CHECK(arg_it->getType()->isIntegerTy(32) || arg_it->getType()->isIntegerTy(64));
-  if (arg_it->getType()->isIntegerTy(32) && from_expr->getType()->isIntegerTy(64)) {
+  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
+  if (sizeof(time_t) == 4 && from_expr->getType()->isIntegerTy(64)) {
     from_expr = cgen_state_->ir_builder_.CreateCast(
       llvm::Instruction::CastOps::Trunc, from_expr, get_int_type(32, cgen_state_->context_));
   }
-  CHECK(extract_func);
-  std::vector<llvm::Value*> extract_func_args {
-    ll_int(static_cast<int32_t>(extract_expr->get_field())),
-    from_expr
-  };
-  return cgen_state_->ir_builder_.CreateCall(extract_func, extract_func_args);
+  return cgen_state_->emitExternalCall("ExtractFromTime", get_int_type(64, cgen_state_->context_),
+    { ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr });
 }
 
 namespace {

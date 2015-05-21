@@ -49,7 +49,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register -Wno-write-stri
 SET (parser_source_files
 	ParserNode.cpp
 	ParserNode.h
-#	${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/ExtractFromTime.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/ExtractFromTime.cpp
 )
 
 ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})

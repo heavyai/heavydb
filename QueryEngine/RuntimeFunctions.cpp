@@ -470,6 +470,5 @@ uint64_t string_pack(const int8_t* ptr, const int32_t len) {
 }
 
 #ifdef __clang__
-#include "ExtractFromTime.cpp"
 #include "../Utils/StringLike.cpp"
 #endif

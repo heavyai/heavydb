@@ -46,7 +46,7 @@ add_custom_command(
     ARGS ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenIncludes.cpp ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenEpilogue.cpp > ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp)
 
 add_custom_command(
-    DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ExtractFromTime.cpp GroupByRuntime.cpp
+    DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     COMMAND clang++
     ARGS -std=c++11 -O3 -c -S -emit-llvm ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
