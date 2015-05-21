@@ -134,7 +134,6 @@ private:
   ResultRows executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
-    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,

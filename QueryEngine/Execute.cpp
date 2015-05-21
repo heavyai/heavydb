@@ -100,7 +100,7 @@ ResultRows Executor::executeSelectPlan(
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
     if (limit || offset) {
       const int64_t scan_limit { get_scan_limit(plan, limit) };
-      auto rows = executeAggScanPlan(plan, limit, offset, hoist_literals, device_type, opt_level, cat,
+      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
         row_set_mem_owner_, scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess, error_code);
       rows.dropFirstN(offset);
       if (limit) {
@@ -108,7 +108,7 @@ ResultRows Executor::executeSelectPlan(
       }
       return rows;
     }
-    return executeAggScanPlan(plan, limit, offset, hoist_literals, device_type, opt_level, cat,
+    return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
       row_set_mem_owner_, max_groups_buffer_entry_guess, error_code);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
@@ -1663,7 +1663,7 @@ ResultRows Executor::executeResultPlan(
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  auto result_rows = executeAggScanPlan(agg_plan, 0, 0, hoist_literals, device_type, opt_level, cat,
+  auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
     row_set_mem_owner_, max_groups_buffer_entry_guess, error_code);
   if (*error_code) {
     return ResultRows({}, nullptr, nullptr);
@@ -1755,7 +1755,6 @@ ResultRows Executor::executeSortPlan(
 ResultRows Executor::executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
-    const int64_t offset,
     const bool hoist_literals,
     const ExecutorDeviceType device_type_in,
     const ExecutorOptLevel opt_level,
