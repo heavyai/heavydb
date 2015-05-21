@@ -472,3 +472,56 @@ uint64_t string_pack(const int8_t* ptr, const int32_t len) {
 #ifdef __clang__
 #include "../Utils/StringLike.cpp"
 #endif
+
+extern "C" __attribute__((noinline))
+void query_stub_hoisted_literals(const int8_t** col_buffers,
+                                 const int8_t* literals,
+                                 const int64_t* num_rows,
+                                 const int64_t* max_matched,
+                                 const int64_t* init_agg_value,
+                                 int64_t** out,
+                                 int64_t** out2,
+                                 int32_t* resume_row_index) {
+  assert(col_buffers || literals || num_rows || max_matched || init_agg_value || out || out2 || resume_row_index);
+}
+
+extern "C"
+void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
+                                      const uint32_t* num_fragments,
+                                      const int8_t* literals,
+                                      const int64_t* num_rows,
+                                      const int64_t* max_matched,
+                                      const int64_t* init_agg_value,
+                                      int64_t** out,
+                                      int64_t** out2,
+                                      int32_t* resume_row_index) {
+  for (uint32_t i = 0; i < *num_fragments; ++i) {
+    query_stub_hoisted_literals(col_buffers[i], literals, num_rows, max_matched,
+      init_agg_value, out, out2, resume_row_index);
+  }
+}
+
+extern "C" __attribute__((noinline))
+void query_stub(const int8_t** col_buffers,
+                const int64_t* num_rows,
+                const int64_t* max_matched,
+                const int64_t* init_agg_value,
+                int64_t** out,
+                int64_t** out2,
+                int32_t* resume_row_index) {
+  assert(col_buffers || num_rows || max_matched || init_agg_value || out || out2 || resume_row_index);
+}
+
+extern "C"
+void multifrag_query(const int8_t*** col_buffers,
+                     const uint32_t* num_fragments,
+                     const int64_t* num_rows,
+                     const int64_t* max_matched,
+                     const int64_t* init_agg_value,
+                     int64_t** out,
+                     int64_t** out2,
+                     int32_t* resume_row_index) {
+  for (uint32_t i = 0; i < *num_fragments; ++i) {
+    query_stub(col_buffers[i], num_rows, max_matched, init_agg_value, out, out2, resume_row_index);
+  }
+}

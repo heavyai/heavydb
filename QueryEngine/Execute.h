@@ -173,7 +173,7 @@ private:
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
-    std::vector<const int8_t*>& col_buffers,
+    std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext*,
     const int64_t num_rows,
     Data_Namespace::DataMgr*,
@@ -186,7 +186,7 @@ private:
     ResultRows& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
-    std::vector<const int8_t*>& col_buffers,
+    std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext* query_exe_context,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
@@ -214,10 +214,12 @@ private:
 
   void nukeOldState(const bool allow_lazy_fetch);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
+                                           llvm::Function*,
                                            const bool hoist_literals,
                                            const ExecutorOptLevel,
                                            llvm::Module*);
   std::vector<void*> optimizeAndCodegenGPU(llvm::Function*,
+                                           llvm::Function*,
                                            const bool hoist_literals,
                                            const ExecutorOptLevel,
                                            llvm::Module*,

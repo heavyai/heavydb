@@ -752,7 +752,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const std::vector<void*>& cu_functions,
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
-    std::vector<const int8_t*> col_buffers,
+    std::vector<std::vector<const int8_t*>> col_buffers,
     const int64_t num_rows,
     const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
@@ -764,19 +764,25 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   data_mgr->cudaMgr_->setContext(device_id);
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
-  CUdeviceptr col_buffers_dev_ptr;
-  {
-    const size_t col_count { col_buffers.size() };
-    std::vector<CUdeviceptr> col_dev_buffers;
-    for (auto col_buffer : col_buffers) {
-      col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
-    }
-    if (!col_dev_buffers.empty()) {
-      col_buffers_dev_ptr = alloc_gpu_mem(
+  uint32_t num_fragments = col_buffers.size();
+  CUdeviceptr multifrag_col_buffers_dev_ptr;
+  const size_t col_count { num_fragments > 0 ? col_buffers.front().size() : 0 };
+  if (col_count) {
+    std::vector<CUdeviceptr> multifrag_col_dev_buffers;
+    for (auto frag_col_buffers : col_buffers) {
+      std::vector<CUdeviceptr> col_dev_buffers;
+      for (auto col_buffer : frag_col_buffers) {
+        col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
+      }
+      auto col_buffers_dev_ptr = alloc_gpu_mem(
         data_mgr, col_count * sizeof(CUdeviceptr), device_id);
       copy_to_gpu(data_mgr, col_buffers_dev_ptr, &col_dev_buffers[0],
         col_count * sizeof(CUdeviceptr), device_id);
+      multifrag_col_dev_buffers.push_back(col_buffers_dev_ptr);
     }
+    multifrag_col_buffers_dev_ptr = alloc_gpu_mem(data_mgr, num_fragments * sizeof(CUdeviceptr), device_id);
+    copy_to_gpu(data_mgr, multifrag_col_buffers_dev_ptr, &multifrag_col_dev_buffers[0],
+      num_fragments * sizeof(CUdeviceptr), device_id);
   }
   CUdeviceptr literals_dev_ptr { 0 };
   if (!literal_buff.empty()) {
@@ -789,6 +795,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
     copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows,
       sizeof(int64_t), device_id);
+  }
+  CUdeviceptr num_fragments_dev_ptr { 0 };
+  {
+    num_fragments_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id);
+    copy_to_gpu(data_mgr, num_fragments_dev_ptr, &num_fragments, sizeof(uint32_t), device_id);
   }
   CUdeviceptr max_matched_dev_ptr { 0 };
   {
@@ -819,7 +830,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
         block_size_x, grid_size_x, device_id);
       if (hoist_literals) {
         void* kernel_params[] = {
-          &col_buffers_dev_ptr,
+          &multifrag_col_buffers_dev_ptr,
+          &num_fragments_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
           &max_matched_dev_ptr,
@@ -834,7 +846,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        nullptr, kernel_params, nullptr));
       } else {
         void* kernel_params[] = {
-          &col_buffers_dev_ptr,
+          &multifrag_col_buffers_dev_ptr,
+          &num_fragments_dev_ptr,
           &num_rows_dev_ptr,
           &max_matched_dev_ptr,
           &init_agg_vals_dev_ptr,
@@ -870,7 +883,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       CUdeviceptr unused_dev_ptr { 0 };
       if (hoist_literals) {
         void* kernel_params[] = {
-          &col_buffers_dev_ptr,
+          &multifrag_col_buffers_dev_ptr,
+          &num_fragments_dev_ptr,
           &literals_dev_ptr,
           &num_rows_dev_ptr,
           &max_matched_dev_ptr,
@@ -884,7 +898,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        0, nullptr, kernel_params, nullptr));
       } else {
         void* kernel_params[] = {
-          &col_buffers_dev_ptr,
+          &multifrag_col_buffers_dev_ptr,
+          &num_fragments_dev_ptr,
           &num_rows_dev_ptr,
           &max_matched_dev_ptr,
           &init_agg_vals_dev_ptr,

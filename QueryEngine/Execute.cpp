@@ -1316,7 +1316,7 @@ std::vector<int64_t*> launch_query_cpu_code(
     const std::vector<void*>& fn_ptrs,
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
-    std::vector<const int8_t*> col_buffers,
+    std::vector<std::vector<const int8_t*>> col_buffers,
     const int64_t num_rows,
     const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
@@ -1331,9 +1331,17 @@ std::vector<int64_t*> launch_query_cpu_code(
       out_vec.push_back(static_cast<int64_t*>(buff));
     }
   }
+
+  std::vector<const int8_t**> multifrag_col_buffers;
+  for (auto& col_buffer : col_buffers) {
+    multifrag_col_buffers.push_back(&col_buffer[0]);
+  }
+  const uint32_t num_fragments { 1 };
+
   if (hoist_literals) {
     typedef void (*agg_query)(
-      const int8_t** col_buffers,
+      const int8_t*** col_buffers,
+      const uint32_t* num_fragments,
       const int8_t* literals,
       const int64_t* num_rows,
       const int64_t* max_matched,
@@ -1343,15 +1351,16 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t* resume_row_index);
     *error_code = 0;
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &literal_buff[0],
         &num_rows, &scan_limit, &init_agg_vals[0], &out_vec[0], nullptr, error_code);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &literal_buff[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &literal_buff[0],
         &num_rows, &scan_limit, &init_agg_vals[0], &group_by_buffers[0], &small_group_by_buffers[0], error_code);
     }
   } else {
     typedef void (*agg_query)(
-      const int8_t** col_buffers,
+      const int8_t*** col_buffers,
+      const uint32_t* num_fragments,
       const int64_t* num_rows,
       const int64_t* max_matched,
       const int64_t* init_agg_value,
@@ -1360,11 +1369,11 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t* resume_row_index);
     *error_code = 0;
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &scan_limit,
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &num_rows, &scan_limit,
         &init_agg_vals[0], &out_vec[0], nullptr, error_code);
     } else {
       *error_code = 0;
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&col_buffers[0], &num_rows, &scan_limit,
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &num_rows, &scan_limit,
         &init_agg_vals[0], &group_by_buffers[0], &small_group_by_buffers[0], error_code);
     }
   }
@@ -1721,8 +1730,9 @@ ResultRows Executor::executeResultPlan(
     ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   *error_code = 0;
+  std::vector<std::vector<const int8_t*>> multi_frag_col_buffers { column_buffers };
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
-    column_buffers, result_columns.size(), 0, init_agg_vals,
+    multi_frag_col_buffers, result_columns.size(), 0, init_agg_vals,
     query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, error_code);
   CHECK(!*error_code);
   return query_exe_context->groupBufferToResults(0, target_exprs, false);
@@ -1980,16 +1990,19 @@ ResultRows Executor::executeAggScanPlan(
       int32_t err { 0 };
       ResultRows device_results({}, nullptr, nullptr);
       if (groupby_exprs.empty()) {
+        std::vector<std::vector<const int8_t*>> multi_frag_col_buffers { col_buffers };
         err = executePlanWithoutGroupBy(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan), chosen_device_type,
-          col_buffers, query_exe_context,
+          multi_frag_col_buffers, query_exe_context,
           num_rows, &cat.get_dataMgr(), chosen_device_id);
       } else {
+        std::vector<std::vector<const int8_t*>> multi_frag_col_buffers { col_buffers };
         err = executePlanWithGroupBy(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan),
-          groupby_exprs.size(), chosen_device_type, col_buffers,
+          groupby_exprs.size(), chosen_device_type,
+          multi_frag_col_buffers,
           query_exe_context, num_rows,
           &cat.get_dataMgr(), chosen_device_id,
           scan_limit, device_type == ExecutorDeviceType::Hybrid);
@@ -2075,7 +2088,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     ResultRows& results,
     const std::vector<Analyzer::Expr*>& target_exprs,
     const ExecutorDeviceType device_type,
-    std::vector<const int8_t*>& col_buffers,
+    std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext* query_exe_context,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
@@ -2129,7 +2142,7 @@ int32_t Executor::executePlanWithGroupBy(
     const std::vector<Analyzer::Expr*>& target_exprs,
     const size_t group_by_col_count,
     const ExecutorDeviceType device_type,
-    std::vector<const int8_t*>& col_buffers,
+    std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext* query_exe_context,
     const int64_t num_rows,
     Data_Namespace::DataMgr* data_mgr,
@@ -2495,6 +2508,27 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
   return std::make_pair(row_func, col_heads);
 }
 
+void bind_query(
+    llvm::Function* query_func,
+    const std::string& query_fname,
+    llvm::Function* multifrag_query_func,
+    llvm::Module* module) {
+  for (auto it = llvm::inst_begin(multifrag_query_func), e = llvm::inst_end(multifrag_query_func); it != e; ++it) {
+    if (!llvm::isa<llvm::CallInst>(*it)) {
+      continue;
+    }
+    auto& query_call = llvm::cast<llvm::CallInst>(*it);
+    std::vector<llvm::Value*> args;
+    for (size_t i = 0; i < query_call.getNumArgOperands(); ++i) {
+      args.push_back(query_call.getArgOperand(i));
+    }
+    if (std::string(query_call.getCalledFunction()->getName()) == query_fname) {
+      llvm::ReplaceInstWithInst(&query_call, llvm::CallInst::Create(query_func, args, ""));
+      break;
+    }
+  }
+}
+
 }  // namespace
 
 void Executor::nukeOldState(const bool allow_lazy_fetch) {
@@ -2671,10 +2705,18 @@ Executor::CompilationResult Executor::compilePlan(
     return {};
   }
 
+  auto multifrag_query_func = cgen_state_->module_->getFunction("multifrag_query" +
+    std::string(hoist_literals ? "_hoisted_literals" : ""));
+  CHECK(multifrag_query_func);
+
+  bind_query(
+    query_func,
+    "query_stub" + std::string(hoist_literals ? "_hoisted_literals" : ""),
+    multifrag_query_func, cgen_state_->module_);
   return Executor::CompilationResult {
     device_type == ExecutorDeviceType::CPU
-      ? optimizeAndCodegenCPU(query_func, hoist_literals, opt_level, cgen_state_->module_)
-      : optimizeAndCodegenGPU(query_func, hoist_literals, opt_level, cgen_state_->module_,
+      ? optimizeAndCodegenCPU(query_func, multifrag_query_func, hoist_literals, opt_level, cgen_state_->module_)
+      : optimizeAndCodegenGPU(query_func, multifrag_query_func, hoist_literals, opt_level, cgen_state_->module_,
                               is_group_by, cuda_mgr),
     cgen_state_->getLiterals(),
     query_mem_desc
@@ -2756,6 +2798,7 @@ void Executor::addCodeToCache(const CodeCacheKey& key,
 }
 
 std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
+                                                   llvm::Function* multifrag_query_func,
                                                    const bool hoist_literals,
                                                    const ExecutorOptLevel opt_level,
                                                    llvm::Module* module) {
@@ -2798,7 +2841,7 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   execution_engine->finalizeObject();
 #endif
 
-  auto native_code = execution_engine->getPointerToFunction(query_func);
+  auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
   CHECK(native_code);
   addCodeToCache(key, { { std::make_tuple(native_code, execution_engine, nullptr) } }, module, cpu_code_cache_);
 
@@ -2866,6 +2909,7 @@ declare i32 @merge_error_code(i32, i32*);
 }  // namespace
 
 std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
+                                                   llvm::Function* multifrag_query_func,
                                                    const bool hoist_literals,
                                                    const ExecutorOptLevel opt_level,
                                                    llvm::Module* module,
@@ -2918,13 +2962,15 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   }
 
   query_func->print(os);
+  multifrag_query_func->print(os);
 
   char nvvm_annotations[1024];
-  auto func_name = query_func->getName().str();
+  auto func_name = multifrag_query_func->getName().str();
   snprintf(nvvm_annotations, sizeof(nvvm_annotations), hoist_literals ?
 R"(
 !nvvm.annotations = !{!0}
-!0 = metadata !{void (i8**,
+!0 = metadata !{void (i8***,
+                      i32*,
                       i8*,
                       i64*,
                       i64*,
@@ -2935,7 +2981,8 @@ R"(
 )" :
 R"(
 !nvvm.annotations = !{!0}
-!0 = metadata !{void (i8**,
+!0 = metadata !{void (i8***,
+                      i32*,
                       i64*,
                       i64*,
                       i64*,
