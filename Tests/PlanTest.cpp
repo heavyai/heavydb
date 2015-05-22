@@ -53,7 +53,7 @@ namespace {
 					CHECK(gsys_cat->getMetadataForDB("gtest_db", db));
 				}
 				Catalog *cat = new Catalog(base_path.string(), db, *dataMgr);
-        gsession = new SessionInfo(std::shared_ptr<Catalog>(cat), user, ExecutorDeviceType::GPU);
+        gsession = new SessionInfo(std::shared_ptr<Catalog>(cat), user, ExecutorDeviceType::GPU, 0);
 			}
 			virtual void TearDown()
 			{

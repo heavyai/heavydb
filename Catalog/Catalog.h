@@ -19,6 +19,7 @@
 #include <utility>
 #include <mutex>
 #include <cstdint>
+#include <ctime>
 
 #include "../SqliteConnector/SqliteConnector.h"
 #include "TableDescriptor.h"
@@ -150,7 +151,7 @@ class Catalog {
          const DBMetadata &get_currentDB() const { return currentDB_; }
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 				 Data_Namespace::DataMgr &get_dataMgr() const { return dataMgr_; }
-         std::string get_basePath() const { return basePath_; }
+         const std::string &get_basePath() const { return basePath_; }
 
          const DictDescriptor *getMetadataForDict(int dictId) const;
 
@@ -199,15 +200,20 @@ class SysCatalog : public Catalog {
  */
 class SessionInfo {
   public:
-    SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata &user, const ExecutorDeviceType t) : catalog_(cat), currentUser_(user), executor_device_type_(t) {}
+    SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata &user, const ExecutorDeviceType t, int32_t sid) : catalog_(cat), currentUser_(user), executor_device_type_(t), session_id(sid), last_used_time(time(0)) {}
     Catalog &get_catalog() const { return *catalog_; };
     const UserMetadata &get_currentUser() const { return currentUser_; }
     const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }
     void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }
+    int32_t get_session_id() const { return session_id; }
+    time_t get_last_used_time() const { return last_used_time; }
+    void update_time() { last_used_time = time(0); }
   private:
     std::shared_ptr<Catalog> catalog_;
     UserMetadata currentUser_;
     ExecutorDeviceType executor_device_type_;
+    int32_t session_id;
+    time_t last_used_time; // for cleaning up SessionInfo after client dies
 };
 
 } // Catalog_Namespace

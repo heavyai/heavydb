@@ -305,7 +305,7 @@ main(int argc, char* argv[])
 		return 1;
 	}
 	Catalog cat(base_path, db, dataMgr);
-  SessionInfo session(std::shared_ptr<Catalog>(&cat), user, ExecutorDeviceType::GPU);
+  SessionInfo session(std::shared_ptr<Catalog>(&cat), user, ExecutorDeviceType::GPU, 0);
 	while (true) {
 		try {
 			cout << "mapd> ";

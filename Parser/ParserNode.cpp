@@ -1664,7 +1664,17 @@ namespace Parser {
     results = executor->execute(root_plan, true, device_type);
     const auto &targets = root_plan->get_plan()->get_targetlist();
     std::ofstream outfile;
+    if (file_path->empty()) {
+      // generate file name as sessionid under mapd_export
+      *file_path = catalog.get_basePath() + "/mapd_export/";
+      if (!boost::filesystem::exists(*file_path))
+        if (!boost::filesystem::create_directory(*file_path))
+          throw std::runtime_error("Directory " + *file_path + " cannot be created.");
+      *file_path += std::to_string(session.get_session_id()) + ".txt";
+    }
     outfile.open(*file_path);
+    if (!outfile)
+      throw std::runtime_error("Cannot open file: " + *file_path);
     if (copy_params.has_header) {
       bool not_first = false;
       size_t i = 0;

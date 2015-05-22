@@ -23,7 +23,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   CHECK(sys_cat.getMetadataForDB(db_name, db));
   CHECK(user.isSuper || (user.userId == db.dbOwner));
   Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_path.string(), db, *dataMgr);
-  return new Catalog_Namespace::SessionInfo(std::shared_ptr<Catalog_Namespace::Catalog>(cat), user, ExecutorDeviceType::GPU);
+  return new Catalog_Namespace::SessionInfo(std::shared_ptr<Catalog_Namespace::Catalog>(cat), user, ExecutorDeviceType::GPU, 0);
 }
 
 ResultRows run_multiple_agg(

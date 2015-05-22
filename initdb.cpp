@@ -61,8 +61,20 @@ main(int argc, char* argv[])
 			return 1;
 		}
 	}
+  std::string export_path = base_path + "/mapd_export";
+	if (boost::filesystem::exists(export_path)) {
+		if (force)
+			boost::filesystem::remove_all(export_path);
+		else {
+			std::cerr << "MapD export directory already exists at " + base_path + ". Use -f to force reinitialization.\n";
+			return 1;
+		}
+	}
 	if (!boost::filesystem::create_directory(catalogs_path)) {
 		std::cerr << "Cannot create mapd_catalogs subdirectory under " << base_path << std::endl;
+	}
+	if (!boost::filesystem::create_directory(export_path)) {
+		std::cerr << "Cannot create mapd_export subdirectory under " << base_path << std::endl;
 	}
 
 	try {

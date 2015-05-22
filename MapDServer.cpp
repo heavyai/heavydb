@@ -138,9 +138,9 @@ public:
     if (cat_it == cat_map_.end()) {
       Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, db_meta, *data_mgr_);
       cat_map_[dbname].reset(cat);
-      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_));;
+      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));;
     } else
-      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_));
+      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
     LOG(INFO) << "User " << user << " connected to database " << dbname << std::endl;
     return session;
   }
@@ -154,6 +154,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    session_it->second->update_time();
     dbname = session_it->second->get_catalog().get_currentDB().dbName;
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname << std::endl;
     sessions_.erase(session_it);
@@ -168,8 +169,10 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    session_it->second->update_time();
     auto &cat = session_it->second->get_catalog();
     auto executor_device_type = session_it->second->get_executor_device_type();
+    session_it->second->update_time();
     LOG(INFO) << query_str;
     auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
@@ -305,6 +308,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    session_it->second->update_time();
     auto &cat = session_it->second->get_catalog(); 
     auto td = cat.getMetadataForTable(table_name);
     if (!td) {
@@ -330,6 +334,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    session_it->second->update_time();
     auto &cat = session_it->second->get_catalog(); 
     const auto tables = cat.getAllTableMetadata();
     for (const auto td : tables) {
@@ -372,6 +377,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    session_it->second->update_time();
     const std::string &user_name = session_it->second->get_currentUser().userName;
     switch (mode) {
       case TExecuteMode::GPU:
@@ -407,6 +413,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    session_it->second->update_time();
     auto &cat = session_it->second->get_catalog(); 
     const TableDescriptor *td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
@@ -450,6 +457,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    session_it->second->update_time();
     auto &cat = session_it->second->get_catalog(); 
     const TableDescriptor *td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
