@@ -203,7 +203,7 @@ COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 `<property>` in the optional WITH clause can be:
 
 * `delimiter`: a single-character string for the delimiter between input fields. The default is `","`, i.e., as a CSV file.
-* `nulls`: a string pattern indicating a field is NULL. By default, an empty string or \N means NULL.
+* `nulls`: a string pattern indicating a field is NULL. By default, an empty string or `\N` means NULL.
 * `header`: can be either `'true'` or `'false'` indicating whether the input file has a header line in Line 1 that should be skipped.
 * `escape`: a single-character string for escaping quotes. The default is the quote character itself.
 * `quoted`: `'true'` or `'false'` indicating whether the input file contains quoted fields.  The default is `'false'`.
@@ -225,7 +225,7 @@ COPY ( <SELECT statement> ) TO '<file path>' [WITH (<property> = value, ...)];
 `<property>` in the optional WITH clause can be:
 
 * `delimiter`: a single-character string for the delimiter between column values. The default is `","`, i.e., as a CSV file.
-* `nulls`: a string pattern indicating a field is NULL. The default is \N.
+* `nulls`: a string pattern indicating a field is NULL. The default is `\N`.
 * `escape`: a single-character string for escaping quotes. The default is the quote character itself.
 * `quoted`: `'true'` or `'false'` indicating whether all the column values should be output in quotes.  The default is `'false'`.
 * `quote`: a single-character string for quoting a column value. The default quote character is double quote `"`. 
@@ -235,7 +235,8 @@ COPY ( <SELECT statement> ) TO '<file path>' [WITH (<property> = value, ...)];
 Example:
 ```
 COPY (SELECT * FROM tweets) TO '/tmp/tweets.csv';
-COPY (SELECT * tweets ORDER BY tweet_time LIMIT 10000) TO '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'true');
+COPY (SELECT * tweets ORDER BY tweet_time LIMIT 10000) TO
+  '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'true');
 ```
 ##DML
 ###INSERT
