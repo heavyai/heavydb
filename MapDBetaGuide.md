@@ -204,7 +204,7 @@ COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 
 * `delimiter`: a single-character string for the delimiter between input fields. The default is `","`, i.e., as a CSV file.
 * `nulls`: a string pattern indicating a field is NULL. By default, an empty string or `\N` means NULL.
-* `header`: can be either `'true'` or `'false'` indicating whether the input file has a header line in Line 1 that should be skipped.
+* `header`: can be either `'true'` or `'false'` indicating whether the input file has a header line in Line 1 that should be skipped.  The default is `'true'`.
 * `escape`: a single-character string for escaping quotes. The default is the quote character itself.
 * `quoted`: `'true'` or `'false'` indicating whether the input file contains quoted fields.  The default is `'false'`.
 * `quote`: a single-character string for quoting a field. The default quote character is double quote `"`. All characters are inside quotes are imported as is except for line delimiters.
@@ -220,7 +220,7 @@ COPY tweets from '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'false');
 ```
 COPY ( <SELECT statement> ) TO '<file path>' [WITH (<property> = value, ...)];
 ```
-`<file path>` must be a path on the server.  This command exports the results of any SELECT statement to the file.
+`<file path>` must be a path on the server.  This command exports the results of any SELECT statement to the file.  There is a special mode when `<file path>` is empty.  In that case, the server automatically generates a file in `<MapD Directory>/mapd_export` that is the client session id with the suffix `.txt`.
 
 `<property>` in the optional WITH clause can be:
 
@@ -230,13 +230,13 @@ COPY ( <SELECT statement> ) TO '<file path>' [WITH (<property> = value, ...)];
 * `quoted`: `'true'` or `'false'` indicating whether all the column values should be output in quotes.  The default is `'false'`.
 * `quote`: a single-character string for quoting a column value. The default quote character is double quote `"`. 
 * `line_delimiter` a single-character string for terminating each line. The default is `"\n"`.
-* `header`: `'true'` or `'false'` indicating whether to output a header line for all the column names.
+* `header`: `'true'` or `'false'` indicating whether to output a header line for all the column names.  The default is `'true'`.
 
 Example:
 ```
 COPY (SELECT * FROM tweets) TO '/tmp/tweets.csv';
 COPY (SELECT * tweets ORDER BY tweet_time LIMIT 10000) TO
-  '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'true');
+  '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'true', header = 'false');
 ```
 ##DML
 ###INSERT
