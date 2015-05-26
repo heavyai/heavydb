@@ -93,13 +93,15 @@ ResultRows Executor::executeSelectPlan(
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
     const size_t max_groups_buffer_entry_guess,
-    int32_t* error_code) {
+    int32_t* error_code,
+    const bool allow_multifrag) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
     if (limit || offset) {
       const int64_t scan_limit { get_scan_limit(plan, limit) };
       auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
-        row_set_mem_owner_, scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess, error_code);
+        row_set_mem_owner_, scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess,
+        error_code, allow_multifrag);
       rows.dropFirstN(offset);
       if (limit) {
         rows.keepFirstN(limit);
@@ -107,7 +109,7 @@ ResultRows Executor::executeSelectPlan(
       return rows;
     }
     return executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
-      row_set_mem_owner_, max_groups_buffer_entry_guess, error_code);
+      row_set_mem_owner_, max_groups_buffer_entry_guess, error_code, allow_multifrag);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -143,7 +145,8 @@ ResultRows Executor::execute(
     const Planner::RootPlan* root_plan,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
-    const ExecutorOptLevel opt_level) {
+    const ExecutorOptLevel opt_level,
+    const bool allow_multifrag) {
   catalog_ = &root_plan->get_catalog();
   const auto stmt_type = root_plan->get_stmt_type();
   std::lock_guard<std::mutex> lock(execute_mutex_);
@@ -153,14 +156,19 @@ ResultRows Executor::execute(
     int32_t error_code { 0 };
     auto rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
       root_plan->get_offset(), hoist_literals, device_type, opt_level, root_plan->get_catalog(),
-      2048, &error_code);
+      2048, &error_code, allow_multifrag);
     if (error_code == ERR_DIV_BY_ZERO) {
       throw std::runtime_error("Division by zero");
+    }
+    if (error_code == ERR_OUT_OF_GPU_MEM) {
+      rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
+        hoist_literals, device_type, opt_level, root_plan->get_catalog(),
+        0, &error_code, false);
     }
     if (error_code) {
       rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
         hoist_literals, ExecutorDeviceType::CPU, opt_level, root_plan->get_catalog(),
-        0, &error_code);
+        0, &error_code, false);
       CHECK(!error_code);
       return rows;
     }
@@ -1671,7 +1679,7 @@ ResultRows Executor::executeResultPlan(
   CHECK(agg_plan);
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
-    row_set_mem_owner_, max_groups_buffer_entry_guess, error_code);
+    row_set_mem_owner_, max_groups_buffer_entry_guess, error_code, false);
   if (*error_code) {
     return ResultRows({}, nullptr, nullptr);
   }
@@ -1749,7 +1757,7 @@ ResultRows Executor::executeSortPlan(
   *error_code = 0;
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
-    error_code);
+    error_code, false);
   rows_to_sort.sort(sort_plan, limit + offset);
   if (limit || offset) {
     rows_to_sort.dropFirstN(offset);
@@ -1769,7 +1777,8 @@ ResultRows Executor::executeAggScanPlan(
     const Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const size_t max_groups_buffer_entry_guess_in,
-    int32_t* error_code) {
+    int32_t* error_code,
+    const bool allow_multifrag) {
   *error_code = 0;
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // TODO(alex): heuristic for group by buffer size
@@ -1893,122 +1902,147 @@ ResultRows Executor::executeAggScanPlan(
   };
   std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts(context_count);
   std::vector<std::mutex> query_context_mutexes(context_count);
-  size_t result_rows_count { 0 };
-  for (size_t i = 0; i < fragments.size(); ++i) {
-    if (skipFragment(fragments[i], simple_quals)) {
-      continue;
-    }
-    auto dispatch = [this, plan, scan_limit, current_dbid, device_type, i, table_id,
-        &available_cpus, &available_gpus, &reduce_mutex, &scheduler_cv, &scheduler_mutex,
-        &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
-        &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs,
-        &query_context_mutexes, &query_contexts, row_set_mem_owner, error_code]
-        (const ExecutorDeviceType chosen_device_type, int chosen_device_id) {
-      const auto& fragment = fragments[i];
-      auto num_rows = static_cast<int64_t>(fragment.numTuples);
-      const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
-        ? Data_Namespace::GPU_LEVEL
-        : Data_Namespace::CPU_LEVEL;
+  auto dispatch = [this, plan, scan_limit, current_dbid, device_type, table_id,
+      &available_cpus, &available_gpus, &reduce_mutex, &scheduler_cv, &scheduler_mutex,
+      &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
+      &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs,
+      &query_context_mutexes, &query_contexts, row_set_mem_owner, error_code]
+      (const ExecutorDeviceType chosen_device_type, int chosen_device_id,
+       const std::vector<size_t>& frag_ids, const size_t ctx_idx) {
+    const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
+      ? Data_Namespace::GPU_LEVEL
+      : Data_Namespace::CPU_LEVEL;
+    std::vector<int64_t> num_rows;
+    for (const auto frag_id : frag_ids) {
+      const auto& fragment = fragments[frag_id];
       if (device_type != ExecutorDeviceType::Hybrid) {
         chosen_device_id = fragment.deviceIds[static_cast<int>(memory_level)];
       }
-      CHECK_GE(chosen_device_id, 0);
-      CHECK_LT(chosen_device_id, max_gpu_count);
-      // need to own them while query executes
-      std::list<ChunkIter> chunk_iterators;
-      std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
-      std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
-      if (chosen_device_type == ExecutorDeviceType::GPU) {
-        gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
+      num_rows.push_back(fragment.numTuples);
+    }
+    CHECK_GE(chosen_device_id, 0);
+    CHECK_LT(chosen_device_id, max_gpu_count);
+    // need to own them while query executes
+    std::list<ChunkIter> chunk_iterators;
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
+    std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
+    if (chosen_device_type == ExecutorDeviceType::GPU) {
+      gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
+    }
+    auto col_buffers = fetchChunks(table_id, col_global_ids, chosen_device_id,
+      memory_level, fragments, frag_ids, cat, chunk_iterators, chunks);
+    CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
+    const CompilationResult& compilation_result =
+      chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
+    CHECK(!compilation_result.query_mem_desc.usesCachedContext() || !scan_limit);
+    auto query_exe_context_owned = compilation_result.query_mem_desc.usesCachedContext()
+      ? nullptr
+      : compilation_result.query_mem_desc.getQueryExecutionContext(
+          plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
+    QueryExecutionContext* query_exe_context { query_exe_context_owned.get() };
+    std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
+    if (compilation_result.query_mem_desc.usesCachedContext()) {
+      query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes[ctx_idx]));
+      if (!query_contexts[ctx_idx]) {
+        query_contexts[ctx_idx] = compilation_result.query_mem_desc.getQueryExecutionContext(
+          plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
       }
-      auto col_buffers = fetchChunks(table_id, col_global_ids, chosen_device_id,
-        memory_level, { fragment }, cat, chunk_iterators, chunks);
-      CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
-      const CompilationResult& compilation_result =
-        chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
-      CHECK(!compilation_result.query_mem_desc.usesCachedContext() || !scan_limit);
-      auto query_exe_context_owned = compilation_result.query_mem_desc.usesCachedContext()
-        ? nullptr
-        : compilation_result.query_mem_desc.getQueryExecutionContext(
-            plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
-      QueryExecutionContext* query_exe_context { query_exe_context_owned.get() };
-      std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
-      if (compilation_result.query_mem_desc.usesCachedContext()) {
-        size_t thread_idx { i % query_contexts.size() };
-        query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes[thread_idx]));
-        if (!query_contexts[thread_idx]) {
-          query_contexts[thread_idx] = compilation_result.query_mem_desc.getQueryExecutionContext(
-            plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
-        }
-        query_exe_context = query_contexts[thread_idx].get();
+      query_exe_context = query_contexts[ctx_idx].get();
+    }
+    CHECK(query_exe_context);
+    int32_t err { 0 };
+    ResultRows device_results({}, nullptr, nullptr);
+    if (groupby_exprs.empty()) {
+      err = executePlanWithoutGroupBy(
+        compilation_result, hoist_literals,
+        device_results, get_agg_target_exprs(plan), chosen_device_type,
+        col_buffers, query_exe_context,
+        num_rows, &cat.get_dataMgr(), chosen_device_id);
+    } else {
+      err = executePlanWithGroupBy(
+        compilation_result, hoist_literals,
+        device_results, get_agg_target_exprs(plan),
+        groupby_exprs.size(), chosen_device_type,
+        col_buffers,
+        query_exe_context, num_rows,
+        &cat.get_dataMgr(), chosen_device_id,
+        scan_limit, device_type == ExecutorDeviceType::Hybrid);
+    }
+    {
+      std::lock_guard<std::mutex> lock(reduce_mutex);
+      if (err) {
+        *error_code = err;
       }
-      CHECK(query_exe_context);
-      int32_t err { 0 };
-      ResultRows device_results({}, nullptr, nullptr);
-      if (groupby_exprs.empty()) {
-        err = executePlanWithoutGroupBy(
-          compilation_result, hoist_literals,
-          device_results, get_agg_target_exprs(plan), chosen_device_type,
-          col_buffers, query_exe_context,
-          { num_rows }, &cat.get_dataMgr(), chosen_device_id);
-      } else {
-        err = executePlanWithGroupBy(
-          compilation_result, hoist_literals,
-          device_results, get_agg_target_exprs(plan),
-          groupby_exprs.size(), chosen_device_type,
-          col_buffers,
-          query_exe_context, { num_rows },
-          &cat.get_dataMgr(), chosen_device_id,
-          scan_limit, device_type == ExecutorDeviceType::Hybrid);
-      }
-      {
-        std::lock_guard<std::mutex> lock(reduce_mutex);
-        if (err) {
-          *error_code = err;
-        }
-        if (!device_results.empty()) {
-          all_fragment_results.push_back(device_results);
-        }
-      }
-      if (device_type == ExecutorDeviceType::Hybrid) {
-        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-        if (chosen_device_type == ExecutorDeviceType::CPU) {
-          ++available_cpus;
-        } else {
-          CHECK(chosen_device_type == ExecutorDeviceType::GPU);
-          auto it_ok = available_gpus.insert(chosen_device_id);
-          CHECK(it_ok.second);
-        }
-        scheduler_lock.unlock();
-        scheduler_cv.notify_one();
-      }
-    };
-    auto chosen_device_type = device_type;
-    int chosen_device_id = 0;
-    if (device_type == ExecutorDeviceType::Hybrid) {
-      std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
-      scheduler_cv.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
-        return available_cpus || !available_gpus.empty();
-      });
-      if (!available_gpus.empty()) {
-        chosen_device_type = ExecutorDeviceType::GPU;
-        auto device_id_it = available_gpus.begin();
-        chosen_device_id = *device_id_it;
-        available_gpus.erase(device_id_it);
-      } else {
-        chosen_device_type = ExecutorDeviceType::CPU;
-        CHECK_GT(available_cpus, 0);
-        --available_cpus;
+      if (!device_results.empty()) {
+        all_fragment_results.push_back(device_results);
       }
     }
-    if (!agg_plan) {
-      dispatch(chosen_device_type, chosen_device_id);
-      result_rows_count += all_fragment_results.empty() ? 0 : all_fragment_results.back().size();
-      if (limit && result_rows_count >= static_cast<size_t>(limit)) {
-        break;
+    if (device_type == ExecutorDeviceType::Hybrid) {
+      std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
+      if (chosen_device_type == ExecutorDeviceType::CPU) {
+        ++available_cpus;
+      } else {
+        CHECK(chosen_device_type == ExecutorDeviceType::GPU);
+        auto it_ok = available_gpus.insert(chosen_device_id);
+        CHECK(it_ok.second);
       }
-    } else {
-      query_threads.push_back(std::thread(dispatch, chosen_device_type, chosen_device_id));
+      scheduler_lock.unlock();
+      scheduler_cv.notify_one();
+    }
+  };
+  size_t result_rows_count { 0 };
+  size_t frag_list_idx { 0 };
+  if (device_type == ExecutorDeviceType::GPU && allow_multifrag && agg_plan) {
+    // NB: We should never be on this path when the query is retried because of
+    //     running out of group by slots; also, for scan only queries (!agg_plan)
+    //     we want the high-granularity, fragment by fragment execution instead.
+    std::unordered_map<int, std::vector<size_t>> fragments_per_device;
+    for (size_t frag_id = 0; frag_id < fragments.size(); ++frag_id) {
+      const auto& fragment = fragments[frag_id];
+      if (skipFragment(fragment, simple_quals)) {
+        continue;
+      }
+      const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
+      fragments_per_device[device_id].push_back(frag_id);
+    }
+    for (const auto& kv : fragments_per_device) {
+      query_threads.push_back(std::thread(dispatch, ExecutorDeviceType::GPU, kv.first,
+        kv.second, kv.first % query_contexts.size()));
+    }
+  } else {
+    for (size_t i = 0; i < fragments.size(); ++i) {
+      if (skipFragment(fragments[i], simple_quals)) {
+        continue;
+      }
+      auto chosen_device_type = device_type;
+      int chosen_device_id = 0;
+      if (device_type == ExecutorDeviceType::Hybrid) {
+        std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
+        scheduler_cv.wait(scheduler_lock, [this, &available_cpus, &available_gpus] {
+          return available_cpus || !available_gpus.empty();
+        });
+        if (!available_gpus.empty()) {
+          chosen_device_type = ExecutorDeviceType::GPU;
+          auto device_id_it = available_gpus.begin();
+          chosen_device_id = *device_id_it;
+          available_gpus.erase(device_id_it);
+        } else {
+          chosen_device_type = ExecutorDeviceType::CPU;
+          CHECK_GT(available_cpus, 0);
+          --available_cpus;
+        }
+      }
+      if (!agg_plan) {
+        dispatch(chosen_device_type, chosen_device_id, { i }, 0);
+        result_rows_count += all_fragment_results.empty() ? 0 : all_fragment_results.back().size();
+        if (limit && result_rows_count >= static_cast<size_t>(limit)) {
+          break;
+        }
+      } else {
+        query_threads.push_back(std::thread(dispatch, chosen_device_type, chosen_device_id,
+          std::vector<size_t> { i }, frag_list_idx % query_contexts.size()));
+        ++frag_list_idx;
+      }
     }
   }
   for (auto& child : query_threads) {
@@ -2041,14 +2075,16 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const std::list<int>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::list<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::vector<size_t>& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
   static std::mutex str_dec_mutex;  // TODO(alex): remove
 
   std::vector<std::vector<const int8_t*>> col_buffers;
-  for (const auto& fragment : fragments) {
+  for (const auto frag_id : selected_fragments) {
+    const auto& fragment = fragments[frag_id];
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const int col_id : col_global_ids) {
       auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
@@ -2117,10 +2153,14 @@ int32_t Executor::executePlanWithoutGroupBy(
       compilation_result.native_functions, hoist_literals, hoist_buf,
       col_buffers, num_rows, 0, query_exe_context->init_agg_vals_, {}, {}, &error_code);
   } else {
-    out_vec = query_exe_context->launchGpuCode(
-      compilation_result.native_functions, hoist_literals, hoist_buf,
-      col_buffers, num_rows, 0, query_exe_context->init_agg_vals_,
-      data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
+    try {
+      out_vec = query_exe_context->launchGpuCode(
+        compilation_result.native_functions, hoist_literals, hoist_buf,
+        col_buffers, num_rows, 0, query_exe_context->init_agg_vals_,
+        data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
+    } catch (const std::runtime_error&) {
+      return ERR_OUT_OF_GPU_MEM;
+    }
   }
   results = ResultRows(target_exprs, this, query_exe_context->row_set_mem_owner_);
   results.beginRow();
@@ -2179,10 +2219,14 @@ int32_t Executor::executePlanWithGroupBy(
       num_rows, scan_limit, query_exe_context->init_agg_vals_,
       query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, &error_code);
   } else {
-    query_exe_context->launchGpuCode(
-      compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
-      num_rows, scan_limit, query_exe_context->init_agg_vals_,
-      data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
+    try {
+      query_exe_context->launchGpuCode(
+        compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
+        num_rows, scan_limit, query_exe_context->init_agg_vals_,
+        data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
+    } catch (const std::runtime_error&) {
+      return ERR_OUT_OF_GPU_MEM;
+    }
   }
   if (!query_exe_context->query_mem_desc_.usesCachedContext()) {
     results = query_exe_context->getRowSet(target_exprs, was_auto_device);

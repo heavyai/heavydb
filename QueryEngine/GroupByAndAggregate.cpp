@@ -798,7 +798,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   {
     num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
     copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows[0],
-      sizeof(int64_t), device_id);
+      sizeof(int64_t) * num_rows.size(), device_id);
   }
   CUdeviceptr num_fragments_dev_ptr { 0 };
   {

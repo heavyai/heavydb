@@ -344,7 +344,7 @@ main(int argc, char* argv[])
 						ResultRows results_cpu({}, nullptr, nullptr);
 						{
 							auto ms = measure<>::execution([&]() {
-								results_cpu = executor->execute(plan, true, ExecutorDeviceType::CPU);
+								results_cpu = executor->execute(plan, true, ExecutorDeviceType::CPU, ExecutorOptLevel::Default, true);
 							});
 							if (timer) {
 								cout << "Query took " << ms << " ms to execute." << endl;
@@ -354,7 +354,7 @@ main(int argc, char* argv[])
 							ResultRows results_gpu({}, nullptr, nullptr);
 							{
 								auto ms = measure<>::execution([&]() {
-									results_gpu = executor->execute(plan, true, ExecutorDeviceType::GPU);
+									results_gpu = executor->execute(plan, true, ExecutorDeviceType::GPU, ExecutorOptLevel::Default, true);
 								});
 								if (timer) {
 									cout << "Query took " << ms << " ms to execute." << endl;

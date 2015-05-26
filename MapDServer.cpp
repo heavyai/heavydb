@@ -74,7 +74,15 @@ TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
 
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(const std::string& base_data_path, const std::string& executor_device, const bool jit_debug) : base_data_path_(base_data_path), random_gen_(std::random_device{}()), session_id_dist_(0, INT32_MAX), jit_debug_(jit_debug) {
+  MapDHandler(const std::string& base_data_path,
+              const std::string& executor_device,
+              const bool allow_multifrag,
+              const bool jit_debug)
+  : base_data_path_(base_data_path)
+  , random_gen_(std::random_device{}())
+  , session_id_dist_(0, INT32_MAX)
+  , jit_debug_(jit_debug)
+  , allow_multifrag_(allow_multifrag) {
         LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
         executor_device_type_ = ExecutorDeviceType::GPU;
@@ -214,7 +222,7 @@ public:
         auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
         ResultRows results({}, nullptr, nullptr);
         execute_time += measure<>::execution([&]() {
-          results = executor->execute(root_plan,true, executor_device_type);
+          results = executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
         });
         const auto plan = root_plan->get_plan();
         const auto& targets = plan->get_targetlist();
@@ -504,6 +512,7 @@ private:
   std::default_random_engine random_gen_;
   std::uniform_int_distribution<int64_t> session_id_dist_;
   bool jit_debug_;
+  bool allow_multifrag_;
   bool cpu_mode_only_;
 };
 
@@ -513,6 +522,7 @@ int main(int argc, char **argv) {
   std::string device("gpu");
   bool flush_log = false;
   bool jit_debug = false;
+  bool allow_multifrag = false;
 
 	namespace po = boost::program_options;
 
@@ -522,6 +532,7 @@ int main(int argc, char **argv) {
 		("path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")
     ("flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")
     ("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
+    ("allow-multifrag", "Allow execution over multiple fragments in a single round-trip to GPU")
     ("cpu", "Run on CPU only")
     ("gpu", "Run on GPUs (Default)")
     ("hybrid", "Run on both CPU and GPUs")
@@ -553,6 +564,8 @@ int main(int argc, char **argv) {
       flush_log = true;
     if (vm.count("jit-debug"))
       jit_debug = true;
+    if (vm.count("allow-multifrag"))
+      allow_multifrag = true;
 
 		po::notify(vm);
 	}
@@ -620,7 +633,7 @@ int main(int argc, char **argv) {
     FLAGS_logbuflevel=-1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
-  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device, jit_debug));
+  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device, allow_multifrag, jit_debug));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());

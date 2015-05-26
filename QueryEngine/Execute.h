@@ -71,9 +71,10 @@ public:
 
   ResultRows execute(
     const Planner::RootPlan* root_plan,
-    const bool hoist_literals = true,
-    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU,
-    const ExecutorOptLevel = ExecutorOptLevel::Default);
+    const bool hoist_literals,
+    const ExecutorDeviceType device_type,
+    const ExecutorOptLevel,
+    const bool allow_multifrag);
 
   StringDictionary* getStringDictionary(
     const int dictId,
@@ -132,7 +133,8 @@ private:
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
     const size_t max_groups_buffer_entry_count,
-    int32_t* error_code);
+    int32_t* error_code,
+    const bool allow_multifrag);
   ResultRows executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
@@ -142,13 +144,15 @@ private:
     const Catalog_Namespace::Catalog&,
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
-    int32_t* error_code);
+    int32_t* error_code,
+    const bool allow_multifrag);
   std::vector<std::vector<const int8_t*>> fetchChunks(
     const int table_id,
     const std::list<int>&,
     const int device_id,
     const Data_Namespace::MemoryLevel,
-    const std::list<Fragmenter_Namespace::FragmentInfo>&,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>&,
+    const std::vector<size_t>& selected_fragments,
     const Catalog_Namespace::Catalog&,
     std::list<ChunkIter>&,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
@@ -504,6 +508,7 @@ private:
   static std::mutex execute_mutex_;
 
   static const int32_t ERR_DIV_BY_ZERO { 1 };
+  static const int32_t ERR_OUT_OF_GPU_MEM { 2 };
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
