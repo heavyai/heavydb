@@ -1315,7 +1315,7 @@ std::vector<int64_t*> launch_query_cpu_code(
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
-    const int64_t num_rows,
+    const std::vector<int64_t>& num_rows,
     const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     std::vector<int64_t*> group_by_buffers,
@@ -1350,10 +1350,10 @@ std::vector<int64_t*> launch_query_cpu_code(
     *error_code = 0;
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &literal_buff[0],
-        &num_rows, &scan_limit, &init_agg_vals[0], &out_vec[0], nullptr, error_code);
+        &num_rows[0], &scan_limit, &init_agg_vals[0], &out_vec[0], nullptr, error_code);
     } else {
       reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &literal_buff[0],
-        &num_rows, &scan_limit, &init_agg_vals[0], &group_by_buffers[0], &small_group_by_buffers[0], error_code);
+        &num_rows[0], &scan_limit, &init_agg_vals[0], &group_by_buffers[0], &small_group_by_buffers[0], error_code);
     }
   } else {
     typedef void (*agg_query)(
@@ -1367,11 +1367,11 @@ std::vector<int64_t*> launch_query_cpu_code(
       int32_t* resume_row_index);
     *error_code = 0;
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &num_rows, &scan_limit,
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &num_rows[0], &scan_limit,
         &init_agg_vals[0], &out_vec[0], nullptr, error_code);
     } else {
       *error_code = 0;
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &num_rows, &scan_limit,
+      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0], &num_fragments, &num_rows[0], &scan_limit,
         &init_agg_vals[0], &group_by_buffers[0], &small_group_by_buffers[0], error_code);
     }
   }
@@ -1730,7 +1730,7 @@ ResultRows Executor::executeResultPlan(
   *error_code = 0;
   std::vector<std::vector<const int8_t*>> multi_frag_col_buffers { column_buffers };
   launch_query_cpu_code(compilation_result.native_functions, hoist_literals, hoist_buf,
-    multi_frag_col_buffers, result_columns.size(), 0, init_agg_vals,
+    multi_frag_col_buffers, { static_cast<int64_t>(result_columns.size()) }, 0, init_agg_vals,
     query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, error_code);
   CHECK(!*error_code);
   return query_exe_context->groupBufferToResults(0, target_exprs, false);
@@ -1950,14 +1950,14 @@ ResultRows Executor::executeAggScanPlan(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan), chosen_device_type,
           col_buffers, query_exe_context,
-          num_rows, &cat.get_dataMgr(), chosen_device_id);
+          { num_rows }, &cat.get_dataMgr(), chosen_device_id);
       } else {
         err = executePlanWithGroupBy(
           compilation_result, hoist_literals,
           device_results, get_agg_target_exprs(plan),
           groupby_exprs.size(), chosen_device_type,
           col_buffers,
-          query_exe_context, num_rows,
+          query_exe_context, { num_rows },
           &cat.get_dataMgr(), chosen_device_id,
           scan_limit, device_type == ExecutorDeviceType::Hybrid);
       }
@@ -2106,7 +2106,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     const ExecutorDeviceType device_type,
     std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext* query_exe_context,
-    const int64_t num_rows,
+    const std::vector<int64_t>& num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id) {
   int32_t error_code { 0 };
@@ -2160,7 +2160,7 @@ int32_t Executor::executePlanWithGroupBy(
     const ExecutorDeviceType device_type,
     std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext* query_exe_context,
-    const int64_t num_rows,
+    const std::vector<int64_t>& num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
     const int64_t scan_limit,

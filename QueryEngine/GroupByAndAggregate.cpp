@@ -757,7 +757,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
-    const int64_t num_rows,
+    const std::vector<int64_t>& num_rows,
     const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     Data_Namespace::DataMgr* data_mgr,
@@ -797,7 +797,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
   CUdeviceptr num_rows_dev_ptr { 0 };
   {
     num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
-    copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows,
+    copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows[0],
       sizeof(int64_t), device_id);
   }
   CUdeviceptr num_fragments_dev_ptr { 0 };

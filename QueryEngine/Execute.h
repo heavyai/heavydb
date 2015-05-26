@@ -186,7 +186,7 @@ private:
     const ExecutorDeviceType device_type,
     std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext*,
-    const int64_t num_rows,
+    const std::vector<int64_t>& num_rows,
     Data_Namespace::DataMgr*,
     const int device_id,
     const int64_t limit,
@@ -199,7 +199,7 @@ private:
     const ExecutorDeviceType device_type,
     std::vector<std::vector<const int8_t*>>& col_buffers,
     const QueryExecutionContext* query_exe_context,
-    const int64_t num_rows,
+    const std::vector<int64_t>& num_rows,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id);
   ResultRows reduceMultiDeviceResults(

@@ -496,7 +496,7 @@ void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                       int64_t** out2,
                                       int32_t* resume_row_index) {
   for (uint32_t i = 0; i < *num_fragments; ++i) {
-    query_stub_hoisted_literals(col_buffers[i], literals, num_rows, max_matched,
+    query_stub_hoisted_literals(col_buffers[i], literals, &num_rows[i], max_matched,
       init_agg_value, out, out2, resume_row_index);
   }
 }
@@ -522,6 +522,6 @@ void multifrag_query(const int8_t*** col_buffers,
                      int64_t** out2,
                      int32_t* resume_row_index) {
   for (uint32_t i = 0; i < *num_fragments; ++i) {
-    query_stub(col_buffers[i], num_rows, max_matched, init_agg_value, out, out2, resume_row_index);
+    query_stub(col_buffers[i], &num_rows[i], max_matched, init_agg_value, out, out2, resume_row_index);
   }
 }

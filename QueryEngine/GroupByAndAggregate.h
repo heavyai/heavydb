@@ -611,7 +611,7 @@ public:
     const bool hoist_literals,
     const std::vector<int8_t>& literal_buff,
     std::vector<std::vector<const int8_t*>> col_buffers,
-    const int64_t num_rows,
+    const std::vector<int64_t>& num_rows,
     const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     Data_Namespace::DataMgr* data_mgr,
