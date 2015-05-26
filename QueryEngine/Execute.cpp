@@ -1916,13 +1916,13 @@ ResultRows Executor::executeAggScanPlan(
       CHECK_LT(chosen_device_id, max_gpu_count);
       // need to own them while query executes
       std::list<ChunkIter> chunk_iterators;
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks;
+      std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
       std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
       if (chosen_device_type == ExecutorDeviceType::GPU) {
         gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
       }
       auto col_buffers = fetchChunks(table_id, col_global_ids, chosen_device_id,
-        memory_level, fragment, cat, chunk_iterators, chunks);
+        memory_level, { fragment }, cat, chunk_iterators, chunks);
       CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
       const CompilationResult& compilation_result =
         chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
@@ -2041,57 +2041,61 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const std::list<int>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const std::list<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
-    std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
   static std::mutex str_dec_mutex;  // TODO(alex): remove
 
-  std::vector<const int8_t*> col_buffers(plan_state_->global_to_local_col_ids_.size());
-  for (const int col_id : col_global_ids) {
-    auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
-    CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-    ChunkKey chunk_key { cat.get_currentDB().dbId, table_id, col_id, fragment.fragmentId };
-    const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
-    auto it = plan_state_->global_to_local_col_ids_.find(col_id);
-    CHECK(it != plan_state_->global_to_local_col_ids_.end());
-    CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
-    auto memory_level_for_column = memory_level;
-    if (plan_state_->columns_to_fetch_.find(col_id) == plan_state_->columns_to_fetch_.end()) {
-      memory_level_for_column = Data_Namespace::CPU_LEVEL;
-    }
-    std::shared_ptr<Chunk_NS::Chunk> chunk;
-    {
-      std::lock_guard<std::mutex> lock(str_dec_mutex);
-      chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
-        chunk_key,
-        memory_level_for_column,
-        memory_level_for_column == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-        chunk_meta_it->second.numBytes,
-        chunk_meta_it->second.numElements);
-      chunks.push_back(chunk);
-    }
-    const bool is_real_string = cd->columnType.is_string() &&
-      cd->columnType.get_compression() == kENCODING_NONE;
-    if (is_real_string) {
-      chunk_iterators.push_back(chunk->begin_iterator(chunk_meta_it->second));
-      auto& chunk_iter = chunk_iterators.back();
-      if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
-        col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);
-      } else {
-        CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_for_column);
-        auto& data_mgr = cat.get_dataMgr();
-        auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id);
-        copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
-        col_buffers[it->second] = reinterpret_cast<int8_t*>(chunk_iter_gpu);
+  std::vector<std::vector<const int8_t*>> col_buffers;
+  for (const auto& fragment : fragments) {
+    std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
+    for (const int col_id : col_global_ids) {
+      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+      CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+      ChunkKey chunk_key { cat.get_currentDB().dbId, table_id, col_id, fragment.fragmentId };
+      const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
+      auto it = plan_state_->global_to_local_col_ids_.find(col_id);
+      CHECK(it != plan_state_->global_to_local_col_ids_.end());
+      CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+      auto memory_level_for_column = memory_level;
+      if (plan_state_->columns_to_fetch_.find(col_id) == plan_state_->columns_to_fetch_.end()) {
+        memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
-    } else {
-      auto ab = chunk->get_buffer();
-      CHECK(ab->getMemoryPtr());
-      col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
+      std::shared_ptr<Chunk_NS::Chunk> chunk;
+      {
+        std::lock_guard<std::mutex> lock(str_dec_mutex);
+        chunk = Chunk_NS::Chunk::getChunk(cd, &cat.get_dataMgr(),
+          chunk_key,
+          memory_level_for_column,
+          memory_level_for_column == Data_Namespace::CPU_LEVEL ? 0 : device_id,
+          chunk_meta_it->second.numBytes,
+          chunk_meta_it->second.numElements);
+        chunks.push_back(chunk);
+      }
+      const bool is_real_string = cd->columnType.is_string() &&
+        cd->columnType.get_compression() == kENCODING_NONE;
+      if (is_real_string) {
+        chunk_iterators.push_back(chunk->begin_iterator(chunk_meta_it->second));
+        auto& chunk_iter = chunk_iterators.back();
+        if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
+          frag_col_buffers[it->second] = reinterpret_cast<int8_t*>(&chunk_iter);
+        } else {
+          CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_for_column);
+          auto& data_mgr = cat.get_dataMgr();
+          auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id);
+          copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
+          frag_col_buffers[it->second] = reinterpret_cast<int8_t*>(chunk_iter_gpu);
+        }
+      } else {
+        auto ab = chunk->get_buffer();
+        CHECK(ab->getMemoryPtr());
+        frag_col_buffers[it->second] = ab->getMemoryPtr(); // @TODO(alex) change to use ChunkIter
+      }
     }
+    col_buffers.push_back(frag_col_buffers);
   }
-  return { col_buffers };
+  return col_buffers;
 }
 
 int32_t Executor::executePlanWithoutGroupBy(

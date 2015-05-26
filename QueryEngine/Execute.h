@@ -148,10 +148,10 @@ private:
     const std::list<int>&,
     const int device_id,
     const Data_Namespace::MemoryLevel,
-    const Fragmenter_Namespace::FragmentInfo&,
+    const std::list<Fragmenter_Namespace::FragmentInfo>&,
     const Catalog_Namespace::Catalog&,
     std::list<ChunkIter>&,
-    std::vector<std::shared_ptr<Chunk_NS::Chunk>>&);
+    std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
   ResultRows executeResultPlan(
     const Planner::Result* result_plan,
     const bool hoist_literals,
