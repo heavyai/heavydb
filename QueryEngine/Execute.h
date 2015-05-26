@@ -3,6 +3,8 @@
 
 #include "GroupByAndAggregate.h"
 #include "../Analyzer/Analyzer.h"
+#include "../Chunk/Chunk.h"
+#include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "NvidiaKernel.h"
@@ -141,6 +143,15 @@ private:
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
     int32_t* error_code);
+  std::vector<std::vector<const int8_t*>> fetchChunks(
+    const int table_id,
+    const std::list<int>&,
+    const int device_id,
+    const Data_Namespace::MemoryLevel,
+    const Fragmenter_Namespace::FragmentInfo&,
+    const Catalog_Namespace::Catalog&,
+    std::list<ChunkIter>&,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>>&);
   ResultRows executeResultPlan(
     const Planner::Result* result_plan,
     const bool hoist_literals,

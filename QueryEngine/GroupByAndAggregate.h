@@ -96,7 +96,7 @@ struct QueryMemoryDescriptor {
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
-    const std::vector<const int8_t*>& col_buffers,
+    const std::vector<std::vector<const int8_t*>>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner>) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
@@ -596,7 +596,7 @@ public:
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
-    const std::vector<const int8_t*>& col_buffers,
+    const std::vector<std::vector<const int8_t*>>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
 
   // TOOD(alex): get rid of targets parameter
@@ -636,7 +636,7 @@ private:
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
   const int device_id_;
-  const std::vector<const int8_t*>& col_buffers_;
+  const std::vector<std::vector<const int8_t*>>& col_buffers_;
   const size_t num_buffers_;
 
   std::vector<int64_t*> group_by_buffers_;

@@ -435,7 +435,7 @@ QueryExecutionContext::QueryExecutionContext(
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
-    const std::vector<const int8_t*>& col_buffers,
+    const std::vector<std::vector<const int8_t*>>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
   : query_mem_desc_(query_mem_desc)
   , init_agg_vals_(executor->plan_state_->init_agg_vals_)
@@ -684,8 +684,10 @@ ResultRows QueryExecutionContext::groupBufferToResults(
             bool is_end;
             CHECK_GE(global_col_id, 0);
             auto col_id = executor_->getLocalColumnId(global_col_id, false);
+            CHECK_EQ(1, col_buffers_.size());
+            auto& frag_col_buffers = col_buffers_.front();
             ChunkIter_get_nth(
-              reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(col_buffers_[col_id])),
+              reinterpret_cast<ChunkIter*>(const_cast<int8_t*>(frag_col_buffers[col_id])),
               str_ptr, false, &vd, &is_end);
             CHECK(!is_end);
             if (!vd.is_null) {
@@ -719,7 +721,9 @@ ResultRows QueryExecutionContext::groupBufferToResults(
           if (executor_->plan_state_->isLazyFetchColumn(target_expr)) {
             CHECK_GE(global_col_id, 0);
             auto col_id = executor_->getLocalColumnId(global_col_id, false);
-            val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), col_buffers_[col_id], val1);
+            CHECK_EQ(1, col_buffers_.size());
+            auto& frag_col_buffers = col_buffers_.front();
+            val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), frag_col_buffers[col_id], val1);
           }
           if (agg_info.agg_kind == kAVG) {
             CHECK(!executor_->plan_state_->isLazyFetchColumn(target_expr));
@@ -928,7 +932,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const Executor* executor,
     const ExecutorDeviceType device_type,
     const int device_id,
-    const std::vector<const int8_t*>& col_buffers,
+    const std::vector<std::vector<const int8_t*>>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   return std::unique_ptr<QueryExecutionContext>(
     new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id, col_buffers, row_set_mem_owner));
