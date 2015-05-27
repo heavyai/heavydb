@@ -878,7 +878,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       const size_t agg_col_count { init_agg_vals.size() };
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer = alloc_gpu_mem(
-          data_mgr, block_size_x * grid_size_x * sizeof(int64_t), device_id);
+          data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id);
         out_vec_dev_buffers.push_back(out_vec_dev_buffer);
       }
       auto out_vec_dev_ptr = alloc_gpu_mem(data_mgr, agg_col_count * sizeof(CUdeviceptr), device_id);
@@ -916,9 +916,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        0, nullptr, kernel_params, nullptr));
       }
       for (size_t i = 0; i < agg_col_count; ++i) {
-        int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t)];
+        int64_t* host_out_vec = new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_fragments];
         copy_from_gpu(data_mgr, host_out_vec, out_vec_dev_buffers[i],
-          block_size_x * grid_size_x * sizeof(int64_t),
+          block_size_x * grid_size_x * sizeof(int64_t) * num_fragments,
           device_id);
         out_vec.push_back(host_out_vec);
       }

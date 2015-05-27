@@ -2128,18 +2128,19 @@ int32_t Executor::executePlanWithoutGroupBy(
   for (const auto target_expr : target_exprs) {
     const auto agg_info = target_info(target_expr);
     CHECK(agg_info.is_agg);
+    uint32_t num_fragments = col_buffers.size();
     const auto val1 = reduce_results(
       agg_info.agg_kind,
       target_expr->get_type_info(),
       out_vec[out_vec_idx],
-      device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1);
+      device_type == ExecutorDeviceType::GPU ? num_fragments * block_size_x_ * grid_size_x_ : 1);
     if (agg_info.agg_kind == kAVG) {
       ++out_vec_idx;
       results.addValue(val1, reduce_results(
         agg_info.agg_kind,
         target_expr->get_type_info(),
         out_vec[out_vec_idx],
-        device_type == ExecutorDeviceType::GPU ? block_size_x_ * grid_size_x_ : 1));
+        device_type == ExecutorDeviceType::GPU ? num_fragments * block_size_x_ * grid_size_x_ : 1));
     } else {
       results.addValue(val1);
     }

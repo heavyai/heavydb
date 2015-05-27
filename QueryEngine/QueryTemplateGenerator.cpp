@@ -209,6 +209,7 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   PointerType* PointerTy_10 = PointerType::get(PointerTy_6, 0);
   FuncTy_8_args.push_back(PointerTy_10);
   FuncTy_8_args.push_back(PointerTy_10);
+  FuncTy_8_args.push_back(IntegerType::get(mod->getContext(), 32));
   FuncTy_8_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
 
   FunctionType* FuncTy_8 = FunctionType::get(
@@ -281,6 +282,8 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
   ptr_out->setName("out");
   Value* ptr_unused = args++;
   ptr_unused->setName("unused");
+  Value* frag_idx = args++;
+  frag_idx->setName("frag_idx");
   Value* ptr_error_code = args++;
   ptr_error_code->setName("error_code");
 
@@ -380,7 +383,9 @@ llvm::Function* query_template(llvm::Module* mod, const size_t aggr_col_count,
     auto out_gep = GetElementPtrInst::CreateInBounds(ptr_out, idx_lv, "", label_122);
     auto ptr_140 = new LoadInst(out_gep, "", false, label_122);
     ptr_140->setAlignment(8);
-    auto ptr_141 = GetElementPtrInst::CreateInBounds(ptr_140, int64_128, "", label_122);
+    auto slot_idx = BinaryOperator::CreateAdd(int32_126,
+      BinaryOperator::CreateMul(frag_idx, int32_127, "", label_122), "", label_122);
+    auto ptr_141 = GetElementPtrInst::CreateInBounds(ptr_140, slot_idx, "", label_122);
     StoreInst* void_142 = new StoreInst(int64_139_vec[i], ptr_141, false, label_122);
     void_142->setAlignment(8);
   }
@@ -437,6 +442,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
 
   FuncTy_12_args.push_back(PointerTy_13);
   FuncTy_12_args.push_back(PointerTy_13);
+  FuncTy_12_args.push_back(IntegerType::get(mod->getContext(), 32));
   FuncTy_12_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
 
   FunctionType* FuncTy_12 = FunctionType::get(
@@ -521,6 +527,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   ptr_group_by_buffers->setName("group_by_buffers");
   Value* ptr_small_groups_buffer = args++;
   ptr_small_groups_buffer->setName("small_groups_buffer");
+  Value* frag_idx = args++;
+  frag_idx->setName("frag_idx");
   Value* ptr_error_code = args++;
   ptr_error_code->setName("error_code");
 
