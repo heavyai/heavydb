@@ -87,7 +87,9 @@ struct QueryMemoryDescriptor {
   std::vector<int8_t> agg_col_widths;
   size_t entry_count;                    // the number of entries in the main buffer
   size_t entry_count_small;              // the number of entries in the small buffer
-  int64_t min_val;                       // meaningful for OneCol{KnownRange, ConsecutiveKeys} only
+  int64_t min_val;                       // meaningful for OneColKnownRange, MultiColPerfectHash only
+  int64_t max_val;
+  bool has_nulls;
   GroupByMemSharing sharing;             // meaningful for GPU only
   CountDistinctDescriptors count_distinct_descriptors_;
 
@@ -677,6 +679,7 @@ private:
     const GroupByColRangeType hash_type_;
     const int64_t min;
     const int64_t max;
+    const bool has_nulls;
   };
 
   struct DiamondCodegen {
@@ -802,9 +805,6 @@ inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
 }
 
 inline int64_t extract_min_stat(const ChunkStats& stats, const SQLTypeInfo& ti) {
-  if (stats.has_nulls) {  // clobber the additional information for now
-    return inline_int_null_val(ti);
-  }
   return extract_from_datum(stats.min, ti);
 }
 

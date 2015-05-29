@@ -243,7 +243,10 @@ private:
 
   int8_t warpSize() const;
 
-  llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col, const bool hoist_literals);
+  llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col,
+                                    const bool hoist_literals,
+                                    const bool translate_null_val,
+                                    const int64_t translated_null_val);
 
   llvm::Value* toDoublePrecision(llvm::Value* val);
 

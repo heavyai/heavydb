@@ -1716,7 +1716,8 @@ ResultRows Executor::executeResultPlan(
     get_col_byte_widths(target_exprs),
     result_rows.size(),
     small_groups_buffer_entry_count_,
-    0, GroupByMemSharing::Shared
+    0, 0, false,
+    GroupByMemSharing::Shared
   };
   auto query_func = query_group_by_template(cgen_state_->module_, is_nested_,
     hoist_literals, query_mem_desc, ExecutorDeviceType::CPU, false);
@@ -3111,9 +3112,21 @@ llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
 }
 
 llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
-                                            const bool hoist_literals) {
+                                            const bool hoist_literals,
+                                            const bool translate_null_val,
+                                            const int64_t translated_null_val) {
   auto group_key = codegen(group_by_col, true, hoist_literals).front();
   cgen_state_->group_by_expr_cache_.push_back(group_key);
+  if (translate_null_val) {
+    const auto& ti = group_by_col->get_type_info();
+    const std::string key_typename { "int" + std::to_string(get_bit_width(ti.get_type())) + "_t" };
+    const auto key_type = get_int_type(ti.get_size() * 8, cgen_state_->context_);
+    group_key = cgen_state_->emitCall("translate_null_key_" + key_typename, {
+      group_key,
+      static_cast<llvm::Value*>(llvm::ConstantInt::get(key_type, inline_int_null_val(ti))),
+      static_cast<llvm::Value*>(llvm::ConstantInt::get(key_type, translated_null_val))
+    });
+  }
   group_key = cgen_state_->ir_builder_.CreateBitCast(
     toDoublePrecision(group_key), get_int_type(64, cgen_state_->context_));
   return group_key;

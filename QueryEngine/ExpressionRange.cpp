@@ -26,33 +26,35 @@ DEF_OPERATOR(ExpressionRange::operator*, *)
 
 ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
   if (type != ExpressionRangeType::Integer || other.type != ExpressionRangeType::Integer) {
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   }
   if (other.int_min * other.int_max <= 0) {
     // if the other interval contains 0, the rule is more complicated;
     // punt for now, we can revisit by splitting the other interval and
     // taking the convex hull of the resulting two intervals
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   }
   return binOp<int64_t>(other, [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) / y); });
 }
 
 ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const {
   if (type != other.type) {
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   }
   ExpressionRange result;
   switch (type) {
   case ExpressionRangeType::Invalid:
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   case ExpressionRangeType::Integer: {
     result.type = ExpressionRangeType::Integer;
+    result.has_nulls = has_nulls || other.has_nulls;
     result.int_min = std::min(int_min, other.int_min);
     result.int_max = std::max(int_max, other.int_max);
     break;
   }
   case ExpressionRangeType::FloatingPoint: {
     result.type = ExpressionRangeType::FloatingPoint;
+    result.has_nulls = has_nulls || other.has_nulls;
     result.fp_min = std::min(fp_min, other.fp_min);
     result.fp_max = std::max(fp_max, other.fp_max);
     break;
@@ -123,7 +125,7 @@ ExpressionRange getExpressionRange(
   if (extract_expr) {
     return getExpressionRange(extract_expr, fragments, executor);
   }
-  return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+  return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
 }
 
 ExpressionRange getExpressionRange(
@@ -144,37 +146,38 @@ ExpressionRange getExpressionRange(
   default:
     break;
   }
-  return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+  return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
 }
 
 ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
   if (constant_expr->get_is_null()) {
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   }
   const auto constant_type = constant_expr->get_type_info().get_type();
   switch (constant_type) {
   case kSMALLINT: {
     const auto v = constant_expr->get_constval().smallintval;
-    return { ExpressionRangeType::Integer, { v }, { v } };
+    return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
   case kINT: {
     const auto v = constant_expr->get_constval().intval;
-    return { ExpressionRangeType::Integer, { v }, { v } };
+    return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
   case kBIGINT: {
     const auto v = constant_expr->get_constval().bigintval;
-    return { ExpressionRangeType::Integer, { v }, { v } };
+    return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
   case kTIME:
   case kTIMESTAMP:
   case kDATE: {
     const auto v = constant_expr->get_constval().timeval;
-    return { ExpressionRangeType::Integer, { v }, { v } };
+    return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
   case kDOUBLE: {
     const auto v = constant_expr->get_constval().doubleval;
     ExpressionRange result;
     result.type = ExpressionRangeType::FloatingPoint;
+    result.has_nulls = false;
     result.fp_min = v;
     result.fp_max = v;
     return result;
@@ -182,7 +185,7 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
   default:
     break;
   }
-  return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+  return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
 }
 
 #define FIND_STAT_FRAG(stat_name)                                                                  \
@@ -200,7 +203,7 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
              extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);                   \
   });                                                                                              \
   if (has_nulls || stat_name##_frag == fragments.end()) {                                          \
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };                                         \
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };                                  \
   }
 
 namespace {
@@ -246,19 +249,28 @@ ExpressionRange getExpressionRange(
     if (col_ti.get_type() == kDOUBLE) {
       ExpressionRange result;
       result.type = ExpressionRangeType::FloatingPoint;
+      result.has_nulls = has_nulls;
       result.fp_min = extract_min_stat_double(min_it->second.chunkStats);
       result.fp_max = extract_max_stat_double(max_it->second.chunkStats);
       return result;
     }
+    for (const auto& fragment : fragments) {
+      const auto it = fragment.chunkMetadataMap.find(col_id);
+      if (it != fragment.chunkMetadataMap.end()) {
+        if (it->second.chunkStats.has_nulls) {
+          has_nulls = true;
+        }
+      }
+    }
     const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
     const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
     CHECK_GE(max_val, min_val);
-    return { ExpressionRangeType::Integer, { min_val }, { max_val } };
+    return { ExpressionRangeType::Integer, has_nulls, { min_val }, { max_val } };
   }
   default:
     break;
   }
-  return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+  return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
 }
 
 #undef FIND_STAT_FRAG
@@ -267,7 +279,7 @@ ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
   const auto& ti = like_expr->get_type_info();
   CHECK(ti.is_boolean());
   const auto& arg_ti = like_expr->get_arg()->get_type_info();
-  return { ExpressionRangeType::Integer, { arg_ti.get_notnull() ? 0 : inline_int_null_val(ti) }, { 1 } };
+  return { ExpressionRangeType::Integer, false, { arg_ti.get_notnull() ? 0 : inline_int_null_val(ti) }, { 1 } };
 }
 
 ExpressionRange getExpressionRange(
@@ -275,14 +287,14 @@ ExpressionRange getExpressionRange(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
-  ExpressionRange expr_range { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+  ExpressionRange expr_range { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   const auto& case_ti = case_expr->get_type_info();
   for (const auto& expr_pair : expr_pair_list) {
     CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
     CHECK(expr_pair.second->get_type_info() == case_ti);
     const auto crt_range = getExpressionRange(expr_pair.second, fragments, executor);
     if (crt_range.type == ExpressionRangeType::Invalid) {
-      return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+      return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
     }
     expr_range = (expr_range.type != ExpressionRangeType::Invalid) ? expr_range || crt_range : crt_range;
   }
@@ -296,7 +308,7 @@ ExpressionRange getExpressionRange(
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
   if (u_expr->get_optype() != kCAST) {
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   }
   const auto& ti = u_expr->get_type_info();
   if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
@@ -307,6 +319,7 @@ ExpressionRange getExpressionRange(
     CHECK(const_operand->get_constval().stringval);
     ExpressionRange expr_range;
     expr_range.type = ExpressionRangeType::Integer;
+    expr_range.has_nulls = false;
     expr_range.int_min = expr_range.int_max = sd->get(*const_operand->get_constval().stringval);
     return expr_range;
   }
@@ -316,6 +329,7 @@ ExpressionRange getExpressionRange(
     if (u_expr->get_type_info().is_integer()) {
       ExpressionRange result;
       result.type = ExpressionRangeType::Integer;
+      result.has_nulls = arg_range.has_nulls;
       result.int_min = arg_range.fp_min;
       result.int_max = arg_range.fp_max;
       return result;
@@ -329,6 +343,7 @@ ExpressionRange getExpressionRange(
     if (u_expr->get_type_info().get_type() == kDOUBLE) {
       ExpressionRange result;
       result.type = ExpressionRangeType::Integer;
+      result.has_nulls = arg_range.has_nulls;
       result.fp_min = arg_range.int_min;
       result.fp_max = arg_range.int_max;
       return result;
@@ -340,7 +355,7 @@ ExpressionRange getExpressionRange(
   default:
     CHECK(false);
   }
-  return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+  return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
 }
 
 ExpressionRange getExpressionRange(
@@ -350,9 +365,10 @@ ExpressionRange getExpressionRange(
   const int32_t extract_field { extract_expr->get_field() };
   ExpressionRange result;
   result.type = ExpressionRangeType::Integer;
+  result.has_nulls = false;
   switch (extract_field) {
   case kYEAR:
-    return { ExpressionRangeType::Invalid, { 0 }, { 0 } };
+    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   case kEPOCH:
     return getExpressionRange(extract_expr->get_from_expr(), fragments, executor);
   case kMONTH:

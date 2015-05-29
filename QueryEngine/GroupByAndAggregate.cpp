@@ -994,27 +994,31 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
   if (!agg_plan) {
-    return { GroupByColRangeType::Scan, 0, guessed_range_max };
+    return { GroupByColRangeType::Scan, 0, guessed_range_max, false };
   }
   const auto& groupby_exprs = agg_plan->get_groupby_list();
   if (groupby_exprs.size() != 1) {
     try {
       checked_int64_t cardinality { 1 };
+      bool has_nulls { false };
       for (const auto groupby_expr : groupby_exprs) {
         auto col_range_info = getExprRangeInfo(groupby_expr, fragments);
         if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
-          return { GroupByColRangeType::MultiCol, 0, 0 };
+          return { GroupByColRangeType::MultiCol, 0, 0, false };
         }
-        auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1;
+        auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1 + (col_range_info.has_nulls ? 1 : 0);
         CHECK_GT(crt_col_cardinality, 0);
         cardinality *= crt_col_cardinality;
+        if (col_range_info.has_nulls) {
+          has_nulls = true;
+        }
       }
       if (cardinality > 10000000) {  // more than 10M groups is a lot
-        return { GroupByColRangeType::MultiCol, 0, 0 };
+        return { GroupByColRangeType::MultiCol, 0, 0, false };
       }
-      return { GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality) };
+      return { GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), has_nulls };
     } catch (...) {  // overflow when computing cardinality
-      return { GroupByColRangeType::MultiCol, 0, 0 };
+      return { GroupByColRangeType::MultiCol, 0, 0, false };
     }
   }
   return getExprRangeInfo(groupby_exprs.front(), fragments);
@@ -1028,15 +1032,15 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   const auto expr_range = getExpressionRange(expr, fragments, executor_);
   switch (expr_range.type) {
   case ExpressionRangeType::Integer:
-    return { GroupByColRangeType::OneColKnownRange, expr_range.int_min, expr_range.int_max };
+    return { GroupByColRangeType::OneColKnownRange, expr_range.int_min, expr_range.int_max, expr_range.has_nulls };
   case ExpressionRangeType::Invalid:
   case ExpressionRangeType::FloatingPoint:
-    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max };
+    return { GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, false };
   default:
     CHECK(false);
   }
   CHECK(false);
-  return { GroupByColRangeType::Scan, 0, 0 };
+  return { GroupByColRangeType::Scan, 0, 0, false };
 }
 
 #define LL_CONTEXT executor_->cgen_state_->context_
@@ -1160,7 +1164,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       GroupByColRangeType::Scan, false, false,
       group_col_widths, agg_col_widths,
       0, 0,
-      0, GroupByMemSharing::Private,
+      0, 0, false,
+      GroupByMemSharing::Private,
       count_distinct_descriptors
     };
   }
@@ -1180,7 +1185,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
         group_col_widths, agg_col_widths,
         max_groups_buffer_entry_count,
         scan_limit_ ? scan_limit_ : executor_->small_groups_buffer_entry_count_,
-        col_range_info.min, GroupByMemSharing::Shared,
+        col_range_info.min, col_range_info.max, col_range_info.has_nulls,
+        GroupByMemSharing::Shared,
         count_distinct_descriptors
       };
     } else {
@@ -1206,7 +1212,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       if (!found_count) {
         keyless = false;
       }
-      const size_t bin_count = col_range_info.max - col_range_info.min + 1;
+      const size_t bin_count = col_range_info.max - col_range_info.min + 1 + (col_range_info.has_nulls ? 1 : 0);
       const size_t interleaved_max_threshold { 20 };
       bool interleaved_bins = keyless &&
         bin_count <= interleaved_max_threshold;
@@ -1215,7 +1221,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
         col_range_info.hash_type_, keyless, interleaved_bins,
         group_col_widths, agg_col_widths,
         bin_count, 0,
-        col_range_info.min, GroupByMemSharing::Shared,
+        col_range_info.min, col_range_info.max, col_range_info.has_nulls,
+        GroupByMemSharing::Shared,
         count_distinct_descriptors
       };
     }
@@ -1226,7 +1233,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       max_groups_buffer_entry_count, 0,
-      0, GroupByMemSharing::Shared,
+      0, 0, false,
+      GroupByMemSharing::Shared,
       count_distinct_descriptors
     };
   }
@@ -1235,8 +1243,9 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       executor_,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
-      static_cast<size_t>(col_range_info.max),
-      0, 0, GroupByMemSharing::Shared,
+      static_cast<size_t>(col_range_info.max), 0,
+      0, 0, col_range_info.has_nulls,
+      GroupByMemSharing::Shared,
       count_distinct_descriptors
     };
   }
@@ -1397,7 +1406,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
   case GroupByColRangeType::Scan: {
     CHECK_EQ(1, groupby_list.size());
     const auto group_expr = groupby_list.front();
-    const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
+    const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
+      query_mem_desc.has_nulls, query_mem_desc.max_val + 1);
     auto small_groups_buffer = arg_it;
     if (query_mem_desc.usesGetGroupValueFast()) {
       std::string get_group_fn_name { "get_group_value_fast" };
@@ -1450,7 +1460,9 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       key_size_lv);
     int32_t subkey_idx = 0;
     for (const auto group_expr : groupby_list) {
-      const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals);
+      auto col_range_info = getExprRangeInfo(group_expr, query_info_.fragments);
+      const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
+        col_range_info.has_nulls, col_range_info.max + 1);
       // store the sub-key to the buffer
       LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
     }

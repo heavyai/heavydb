@@ -161,6 +161,22 @@ DEF_CAST_NULLABLE_BIDIR(double, int64_t)
 #undef DEF_CAST_NULLABLE_BIDIR
 #undef DEF_CAST_NULLABLE
 
+#define DEF_TRANSLATE_NULL_KEY(key_type)                                                                             \
+extern "C" __attribute__((always_inline))                                                                            \
+int64_t translate_null_key_##key_type(const key_type key, const key_type null_val, const key_type translated_val) {  \
+  if (key == null_val) {                                                                                             \
+    return translated_val;                                                                                           \
+  }                                                                                                                  \
+  return key;                                                                                                        \
+}
+
+DEF_TRANSLATE_NULL_KEY(int8_t)
+DEF_TRANSLATE_NULL_KEY(int16_t)
+DEF_TRANSLATE_NULL_KEY(int32_t)
+DEF_TRANSLATE_NULL_KEY(int64_t)
+
+#undef DEF_TRANSLATE_NULL_KEY
+
 // aggregator implementations
 
 extern "C" __attribute__((always_inline))
