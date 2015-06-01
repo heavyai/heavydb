@@ -202,7 +202,7 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
       return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <                  \
              extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);                   \
   });                                                                                              \
-  if (has_nulls || stat_name##_frag == fragments.end()) {                                          \
+  if (stat_name##_frag == fragments.end()) {                                                       \
     return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };                                  \
   }
 
