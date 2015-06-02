@@ -40,6 +40,9 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
 								case kVARCHAR:
 								case kCHAR:
 									return new StringNoneEncoder(buffer);
+                case kARRAY:
+                  // return new ArrayNoneEncoder(buffer);
+                  return nullptr;
 								case kTIME:
 								case kTIMESTAMP:
 								case kDATE:
@@ -122,19 +125,6 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
           return new NoneEncoder <int32_t> (buffer);
           break;
         }
-        case kENCODING_TOKDICT:
-          CHECK(sqlType.is_string());
-          switch (sqlType.get_elem_size()) {
-            case 1:
-              return new StringTokDictEncoder<int8_t>(buffer);
-            case 2:
-              return new StringTokDictEncoder<int16_t>(buffer);
-            case 4:
-              return new StringTokDictEncoder<int32_t>(buffer);
-            default:
-              assert(false);
-          }
-          break;
         default: {
             return 0;
             break;

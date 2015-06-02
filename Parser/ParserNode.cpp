@@ -332,12 +332,12 @@ namespace Parser {
     if (right_type != new_right_type)
       right_expr = right_expr->add_cast(new_right_type);
     if (optype == kEQ || optype == kNE) {
-      if ((new_left_type.get_compression() == kENCODING_DICT || new_left_type.get_compression() == kENCODING_TOKDICT) && new_right_type.get_compression() == kENCODING_NONE) {
+      if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_NONE) {
         SQLTypeInfo ti(new_right_type);
         ti.set_compression(new_left_type.get_compression());
         ti.set_comp_param(new_left_type.get_comp_param());
         right_expr = right_expr->add_cast(ti);
-      } else if ((new_right_type.get_compression() == kENCODING_DICT || new_right_type.get_compression() == kENCODING_TOKDICT) && new_left_type.get_compression() == kENCODING_NONE) {
+      } else if (new_right_type.get_compression() == kENCODING_DICT && new_left_type.get_compression() == kENCODING_NONE) {
         SQLTypeInfo ti(new_right_type);
         ti.set_compression(new_right_type.get_compression());
         ti.set_comp_param(new_right_type.get_comp_param());
@@ -382,7 +382,7 @@ namespace Parser {
   {
     Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     SQLTypeInfo ti = arg_expr->get_type_info();
-    bool dict_comp = ti.get_compression() == kENCODING_DICT || ti.get_compression() == kENCODING_TOKDICT;
+    bool dict_comp = ti.get_compression() == kENCODING_DICT;
     std::list<Analyzer::Expr*> *value_exprs = new std::list<Analyzer::Expr*>();
     for (auto p : *value_list) {
       Analyzer::Expr *e = p->analyze(catalog, query, allow_tlist_ref);
@@ -1414,19 +1414,6 @@ namespace Parser {
           // diciontary encoding
           cd.columnType.set_compression(kENCODING_DICT);
           cd.columnType.set_comp_param(comp_param);
-        } else if (boost::iequals(comp, "token_dict")) {
-          if (!cd.columnType.is_string())
-            throw std::runtime_error("Tokenized-Dictionary encoding is only supported on string columns.");
-          if (compression->get_encoding_param() == 0)
-            comp_param = 32; // default to 32-bits
-          else
-            comp_param = compression->get_encoding_param();
-          if (comp_param != 8 && comp_param != 16 && comp_param != 32)
-                throw std::runtime_error("Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
-          // tokenized diciontary encoding
-          cd.columnType.set_compression(kENCODING_TOKDICT);
-          cd.columnType.set_comp_param(comp_param);
-          cd.columnType.set_elem_size(comp_param/8);
         } else if (boost::iequals(comp, "sparse")) {
           // sparse column encoding with mostly NULL values
           if (cd.columnType.get_notnull())

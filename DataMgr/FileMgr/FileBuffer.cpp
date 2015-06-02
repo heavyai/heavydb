@@ -232,13 +232,13 @@ namespace File_Namespace {
         hasEncoder = static_cast <bool> (typeData[1]);
         if (hasEncoder) {
             sqlType.set_type(static_cast<SQLTypes> (typeData[2]));
-						sqlType.set_dimension(typeData[3]);
-						sqlType.set_scale(typeData[4]);
-						sqlType.set_notnull(static_cast<bool>(typeData[5]));
-            sqlType.set_compression(static_cast<EncodingType> (typeData[6]));
-            sqlType.set_comp_param(typeData[7]);
-            sqlType.set_size(typeData[8]);
-            sqlType.set_elem_size(typeData[9]);
+            sqlType.set_subtype(static_cast<SQLTypes> (typeData[3]));
+						sqlType.set_dimension(typeData[4]);
+						sqlType.set_scale(typeData[5]);
+						sqlType.set_notnull(static_cast<bool>(typeData[6]));
+            sqlType.set_compression(static_cast<EncodingType> (typeData[7]));
+            sqlType.set_comp_param(typeData[8]);
+            sqlType.set_size(typeData[9]);
             initEncoder(sqlType);
             encoder->readMetadata(f);
         }
@@ -261,13 +261,13 @@ namespace File_Namespace {
         typeData[1] = static_cast<int>(hasEncoder); 
         if (hasEncoder) {
             typeData[2] = static_cast<int>(sqlType.get_type()); 
-            typeData[3] = sqlType.get_dimension(); 
-            typeData[4] = sqlType.get_scale(); 
-            typeData[5] = static_cast<int>(sqlType.get_notnull()); 
-            typeData[6] = static_cast<int>(sqlType.get_compression()); 
-            typeData[7] = sqlType.get_comp_param(); 
-            typeData[8] = sqlType.get_size(); 
-            typeData[9] = sqlType.get_elem_size(); 
+            typeData[3] = static_cast<int>(sqlType.get_subtype()); 
+            typeData[4] = sqlType.get_dimension(); 
+            typeData[5] = sqlType.get_scale(); 
+            typeData[6] = static_cast<int>(sqlType.get_notnull()); 
+            typeData[7] = static_cast<int>(sqlType.get_compression()); 
+            typeData[8] = sqlType.get_comp_param(); 
+            typeData[9] = sqlType.get_size(); 
         }
         numBytesWritten = fwrite((int8_t *)&(typeData[0]),sizeof(int),typeData.size(),f);
         CHECK_GE(numBytesWritten, 0);

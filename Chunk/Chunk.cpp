@@ -43,7 +43,7 @@ namespace Chunk_NS {
       if (column_desc->columnType.get_compression() == kENCODING_NONE) {
         StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
         str_encoder->set_index_buf(index_buf);
-      } else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
+      } /* else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
         switch (column_desc->columnType.get_elem_size()) {
           case 1: {
             StringTokDictEncoder<int8_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int8_t>*>(buffer->encoder);
@@ -64,6 +64,7 @@ namespace Chunk_NS {
             assert(false);
         }
       }
+      */
     } else
       buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
   }
@@ -89,7 +90,7 @@ namespace Chunk_NS {
       if (column_desc->columnType.get_compression() == kENCODING_NONE) {
         StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
         return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
-      } else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
+      } /* else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
         switch (column_desc->columnType.get_elem_size()) {
           case 1: {
             StringTokDictEncoder<int8_t> *tokdict_encoder = dynamic_cast<StringTokDictEncoder<int8_t>*>(buffer->encoder);
@@ -107,6 +108,7 @@ namespace Chunk_NS {
             assert(false);
         }
       }
+      */
     }
     return buffer->encoder->appendData(src_data.numbersPtr, num_elems);
   }
@@ -128,7 +130,7 @@ namespace Chunk_NS {
       if (column_desc->columnType.get_compression() == kENCODING_NONE) {
         StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
         str_encoder->set_index_buf(index_buf);
-      } else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
+      } /* else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
         switch (column_desc->columnType.get_elem_size()) {
           case 1: {
             StringTokDictEncoder<int8_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int8_t>*>(buffer->encoder);
@@ -149,6 +151,7 @@ namespace Chunk_NS {
             assert(false);
         }
       }
+      */
     }
   }
 

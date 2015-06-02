@@ -135,13 +135,6 @@ TEST(StorageSmall, AllTypes) {
 	ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }
 
-TEST(StorageSmall, TokStrings) {
-	ASSERT_NO_THROW(run_ddl("drop table if exists tokstrings;"););
-	ASSERT_NO_THROW(run_ddl("create table tokstrings (x varchar(10) encoding token_dict(8), y varchar(20) encoding token_dict(16), z text encoding token_dict );"););
-	EXPECT_TRUE(storage_test("tokstrings", SMALL));
-	ASSERT_NO_THROW(run_ddl("drop table tokstrings;"););
-}
-
 int
 main(int argc, char* argv[])
 {

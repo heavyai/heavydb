@@ -211,42 +211,10 @@ random_fill(const ColumnDescriptor *cd, DataBlockPtr p, size_t num_elems, size_t
 		case kCHAR:
       if (cd->columnType.get_compression() == kENCODING_NONE)
         hash = random_fill_string(*p.stringsPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
-      else if (cd->columnType.get_compression() == kENCODING_TOKDICT) {
-        switch (cd->columnType.get_elem_size()) {
-          case 1:
-            hash = random_fill_int8array(*p.tok8dictPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
-            break;
-          case 2:
-            hash = random_fill_int16array(*p.tok16dictPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
-            break;
-          case 4:
-            hash = random_fill_int32array(*p.tok32dictPtr, num_elems, cd->columnType.get_dimension(), data_volumn);
-            break;
-          default:
-            assert(false);
-            break;
-        }
-      }
 			break;
 		case kTEXT:
       if (cd->columnType.get_compression() == kENCODING_NONE)
         hash = random_fill_string(*p.stringsPtr, num_elems, MAX_TEXT_LEN, data_volumn);
-      else if (cd->columnType.get_compression() == kENCODING_TOKDICT) {
-        switch (cd->columnType.get_elem_size()) {
-          case 1:
-            hash = random_fill_int8array(*p.tok8dictPtr, num_elems, MAX_TEXT_LEN, data_volumn);
-            break;
-          case 2:
-            hash = random_fill_int16array(*p.tok16dictPtr, num_elems, MAX_TEXT_LEN, data_volumn);
-            break;
-          case 4:
-            hash = random_fill_int32array(*p.tok32dictPtr, num_elems, MAX_TEXT_LEN, data_volumn);
-            break;
-          default:
-            assert(false);
-            break;
-        }
-      }
 			break;
 		case kTIME:
 		case kTIMESTAMP:
@@ -301,29 +269,6 @@ populate_table_random(const string &table_name, const size_t num_rows, const Cat
         vector<string> *col_vec = new vector<string>(num_rows);
         gc_strings.push_back(unique_ptr<vector<string>>(col_vec)); // add to gc list
         p.stringsPtr = col_vec;
-      } else if (cd->columnType.get_compression() == kENCODING_TOKDICT) {
-        switch (cd->columnType.get_elem_size()) {
-          case 1: {
-            vector<vector<int8_t>> *col_vec = new vector<vector<int8_t>>(num_rows);
-            gc_int8arrays.push_back(unique_ptr<vector<vector<int8_t>>>(col_vec));
-            p.tok8dictPtr = col_vec;
-            break;
-          }
-          case 2: {
-            vector<vector<int16_t>> *col_vec = new vector<vector<int16_t>>(num_rows);
-            gc_int16arrays.push_back(unique_ptr<vector<vector<int16_t>>>(col_vec));
-            p.tok16dictPtr = col_vec;
-            break;
-          }
-          case 4: {
-            vector<vector<int32_t>> *col_vec = new vector<vector<int32_t>>(num_rows);
-            gc_int32arrays.push_back(unique_ptr<vector<vector<int32_t>>>(col_vec));
-            p.tok32dictPtr = col_vec;
-            break;
-          }
-          default:
-            assert(false);
-        }
       }
 		} else {
 			int8_t *col_buf = static_cast<int8_t*>(malloc(num_rows * cd->columnType.get_size()));

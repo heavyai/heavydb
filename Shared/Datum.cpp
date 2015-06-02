@@ -14,7 +14,7 @@
 #include "sqltypes.h"
 
 std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = { "NULL", "BOOLEAN", "CHAR", "VARCHAR", "NUMERIC", "DECIMAL", "INTEGER", "SMALLINT", "FLOAT", "DOUBLE", "TIME", "TIMESTAMP", "BIGINT", "TEXT", "DATE" };
-std::string SQLTypeInfo::comp_name[kENCODING_LAST] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "TOKEN_DICT" };
+std::string SQLTypeInfo::comp_name[kENCODING_LAST] = { "NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE" };
 
 int64_t
 parse_numeric(const std::string &s, SQLTypeInfo &ti)

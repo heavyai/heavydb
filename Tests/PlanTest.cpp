@@ -100,14 +100,14 @@ namespace {
 }
 
 TEST(ParseAnalyzePlan, Create) {
-	ASSERT_NO_THROW(run_ddl("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m timestamp(0), n time(0), o date, p varchar(255) encoding token_dict);"););
+	ASSERT_NO_THROW(run_ddl("create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m timestamp(0), n time(0), o date);"););
 	ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("fat") != nullptr);
 	ASSERT_NO_THROW(run_ddl("create table if not exists skinny (a smallint, b int, c bigint);"););
 	ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("skinny") != nullptr);
 	ASSERT_NO_THROW(run_ddl("create table if not exists smallfrag (a int, b text, c bigint) with (fragment_size = 1000, page_size = 512);"););
 	const TableDescriptor *td = gsession->get_catalog().getMetadataForTable("smallfrag");
 	EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
-	ASSERT_NO_THROW(run_ddl("create table if not exists testdict (a varchar(100) encoding dict(8), b text encoding token_dict(16), c text encoding dict);"););
+	ASSERT_NO_THROW(run_ddl("create table if not exists testdict (a varchar(100) encoding dict(8), c text encoding dict);"););
 	td = gsession->get_catalog().getMetadataForTable("testdict");
   const ColumnDescriptor *cd = gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
   const DictDescriptor *dd = gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());

@@ -72,7 +72,7 @@ SysCatalog::createDatabase(const string &name, int owner)
 	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + std::to_string(owner) + ")");
 	SqliteConnector dbConn(name, basePath_+"/mapd_catalogs/");
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, partitions text)");
-	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, size integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
+	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, size integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, refresh int)");
 	dbConn.query("CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean)");
 }
@@ -217,7 +217,7 @@ void Catalog::buildMaps() {
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
     }
-    string columnQuery("SELECT tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, size, chunks from mapd_columns");
+    string columnQuery("SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, size, chunks from mapd_columns");
     sqliteConnector_.query(columnQuery);
     numRows = sqliteConnector_.getNumRows();
     for (size_t r = 0; r < numRows; ++r) {
@@ -226,18 +226,14 @@ void Catalog::buildMaps() {
 				cd->columnId = sqliteConnector_.getData<int>(r,1);
         cd->columnName = sqliteConnector_.getData<string>(r,2);
 				cd->columnType.set_type((SQLTypes)sqliteConnector_.getData<int>(r,3));
-				cd->columnType.set_dimension(sqliteConnector_.getData<int>(r,4));
-				cd->columnType.set_scale(sqliteConnector_.getData<int>(r,5));
-				cd->columnType.set_notnull(sqliteConnector_.getData<bool>(r,6));
-				cd->columnType.set_compression((EncodingType)sqliteConnector_.getData<int>(r,7));
-        cd->columnType.set_comp_param(sqliteConnector_.getData<int>(r,8));
-        cd->columnType.set_size(sqliteConnector_.getData<int>(r,9));
-        if (cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_TOKDICT) {
-          
-          DictDescriptor *dd = dictDescriptorMapById_[cd->columnType.get_comp_param()];
-          cd->columnType.set_elem_size(dd->dictNBits/8);
-        }
-				cd->chunks = sqliteConnector_.getData<string>(r,10);
+				cd->columnType.set_subtype((SQLTypes)sqliteConnector_.getData<int>(r,4));
+				cd->columnType.set_dimension(sqliteConnector_.getData<int>(r,5));
+				cd->columnType.set_scale(sqliteConnector_.getData<int>(r,6));
+				cd->columnType.set_notnull(sqliteConnector_.getData<bool>(r,7));
+				cd->columnType.set_compression((EncodingType)sqliteConnector_.getData<int>(r,8));
+        cd->columnType.set_comp_param(sqliteConnector_.getData<int>(r,9));
+        cd->columnType.set_size(sqliteConnector_.getData<int>(r,10));
+				cd->chunks = sqliteConnector_.getData<string>(r,11);
         ColumnKey columnKey(cd->tableId, cd->columnName);
         columnDescriptorMap_[columnKey] = cd;
 				ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -304,8 +300,7 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
 		columnDescriptorMapById_.erase(colDescIt);
 		ColumnKey cnameKey(tableId, cd->columnName);
 		columnDescriptorMap_.erase(cnameKey);
-    if (cd->columnType.get_compression() == kENCODING_DICT || 
-        cd->columnType.get_compression() == kENCODING_TOKDICT) {
+    if (cd->columnType.get_compression() == kENCODING_DICT) {
       DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
       DictDescriptor *dd = dictIt->second;
       dictDescriptorMapById_.erase(dictIt);
@@ -431,8 +426,7 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
 		td.tableId = sqliteConnector_.getData<int>(0, 0);
 		int colId = 1;
 		for (auto cd : columns) {
-      if (cd.columnType.get_compression() == kENCODING_DICT ||
-          cd.columnType.get_compression() == kENCODING_TOKDICT) {
+      if (cd.columnType.get_compression() == kENCODING_DICT) {
         std::string dictName = td.tableName + "_" + cd.columnName + "_dict";
         sqliteConnector_.query("INSERT INTO mapd_dictionaries (name, nbits, is_shared) VALUES ('" + dictName + "', " + std::to_string(cd.columnType.get_comp_param()) + ", 0)");
         sqliteConnector_.query("SELECT dictid FROM mapd_dictionaries WHERE name = '" + dictName + "'");
@@ -444,7 +438,7 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
           cd.columnType.set_size(cd.columnType.get_comp_param()/8);
         cd.columnType.set_comp_param(dictId);
       }
-			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, coldim, colscale, is_notnull, compression, comp_param, size, chunks) VALUES (" + std::to_string(td.tableId) + ", " + std::to_string(colId) + ", '" + cd.columnName + "', " + std::to_string(cd.columnType.get_type()) + ", " + std::to_string(cd.columnType.get_dimension()) + ", " + std::to_string(cd.columnType.get_scale()) + ", " + std::to_string(cd.columnType.get_notnull()) + ", " + std::to_string(cd.columnType.get_compression()) + ", " + std::to_string(cd.columnType.get_comp_param()) + ", " + std::to_string(cd.columnType.get_size()) + ", '')");
+			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, size, chunks) VALUES (" + std::to_string(td.tableId) + ", " + std::to_string(colId) + ", '" + cd.columnName + "', " + std::to_string(cd.columnType.get_type()) + ", " + std::to_string(cd.columnType.get_subtype()) + ", " + std::to_string(cd.columnType.get_dimension()) + ", " + std::to_string(cd.columnType.get_scale()) + ", " + std::to_string(cd.columnType.get_notnull()) + ", " + std::to_string(cd.columnType.get_compression()) + ", " + std::to_string(cd.columnType.get_comp_param()) + ", " + std::to_string(cd.columnType.get_size()) + ", '')");
 			cd.tableId = td.tableId;
 			cd.columnId = colId++;
 			cds.push_back(cd);
@@ -467,7 +461,7 @@ Catalog::dropTable(const TableDescriptor *td)
 	sqliteConnector_.query("BEGIN TRANSACTION");
 	try {
 		sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + std::to_string(td->tableId));
-		sqliteConnector_.query("DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression in (" + std::to_string(kENCODING_DICT) + ", " + std::to_string(kENCODING_TOKDICT) + ") and tableid = " + std::to_string(td->tableId) + ")");
+		sqliteConnector_.query("DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = " + std::to_string(kENCODING_DICT) + " and tableid = " + std::to_string(td->tableId) + ")");
 		sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + std::to_string(td->tableId));
 		if (td->isView)
 			sqliteConnector_.query("DELETE FROM mapd_views WHERE tableid = " + std::to_string(td->tableId));

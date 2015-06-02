@@ -56,8 +56,7 @@ public:
       string_buffer_ = new std::vector<std::string>();
       if (col_desc->columnType.get_compression() == kENCODING_DICT) {
         string_dict_buffer_ = new std::vector<int32_t>();
-      } else if (col_desc->columnType.get_compression() == kENCODING_TOKDICT)
-        CHECK(false);
+      }
       break;
     case kTIME:
     case kTIMESTAMP:

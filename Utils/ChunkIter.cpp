@@ -91,7 +91,6 @@ decompress(const SQLTypeInfo &ti, int8_t *compressed, VarlenDatum *result, Datum
           case kENCODING_RL:
           case kENCODING_DIFF:
           case kENCODING_DICT:
-          case kENCODING_TOKDICT:
           case kENCODING_SPARSE:
           case kENCODING_NONE:
             assert(false);

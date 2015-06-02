@@ -34,25 +34,9 @@ enum SQLTypes {
 	kBIGINT = 12,
 	kTEXT = 13,
 	kDATE = 14,
-  kSQLTYPE_LAST = 15
+  kARRAY = 15,
+  kSQLTYPE_LAST = 16
 };
-
-
-
-
-typedef union {
-	bool boolval;
-  int8_t tinyintval;
-	int16_t smallintval;
-	int32_t intval;
-	int64_t bigintval;
-	std::time_t timeval;
-	float floatval;
-	double doubleval;
-#ifndef __CUDACC__
-	std::string *stringval; // string value
-#endif
-} Datum;
 
 struct VarlenDatum {
 	int length;
@@ -63,13 +47,26 @@ struct VarlenDatum {
 	VarlenDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n) {}
 };
 
+typedef union {
+	bool boolval;
+  int8_t tinyintval;
+	int16_t smallintval;
+	int32_t intval;
+	int64_t bigintval;
+	std::time_t timeval;
+	float floatval;
+	double doubleval;
+  VarlenDatum *arrayval;
+#ifndef __CUDACC__
+	std::string *stringval; // string value
+#endif
+} Datum;
+
 #ifndef __CUDACC__
 union DataBlockPtr {
 	int8_t *numbersPtr;
 	std::vector<std::string> *stringsPtr;
-  std::vector<std::vector<int8_t>> *tok8dictPtr; // single byte tokenized dictionary encoding array
-  std::vector<std::vector<int16_t>> *tok16dictPtr; // double byte tokenized dictionary encoding array
-  std::vector<std::vector<int32_t>> *tok32dictPtr; // 4-byte tokenized dictionary encoding array
+  std::vector<VarlenDatum> *arrayPtr;
 };
 #endif
 
@@ -81,8 +78,7 @@ enum EncodingType {
 	kENCODING_DIFF = 3, // Differential encoding
 	kENCODING_DICT = 4, // Dictionary encoding
 	kENCODING_SPARSE = 5, // Null encoding for sparse columns
-	kENCODING_TOKDICT = 6, // Tokenized-Dictionary encoding
-  kENCODING_LAST = 7
+  kENCODING_LAST = 6
 };
 
 #define IS_INTEGER(T) (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kBIGINT))
@@ -107,12 +103,13 @@ enum EncodingType {
 // length, precision, scale, etc.
 class SQLTypeInfo {
   public:
-    SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p, int es) : type(t), dimension(d), scale(s), notnull(n), compression(c), comp_param(p), size(get_storage_size()), elem_size(es) {}
-    SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
-    SQLTypeInfo(SQLTypes t, bool n) : type(t), dimension(0), scale(0), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()), elem_size(0) {}
-    SQLTypeInfo() : type(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0), elem_size(0) {}
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p, SQLTypes st) : type(t), subtype(st), dimension(d), scale(s), notnull(n), compression(c), comp_param(p), size(get_storage_size()) {}
+    SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), subtype(kNULLT), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
+    SQLTypeInfo(SQLTypes t, bool n) : type(t), subtype(kNULLT), dimension(0), scale(0), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
+    SQLTypeInfo() : type(kNULLT), subtype(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0) {}
 
     DEVICE inline SQLTypes get_type() const { return type; }
+    inline SQLTypes get_subtype() const { return subtype; }
     inline int get_dimension() const { return dimension; }
     inline int get_precision() const { return dimension; }
     inline int get_scale() const { return scale; }
@@ -120,15 +117,14 @@ class SQLTypeInfo {
     DEVICE inline EncodingType get_compression() const { return compression; }
     DEVICE inline int get_comp_param() const { return comp_param; }
     inline int get_size() const { return size; }
-    inline int get_elem_size() const { return elem_size; }
     inline void set_type(SQLTypes t) { type = t; }
+    inline void set_subtype(SQLTypes st) { subtype = st; }
     inline void set_dimension(int d) { dimension = d; }
     inline void set_precision(int d) { dimension = d; }
     inline void set_scale(int s) { scale = s; }
     inline void set_notnull(bool n) { notnull = n; }
     inline void set_size(int s) { size = s; }
     inline void set_fixed_size() { size = get_storage_size(); }
-    inline void set_elem_size(int s) { elem_size = s; }
     inline void set_compression(EncodingType c) { compression = c; }
     inline void set_comp_param(int p) { comp_param = p; }
 #ifndef __CUDACC__
@@ -141,25 +137,26 @@ class SQLTypeInfo {
     inline bool is_number() const { return IS_NUMBER(type); }
     inline bool is_time() const { return IS_TIME(type); }
     inline bool is_boolean() const { return type == kBOOLEAN; }
+    inline bool is_array() const { return type == kARRAY; }
 
-		inline bool is_varlen() const { return IS_STRING(type) && compression != kENCODING_DICT; }
+		inline bool is_varlen() const { return (IS_STRING(type) && compression != kENCODING_DICT) || type == kARRAY; }
 
 
     DEVICE inline bool operator!=(const SQLTypeInfo &rhs) const {
-      return type != rhs.get_type() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || (compression != kENCODING_NONE && comp_param != rhs.get_comp_param() && comp_param != TRANSIENT_DICT(rhs.get_comp_param()));
+      return type != rhs.get_type() || subtype != rhs.get_subtype() || dimension != rhs.get_dimension() || scale != rhs.get_scale() || compression != rhs.get_compression() || (compression != kENCODING_NONE && comp_param != rhs.get_comp_param() && comp_param != TRANSIENT_DICT(rhs.get_comp_param()));
     }
     DEVICE inline bool operator==(const SQLTypeInfo &rhs) const {
-      return type == rhs.get_type() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && (compression == kENCODING_NONE || comp_param == rhs.get_comp_param() || comp_param == TRANSIENT_DICT(rhs.get_comp_param()));
+      return type == rhs.get_type() && subtype == rhs.get_subtype() && dimension == rhs.get_dimension() && scale == rhs.get_scale() && compression == rhs.get_compression() && (compression == kENCODING_NONE || comp_param == rhs.get_comp_param() || comp_param == TRANSIENT_DICT(rhs.get_comp_param()));
     }
     DEVICE inline void operator=(const SQLTypeInfo &rhs) {
       type = rhs.get_type();
+      subtype = rhs.get_subtype();
       dimension = rhs.get_dimension();
       scale = rhs.get_scale();
       notnull = rhs.get_notnull();
       compression = rhs.get_compression();
       comp_param = rhs.get_comp_param();
       size = rhs.get_size();
-      elem_size = rhs.get_elem_size();
     }
     DEVICE inline bool is_castable(const SQLTypeInfo &new_type_info) const {
       // can always cast between the same type but different precision/scale/encodings
@@ -212,6 +209,8 @@ class SQLTypeInfo {
           break;
         case kNULLT:
           return true;
+        case kARRAY:
+          return d.arrayval == NULL || d.arrayval->is_null;
         default:
           break;
       }
@@ -238,13 +237,13 @@ class SQLTypeInfo {
     }
   private:
     SQLTypes type; // type id
+    SQLTypes subtype; // element type of arrays
     int dimension; // VARCHAR/CHAR length or NUMERIC/DECIMAL precision
     int scale; // NUMERIC/DECIMAL scale
     bool notnull; // nullable?  a hint, not used for type checking
     EncodingType compression; // compression scheme
     int comp_param; // compression parameter when applicable for certain schemes
     int size; // size of the type in bytes.  -1 for variable size
-    int elem_size; // size of array elements in bytes, 1, 2 or 4.  for internal use for tokenized dictionary encoding only.
 #ifndef __CUDACC__
     static std::string type_name[kSQLTYPE_LAST];
     static std::string comp_name[kENCODING_LAST];
