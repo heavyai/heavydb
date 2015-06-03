@@ -138,6 +138,42 @@ public:
     }
   }
 
+  void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
+    try {
+      client_.get_row_descriptor(_return, session, table_name);
+    }
+    catch (TMapDException &e) {
+      throw e;
+    }
+    catch (TException &te) {
+      try {
+        transport_.open();
+        client_.get_row_descriptor(_return, session, table_name);
+      }
+      catch (TMapDException &e) {
+        throw e;
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+      catch (std::exception &e) {
+        std::cerr << "get_row_descriptor caught exception: " << e.what() << std::endl;
+        TMapDException ex;
+        ex.error_msg = e.what();
+        throw ex;
+      }
+    }
+    catch (std::exception &e) {
+      std::cerr << "get_row_descriptor caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
   void get_tables(std::vector<std::string> & _return, const TSessionId session)
   {
     try {

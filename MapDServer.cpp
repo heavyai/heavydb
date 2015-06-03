@@ -334,6 +334,33 @@ public:
     }
   }
 
+  void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    session_it->second->update_time();
+    auto &cat = session_it->second->get_catalog(); 
+    auto td = cat.getMetadataForTable(table_name);
+    if (!td) {
+      TMapDException ex;
+      ex.error_msg = "Table doesn't exist";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId);
+    for (const auto cd : col_descriptors) {
+      TColumnType col_type;
+      col_type.col_name = cd->columnName;
+      col_type.col_type.type = type_to_thrift(cd->columnType);
+      col_type.col_type.nullable = !cd->columnType.get_notnull();
+      _return.push_back(col_type);
+    }
+  }
+
   void get_tables(std::vector<std::string> & table_names, const TSessionId session) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {

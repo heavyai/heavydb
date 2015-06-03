@@ -51,6 +51,7 @@ struct ClientContext {
   std::vector<std::string> names_return;
   std::vector<TDBInfo> dbinfos_return;
   TTableDescriptor columns_return;
+  TRowDescriptor rowdesc_return;
   TExecuteMode::type execution_mode;
   std::string version;
 
@@ -66,7 +67,8 @@ enum ThriftService {
   kGET_DATABASES,
   kGET_USERS,
   kSET_EXECUTION_MODE,
-  kGET_VERSION
+  kGET_VERSION,
+  kGET_ROW_DESC
 };
 
 static bool
@@ -85,6 +87,9 @@ thrift_with_retry(ThriftService which_service, ClientContext &context, char *arg
         break;
       case kGET_COLUMNS:
         context.client.get_table_descriptor(context.columns_return, context.session, arg);
+        break;
+      case kGET_ROW_DESC:
+        context.client.get_row_descriptor(context.rowdesc_return, context.session, arg);
         break;
       case kGET_TABLES:
         context.client.get_tables(context.names_return, context.session);
@@ -231,10 +236,10 @@ process_backslash_commands(char *command, ClientContext &context)
           return;
         }
         std::string table_name(command+3);
-        if (thrift_with_retry(kGET_COLUMNS, context, command+3))
-          for (auto p : context.columns_return) {
-            std::cout << p.first << " ";
-            switch (p.second.col_type.type) {
+        if (thrift_with_retry(kGET_ROW_DESC, context, command+3))
+          for (auto p : context.rowdesc_return) {
+            std::cout << p.col_name << " ";
+            switch (p.col_type.type) {
               case TDatumType::INT:
                 std::cout << "INTEGER\n";
                 break;
