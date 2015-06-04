@@ -1,5 +1,5 @@
 /**
- * @file    StreamInsert.cpp
+ * @file    StreamInsertIG.cpp
  * @author  Wei Hong <wei@mapd.com>
  * @brief   Sample MapD Client code for inserting a stream of rows from stdin
  * to a MapD table.
@@ -10,7 +10,7 @@
 #include <cstring>
 #include <string>
 #include <iostream>
-#include <boost/tokenizer.hpp>
+#include <iterator>
 
 // include files for Thrift and MapD Thrift Services
 #include "gen-cpp/MapD.h"
@@ -27,59 +27,129 @@ using boost::shared_ptr;
 
 namespace {
   // anonymous namespace for private functions
-  const size_t INSERT_BATCH_SIZE = 10000;
+  struct CopyParams {
+    char delimiter;
+    std::string null_str;
+    char line_delim;
+    size_t batch_size;
+    CopyParams() : delimiter('\x01'), null_str("\\N"), line_delim('\n'), batch_size(10000) {}
+  } copy_params;
+
+#define MAX_FIELD_LEN   10000
+// #define PRINT_ERROR_DATA
 
   // reads tab-delimited rows from std::cin and load them to
-  // table_name in batches of size INSERT_BATCH_SIZE until done
+  // table_name in batches of size copy_params.batch_size until EOF
   void
-  stream_insert(MapDClient &client, const TSessionId session, const std::string &table_name, const TTableDescriptor &table_desc, const char *delimiter)
+  stream_insert(MapDClient &client, const TSessionId session, const std::string &table_name, const TRowDescriptor &row_desc)
   {
-    std::string line;
     std::vector<TStringRow> input_rows;
     TStringRow row;
-    boost::char_separator<char> sep{delimiter, "", boost::keep_empty_tokens};
-    while (std::getline(std::cin, line)) {
+
+    std::istream_iterator<char> eos;
+    std::cin >> std::noskipws;
+    std::istream_iterator<char> iit(std::cin);
+
+    char field[MAX_FIELD_LEN];
+    int field_i = 0;
+
+    int nrows = 0;
+    int nskipped = 0;
+
+    while (iit != eos) {
       {
         // free previous row's memory
         std::vector<TStringValue> empty;
         row.cols.swap(empty);
       }
-      boost::tokenizer<boost::char_separator<char>> tok{line, sep};
-      for (const auto &s : tok) {
-        TStringValue ts;
-        ts.str_val = s;
-        ts.is_null = s.empty();
-        row.cols.push_back(ts);
-      }
-      if (row.cols.size() != table_desc.size()) {
-        std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << table_desc.size() << ") " << line << std::endl;
-        continue;
-      }
-      input_rows.push_back(row);
-      if (input_rows.size() >= INSERT_BATCH_SIZE) {
-        try {
-          client.load_table(session, table_name, input_rows);
+      // construct a row
+      while (iit != eos) {
+        if (*iit == copy_params.delimiter || *iit == copy_params.line_delim) {
+          if (*iit == copy_params.line_delim && row.cols.size() < row_desc.size() - 1 && row_desc[row.cols.size()].col_type.type  == TDatumType::STR)
+          {
+            // not enough columns yet and it is a string column
+            // treat the line delimiter as part of the string
+            field[field_i++] = *iit;
+          } else {
+            field[field_i] = '\0';
+            field_i = 0;
+            TStringValue ts;
+            ts.str_val = field;
+            ts.is_null = (ts.str_val.empty() || ts.str_val == copy_params.null_str);
+            row.cols.push_back(ts); // add column value to row
+            if ((*iit == copy_params.line_delim && row.cols.size() == row_desc.size()) || (row.cols.size() > row_desc.size()))
+              break; // found row
+          }
+        } else {
+          field[field_i++] = *iit;
         }
-        catch (TMapDException &e) {
-          std::cerr << e.error_msg << std::endl;
+        if (field_i >= MAX_FIELD_LEN) {
+          field[MAX_FIELD_LEN - 1] = '\0';
+          std::cerr << "String too long for buffer." << std::endl;
+#ifdef PRINT_ERROR_DATA
+          std::cerr << field << std::endl;
+#endif
+          field_i = 0;
+          break;
         }
-        {
-          // free rowset that has already been loaded
-          std::vector<TStringRow> empty;
-          input_rows.swap(empty);
+        ++iit;
+      }
+      if (row.cols.size() == row_desc.size()) {
+        input_rows.push_back(row);
+        if (input_rows.size() >= copy_params.batch_size) {
+          try {
+            client.load_table(session, table_name, input_rows);
+            nrows += input_rows.size();
+            std::cout << nrows << " rows inserted, " << nskipped << " rows skipped." << std::endl;
+          }
+          catch (TMapDException &e) {
+            std::cerr << e.error_msg << std::endl;
+          }
+          {
+            // free rowset that has already been loaded
+            std::vector<TStringRow> empty;
+            input_rows.swap(empty);
+          }
+        }
+      } else {
+        ++nskipped;
+#ifdef PRINT_ERROR_DATA
+        std::cerr << "Incorrect number of columns for row at: ";
+        bool not_first = false;
+        for (const auto &p : row.cols) {
+          if (not_first)
+            std::cerr << copy_params.delimiter;
+          else
+            not_first = true;
+          std::cerr << p;
+        }
+        std::cerr << std::endl;
+#endif
+        if (row.cols.size() > row_desc.size()) {
+          // skip to the next line delimiter
+          while (*iit != copy_params.line_delim)
+            ++iit;
         }
       }
+      ++iit;
     }
     // load remaining rowset if any
-    if (input_rows.size() > 0)
-      client.load_table(session, table_name, input_rows);
+    if (input_rows.size() > 0) {
+      try {
+        client.load_table(session, table_name, input_rows);
+        nrows += input_rows.size();
+        std::cout << nrows << " rows inserted, " << nskipped << " rows skipped." << std::endl;
+      }
+      catch (TMapDException &e) {
+        std::cerr << e.error_msg << std::endl;
+      }
+    }
   }
 }
 
 int main(int argc, char **argv) {
   std::string server_host("localhost"); // default to localohost
   int port = 9091; // default port number
-  const char *delimiter = "\t"; // only support tab delimiter for now
 
   if (argc < 5) {
     std::cout << "Usage: <table> <database> <user> <password> [hostname[:port]]" << std::endl;
@@ -106,9 +176,9 @@ int main(int argc, char **argv) {
   try {
     transport->open(); // open transport
     session = client.connect(user_name, passwd, db_name); // connect to mapd_server
-    TTableDescriptor table_desc;
-    client.get_table_descriptor(table_desc, session, table_name);
-    stream_insert(client, session, table_name, table_desc, delimiter);
+    TRowDescriptor row_desc;
+    client.get_row_descriptor(row_desc, session, table_name);
+    stream_insert(client, session, table_name, row_desc);
     client.disconnect(session); // disconnect from mapd_server
     transport->close(); // close transport
   }
