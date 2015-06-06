@@ -432,6 +432,7 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%eal_bar';", dt);
+    c("SELECT COUNT(*) FROM test WHERE str LIKE '%ba%';", dt);
     c("SELECT * FROM test WHERE str LIKE '%';", dt);
     c("SELECT * FROM test WHERE str LIKE 'f%%';", dt);
     c("SELECT * FROM test WHERE str LIKE 'f%\%';", dt);

@@ -311,6 +311,9 @@ namespace Parser {
       Expr *escape_string;
 
       static void check_like_expr(const std::string &like_str, char escape_char);
+      static bool test_is_simple_expr(const std::string &like_str, char escape_char);
+      static void erase_cntl_chars(std::string &like_str, char escape_char);
+
   };
 
   /*

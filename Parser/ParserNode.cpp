@@ -439,6 +439,43 @@ namespace Parser {
       
   }
 
+  bool
+  LikeExpr::test_is_simple_expr(const std::string &like_str, char escape_char)
+  {
+    // if not bounded by '%' then not a simple string
+    if (like_str.size() < 2 || like_str[0] != '%' || like_str[like_str.size() - 1] != '%')
+      return false;
+    // if the last '%' is escaped then not a simple string
+    if (like_str[like_str.size()-2] == escape_char && like_str[like_str.size()-3] != escape_char)
+      return false;
+    for (size_t i = 1; i < like_str.size() - 1; i++) {
+      if (like_str[i] == '%' || like_str[i] == '_' || like_str[i] == '[' || like_str[i] == ']') {
+      if (like_str[i-1] != escape_char)
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void LikeExpr::erase_cntl_chars(std::string &like_str, char escape_char) {
+    char prev_char = '\0';
+    // easier to create new string of allowable chars
+    // rather than erase chars from
+    // existing string
+    std::string new_str;
+    for (char& cur_char: like_str) {
+      if (cur_char == '%' || cur_char == escape_char ) {
+        if (prev_char != escape_char) {
+          prev_char = cur_char;
+          continue;
+        }
+      }
+      new_str.push_back(cur_char);
+      prev_char = cur_char;
+    }
+    like_str = new_str;
+  }
+
   Analyzer::Expr *
   LikeExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
@@ -461,13 +498,20 @@ namespace Parser {
       escape_char = (*c->get_constval().stringval)[0];
     }
     Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(like_expr);
+    bool is_simple = false;
     if (c != nullptr) {
       std::string &pattern = *c->get_constval().stringval;
       if (is_ilike)
         std::transform(pattern.begin(), pattern.end(), pattern.begin(), ::tolower);
       check_like_expr(pattern, escape_char);
+      is_simple = test_is_simple_expr(pattern, escape_char);
+      //if (likeCount++ % 2 == 1)
+      //    is_simple = false;
+        if (is_simple) {
+          erase_cntl_chars(pattern, escape_char);
+        }
     }
-    Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr, is_ilike);
+    Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr, is_ilike, is_simple);
     if (is_not)
       result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
     return result;

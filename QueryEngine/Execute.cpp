@@ -399,10 +399,14 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     str_lv[1],
     str_lv[2],
     like_expr_arg_lvs[1],
-    like_expr_arg_lvs[2],
-    ll_int(int8_t(escape_char))
+    like_expr_arg_lvs[2]
   };
   std::string fn_name { expr->get_is_ilike() ? "string_ilike" : "string_like" };
+  if (expr->get_is_simple()) {
+    fn_name += "_simple";
+  } else {
+    str_like_args.push_back(ll_int(int8_t(escape_char)));
+  }
   if (is_nullable) {
     fn_name += "_nullable";
     str_like_args.push_back(inlineIntNull(expr->get_type_info()));
@@ -2952,6 +2956,10 @@ declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
 declare i8 @string_ilike_nullable(i8*, i32, i8*, i32, i8, i8);
+declare i1 @string_like_simple(i8*, i32, i8*, i32);
+declare i1 @string_ilike_simple(i8*, i32, i8*, i32);
+declare i8 @string_like_simple_nullable(i8*, i32, i8*, i32, i8);
+declare i8 @string_ilike_simple_nullable(i8*, i32, i8*, i32, i8);
 declare i1 @string_lt(i8*, i32, i8*, i32);
 declare i1 @string_le(i8*, i32, i8*, i32);
 declare i1 @string_gt(i8*, i32, i8*, i32);

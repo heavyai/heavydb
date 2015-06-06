@@ -25,6 +25,51 @@ inline lowercase(char c)
   return c;
 }
 
+extern "C" DEVICE
+bool string_like_simple(const char *str, const int32_t str_len, const char *pattern, const int32_t pat_len)
+{
+  int i, j;
+  int search_len = str_len - pat_len + 1;
+  for (i = 0; i < search_len; ++i) {
+    for (j = 0; j < pat_len && pattern[j] == str[j+i]; ++j) {}
+    if (j >= pat_len) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
+extern "C" DEVICE
+bool string_ilike_simple(const char *str, const int32_t str_len, const char *pattern, const int32_t pat_len)
+{
+  int i, j;
+  int search_len = str_len - pat_len + 1;
+  for (i = 0; i < search_len; ++i) {
+    for (j = 0; j < pat_len && pattern[j] == lowercase(str[j+i]); ++j) {}
+    if (j >= pat_len) {
+      return true;
+    }
+  }
+  return false;
+}
+
+#define STR_LIKE_SIMPLE_NULLABLE(base_func)                          \
+extern "C" DEVICE                                                    \
+int8_t base_func##_nullable(const char* lhs, const int32_t lhs_len,  \
+                            const char* rhs, const int32_t rhs_len,  \
+                            const int8_t bool_null) {                \
+  if (!lhs || !rhs) {                                                \
+    return bool_null;                                                \
+  }                                                                  \
+  return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;              \
+}
+
+STR_LIKE_SIMPLE_NULLABLE(string_like_simple)
+STR_LIKE_SIMPLE_NULLABLE(string_ilike_simple)
+
+#undef STR_LIKE_SIMPLE_NULLABLE
+
 // internal recursive function for performing LIKE matching.
 // when is_ilike is true, pattern is assumed to be already converted to all lowercase
 DEVICE static LikeStatus
