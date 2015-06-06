@@ -36,7 +36,7 @@ namespace {
   } copy_params;
 
 #define MAX_FIELD_LEN   10000
-// #define PRINT_ERROR_DATA
+  const bool print_error_data = false;
 
   // reads tab-delimited rows from std::cin and load them to
   // table_name in batches of size copy_params.batch_size until EOF
@@ -65,7 +65,21 @@ namespace {
       // construct a row
       while (iit != eos) {
         if (*iit == copy_params.delimiter || *iit == copy_params.line_delim) {
-          if (*iit == copy_params.line_delim && row.cols.size() < row_desc.size() - 1 && row_desc[row.cols.size()].col_type.type  == TDatumType::STR)
+          bool end_of_field = (*iit == copy_params.delimiter);
+          bool end_of_row;
+          if (end_of_field)
+            end_of_row = false;
+          else {
+            end_of_row = (row_desc[row.cols.size()].col_type.type  != TDatumType::STR) || (row.cols.size() == row_desc.size() - 1);
+            if (!end_of_row) {
+              int l = copy_params.null_str.size();
+              if (field_i >= l && strncmp(field + field_i - l, copy_params.null_str.c_str(), l) == 0) {
+                end_of_row = true;
+                // std::cout << "new line after null.\n";
+              }
+            }
+          }
+          if (!end_of_field && !end_of_row)
           {
             // not enough columns yet and it is a string column
             // treat the line delimiter as part of the string
@@ -77,7 +91,7 @@ namespace {
             ts.str_val = field;
             ts.is_null = (ts.str_val.empty() || ts.str_val == copy_params.null_str);
             row.cols.push_back(ts); // add column value to row
-            if ((*iit == copy_params.line_delim && row.cols.size() == row_desc.size()) || (row.cols.size() > row_desc.size()))
+            if (end_of_row || (row.cols.size() > row_desc.size()))
               break; // found row
           }
         } else {
@@ -86,9 +100,8 @@ namespace {
         if (field_i >= MAX_FIELD_LEN) {
           field[MAX_FIELD_LEN - 1] = '\0';
           std::cerr << "String too long for buffer." << std::endl;
-#ifdef PRINT_ERROR_DATA
-          std::cerr << field << std::endl;
-#endif
+          if (print_error_data)
+            std::cerr << field << std::endl;
           field_i = 0;
           break;
         }
@@ -113,18 +126,18 @@ namespace {
         }
       } else {
         ++nskipped;
-#ifdef PRINT_ERROR_DATA
-        std::cerr << "Incorrect number of columns for row at: ";
-        bool not_first = false;
-        for (const auto &p : row.cols) {
-          if (not_first)
-            std::cerr << copy_params.delimiter;
-          else
-            not_first = true;
-          std::cerr << p;
+        if (print_error_data) {
+          std::cerr << "Incorrect number of columns for row at: ";
+          bool not_first = false;
+          for (const auto &p : row.cols) {
+            if (not_first)
+              std::cerr << copy_params.delimiter;
+            else
+              not_first = true;
+            std::cerr << p;
+          }
+          std::cerr << std::endl;
         }
-        std::cerr << std::endl;
-#endif
         if (row.cols.size() > row_desc.size()) {
           // skip to the next line delimiter
           while (*iit != copy_params.line_delim)
