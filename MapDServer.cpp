@@ -99,7 +99,6 @@ public:
         LOG(INFO) << "Started in CPU Mode" << std::endl; 
         cpu_mode_only_ = true;
     }
-    const auto system_db_file = boost::filesystem::path(base_data_path_) / "mapd_catalogs" / "mapd";
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_)); // second param is whether to initialize GPU buffer pool
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, *data_mgr_));
