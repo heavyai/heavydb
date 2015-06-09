@@ -9,6 +9,7 @@
 #include <boost/noncopyable.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/variant.hpp>
+#include <boost/version.hpp>
 #include <glog/logging.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
@@ -421,9 +422,17 @@ public:
       for (size_t col_idx = 0; col_idx < colCount(); ++col_idx) {
         const auto lhs_val = get(row_idx, col_idx, true);
         const auto rhs_val = r.get(row_idx, col_idx, true);
+#if BOOST_VERSION < 105800
         const auto lhs_pd = boost::get<std::pair<int64_t, int64_t>>(&lhs_val);
+#else
+        const auto lhs_pd = boost::relaxed_get<std::pair<int64_t, int64_t>>(&lhs_val);
+#endif
         if (lhs_pd) {
+#if BOOST_VERSION < 105800
           const auto rhs_pd = boost::get<std::pair<int64_t, int64_t>>(&rhs_val);
+#else
+          const auto rhs_pd = boost::relaxed_get<std::pair<int64_t, int64_t>>(&rhs_val);
+#endif
           if (!rhs_pd) {
             return false;
           }
