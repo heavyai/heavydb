@@ -2158,7 +2158,7 @@ int32_t Executor::executePlanWithoutGroupBy(
       out_vec = query_exe_context->launchGpuCode(
         compilation_result.native_functions, hoist_literals, hoist_buf,
         col_buffers, num_rows, 0, query_exe_context->init_agg_vals_,
-        data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
+        data_mgr, blockSize(), gridSize(), device_id, &error_code);
     } catch (const std::runtime_error&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -2174,14 +2174,14 @@ int32_t Executor::executePlanWithoutGroupBy(
       agg_info.agg_kind,
       target_expr->get_type_info(),
       out_vec[out_vec_idx],
-      device_type == ExecutorDeviceType::GPU ? num_fragments * block_size_x_ * grid_size_x_ : 1);
+      device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1);
     if (agg_info.agg_kind == kAVG) {
       ++out_vec_idx;
       results.addValue(val1, reduce_results(
         agg_info.agg_kind,
         target_expr->get_type_info(),
         out_vec[out_vec_idx],
-        device_type == ExecutorDeviceType::GPU ? num_fragments * block_size_x_ * grid_size_x_ : 1));
+        device_type == ExecutorDeviceType::GPU ? num_fragments * blockSize() * gridSize() : 1));
     } else {
       results.addValue(val1);
     }
@@ -2224,7 +2224,7 @@ int32_t Executor::executePlanWithGroupBy(
       query_exe_context->launchGpuCode(
         compilation_result.native_functions, hoist_literals, hoist_buf, col_buffers,
         num_rows, scan_limit, query_exe_context->init_agg_vals_,
-        data_mgr, block_size_x_, grid_size_x_, device_id, &error_code);
+        data_mgr, blockSize(), gridSize(), device_id, &error_code);
     } catch (const std::runtime_error&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -2621,7 +2621,7 @@ Executor::CompilationResult Executor::compilePlan(
 
   if (device_type == ExecutorDeviceType::GPU &&
       query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
-    const size_t required_memory { (grid_size_x_ * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)) };
+    const size_t required_memory { (gridSize() * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)) };
     CHECK(catalog_->get_dataMgr().cudaMgr_);
     const size_t max_memory { catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 10 };
     cgen_state_->must_run_on_cpu_ =  required_memory > max_memory;
@@ -3067,7 +3067,7 @@ R"(
     gpu_rt_path /= "QueryEngine";
     gpu_rt_path /= "cuda_mapd_rt.a";
     auto gpu_context = new GpuCompilationContext(ptx, func_name, gpu_rt_path.string(),
-      device_id, cuda_mgr, block_size_x_);
+      device_id, cuda_mgr, blockSize());
     auto native_code = gpu_context->kernel();
     CHECK(native_code);
     native_functions.push_back(native_code);
@@ -3082,10 +3082,25 @@ R"(
 }
 
 int8_t Executor::warpSize() const {
+  CHECK(catalog_);
   CHECK(catalog_->get_dataMgr().cudaMgr_);
   const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
   CHECK(!dev_props.empty());
   return dev_props.front().warpSize;
+}
+
+unsigned Executor::gridSize() const {
+  CHECK(catalog_);
+  CHECK(catalog_->get_dataMgr().cudaMgr_);
+  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  return grid_size_x_ ? grid_size_x_ : 2 * dev_props.front().numMPs;
+}
+
+unsigned Executor::blockSize() const {
+  CHECK(catalog_);
+  CHECK(catalog_->get_dataMgr().cudaMgr_);
+  const auto& dev_props = catalog_->get_dataMgr().cudaMgr_->deviceProperties;
+  return block_size_x_ ? block_size_x_ : dev_props.front().maxThreadsPerBlock;
 }
 
 llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {

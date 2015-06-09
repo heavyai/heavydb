@@ -32,6 +32,7 @@ void CudaMgr::fillDeviceProperties() {
         checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].sharedMemPerBlock, CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR, deviceProperties[deviceNum].device));
         checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].numMPs, CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, deviceProperties[deviceNum].device));
         checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, deviceProperties[deviceNum].device));
+        checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].maxThreadsPerBlock, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, deviceProperties[deviceNum].device));
         checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].maxRegistersPerBlock, CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK, deviceProperties[deviceNum].device));
         checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].maxRegistersPerMP, CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_MULTIPROCESSOR, deviceProperties[deviceNum].device));
         checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].pciBusId, CU_DEVICE_ATTRIBUTE_PCI_BUS_ID, deviceProperties[deviceNum].device));

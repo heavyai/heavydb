@@ -445,7 +445,7 @@ QueryExecutionContext::QueryExecutionContext(
   , col_buffers_(col_buffers)
   , num_buffers_ { device_type == ExecutorDeviceType::CPU
       ? 1
-      : executor->block_size_x_ * executor->grid_size_x_ }
+      : executor->blockSize() * executor->gridSize() }
   , row_set_mem_owner_(row_set_mem_owner) {
   if (query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
@@ -475,7 +475,7 @@ QueryExecutionContext::QueryExecutionContext(
   }
 
   size_t step { device_type_ == ExecutorDeviceType::GPU && query_mem_desc_.threadsShareMemory()
-    ? executor_->block_size_x_ : 1 };
+    ? executor_->blockSize() : 1 };
 
   for (size_t i = 0; i < num_buffers_; i += step) {
     auto group_by_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
@@ -600,7 +600,7 @@ ResultRows QueryExecutionContext::getRowSet(
     CHECK_EQ(1, num_buffers_);
     return groupBufferToResults(0, targets, was_auto_device);
   }
-  size_t step { query_mem_desc_.threadsShareMemory() ? executor_->block_size_x_ : 1 };
+  size_t step { query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1 };
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     results_per_sm.emplace_back(groupBufferToResults(i, targets, was_auto_device));
   }

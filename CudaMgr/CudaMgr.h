@@ -15,6 +15,7 @@ struct DeviceProperties {
     int sharedMemPerBlock;
     int numMPs;
     int warpSize;
+    int maxThreadsPerBlock;
     int maxRegistersPerBlock;
     int maxRegistersPerMP;
     int pciBusId;

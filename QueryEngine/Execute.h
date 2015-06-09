@@ -64,8 +64,8 @@ public:
     const int db_id,
     const std::string& debug_dir = "",
     const std::string& debug_file = "",
-    const size_t block_size_x = 1024,
-    const size_t grid_size_x = 15);
+    const size_t block_size_x = 0,
+    const size_t grid_size_x = 0);
 
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
 
@@ -242,6 +242,8 @@ private:
                                            const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
   int8_t warpSize() const;
+  unsigned gridSize() const;
+  unsigned blockSize() const;
 
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                     const bool hoist_literals,
