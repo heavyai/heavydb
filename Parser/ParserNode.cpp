@@ -1481,6 +1481,8 @@ namespace Parser {
         } else
           throw std::runtime_error("Invalid column compression scheme " + comp);
       }
+      if (cd.columnType.is_string_array() && cd.columnType.get_compression() != kENCODING_DICT)
+        throw std::runtime_error("Array of strings must be dictionary encoded. Specify ENCODING DICT");
       cd.columnType.set_fixed_size();
       columns.push_back(cd);
     }
