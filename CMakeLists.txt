@@ -30,8 +30,12 @@ ADD_SUBDIRECTORY    (Fragmenter)
 ADD_SUBDIRECTORY    (Chunk)
 ADD_SUBDIRECTORY    (Shared)
 ADD_SUBDIRECTORY    (Utils)
-ADD_SUBDIRECTORY    (Tests)
 ADD_SUBDIRECTORY    (SQLFrontend)
+
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
+    QueryEngine DataMgr Fragmenter Chunk)
+
+ADD_SUBDIRECTORY    (Tests)
 ADD_SUBDIRECTORY    (SampleCode)
 
 set(mapd_source_files main.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
@@ -68,7 +72,7 @@ set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
-target_link_libraries (mapd_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
-target_link_libraries (mapd_http_server Shared Catalog SqliteConnector Parser Analyzer Planner QueryEngine DataMgr Fragmenter Chunk ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
+target_link_libraries (mapd ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
+target_link_libraries (mapd_http_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
