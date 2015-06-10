@@ -1,8 +1,8 @@
 /**
- * @file    StreamInsertIG.cpp
+ * @file    StreamInsert.cpp
  * @author  Wei Hong <wei@mapd.com>
- * @brief   Sample MapD Client code for inserting a stream of rows from stdin
- * to a MapD table.
+ * @brief   Sample MapD Client code for inserting a stream of rows 
+ * with optional transformations from stdin to a MapD table.
  * 
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
@@ -11,6 +11,10 @@
 #include <string>
 #include <iostream>
 #include <iterator>
+#include <regex>
+
+#include <thread>
+#include <chrono>
 
 // include files for Thrift and MapD Thrift Services
 #include "gen-cpp/MapD.h"
@@ -35,13 +39,14 @@ namespace {
     CopyParams() : delimiter('\x01'), null_str("\\N"), line_delim('\n'), batch_size(10000) {}
   } copy_params;
 
-#define MAX_FIELD_LEN   10000
+#define MAX_FIELD_LEN   20000
   const bool print_error_data = false;
+  const bool print_transformation = false;
 
-  // reads tab-delimited rows from std::cin and load them to
+  // reads copy_params.delimiter delimited rows from std::cin and load them to
   // table_name in batches of size copy_params.batch_size until EOF
   void
-  stream_insert(MapDClient &client, const TSessionId session, const std::string &table_name, const TRowDescriptor &row_desc)
+  stream_insert(MapDClient &client, const TSessionId session, const std::string &table_name, const TRowDescriptor &row_desc, const std::map<std::string, std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>>> &transformations)
   {
     std::vector<TStringRow> input_rows;
     TStringRow row;
@@ -51,10 +56,19 @@ namespace {
     std::istream_iterator<char> iit(std::cin);
 
     char field[MAX_FIELD_LEN];
-    int field_i = 0;
+    size_t field_i = 0;
 
     int nrows = 0;
     int nskipped = 0;
+    
+    const std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>> *xforms[row_desc.size()];
+    for (int i = 0; i < row_desc.size(); i++) {
+      auto it = transformations.find(row_desc[i].col_name);
+      if (it != transformations.end())
+        xforms[i] = &(it->second);
+      else
+        xforms[i] = nullptr;
+    }
 
     while (iit != eos) {
       {
@@ -88,8 +102,18 @@ namespace {
             field[field_i] = '\0';
             field_i = 0;
             TStringValue ts;
-            ts.str_val = field;
+            ts.str_val = std::string(field);
             ts.is_null = (ts.str_val.empty() || ts.str_val == copy_params.null_str);
+            auto xform = xforms[row.cols.size()];
+            if (!ts.is_null && xform != nullptr) {
+              if (print_transformation)
+                std::cout << "\ntransforming\n" << ts.str_val << "\nto\n";
+              ts.str_val = std::regex_replace(ts.str_val, *xform->first, *xform->second);
+              if (ts.str_val.empty())
+                ts.is_null = true;
+              if (print_transformation)
+                std::cout << ts.str_val << std::endl;
+            }
             row.cols.push_back(ts); // add column value to row
             if (end_of_row || (row.cols.size() > row_desc.size()))
               break; // found row
@@ -163,9 +187,10 @@ namespace {
 int main(int argc, char **argv) {
   std::string server_host("localhost"); // default to localohost
   int port = 9091; // default port number
+  std::map<std::string, std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>>> transformations;
 
   if (argc < 5) {
-    std::cout << "Usage: <table> <database> <user> <password> [hostname[:port]]" << std::endl;
+    std::cout << "Usage: <table> <database> <user> <password> [hostname[:port]] [transformation ...]" << std::endl;
     return 1;
   }
   std::string table_name(argv[1]);
@@ -180,6 +205,38 @@ int main(int argc, char **argv) {
     if (portno != NULL)
       port = atoi(portno);
   }
+  for (int i = 6; i < argc; i++) {
+    char *col_name = argv[i];
+    char *p;
+    for (p = col_name; *p != ':' && *p != '\0'; ++p);
+    if (*p == '\0') {
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      return 1;
+    }
+    *(p++) = '\0';
+    if (*(p++) != 's' || *(p++) != '/') {
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      return 1;
+    }
+    char *regex_str = p;
+    for (; (*p != '/' || *(p - 1) == '\\') && *p != '\0'; ++p);
+    if (*p == '\0') {
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      return 1;
+    }
+    *(p++) = '\0';
+    char *fmt_str = p;
+    for (; (*p != '/' || *(p - 1) == '\\') && *p != '\0'; ++p);
+    if (*p == '\0') {
+      std::cerr << "Transformation format: <column name>:s/<regex pattern>/<fmt string>/" << std::endl;
+      return 1;
+    }
+    *p = '\0';
+    std::cout << "transform " << col_name << ": s/" << regex_str << "/" << fmt_str << "/" << std::endl;
+    transformations[col_name] = std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>>(std::unique_ptr<std::regex>(new std::regex(regex_str)), std::unique_ptr<std::string>(new std::string(fmt_str)));
+  }
+
+  //for attaching debugger std::this_thread::sleep_for (std::chrono::seconds(20));
 
   shared_ptr<TTransport> socket(new TSocket(server_host, port));
   shared_ptr<TTransport> transport(new TBufferedTransport(socket));
@@ -191,7 +248,7 @@ int main(int argc, char **argv) {
     session = client.connect(user_name, passwd, db_name); // connect to mapd_server
     TRowDescriptor row_desc;
     client.get_row_descriptor(row_desc, session, table_name);
-    stream_insert(client, session, table_name, row_desc);
+    stream_insert(client, session, table_name, row_desc, transformations);
     client.disconnect(session); // disconnect from mapd_server
     transport->close(); // close transport
   }
