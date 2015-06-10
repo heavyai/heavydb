@@ -899,10 +899,10 @@ data_type:
 	|	CHARACTER '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kCHAR, $<intval>3); }
 	|	NUMERIC { $<nodeval>$ = new SQLType(kNUMERIC); }
 	|	NUMERIC '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kNUMERIC, $<intval>3); }
-	|	NUMERIC '(' non_neg_int ',' non_neg_int ')' { $<nodeval>$ = new SQLType(kNUMERIC, $<intval>3, $<intval>5); }
+	|	NUMERIC '(' non_neg_int ',' non_neg_int ')' { $<nodeval>$ = new SQLType(kNUMERIC, $<intval>3, $<intval>5, false); }
 	|	DECIMAL { $<nodeval>$ = new SQLType(kDECIMAL); }
 	|	DECIMAL '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kDECIMAL, $<intval>3); }
-	|	DECIMAL '(' non_neg_int ',' non_neg_int ')' { $<nodeval>$ = new SQLType(kDECIMAL, $<intval>3, $<intval>5); }
+	|	DECIMAL '(' non_neg_int ',' non_neg_int ')' { $<nodeval>$ = new SQLType(kDECIMAL, $<intval>3, $<intval>5, false); }
 	|	INTEGER { $<nodeval>$ = new SQLType(kINT); }
 	|	SMALLINT { $<nodeval>$ = new SQLType(kSMALLINT); }
 	|	FLOAT { $<nodeval>$ = new SQLType(kFLOAT); }
@@ -915,6 +915,11 @@ data_type:
 	| TIME '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIME, $<intval>3); }
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
+  | data_type '[' ']'
+  { $<nodeval>$ = $<nodeval>1; 
+    if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
+      throw std::runtime_error("array of array not supported.");
+    dynamic_cast<SQLType*>($<nodeval>$)->set_is_array(true); }
 	;
 
 	/* the various things you can name */

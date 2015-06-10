@@ -128,10 +128,11 @@ class SQLTypeInfo {
     inline void set_compression(EncodingType c) { compression = c; }
     inline void set_comp_param(int p) { comp_param = p; }
 #ifndef __CUDACC__
-    inline std::string get_type_name() const { return type_name[(int)type]; }
+    inline std::string get_type_name() const { return (type == kARRAY)?type_name[(int)subtype] + "[]":type_name[(int)type]; }
     inline std::string get_compression_name() const { return comp_name[(int)compression]; }
 #endif
     inline bool is_string() const { return IS_STRING(type); }
+    inline bool is_string_array() const { return (type == kARRAY) && IS_STRING(subtype); }
     inline bool is_integer() const { return IS_INTEGER(type); }
     inline bool is_fp() const { return type == kFLOAT || type == kDOUBLE; }
     inline bool is_number() const { return IS_NUMBER(type); }

@@ -1073,6 +1073,8 @@ namespace Parser {
         assert(false);
         break;
     }
+    if (is_array)
+      str += "[]";
     return str;
   }
 
@@ -1394,7 +1396,11 @@ namespace Parser {
       cd.columnName = *coldef->get_column_name();
       SQLType *t = coldef->get_column_type();
       t->check_type();
-      cd.columnType.set_type(t->get_type());
+      if (t->get_is_array()) {
+        cd.columnType.set_type(kARRAY);
+        cd.columnType.set_subtype(t->get_type());
+      } else
+        cd.columnType.set_type(t->get_type());
       cd.columnType.set_dimension(t->get_param1());
       cd.columnType.set_scale(t->get_param2());
       const ColumnConstraintDef *cc = coldef->get_column_constraint();
@@ -1414,7 +1420,10 @@ namespace Parser {
           if (!cd.columnType.is_integer() && !cd.columnType.is_time())
             throw std::runtime_error("Fixed encoding is only supported for integer or time columns.");
           // fixed-bits encoding
-          switch (cd.columnType.get_type()) {
+          SQLTypes type = cd.columnType.get_type();
+          if (type == kARRAY)
+            type = cd.columnType.get_subtype();
+          switch (type) {
             case kSMALLINT:
               if (compression->get_encoding_param() != 8)
                 throw std::runtime_error("Compression parameter for Fixed encoding on SMALLINT must be 8.");
@@ -1434,7 +1443,7 @@ namespace Parser {
                 throw std::runtime_error("Compression parameter for Fixed encoding on TIME, DATE or TIMESTAMP must 32.");
               break;
             default:
-              break;
+              throw std::runtime_error("Cannot apply FIXED encoding to " + t->to_string());
           }
           cd.columnType.set_compression(kENCODING_FIXED);
           cd.columnType.set_comp_param(compression->get_encoding_param());
@@ -1442,13 +1451,15 @@ namespace Parser {
           // run length encoding
           cd.columnType.set_compression(kENCODING_RL);
           cd.columnType.set_comp_param(0);
+          // throw std::runtime_error("RL(Run Length) encoding not supported yet.");
         } else if (boost::iequals(comp, "diff")) {
           // differential encoding
           cd.columnType.set_compression(kENCODING_DIFF);
           cd.columnType.set_comp_param(0);
+          // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
         } else if (boost::iequals(comp, "dict")) {
-          if (!cd.columnType.is_string())
-            throw std::runtime_error("Dictionary encoding is only supported on string columns.");
+          if (!cd.columnType.is_string() && !cd.columnType.is_string_array())
+            throw std::runtime_error("Dictionary encoding is only supported on string or string array columns.");
           if (compression->get_encoding_param() == 0)
             comp_param = 32; // default to 32-bits
           else
@@ -1466,6 +1477,7 @@ namespace Parser {
             throw std::runtime_error("Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to sparse-column encoding.");
           cd.columnType.set_compression(kENCODING_SPARSE);
           cd.columnType.set_comp_param(compression->get_encoding_param());
+          // throw std::runtime_error("SPARSE encoding not supported yet.");
         } else
           throw std::runtime_error("Invalid column compression scheme " + comp);
       }
