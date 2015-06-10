@@ -2,10 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT			(mapd_exe)
 
-#if (CMAKE_BUILD_TYPE MATCHES "[Rr][Ee][Ll][Ee][Aa][Ss][Ee]")
-#  message("release mode")
-#endif(CMAKE_BUILD_TYPE MATCHES "[Rr][Ee][Ll][Ee][Aa][Ss][Ee]")
-
+find_package(Git)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -pthread ${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/nvvm/lib -L/usr/local/cuda/nvvm/lib64")
 FIND_PACKAGE( Boost COMPONENTS filesystem program_options thread system REQUIRED )
@@ -18,7 +15,7 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
-include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_CURRENT_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/")
+include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/")
 ADD_SUBDIRECTORY    (SqliteConnector)
 ADD_SUBDIRECTORY    (Catalog)
 ADD_SUBDIRECTORY    (Parser)
@@ -37,37 +34,37 @@ ADD_SUBDIRECTORY    (Tests)
 ADD_SUBDIRECTORY    (SQLFrontend)
 ADD_SUBDIRECTORY    (SampleCode)
 
-set(mapd_source_files main.cpp ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
+set(mapd_source_files main.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 add_executable(mapd ${mapd_source_files})
 
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(mapd_server_source_files MapDServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
-set(mapd_http_server_source_files MapDHttpServer.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
+set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
+set(mapd_http_server_source_files MapDHttpServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
 add_executable(mapd_server ${mapd_server_source_files})
 add_executable(mapd_http_server ${mapd_http_server_source_files})
 
 add_custom_command(
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp
+    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
     COMMAND thrift
-    ARGS -gen cpp -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/mapd.thrift)
+    ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
 add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/Shared/release.h ${CMAKE_CURRENT_BINARY_DIR}/MAPD_GIT_HASH.txt
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h
-    COMMAND sed -e \"s/MAPD_GIT_HASH/`${GIT_EXECUTABLE} log -1 --pretty=format:%h`/\" ${CMAKE_SOURCE_DIR}/Shared/release.h > ${CMAKE_CURRENT_BINARY_DIR}/MapDRelease.h)
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/MAPD_GIT_HASH.txt
-  COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_CURRENT_BINARY_DIR}/MAPD_GIT_HASH.txt
+    DEPENDS ${CMAKE_SOURCE_DIR}/Shared/release.h ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt
+    OUTPUT ${CMAKE_BINARY_DIR}/MapDRelease.h
+    COMMAND sed -e \"s/MAPD_GIT_HASH/`${GIT_EXECUTABLE} log -1 --pretty=format:%h`/\" ${CMAKE_SOURCE_DIR}/Shared/release.h > ${CMAKE_BINARY_DIR}/MapDRelease.h)
+add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt
+  COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt
   DEPENDS githash)
 add_custom_target(githash ALL
-  COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_CURRENT_BINARY_DIR}/MAPD_GIT_HASH.txt)
+  COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)
 
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
+set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
+set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
+set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
