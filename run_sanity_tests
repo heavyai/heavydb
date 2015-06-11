@@ -3,7 +3,7 @@
 result="success"
 for test in Tests/PlanTest Tests/ExecuteTest Tests/StorageTest
 do
-	cd build && eval $test
+	cd build && eval $test --gtest_output=xml:$(basename $test).xml
 	if [ $? != 0 ]
 	then
 		result="fail"
