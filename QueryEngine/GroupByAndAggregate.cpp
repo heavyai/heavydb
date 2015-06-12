@@ -326,6 +326,13 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
           auto rhs_str = string_dict->getString(rhs_v.i1);
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
+        if (UNLIKELY(targets_[order_entry.tle_no - 1].is_distinct)) {
+          const auto lhs_sz = bitmap_set_size(lhs_v.i1, order_entry.tle_no - 1,
+            row_set_mem_owner_->count_distinct_descriptors_);
+          const auto rhs_sz = bitmap_set_size(rhs_v.i1, order_entry.tle_no - 1,
+            row_set_mem_owner_->count_distinct_descriptors_);
+          return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
+        }
         return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
       } else {
         if (lhs_v.isPair()) {

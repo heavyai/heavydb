@@ -360,6 +360,7 @@ TEST(Select, OrderBy) {
       ASSERT_TRUE(v<int64_t>(rows.get(row_idx, 3, true)) == 344 ||
                   v<int64_t>(rows.get(row_idx, 3, true)) == 301);
     }
+    c("SELECT x, COUNT(distinct y) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
   }
 }
 
