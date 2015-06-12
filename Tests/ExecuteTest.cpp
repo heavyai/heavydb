@@ -120,7 +120,7 @@ public:
                   &tm_struct);
                 if (end_str != nullptr) {
                   ASSERT_EQ(0, *end_str);
-                  ASSERT_EQ(ref_val.size(), end_str - ref_val.c_str());
+                  ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
                 }
                 const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
                 ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
@@ -139,7 +139,7 @@ public:
               case kTIME: {
                 std::vector<std::string> time_tokens;
                 boost::split(time_tokens, ref_val, boost::is_any_of(":"));
-                ASSERT_EQ(3, time_tokens.size());
+                ASSERT_EQ(size_t(3), time_tokens.size());
                 const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
                 ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
                           boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
@@ -380,7 +380,7 @@ TEST(Select, ComplexQueries) {
       "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
       "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
       dt);
-    ASSERT_EQ(rows.size(), 2);
+    ASSERT_EQ(rows.size(), size_t(2));
     {
       ASSERT_EQ(v<int64_t>(rows.get(0, 0, true)), 51);
       ASSERT_EQ(v<int64_t>(rows.get(0, 1, true)), -59 * g_num_rows / 2);

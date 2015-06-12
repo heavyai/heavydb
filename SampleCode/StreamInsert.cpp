@@ -62,7 +62,7 @@ namespace {
     int nskipped = 0;
     
     const std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>> *xforms[row_desc.size()];
-    for (int i = 0; i < row_desc.size(); i++) {
+    for (size_t i = 0; i < row_desc.size(); i++) {
       auto it = transformations.find(row_desc[i].col_name);
       if (it != transformations.end())
         xforms[i] = &(it->second);
@@ -86,7 +86,7 @@ namespace {
           else {
             end_of_row = (row_desc[row.cols.size()].col_type.type  != TDatumType::STR) || (row.cols.size() == row_desc.size() - 1);
             if (!end_of_row) {
-              int l = copy_params.null_str.size();
+              size_t l = copy_params.null_str.size();
               if (field_i >= l && strncmp(field + field_i - l, copy_params.null_str.c_str(), l) == 0) {
                 end_of_row = true;
                 // std::cout << "new line after null.\n";
