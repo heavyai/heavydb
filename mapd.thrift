@@ -48,14 +48,14 @@ struct TStringRow {
   1: list<TStringValue> cols
 }
 
+typedef list<TColumnType> TRowDescriptor
+typedef map<string, TColumnType> TTableDescriptor
+typedef i32 TSessionId
+
 struct TRowSet {
   1: TRowDescriptor row_desc
   2: list<TRow> rows
 }
-
-typedef list<TColumnType> TRowDescriptor
-typedef map<string, TColumnType> TTableDescriptor
-typedef i32 TSessionId
 
 struct TQueryResult {
   1: TRowSet row_set
