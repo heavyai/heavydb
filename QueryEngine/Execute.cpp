@@ -163,7 +163,7 @@ ResultRows Executor::execute(
     if (error_code == ERR_OUT_OF_GPU_MEM) {
       rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
         hoist_literals, device_type, opt_level, root_plan->get_catalog(),
-        0, &error_code, false);
+        2048, &error_code, false);
     }
     if (error_code) {
       rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
