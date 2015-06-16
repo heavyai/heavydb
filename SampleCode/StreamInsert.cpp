@@ -39,8 +39,8 @@ struct CopyParams {
   CopyParams(char d, const std::string &n, char l, size_t b) : delimiter(d), null_str(n), line_delim(l), batch_size(b) {}
 };
 
-const bool print_error_data = false;
-const bool print_transformation = false;
+bool print_error_data = false;
+bool print_transformation = false;
 
 
 namespace {
@@ -215,7 +215,9 @@ int main(int argc, char **argv) {
     ("null", po::value<std::string>(&nulls), "NULL string")
     ("line", po::value<std::string>(&line_delim_str), "Line delimiter")
     ("batch", po::value<size_t>(&batch_size), "Insert batch size")
-    ("transform,t", po::value<std::vector<std::string>>(&xforms)->multitoken(), "Column Transformations");
+    ("transform,t", po::value<std::vector<std::string>>(&xforms)->multitoken(), "Column Transformations")
+    ("print_error", "Print Error Rows")
+    ("print_transform", "Print Transformations");
 
 	po::positional_options_description positionalOptions;
 	positionalOptions.add("table", 1);
@@ -226,9 +228,13 @@ int main(int argc, char **argv) {
 	try {
 		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
 		if (vm.count("help")) {
-			std::cout << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} <hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line delimiter>][--batch <batch size>][{-t|--transform} transformation ...]\n";
+			std::cout << "Usage: <table name> <database name> {-u|--user} <user> {-p|--passwd} <password> [{--host} <hostname>][--port <port number>][--delim <delimiter>][--null <null string>][--line <line delimiter>][--batch <batch size>][{-t|--transform} transformation ...][--print_error][--print_transform]\n";
 			return 0;
 		}
+    if (vm.count("print_error"))
+      print_error_data = true;
+    if (vm.count("print_transform"))
+      print_transformation = true;
 
 		po::notify(vm);
 	}
