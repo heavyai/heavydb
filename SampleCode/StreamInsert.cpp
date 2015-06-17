@@ -108,7 +108,7 @@ namespace {
             TStringValue ts;
             ts.str_val = std::string(field);
             ts.is_null = (ts.str_val.empty() || ts.str_val == copy_params.null_str);
-            auto xform = xforms[row.cols.size()];
+            auto xform = row.cols.size() < row_desc.size() ? xforms[row.cols.size()] : nullptr;
             if (!ts.is_null && xform != nullptr) {
               if (print_transformation)
                 std::cout << "\ntransforming\n" << ts.str_val << "\nto\n";
