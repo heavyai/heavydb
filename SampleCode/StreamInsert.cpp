@@ -11,7 +11,7 @@
 #include <string>
 #include <iostream>
 #include <iterator>
-#include <regex>
+#include <boost/regex.hpp>
 
 #include <thread>
 #include <chrono>
@@ -50,7 +50,7 @@ namespace {
   // reads copy_params.delimiter delimited rows from std::cin and load them to
   // table_name in batches of size copy_params.batch_size until EOF
   void
-  stream_insert(MapDClient &client, const TSessionId session, const std::string &table_name, const TRowDescriptor &row_desc, const std::map<std::string, std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>>> &transformations, const CopyParams &copy_params)
+  stream_insert(MapDClient &client, const TSessionId session, const std::string &table_name, const TRowDescriptor &row_desc, const std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> &transformations, const CopyParams &copy_params)
   {
     std::vector<TStringRow> input_rows;
     TStringRow row;
@@ -65,7 +65,7 @@ namespace {
     int nrows = 0;
     int nskipped = 0;
     
-    const std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>> *xforms[row_desc.size()];
+    const std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>> *xforms[row_desc.size()];
     for (size_t i = 0; i < row_desc.size(); i++) {
       auto it = transformations.find(row_desc[i].col_name);
       if (it != transformations.end())
@@ -112,7 +112,7 @@ namespace {
             if (!ts.is_null && xform != nullptr) {
               if (print_transformation)
                 std::cout << "\ntransforming\n" << ts.str_val << "\nto\n";
-              ts.str_val = std::regex_replace(ts.str_val, *xform->first, *xform->second);
+              ts.str_val = boost::regex_replace(ts.str_val, *xform->first, *xform->second);
               if (ts.str_val.empty())
                 ts.is_null = true;
               if (print_transformation)
@@ -162,7 +162,7 @@ namespace {
               std::cerr << copy_params.delimiter;
             else
               not_first = true;
-            std::cerr << p;
+            std::cerr << &p;
           }
           std::cerr << std::endl;
         }
@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
   std::string delim_str(","), nulls("\\N"), line_delim_str("\n");
   size_t batch_size = 10000;
   std::vector<std::string> xforms;
-  std::map<std::string, std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>>> transformations;
+  std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> transformations;
 
 	namespace po = boost::program_options;
 
@@ -321,7 +321,7 @@ int main(int argc, char **argv) {
     }
     std::string fmt_str = t.substr(n1, n2-n1);
     std::cout << "transform " << col_name << ": s/" << regex_str << "/" << fmt_str << "/" << std::endl;
-    transformations[col_name] = std::pair<std::unique_ptr<std::regex>, std::unique_ptr<std::string>>(std::unique_ptr<std::regex>(new std::regex(regex_str)), std::unique_ptr<std::string>(new std::string(fmt_str)));
+    transformations[col_name] = std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>(std::unique_ptr<boost::regex>(new boost::regex(regex_str)), std::unique_ptr<std::string>(new std::string(fmt_str)));
   }
 
   CopyParams copy_params(delim, nulls, line_delim, batch_size);

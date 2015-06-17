@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
-FIND_PACKAGE( Boost COMPONENTS system program_options REQUIRED )
+FIND_PACKAGE( Boost COMPONENTS system program_options regex REQUIRED )
 ADD_EXECUTABLE (StreamInsertSimple StreamInsertSimple.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 ADD_EXECUTABLE (DataGen DataGen.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
 ADD_EXECUTABLE (StreamInsert StreamInsert.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp)
