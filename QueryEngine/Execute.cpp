@@ -1883,7 +1883,7 @@ ResultRows Executor::executeAggScanPlan(
   const auto& col_global_ids = scan_plan->get_col_list();
   std::vector<ResultRows> all_fragment_results;
   all_fragment_results.reserve(fragments.size());
-  std::vector<std::thread> query_threads;
+
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
@@ -1898,7 +1898,6 @@ ResultRows Executor::executeAggScanPlan(
   }
   std::condition_variable scheduler_cv;
   std::mutex scheduler_mutex;
-  std::mutex reduce_mutex;
   const size_t context_count { device_type == ExecutorDeviceType::GPU
     ? available_gpus.size()
     : device_type == ExecutorDeviceType::Hybrid
@@ -1908,12 +1907,13 @@ ResultRows Executor::executeAggScanPlan(
   std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts(context_count);
   std::vector<std::mutex> query_context_mutexes(context_count);
   auto dispatch = [this, plan, scan_limit, current_dbid, device_type, table_id,
-      &available_cpus, &available_gpus, &reduce_mutex, &scheduler_cv, &scheduler_mutex,
+      &available_cpus, &available_gpus, &scheduler_cv, &scheduler_mutex,
       &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
       &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs,
       &query_context_mutexes, &query_contexts, row_set_mem_owner, error_code]
       (const ExecutorDeviceType chosen_device_type, int chosen_device_id,
        const std::vector<size_t>& frag_ids, const size_t ctx_idx) {
+    static std::mutex reduce_mutex;
     const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
       ? Data_Namespace::GPU_LEVEL
       : Data_Namespace::CPU_LEVEL;
@@ -1995,8 +1995,51 @@ ResultRows Executor::executeAggScanPlan(
       scheduler_cv.notify_one();
     }
   };
+  dispatchFragments(all_fragment_results, dispatch, device_type, allow_multifrag,
+    agg_plan, limit, fragments, simple_quals, context_count,
+    scheduler_cv, scheduler_mutex, available_gpus, available_cpus);
+  cat.get_dataMgr().freeAllBuffers();
+  if (agg_plan) {
+    for (const auto& query_exe_context : query_contexts) {
+      if (!query_exe_context) {
+        continue;
+      }
+      all_fragment_results.push_back(query_exe_context->getRowSet(get_agg_target_exprs(plan),
+        device_type == ExecutorDeviceType::Hybrid));
+    }
+    auto reduced_results = reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner);
+    if (reduced_results.group_by_buffer_) {
+      reduced_results.addKeylessGroupByBuffer(
+        reduced_results.group_by_buffer_,
+        reduced_results.groups_buffer_entry_count_,
+        reduced_results.min_val_,
+        reduced_results.warp_count_);
+    }
+    return reduced_results;
+  }
+  return results_union(all_fragment_results);
+}
+
+void Executor::dispatchFragments(
+    std::vector<ResultRows>& all_fragment_results,
+    const std::function<void(
+      const ExecutorDeviceType chosen_device_type, int chosen_device_id,
+      const std::vector<size_t>& frag_ids, const size_t ctx_idx)> dispatch,
+    const ExecutorDeviceType device_type,
+    const bool allow_multifrag,
+    const Planner::AggPlan* agg_plan,
+    const int64_t limit,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::list<Analyzer::Expr*>& simple_quals,
+    const size_t context_count,
+    std::condition_variable& scheduler_cv,
+    std::mutex& scheduler_mutex,
+    std::unordered_set<int>& available_gpus,
+    int& available_cpus) {
   size_t result_rows_count { 0 };
   size_t frag_list_idx { 0 };
+  std::vector<std::thread> query_threads;
+
   if (device_type == ExecutorDeviceType::GPU && allow_multifrag && agg_plan) {
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
@@ -2012,7 +2055,7 @@ ResultRows Executor::executeAggScanPlan(
     }
     for (const auto& kv : fragments_per_device) {
       query_threads.push_back(std::thread(dispatch, ExecutorDeviceType::GPU, kv.first,
-        kv.second, kv.first % query_contexts.size()));
+        kv.second, kv.first % context_count));
     }
   } else {
     for (size_t i = 0; i < fragments.size(); ++i) {
@@ -2045,7 +2088,7 @@ ResultRows Executor::executeAggScanPlan(
         }
       } else {
         query_threads.push_back(std::thread(dispatch, chosen_device_type, chosen_device_id,
-          std::vector<size_t> { i }, frag_list_idx % query_contexts.size()));
+          std::vector<size_t> { i }, frag_list_idx % context_count));
         ++frag_list_idx;
       }
     }
@@ -2053,26 +2096,6 @@ ResultRows Executor::executeAggScanPlan(
   for (auto& child : query_threads) {
     child.join();
   }
-  cat.get_dataMgr().freeAllBuffers();
-  if (agg_plan) {
-    for (const auto& query_exe_context : query_contexts) {
-      if (!query_exe_context) {
-        continue;
-      }
-      all_fragment_results.push_back(query_exe_context->getRowSet(get_agg_target_exprs(plan),
-        device_type == ExecutorDeviceType::Hybrid));
-    }
-    auto reduced_results = reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner);
-    if (reduced_results.group_by_buffer_) {
-      reduced_results.addKeylessGroupByBuffer(
-        reduced_results.group_by_buffer_,
-        reduced_results.groups_buffer_entry_count_,
-        reduced_results.min_val_,
-        reduced_results.warp_count_);
-    }
-    return reduced_results;
-  }
-  return results_union(all_fragment_results);
 }
 
 std::vector<std::vector<const int8_t*>> Executor::fetchChunks(

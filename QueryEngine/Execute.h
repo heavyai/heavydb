@@ -17,8 +17,9 @@
 #include <llvm/IR/Value.h>
 #include <cuda.h>
 
-#include <map>
 #include <condition_variable>
+#include <functional>
+#include <map>
 #include <mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -146,6 +147,22 @@ private:
     const size_t max_groups_buffer_entry_count,
     int32_t* error_code,
     const bool allow_multifrag);
+  void dispatchFragments(
+    std::vector<ResultRows>& all_fragment_results,
+    const std::function<void(
+      const ExecutorDeviceType chosen_device_type, int chosen_device_id,
+      const std::vector<size_t>& frag_ids, const size_t ctx_idx)> dispatch,
+    const ExecutorDeviceType device_type,
+    const bool allow_multifrag,
+    const Planner::AggPlan* agg_plan,
+    const int64_t limit,
+    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::list<Analyzer::Expr*>& simple_quals,
+    const size_t context_count,
+    std::condition_variable& scheduler_cv,
+    std::mutex& scheduler_mutex,
+    std::unordered_set<int>& available_gpus,
+    int& available_cpus);
   std::vector<std::vector<const int8_t*>> fetchChunks(
     const int table_id,
     const std::list<int>&,
