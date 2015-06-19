@@ -5,7 +5,7 @@
 
 #include "Chunk.h"
 #include "../DataMgr/StringNoneEncoder.h"
-#include "../DataMgr/StringTokDictEncoder.h"
+#include "../DataMgr/ArrayNoneEncoder.h"
 
 namespace Chunk_NS {
   std::shared_ptr<Chunk>
@@ -40,31 +40,13 @@ namespace Chunk_NS {
       subKey.pop_back();
       subKey.push_back(2); // 2 for the index buffer
       index_buf = data_mgr->getChunkBuffer(subKey, mem_level, device_id, (num_elems + 1) * sizeof(StringOffsetT)); // always record n+1 offsets so string length can be calculated
-      if (column_desc->columnType.get_compression() == kENCODING_NONE) {
+      if (column_desc->columnType.get_type() == kARRAY) {
+        ArrayNoneEncoder *array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder);
+        array_encoder->set_index_buf(index_buf);
+      } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
         StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
         str_encoder->set_index_buf(index_buf);
-      } /* else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
-        switch (column_desc->columnType.get_elem_size()) {
-          case 1: {
-            StringTokDictEncoder<int8_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int8_t>*>(buffer->encoder);
-            str_encoder->set_index_buf(index_buf);
-            break;
-          }
-          case 2: {
-            StringTokDictEncoder<int16_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int16_t>*>(buffer->encoder);
-            str_encoder->set_index_buf(index_buf);
-            break;
-          }
-          case 4: {
-            StringTokDictEncoder<int32_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int32_t>*>(buffer->encoder);
-            str_encoder->set_index_buf(index_buf);
-            break;
-          }
-          default:
-            assert(false);
-        }
       }
-      */
     } else
       buffer = data_mgr->getChunkBuffer(key, mem_level, device_id, num_bytes);
   }
@@ -87,28 +69,13 @@ namespace Chunk_NS {
   Chunk::appendData(DataBlockPtr &src_data, const size_t num_elems, const size_t start_idx)
   {
     if (column_desc->columnType.is_varlen()) {
-      if (column_desc->columnType.get_compression() == kENCODING_NONE) {
+      if (column_desc->columnType.get_type() == kARRAY) {
+        ArrayNoneEncoder *array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder);
+        return array_encoder->appendData(src_data.arraysPtr, start_idx, num_elems);
+      } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
         StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
         return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
-      } /* else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
-        switch (column_desc->columnType.get_elem_size()) {
-          case 1: {
-            StringTokDictEncoder<int8_t> *tokdict_encoder = dynamic_cast<StringTokDictEncoder<int8_t>*>(buffer->encoder);
-            return tokdict_encoder->appendData(src_data.tok8dictPtr, start_idx, num_elems);
-          }
-          case 2: {
-            StringTokDictEncoder<int16_t> *tokdict_encoder = dynamic_cast<StringTokDictEncoder<int16_t>*>(buffer->encoder);
-            return tokdict_encoder->appendData(src_data.tok16dictPtr, start_idx, num_elems);
-          }
-          case 4: {
-            StringTokDictEncoder<int32_t> *tokdict_encoder = dynamic_cast<StringTokDictEncoder<int32_t>*>(buffer->encoder);
-            return tokdict_encoder->appendData(src_data.tok32dictPtr, start_idx, num_elems);
-          }
-          default:
-            assert(false);
-        }
-      }
-      */
+      } 
     }
     return buffer->encoder->appendData(src_data.numbersPtr, num_elems);
   }
@@ -127,31 +94,13 @@ namespace Chunk_NS {
   {
     buffer->initEncoder(column_desc->columnType);
     if (column_desc->columnType.is_varlen()) {
-      if (column_desc->columnType.get_compression() == kENCODING_NONE) {
+      if (column_desc->columnType.get_type() == kARRAY) {
+        ArrayNoneEncoder *array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder);
+        array_encoder->set_index_buf(index_buf);
+      } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
         StringNoneEncoder *str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
         str_encoder->set_index_buf(index_buf);
-      } /* else if (column_desc->columnType.get_compression() == kENCODING_TOKDICT) {
-        switch (column_desc->columnType.get_elem_size()) {
-          case 1: {
-            StringTokDictEncoder<int8_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int8_t>*>(buffer->encoder);
-            str_encoder->set_index_buf(index_buf);
-            break;
-          }
-          case 2: {
-            StringTokDictEncoder<int16_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int16_t>*>(buffer->encoder);
-            str_encoder->set_index_buf(index_buf);
-            break;
-          }
-          case 4: {
-            StringTokDictEncoder<int32_t> *str_encoder = dynamic_cast<StringTokDictEncoder<int32_t>*>(buffer->encoder);
-            str_encoder->set_index_buf(index_buf);
-            break;
-          }
-          default:
-            assert(false);
-        }
       }
-      */
     }
   }
 

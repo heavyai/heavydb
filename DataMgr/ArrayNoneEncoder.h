@@ -1,12 +1,12 @@
 /**
- * @file		StringTokDictEncoder.h
+ * @file		ArrayNoneEncoder.h
  * @author	Wei Hong <wei@mapd.com>
- * @brief		For tokenized dictionary encoded strings
+ * @brief		unencoded array encoder
  * 
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
-#ifndef STRING_TOK_DICT_ENCODER_H
-#define STRING_TOK_DICT_ENCODER_H
+#ifndef ARRAY_NONE_ENCODER_H
+#define ARRAY_NONE_ENCODER_H
 
 #include <cstring>
 #include <memory>
@@ -19,11 +19,10 @@
 
 using Data_Namespace::AbstractBuffer;
 
-template <typename T>
-class StringTokDictEncoder : public Encoder {
+class ArrayNoneEncoder : public Encoder {
 
     public:
-        StringTokDictEncoder(AbstractBuffer *buffer): Encoder(buffer), index_buf(nullptr), last_offset(-1) {}
+        ArrayNoneEncoder(AbstractBuffer *buffer): Encoder(buffer), index_buf(nullptr), last_offset(-1) {}
 
         ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) {
 						assert(false); // should never be called for strings
@@ -32,7 +31,7 @@ class StringTokDictEncoder : public Encoder {
             return chunkMetadata;
         }
 
-				ChunkMetadata appendData(const std::vector<std::vector<T>> *srcData, const int start_idx, const size_t numAppendElems)
+				ChunkMetadata appendData(const std::vector<ArrayDatum> *srcData, const int start_idx, const size_t numAppendElems)
         {
           assert(index_buf != nullptr); // index_buf must be set before this.
           size_t index_size = numAppendElems * sizeof(StringOffsetT);
@@ -52,7 +51,7 @@ class StringTokDictEncoder : public Encoder {
           }
           size_t data_size = 0;
           for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
-            size_t len = (*srcData)[n].size() * sizeof(T);
+            size_t len = (*srcData)[n].length;
             data_size += len;
           }
           buffer_->reserve(data_size);
@@ -64,7 +63,7 @@ class StringTokDictEncoder : public Encoder {
             StringOffsetT *p = (StringOffsetT*)inbuf;
             size_t i;
             for (i = 0; num_appended < numAppendElems && i < inbuf_size/sizeof(StringOffsetT); i++, num_appended++) {
-              p[i] = last_offset + (*srcData)[num_appended + start_idx].size() * sizeof(T);
+              p[i] = last_offset + (*srcData)[num_appended + start_idx].length;
               last_offset = p[i];
             }
             index_buf->append(inbuf, i * sizeof(StringOffsetT));
@@ -73,19 +72,20 @@ class StringTokDictEncoder : public Encoder {
           for (size_t num_appended = 0; num_appended < numAppendElems; ) {
             size_t size = 0;
             for (int i = start_idx + num_appended; num_appended < numAppendElems && size < inbuf_size;  i++, num_appended++) {
-              size_t len = (*srcData)[i].size() * sizeof(T);
+              size_t len = (*srcData)[i].length;
               if (len > inbuf_size) {
                 // for large strings, append on its own
                 if (size > 0)
                   buffer_->append(inbuf, size);
                 size = 0;
-                buffer_->append((int8_t*)(*srcData)[i].data(), len);
+                buffer_->append((*srcData)[i].data_ptr.get(), len);
                 num_appended++;
                 break;
               } else if (size + len > inbuf_size)
                 break;
               char *dest = (char*)inbuf + size;
-              std::memcpy((void*)dest, (void*)(*srcData)[i].data(), len);
+              if (len > 0)
+                std::memcpy((void*)dest, (void*)(*srcData)[i].data_ptr.get(), len);
               size += len;
             }
             if (size > 0)
@@ -104,8 +104,9 @@ class StringTokDictEncoder : public Encoder {
 
         void getMetadata(ChunkMetadata &chunkMetadata) {
             Encoder::getMetadata(chunkMetadata); // call on parent class
-            chunkMetadata.chunkStats.min.stringval = nullptr;
-            chunkMetadata.chunkStats.max.stringval = nullptr;
+            // @TODO(wei) keep min max of array elements
+            chunkMetadata.chunkStats.min.arrayval = nullptr;
+            chunkMetadata.chunkStats.max.arrayval = nullptr;
         }
 
         void writeMetadata(FILE *f) {
@@ -128,6 +129,6 @@ class StringTokDictEncoder : public Encoder {
 			AbstractBuffer *index_buf;
 			StringOffsetT last_offset;
 
-}; // class StringTokDictEncoder
+}; // class ArrayNoneEncoder
 
-#endif // STRING_TOK_DICT_ENCODER_H
+#endif // ARRAY_NONE_ENCODER_H

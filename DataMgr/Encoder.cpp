@@ -2,7 +2,7 @@
 #include "NoneEncoder.h"
 #include "FixedLengthEncoder.h"
 #include "StringNoneEncoder.h"
-#include "StringTokDictEncoder.h"
+#include "ArrayNoneEncoder.h"
 #include <glog/logging.h>
 
 
@@ -41,8 +41,7 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
 								case kCHAR:
 									return new StringNoneEncoder(buffer);
                 case kARRAY:
-                  // return new ArrayNoneEncoder(buffer);
-                  return nullptr;
+                  return new ArrayNoneEncoder(buffer);
 								case kTIME:
 								case kTIMESTAMP:
 								case kDATE:
@@ -121,8 +120,13 @@ Encoder * Encoder::Create(Data_Namespace::AbstractBuffer *buffer, const SQLTypeI
             break;
         } // Case: kENCODING_FIXED
         case kENCODING_DICT: {
-          CHECK(sqlType.is_string());
-          return new NoneEncoder <int32_t> (buffer);
+          if (sqlType.get_type() == kARRAY) {
+            CHECK(IS_STRING(sqlType.get_subtype()));
+            return new ArrayNoneEncoder(buffer);
+          } else {
+            CHECK(sqlType.is_string());
+            return new NoneEncoder <int32_t> (buffer);
+          } 
           break;
         }
         default: {

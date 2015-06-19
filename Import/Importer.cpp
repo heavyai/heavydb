@@ -49,6 +49,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
   const char *field = buf;
   const char *p;
   bool in_quote = false;
+  bool in_array = false;
   bool has_escape = false;
   bool strip_quotes = false;
   for (p = buf; p < buf_end && *p != copy_params.line_delim; p++) {
@@ -59,8 +60,12 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;
+    } else if (!in_quote && *p == copy_params.array_begin) {
+      in_array = true;
+    } else if (!in_quote && *p == copy_params.array_end) {
+      in_array = false;
     } else if (*p == copy_params.delimiter) {
-      if (!in_quote) {
+      if (!in_quote && !in_array) {
         if (!has_escape && !strip_quotes) {
           std::string s(field, p - field);
           row.push_back(s);
@@ -100,8 +105,12 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;
+    } else if (*p == copy_params.array_begin) {
+      in_array = true;
+    } else if (*p == copy_params.array_end) {
+      in_array = false;
     } else if (*p == copy_params.delimiter) {
-      if (!in_quote) {
+      if (!in_quote && !in_array) {
         if (!has_escape) {
           std::string s(field, p - field);
           row.push_back(s);
@@ -141,6 +150,86 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
   return p;
 }
 
+int8_t *
+appendDatum(int8_t *buf, Datum d, const SQLTypeInfo &ti)
+{
+  switch (ti.get_type()) {
+    case kBOOLEAN:
+      *(bool*)buf = d.boolval;
+      return buf + sizeof(bool);
+    case kNUMERIC:
+    case kDECIMAL:
+    case kBIGINT:
+      *(int64_t*)buf = d.bigintval;
+      return buf + sizeof(int64_t);
+    case kINT:
+      *(int32_t*)buf = d.intval;
+      return buf + sizeof(int32_t);
+    case kSMALLINT:
+      *(int16_t*)buf = d.smallintval;
+      return buf + sizeof(int16_t);
+    case kFLOAT:
+      *(float*)buf = d.floatval;
+      return buf + sizeof(float);
+    case kDOUBLE:
+      *(double*)buf = d.doubleval;
+      return buf + sizeof(double);
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      *(time_t*)buf = d.timeval;
+      return buf + sizeof(time_t);
+    default:
+      return NULL;
+  }
+  return NULL;
+}
+
+ArrayDatum
+StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &copy_params)
+{
+  SQLTypeInfo elem_ti(ti.get_subtype(), ti.get_dimension(), ti.get_scale(), ti.get_notnull(), ti.get_compression(), ti.get_comp_param(), kNULLT);
+  if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
+    LOG(WARNING) << "Malformed array: " << s;
+    return ArrayDatum(0, NULL, true);
+  }
+  std::vector<std::string> elem_strs;
+  size_t last = 1;
+  for (size_t i = s.find(copy_params.delimiter, 1); i != std::string::npos; i = s.find(copy_params.delimiter, last)) {
+    elem_strs.push_back(s.substr(last, i - last));
+    last = i + 1;
+  }
+  elem_strs.push_back(s.substr(last, s.size() - 1 - last));
+  if (!elem_ti.is_string()) {
+    size_t len = elem_strs.size() * elem_ti.get_size();
+    int8_t *buf = (int8_t*)malloc(len);
+    int8_t *p = buf;
+    for (auto &e : elem_strs) {
+      Datum d = StringToDatum(e, elem_ti);
+      p = appendDatum(p, d, elem_ti);
+    }
+    return ArrayDatum(len, buf, len == 0);
+  }
+  // must not be called for array of strings
+  CHECK(false);
+  return ArrayDatum(0, NULL, true);
+}
+
+void
+parseStringArray(const std::string &s, const CopyParams &copy_params, std::vector<std::string> &string_vec)
+{
+  if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
+    LOG(WARNING) << "Malformed array: " << s;
+    return;
+  }
+  size_t last = 1;
+  for (size_t i = s.find(copy_params.delimiter, 1); i != std::string::npos; i = s.find(copy_params.delimiter, last)) {
+    string_vec.push_back(s.substr(last, i - last));
+    last = i + 1;
+  }
+  string_vec.push_back(s.substr(last, s.size() - 1 - last));
+}
+
 static size_t
 find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &copy_params)
 {
@@ -156,7 +245,7 @@ find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &c
 }
 
 void
-TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null)
+TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null, const CopyParams &copy_params)
 {
   switch (cd->columnType.get_type()) {
   case kBOOLEAN: {
@@ -239,6 +328,21 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val,
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
       addTime(cd->columnType.get_size() == 4 ? NULL_INT : NULL_BIGINT);
+    }
+    break;
+  case kARRAY:
+    if (!is_null) {
+      if (IS_STRING(cd->columnType.get_subtype())) {
+        std::vector<std::string> &string_vec = addStringArray();
+        parseStringArray(val, copy_params, string_vec);
+      } else {
+        ArrayDatum d = StringToArray(val, cd->columnType, copy_params);
+        addArray(d);
+      }
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addArray(ArrayDatum(0, NULL, true));
     }
     break;
   default:
@@ -380,7 +484,7 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
         bool is_null = (row[col_idx] == copy_params.null_str);
         if (!cd->columnType.is_string() && row[col_idx].empty())
           is_null = true;
-        import_buffers[col_idx]->add_value(cd, row[col_idx], is_null);
+        import_buffers[col_idx]->add_value(cd, row[col_idx], is_null, copy_params);
         ++col_idx;
       }
       row_count++;
@@ -426,8 +530,7 @@ Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffe
         import_buff->getTypeInfo().is_time() ||
         import_buff->getTypeInfo().get_type() == kBOOLEAN) {
       p.numbersPtr = import_buff->getAsBytes();
-    } else {
-      CHECK(import_buff->getTypeInfo().is_string());
+    } else if (import_buff->getTypeInfo().is_string()) {
       auto string_payload_ptr = import_buff->getStringBuffer();
       if (import_buff->getTypeInfo().get_compression() == kENCODING_NONE) {
         p.stringsPtr = string_payload_ptr;
@@ -436,6 +539,14 @@ Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffe
         import_buff->addDictEncodedString(*string_payload_ptr);
         p.numbersPtr = import_buff->getStringDictBuffer();
       }
+    } else {
+      CHECK(import_buff->getTypeInfo().get_type() == kARRAY);
+      if (IS_STRING(import_buff->getTypeInfo().get_subtype())) {
+        CHECK(import_buff->getTypeInfo().get_compression() == kENCODING_DICT);
+        import_buff->addDictEncodedStringArray(*import_buff->getStringArrayBuffer());
+        p.arraysPtr = import_buff->getStringArrayDictBuffer();
+      } else
+        p.arraysPtr = import_buff->getArrayBuffer();
     }
     ins_data.data.push_back(p);
   }
@@ -458,7 +569,7 @@ Loader::init()
   insert_data.tableId = table_desc->tableId;
   for (auto cd : column_descs) {
     insert_data.columnIds.push_back(cd->columnId);
-    if (cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_DICT) {
+    if (cd->columnType.is_varlen() && cd->columnType.get_compression() == kENCODING_DICT) {
       const auto dd = catalog.getMetadataForDict(cd->columnType.get_comp_param());
       CHECK(dd);
       dict_map[cd->columnId] = dd->stringDict;

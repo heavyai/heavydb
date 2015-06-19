@@ -22,6 +22,21 @@
 
 namespace Importer_NS {
 
+struct CopyParams {
+  char delimiter;
+  std::string null_str;
+  bool has_header;
+  bool quoted; // does the input have any quoted fields, default to false
+  char quote;
+  char escape;
+  char line_delim;
+  char array_begin;
+  char array_end;
+  int threads;
+
+  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), array_begin('{'), array_end('}'), threads(0) {}
+};
+
 class TypedImportBuffer : boost::noncopyable {
 public:
   TypedImportBuffer(
@@ -63,6 +78,14 @@ public:
     case kDATE:
       time_buffer_ = new std::vector<time_t>();
       break;
+    case kARRAY:
+      if (IS_STRING(col_desc->columnType.get_subtype())) {
+        CHECK(col_desc->columnType.get_compression() == kENCODING_DICT);
+        string_array_buffer_ = new std::vector<std::vector<std::string>>();
+        string_array_dict_buffer_ = new std::vector<ArrayDatum>();
+      } else
+        array_buffer_ = new std::vector<ArrayDatum>();
+      break;
     default:
       CHECK(false);
     }
@@ -103,6 +126,13 @@ public:
     case kDATE:
       delete time_buffer_;
       break;
+    case kARRAY:
+      if (IS_STRING(column_desc_->columnType.get_subtype())) {
+        delete string_array_buffer_;
+        delete string_array_dict_buffer_;
+      } else
+        delete array_buffer_;
+      break;
     default:
       CHECK(false);
     }
@@ -136,6 +166,15 @@ public:
     string_buffer_->push_back(v);
   }
 
+  void addArray(const ArrayDatum &v) {
+    array_buffer_->push_back(v);
+  }
+
+  std::vector<std::string> &addStringArray() {
+    string_array_buffer_->push_back(std::vector<std::string>());
+    return string_array_buffer_->back();
+  }
+
   void addTime(const time_t v) {
     time_buffer_->push_back(v);
   }
@@ -143,6 +182,19 @@ public:
   void addDictEncodedString(const std::vector<std::string> &stringVec) {
     CHECK(string_dict_);
     string_dict_->addBulk(stringVec, *string_dict_buffer_);
+  }
+
+  void addDictEncodedStringArray(const std::vector<std::vector<std::string>> &stringArrayVec) {
+    CHECK(string_dict_);
+    for (auto &p : stringArrayVec) {
+      size_t len = p.size() * sizeof(int32_t);
+      int32_t *a = (int32_t*)malloc(len);
+      int i = 0;
+      for (auto &s : p) {
+        a[i++] = string_dict_->getOrAdd(s);
+      }
+      string_array_dict_buffer_->push_back(ArrayDatum(len, (int8_t*)a, len == 0));
+    }
   }
 
   const SQLTypeInfo &getTypeInfo() const {
@@ -180,6 +232,18 @@ public:
 
   std::vector<std::string>* getStringBuffer() const {
     return string_buffer_;
+  }
+
+  std::vector<ArrayDatum>* getArrayBuffer() const {
+    return array_buffer_;
+  }
+
+  std::vector<std::vector<std::string>> *getStringArrayBuffer() const {
+    return string_array_buffer_;
+  }
+
+  std::vector<ArrayDatum>* getStringArrayDictBuffer() const {
+    return string_array_dict_buffer_;
   }
 
   int8_t* getStringDictBuffer() const {
@@ -235,12 +299,20 @@ public:
       time_buffer_->clear();
       break;
     }
+    case kARRAY: {
+      if (IS_STRING(column_desc_->columnType.get_subtype())) {
+        string_array_buffer_->clear();
+        string_array_dict_buffer_->clear();
+      } else
+        array_buffer_->clear();
+      break;
+    }
     default:
       CHECK(false);
     }
   }
 
-  void add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null);
+  void add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null, const CopyParams &copy_params);
   void add_value(const ColumnDescriptor *cd, const TDatum &val, const bool is_null);
 private:
   union {
@@ -252,23 +324,15 @@ private:
     std::vector<double>* double_buffer_;
     std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
+    std::vector<ArrayDatum>* array_buffer_;
+    std::vector<std::vector<std::string>> *string_array_buffer_;
   };
-  std::vector<int32_t>* string_dict_buffer_;
+  union {
+    std::vector<int32_t>* string_dict_buffer_;
+    std::vector<ArrayDatum>* string_array_dict_buffer_;
+  };
   const ColumnDescriptor *column_desc_;
   StringDictionary *string_dict_;
-};
-
-struct CopyParams {
-  char delimiter;
-  std::string null_str;
-  bool has_header;
-  bool quoted; // does the input have any quoted fields, default to false
-  char quote;
-  char escape;
-  char line_delim;
-  int threads;
-
-  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), threads(0) {}
 };
 
 class Loader {
@@ -279,7 +343,7 @@ class Loader {
     const std::list<const ColumnDescriptor *> &get_column_descs() const { return column_descs; }
     const Fragmenter_Namespace::InsertData &get_insert_data() const { return insert_data; }
     StringDictionary *get_string_dict(const ColumnDescriptor *cd) const { 
-      if (!cd->columnType.is_string() || cd->columnType.get_compression() != kENCODING_DICT)
+      if ((cd->columnType.get_type() != kARRAY || !IS_STRING(cd->columnType.get_subtype())) && (!cd->columnType.is_string() || cd->columnType.get_compression() != kENCODING_DICT))
         return nullptr;
       return dict_map.at(cd->columnId);
     }

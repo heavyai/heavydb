@@ -47,6 +47,25 @@ struct VarlenDatum {
 	VarlenDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n) {}
 };
 
+// ArrayDatum is idential to VarlenDatum except that it takes ownership of
+// the memory holding array data.
+struct ArrayDatum {
+  size_t length;
+#ifndef __CUDACC__
+  std::shared_ptr<int8_t> data_ptr;
+#else
+  int8_t *data_ptr;
+#endif
+  bool is_null;
+
+  DEVICE ArrayDatum() : length(0), is_null(true) {}
+#ifndef __CUDACC__
+  ArrayDatum(int l, int8_t *p, bool n) : length(l), data_ptr(std::shared_ptr<int8_t>(p)), is_null(n) {}
+#else
+  ArrayDatum(int l, int8_t *p, bool n) : length(l), data_ptr(p), is_null(n) {}
+#endif
+};
+
 typedef union {
 	bool boolval;
   int8_t tinyintval;
@@ -66,7 +85,7 @@ typedef union {
 union DataBlockPtr {
 	int8_t *numbersPtr;
 	std::vector<std::string> *stringsPtr;
-  std::vector<VarlenDatum> *arrayPtr;
+  std::vector<ArrayDatum> *arraysPtr;
 };
 #endif
 

@@ -1610,6 +1610,14 @@ namespace Parser {
             copy_params.quoted = false;
           else
             throw std::runtime_error("Invalid string for boolean " + *s);
+        } else if (boost::iequals(*p->get_name(), "array")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Array option must be a string.");
+          else if (str_literal->get_stringval()->length() != 2)
+            throw std::runtime_error("Array option must be exactly two characters.  Default is {}.");
+          copy_params.array_begin = (*str_literal->get_stringval())[0];
+          copy_params.array_end = (*str_literal->get_stringval())[1];
         } else
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

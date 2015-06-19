@@ -501,6 +501,7 @@ public:
       throw ex;
     }
     Importer_NS::Loader loader(cat, td);
+    Importer_NS::CopyParams copy_params;
     if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
       ex.error_msg = "Wrong number of columns to load into Table " + table_name + " (" + std::to_string(rows.size()) + " vs " + std::to_string(td->nColumns) + ")";
@@ -516,7 +517,7 @@ public:
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
-          import_buffers[col_idx]->add_value(cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null);
+          import_buffers[col_idx]->add_value(cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null, copy_params);
           col_idx++;
         }
       } catch (const std::exception &e) {
