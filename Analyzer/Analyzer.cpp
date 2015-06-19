@@ -897,7 +897,7 @@ namespace Analyzer {
     column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
     for (auto col_desc : column_descs) {
       ColumnVar *cv = new ColumnVar(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
-      TargetEntry *tle = new TargetEntry(col_desc->columnName, cv);
+      TargetEntry *tle = new TargetEntry(col_desc->columnName, cv, false);
       tlist.push_back(tle);
     }
   }
@@ -1613,6 +1613,8 @@ namespace Analyzer {
   {
     std::cout << "(" << resname << " ";;
     expr->print();
+    if (unnest)
+      std::cout << " UNNEST";
     std::cout << ") ";
   }
 

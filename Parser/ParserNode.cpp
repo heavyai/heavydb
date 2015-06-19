@@ -940,7 +940,9 @@ namespace Parser {
           }
           if (e->get_type_info().get_type() == kNULLT)
             throw std::runtime_error("Untyped NULL in SELECT clause.  Use CAST to specify a type.");
-          Analyzer::TargetEntry *tle = new Analyzer::TargetEntry(resname, e);
+          Analyzer::UOper *o = dynamic_cast<Analyzer::UOper*>(e);
+          bool unnest = (o != nullptr && o->get_optype() == kUNNEST);
+          Analyzer::TargetEntry *tle = new Analyzer::TargetEntry(resname, e, unnest);
           tlist.push_back(tle);
         }
       }
@@ -1134,6 +1136,10 @@ namespace Parser {
       str = "-(" + left->to_string() + ")";
     else if (optype == kNOT)
       str = "NOT (" + left->to_string() + ")";
+    else if (optype == kARRAY_AT)
+      str = left->to_string() + "[" + right->to_string() + "]";
+    else if (optype == kUNNEST)
+      str = "UNNEST(" + left->to_string() + ")";
     else
       str = "(" + left->to_string() + op_str[optype] + right->to_string() + ")";
     return str;
@@ -1335,7 +1341,7 @@ namespace Parser {
           throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
       }
       e = e->add_cast(cd->columnType);
-      tlist.push_back(new Analyzer::TargetEntry("", e));
+      tlist.push_back(new Analyzer::TargetEntry("", e, false));
       ++it;
     }
   }

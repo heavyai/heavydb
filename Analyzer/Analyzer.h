@@ -444,17 +444,18 @@ namespace Analyzer {
    */
   class TargetEntry {
     public:
-      TargetEntry(const std::string &n, Expr *e) : resname(n), expr(e) {}
-      TargetEntry(const std::string &n, Expr *e, bool d) : resname(n), expr(e) {}
+      TargetEntry(const std::string &n, Expr *e, bool u) : resname(n), expr(e), unnest(u) {}
       virtual ~TargetEntry() { delete expr; }
       const std::string &get_resname() const { return resname; }
       void set_resname( const std::string &name) { resname = name; }
       Expr *get_expr() { return expr; }
       void set_expr(Expr *e) { expr = e; }
+      bool get_unnest() const { return unnest; }
       virtual void print() const;
     private:
       std::string resname; // alias name, e.g., SELECT salary + bonus AS compensation, 
       Expr *expr; // expression to evaluate for the value
+      bool unnest; // unnest a collection type
   };
 
   /*

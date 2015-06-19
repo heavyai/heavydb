@@ -128,7 +128,7 @@ namespace Planner {
 				std::vector<Analyzer::TargetEntry*> tlist;
 				int i = 1;
 				for (auto tle : cur_query->get_targetlist()) {
-					tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), new Analyzer::Var(tle->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, i++)));
+					tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), new Analyzer::Var(tle->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, i++), false));
 				}
 				std::list<Analyzer::Expr*> const_quals;
 				for (auto p : const_predicates)
@@ -179,7 +179,7 @@ namespace Planner {
 		if (having_pred != nullptr)
 			having_pred->collect_column_var(colvar_set, true);
 		for (auto colvar : colvar_set) {
-			Analyzer::TargetEntry *tle = new Analyzer::TargetEntry("", colvar->deep_copy());
+			Analyzer::TargetEntry *tle = new Analyzer::TargetEntry("", colvar->deep_copy(), false);
 			base_scans[colvar->get_rte_idx()]->add_tle(tle);
 		}
 	}
@@ -238,13 +238,13 @@ namespace Planner {
 				expr = new Analyzer::Var(c->get_type_info(), c->get_table_id(), c->get_column_id(), c->get_rte_idx(), Analyzer::Var::kGROUPBY, varno);
 			} else
 				expr = new Analyzer::Var(e->get_type_info(), Analyzer::Var::kGROUPBY, varno);
-			new_tle = new Analyzer::TargetEntry("", expr);
+			new_tle = new Analyzer::TargetEntry("", expr, false);
 			agg_tlist.push_back(new_tle);
 			varno++;
 		}
 		for (auto e : aggexpr_list) {
 			Analyzer::TargetEntry *new_tle;
-			new_tle = new Analyzer::TargetEntry("", e->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
+			new_tle = new Analyzer::TargetEntry("", e->rewrite_with_child_targetlist(cur_plan->get_targetlist()), false);
 			agg_tlist.push_back(new_tle);
 		}
 
@@ -264,7 +264,7 @@ namespace Planner {
 		else {
 			std::vector<Analyzer::TargetEntry*> result_tlist;
 			for (auto tle : cur_query->get_targetlist()) {
-				result_tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_agg_to_var(agg_tlist)));
+				result_tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_agg_to_var(agg_tlist), tle->get_unnest()));
 			}
 			std::list<Analyzer::Expr*> const_quals;
 			for (auto p : const_predicates)
@@ -281,7 +281,7 @@ namespace Planner {
 		std::vector<Analyzer::TargetEntry*> tlist;
 		int varno = 1;
 		for (auto tle : cur_plan->get_targetlist()) {
-			tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), new Analyzer::Var(tle->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, varno)));
+			tlist.push_back(new Analyzer::TargetEntry(tle->get_resname(), new Analyzer::Var(tle->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, varno), false));
 			varno++;
 		}
 		cur_plan = new Sort(tlist, 0.0, cur_plan, *query.get_order_by(), query.get_is_distinct());
@@ -294,9 +294,9 @@ namespace Planner {
 		for (auto tle : query.get_targetlist()) {
 			Analyzer::TargetEntry *new_tle;
 			if (cur_plan == nullptr)
-				new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->deep_copy());
+				new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->deep_copy(), tle->get_unnest());
 			else
-				new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_with_targetlist(cur_plan->get_targetlist()));
+				new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->rewrite_with_targetlist(cur_plan->get_targetlist()), tle->get_unnest());
 			final_tlist.push_back(new_tle);
 		}
 		if (cur_plan == nullptr)
