@@ -199,6 +199,11 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
       if (lhs_meta_it->second.chunkStats.has_nulls || rhs_meta_it->second.chunkStats.has_nulls) {  \
         has_nulls = true;                                                                          \
       }                                                                                            \
+      if (col_ti.is_fp()) {                                                                        \
+        CHECK_EQ(kDOUBLE, col_ti.get_type());                                                      \
+        return extract_##stat_name##_stat_double(lhs_meta_it->second.chunkStats) <                 \
+               extract_##stat_name##_stat_double(rhs_meta_it->second.chunkStats);                  \
+      }                                                                                            \
       return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <                  \
              extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);                   \
   });                                                                                              \

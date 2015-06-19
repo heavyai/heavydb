@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <ctime>
 #include <cfloat>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cassert>

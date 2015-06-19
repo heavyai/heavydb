@@ -562,7 +562,7 @@ int main(int argc, char** argv)
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test {
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16));" };
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16)) WITH (fragment_size=2);" };
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
       "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date, fx int);");
