@@ -27,7 +27,9 @@ enum SQLOps {
 	kUMINUS,
 	kISNULL,
 	kEXISTS,
-	kCAST
+	kCAST,
+  kARRAY_AT,
+  kUNNEST
 };
 
 #define IS_COMPARISON(X) ((X) == kEQ || (X) == kNE || (X) == kLT || (X) == kGT || (X) == kLE || (X) == kGE)

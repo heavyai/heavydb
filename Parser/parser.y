@@ -798,6 +798,13 @@ extract_exp: EXTRACT '(' NAME FROM scalar_exp ')'
   }
   ;
 
+/* should be scaler_exp '[' scalar_exp ']' but it cause conflicts.  need to debug */
+array_at_exp : column_ref '[' scalar_exp ']'
+  {
+    $<nodeval>$ = new OperExpr(kARRAY_AT, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3));
+  }
+  ;
+
 	/* scalar expressions */
 
 scalar_exp:
@@ -815,6 +822,7 @@ scalar_exp:
 	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
 	| case_exp { $<nodeval>$ = $<nodeval>1; }
   | extract_exp { $<nodeval>$ = $<nodeval>1; }
+  | array_at_exp { $<nodeval>$ = $<nodeval>1; }
 	;
 
 select_entry: general_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }

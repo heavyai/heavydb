@@ -188,7 +188,7 @@ appendDatum(int8_t *buf, Datum d, const SQLTypeInfo &ti)
 ArrayDatum
 StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &copy_params)
 {
-  SQLTypeInfo elem_ti(ti.get_subtype(), ti.get_dimension(), ti.get_scale(), ti.get_notnull(), ti.get_compression(), ti.get_comp_param(), kNULLT);
+  SQLTypeInfo elem_ti = ti.get_elem_type();
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
     LOG(WARNING) << "Malformed array: " << s;
     return ArrayDatum(0, NULL, true);

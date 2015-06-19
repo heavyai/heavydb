@@ -255,6 +255,7 @@ class SQLTypeInfo {
       }
       return false;
     }
+    SQLTypeInfo get_elem_type() const { return SQLTypeInfo(subtype, dimension, scale, notnull, compression, comp_param, kNULLT); }
   private:
     SQLTypes type; // type id
     SQLTypes subtype; // element type of arrays

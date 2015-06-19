@@ -320,6 +320,15 @@ namespace Parser {
     if (right == nullptr) {
       return new Analyzer::UOper(left_type, left_expr->get_contains_agg(), optype, left_expr->decompress());
     }
+    if (optype == kARRAY_AT) {
+      if (left_type.get_type() != kARRAY)
+        throw std::runtime_error(left->to_string() + " is not of array type.");
+      right_expr = right->analyze(catalog, query, allow_tlist_ref);
+      right_type = right_expr->get_type_info();
+      if (!right_type.is_integer())
+        throw std::runtime_error(right->to_string() + " is not of integer type.");
+      return new Analyzer::BinOper(left_type.get_elem_type(), false, kARRAY_AT, kONE, left_expr, right_expr);
+    }
     SQLQualifier qual = kONE;
     if (typeid(*right) == typeid(SubqueryExpr))
       qual = dynamic_cast<SubqueryExpr*>(right)->get_qualifier();
@@ -630,6 +639,13 @@ namespace Parser {
         throw std::runtime_error("Cannot compute SUM on non-number-type arguments.");
       arg_expr = arg_expr->decompress();
       result_type = arg_expr->get_type_info();
+    }
+    else if (boost::iequals(*name, "unnest")) {
+      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+      const SQLTypeInfo &arg_ti = arg_expr->get_type_info();
+      if (arg_ti.get_type() != kARRAY)
+        throw std::runtime_error(arg->to_string() + " is not of array type.");
+      return new Analyzer::UOper(arg_ti.get_elem_type(), false, kUNNEST, arg_expr);
     }
     else
       throw std::runtime_error("invalid function name: " + *name);

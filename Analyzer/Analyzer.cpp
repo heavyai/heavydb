@@ -1457,6 +1457,9 @@ namespace Analyzer {
       case kCAST:
         op = "CAST " + type_info.get_type_name() + " " + type_info.get_compression_name() + "(" + std::to_string(type_info.get_comp_param()) + ") ";
         break;
+      case kUNNEST:
+        op = "UNNEST ";
+        break;
       default:
         break;
     }
@@ -1505,6 +1508,9 @@ namespace Analyzer {
         break;
       case kDIVIDE:
         op = "/ ";
+        break;
+      case kARRAY_AT:
+        op = "[] ";
         break;
       default:
         break;
