@@ -394,7 +394,7 @@ private:
         }
       }
       CHECK(pos_arg);
-      CHECK_EQ(static_cast<llvm::IntegerType*>(pos_arg->getType())->getBitWidth(), 64);
+      CHECK(pos_arg->getType()->isIntegerTy(64));
       return pos_arg;
     }
 

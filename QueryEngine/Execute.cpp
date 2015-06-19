@@ -1013,13 +1013,13 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
       if (operand_ti.get_compression() != kENCODING_DICT && !operand_as_const) {
         CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
         CHECK_EQ(kENCODING_DICT, ti.get_compression());
-        CHECK_EQ(64, static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth());
+        CHECK(operand_lv->getType()->isIntegerTy(64));
         cgen_state_->must_run_on_cpu_ = true;
         return cgen_state_->emitExternalCall("string_compress",
           get_int_type(32, cgen_state_->context_),
           { operand_lv, ll_int(int64_t(getStringDictionary(ti.get_comp_param(), row_set_mem_owner_))) });
       }
-      CHECK_EQ(32, static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth());
+      CHECK(operand_lv->getType()->isIntegerTy(32));
       if (ti.get_compression() == kENCODING_NONE) {
         CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
         cgen_state_->must_run_on_cpu_ = true;
