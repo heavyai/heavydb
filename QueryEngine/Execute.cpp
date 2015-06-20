@@ -1995,7 +1995,12 @@ ResultRows Executor::executeAggScanPlan(
       scheduler_cv.notify_one();
     }
   };
-  dispatchFragments(all_fragment_results, dispatch, device_type, allow_multifrag,
+  // TODO(alex): make query_mem_desc easily available
+  const QueryMemoryDescriptor& query_mem_desc = compilation_result_cpu.native_functions.empty()
+    ? compilation_result_gpu.query_mem_desc
+    : compilation_result_cpu.query_mem_desc;
+  dispatchFragments(all_fragment_results, dispatch, device_type,
+    allow_multifrag && query_mem_desc.usesCachedContext(),
     agg_plan, limit, fragments, simple_quals, context_count,
     scheduler_cv, scheduler_mutex, available_gpus, available_cpus);
   cat.get_dataMgr().freeAllBuffers();
