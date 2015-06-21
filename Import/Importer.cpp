@@ -60,9 +60,9 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;
-    } else if (!in_quote && *p == copy_params.array_begin) {
+    } else if (copy_params.array_begin && !in_quote && *p == copy_params.array_begin) {
       in_array = true;
-    } else if (!in_quote && *p == copy_params.array_end) {
+    } else if (copy_params.array_begin && !in_quote && *p == copy_params.array_end) {
       in_array = false;
     } else if (*p == copy_params.delimiter) {
       if (!in_quote && !in_array) {
@@ -105,9 +105,9 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;
-    } else if (*p == copy_params.array_begin) {
+    } else if (copy_params.array_begin && *p == copy_params.array_begin) {
       in_array = true;
-    } else if (*p == copy_params.array_end) {
+    } else if (copy_params.array_begin && *p == copy_params.array_end) {
       in_array = false;
     } else if (*p == copy_params.delimiter) {
       if (!in_quote && !in_array) {

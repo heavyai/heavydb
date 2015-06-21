@@ -34,7 +34,7 @@ struct CopyParams {
   char array_end;
   int threads;
 
-  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), array_begin('{'), array_end('}'), threads(0) {}
+  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), array_begin(0), array_end(0), threads(0) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
