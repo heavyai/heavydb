@@ -569,7 +569,8 @@ Loader::init()
   insert_data.tableId = table_desc->tableId;
   for (auto cd : column_descs) {
     insert_data.columnIds.push_back(cd->columnId);
-    if (cd->columnType.is_varlen() && cd->columnType.get_compression() == kENCODING_DICT) {
+    if (cd->columnType.get_compression() == kENCODING_DICT) {
+      CHECK(cd->columnType.is_string() || cd->columnType.is_string_array());
       const auto dd = catalog.getMetadataForDict(cd->columnType.get_comp_param());
       CHECK(dd);
       dict_map[cd->columnId] = dd->stringDict;
