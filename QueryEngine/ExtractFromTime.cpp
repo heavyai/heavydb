@@ -174,3 +174,14 @@ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
 #endif
   }
 }
+
+extern "C"
+#ifdef __CUDACC__
+__device__
+#endif
+int64_t ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return ExtractFromTime(field, timeval);
+}

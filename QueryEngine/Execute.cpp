@@ -800,9 +800,9 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
 llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const bool hoist_literals) {
   auto from_expr = codegen(extract_expr->get_from_expr(), true, hoist_literals).front();
   const int32_t extract_field { extract_expr->get_field() };
+  const auto& extract_expr_ti = extract_expr->get_from_expr()->get_type_info();
   if (extract_field == kEPOCH) {
-    CHECK(extract_expr->get_from_expr()->get_type_info().get_type() == kTIMESTAMP ||
-          extract_expr->get_from_expr()->get_type_info().get_type() == kDATE);
+    CHECK(extract_expr_ti.get_type() == kTIMESTAMP || extract_expr_ti.get_type() == kDATE);
     if (from_expr->getType()->isIntegerTy(32)) {
       from_expr = cgen_state_->ir_builder_.CreateCast(
         llvm::Instruction::CastOps::SExt, from_expr, get_int_type(64, cgen_state_->context_));
@@ -815,8 +815,13 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
     from_expr = cgen_state_->ir_builder_.CreateCast(
       llvm::Instruction::CastOps::Trunc, from_expr, get_int_type(32, cgen_state_->context_));
   }
-  return cgen_state_->emitExternalCall("ExtractFromTime", get_int_type(64, cgen_state_->context_),
-    { ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr });
+  std::vector<llvm::Value*> extract_args { ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr };
+  std::string extract_fname { "ExtractFromTime" };
+  if (!extract_expr_ti.get_notnull()) {
+    extract_args.push_back(inlineIntNull(extract_expr_ti));
+    extract_fname += "Nullable";
+  }
+  return cgen_state_->emitExternalCall(extract_fname, get_int_type(64, cgen_state_->context_), extract_args);
 }
 
 namespace {
@@ -2979,6 +2984,7 @@ declare void @agg_min_double_skip_val_shared(i64*, double, double);
 declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_double_shared(i64*, double);
 declare i64 @ExtractFromTime(i32, i64);
+declare i64 @ExtractFromTimeNullable(i32, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
