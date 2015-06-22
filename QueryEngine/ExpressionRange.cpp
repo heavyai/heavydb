@@ -375,7 +375,8 @@ ExpressionRange getExpressionRange(
   switch (extract_field) {
   case kYEAR: {
     auto year_range = getExpressionRange(extract_expr->get_from_expr(), fragments, executor);
-    if (year_range.type == ExpressionRangeType::Invalid) {
+    // TODO(alex): don't punt when the column has nulls once issue #70 is fixed
+    if (year_range.type == ExpressionRangeType::Invalid || year_range.has_nulls) {
       return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
     }
     CHECK(year_range.type == ExpressionRangeType::Integer);
