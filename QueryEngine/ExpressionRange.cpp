@@ -1,4 +1,5 @@
 #include "ExpressionRange.h"
+#include "ExtractFromTime.h"
 #include "GroupByAndAggregate.h"
 #include "Execute.h"
 
@@ -372,8 +373,16 @@ ExpressionRange getExpressionRange(
   result.type = ExpressionRangeType::Integer;
   result.has_nulls = false;
   switch (extract_field) {
-  case kYEAR:
-    return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
+  case kYEAR: {
+    auto year_range = getExpressionRange(extract_expr->get_from_expr(), fragments, executor);
+    if (year_range.type == ExpressionRangeType::Invalid) {
+      return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
+    }
+    CHECK(year_range.type == ExpressionRangeType::Integer);
+    year_range.int_min = ExtractFromTime(kYEAR, year_range.int_min);
+    year_range.int_max = ExtractFromTime(kYEAR, year_range.int_max);
+    return year_range;
+  }
   case kEPOCH:
     return getExpressionRange(extract_expr->get_from_expr(), fragments, executor);
   case kMONTH:
