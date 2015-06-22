@@ -78,14 +78,14 @@ class ArrayNoneEncoder : public Encoder {
                 if (size > 0)
                   buffer_->append(inbuf, size);
                 size = 0;
-                buffer_->append((*srcData)[i].data_ptr.get(), len);
+                buffer_->append((*srcData)[i].data_ptr, len);
                 num_appended++;
                 break;
               } else if (size + len > inbuf_size)
                 break;
               char *dest = (char*)inbuf + size;
               if (len > 0)
-                std::memcpy((void*)dest, (void*)(*srcData)[i].data_ptr.get(), len);
+                std::memcpy((void*)dest, (void*)(*srcData)[i].data_ptr, len);
               size += len;
             }
             if (size > 0)

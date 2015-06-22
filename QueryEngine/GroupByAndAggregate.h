@@ -698,11 +698,13 @@ private:
                    const std::string& label_prefix,
                    DiamondCodegen* parent = nullptr);
     void setChainToNext();
+    void setFalseTarget(llvm::BasicBlock* cond_false);
     ~DiamondCodegen();
 
     Executor* executor_;
     llvm::BasicBlock* cond_true_;
     llvm::BasicBlock* cond_false_;
+    llvm::BasicBlock* orig_cond_false_;
     bool chain_to_next_;
     DiamondCodegen* parent_;
   };
@@ -710,7 +712,8 @@ private:
   llvm::Value* codegenGroupBy(
     const QueryMemoryDescriptor&,
     const ExecutorDeviceType,
-    const bool hoist_literals);
+    const bool hoist_literals,
+    DiamondCodegen&);
 
   llvm::Function* codegenPerfectHashFunction();
 
@@ -749,6 +752,8 @@ private:
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const size_t max_groups_buffer_entry_count_;
   const int64_t scan_limit_;
+
+  friend class Executor;
 };
 
 namespace {

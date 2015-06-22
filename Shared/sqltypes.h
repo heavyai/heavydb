@@ -52,16 +52,12 @@ struct VarlenDatum {
 // the memory holding array data.
 struct ArrayDatum {
   size_t length;
-#ifndef __CUDACC__
-  std::shared_ptr<int8_t> data_ptr;
-#else
   int8_t *data_ptr;
-#endif
   bool is_null;
 
   DEVICE ArrayDatum() : length(0), is_null(true) {}
 #ifndef __CUDACC__
-  ArrayDatum(int l, int8_t *p, bool n) : length(l), data_ptr(std::shared_ptr<int8_t>(p)), is_null(n) {}
+  ArrayDatum(int l, int8_t *p, bool n) : length(l), data_ptr(p), is_null(n) {}
 #else
   ArrayDatum(int l, int8_t *p, bool n) : length(l), data_ptr(p), is_null(n) {}
 #endif

@@ -344,6 +344,9 @@ __device__ void agg_max_double_skip_val_shared(int64_t* agg, const double val, c
 
 #include "ExtractFromTime.cpp"
 #include "../Utils/ChunkIter.cpp"
+#define EXECUTE_INCLUDE
+#include "ArrayOps.cpp"
+#undef EXECUTE_INCLUDE
 #include "../Utils/StringLike.cpp"
 
 extern "C"

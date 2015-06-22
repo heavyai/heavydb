@@ -448,6 +448,8 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper, const bool hoist_l
     return codegenUMinus(u_oper, hoist_literals);
   case kISNULL:
     return codegenIsNull(u_oper, hoist_literals);
+  case kUNNEST:
+    return codegenUnnest(u_oper, hoist_literals);
   default:
     CHECK(false);
   }
@@ -551,6 +553,9 @@ std::vector<llvm::Value*> Executor::codegen(
     CHECK(it_ok.second);
     return { ptr_and_len, str_lv, len_lv };
   }
+  if (col_var->get_type_info().is_array()) {
+    return { col_byte_stream, pos_arg };
+  }
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(
     col_byte_stream,
@@ -602,6 +607,16 @@ Executor::colByteStream(const int col_id, const bool fetch_column, const bool ho
       return std::make_pair(&arg, pos_arg);
     }
     ++arg_idx;
+  }
+  CHECK(false);
+}
+
+llvm::Value* Executor::posArg() const {
+  auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
+  for (auto& arg : in_arg_list) {
+    if (arg.getType()->isIntegerTy()) {
+      return &arg;
+    }
   }
   CHECK(false);
 }
@@ -1156,6 +1171,10 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
   }
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
     operand_lv, inlineIntNull(ti));
+}
+
+llvm::Value* Executor::codegenUnnest(const Analyzer::UOper* uoper, const bool hoist_literals) {
+  return codegen(uoper->get_operand(), true, hoist_literals).front();
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {
@@ -2149,7 +2168,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
       }
       const bool is_real_string = cd->columnType.is_string() &&
         cd->columnType.get_compression() == kENCODING_NONE;
-      if (is_real_string) {
+      if (is_real_string || cd->columnType.is_array()) {
         chunk_iterators.push_back(chunk->begin_iterator(chunk_meta_it->second));
         auto& chunk_iter = chunk_iterators.back();
         if (memory_level_for_column == Data_Namespace::CPU_LEVEL) {
@@ -2986,6 +3005,10 @@ declare void @agg_id_double_shared(i64*, double);
 declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
 declare i64 @string_decode(i8*, i64);
+declare i32 @array_size(i8*, i64, i32);
+declare i32 @array_at_i16(i8*, i64, i32);
+declare i32 @array_at_i32(i8*, i64, i32);
+declare i32 @array_at_i64(i8*, i64, i32);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
@@ -3038,7 +3061,8 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
         if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
             get_gv_call.getCalledFunction()->getName() == "get_matching_group_value_perfect_hash" ||
-            get_gv_call.getCalledFunction()->getName() == "string_decode") {
+            get_gv_call.getCalledFunction()->getName() == "string_decode" ||
+            get_gv_call.getCalledFunction()->getName() == "array_size") {
           llvm::AttributeSet no_inline_attrs;
           no_inline_attrs = no_inline_attrs.addAttribute(cgen_state_->context_, 0, llvm::Attribute::NoInline);
           cgen_state_->row_func_->setAttributes(no_inline_attrs);
@@ -3168,11 +3192,53 @@ llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
     : val;
 }
 
+#define EXECUTE_INCLUDE
+#include "ArrayOps.cpp"
+#undef EXECUTE_INCLUDE
+
 llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                             const bool hoist_literals,
                                             const bool translate_null_val,
-                                            const int64_t translated_null_val) {
+                                            const int64_t translated_null_val,
+                                            GroupByAndAggregate::DiamondCodegen& diamond_codegen) {
+  llvm::Value* array_idx_ptr { nullptr };
+  llvm::Value* array_len { nullptr };
   auto group_key = codegen(group_by_col, true, hoist_literals).front();
+  if (dynamic_cast<Analyzer::UOper*>(group_by_col) && static_cast<Analyzer::UOper*>(group_by_col)->get_optype() == kUNNEST) {
+    auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
+    auto array_loop_head = llvm::BasicBlock::Create(cgen_state_->context_, "array_loop_head",
+      cgen_state_->row_func_, preheader->getNextNode());
+    diamond_codegen.setFalseTarget(array_loop_head);
+    const auto ret_ty = get_int_type(32, cgen_state_->context_);
+    array_idx_ptr = cgen_state_->ir_builder_.CreateAlloca(ret_ty);
+    cgen_state_->ir_builder_.CreateStore(ll_int(int32_t(0)), array_idx_ptr);
+    const auto& array_ti = static_cast<Analyzer::UOper*>(group_by_col)->get_operand()->get_type_info();
+    CHECK(array_ti.is_array());
+    const auto& elem_ti = array_ti.get_elem_type();
+    array_len = cgen_state_->emitExternalCall("array_size", ret_ty,
+      { group_key, posArg(), ll_int(uint32_t(elem_ti.get_size())) });
+    cgen_state_->ir_builder_.CreateBr(array_loop_head);
+    cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
+  }
+  if (array_idx_ptr) {
+    CHECK(array_len);
+    auto array_idx = cgen_state_->ir_builder_.CreateLoad(array_idx_ptr);
+    auto bound_check = cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SLT, array_idx, array_len);
+    auto array_loop_body = llvm::BasicBlock::Create(cgen_state_->context_, "array_loop_body", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.CreateCondBr(bound_check, array_loop_body, diamond_codegen.orig_cond_false_);
+    cgen_state_->ir_builder_.SetInsertPoint(array_loop_body);
+    cgen_state_->ir_builder_.CreateStore(
+      cgen_state_->ir_builder_.CreateAdd(array_idx, ll_int(int32_t(1))),
+      array_idx_ptr
+    );
+    const auto& array_ti = static_cast<Analyzer::UOper*>(group_by_col)->get_operand()->get_type_info();
+    CHECK(array_ti.is_array());
+    const auto& elem_ti = array_ti.get_elem_type();
+    const std::string array_at_fname { "array_at_i" + std::to_string(elem_ti.get_size() * 8) };
+    const auto ret_ty = get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
+    group_key = cgen_state_->emitExternalCall(array_at_fname, ret_ty,
+      { group_key, posArg(), array_idx });
+  }
   cgen_state_->group_by_expr_cache_.push_back(group_key);
   if (translate_null_val) {
     const auto& ti = group_by_col->get_type_info();

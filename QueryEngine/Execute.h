@@ -120,9 +120,11 @@ private:
   llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
+  llvm::Value* codegenUnnest(const Analyzer::UOper*, const bool hoist_literals);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   std::pair<llvm::Value*, llvm::Value*>
   colByteStream(const int col_id, const bool fetch_column, const bool hoist_literals);
+  llvm::Value* posArg() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
   ResultRows executeSelectPlan(
@@ -265,7 +267,8 @@ private:
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                     const bool hoist_literals,
                                     const bool translate_null_val,
-                                    const int64_t translated_null_val);
+                                    const int64_t translated_null_val,
+                                    GroupByAndAggregate::DiamondCodegen&);
 
   llvm::Value* toDoublePrecision(llvm::Value* val);
 

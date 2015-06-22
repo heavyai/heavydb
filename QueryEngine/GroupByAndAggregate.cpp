@@ -1310,7 +1310,7 @@ GroupByAndAggregate::DiamondCodegen::DiamondCodegen(
   }
   cond_true_ = llvm::BasicBlock::Create(
     LL_CONTEXT, label_prefix + "_true", ROW_FUNC);
-  cond_false_ = llvm::BasicBlock::Create(
+  orig_cond_false_ = cond_false_ = llvm::BasicBlock::Create(
     LL_CONTEXT, label_prefix + "_false", ROW_FUNC);
 
   LL_BUILDER.CreateCondBr(cond, cond_true_, cond_false_);
@@ -1322,13 +1322,17 @@ void GroupByAndAggregate::DiamondCodegen::setChainToNext() {
   chain_to_next_ = true;
 }
 
+void GroupByAndAggregate::DiamondCodegen::setFalseTarget(llvm::BasicBlock* cond_false) {
+  cond_false_ = cond_false;
+}
+
 GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
   if (parent_) {
     LL_BUILDER.CreateBr(parent_->cond_false_);
   } else if (chain_to_next_) {
     LL_BUILDER.CreateBr(cond_false_);
   }
-  LL_BUILDER.SetInsertPoint(cond_false_);
+  LL_BUILDER.SetInsertPoint(orig_cond_false_);
 }
 
 bool GroupByAndAggregate::codegen(
@@ -1355,7 +1359,7 @@ bool GroupByAndAggregate::codegen(
         LL_BUILDER.CreateStore(LL_BUILDER.CreateAdd(crt_matched, executor_->ll_int(int64_t(1))), arg_it);
       }
 
-      auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals);
+      auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals, filter_cfg);
       if (query_mem_desc.usesGetGroupValueFast() || query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
         if (query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
           filter_cfg.setChainToNext();
@@ -1398,7 +1402,8 @@ bool GroupByAndAggregate::codegen(
 llvm::Value* GroupByAndAggregate::codegenGroupBy(
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
-    const bool hoist_literals) {
+    const bool hoist_literals,
+    DiamondCodegen& diamond_codegen) {
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
 
@@ -1417,7 +1422,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     CHECK_EQ(1, groupby_list.size());
     const auto group_expr = groupby_list.front();
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
-      query_mem_desc.has_nulls, query_mem_desc.max_val + 1);
+      query_mem_desc.has_nulls, query_mem_desc.max_val + 1, diamond_codegen);
     auto small_groups_buffer = arg_it;
     if (query_mem_desc.usesGetGroupValueFast()) {
       std::string get_group_fn_name { "get_group_value_fast" };
@@ -1472,7 +1477,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     for (const auto group_expr : groupby_list) {
       auto col_range_info = getExprRangeInfo(group_expr, query_info_.fragments);
       const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
-        col_range_info.has_nulls, col_range_info.max + 1);
+        col_range_info.has_nulls, col_range_info.max + 1, diamond_codegen);
       // store the sub-key to the buffer
       LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
     }
