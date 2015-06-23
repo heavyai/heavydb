@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 
-PROJECT			(mapd_exe)
+PROJECT(mapd2)
 
 find_package(Git)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
@@ -61,6 +61,7 @@ add_custom_command(
     COMMAND thrift
     ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
+execute_process(COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/Shared/release.h ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt
     OUTPUT ${CMAKE_BINARY_DIR}/MapDRelease.h
@@ -81,3 +82,16 @@ target_link_libraries (mapd ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS
 target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (mapd_http_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
+
+install(TARGETS initdb mapd mapd_server mapd_http_server DESTINATION bin)
+install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
+install(FILES mapd.thrift DESTINATION ".")
+install(FILES MapDBetaGuide.md DESTINATION docs)
+
+string(TIMESTAMP CURRENT_DATE "%Y%m%d")
+file(STRINGS ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt MAPD_GIT_HASH)
+set(CPACK_PACKAGE_VERSION "${CURRENT_DATE}-${MAPD_GIT_HASH}")
+
+set(CPACK_GENERATOR "TBZ2")
+
+include(CPack)

@@ -18,3 +18,6 @@ set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED
 target_link_libraries (StreamInsertSimple ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lthrift")
 target_link_libraries (StreamInsert ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} "-lthrift")
 target_link_libraries (DataGen ${CMAKE_DL_LIBS} "-lthrift")
+
+install(TARGETS StreamInsertSimple StreamInsert DataGen DESTINATION SampleCode)
+install(DIRECTORY . DESTINATION SampleCode)

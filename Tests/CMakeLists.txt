@@ -30,3 +30,6 @@ target_link_libraries (StoragePerfTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES
 target_link_libraries (ExecuteTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (RunQueryLoop gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (StringDictionaryTest StringDictionary gtest ${Boost_LIBRARIES})
+
+install(TARGETS ExecuteTest RunQueryLoop StringDictionaryTest PlanTest
+    UtilTest StorageTest StoragePerfTest DESTINATION Tests)
