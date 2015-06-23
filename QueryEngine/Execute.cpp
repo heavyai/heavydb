@@ -2005,7 +2005,7 @@ ResultRows Executor::executeAggScanPlan(
     ? compilation_result_gpu.query_mem_desc
     : compilation_result_cpu.query_mem_desc;
   dispatchFragments(all_fragment_results, dispatch, device_type,
-    allow_multifrag && query_mem_desc.usesCachedContext(),
+    allow_multifrag && (groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
     agg_plan, limit, fragments, simple_quals, context_count,
     scheduler_cv, scheduler_mutex, available_gpus, available_cpus);
   cat.get_dataMgr().freeAllBuffers();
