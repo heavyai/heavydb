@@ -1300,6 +1300,7 @@ GroupByAndAggregate::DiamondCodegen::DiamondCodegen(
     llvm::Value* cond,
     Executor* executor,
     const bool chain_to_next,
+    const std::string& label_prefix,
     DiamondCodegen* parent)
   : executor_(executor)
   , chain_to_next_(chain_to_next)
@@ -1308,9 +1309,9 @@ GroupByAndAggregate::DiamondCodegen::DiamondCodegen(
     CHECK(!chain_to_next_);
   }
   cond_true_ = llvm::BasicBlock::Create(
-    LL_CONTEXT, "cond_true", ROW_FUNC);
+    LL_CONTEXT, label_prefix + "_true", ROW_FUNC);
   cond_false_ = llvm::BasicBlock::Create(
-    LL_CONTEXT, "cond_false", ROW_FUNC);
+    LL_CONTEXT, label_prefix + "_false", ROW_FUNC);
 
   LL_BUILDER.CreateCondBr(cond, cond_true_, cond_false_);
   LL_BUILDER.SetInsertPoint(cond_true_);
@@ -1342,7 +1343,8 @@ bool GroupByAndAggregate::codegen(
     const bool is_group_by = !group_by_exprs(plan_).empty();
     auto query_mem_desc = getQueryMemoryDescriptor(max_groups_buffer_entry_count_);
 
-    DiamondCodegen filter_cfg(filter_result, executor_, !is_group_by || query_mem_desc.usesGetGroupValueFast());
+    DiamondCodegen filter_cfg(filter_result, executor_,
+      !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");
 
     if (is_group_by) {
       if (scan_limit_) {
@@ -1369,6 +1371,7 @@ bool GroupByAndAggregate::codegen(
               llvm::ConstantPointerNull::get(llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0))),
             executor_,
             false,
+            "groupby_nullcheck",
             &filter_cfg);
           codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
         }

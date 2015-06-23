@@ -695,6 +695,7 @@ private:
     DiamondCodegen(llvm::Value* cond,
                    Executor* executor,
                    const bool chain_to_next,
+                   const std::string& label_prefix,
                    DiamondCodegen* parent = nullptr);
     void setChainToNext();
     ~DiamondCodegen();
