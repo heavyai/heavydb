@@ -83,15 +83,25 @@ target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_
 target_link_libraries (mapd_http_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda   -lglog -lz -lncurses -ldl -lthrift -pthread")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
 
+# Packaging
+set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
+
 install(TARGETS initdb mapd mapd_server mapd_http_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 install(FILES mapd.thrift DESTINATION ".")
 install(FILES MapDBetaGuide.md DESTINATION docs)
 
+install(FILES ${Boost_LIBRARIES} DESTINATION thirdparty)
+
+if(EXISTS "${CMAKE_SOURCE_DIR}/LICENSE.md")
+  install(FILES LICENSE.md DESTINATION ".")
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE.md")
+endif()
+
 string(TIMESTAMP CURRENT_DATE "%Y%m%d")
 file(STRINGS ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt MAPD_GIT_HASH)
 set(CPACK_PACKAGE_VERSION "${CURRENT_DATE}-${MAPD_GIT_HASH}")
 
-set(CPACK_GENERATOR "TBZ2")
+set(CPACK_GENERATOR "STGZ")
 
 include(CPack)
