@@ -86,6 +86,22 @@ target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector Da
 # Packaging
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
+## Frontend
+option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" OFF)
+if(MAPD2_FRONTEND_DOWNLOAD)
+  include(ExternalProject)
+  ExternalProject_Add(frontend
+    GIT_REPOSITORY git@github.com:map-d/mapd2-frontend.git
+    PREFIX external
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+    UPDATE_COMMAND ""
+    )
+  ExternalProject_Get_Property(frontend source_dir)
+  install(DIRECTORY ${source_dir} DESTINATION "." PATTERN .git EXCLUDE)
+endif()
+
 install(TARGETS initdb mapd mapd_server mapd_http_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 install(FILES mapd.thrift DESTINATION ".")
