@@ -780,6 +780,8 @@ inline size_t get_bit_width(const SQLTypes type) {
     case kVARCHAR:
     case kCHAR:
       return 32;
+    case kARRAY:
+      throw std::runtime_error("Projecting on array columns not supported yet.");
     default:
       CHECK(false);
   }
