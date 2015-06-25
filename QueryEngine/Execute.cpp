@@ -92,16 +92,19 @@ ResultRows Executor::executeSelectPlan(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
-    const size_t max_groups_buffer_entry_guess,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
     const bool allow_multifrag) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
     if (limit || offset) {
       const int64_t scan_limit { get_scan_limit(plan, limit) };
+      size_t max_groups_buffer_entry_guess_limit {
+        scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess };
       auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
-        row_set_mem_owner_, scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess,
+        row_set_mem_owner_, max_groups_buffer_entry_guess_limit,
         error_code, allow_multifrag);
+      max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       rows.dropFirstN(offset);
       if (limit) {
         rows.keepFirstN(limit);
@@ -154,23 +157,33 @@ ResultRows Executor::execute(
   switch (stmt_type) {
   case kSELECT: {
     int32_t error_code { 0 };
+    size_t max_groups_buffer_entry_guess { 2048 };
     auto rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(),
       root_plan->get_offset(), hoist_literals, device_type, opt_level, root_plan->get_catalog(),
-      2048, &error_code, allow_multifrag);
+      max_groups_buffer_entry_guess, &error_code, allow_multifrag);
     if (error_code == ERR_DIV_BY_ZERO) {
       throw std::runtime_error("Division by zero");
     }
     if (error_code == ERR_OUT_OF_GPU_MEM) {
       rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
         hoist_literals, device_type, opt_level, root_plan->get_catalog(),
-        2048, &error_code, false);
+        max_groups_buffer_entry_guess, &error_code, false);
     }
     if (error_code) {
-      rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
-        hoist_literals, ExecutorDeviceType::CPU, opt_level, root_plan->get_catalog(),
-        0, &error_code, false);
-      CHECK(!error_code);
-      return rows;
+      max_groups_buffer_entry_guess = 0;
+      while (true) {
+        rows = executeSelectPlan(root_plan->get_plan(), root_plan->get_limit(), root_plan->get_offset(),
+          hoist_literals, ExecutorDeviceType::CPU, opt_level, root_plan->get_catalog(),
+          max_groups_buffer_entry_guess, &error_code, false);
+        if (!error_code) {
+          return rows;
+        }
+        // Even the conservative guess failed; it should only happen when we group
+        // by a huge cardinality array. Maybe we should throw an exception instead?
+        // Such a heavy query is entirely capable of exhausting all the host memory.
+        CHECK(max_groups_buffer_entry_guess);
+        max_groups_buffer_entry_guess *= 2;
+      }
     }
     return rows;
   }
@@ -1701,7 +1714,7 @@ ResultRows Executor::executeResultPlan(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
-    const size_t max_groups_buffer_entry_guess,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
@@ -1781,7 +1794,7 @@ ResultRows Executor::executeSortPlan(
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
-    const size_t max_groups_buffer_entry_guess,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code) {
   *error_code = 0;
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
@@ -1805,7 +1818,7 @@ ResultRows Executor::executeAggScanPlan(
     const ExecutorOptLevel opt_level,
     const Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const size_t max_groups_buffer_entry_guess_in,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
     const bool allow_multifrag) {
   *error_code = 0;
@@ -1833,7 +1846,6 @@ ResultRows Executor::executeAggScanPlan(
   fragmenter->getFragmentsForQuery(query_info);
   const auto& fragments = query_info.fragments;
 
-  auto max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_in;
   if (!max_groups_buffer_entry_guess) {
     // The query has failed the first execution attempt because of running out
     // of group by slots. Make the conservative choice: allocate fragment size

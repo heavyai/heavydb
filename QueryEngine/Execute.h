@@ -135,7 +135,7 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
-    const size_t max_groups_buffer_entry_count,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
     const bool allow_multifrag);
   ResultRows executeAggScanPlan(
@@ -146,7 +146,7 @@ private:
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
     std::shared_ptr<RowSetMemoryOwner>,
-    const size_t max_groups_buffer_entry_count,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
     const bool allow_multifrag);
   void dispatchFragments(
@@ -181,7 +181,7 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
-    const size_t max_groups_buffer_entry_count,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code);
   ResultRows executeSortPlan(
     const Planner::Sort* sort_plan,
@@ -191,7 +191,7 @@ private:
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
-    const size_t max_groups_buffer_entry_count,
+    size_t& max_groups_buffer_entry_guess,
     int32_t* error_code);
 
   struct CompilationResult {
