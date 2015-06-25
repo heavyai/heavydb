@@ -567,7 +567,7 @@ std::vector<llvm::Value*> Executor::codegen(
     return { ptr_and_len, str_lv, len_lv };
   }
   if (col_var->get_type_info().is_array()) {
-    return { col_byte_stream, pos_arg };
+    return { col_byte_stream };
   }
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(
