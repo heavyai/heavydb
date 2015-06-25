@@ -434,8 +434,9 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
         std::string folderPath = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
         DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, folderPath);
         dds.push_back(dd);
-        if (cd.columnType.get_compression() == kENCODING_DICT)
+        if (!cd.columnType.is_array()) {
           cd.columnType.set_size(cd.columnType.get_comp_param()/8);
+        }
         cd.columnType.set_comp_param(dictId);
       }
 			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, size, chunks) VALUES (" + std::to_string(td.tableId) + ", " + std::to_string(colId) + ", '" + cd.columnName + "', " + std::to_string(cd.columnType.get_type()) + ", " + std::to_string(cd.columnType.get_subtype()) + ", " + std::to_string(cd.columnType.get_dimension()) + ", " + std::to_string(cd.columnType.get_scale()) + ", " + std::to_string(cd.columnType.get_notnull()) + ", " + std::to_string(cd.columnType.get_compression()) + ", " + std::to_string(cd.columnType.get_comp_param()) + ", " + std::to_string(cd.columnType.get_size()) + ", '')");
