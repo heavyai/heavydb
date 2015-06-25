@@ -447,6 +447,9 @@ llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper, const bool hoi
   if (IS_LOGIC(optype)) {
     return codegenLogical(bin_oper, hoist_literals);
   }
+  if (optype == kARRAY_AT) {
+    return codegenArrayAt(bin_oper, hoist_literals);
+  }
   CHECK(false);
 }
 
@@ -1188,6 +1191,33 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
 
 llvm::Value* Executor::codegenUnnest(const Analyzer::UOper* uoper, const bool hoist_literals) {
   return codegen(uoper->get_operand(), true, hoist_literals).front();
+}
+
+llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
+                                      const bool hoist_literals) {
+  const auto arr_expr = array_at->get_left_operand();
+  const auto idx_expr = array_at->get_right_operand();
+  const auto& idx_ti = idx_expr->get_type_info();
+  CHECK(idx_ti.is_integer());
+  auto idx_lvs = codegen(idx_expr, true, hoist_literals);
+  CHECK_EQ(1, idx_lvs.size());
+  auto idx_lv = idx_lvs.front();
+  if (idx_ti.get_size() < 8) {
+    idx_lv = cgen_state_->ir_builder_.CreateCast(
+      llvm::Instruction::CastOps::SExt,
+      idx_lv,
+      get_int_type(64, cgen_state_->context_)
+    );
+  }
+  const auto& array_ti = arr_expr->get_type_info();
+  CHECK(array_ti.is_array());
+  const auto& elem_ti = array_ti.get_elem_type();
+  const std::string array_at_fname { "array_at_i" + std::to_string(elem_ti.get_size() * 8) + "_checked" };
+  const auto ret_ty = get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
+  const auto arr_lvs = codegen(arr_expr, true, hoist_literals);
+  CHECK_EQ(1, arr_lvs.size());
+  return cgen_state_->emitExternalCall(array_at_fname, ret_ty,
+    { arr_lvs.front(), posArg(), idx_lv, inlineIntNull(elem_ti) });
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {
@@ -3021,6 +3051,9 @@ declare i32 @array_size(i8*, i64, i32);
 declare i32 @array_at_i16(i8*, i64, i32);
 declare i32 @array_at_i32(i8*, i64, i32);
 declare i32 @array_at_i64(i8*, i64, i32);
+declare i32 @array_at_i16_checked(i8*, i64, i64, i16);
+declare i32 @array_at_i32_checked(i8*, i64, i64, i32);
+declare i32 @array_at_i64_checked(i8*, i64, i64, i64);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
