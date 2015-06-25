@@ -185,7 +185,7 @@ ChunkIter_get_nth(ChunkIter *it, int n, ArrayDatum *result, bool *is_end)
   if (static_cast<size_t>(n) >= it->num_elems || n < 0) {
     *is_end = true;
     result->length = 0;
-    result->data_ptr = NULL;
+    result->pointer = NULL;
     result->is_null = true;
     return;
   }
@@ -195,13 +195,13 @@ ChunkIter_get_nth(ChunkIter *it, int n, ArrayDatum *result, bool *is_end)
     // for fixed-size
     int8_t *current_pos = it->start_pos + n * it->skip_size;
     result->length = it->skip_size;
-    result->data_ptr = current_pos;
-    result->is_null = it->type_info.is_null(result->data_ptr);
+    result->pointer = current_pos;
+    result->is_null = it->type_info.is_null(result->pointer);
   } else {
     int8_t *current_pos = it->start_pos + n * sizeof(StringOffsetT);
     StringOffsetT offset = *(StringOffsetT*)current_pos;
     result->length = *((StringOffsetT*)current_pos + 1) - offset;
-    result->data_ptr = it->second_buf + offset;
+    result->pointer = it->second_buf + offset;
     // @TODO(wei) treat zero length as null for now
     result->is_null = (result->length == 0);
   }

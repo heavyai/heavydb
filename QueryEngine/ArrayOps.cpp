@@ -30,7 +30,7 @@ int##width##_t array_at_i##width(int8_t* chunk_iter_,                \
   ArrayDatum ad;                                                     \
   bool is_end;                                                       \
   ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);              \
-  return reinterpret_cast<int##width##_t*>(ad.data_ptr)[elem_idx];   \
+  return reinterpret_cast<int##width##_t*>(ad.pointer)[elem_idx];    \
 }
 
 ARRAY_AT(16)
