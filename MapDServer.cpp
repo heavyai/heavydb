@@ -39,7 +39,11 @@ using boost::shared_ptr;
 namespace {
 
 TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
-  switch (type_info.get_type()) {
+  SQLTypes type = type_info.get_type();
+  if (type == kARRAY) {
+    type = type_info.get_subtype();
+  }
+  switch (type) {
     case kBOOLEAN:
       return TDatumType::BOOL;
     case kSMALLINT:
@@ -237,6 +241,7 @@ public:
             const auto& target_ti = target->get_expr()->get_type_info();
             proj_info.col_type.type = type_to_thrift(target_ti);
             proj_info.col_type.nullable = !target_ti.get_notnull();
+            proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
             _return.row_set.row_desc.push_back(proj_info);
             ++i;
           }
@@ -329,6 +334,7 @@ public:
       TColumnType col_type;
       col_type.col_type.type = type_to_thrift(cd->columnType);
       col_type.col_type.nullable = !cd->columnType.get_notnull();
+      col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
       _return.insert(std::make_pair(cd->columnName, col_type));
     }
   }
@@ -356,6 +362,7 @@ public:
       col_type.col_name = cd->columnName;
       col_type.col_type.type = type_to_thrift(cd->columnType);
       col_type.col_type.nullable = !cd->columnType.get_notnull();
+      col_type.col_type.is_array = cd->columnType.get_type() == kARRAY;
       _return.push_back(col_type);
     }
   }

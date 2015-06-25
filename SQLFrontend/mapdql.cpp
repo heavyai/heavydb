@@ -241,29 +241,32 @@ process_backslash_commands(char *command, ClientContext &context)
             std::cout << p.col_name << " ";
             switch (p.col_type.type) {
               case TDatumType::INT:
-                std::cout << "INTEGER\n";
+                std::cout << "INTEGER";
                 break;
               case TDatumType::REAL:
-                std::cout << "DOUBLE\n";
+                std::cout << "DOUBLE";
                 break;
               case TDatumType::STR:
-                std::cout << "STRING\n";
+                std::cout << "STRING";
                 break;
               case TDatumType::TIME:
-                std::cout << "TIME\n";
+                std::cout << "TIME";
                 break;
               case TDatumType::TIMESTAMP:
-                std::cout << "TIMESTAMP\n";
+                std::cout << "TIMESTAMP";
                 break;
               case TDatumType::DATE:
-                std::cout << "DATE\n";
+                std::cout << "DATE";
                 break;
               case TDatumType::BOOL:
-                std::cout << "BOOLEAN\n";
+                std::cout << "BOOLEAN";
                 break;
               default:
-                std::cerr << "Invalid Column Type.\n";
+                std::cerr << "Invalid Column Type.";
             }
+            if (p.col_type.is_array)
+              std::cout << "[]";
+            std::cout << "\n";
           }
         return;
       }

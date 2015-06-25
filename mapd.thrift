@@ -32,7 +32,8 @@ struct TStringValue {
 
 struct TTypeInfo {
   1: TDatumType type,
-  2: bool nullable
+  2: bool nullable,
+  3: bool is_array
 }
 
 struct TColumnType {
