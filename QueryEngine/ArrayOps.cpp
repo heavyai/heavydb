@@ -25,7 +25,7 @@ uint32_t array_size(int8_t* chunk_iter_, const uint64_t row_pos, const uint32_t 
 extern "C" DEVICE                                                    \
 int##width##_t array_at_i##width(int8_t* chunk_iter_,                \
                                  const uint64_t row_pos,             \
-                                 const uint##width##_t elem_idx) {   \
+                                 const uint32_t elem_idx) {          \
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_); \
   ArrayDatum ad;                                                     \
   bool is_end;                                                       \
