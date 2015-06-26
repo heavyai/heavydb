@@ -1193,6 +1193,25 @@ llvm::Value* Executor::codegenUnnest(const Analyzer::UOper* uoper, const bool ho
   return codegen(uoper->get_operand(), true, hoist_literals).front();
 }
 
+namespace {
+
+uint32_t log2_bytes(const uint32_t bytes) {
+  switch (bytes) {
+  case 1:
+    return 0;
+  case 2:
+    return 1;
+  case 4:
+    return 2;
+  case 8:
+    return 3;
+  default:
+    CHECK(false);
+  }
+}
+
+}  // namespace
+
 llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
                                       const bool hoist_literals) {
   const auto arr_expr = array_at->get_left_operand();
@@ -3261,7 +3280,7 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
     array_len = cgen_state_->emitExternalCall("array_size", ret_ty,
-      { group_key, posArg(), ll_int(uint32_t(elem_ti.get_size())) });
+      { group_key, posArg(), ll_int(log2_bytes(elem_ti.get_size())) });
     cgen_state_->ir_builder_.CreateBr(array_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
   }

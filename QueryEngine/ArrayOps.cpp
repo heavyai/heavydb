@@ -13,12 +13,12 @@
 #ifdef EXECUTE_INCLUDE
 
 extern "C" DEVICE
-uint32_t array_size(int8_t* chunk_iter_, const uint64_t row_pos, const uint32_t elem_sz) {
+uint32_t array_size(int8_t* chunk_iter_, const uint64_t row_pos, const uint32_t elem_log_sz) {
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   ArrayDatum ad;
   bool is_end;
   ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);
-  return ad.is_null ? 0 : ad.length / elem_sz;
+  return ad.is_null ? 0 : ad.length >> elem_log_sz;
 }
 
 #define ARRAY_AT(width)                                              \
