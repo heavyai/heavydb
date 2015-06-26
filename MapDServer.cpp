@@ -171,6 +171,69 @@ public:
     sessions_.erase(session_it);
   }
 
+  TColumnValue value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) {
+    TColumnValue col_val;
+    const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+    if (!scalar_tv) {
+      const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
+      CHECK(list_tv);
+      CHECK(ti.is_array());
+      for (const auto& elem_tv : *list_tv) {
+        const auto scalar_col_val = value_to_thrift(elem_tv, ti.get_elem_type());
+        col_val.datum.arr_val.push_back(scalar_col_val.datum);
+      }
+      col_val.is_null = col_val.datum.arr_val.empty();
+      return col_val;
+    }
+    if (boost::get<int64_t>(scalar_tv)) {
+      col_val.datum.int_val = *(boost::get<int64_t>(scalar_tv));
+      switch (ti.get_type()) {
+        case kBOOLEAN:
+          col_val.is_null = (col_val.datum.int_val == NULL_BOOLEAN);
+          break;
+        case kSMALLINT:
+          col_val.is_null = (col_val.datum.int_val == NULL_SMALLINT);
+          break;
+        case kINT:
+          col_val.is_null = (col_val.datum.int_val == NULL_INT);
+          break;
+        case kBIGINT:
+          col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
+          break;
+        case kTIME:
+        case kTIMESTAMP:
+        case kDATE:
+          if (sizeof(time_t) == 4)
+            col_val.is_null = (col_val.datum.int_val == NULL_INT);
+          else
+            col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
+          break;
+        default:
+          col_val.is_null = false;
+      }
+    } else if (boost::get<double>(scalar_tv)) {
+      col_val.datum.real_val = *(boost::get<double>(scalar_tv));
+      if (ti.get_type() == kFLOAT) {
+        col_val.is_null = (col_val.datum.real_val == NULL_FLOAT);
+      } else {
+        col_val.is_null = (col_val.datum.real_val == NULL_DOUBLE);
+      }
+    } else if (boost::get<NullableString>(scalar_tv)) {
+      auto s_n = boost::get<NullableString>(scalar_tv);
+      auto s = boost::get<std::string>(s_n);
+      if (s) {
+        col_val.datum.str_val = *s;
+      } else {
+        auto null_p = boost::get<void*>(s_n);
+        CHECK(null_p && !*null_p);
+      }
+      col_val.is_null = !s;
+    } else {
+      CHECK(false);
+    }
+    return col_val;
+  }
+
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
 
     auto session_it = sessions_.find(session);
@@ -249,52 +312,8 @@ public:
         for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
           TRow trow;
           for (size_t i = 0; i < results.colCount(); ++i) {
-            TColumnValue col_val;
             const auto agg_result = results.get(row_idx, i, true);
-            if (boost::get<int64_t>(&agg_result)) {
-              col_val.datum.int_val = *(boost::get<int64_t>(&agg_result));
-              switch (targets[i]->get_expr()->get_type_info().get_type()) {
-                case kBOOLEAN:
-                  col_val.is_null = (col_val.datum.int_val == NULL_BOOLEAN);
-                  break;
-                case kSMALLINT:
-                  col_val.is_null = (col_val.datum.int_val == NULL_SMALLINT);
-                  break;
-                case kINT:
-                  col_val.is_null = (col_val.datum.int_val == NULL_INT);
-                  break;
-                case kBIGINT:
-                  col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
-                  break;
-                case kTIME:
-                case kTIMESTAMP:
-                case kDATE:
-                  if (sizeof(time_t) == 4)
-                    col_val.is_null = (col_val.datum.int_val == NULL_INT);
-                  else
-                    col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
-                  break;
-                default:
-                  col_val.is_null = false;
-              }
-            } else if (boost::get<double>(&agg_result)) {
-              col_val.datum.real_val = *(boost::get<double>(&agg_result));
-              if (targets[i]->get_expr()->get_type_info().get_type() == kFLOAT) {
-                col_val.is_null = (col_val.datum.real_val == NULL_FLOAT);
-              } else {
-                col_val.is_null = (col_val.datum.real_val == NULL_DOUBLE);
-              }
-            } else {
-              auto s = boost::get<std::string>(&agg_result);
-              if (s) {
-                col_val.datum.str_val = *s;
-              } else {
-                auto null_p = boost::get<void*>(&agg_result);
-                CHECK(null_p && !*null_p);
-              }
-              col_val.is_null = !s;
-            }
-            trow.cols.push_back(col_val);
+            trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
           }
           _return.row_set.rows.push_back(trow);
         }

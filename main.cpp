@@ -361,7 +361,6 @@ main(int argc, char* argv[])
 								}
 							}
 							results = results_gpu;
-							//CHECK(results_cpu == results_gpu);
 						} else {
 							results = results_cpu;
 						}

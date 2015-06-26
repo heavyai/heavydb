@@ -6,6 +6,7 @@
 #include "../Planner/Planner.h"
 #include "../Shared/sqltypes.h"
 
+#include <boost/algorithm/string/join.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 #include <boost/variant.hpp>
@@ -40,7 +41,9 @@ enum class GroupByMemSharing {
 
 struct QueryMemoryDescriptor;
 
-typedef boost::variant<int64_t, double, std::string, void*> TargetValue;
+typedef boost::variant<std::string, void*> NullableString;
+typedef boost::variant<int64_t, double, NullableString> ScalarTargetValue;
+typedef boost::variant<ScalarTargetValue, std::vector<ScalarTargetValue>> TargetValue;
 
 struct TargetInfo {
   bool is_agg;
@@ -195,6 +198,12 @@ public:
     return &strings_.back();
   }
 
+  std::vector<int64_t>* addArray(const std::vector<int64_t>& arr) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    arrays_.emplace_back(arr);
+    return &arrays_.back();
+  }
+
   void addStringDict(StringDictionary* str_dict) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     auto it = str_dict_owned_.find(str_dict);
@@ -232,6 +241,7 @@ private:
   std::vector<std::set<int64_t>*> count_distinct_sets_;
   std::vector<int64_t*> group_by_buffers_;
   std::list<std::string> strings_;
+  std::list<std::vector<int64_t>> arrays_;
   std::unordered_set<StringDictionary*> str_dict_owned_;
   std::vector<std::unique_ptr<DictStrLiteralsOwner>> str_dict_owners_;
   std::shared_ptr<StringDictionary> lit_str_dict_;
@@ -359,6 +369,10 @@ public:
     target_values_.back().emplace_back(row_set_mem_owner_->addString(val));
   }
 
+  void addValue(const std::vector<int64_t>& val) {
+    target_values_.back().emplace_back(row_set_mem_owner_->addArray(val));
+  }
+
   void addValue() {
     target_values_.back().emplace_back();
   }
@@ -407,42 +421,11 @@ public:
   }
 
   TargetValue get(const size_t row_idx,
-                const size_t col_idx,
-                const bool translate_strings) const;
+                  const size_t col_idx,
+                  const bool translate_strings) const;
 
   SQLTypeInfo getType(const size_t col_idx) const {
     return targets_[col_idx].sql_type;
-  }
-
-  bool operator==(const ResultRows& r) const {
-    if (size() != r.size()) {
-      return false;
-    }
-    for (size_t row_idx = 0; row_idx < size(); ++row_idx) {
-      for (size_t col_idx = 0; col_idx < colCount(); ++col_idx) {
-        const auto lhs_val = get(row_idx, col_idx, true);
-        const auto rhs_val = r.get(row_idx, col_idx, true);
-#if BOOST_VERSION < 105800
-        const auto lhs_pd = boost::get<std::pair<int64_t, int64_t>>(&lhs_val);
-#else
-        const auto lhs_pd = boost::relaxed_get<std::pair<int64_t, int64_t>>(&lhs_val);
-#endif
-        if (lhs_pd) {
-#if BOOST_VERSION < 105800
-          const auto rhs_pd = boost::get<std::pair<int64_t, int64_t>>(&rhs_val);
-#else
-          const auto rhs_pd = boost::relaxed_get<std::pair<int64_t, int64_t>>(&rhs_val);
-#endif
-          if (!rhs_pd) {
-            return false;
-          }
-          if (lhs_pd->first != rhs_pd->first || lhs_pd->second != rhs_pd->second) {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
   }
 private:
   void beginRow(const int64_t key) {
@@ -489,6 +472,7 @@ private:
       Int,
       Pair,
       Str,
+      Arr,
       Null
     };
 
@@ -500,10 +484,16 @@ private:
 
     explicit InternalTargetValue(const std::string* s) : i1(reinterpret_cast<int64_t>(s)), ty(ITVType::Str) {}
 
+    explicit InternalTargetValue(const std::vector<int64_t>* v) : i1(reinterpret_cast<int64_t>(v)), ty(ITVType::Arr) {}
+
     explicit InternalTargetValue() : ty(ITVType::Null) {}
 
     std::string strVal() const {
       return *reinterpret_cast<std::string*>(i1);
+    }
+
+    std::vector<int64_t> arrVal() const {
+      return *reinterpret_cast<std::vector<int64_t>*>(i1);
     }
 
     bool isInt() const {
@@ -569,33 +559,60 @@ private:
   friend class Executor;
 };
 
-inline std::string row_col_to_string(const ResultRows& rows, const size_t row_idx, const size_t i) {
-  const auto agg_result = rows.get(row_idx, i, true);
-  const auto agg_ti = rows.getType(i);
-  if (agg_ti.is_time()) {
-    Datum datum;
-    datum.timeval = *boost::get<int64_t>(&agg_result);
-    return DatumToString(datum, agg_ti);
+namespace {
+
+inline std::string nullable_str_to_string(const NullableString& str) {
+  auto nptr = boost::get<void*>(&str);
+  if (nptr) {
+    CHECK(!*nptr);
+    return "NULL";
   }
-  if (agg_ti.is_boolean()) {
-    const auto bool_val = *boost::get<int64_t>(&agg_result);
+  auto sptr = boost::get<std::string>(&str);
+  CHECK(sptr);
+  return *sptr;
+}
+
+inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti, const std::string& delim) {
+  if (ti.is_array()) {
+    const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
+    CHECK(list_tv);
+    std::vector<std::string> elem_strs;
+    elem_strs.reserve(list_tv->size());
+    const auto& elem_ti = ti.get_elem_type();
+    for (const auto& elem_tv : *list_tv) {
+      elem_strs.push_back(datum_to_string(elem_tv, elem_ti, delim));
+    }
+    return "{" + boost::algorithm::join(elem_strs, delim) + "}";
+  }
+  const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+  if (ti.is_time()) {
+    Datum datum;
+    datum.timeval = *boost::get<int64_t>(scalar_tv);
+    return DatumToString(datum, ti);
+  }
+  if (ti.is_boolean()) {
+    const auto bool_val = *boost::get<int64_t>(scalar_tv);
     return bool_val < 0 ? "NULL" : (bool_val ? "true" : "false");
   }
-  auto iptr = boost::get<int64_t>(&agg_result);
+  auto iptr = boost::get<int64_t>(scalar_tv);
   if (iptr) {
     return std::to_string(*iptr);
   }
-  auto dptr = boost::get<double>(&agg_result);
+  auto dptr = boost::get<double>(scalar_tv);
   if (dptr) {
     return std::to_string(*dptr);
   }
-  auto sptr = boost::get<std::string>(&agg_result);
-  if (sptr) {
-    return *sptr;
-  }
-  auto nptr = boost::get<void*>(&agg_result);
-  CHECK(nptr && !*nptr);
-  return "NULL";
+  auto sptr = boost::get<NullableString>(scalar_tv);
+  CHECK(sptr);
+  return nullable_str_to_string(*sptr);
+}
+
+}  // namespace
+
+inline std::string row_col_to_string(const ResultRows& rows, const size_t row_idx, const size_t i, const std::string& delim = ", ") {
+  const auto tv = rows.get(row_idx, i, true);
+  const auto ti = rows.getType(i);
+  return datum_to_string(tv, ti, delim);
 }
 
 class QueryExecutionContext : boost::noncopyable {
@@ -840,7 +857,8 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
       col_widths.push_back(sizeof(int64_t));
     } else {
       const auto agg_info = target_info(col_expr);
-      if (agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) {
+      if ((agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) ||
+           agg_info.sql_type.is_array()) {
         col_widths.push_back(sizeof(int64_t));
         col_widths.push_back(sizeof(int64_t));
         continue;

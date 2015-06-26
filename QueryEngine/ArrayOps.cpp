@@ -64,4 +64,13 @@ ARRAY_AT_CHECKED(64)
 
 #undef ARRAY_AT_CHECKED
 
+extern "C" DEVICE
+int8_t* array_buff(int8_t* chunk_iter_, const uint64_t row_pos) {
+  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  ArrayDatum ad;
+  bool is_end;
+  ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);
+  return ad.pointer;
+}
+
 #endif  // EXECUTE_INCLUDE

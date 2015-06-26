@@ -1771,15 +1771,20 @@ namespace Parser {
       bool not_first = false;
       for (size_t i = 0; i < results.colCount(); ++i) {
         bool is_null;
-        const auto agg_result = results.get(row_idx, i, true);
+        const auto tv = results.get(row_idx, i, true);
+        const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
         if (not_first)
           outfile << copy_params.delimiter;
         else
           not_first = true;
         if (copy_params.quoted)
           outfile << copy_params.quote;
-        if (boost::get<int64_t>(&agg_result)) {
-          auto int_val = *(boost::get<int64_t>(&agg_result));
+        if (!scalar_tv) {
+          outfile << row_col_to_string(results, row_idx, i, " | ");
+          continue;
+        }
+        if (boost::get<int64_t>(scalar_tv)) {
+          auto int_val = *(boost::get<int64_t>(scalar_tv));
           switch (targets[i]->get_expr()->get_type_info().get_type()) {
             case kBOOLEAN:
               is_null = (int_val == NULL_BOOLEAN);
@@ -1808,8 +1813,8 @@ namespace Parser {
             outfile << copy_params.null_str;
           else
             outfile << int_val;
-        } else if (boost::get<double>(&agg_result)) {
-          auto real_val = *(boost::get<double>(&agg_result));
+        } else if (boost::get<double>(scalar_tv)) {
+          auto real_val = *(boost::get<double>(scalar_tv));
           if (targets[i]->get_expr()->get_type_info().get_type() == kFLOAT) {
             is_null = (real_val == NULL_FLOAT);
           } else {
@@ -1820,19 +1825,21 @@ namespace Parser {
           else
             outfile << real_val;
         } else {
-          auto s = boost::get<std::string>(&agg_result);
-          is_null = !s;
+          auto s = boost::get<NullableString>(scalar_tv);
+          is_null = !s || boost::get<void*>(s);
           if (is_null)
             outfile << copy_params.null_str;
           else {
+            auto s_notnull = boost::get<std::string>(s);
+            CHECK(s_notnull);
             if (!copy_params.quoted)
-              outfile << *s;
+              outfile << *s_notnull;
             else {
-              size_t q = s->find(copy_params.quote);
+              size_t q = s_notnull->find(copy_params.quote);
               if (q == std::string::npos)
-                outfile << *s;
+                outfile << *s_notnull;
               else {
-                std::string str(*s);
+                std::string str(*s_notnull);
                 while  (q != std::string::npos) {
                     str.insert(q, 1, copy_params.escape);
                     q = str.find(copy_params.quote, q + 2);

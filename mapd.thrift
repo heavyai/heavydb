@@ -17,7 +17,8 @@ enum TExecuteMode {
 union TDatum {
   1: i64 int_val,
   2: double real_val,
-  3: string str_val
+  3: string str_val,
+  4: list<TDatum> arr_val
 }
 
 struct TColumnValue {

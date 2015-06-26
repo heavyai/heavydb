@@ -12,6 +12,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
@@ -323,6 +324,55 @@ process_backslash_commands(char *command, ClientContext &context)
   }
 }
 
+std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
+  if (type_info.is_array) {
+    std::vector<std::string> elem_strs;
+    elem_strs.reserve(datum.arr_val.size());
+    for (const auto& elem_datum : datum.arr_val) {
+      TTypeInfo elem_type_info { type_info };
+      elem_type_info.is_array = false;
+      elem_strs.push_back(datum_to_string(elem_datum, elem_type_info));
+    }
+    return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
+  }
+  switch (type_info.type) {
+  case TDatumType::INT:
+    return std::to_string(datum.int_val);
+  case TDatumType::REAL:
+    return std::to_string(datum.real_val);
+  case TDatumType::STR:
+    return datum.str_val;
+  case TDatumType::TIME: {
+    time_t t = datum.int_val;
+    std::tm tm_struct;
+    gmtime_r(&t, &tm_struct);
+    char buf[9];
+    strftime(buf, 9, "%T", &tm_struct);
+    return buf;
+  }
+  case TDatumType::TIMESTAMP: {
+    time_t t = datum.int_val;
+    std::tm tm_struct;
+    gmtime_r(&t, &tm_struct);
+    char buf[20];
+    strftime(buf, 20, "%F %T", &tm_struct);
+    return buf;
+  }
+  case TDatumType::DATE: {
+    time_t t = datum.int_val;
+    std::tm tm_struct;
+    gmtime_r(&t, &tm_struct);
+    char buf[11];
+    strftime(buf, 11, "%F", &tm_struct);
+    return buf;
+  }
+  case TDatumType::BOOL:
+    return (datum.int_val ? "true" : "false");
+  default:
+    return "Unknown column type.\n";
+  }
+}
+
 int main(int argc, char **argv) {
   std::string server_host("localhost");
   int port = 9091;
@@ -452,52 +502,7 @@ int main(int argc, char **argv) {
               if (col_val.is_null)
                 std::cout << "NULL";
               else
-                switch (context.query_return.row_set.row_desc[i].col_type.type) {
-                  case TDatumType::INT:
-                    std::cout << std::to_string(col_val.datum.int_val);
-                    break;
-                  case TDatumType::REAL:
-                    std::cout << std::to_string(col_val.datum.real_val);
-                    break;
-                  case TDatumType::STR:
-                    std::cout << col_val.datum.str_val;
-                    break;
-                  case TDatumType::TIME:
-                    {
-                      time_t t = (time_t)col_val.datum.int_val;
-                      std::tm tm_struct;
-                      gmtime_r(&t, &tm_struct);
-                      char buf[9];
-                      strftime(buf, 9, "%T", &tm_struct);
-                      std::cout << buf;
-                      break;
-                    }
-                  case TDatumType::TIMESTAMP:
-                    {
-                      time_t t = (time_t)col_val.datum.int_val;
-                      std::tm tm_struct;
-                      gmtime_r(&t, &tm_struct);
-                      char buf[20];
-                      strftime(buf, 20, "%F %T", &tm_struct);
-                      std::cout << buf;
-                      break;
-                    }
-                  case TDatumType::DATE:
-                    {
-                      time_t t = (time_t)col_val.datum.int_val;
-                      std::tm tm_struct;
-                      gmtime_r(&t, &tm_struct);
-                      char buf[11];
-                      strftime(buf, 11, "%F", &tm_struct);
-                      std::cout << buf;
-                      break;
-                    }
-                  case TDatumType::BOOL:
-                    std::cout << (col_val.datum.int_val ? "true" : "false");
-                    break;
-                  default:
-                    std::cerr << "Unknown column type." << std::endl;
-                }
+                std::cout << datum_to_string(col_val.datum, context.query_return.row_set.row_desc[i].col_type);
               i++;
             }
           std::cout << std::endl;

@@ -54,6 +54,21 @@ inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   }
 }
 
+inline uint32_t log2_bytes(const uint32_t bytes) {
+  switch (bytes) {
+  case 1:
+    return 0;
+  case 2:
+    return 1;
+  case 4:
+    return 2;
+  case 8:
+    return 3;
+  default:
+    CHECK(false);
+  }
+}
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
     "Host hardware not supported, unexpected size of float / double.");

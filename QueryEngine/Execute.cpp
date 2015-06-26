@@ -1193,25 +1193,6 @@ llvm::Value* Executor::codegenUnnest(const Analyzer::UOper* uoper, const bool ho
   return codegen(uoper->get_operand(), true, hoist_literals).front();
 }
 
-namespace {
-
-uint32_t log2_bytes(const uint32_t bytes) {
-  switch (bytes) {
-  case 1:
-    return 0;
-  case 2:
-    return 1;
-  case 4:
-    return 2;
-  case 8:
-    return 3;
-  default:
-    CHECK(false);
-  }
-}
-
-}  // namespace
-
 llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
                                       const bool hoist_literals) {
   const auto arr_expr = array_at->get_left_operand();
@@ -1616,7 +1597,9 @@ public:
     for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
       for (size_t i = 0; i < num_columns; ++i) {
         const auto col_val = rows.get(row_idx, i, false);
-        auto i64_p = boost::get<int64_t>(&col_val);
+        const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
+        CHECK(scalar_col_val);
+        auto i64_p = boost::get<int64_t>(scalar_col_val);
         if (i64_p) {
           switch (get_bit_width(target_types[i].get_type())) {
           case 16:
@@ -1633,7 +1616,7 @@ public:
           }
         } else {
           CHECK(target_types[i].get_type() == kFLOAT || target_types[i].get_type() == kDOUBLE);
-          auto double_p = boost::get<double>(&col_val);
+          auto double_p = boost::get<double>(scalar_col_val);
           switch (target_types[i].get_type()) {
           case kFLOAT:
             ((float*) column_buffers_[i])[row_idx] = static_cast<float>(*double_p);
@@ -3067,6 +3050,7 @@ declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
+declare i8* @array_buff(i8*, i64);
 declare i32 @array_at_i16(i8*, i64, i32);
 declare i32 @array_at_i32(i8*, i64, i32);
 declare i32 @array_at_i64(i8*, i64, i32);

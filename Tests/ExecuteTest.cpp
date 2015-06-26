@@ -27,7 +27,9 @@ TargetValue run_simple_agg(
 
 template<class T>
 T v(const TargetValue& r) {
-  auto p = boost::get<T>(&r);
+  auto scalar_r = boost::get<ScalarTargetValue>(&r);
+  CHECK(scalar_r);
+  auto p = boost::get<T>(scalar_r);
   CHECK(p);
   return *p;
 }
@@ -77,11 +79,13 @@ public:
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
         const auto ref_col_type = connector_.columnTypes[col_idx];
         const auto mapd_variant = mapd_results.get(row_idx, col_idx, true);
+        const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
+        CHECK(scalar_mapd_variant);
         switch (ref_col_type) {
         case SQLITE_INTEGER: {
           ASSERT_TRUE(mapd_results.getType(col_idx).is_integer());
           const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
-          const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
+          const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
           ASSERT_NE(nullptr, mapd_as_int_p);
           const auto mapd_val = *mapd_as_int_p;
           ASSERT_EQ(ref_val, mapd_val);
@@ -92,7 +96,7 @@ public:
                       mapd_results.getType(col_idx).get_type() == kFLOAT ||
                       mapd_results.getType(col_idx).get_type() == kDOUBLE);
           const auto ref_val = connector_.getData<double>(row_idx, col_idx);
-          const auto mapd_as_double_p = boost::get<double>(&mapd_variant);
+          const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
           ASSERT_NE(nullptr, mapd_as_double_p);
           const auto mapd_val = *mapd_as_double_p;
           ASSERT_TRUE(approx_eq(ref_val, mapd_val));
@@ -104,9 +108,11 @@ public:
                       mapd_results.getType(col_idx).is_boolean());
           const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
           if (mapd_results.getType(col_idx).is_string()) {
-            const auto mapd_as_str_p = boost::get<std::string>(&mapd_variant);
+            const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
             ASSERT_NE(nullptr, mapd_as_str_p);
-            const auto mapd_val = *mapd_as_str_p;
+            const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
+            CHECK(mapd_str_notnull);
+            const auto mapd_val = *mapd_str_notnull;
             ASSERT_EQ(ref_val, mapd_val);
           } else {
             const auto mapd_type = mapd_results.getType(col_idx).get_type();
@@ -122,12 +128,12 @@ public:
                   ASSERT_EQ(0, *end_str);
                   ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
                 }
-                const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
+                const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
                 ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
                 break;
               }
               case kBOOLEAN: {
-                const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
+                const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
                 if (ref_val == "t") {
                   ASSERT_EQ(1, *mapd_as_int_p);
                 } else {
@@ -140,7 +146,7 @@ public:
                 std::vector<std::string> time_tokens;
                 boost::split(time_tokens, ref_val, boost::is_any_of(":"));
                 ASSERT_EQ(size_t(3), time_tokens.size());
-                const auto mapd_as_int_p = boost::get<int64_t>(&mapd_variant);
+                const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
                 ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
                           boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
                           boost::lexical_cast<int64_t>(time_tokens[2]),
@@ -593,7 +599,7 @@ int main(int argc, char** argv)
     LOG(ERROR) << e.what();
   }
   const std::string drop_test { "DROP TABLE test;" };
-  run_ddl_statement(drop_test);
+  //run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
   return err;
 }
