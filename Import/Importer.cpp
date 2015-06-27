@@ -224,10 +224,12 @@ parseStringArray(const std::string &s, const CopyParams &copy_params, std::vecto
   }
   size_t last = 1;
   for (size_t i = s.find(copy_params.delimiter, 1); i != std::string::npos; i = s.find(copy_params.delimiter, last)) {
-    string_vec.push_back(s.substr(last, i - last));
+    if (i > last) // if not empty string - disallow empty strings for now
+      string_vec.push_back(s.substr(last, i - last));
     last = i + 1;
   }
-  string_vec.push_back(s.substr(last, s.size() - 1 - last));
+  if (s.size()-1 > last)  // if not empty string - disallow empty strings for now 
+    string_vec.push_back(s.substr(last, s.size() - 1 - last));
 }
 
 static size_t
