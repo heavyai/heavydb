@@ -413,6 +413,12 @@ TargetValue ResultRows::get(const size_t row_idx,
     }
   } else if (targets_[col_idx].sql_type.is_array()) {
     const auto& elem_type = targets_[col_idx].sql_type.get_elem_type();
+    CHECK(target_values_[row_idx][col_idx].ty == InternalTargetValue::ITVType::Arr ||
+          target_values_[row_idx][col_idx].ty == InternalTargetValue::ITVType::Null);
+    if (target_values_[row_idx][col_idx].ty == InternalTargetValue::ITVType::Null) {
+      return std::vector<ScalarTargetValue> {};
+    }
+    CHECK(target_values_[row_idx][col_idx].i1);
     std::vector<ScalarTargetValue> tv_arr;
     if (elem_type.is_integer()) {
       const auto& int_arr = *reinterpret_cast<std::vector<int64_t>*>(target_values_[row_idx][col_idx].i1);
