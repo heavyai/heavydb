@@ -277,6 +277,9 @@ namespace {
 
 __attribute__((always_inline))
 inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const bool is_int) {
+  if (!fp_pair.second) {
+    return inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
+  }
   return is_int
     ? static_cast<double>(fp_pair.first) / static_cast<double>(fp_pair.second)
     : *reinterpret_cast<const double*>(&fp_pair.first) / static_cast<double>(fp_pair.second);
