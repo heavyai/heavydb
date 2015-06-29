@@ -753,9 +753,7 @@ private:
     const Analyzer::Expr* target_expr,
     std::vector<llvm::Value*>& agg_args,
     const QueryMemoryDescriptor&,
-    const ExecutorDeviceType,
-    const bool is_group_by,
-    const int32_t agg_out_off);
+    const ExecutorDeviceType);
 
   std::vector<llvm::Value*> codegenAggArg(
     const Analyzer::Expr* target_expr,

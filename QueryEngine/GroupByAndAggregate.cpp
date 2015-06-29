@@ -1743,6 +1743,27 @@ void GroupByAndAggregate::codegenAggCalls(
     }
     size_t target_lv_idx = 0;
     for (const auto& agg_base_name : agg_fn_names) {
+      if (agg_info.is_distinct &&
+          static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info().is_array()) {
+        CHECK(agg_info.is_distinct);
+        const auto& elem_ti =
+          static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info().get_elem_type();
+        CHECK(!elem_ti.is_fp());
+        executor_->cgen_state_->emitExternalCall(
+          "agg_count_distinct_array_i" + std::to_string(elem_ti.get_size() * 8),
+          llvm::Type::getVoidTy(LL_CONTEXT),
+          {
+            is_group_by
+              ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
+              : agg_out_vec[agg_out_off],
+            target_lvs[target_lv_idx],
+            executor_->posArg(),
+            executor_->inlineIntNull(elem_ti)
+          });
+        ++agg_out_off;
+        ++target_lv_idx;
+        continue;
+      }
       auto target_lv = executor_->toDoublePrecision(target_lvs[target_lv_idx]);
       std::vector<llvm::Value*> agg_args {
         is_group_by
@@ -1762,7 +1783,7 @@ void GroupByAndAggregate::codegenAggCalls(
       if (agg_info.is_distinct) {
         CHECK(!agg_info.sql_type.is_fp());
         CHECK_EQ("agg_count_distinct", agg_base_name);
-        codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc, device_type, is_group_by, agg_out_off);
+        codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc, device_type);
       } else {
         if (agg_info.skip_null_val) {
           agg_fname += "_skip_val";
@@ -1795,9 +1816,7 @@ void GroupByAndAggregate::codegenCountDistinct(
     const Analyzer::Expr* target_expr,
     std::vector<llvm::Value*>& agg_args,
     const QueryMemoryDescriptor& query_mem_desc,
-    const ExecutorDeviceType device_type,
-    const bool is_group_by,
-    const int32_t agg_out_off) {
+    const ExecutorDeviceType device_type) {
   const auto agg_info = target_info(target_expr);
   const auto& arg_ti = static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
   if (arg_ti.is_fp()) {

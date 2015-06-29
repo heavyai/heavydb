@@ -1272,6 +1272,8 @@ llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
   case kTIMESTAMP:
   case kDATE:
     return ll_int(inline_int_null_val(type_info));
+  case kARRAY:
+    return ll_int(int64_t(0));
   default:
     CHECK(false);
   }
