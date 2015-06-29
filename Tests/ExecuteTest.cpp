@@ -599,7 +599,7 @@ int main(int argc, char** argv)
     LOG(ERROR) << e.what();
   }
   const std::string drop_test { "DROP TABLE test;" };
-  //run_ddl_statement(drop_test);
+  run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
   return err;
 }
