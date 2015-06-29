@@ -1272,7 +1272,15 @@ namespace Analyzer {
     if (typeid(rhs) != typeid(ColumnVar) && typeid(rhs) != typeid(Var))
       return false;
     const ColumnVar &rhs_cv = dynamic_cast<const ColumnVar&>(rhs);
-    return (table_id == rhs_cv.get_table_id()) && (column_id == rhs_cv.get_column_id()) && (rte_idx == rhs_cv.get_rte_idx());
+    if (rte_idx != -1)
+      return (table_id == rhs_cv.get_table_id()) && (column_id == rhs_cv.get_column_id()) && (rte_idx == rhs_cv.get_rte_idx());
+    const Var *v = dynamic_cast<const Var*>(this);
+    if (v == nullptr)
+      return false;
+    const Var *rv = dynamic_cast<const Var*>(&rhs);
+    if (rv == nullptr)
+      return false;
+    return (v->get_which_row() == rv->get_which_row()) && (v->get_varno() == rv->get_varno());
   }
 
   bool
