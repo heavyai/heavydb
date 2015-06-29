@@ -1687,6 +1687,11 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
   }
 }
 
+const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+  return agg_expr ? agg_expr->get_arg() : nullptr;
+}
+
 }  // namespace
 
 void GroupByAndAggregate::codegenAggCalls(
@@ -1703,7 +1708,6 @@ void GroupByAndAggregate::codegenAggCalls(
   } else {
     CHECK(!agg_out_vec.empty());
   }
-
   const auto& target_list = plan_->get_targetlist();
   int32_t agg_out_off { 0 };
   for (size_t target_idx = 0; target_idx < target_list.size(); ++target_idx) {
@@ -1717,10 +1721,12 @@ void GroupByAndAggregate::codegenAggCalls(
     const auto agg_info = target_info(target_expr);
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     auto target_lvs = codegenAggArg(target_expr, hoist_literals);
+    llvm::Value* str_target_lv { nullptr };
     if (target_lvs.size() == 3) {
       // none encoding string, pop the packed pointer + length since
       // it's only useful for IS NULL checks and assumed to be only
       // two components (pointer and length) for the purpose of projection
+      str_target_lv = target_lvs.front();
       target_lvs.erase(target_lvs.begin());
     }
     if (target_lvs.size() < agg_fn_names.size()) {
@@ -1730,7 +1736,7 @@ void GroupByAndAggregate::codegenAggCalls(
         target_lvs.push_back(target_lvs.front());
       }
     } else {
-      CHECK_EQ(agg_fn_names.size(), target_lvs.size());
+      CHECK(str_target_lv || (agg_fn_names.size() == target_lvs.size()));
       CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
     }
     const bool is_simple_count = agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
@@ -1772,16 +1778,17 @@ void GroupByAndAggregate::codegenAggCalls(
         continue;
       }
       auto target_lv = executor_->toDoublePrecision(target_lvs[target_lv_idx]);
+      auto arg_expr = agg_arg(target_expr);
       std::vector<llvm::Value*> agg_args {
         is_group_by
           ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
           : agg_out_vec[agg_out_off],
-        // TODO(alex): simply use target_lv once we're done with refactoring,
-        //             for now just generate the same IR for easy debugging
-        is_simple_count ? LL_INT(0L) : target_lv
+        (is_simple_count && !arg_expr)
+          ? LL_INT(int64_t(0))
+          : (is_simple_count && arg_expr && str_target_lv ? str_target_lv : target_lv)
       };
       std::string agg_fname { agg_base_name };
-      if (agg_info.sql_type.is_fp()) {
+      if (agg_info.sql_type.is_fp() || (arg_expr && arg_expr->get_type_info().is_fp())) {
         if (!executor_->plan_state_->isLazyFetchColumn(target_expr)) {
           CHECK(target_lv->getType()->isDoubleTy());
           agg_fname += "_double";
@@ -1793,10 +1800,11 @@ void GroupByAndAggregate::codegenAggCalls(
         codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc, device_type);
       } else {
         if (agg_info.skip_null_val) {
+          const SQLTypeInfo& null_ti { arg_expr ? arg_expr->get_type_info() : agg_info.sql_type };
           agg_fname += "_skip_val";
-          auto null_lv = executor_->toDoublePrecision(agg_info.sql_type.is_fp()
-            ? static_cast<llvm::Value*>(executor_->inlineFpNull(agg_info.sql_type))
-            : static_cast<llvm::Value*>(executor_->inlineIntNull(agg_info.sql_type)));
+          auto null_lv = executor_->toDoublePrecision(null_ti.is_fp()
+            ? static_cast<llvm::Value*>(executor_->inlineFpNull(null_ti))
+            : static_cast<llvm::Value*>(executor_->inlineIntNull(null_ti)));
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {

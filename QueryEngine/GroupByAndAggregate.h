@@ -267,13 +267,12 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   const auto& agg_arg_ti = agg_arg->get_type_info();
   bool is_distinct { false };
   if (agg_expr->get_aggtype() == kCOUNT) {
-    CHECK(agg_expr->get_is_distinct());
-    is_distinct = true;
+    is_distinct = agg_expr->get_is_distinct();
   }
   bool skip_null = !agg_arg_ti.get_notnull();
   return {
     true, agg_expr->get_aggtype(),
-    agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info(),
+    agg_type == kAVG ? agg_arg_ti : (agg_type == kCOUNT ? SQLTypeInfo(kBIGINT, notnull) : agg_expr->get_type_info()),
     skip_null, is_distinct
   };
 }
