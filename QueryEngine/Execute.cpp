@@ -1175,7 +1175,8 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
         ti.is_boolean() ||
         ti.is_time() ||
         ti.is_string() ||
-        ti.is_fp());
+        ti.is_fp() ||
+        ti.is_array());
   // if the type is inferred as non null, short-circuit to false
   if (ti.get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
@@ -1184,6 +1185,10 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
   if (ti.is_fp()) {
     return cgen_state_->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
       operand_lv, ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE));
+  }
+  if (ti.is_array()) {
+    return cgen_state_->emitExternalCall("array_is_null", get_int_type(1, cgen_state_->context_),
+      { operand_lv, posArg() });
   }
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ,
     operand_lv, inlineIntNull(ti));
@@ -3050,6 +3055,7 @@ declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
+declare i1 @array_is_null(i8*, i64);
 declare i8* @array_buff(i8*, i64);
 declare i32 @array_at_i16(i8*, i64, i32);
 declare i32 @array_at_i32(i8*, i64, i32);

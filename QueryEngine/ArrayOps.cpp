@@ -21,6 +21,15 @@ uint32_t array_size(int8_t* chunk_iter_, const uint64_t row_pos, const uint32_t 
   return ad.is_null ? 0 : ad.length >> elem_log_sz;
 }
 
+extern "C" DEVICE
+bool array_is_null(int8_t* chunk_iter_, const uint64_t row_pos) {
+  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  ArrayDatum ad;
+  bool is_end;
+  ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);
+  return ad.is_null;
+}
+
 #define ARRAY_AT(width)                                              \
 extern "C" DEVICE                                                    \
 int##width##_t array_at_i##width(int8_t* chunk_iter_,                \
