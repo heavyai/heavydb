@@ -1707,6 +1707,10 @@ void GroupByAndAggregate::codegenAggCalls(
     auto target = target_list[target_idx];
     auto target_expr = target->get_expr();
     CHECK(target_expr);
+    if (dynamic_cast<Analyzer::UOper*>(target_expr) &&
+        static_cast<Analyzer::UOper*>(target_expr)->get_optype() == kUNNEST) {
+      throw std::runtime_error("UNNEST not supported in the projection list yet.");
+    }
     const auto agg_info = target_info(target_expr);
     const auto agg_fn_names = agg_fn_base_names(agg_info);
     auto target_lvs = codegenAggArg(target_expr, hoist_literals);
