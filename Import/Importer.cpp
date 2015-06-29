@@ -199,7 +199,9 @@ StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &cop
     elem_strs.push_back(s.substr(last, i - last));
     last = i + 1;
   }
-  elem_strs.push_back(s.substr(last, s.size() - 1 - last));
+  if (last + 1 < s.size()) {
+    elem_strs.push_back(s.substr(last, s.size() - 1 - last));
+  }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
     int8_t *buf = (int8_t*)malloc(len);
