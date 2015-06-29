@@ -1178,7 +1178,7 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
         ti.is_fp() ||
         ti.is_array());
   // if the type is inferred as non null, short-circuit to false
-  if (ti.get_notnull()) {
+  if (ti.get_notnull() && !ti.is_array()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, true, hoist_literals).front();
