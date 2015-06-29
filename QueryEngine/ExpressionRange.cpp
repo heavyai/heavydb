@@ -155,27 +155,29 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
     return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   }
   const auto constant_type = constant_expr->get_type_info().get_type();
+  const auto datum = constant_expr->get_constval();
   switch (constant_type) {
   case kSMALLINT: {
-    const auto v = constant_expr->get_constval().smallintval;
+    const auto v = datum.smallintval;
     return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
   case kINT: {
-    const auto v = constant_expr->get_constval().intval;
+    const auto v = datum.intval;
     return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
   case kBIGINT: {
-    const auto v = constant_expr->get_constval().bigintval;
+    const auto v = datum.bigintval;
     return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
   case kTIME:
   case kTIMESTAMP:
   case kDATE: {
-    const auto v = constant_expr->get_constval().timeval;
+    const auto v = datum.timeval;
     return { ExpressionRangeType::Integer, false, { v }, { v } };
   }
+  case kFLOAT:
   case kDOUBLE: {
-    const auto v = constant_expr->get_constval().doubleval;
+    const double v = constant_type == kDOUBLE ? datum.doubleval : datum.floatval;
     ExpressionRange result;
     result.type = ExpressionRangeType::FloatingPoint;
     result.has_nulls = false;
@@ -201,9 +203,8 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
         has_nulls = true;                                                                          \
       }                                                                                            \
       if (col_ti.is_fp()) {                                                                        \
-        CHECK_EQ(kDOUBLE, col_ti.get_type());                                                      \
-        return extract_##stat_name##_stat_double(lhs_meta_it->second.chunkStats) <                 \
-               extract_##stat_name##_stat_double(rhs_meta_it->second.chunkStats);                  \
+        return extract_##stat_name##_stat_double(lhs_meta_it->second.chunkStats, col_ti) <         \
+               extract_##stat_name##_stat_double(rhs_meta_it->second.chunkStats, col_ti);          \
       }                                                                                            \
       return extract_##stat_name##_stat(lhs_meta_it->second.chunkStats, col_ti) <                  \
              extract_##stat_name##_stat(rhs_meta_it->second.chunkStats, col_ti);                   \
@@ -214,15 +215,15 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
 
 namespace {
 
-inline double extract_min_stat_double(const ChunkStats& stats) {
+inline double extract_min_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
   if (stats.has_nulls) {  // clobber the additional information for now
     return NULL_DOUBLE;
   }
-  return stats.min.doubleval;
+  return col_ti.get_type() == kDOUBLE ? stats.min.doubleval : stats.min.floatval;
 }
 
-inline double extract_max_stat_double(const ChunkStats& stats) {
-  return stats.max.doubleval;
+inline double extract_max_stat_double(const ChunkStats& stats, const SQLTypeInfo& col_ti) {
+  return col_ti.get_type() == kDOUBLE ? stats.max.doubleval : stats.max.floatval;
 }
 
 }  // namespace
@@ -244,6 +245,7 @@ ExpressionRange getExpressionRange(
   case kDATE:
   case kTIMESTAMP:
   case kTIME:
+  case kFLOAT:
   case kDOUBLE: {
     bool has_nulls { false };
     FIND_STAT_FRAG(min);
@@ -252,12 +254,12 @@ ExpressionRange getExpressionRange(
     CHECK(min_it != min_frag->chunkMetadataMap.end());
     const auto max_it = max_frag->chunkMetadataMap.find(col_id);
     CHECK(max_it != max_frag->chunkMetadataMap.end());
-    if (col_ti.get_type() == kDOUBLE) {
+    if (col_ti.is_fp()) {
       ExpressionRange result;
       result.type = ExpressionRangeType::FloatingPoint;
       result.has_nulls = has_nulls;
-      result.fp_min = extract_min_stat_double(min_it->second.chunkStats);
-      result.fp_max = extract_max_stat_double(max_it->second.chunkStats);
+      result.fp_min = extract_min_stat_double(min_it->second.chunkStats, col_ti);
+      result.fp_max = extract_max_stat_double(max_it->second.chunkStats, col_ti);
       return result;
     }
     for (const auto& fragment : fragments) {
@@ -332,7 +334,11 @@ ExpressionRange getExpressionRange(
   const auto arg_range = getExpressionRange(u_expr->get_operand(), fragments, executor);
   switch (arg_range.type) {
   case ExpressionRangeType::FloatingPoint: {
-    if (u_expr->get_type_info().is_integer()) {
+    const auto& arg_ti = u_expr->get_operand()->get_type_info();
+    if (ti.is_fp() && ti.get_size() >= arg_ti.get_size()) {
+      return arg_range;
+    }
+    if (ti.is_integer()) {
       ExpressionRange result;
       result.type = ExpressionRangeType::Integer;
       result.has_nulls = arg_range.has_nulls;
@@ -343,10 +349,10 @@ ExpressionRange getExpressionRange(
     break;
   }
   case ExpressionRangeType::Integer: {
-    if (u_expr->get_type_info().is_integer() || u_expr->get_type_info().is_time()) {
+    if (ti.is_integer() || ti.is_time()) {
       return arg_range;
     }
-    if (u_expr->get_type_info().get_type() == kDOUBLE) {
+    if (ti.get_type() == kDOUBLE) {
       ExpressionRange result;
       result.type = ExpressionRangeType::Integer;
       result.has_nulls = arg_range.has_nulls;
