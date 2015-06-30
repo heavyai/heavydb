@@ -423,11 +423,17 @@ TargetValue ResultRows::get(const size_t row_idx,
     }
     CHECK(target_values_[row_idx][col_idx].i1);
     std::vector<ScalarTargetValue> tv_arr;
-    if (elem_type.is_integer()) {
+    if (elem_type.is_integer() || elem_type.is_fp()) {
       const auto& int_arr = *reinterpret_cast<std::vector<int64_t>*>(target_values_[row_idx][col_idx].i1);
       tv_arr.reserve(int_arr.size());
-      for (const auto x : int_arr) {
-        tv_arr.emplace_back(x);
+      if (elem_type.is_integer()) {
+        for (const auto x : int_arr) {
+          tv_arr.emplace_back(x);
+        }
+      } else {
+        for (const auto x : int_arr) {
+          tv_arr.emplace_back(*reinterpret_cast<const double*>(&x));
+        }
       }
     } else if (elem_type.is_string()) {
       CHECK_EQ(kENCODING_DICT, targets_[col_idx].sql_type.get_compression());
@@ -668,13 +674,29 @@ int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_strea
 }
 
 template<class T>
+int64_t arr_elem_bitcast(const T val) {
+  return val;
+}
+
+template<>
+int64_t arr_elem_bitcast(const float val) {
+  const double dval { val };
+  return *reinterpret_cast<const int64_t*>(&dval);
+}
+
+template<>
+int64_t arr_elem_bitcast(const double val) {
+  return *reinterpret_cast<const int64_t*>(&val);
+}
+
+template<class T>
 std::vector<int64_t> arr_from_buffer(const int8_t* buff, const size_t buff_sz) {
   std::vector<int64_t> result;
   auto buff_elems = reinterpret_cast<const T*>(buff);
   CHECK_EQ(0, buff_sz % sizeof(T));
   const size_t num_elems = buff_sz / sizeof(T);
   for (size_t i = 0; i < num_elems; ++i) {
-    result.push_back(buff_elems[i]);
+    result.push_back(arr_elem_bitcast(buff_elems[i]));
   }
   return result;
 }
@@ -766,11 +788,20 @@ ResultRows QueryExecutionContext::groupBufferToResults(
                 case 2:
                   results.addValue(arr_from_buffer<int16_t>(ad.pointer, ad.length));
                   break;
-                case 4:
-                  results.addValue(arr_from_buffer<int32_t>(ad.pointer, ad.length));
+                case 4: {
+                  if (elem_ti.is_fp()) {
+                    results.addValue(arr_from_buffer<float>(ad.pointer, ad.length));
+                  } else {
+                    results.addValue(arr_from_buffer<int32_t>(ad.pointer, ad.length));
+                  }
                   break;
+                }
                 case 8:
-                  results.addValue(arr_from_buffer<int64_t>(ad.pointer, ad.length));
+                  if (elem_ti.is_fp()) {
+                    results.addValue(arr_from_buffer<double>(ad.pointer, ad.length));
+                  } else {
+                    results.addValue(arr_from_buffer<int64_t>(ad.pointer, ad.length));
+                  }
                   break;
                 default:
                   CHECK(false);
@@ -782,12 +813,14 @@ ResultRows QueryExecutionContext::groupBufferToResults(
           } else {
             CHECK_GE(str_len, 0);
             int elem_sz { 1 };
+            bool is_fp { false };
             if (is_array) {
               CHECK(!is_real_string);
               const auto& target_ti = target_expr->get_type_info();
               CHECK(target_ti.is_array());
               const auto& elem_ti = target_ti.get_elem_type();
               elem_sz = elem_ti.get_size();
+              is_fp = elem_ti.is_fp();
             }
             str_len *= elem_sz;
             CHECK(device_type_ == ExecutorDeviceType::CPU ||
@@ -812,10 +845,18 @@ ResultRows QueryExecutionContext::groupBufferToResults(
                   results.addValue(arr_from_buffer<int16_t>(reinterpret_cast<int8_t*>(str_ptr), str_len));
                   break;
                 case 4:
-                  results.addValue(arr_from_buffer<int32_t>(reinterpret_cast<int8_t*>(str_ptr), str_len));
+                  if (is_fp) {
+                    results.addValue(arr_from_buffer<float>(reinterpret_cast<int8_t*>(str_ptr), str_len));
+                  } else {
+                    results.addValue(arr_from_buffer<int32_t>(reinterpret_cast<int8_t*>(str_ptr), str_len));
+                  }
                   break;
                 case 8:
-                  results.addValue(arr_from_buffer<int64_t>(reinterpret_cast<int8_t*>(str_ptr), str_len));
+                  if (is_fp) {
+                    results.addValue(arr_from_buffer<double>(reinterpret_cast<int8_t*>(str_ptr), str_len));
+                  } else {
+                    results.addValue(arr_from_buffer<int64_t>(reinterpret_cast<int8_t*>(str_ptr), str_len));
+                  }
                   break;
                 default:
                   CHECK(false);
@@ -1763,9 +1804,9 @@ void GroupByAndAggregate::codegenAggCalls(
         CHECK(agg_info.is_distinct);
         const auto& elem_ti =
           static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info().get_elem_type();
-        CHECK(!elem_ti.is_fp());
-        executor_->cgen_state_->emitExternalCall(
-          "agg_count_distinct_array_i" + std::to_string(elem_ti.get_size() * 8),
+        executor_->cgen_state_->emitExternalCall(elem_ti.is_fp()
+          ? "agg_count_distinct_array_" + std::string(elem_ti.get_type() == kDOUBLE ? "double" : "float")
+          : "agg_count_distinct_array_int" + std::to_string(elem_ti.get_size() * 8) + "_t",
           llvm::Type::getVoidTy(LL_CONTEXT),
           {
             is_group_by
@@ -1773,7 +1814,9 @@ void GroupByAndAggregate::codegenAggCalls(
               : agg_out_vec[agg_out_off],
             target_lvs[target_lv_idx],
             executor_->posArg(),
-            executor_->inlineIntNull(elem_ti)
+            elem_ti.is_fp()
+              ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
+              : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))
           });
         ++agg_out_off;
         ++target_lv_idx;

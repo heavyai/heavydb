@@ -1217,12 +1217,22 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
   const auto& array_ti = arr_expr->get_type_info();
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
-  const std::string array_at_fname { "array_at_i" + std::to_string(elem_ti.get_size() * 8) + "_checked" };
-  const auto ret_ty = get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
+  const std::string array_at_fname { elem_ti.is_fp()
+    ? "array_at_" + std::string(elem_ti.get_type() == kDOUBLE ? "double_checked" : "float_checked")
+    : "array_at_int" + std::to_string(elem_ti.get_size() * 8) + "_t_checked" };
+  const auto ret_ty = elem_ti.is_fp()
+    ? (elem_ti.get_type() == kDOUBLE
+      ? llvm::Type::getDoubleTy(cgen_state_->context_)
+      : llvm::Type::getFloatTy(cgen_state_->context_))
+    : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
   const auto arr_lvs = codegen(arr_expr, true, hoist_literals);
   CHECK_EQ(1, arr_lvs.size());
-  return cgen_state_->emitExternalCall(array_at_fname, ret_ty,
-    { arr_lvs.front(), posArg(), idx_lv, inlineIntNull(elem_ti) });
+  return cgen_state_->emitExternalCall(array_at_fname, ret_ty, {
+    arr_lvs.front(), posArg(), idx_lv,
+    elem_ti.is_fp()
+      ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
+      : static_cast<llvm::Value*>(inlineIntNull(elem_ti))
+  });
 }
 
 llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant) {
@@ -3059,12 +3069,16 @@ declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i1 @array_is_null(i8*, i64);
 declare i8* @array_buff(i8*, i64);
-declare i32 @array_at_i16(i8*, i64, i32);
-declare i32 @array_at_i32(i8*, i64, i32);
-declare i32 @array_at_i64(i8*, i64, i32);
-declare i32 @array_at_i16_checked(i8*, i64, i64, i16);
-declare i32 @array_at_i32_checked(i8*, i64, i64, i32);
-declare i32 @array_at_i64_checked(i8*, i64, i64, i64);
+declare i16 @array_at_int16_t(i8*, i64, i32);
+declare i32 @array_at_int32_t(i8*, i64, i32);
+declare i64 @array_at_int64_t(i8*, i64, i32);
+declare float @array_at_float(i8*, i64, i32);
+declare double @array_at_double(i8*, i64, i32);
+declare i16 @array_at_int16_t_checked(i8*, i64, i64, i16);
+declare i32 @array_at_int32_t_checked(i8*, i64, i64, i32);
+declare i64 @array_at_int64_t_checked(i8*, i64, i64, i64);
+declare float @array_at_float_checked(i8*, i64, i64, float);
+declare double @array_at_double_checked(i8*, i64, i64, double);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
@@ -3293,8 +3307,16 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
     const auto& array_ti = static_cast<Analyzer::UOper*>(group_by_col)->get_operand()->get_type_info();
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
-    const std::string array_at_fname { "array_at_i" + std::to_string(elem_ti.get_size() * 8) };
-    const auto ret_ty = get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
+    const std::string array_at_fname {
+      elem_ti.is_fp()
+        ? "array_at_" + std::string(elem_ti.get_type() == kDOUBLE ? "double" : "float")
+        : "array_at_int" + std::to_string(elem_ti.get_size() * 8) + "_t"
+    };
+    const auto ret_ty = elem_ti.is_fp()
+      ? (elem_ti.get_type() == kDOUBLE
+        ? llvm::Type::getDoubleTy(cgen_state_->context_)
+        : llvm::Type::getFloatTy(cgen_state_->context_))
+      : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
     group_key = cgen_state_->emitExternalCall(array_at_fname, ret_ty,
       { group_key, posArg(), array_idx });
     CHECK(array_loop_head);
