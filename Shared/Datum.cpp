@@ -71,6 +71,9 @@ StringToDatum(const std::string &s, SQLTypeInfo &ti)
 		case kDECIMAL:
 			d.bigintval = parse_numeric(s, ti);
 			break;
+		case kBIGINT:
+			d.bigintval = std::stoi(s);
+			break;
 		case kINT:
 			d.intval = std::stoi(s);
 			break;
