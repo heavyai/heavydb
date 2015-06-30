@@ -1518,6 +1518,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     ? agg_plan->get_groupby_list()
     : std::list<Analyzer::Expr*> { nullptr };
 
+  std::stack<llvm::BasicBlock*> array_loops;
+
   switch (query_mem_desc.hash_type) {
   case GroupByColRangeType::OneColKnownRange:
   case GroupByColRangeType::OneColGuessedRange:
@@ -1525,7 +1527,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     CHECK_EQ(1, groupby_list.size());
     const auto group_expr = groupby_list.front();
     const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
-      query_mem_desc.has_nulls, query_mem_desc.max_val + 1, diamond_codegen);
+      query_mem_desc.has_nulls, query_mem_desc.max_val + 1, diamond_codegen, array_loops);
     auto small_groups_buffer = arg_it;
     if (query_mem_desc.usesGetGroupValueFast()) {
       std::string get_group_fn_name { "get_group_value_fast" };
@@ -1580,7 +1582,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
     for (const auto group_expr : groupby_list) {
       auto col_range_info = getExprRangeInfo(group_expr, query_info_.fragments);
       const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
-        col_range_info.has_nulls, col_range_info.max + 1, diamond_codegen);
+        col_range_info.has_nulls, col_range_info.max + 1, diamond_codegen, array_loops);
       // store the sub-key to the buffer
       LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
     }

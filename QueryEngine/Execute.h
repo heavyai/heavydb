@@ -21,6 +21,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
 #include "../Shared/measure.h"
@@ -284,7 +285,8 @@ private:
                                     const bool hoist_literals,
                                     const bool translate_null_val,
                                     const int64_t translated_null_val,
-                                    GroupByAndAggregate::DiamondCodegen&);
+                                    GroupByAndAggregate::DiamondCodegen&,
+                                    std::stack<llvm::BasicBlock*>&);
 
   llvm::Value* toDoublePrecision(llvm::Value* val);
 
