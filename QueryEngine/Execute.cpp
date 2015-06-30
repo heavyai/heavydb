@@ -1695,8 +1695,8 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
    }
     case kMIN: {
       const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
-      if (agg_arg_type_info.is_string()) {
-        throw std::runtime_error("MIN on strings not supported yet");
+      if (agg_arg_type_info.is_string() || agg_arg_type_info.is_array()) {
+        throw std::runtime_error("MIN on strings or arrays not supported yet");
       }
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_min" : "agg_min_double",
                           agg_expr->get_arg(), agg_init_val, target_idx);
@@ -1704,8 +1704,8 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
     }
     case kMAX: {
       const auto agg_arg_type_info = agg_expr->get_arg()->get_type_info();
-      if (agg_arg_type_info.is_string()) {
-        throw std::runtime_error("MAX on strings not supported yet");
+      if (agg_arg_type_info.is_string() || agg_arg_type_info.is_array()) {
+        throw std::runtime_error("MAX on strings or arrays not supported yet");
       }
       result.emplace_back((target_type_info.is_integer() || target_type_info.is_time()) ? "agg_max" : "agg_max_double",
                           agg_expr->get_arg(), agg_init_val, target_idx);
