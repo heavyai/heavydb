@@ -1284,7 +1284,8 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       auto arg_range_info = getExprRangeInfo(agg_expr->get_arg(), query_info_.fragments);
       CountDistinctImplType count_distinct_impl_type { CountDistinctImplType::StdSet };
       int64_t bitmap_sz_bits { 0 };
-      if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange) {
+      if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
+          !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
         if (bitmap_sz_bits <= 0) {

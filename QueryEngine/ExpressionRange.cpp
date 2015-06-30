@@ -232,7 +232,9 @@ ExpressionRange getExpressionRange(
     const Analyzer::ColumnVar* col_expr,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
   int col_id = col_expr->get_column_id();
-  const auto& col_ti = col_expr->get_type_info();
+  const auto& col_ti = col_expr->get_type_info().is_array()
+    ? col_expr->get_type_info().get_elem_type()
+    : col_expr->get_type_info();
   switch (col_ti.get_type()) {
   case kTEXT:
   case kCHAR:
@@ -315,6 +317,9 @@ ExpressionRange getExpressionRange(
     const Analyzer::UOper* u_expr,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
+  if (u_expr->get_optype() == kUNNEST) {
+    return getExpressionRange(u_expr->get_operand(), fragments, executor);
+  }
   if (u_expr->get_optype() != kCAST) {
     return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
   }
