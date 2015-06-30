@@ -22,10 +22,10 @@ using Data_Namespace::AbstractBuffer;
 class ArrayNoneEncoder : public Encoder {
 
     public:
-        ArrayNoneEncoder(AbstractBuffer *buffer): Encoder(buffer), index_buf(nullptr), last_offset(-1) {}
+        ArrayNoneEncoder(AbstractBuffer *buffer): Encoder(buffer), has_nulls(false), initialized(false), index_buf(nullptr), last_offset(-1) {}
 
         ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) {
-						assert(false); // should never be called for strings
+						assert(false); // should never be called for arrays
             ChunkMetadata chunkMetadata;
             getMetadata(chunkMetadata);
             return chunkMetadata;
@@ -96,6 +96,10 @@ class ArrayNoneEncoder : public Encoder {
           if (!buffer_->isDirty())
             buffer_->setDirty();
 
+          // keep Chunk statistics with array elements
+          for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
+            update_elem_stats((*srcData)[n]);
+          }
           numElems += numAppendElems;
           ChunkMetadata chunkMetadata;
           getMetadata(chunkMetadata);
@@ -104,30 +108,200 @@ class ArrayNoneEncoder : public Encoder {
 
         void getMetadata(ChunkMetadata &chunkMetadata) {
             Encoder::getMetadata(chunkMetadata); // call on parent class
-            // @TODO(wei) keep min max of array elements
-            chunkMetadata.chunkStats.min.arrayval = nullptr;
-            chunkMetadata.chunkStats.max.arrayval = nullptr;
+            chunkMetadata.fillChunkStats(elem_min, elem_max, has_nulls);
         }
 
         void writeMetadata(FILE *f) {
             // assumes pointer is already in right place
             CHECK_RET(fwrite((int8_t *)&numElems,sizeof(size_t),1,f));
+            CHECK_RET(fwrite((int8_t *)&elem_min,sizeof(Datum),1,f));
+            CHECK_RET(fwrite((int8_t *)&elem_max,sizeof(Datum),1,f));
+            CHECK_RET(fwrite((int8_t *)&has_nulls,sizeof(bool),1,f));
+            CHECK_RET(fwrite((int8_t *)&initialized,sizeof(bool),1,f));
         }
 
         void readMetadata(FILE *f) {
             // assumes pointer is already in right place
             CHECK_RET(fread((int8_t *)&numElems,sizeof(size_t),1,f));
+            CHECK_RET(fread((int8_t *)&elem_min,sizeof(Datum),1,f));
+            CHECK_RET(fread((int8_t *)&elem_max,sizeof(Datum),1,f));
+            CHECK_RET(fread((int8_t *)&has_nulls,sizeof(bool),1,f));
+            CHECK_RET(fread((int8_t *)&initialized,sizeof(bool),1,f));
         }
 
         void copyMetadata(const Encoder * copyFromEncoder) {
             numElems = copyFromEncoder -> numElems;
+            auto array_encoder = dynamic_cast<const ArrayNoneEncoder*>(copyFromEncoder);
+            elem_min = array_encoder->elem_min;
+            elem_max = array_encoder->elem_max;
+            has_nulls = array_encoder->has_nulls;
+            initialized = array_encoder->initialized;
         }
 
 				AbstractBuffer *get_index_buf() const { return index_buf; }
+
+      Datum elem_min;
+      Datum elem_max;
+      bool has_nulls;
+      bool initialized;
 				void set_index_buf(AbstractBuffer *buf) { index_buf = buf; }
 		private:
 			AbstractBuffer *index_buf;
 			StringOffsetT last_offset;
+
+      void update_elem_stats(const ArrayDatum &array) {
+        if (array.is_null || array.length == 0) {
+          has_nulls = true;
+          return;
+        }
+        switch (buffer_->sqlType.get_subtype()) {
+          case kBOOLEAN:
+            {
+              const bool *bool_array = (bool*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(bool); i++) {
+                if ((int8_t)bool_array[i] == NULL_BOOLEAN)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.boolval = std::min(elem_min.boolval, bool_array[i]);
+                  elem_max.boolval = std::max(elem_max.boolval, bool_array[i]);
+                } else {
+                  elem_min.boolval = bool_array[i];
+                  elem_max.boolval = bool_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          case kINT: 
+            {
+              const int32_t *int_array = (int32_t*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(int32_t); i++) {
+                if (int_array[i] == NULL_INT)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.intval = std::min(elem_min.intval, int_array[i]);
+                  elem_max.intval = std::max(elem_max.intval, int_array[i]);
+                } else {
+                  elem_min.intval = int_array[i];
+                  elem_max.intval = int_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          case kSMALLINT: 
+            {
+              const int16_t *int_array = (int16_t*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(int16_t); i++) {
+                if (int_array[i] == NULL_SMALLINT)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.smallintval = std::min(elem_min.smallintval, int_array[i]);
+                  elem_max.smallintval = std::max(elem_max.smallintval, int_array[i]);
+                } else {
+                  elem_min.smallintval = int_array[i];
+                  elem_max.smallintval = int_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          case kBIGINT:
+          case kNUMERIC:
+          case kDECIMAL:
+            {
+              const int64_t *int_array = (int64_t*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(int64_t); i++) {
+                if (int_array[i] == NULL_BIGINT)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.bigintval = std::min(elem_min.bigintval, int_array[i]);
+                  elem_max.bigintval = std::max(elem_max.bigintval, int_array[i]);
+                } else {
+                  elem_min.bigintval = int_array[i];
+                  elem_max.bigintval = int_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          case kFLOAT:
+            {
+              const float *flt_array = (float*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(float); i++) {
+                if (flt_array[i] == NULL_FLOAT)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.floatval = std::min(elem_min.floatval, flt_array[i]);
+                  elem_max.floatval = std::max(elem_max.floatval, flt_array[i]);
+                } else {
+                  elem_min.floatval = flt_array[i];
+                  elem_max.floatval = flt_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          case kDOUBLE:
+            {
+              const double *dbl_array = (double*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(double); i++) {
+                if (dbl_array[i] == NULL_DOUBLE)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.doubleval = std::min(elem_min.doubleval, dbl_array[i]);
+                  elem_max.doubleval = std::max(elem_max.doubleval, dbl_array[i]);
+                } else {
+                  elem_min.doubleval = dbl_array[i];
+                  elem_max.doubleval = dbl_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          case kTIME:
+          case kTIMESTAMP:
+          case kDATE:
+            {
+              const time_t *tm_array = (time_t*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(time_t); i++) {
+                if (tm_array[i] == NULL_BIGINT)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.timeval = std::min(elem_min.timeval, tm_array[i]);
+                  elem_max.timeval = std::max(elem_max.timeval, tm_array[i]);
+                } else {
+                  elem_min.timeval = tm_array[i];
+                  elem_max.timeval = tm_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          case kCHAR:
+          case kVARCHAR:
+          case kTEXT:
+            {
+              assert(buffer_->sqlType.get_compression() == kENCODING_DICT);
+              const int32_t *int_array = (int32_t*)array.pointer;
+              for (size_t i = 0; i < array.length/sizeof(int32_t); i++) {
+                if (int_array[i] == NULL_INT)
+                  has_nulls = true;
+                else if (initialized) {
+                  elem_min.intval = std::min(elem_min.intval, int_array[i]);
+                  elem_max.intval = std::max(elem_max.intval, int_array[i]);
+                } else {
+                  elem_min.intval = int_array[i];
+                  elem_max.intval = int_array[i];
+                  initialized = true;
+                }
+              }
+            }
+            break;
+          default:
+            assert(false);
+        }
+      };
 
 }; // class ArrayNoneEncoder
 

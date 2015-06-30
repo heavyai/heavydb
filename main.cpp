@@ -84,7 +84,8 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
             cout << "numBytes:" << chunkMetadata.numBytes;
             cout << " numElements:" << chunkMetadata.numElements;
             cout << " has_nulls:" << chunkMetadata.chunkStats.has_nulls;
-            switch (cd->columnType.get_type()) {
+            SQLTypes t = cd->columnType.get_type() == kARRAY ? cd->columnType.get_subtype() : cd->columnType.get_type();
+            switch (t) {
               case kBOOLEAN:
                 cout << " min:" << (short)chunkMetadata.chunkStats.min.tinyintval;
                 cout << " max:" << (short)chunkMetadata.chunkStats.max.tinyintval;

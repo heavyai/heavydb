@@ -71,6 +71,12 @@ struct ChunkMetadata {
             }
         }
     }
+
+    void fillChunkStats (const Datum min, const Datum max, const bool has_nulls) {
+        chunkStats.has_nulls = has_nulls;
+        chunkStats.min = min;
+        chunkStats.max = max;
+    }
 };
 
 #endif //CHUNKMETADATA_H
