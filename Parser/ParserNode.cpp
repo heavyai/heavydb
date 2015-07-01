@@ -608,47 +608,57 @@ namespace Parser {
       agg_type = kCOUNT;
       if (arg == nullptr)
         arg_expr = nullptr;
-      else
+      else {
         arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+        const SQLTypeInfo &ti = arg_expr->get_type_info();
+        if (ti.is_string() && (ti.get_compression() != kENCODING_DICT || !distinct))
+          throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT ).");
+        if (ti.get_type() == kARRAY && !distinct)
+          throw std::runtime_error("Only COUNT(DISTINCT ) is supported on arrays.");
+      }
       is_distinct = distinct;
+    } else {
+      if (boost::iequals(*name, "min")) {
+        agg_type = kMIN;
+        arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+        arg_expr = arg_expr->decompress();
+        result_type = arg_expr->get_type_info();
+      }
+      else if (boost::iequals(*name, "max")) {
+        agg_type = kMAX;
+        arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+        arg_expr = arg_expr->decompress();
+        result_type = arg_expr->get_type_info();
+      }
+      else if (boost::iequals(*name, "avg")) {
+        agg_type = kAVG;
+        arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+        if (!arg_expr->get_type_info().is_number())
+          throw std::runtime_error("Cannot compute AVG on non-number-type arguments.");
+        arg_expr = arg_expr->decompress();
+        result_type.set_type(kDOUBLE);
+      }
+      else if (boost::iequals(*name, "sum")) {
+        agg_type = kSUM;
+        arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+        if (!arg_expr->get_type_info().is_number())
+          throw std::runtime_error("Cannot compute SUM on non-number-type arguments.");
+        arg_expr = arg_expr->decompress();
+        result_type = arg_expr->get_type_info();
+      }
+      else if (boost::iequals(*name, "unnest")) {
+        arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+        const SQLTypeInfo &arg_ti = arg_expr->get_type_info();
+        if (arg_ti.get_type() != kARRAY)
+          throw std::runtime_error(arg->to_string() + " is not of array type.");
+        return new Analyzer::UOper(arg_ti.get_elem_type(), false, kUNNEST, arg_expr);
+      }
+      else
+        throw std::runtime_error("invalid function name: " + *name);
+      if (arg_expr->get_type_info().is_string() || 
+          arg_expr->get_type_info().get_type() == kARRAY)
+        throw std::runtime_error("Only COUNT(DISTINCT ) aggregate is supported on strings and arrays.");
     }
-    else if (boost::iequals(*name, "min")) {
-      agg_type = kMIN;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-      arg_expr = arg_expr->decompress();
-      result_type = arg_expr->get_type_info();
-    }
-    else if (boost::iequals(*name, "max")) {
-      agg_type = kMAX;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-      arg_expr = arg_expr->decompress();
-      result_type = arg_expr->get_type_info();
-    }
-    else if (boost::iequals(*name, "avg")) {
-      agg_type = kAVG;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-      if (!arg_expr->get_type_info().is_number())
-        throw std::runtime_error("Cannot compute AVG on non-number-type arguments.");
-      arg_expr = arg_expr->decompress();
-      result_type.set_type(kDOUBLE);
-    }
-    else if (boost::iequals(*name, "sum")) {
-      agg_type = kSUM;
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-      if (!arg_expr->get_type_info().is_number())
-        throw std::runtime_error("Cannot compute SUM on non-number-type arguments.");
-      arg_expr = arg_expr->decompress();
-      result_type = arg_expr->get_type_info();
-    }
-    else if (boost::iequals(*name, "unnest")) {
-      arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-      const SQLTypeInfo &arg_ti = arg_expr->get_type_info();
-      if (arg_ti.get_type() != kARRAY)
-        throw std::runtime_error(arg->to_string() + " is not of array type.");
-      return new Analyzer::UOper(arg_ti.get_elem_type(), false, kUNNEST, arg_expr);
-    }
-    else
-      throw std::runtime_error("invalid function name: " + *name);
     int naggs = query.get_num_aggs();
     query.set_num_aggs(naggs+1);
     return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct);
