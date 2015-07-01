@@ -92,7 +92,9 @@ void ResultRows::reduce(const ResultRows& other_results) {
         auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(target_idx);
         CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
         count_distinct_type = count_distinct_desc_it->second.impl_type_;
-        bitmap_sz_bytes = count_distinct_desc_it->second.bitmapSizeBytes();
+        if (count_distinct_type == CountDistinctImplType::Bitmap) {
+          bitmap_sz_bytes = count_distinct_desc_it->second.bitmapSizeBytes();
+        }
       }
       for (int32_t bin = 0; bin < groups_buffer_entry_count_; ++bin) {
         size_t group_by_buffer_base_idx { bin * warp_count_ * agg_col_count + target_idx };
