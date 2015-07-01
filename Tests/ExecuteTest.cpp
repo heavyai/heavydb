@@ -2,6 +2,7 @@
 
 #include "../Parser/parser.h"
 #include "../SqliteConnector/SqliteConnector.h"
+#include "../Import/Importer.h"
 
 #include <boost/algorithm/string.hpp>
 #include <gtest/gtest.h>
@@ -560,6 +561,163 @@ TEST(Select, BooleanColumn) {
   }
 }
 
+namespace Importer_NS {
+
+ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const CopyParams& copy_params);
+void parseStringArray(const std::string& s, const CopyParams& copy_params, std::vector<std::string>& string_vec);
+
+}  // Importer_NS
+
+namespace {
+
+const size_t g_array_test_row_count { 20 };
+
+void import_array_test(const std::string& table_name) {
+  const auto& cat = g_session->get_catalog();
+  const auto td = cat.getMetadataForTable(table_name);
+  CHECK(td);
+  Importer_NS::Loader loader(cat, td);
+  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+  const auto col_descs = cat.getAllColumnMetadataForTable(td->tableId);
+  for (const auto cd : col_descs) {
+    import_buffers.emplace_back(new Importer_NS::TypedImportBuffer(cd, cd->columnType.get_compression() == kENCODING_DICT ?
+      cat.getMetadataForDict(cd->columnType.get_comp_param())->stringDict : nullptr));
+  }
+  Importer_NS::CopyParams copy_params;
+  copy_params.array_begin = '{';
+  copy_params.array_end = '}';
+  for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
+    for (const auto& import_buffer : import_buffers) {
+      const auto& ti = import_buffer->getTypeInfo();
+      switch (ti.get_type()) {
+      case kINT:
+        import_buffer->addInt(7 + row_idx);
+        break;
+      case kARRAY: {
+        const auto& elem_ti = ti.get_elem_type();
+        std::vector<std::string> array_elems;
+        switch (elem_ti.get_type()) {
+        case kSMALLINT:
+          for (size_t i = 0; i < 3; ++i) {
+            array_elems.push_back(std::to_string(row_idx + i + 1));
+          }
+          break;
+        case kINT:
+          for (size_t i = 0; i < 3; ++i) {
+            array_elems.push_back(std::to_string((row_idx + i + 1) * 10));
+          }
+          break;
+        case kBIGINT:
+          for (size_t i = 0; i < 3; ++i) {
+            array_elems.push_back(std::to_string((row_idx + i + 1) * 100));
+          }
+          break;
+        case kTEXT:
+          for (size_t i = 0; i < 3; ++i) {
+            array_elems.emplace_back(2, 'a' + row_idx + i);
+          }
+          break;
+        case kFLOAT:
+          for (size_t i = 0; i < 3; ++i) {
+            array_elems.emplace_back(std::to_string(row_idx + i + 1) + "." + std::to_string(row_idx + i + 1));
+          }
+          break;
+        case kDOUBLE:
+          for (size_t i = 0; i < 3; ++i) {
+            array_elems.emplace_back(std::to_string(11 * (row_idx + i + 1)) + "." + std::to_string(row_idx + i + 1));
+          }
+          break;
+        default:
+          CHECK(false);
+        }
+        if (elem_ti.is_string()) {
+          import_buffer->addDictEncodedStringArray({ array_elems });
+        } else {
+          auto arr_str = "{" + boost::algorithm::join(array_elems, ",") + "}";
+          import_buffer->addArray(StringToArray(arr_str, ti, copy_params));
+        }
+        break;
+      }
+      case kTEXT:
+        import_buffer->addString("real_str" + std::to_string(row_idx));
+        break;
+      default:
+        CHECK(false);
+      }
+    }
+  }
+  loader.load(import_buffers, g_array_test_row_count);
+  loader.checkpoint();
+}
+
+}  // namespace
+
+TEST(Select, ArrayUnnest) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    unsigned power10 = 1;
+    for (const unsigned int_width : { 16, 32, 64 }) {
+      auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_i" +
+        std::to_string(int_width) + ") AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
+      ASSERT_EQ(size_t(g_array_test_row_count + 2), result_rows.size());
+      ASSERT_EQ(int64_t(g_array_test_row_count + 2) * power10, v<int64_t>(result_rows.get(0, 1, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
+      ASSERT_EQ(power10, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 1, true)));
+      power10 *= 10;
+    }
+    for (const std::string float_type : { "float", "double" }) {
+      auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_" +
+        float_type + ") AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
+      ASSERT_EQ(size_t(g_array_test_row_count + 2), result_rows.size());
+      ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
+    }
+    {
+      auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_str) AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
+      ASSERT_EQ(size_t(g_array_test_row_count + 2), result_rows.size());
+      ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
+    }
+  }
+}
+
+TEST(Select, ArrayIndex) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
+      ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE arr_i32[1] = " +
+        std::to_string(10 * (row_idx + 2)) + " AND x = " + std::to_string(7 + row_idx) +
+        " AND real_str LIKE 'real_str" + std::to_string(row_idx) + "';", dt)));
+      ASSERT_EQ(0, v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE arr_i32[3] > 0 OR arr_i32[3] <= 0;", dt)));
+      ASSERT_EQ(0, v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE arr_i32[-1] > 0 OR arr_i32[-1] <= 0;", dt)));
+    }
+  }
+}
+
+TEST(Select, ArrayCountDistinct) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    for (const unsigned int_width : { 16, 32, 64 }) {
+      ASSERT_EQ(int64_t(g_array_test_row_count + 2), v<int64_t>(run_simple_agg("SELECT COUNT(distinct arr_i" +
+        std::to_string(int_width) + ") FROM array_test;", dt)));
+      auto result_rows = run_multiple_agg("SELECT COUNT(distinct arr_i" + std::to_string(int_width) +
+        ") FROM array_test GROUP BY x;", dt);
+      ASSERT_EQ(g_array_test_row_count, result_rows.size());
+      for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
+        ASSERT_EQ(3, v<int64_t>(result_rows.get(row_idx, 0, true)));
+      }
+    }
+    for (const std::string float_type : { "float", "double" }) {
+      ASSERT_EQ(int64_t(g_array_test_row_count + 2), v<int64_t>(run_simple_agg("SELECT COUNT(distinct arr_" +
+        float_type + ") FROM array_test;", dt)));
+    }
+    ASSERT_EQ(int64_t(g_array_test_row_count + 2), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(distinct arr_str) FROM array_test;", dt)));
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);
@@ -592,6 +750,18 @@ int main(int argc, char** argv)
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
+  try {
+    const std::string drop_old_array_test { "DROP TABLE IF EXISTS array_test;" };
+    run_ddl_statement(drop_old_array_test);
+    const std::string create_array_test {
+      "CREATE TABLE array_test(x int, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str text[] encoding dict, "
+        "arr_float float[], arr_double double[], real_str text) WITH (fragment_size=2);" };
+    run_ddl_statement(create_array_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'array_test'";
+    return -EEXIST;
+  }
+  import_array_test("array_test");
   int err { 0 };
   try {
     err = RUN_ALL_TESTS();
@@ -601,5 +771,7 @@ int main(int argc, char** argv)
   const std::string drop_test { "DROP TABLE test;" };
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
+  const std::string drop_array_test { "DROP TABLE array_test;" };
+  run_ddl_statement(drop_array_test);
   return err;
 }

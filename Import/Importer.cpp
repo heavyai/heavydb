@@ -16,6 +16,7 @@
 #include <glog/logging.h>
 #include "../Shared/measure.h"
 #include "Importer.h"
+#include "gen-cpp/MapD.h"
 
 namespace Importer_NS {
 

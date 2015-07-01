@@ -18,7 +18,8 @@
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../StringDictionary/StringDictionary.h"
-#include "gen-cpp/MapD.h"
+
+class TDatum;
 
 namespace Importer_NS {
 
