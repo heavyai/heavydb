@@ -145,17 +145,17 @@ type array_at_##type##_checked(int8_t* chunk_iter_,                             
                                const uint64_t row_pos,                           \
                                const int64_t elem_idx,                           \
                                const type null_val) {                            \
-  if (elem_idx < 0) {                                                            \
+  if (elem_idx <= 0) {                                                           \
     return null_val;                                                             \
   }                                                                              \
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);             \
   ArrayDatum ad;                                                                 \
   bool is_end;                                                                   \
   ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);                          \
-  if (ad.is_null || static_cast<size_t>(elem_idx) >= ad.length / sizeof(type)) { \
+  if (ad.is_null || static_cast<size_t>(elem_idx) > ad.length / sizeof(type)) {  \
     return null_val;                                                             \
   }                                                                              \
-  return reinterpret_cast<type*>(ad.pointer)[elem_idx];                          \
+  return reinterpret_cast<type*>(ad.pointer)[elem_idx - 1];                      \
 }
 
 ARRAY_AT_CHECKED(int16_t)

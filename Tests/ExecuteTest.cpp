@@ -686,13 +686,13 @@ TEST(Select, ArrayIndex) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
-      ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE arr_i32[1] = " +
+      ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM array_test WHERE arr_i32[2] = " +
         std::to_string(10 * (row_idx + 2)) + " AND x = " + std::to_string(7 + row_idx) +
         " AND real_str LIKE 'real_str" + std::to_string(row_idx) + "';", dt)));
       ASSERT_EQ(0, v<int64_t>(run_simple_agg(
-        "SELECT COUNT(*) FROM array_test WHERE arr_i32[3] > 0 OR arr_i32[3] <= 0;", dt)));
+        "SELECT COUNT(*) FROM array_test WHERE arr_i32[4] > 0 OR arr_i32[4] <= 0;", dt)));
       ASSERT_EQ(0, v<int64_t>(run_simple_agg(
-        "SELECT COUNT(*) FROM array_test WHERE arr_i32[-1] > 0 OR arr_i32[-1] <= 0;", dt)));
+        "SELECT COUNT(*) FROM array_test WHERE arr_i32[0] > 0 OR arr_i32[0] <= 0;", dt)));
     }
   }
 }
