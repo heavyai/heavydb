@@ -679,9 +679,8 @@ comparison_predicate:
 		{ $<nodeval>$ = new OperExpr($<opval>2, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	scalar_exp comparison subquery
 		{ 
-			$<nodeval>$ = new OperExpr($<opval>2, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); 
+			$<nodeval>$ = new OperExpr($<opval>2, kONE, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); 
 			/* subquery can only return a single result */
-			dynamic_cast<SubqueryExpr*>($<nodeval>3)->set_qualifier(kONE); 
 		}
 	;
 
@@ -718,6 +717,16 @@ in_predicate:
 		{ $<nodeval>$ = new InSubquery(true, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<SubqueryExpr*>($<nodeval>4)); }
 	|	scalar_exp IN subquery
 		{ $<nodeval>$ = new InSubquery(false, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<SubqueryExpr*>($<nodeval>3)); }
+  /* causes reduce/reduce conflict
+  | scalar_exp NOT IN scalar_exp
+  {
+    $<nodeval>$ = new OperExpr(kNE, kALL, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4));
+  }
+  | scalar_exp IN scalar_exp
+  {
+    $<nodeval>$ = new OperExpr(kEQ, kANY, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4));
+  }
+  */
 	|	scalar_exp NOT IN '(' atom_commalist ')'
 	{ $<nodeval>$ = new InValues(true, dynamic_cast<Expr*>($<nodeval>1), reinterpret_cast<std::list<Expr*>*>($<listval>5)); }
 	|	scalar_exp IN '(' atom_commalist ')'
@@ -736,9 +745,12 @@ atom_commalist:
 all_or_any_predicate:
 		scalar_exp comparison any_all_some subquery
 		{
-			$<nodeval>$ = new OperExpr($<opval>2, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4));
-			dynamic_cast<SubqueryExpr*>($<nodeval>4)->set_qualifier($<qualval>3);
+			$<nodeval>$ = new OperExpr($<opval>2, $<qualval>3, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4));
 		}
+    | scalar_exp comparison any_all_some scalar_exp
+    {
+			$<nodeval>$ = new OperExpr($<opval>2, $<qualval>3, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>4));
+    }
 	;
 
 comparison:

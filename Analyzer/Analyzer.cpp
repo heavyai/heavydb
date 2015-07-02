@@ -970,7 +970,7 @@ namespace Analyzer {
   BinOper::normalize_simple_predicate(int &rte_idx) const
   {
     rte_idx = -1;
-    if (!IS_COMPARISON(optype))
+    if (!IS_COMPARISON(optype) || qualifier != kONE)
       return nullptr;
     if (typeid(*left_operand) == typeid(ColumnVar) && typeid(*right_operand) == typeid(Constant)) {
       ColumnVar *cv = dynamic_cast<ColumnVar*>(left_operand);
@@ -1524,6 +1524,10 @@ namespace Analyzer {
         break;
     }
     std::cout << "(" << op;
+    if (qualifier == kANY)
+      std::cout << "ANY ";
+    else if (qualifier == kALL)
+      std::cout << "ALL ";
     left_operand->print();
     right_operand->print();
     std::cout << ") ";

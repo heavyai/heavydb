@@ -329,18 +329,27 @@ namespace Parser {
         throw std::runtime_error(right->to_string() + " is not of integer type.");
       return new Analyzer::BinOper(left_type.get_elem_type(), false, kARRAY_AT, kONE, left_expr, right_expr);
     }
-    SQLQualifier qual = kONE;
-    if (typeid(*right) == typeid(SubqueryExpr))
-      qual = dynamic_cast<SubqueryExpr*>(right)->get_qualifier();
+    SQLQualifier qual = opqualifier;
     right_expr = right->analyze(catalog, query, allow_tlist_ref);
     bool has_agg = (left_expr->get_contains_agg() || right_expr->get_contains_agg());
     right_type = right_expr->get_type_info();
+    if (qual != kONE) {
+      // subquery not supported yet.
+      assert(typeid(*right_expr) != typeid(Analyzer::Subquery));
+      if (right_type.get_type() != kARRAY)
+        throw std::runtime_error("Existential or universal qualifiers can only be used in front of a subquery or an expression of array type.");
+      right_type = right_type.get_elem_type();
+    }
     result_type = Analyzer::BinOper::analyze_type_info(optype, left_type, right_type, &new_left_type, &new_right_type);
     if (left_type != new_left_type)
       left_expr = left_expr->add_cast(new_left_type);
-    if (right_type != new_right_type)
-      right_expr = right_expr->add_cast(new_right_type);
-    if (optype == kEQ || optype == kNE) {
+    if (right_type != new_right_type) {
+      if (qual == kONE) 
+        right_expr = right_expr->add_cast(new_right_type);
+      else
+        right_expr = right_expr->add_cast(new_right_type.get_array_type());
+    }
+    if ((optype == kEQ || optype == kNE) && qual == kONE) {
       if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_NONE) {
         SQLTypeInfo ti(new_right_type);
         ti.set_compression(new_left_type.get_compression());
@@ -1176,12 +1185,7 @@ namespace Parser {
   SubqueryExpr::to_string() const
   {
     std::string str;
-    if (qualifier == kANY)
-      str = "ANY (";
-    else if (qualifier == kALL)
-      str = "ALL (";
-    else
-      str = "(";
+    str = "(";
     str += query->to_string();
     str += ")";
     return str;

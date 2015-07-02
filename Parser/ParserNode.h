@@ -178,7 +178,8 @@ namespace Parser {
    */
   class OperExpr : public Expr {
     public:
-      OperExpr(SQLOps t, Expr *l, Expr *r) : optype(t), left(l), right(r) {}
+      OperExpr(SQLOps t, Expr *l, Expr *r) : optype(t), opqualifier(kONE), left(l), right(r) {}
+      OperExpr(SQLOps t, SQLQualifier q, Expr *l, Expr *r) : optype(t), opqualifier(q), left(l), right(r) {}
       virtual ~OperExpr() { delete left; delete right; }
       SQLOps get_optype() const { return optype; }
       const Expr *get_left() const { return left; }
@@ -187,6 +188,7 @@ namespace Parser {
       virtual std::string to_string() const;
     private:
       SQLOps  optype;
+      SQLQualifier opqualifier;
       Expr *left;
       Expr *right;
   };
@@ -200,15 +202,12 @@ namespace Parser {
    */
   class SubqueryExpr : public Expr {
     public:
-      explicit SubqueryExpr(QuerySpec *q) : qualifier(kANY), query(q) {}
+      explicit SubqueryExpr(QuerySpec *q) : query(q) {}
       virtual ~SubqueryExpr();
       const QuerySpec *get_query() const { return query; }
-      SQLQualifier get_qualifier() const { return qualifier; }
-      void set_qualifier(SQLQualifier ql) { qualifier = ql; }
       virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      SQLQualifier qualifier;
       QuerySpec *query;
   };
 

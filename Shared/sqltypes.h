@@ -196,6 +196,8 @@ class SQLTypeInfo {
         return true;
       else if (type == kBOOLEAN && new_type_info.is_number())
         return true;
+      else if (type == kARRAY && new_type_info.get_type() == kARRAY)
+        return get_elem_type().is_castable(new_type_info.get_elem_type());
       else
         return false;
     }
@@ -255,7 +257,8 @@ class SQLTypeInfo {
       }
       return false;
     }
-    SQLTypeInfo get_elem_type() const { return SQLTypeInfo(subtype, dimension, scale, notnull, compression, comp_param, kNULLT); }
+    inline SQLTypeInfo get_elem_type() const { return SQLTypeInfo(subtype, dimension, scale, notnull, compression, comp_param, kNULLT); }
+    inline SQLTypeInfo get_array_type() const { return SQLTypeInfo(kARRAY, dimension, scale, notnull, compression, comp_param, type); }
   private:
     SQLTypes type; // type id
     SQLTypes subtype; // element type of arrays
