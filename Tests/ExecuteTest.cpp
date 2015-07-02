@@ -718,6 +718,35 @@ TEST(Select, ArrayCountDistinct) {
   }
 }
 
+TEST(Select, ArrayAnyAndAll) {
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    unsigned power10 = 1;
+    for (const unsigned int_width : { 16, 32, 64 }) {
+      ASSERT_EQ(2, v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE " + std::to_string(2 * power10) +
+        " = ANY arr_i" + std::to_string(int_width) + ";", dt)));
+      ASSERT_EQ(int64_t(g_array_test_row_count) - 2, v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE " + std::to_string(2 * power10) +
+        " < ALL arr_i" + std::to_string(int_width) + ";", dt)));
+      power10 *= 10;
+    }
+    for (const std::string float_type : { "float", "double" }) {
+      ASSERT_EQ(int64_t(g_array_test_row_count), v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE 1 < ANY arr_" + float_type + ";", dt)));
+      ASSERT_EQ(int64_t(g_array_test_row_count), v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE 2 < ANY arr_" + float_type + ";", dt)));
+      ASSERT_EQ(int64_t(g_array_test_row_count), v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE 0 < ALL arr_" + float_type + ";", dt)));
+    }
+    ASSERT_EQ(int64_t(g_array_test_row_count), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE x - 5 = ANY arr_i16;", dt)));
+    ASSERT_EQ(1, v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE 'aa' = ANY arr_str;", dt)));
+    ASSERT_EQ(2, v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE 'bb' = ANY arr_str;", dt)));
+  }
+}
+
 int main(int argc, char** argv)
 {
   testing::InitGoogleTest(&argc, argv);

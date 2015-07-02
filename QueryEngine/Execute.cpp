@@ -431,7 +431,7 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const bool hoist_
   llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
   for (auto in_val : *expr->get_value_list()) {
     result = cgen_state_->ir_builder_.CreateOr(result,
-      toBool(codegenCmp(kEQ, expr->get_arg(), in_val, hoist_literals)));
+      toBool(codegenCmp(kEQ, kONE, expr->get_arg(), in_val, hoist_literals)));
   }
   return result;
 }
@@ -895,6 +895,25 @@ std::string icmp_name(const SQLOps op_type) {
   }
 }
 
+std::string icmp_arr_name(const SQLOps op_type) {
+  switch (op_type) {
+  case kEQ:
+    return "eq";
+  case kNE:
+    return "ne";
+  case kLT:
+    return "gt";
+  case kGT:
+    return "lt";
+  case kLE:
+    return "ge";
+  case kGE:
+    return "le";
+  default:
+    CHECK(false);
+  }
+}
+
 llvm::CmpInst::Predicate llvm_fcmp_pred(const SQLOps op_type) {
   switch (op_type) {
   case kEQ:
@@ -941,12 +960,14 @@ std::string string_cmp_func(const SQLOps optype) {
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   const auto optype = bin_oper->get_optype();
+  const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  return codegenCmp(optype, lhs, rhs, hoist_literals);
+  return codegenCmp(optype, qualifier, lhs, rhs, hoist_literals);
 }
 
 llvm::Value* Executor::codegenCmp(const SQLOps optype,
+                                  const SQLQualifier qualifier,
                                   const Analyzer::Expr* lhs,
                                   const Analyzer::Expr* rhs,
                                   const bool hoist_literals) {
@@ -954,7 +975,37 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
   auto lhs_lvs = codegen(lhs, true, hoist_literals);
+  if (rhs_ti.is_array()) {
+    const Analyzer::Expr* arr_expr { rhs };
+    if (dynamic_cast<const Analyzer::UOper*>(rhs)) {
+      const auto cast_arr = static_cast<const Analyzer::UOper*>(rhs);
+      CHECK_EQ(kCAST, cast_arr->get_optype());
+      arr_expr = cast_arr->get_operand();
+    }
+    const auto& arr_ti = arr_expr->get_type_info();
+    const auto& elem_ti = arr_ti.get_elem_type();
+    auto rhs_lvs = codegen(arr_expr, true, hoist_literals);
+    CHECK_NE(kONE, qualifier);
+    std::string fname { std::string("array_") +
+      (qualifier == kANY ? "any" : "all") + "_" + icmp_arr_name(optype) };
+    if (elem_ti.is_integer() || elem_ti.is_string()) {
+      fname += ("_" + ("int" + std::to_string(elem_ti.get_size() * 8) + "_t"));
+    } else {
+      CHECK(elem_ti.is_fp());
+      fname += elem_ti.get_type() == kDOUBLE ? "_double" : "_float";
+    }
+    const auto& target_ti = rhs_ti.get_elem_type();
+    if (target_ti.is_integer() || target_ti.is_string()) {
+      fname += ("_" + ("int" + std::to_string(target_ti.get_size() * 8) + "_t"));
+    } else {
+      CHECK(target_ti.is_fp());
+      fname += target_ti.get_type() == kDOUBLE ? "_double" : "_float";
+    }
+    return cgen_state_->emitExternalCall(fname, get_int_type(1, cgen_state_->context_),
+      { rhs_lvs.front(), posArg(), lhs_lvs.front() });
+  }
   auto rhs_lvs = codegen(rhs, true, hoist_literals);
+  CHECK_EQ(kONE, qualifier);
   CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
         (lhs_ti.is_string() && rhs_ti.is_string()));
   const bool not_null { lhs_ti.get_notnull() && rhs_ti.get_notnull() };
@@ -3029,6 +3080,39 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
 
 namespace {
 
+std::string cpp_to_llvm_name(const std::string& s) {
+  if (s == "int16_t") {
+    return "i16";
+  }
+  if (s == "int32_t") {
+    return "i32";
+  }
+  if (s == "int64_t") {
+    return "i64";
+  }
+  CHECK(s == "float" || s == "double");
+  return s;
+}
+
+std::string gen_array_any_all_sigs() {
+  std::string result;
+  for (const std::string any_or_all : { "any", "all" }) {
+    for (const std::string elem_type : { "int16_t", "int32_t", "int64_t", "float", "double" }) {
+      for (const std::string needle_type : { "int16_t", "int32_t", "int64_t", "float", "double" }) {
+        for (const std::string op_name : { "eq", "ne", "lt", "le", "gt", "ge" }) {
+          result += ("declare i1 @array_" +
+            any_or_all + "_" +
+            op_name + "_" +
+            elem_type + "_" +
+            needle_type +
+            "(i8*, i64, " + cpp_to_llvm_name(needle_type) + ");\n");
+        }
+      }
+    }
+  }
+  return result;
+}
+
 const std::string cuda_llir_prologue =
 R"(
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
@@ -3100,8 +3184,7 @@ declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i32 @merge_error_code(i32, i32*);
-
-)";
+)" + gen_array_any_all_sigs();
 
 }  // namespace
 
