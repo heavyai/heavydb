@@ -349,16 +349,18 @@ namespace Parser {
       else
         right_expr = right_expr->add_cast(new_right_type.get_array_type());
     }
-    if ((optype == kEQ || optype == kNE) && qual == kONE) {
+    if (optype == kEQ || optype == kNE) {
       if (new_left_type.get_compression() == kENCODING_DICT && new_right_type.get_compression() == kENCODING_NONE) {
         SQLTypeInfo ti(new_right_type);
         ti.set_compression(new_left_type.get_compression());
         ti.set_comp_param(new_left_type.get_comp_param());
+        ti.set_fixed_size();
         right_expr = right_expr->add_cast(ti);
       } else if (new_right_type.get_compression() == kENCODING_DICT && new_left_type.get_compression() == kENCODING_NONE) {
-        SQLTypeInfo ti(new_right_type);
+        SQLTypeInfo ti(new_left_type);
         ti.set_compression(new_right_type.get_compression());
         ti.set_comp_param(new_right_type.get_comp_param());
+        ti.set_fixed_size();
         left_expr = left_expr->add_cast(ti);
       } else {
         left_expr = left_expr->decompress();
