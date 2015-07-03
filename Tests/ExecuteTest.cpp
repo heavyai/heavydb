@@ -699,6 +699,7 @@ TEST(Select, ArrayIndex) {
 
 TEST(Select, ArrayCountDistinct) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
     for (const unsigned int_width : { 16, 32, 64 }) {
       ASSERT_EQ(int64_t(g_array_test_row_count + 2), v<int64_t>(run_simple_agg("SELECT COUNT(distinct arr_i" +
         std::to_string(int_width) + ") FROM array_test;", dt)));
@@ -720,6 +721,7 @@ TEST(Select, ArrayCountDistinct) {
 
 TEST(Select, ArrayAnyAndAll) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
     unsigned power10 = 1;
     for (const unsigned int_width : { 16, 32, 64 }) {
       ASSERT_EQ(2, v<int64_t>(run_simple_agg(
