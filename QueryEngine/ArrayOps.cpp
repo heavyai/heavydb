@@ -42,6 +42,7 @@ type array_at_##type(int8_t* chunk_iter_,                            \
   return reinterpret_cast<type*>(ad.pointer)[elem_idx];              \
 }
 
+ARRAY_AT(int8_t)
 ARRAY_AT(int16_t)
 ARRAY_AT(int32_t)
 ARRAY_AT(int64_t)
@@ -89,6 +90,8 @@ bool array_all_##oper_name##_##type##_##needle_type(int8_t* chunk_iter_,        
 }
 
 #define ARRAY_ALL_ANY_ALL_TYPES(oper_name, oper, needle_type) \
+ARRAY_ANY(int8_t, needle_type, oper_name, oper)               \
+ARRAY_ALL(int8_t, needle_type, oper_name, oper)               \
 ARRAY_ANY(int16_t, needle_type, oper_name, oper)              \
 ARRAY_ALL(int16_t, needle_type, oper_name, oper)              \
 ARRAY_ANY(int32_t, needle_type, oper_name, oper)              \
@@ -99,6 +102,13 @@ ARRAY_ANY(float, needle_type, oper_name, oper)                \
 ARRAY_ALL(float, needle_type, oper_name, oper)                \
 ARRAY_ANY(double, needle_type, oper_name, oper)               \
 ARRAY_ALL(double, needle_type, oper_name, oper)
+
+ARRAY_ALL_ANY_ALL_TYPES(eq, ==, int8_t)
+ARRAY_ALL_ANY_ALL_TYPES(ne, !=, int8_t)
+ARRAY_ALL_ANY_ALL_TYPES(lt, <, int8_t)
+ARRAY_ALL_ANY_ALL_TYPES(le, <=, int8_t)
+ARRAY_ALL_ANY_ALL_TYPES(gt, >, int8_t)
+ARRAY_ALL_ANY_ALL_TYPES(ge, >=, int8_t)
 
 ARRAY_ALL_ANY_ALL_TYPES(eq, ==, int16_t)
 ARRAY_ALL_ANY_ALL_TYPES(ne, !=, int16_t)
@@ -158,6 +168,7 @@ type array_at_##type##_checked(int8_t* chunk_iter_,                             
   return reinterpret_cast<type*>(ad.pointer)[elem_idx - 1];                      \
 }
 
+ARRAY_AT_CHECKED(int8_t)
 ARRAY_AT_CHECKED(int16_t)
 ARRAY_AT_CHECKED(int32_t)
 ARRAY_AT_CHECKED(int64_t)
@@ -178,6 +189,11 @@ int8_t* array_buff(int8_t* chunk_iter_, const uint64_t row_pos) {
 #ifndef __CUDACC__
 
 #include <set>
+
+extern "C" ALWAYS_INLINE
+int64_t elem_bitcast_int8_t(const int8_t val) {
+  return val;
+}
 
 extern "C" ALWAYS_INLINE
 int64_t elem_bitcast_int16_t(const int16_t val) {
@@ -225,6 +241,7 @@ void agg_count_distinct_array_##type(int64_t* agg,                   \
   }                                                                  \
 }
 
+COUNT_DISTINCT_ARRAY(int8_t)
 COUNT_DISTINCT_ARRAY(int16_t)
 COUNT_DISTINCT_ARRAY(int32_t)
 COUNT_DISTINCT_ARRAY(int64_t)
