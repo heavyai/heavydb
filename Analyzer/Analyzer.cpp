@@ -1177,9 +1177,10 @@ namespace Analyzer {
   Expr *
   InValues::rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const
   {
-    // should never be called
-    CHECK(false);
-    return nullptr;
+    std::list<Expr*> *new_value_list = new std::list<Expr*>();
+    for (auto v : *value_list)
+      new_value_list->push_back(v->rewrite_agg_to_var(tlist));
+    return new InValues(arg->rewrite_agg_to_var(tlist), new_value_list);
   }
 
   Expr *
