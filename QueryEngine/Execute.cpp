@@ -1144,7 +1144,10 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
       return cgen_state_->emitCall("cast_" + from_tname + "_to_" + to_tname + "_nullable",
         { operand_lv, inlineIntNull(operand_ti), inlineIntNull(ti) });
     } else {
-      CHECK(ti.get_type() == kFLOAT || ti.get_type() == kDOUBLE);
+      if (!ti.is_fp()) {
+        throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " +
+          ti.get_type_name() + " not supported");
+      }
       return cgen_state_->ir_builder_.CreateSIToFP(operand_lv, ti.get_type() == kFLOAT
         ? llvm::Type::getFloatTy(cgen_state_->context_)
         : llvm::Type::getDoubleTy(cgen_state_->context_));
