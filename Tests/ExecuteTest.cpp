@@ -323,6 +323,8 @@ TEST(Select, Having) {
     c("SELECT z, SUM(y) FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100;", dt);
     c("SELECT z, SUM(y) FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 AND COUNT(*) > 5;", dt);
     c("SELECT z, SUM(y) FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 AND COUNT(*) > 9;", dt);
+    c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING str IN ('bar', 'baz');", dt);
+    c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING str LIKE 'ba_';", dt);
   }
 }
 
