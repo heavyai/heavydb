@@ -1153,8 +1153,10 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
         : llvm::Type::getDoubleTy(cgen_state_->context_));
     }
   } else {
-    CHECK(operand_ti.get_type() == kFLOAT ||
-          operand_ti.get_type() == kDOUBLE);
+    if (!operand_ti.is_fp()) {
+      throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " +
+        ti.get_type_name() + " not supported");
+    }
     if (operand_ti == ti) {
       return operand_lv;
     }

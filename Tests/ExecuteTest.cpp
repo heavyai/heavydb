@@ -567,6 +567,9 @@ TEST(Select, UnsupportedCast) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
     EXPECT_THROW(run_multiple_agg("SELECT CAST(x AS text) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT CAST(arr_i32 AS text[]) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT CAST(arr_i32 AS float[]) FROM test;", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT CAST(arr_i32 AS double[]) FROM test;", dt), std::runtime_error);
   }
 }
 
