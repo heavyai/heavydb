@@ -988,13 +988,29 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
     CHECK_NE(kONE, qualifier);
     std::string fname { std::string("array_") +
       (qualifier == kANY ? "any" : "all") + "_" + icmp_arr_name(optype) };
+    const auto& target_ti = rhs_ti.get_elem_type();
+    const bool is_real_string { target_ti.is_string() &&
+      target_ti.get_compression() != kENCODING_DICT };
+    if (is_real_string) {
+      cgen_state_->must_run_on_cpu_ = true;
+      CHECK_EQ(kENCODING_NONE, target_ti.get_compression());
+      fname += "_str";
+    }
     if (elem_ti.is_integer() || elem_ti.is_boolean() || elem_ti.is_string()) {
       fname += ("_" + ("int" + std::to_string(elem_ti.get_size() * 8) + "_t"));
     } else {
       CHECK(elem_ti.is_fp());
       fname += elem_ti.get_type() == kDOUBLE ? "_double" : "_float";
     }
-    const auto& target_ti = rhs_ti.get_elem_type();
+    if (is_real_string) {
+      CHECK_EQ(3, lhs_lvs.size());
+      return cgen_state_->emitExternalCall(fname, get_int_type(1, cgen_state_->context_),
+        {
+          rhs_lvs.front(), posArg(), lhs_lvs[1], lhs_lvs[2],
+          ll_int(int64_t(getStringDictionary(elem_ti.get_comp_param(), row_set_mem_owner_))),
+          inlineIntNull(elem_ti)
+        });
+    }
     if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
       fname += ("_" + ("int" + std::to_string(target_ti.get_size() * 8) + "_t"));
     } else {

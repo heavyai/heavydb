@@ -793,6 +793,18 @@ TEST(Select, ArrayAnyAndAll) {
       "SELECT COUNT(*) FROM array_test WHERE CAST('t' AS boolean) = ANY arr_bool;", dt)));
     ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg(
       "SELECT COUNT(*) FROM array_test WHERE CAST('t' AS boolean) = ALL arr_bool;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count - 2), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE 'bb' < ALL arr_str;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count - 1), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE 'bb' <= ALL arr_str;", dt)));
+    ASSERT_EQ(int64_t(1), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE 'bb' > ANY arr_str;", dt)));
+    ASSERT_EQ(int64_t(2), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE 'bb' >= ANY arr_str;", dt)));
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE  real_str = ANY arr_str;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE  real_str <> ANY arr_str;", dt)));
   }
 }
 

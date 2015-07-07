@@ -252,6 +252,91 @@ COUNT_DISTINCT_ARRAY(double)
 
 #undef COUNT_DISTINCT_ARRAY
 
+#include <string>
+
+extern "C"
+uint64_t string_decompress(const int32_t string_id, const int64_t string_dict_handle);
+
+#define ARRAY_STR_ANY(type, oper_name, oper)                                          \
+extern "C"                                                                            \
+bool array_any_##oper_name##_str_##type(int8_t* chunk_iter_,                          \
+                                        const uint64_t row_pos,                       \
+                                        const char* needle_ptr,                       \
+                                        const uint32_t needle_len,                    \
+                                        const int64_t string_dict_handle,             \
+                                        const type null_val) {                        \
+  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);                  \
+  ArrayDatum ad;                                                                      \
+  bool is_end;                                                                        \
+  ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);                               \
+  const size_t elem_count = ad.length / sizeof(type);                                 \
+  std::string needle_str(needle_ptr, needle_len);                                     \
+  for (size_t i = 0; i < elem_count; ++i) {                                           \
+    const type val = reinterpret_cast<type*>(ad.pointer)[i];                          \
+    if (val != null_val) {                                                            \
+      uint64_t str_and_len = string_decompress(val, string_dict_handle);              \
+      const char* str = reinterpret_cast<const char*>(str_and_len & 0xffffffffffff);  \
+      const uint16_t len = str_and_len >> 48;                                         \
+      std::string val_str(str, len);                                                  \
+      if (val_str oper needle_str) {                                                  \
+        return true;                                                                  \
+      }                                                                               \
+    }                                                                                 \
+  }                                                                                   \
+  return false;                                                                       \
+}
+
+#define ARRAY_STR_ALL(type, oper_name, oper)                                          \
+extern "C"                                                                            \
+bool array_all_##oper_name##_str_##type(int8_t* chunk_iter_,                          \
+                                        const uint64_t row_pos,                       \
+                                        const char* needle_ptr,                       \
+                                        const uint32_t needle_len,                    \
+                                        const int64_t string_dict_handle,             \
+                                        const type null_val) {                        \
+  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);                  \
+  ArrayDatum ad;                                                                      \
+  bool is_end;                                                                        \
+  ChunkIter_get_nth(chunk_iter, row_pos, &ad, &is_end);                               \
+  const size_t elem_count = ad.length / sizeof(type);                                 \
+  std::string needle_str(needle_ptr, needle_len);                                     \
+  for (size_t i = 0; i < elem_count; ++i) {                                           \
+    const type val = reinterpret_cast<type*>(ad.pointer)[i];                          \
+    if (val == null_val) {                                                            \
+      return false;                                                                   \
+    }                                                                                 \
+    uint64_t str_and_len = string_decompress(val, string_dict_handle);                \
+      const char* str = reinterpret_cast<const char*>(str_and_len & 0xffffffffffff);  \
+      const uint16_t len = str_and_len >> 48;                                         \
+      std::string val_str(str, len);                                                  \
+      if (!(val_str oper needle_str)) {                                               \
+        return false;                                                                 \
+      }                                                                               \
+  }                                                                                   \
+  return true;                                                                        \
+}
+
+#define ARRAY_STR_ALL_ANY_ALL_TYPES(oper_name, oper)  \
+ARRAY_STR_ANY(int8_t, oper_name, oper)                \
+ARRAY_STR_ALL(int8_t, oper_name, oper)                \
+ARRAY_STR_ANY(int16_t, oper_name, oper)               \
+ARRAY_STR_ALL(int16_t, oper_name, oper)               \
+ARRAY_STR_ANY(int32_t, oper_name, oper)               \
+ARRAY_STR_ALL(int32_t, oper_name, oper)               \
+ARRAY_STR_ANY(int64_t, oper_name, oper)               \
+ARRAY_STR_ALL(int64_t, oper_name, oper)
+
+ARRAY_STR_ALL_ANY_ALL_TYPES(eq, ==)
+ARRAY_STR_ALL_ANY_ALL_TYPES(ne, !=)
+ARRAY_STR_ALL_ANY_ALL_TYPES(lt, <)
+ARRAY_STR_ALL_ANY_ALL_TYPES(le, <=)
+ARRAY_STR_ALL_ANY_ALL_TYPES(gt, >)
+ARRAY_STR_ALL_ANY_ALL_TYPES(ge, >=)
+
+#undef ARRAY_ALL_ANY_ALL_TYPES
+#undef ARRAY_STR_ALL
+#undef ARRAY_STR_ANY
+
 #endif
 
 #endif  // EXECUTE_INCLUDE
