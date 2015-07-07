@@ -1002,7 +1002,11 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
       fname += target_ti.get_type() == kDOUBLE ? "_double" : "_float";
     }
     return cgen_state_->emitExternalCall(fname, get_int_type(1, cgen_state_->context_),
-      { rhs_lvs.front(), posArg(), lhs_lvs.front() });
+      {
+        rhs_lvs.front(), posArg(), lhs_lvs.front(), elem_ti.is_fp()
+          ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
+          : static_cast<llvm::Value*>(inlineIntNull(elem_ti))
+      });
   }
   auto rhs_lvs = codegen(rhs, true, hoist_literals);
   CHECK_EQ(kONE, qualifier);
@@ -3113,7 +3117,7 @@ std::string gen_array_any_all_sigs() {
             op_name + "_" +
             elem_type + "_" +
             needle_type +
-            "(i8*, i64, " + cpp_to_llvm_name(needle_type) + ");\n");
+            "(i8*, i64, " + cpp_to_llvm_name(needle_type) + ", " + cpp_to_llvm_name(elem_type) + ");\n");
         }
       }
     }

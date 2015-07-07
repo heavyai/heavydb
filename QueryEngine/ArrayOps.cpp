@@ -55,7 +55,8 @@ ARRAY_AT(double)
 extern "C" DEVICE                                                               \
 bool array_any_##oper_name##_##type##_##needle_type(int8_t* chunk_iter_,        \
                                                     const uint64_t row_pos,     \
-                                                    const needle_type needle) { \
+                                                    const needle_type needle,   \
+                                                    const type null_val) {      \
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);            \
   ArrayDatum ad;                                                                \
   bool is_end;                                                                  \
@@ -63,7 +64,7 @@ bool array_any_##oper_name##_##type##_##needle_type(int8_t* chunk_iter_,        
   const size_t elem_count = ad.length / sizeof(type);                           \
   for (size_t i = 0; i < elem_count; ++i) {                                     \
     const needle_type val = reinterpret_cast<type*>(ad.pointer)[i];             \
-    if (val oper needle) {                                                      \
+    if (val != null_val && val oper needle) {                                   \
       return true;                                                              \
     }                                                                           \
   }                                                                             \
@@ -74,7 +75,8 @@ bool array_any_##oper_name##_##type##_##needle_type(int8_t* chunk_iter_,        
 extern "C" DEVICE                                                               \
 bool array_all_##oper_name##_##type##_##needle_type(int8_t* chunk_iter_,        \
                                                     const uint64_t row_pos,     \
-                                                    const needle_type needle) { \
+                                                    const needle_type needle,   \
+                                                    const type null_val) {      \
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);            \
   ArrayDatum ad;                                                                \
   bool is_end;                                                                  \
@@ -82,7 +84,7 @@ bool array_all_##oper_name##_##type##_##needle_type(int8_t* chunk_iter_,        
   const size_t elem_count = ad.length / sizeof(type);                           \
   for (size_t i = 0; i < elem_count; ++i) {                                     \
     const needle_type val = reinterpret_cast<type*>(ad.pointer)[i];             \
-    if (!(val oper needle)) {                                                   \
+    if (!(val != null_val && val oper needle)) {                                \
       return false;                                                             \
     }                                                                           \
   }                                                                             \
