@@ -32,6 +32,21 @@ Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t
   buffer[0] = nullptr;
   buffer[1] = nullptr;
   which_buf = 0;
+  std::unique_ptr<bool> is_array = std::unique_ptr<bool>((bool*)malloc(loader.get_column_descs().size() * sizeof(bool)));
+  int i = 0;
+  bool has_array = false;
+  for (auto &p : loader.get_column_descs()) {
+    if (p->columnType.get_type() == kARRAY) {
+      is_array.get()[i] = true;
+      has_array = true;
+    } else
+      is_array.get()[i] = false;
+    ++i;
+  }
+  if (has_array)
+    is_array_a = std::unique_ptr<bool>(is_array.release());
+  else
+    is_array_a = std::unique_ptr<bool>(nullptr);
 }
 
 Importer::~Importer()
@@ -45,7 +60,7 @@ Importer::~Importer()
 }
 
 static const char *
-get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const CopyParams &copy_params, bool is_begin, std::vector<std::string> &row)
+get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const CopyParams &copy_params, bool is_begin, const bool *is_array, std::vector<std::string> &row)
 {
   const char *field = buf;
   const char *p;
@@ -61,9 +76,9 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;
-    } else if (copy_params.array_begin && !in_quote && *p == copy_params.array_begin) {
+    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_begin && is_array[row.size()]) {
       in_array = true;
-    } else if (copy_params.array_begin && !in_quote && *p == copy_params.array_end) {
+    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_end && is_array[row.size()]) {
       in_array = false;
     } else if (*p == copy_params.delimiter) {
       if (!in_quote && !in_array) {
@@ -106,9 +121,9 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
       in_quote = !in_quote;
       if (in_quote)
         strip_quotes = true;
-    } else if (copy_params.array_begin && *p == copy_params.array_begin) {
+    } else if (is_array != nullptr && *p == copy_params.array_begin && is_array[row.size()]) {
       in_array = true;
-    } else if (copy_params.array_begin && *p == copy_params.array_end) {
+    } else if (is_array != nullptr && *p == copy_params.array_end && is_array[row.size()]) {
       in_array = false;
     } else if (*p == copy_params.delimiter) {
       if (!in_quote && !in_array) {
@@ -457,6 +472,7 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
   const char *thread_buf_end = buffer + end_pos;
   const char *buf_end = buffer + total_size;
   std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers = importer->get_import_buffers(thread_id);
+  auto us = measure<std::chrono::microseconds>::execution([&]() {});
   for (const auto& p : import_buffers)
     p->clear();
   std::vector<std::string> row;
@@ -465,10 +481,13 @@ import_thread(int thread_id, Importer *importer, const char *buffer, size_t begi
       decltype(row) empty;
       row.swap(empty);
     }
-    auto us = measure<std::chrono::microseconds>::execution([&]() {
-    p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, row);
-    });
-    total_get_row_time_us += us;
+    if (debug_timing) {
+      us = measure<std::chrono::microseconds>::execution([&]() {
+        p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
+      });
+      total_get_row_time_us += us;
+    } else 
+      p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
     /*
     std::cout << "Row " << row_count << " : ";
     for (auto p : row)

@@ -35,7 +35,7 @@ struct CopyParams {
   char array_end;
   int threads;
 
-  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), array_begin(0), array_end(0), threads(0) {}
+  CopyParams() : delimiter(','), null_str("\\N"), has_header(true), quoted(false), quote('"'), escape('"'), line_delim('\n'), array_begin('{'), array_end('}'), threads(0) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
@@ -369,6 +369,7 @@ class Importer {
     void load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count) { if (!loader.load(import_buffers, row_count)) load_failed = true; }
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> &get_import_buffers_vec() { return import_buffers_vec; }
     std::vector<std::unique_ptr<TypedImportBuffer>> &get_import_buffers(int i) { return import_buffers_vec[i]; }
+    const bool *get_is_array() const { return is_array_a.get(); }
   private:
     const std::string &file_path;
     const CopyParams &copy_params;
@@ -380,6 +381,7 @@ class Importer {
     std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
     Loader loader;
     bool load_failed;
+    std::unique_ptr<bool> is_array_a;
 };
 
 };
