@@ -171,8 +171,8 @@ public:
     sessions_.erase(session_it);
   }
 
-  TColumnValue value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) {
-    TColumnValue col_val;
+  TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) {
+    TDatum datum;
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     if (!scalar_tv) {
       const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
@@ -180,58 +180,58 @@ public:
       CHECK(ti.is_array());
       for (const auto& elem_tv : *list_tv) {
         const auto scalar_col_val = value_to_thrift(elem_tv, ti.get_elem_type());
-        col_val.datum.arr_val.push_back(scalar_col_val.datum);
+        datum.val.arr_val.push_back(scalar_col_val);
       }
-      col_val.is_null = col_val.datum.arr_val.empty();
-      return col_val;
+      datum.is_null = datum.val.arr_val.empty();
+      return datum;
     }
     if (boost::get<int64_t>(scalar_tv)) {
-      col_val.datum.int_val = *(boost::get<int64_t>(scalar_tv));
+      datum.val.int_val = *(boost::get<int64_t>(scalar_tv));
       switch (ti.get_type()) {
         case kBOOLEAN:
-          col_val.is_null = (col_val.datum.int_val == NULL_BOOLEAN);
+          datum.is_null = (datum.val.int_val == NULL_BOOLEAN);
           break;
         case kSMALLINT:
-          col_val.is_null = (col_val.datum.int_val == NULL_SMALLINT);
+          datum.is_null = (datum.val.int_val == NULL_SMALLINT);
           break;
         case kINT:
-          col_val.is_null = (col_val.datum.int_val == NULL_INT);
+          datum.is_null = (datum.val.int_val == NULL_INT);
           break;
         case kBIGINT:
-          col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
+          datum.is_null = (datum.val.int_val == NULL_BIGINT);
           break;
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
           if (sizeof(time_t) == 4)
-            col_val.is_null = (col_val.datum.int_val == NULL_INT);
+            datum.is_null = (datum.val.int_val == NULL_INT);
           else
-            col_val.is_null = (col_val.datum.int_val == NULL_BIGINT);
+            datum.is_null = (datum.val.int_val == NULL_BIGINT);
           break;
         default:
-          col_val.is_null = false;
+          datum.is_null = false;
       }
     } else if (boost::get<double>(scalar_tv)) {
-      col_val.datum.real_val = *(boost::get<double>(scalar_tv));
+      datum.val.real_val = *(boost::get<double>(scalar_tv));
       if (ti.get_type() == kFLOAT) {
-        col_val.is_null = (col_val.datum.real_val == NULL_FLOAT);
+        datum.is_null = (datum.val.real_val == NULL_FLOAT);
       } else {
-        col_val.is_null = (col_val.datum.real_val == NULL_DOUBLE);
+        datum.is_null = (datum.val.real_val == NULL_DOUBLE);
       }
     } else if (boost::get<NullableString>(scalar_tv)) {
       auto s_n = boost::get<NullableString>(scalar_tv);
       auto s = boost::get<std::string>(s_n);
       if (s) {
-        col_val.datum.str_val = *s;
+        datum.val.str_val = *s;
       } else {
         auto null_p = boost::get<void*>(s_n);
         CHECK(null_p && !*null_p);
       }
-      col_val.is_null = !s;
+      datum.is_null = !s;
     } else {
       CHECK(false);
     }
-    return col_val;
+    return datum;
   }
 
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
@@ -498,7 +498,7 @@ public:
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
-          import_buffers[col_idx]->add_value(cd, row.cols[col_idx].datum, row.cols[col_idx].is_null);
+          import_buffers[col_idx]->add_value(cd, row.cols[col_idx], row.cols[col_idx].is_null);
           col_idx++;
         }
       } catch (const std::exception &e) {

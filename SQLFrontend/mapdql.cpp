@@ -324,26 +324,19 @@ process_backslash_commands(char *command, ClientContext &context)
   }
 }
 
-std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
-  if (type_info.is_array) {
-    std::vector<std::string> elem_strs;
-    elem_strs.reserve(datum.arr_val.size());
-    for (const auto& elem_datum : datum.arr_val) {
-      TTypeInfo elem_type_info { type_info };
-      elem_type_info.is_array = false;
-      elem_strs.push_back(datum_to_string(elem_datum, elem_type_info));
-    }
-    return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
+std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
+  if (datum.is_null) {
+    return "NULL";
   }
   switch (type_info.type) {
   case TDatumType::INT:
-    return std::to_string(datum.int_val);
+    return std::to_string(datum.val.int_val);
   case TDatumType::REAL:
-    return std::to_string(datum.real_val);
+    return std::to_string(datum.val.real_val);
   case TDatumType::STR:
-    return datum.str_val;
+    return datum.val.str_val;
   case TDatumType::TIME: {
-    time_t t = datum.int_val;
+    time_t t = datum.val.int_val;
     std::tm tm_struct;
     gmtime_r(&t, &tm_struct);
     char buf[9];
@@ -351,7 +344,7 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     return buf;
   }
   case TDatumType::TIMESTAMP: {
-    time_t t = datum.int_val;
+    time_t t = datum.val.int_val;
     std::tm tm_struct;
     gmtime_r(&t, &tm_struct);
     char buf[20];
@@ -359,7 +352,7 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     return buf;
   }
   case TDatumType::DATE: {
-    time_t t = datum.int_val;
+    time_t t = datum.val.int_val;
     std::tm tm_struct;
     gmtime_r(&t, &tm_struct);
     char buf[11];
@@ -367,10 +360,27 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
     return buf;
   }
   case TDatumType::BOOL:
-    return (datum.int_val ? "true" : "false");
+    return (datum.val.int_val ? "true" : "false");
   default:
     return "Unknown column type.\n";
   }
+}
+
+std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
+  if (datum.is_null) {
+    return "NULL";
+  }
+  if (type_info.is_array) {
+    std::vector<std::string> elem_strs;
+    elem_strs.reserve(datum.val.arr_val.size());
+    for (const auto& elem_datum : datum.val.arr_val) {
+      TTypeInfo elem_type_info { type_info };
+      elem_type_info.is_array = false;
+      elem_strs.push_back(scalar_datum_to_string(elem_datum, elem_type_info));
+    }
+    return "{" + boost::algorithm::join(elem_strs, ", ") + "}";
+  }
+  return scalar_datum_to_string(datum, type_info);
 }
 
 int main(int argc, char **argv) {
@@ -494,15 +504,12 @@ int main(int argc, char **argv) {
           for (auto row : context.query_return.row_set.rows) {
             not_first = false;
             int i = 0;
-            for (auto col_val : row.cols) {
+            for (auto datum : row.cols) {
               if (not_first)
                 std::cout << delimiter;
               else
                 not_first = true;
-              if (col_val.is_null)
-                std::cout << "NULL";
-              else
-                std::cout << datum_to_string(col_val.datum, context.query_return.row_set.row_desc[i].col_type);
+              std::cout << datum_to_string(datum, context.query_return.row_set.row_desc[i].col_type);
               i++;
             }
           std::cout << std::endl;

@@ -587,19 +587,22 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   if (ti.is_time()) {
     Datum datum;
     datum.timeval = *boost::get<int64_t>(scalar_tv);
+    if (datum.timeval == NULL_BIGINT) {
+      return "NULL";
+    }
     return DatumToString(datum, ti);
   }
   if (ti.is_boolean()) {
     const auto bool_val = *boost::get<int64_t>(scalar_tv);
-    return bool_val < 0 ? "NULL" : (bool_val ? "true" : "false");
+    return bool_val == NULL_BOOLEAN ? "NULL" : (bool_val ? "true" : "false");
   }
   auto iptr = boost::get<int64_t>(scalar_tv);
   if (iptr) {
-    return std::to_string(*iptr);
+    return *iptr == inline_int_null_val(ti) ? "NULL" : std::to_string(*iptr);
   }
   auto dptr = boost::get<double>(scalar_tv);
   if (dptr) {
-    return std::to_string(*dptr);
+    return *dptr == inline_fp_null_val(ti) ? "NULL" : std::to_string(*dptr);
   }
   auto sptr = boost::get<NullableString>(scalar_tv);
   CHECK(sptr);

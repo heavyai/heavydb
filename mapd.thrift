@@ -14,15 +14,15 @@ enum TExecuteMode {
   CPU
 }
 
-union TDatum {
+union TDatumVal {
   1: i64 int_val,
   2: double real_val,
   3: string str_val,
   4: list<TDatum> arr_val
 }
 
-struct TColumnValue {
-  1: TDatum datum,
+struct TDatum {
+  1: TDatumVal val,
   2: bool is_null
 }
 
@@ -43,7 +43,7 @@ struct TColumnType {
 }
 
 struct TRow {
-  1: list<TColumnValue> cols
+  1: list<TDatum> cols
 }
 
 struct TStringRow {

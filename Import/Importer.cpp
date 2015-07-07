@@ -371,7 +371,7 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val,
 }
 
 void
-TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, const bool is_null)
+TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &datum, const bool is_null)
 {
   switch (cd->columnType.get_type()) {
   case kBOOLEAN: {
@@ -380,13 +380,13 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, cons
         throw std::runtime_error("NULL for column " + cd->columnName);
       addBoolean(NULL_BOOLEAN);
     } else {
-      addBoolean((int8_t)val.int_val);
+      addBoolean((int8_t)datum.val.int_val);
     }
     break;
   }
   case kSMALLINT:
     if (!is_null) {
-      addSmallint((int16_t)val.int_val);
+      addSmallint((int16_t)datum.val.int_val);
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
@@ -395,7 +395,7 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, cons
     break;
   case kINT:
     if (!is_null) {
-      addInt((int32_t)val.int_val);
+      addInt((int32_t)datum.val.int_val);
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
@@ -404,7 +404,7 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, cons
     break;
   case kBIGINT:
     if (!is_null) {
-      addBigint(val.int_val);
+      addBigint(datum.val.int_val);
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
@@ -413,7 +413,7 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, cons
     break;
   case kFLOAT:
     if (!is_null) {
-      addFloat((float)val.real_val);
+      addFloat((float)datum.val.real_val);
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
@@ -422,7 +422,7 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, cons
     break;
   case kDOUBLE:
     if (!is_null) {
-      addDouble(val.real_val);
+      addDouble(datum.val.real_val);
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
@@ -438,14 +438,14 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &val, cons
         throw std::runtime_error("NULL for column " + cd->columnName);
       addString(std::string());
     } else
-      addString(val.str_val);
+      addString(datum.val.str_val);
     break;
   }
   case kTIME:
   case kTIMESTAMP:
   case kDATE:
     if (!is_null) {
-      addTime((time_t)val.int_val);
+      addTime((time_t)datum.val.int_val);
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
