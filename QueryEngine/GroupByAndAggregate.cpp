@@ -425,10 +425,10 @@ TargetValue ResultRows::get(const size_t row_idx,
     }
     CHECK(target_values_[row_idx][col_idx].i1);
     std::vector<ScalarTargetValue> tv_arr;
-    if (elem_type.is_integer() || elem_type.is_fp()) {
+    if (elem_type.is_integer() || elem_type.is_boolean() || elem_type.is_fp()) {
       const auto& int_arr = *reinterpret_cast<std::vector<int64_t>*>(target_values_[row_idx][col_idx].i1);
       tv_arr.reserve(int_arr.size());
-      if (elem_type.is_integer()) {
+      if (elem_type.is_integer() || elem_type.is_boolean()) {
         for (const auto x : int_arr) {
           tv_arr.emplace_back(x);
         }

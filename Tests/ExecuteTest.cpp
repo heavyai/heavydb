@@ -585,6 +585,7 @@ namespace {
 const size_t g_array_test_row_count { 20 };
 
 void import_array_test(const std::string& table_name) {
+  CHECK_EQ(size_t(0), g_array_test_row_count % 2);
   const auto& cat = g_session->get_catalog();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
@@ -609,6 +610,18 @@ void import_array_test(const std::string& table_name) {
         const auto& elem_ti = ti.get_elem_type();
         std::vector<std::string> array_elems;
         switch (elem_ti.get_type()) {
+        case kBOOLEAN: {
+          for (size_t i = 0; i < 3; ++i) {
+            if (row_idx % 2) {
+              array_elems.push_back("T");
+              array_elems.push_back("F");
+            } else {
+              array_elems.push_back("F");
+              array_elems.push_back("T");
+            }
+          }
+          break;
+        }
         case kSMALLINT:
           for (size_t i = 0; i < 3; ++i) {
             array_elems.push_back(std::to_string(row_idx + i + 1));
@@ -671,7 +684,7 @@ TEST(Select, ArrayUnnest) {
     for (const unsigned int_width : { 16, 32, 64 }) {
       auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_i" +
         std::to_string(int_width) + ") AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(size_t(g_array_test_row_count + 2), result_rows.size());
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows.size());
       ASSERT_EQ(int64_t(g_array_test_row_count + 2) * power10, v<int64_t>(result_rows.get(0, 1, true)));
       ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
       ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
@@ -681,15 +694,23 @@ TEST(Select, ArrayUnnest) {
     for (const std::string float_type : { "float", "double" }) {
       auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_" +
         float_type + ") AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(size_t(g_array_test_row_count + 2), result_rows.size());
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows.size());
       ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
       ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
     }
     {
       auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_str) AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(size_t(g_array_test_row_count + 2), result_rows.size());
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows.size());
       ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
       ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
+    }
+    {
+      auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_bool) AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
+      ASSERT_EQ(size_t(2), result_rows.size());
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.get(0, 0, true)));
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.get(1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 1, true)));
+      ASSERT_EQ(0, v<int64_t>(result_rows.get(1, 1, true)));
     }
   }
 }
@@ -706,6 +727,14 @@ TEST(Select, ArrayIndex) {
       ASSERT_EQ(0, v<int64_t>(run_simple_agg(
         "SELECT COUNT(*) FROM array_test WHERE arr_i32[0] > 0 OR arr_i32[0] <= 0;", dt)));
     }
+    for (size_t i = 1; i <= 6; ++i) {
+      ASSERT_EQ(int64_t(g_array_test_row_count / 2), v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE arr_bool[" + std::to_string(i) + "];", dt)));
+    }
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE arr_bool[7];", dt)));
+    ASSERT_EQ(0, v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE arr_bool[0];", dt)));
   }
 }
 
@@ -728,6 +757,8 @@ TEST(Select, ArrayCountDistinct) {
     }
     ASSERT_EQ(int64_t(g_array_test_row_count + 2), v<int64_t>(run_simple_agg(
       "SELECT COUNT(distinct arr_str) FROM array_test;", dt)));
+    ASSERT_EQ(2, v<int64_t>(run_simple_agg(
+      "SELECT COUNT(distinct arr_bool) FROM array_test;", dt)));
   }
 }
 
@@ -758,6 +789,10 @@ TEST(Select, ArrayAnyAndAll) {
       "SELECT COUNT(*) FROM array_test WHERE 'aa' = ANY arr_str;", dt)));
     ASSERT_EQ(2, v<int64_t>(run_simple_agg(
       "SELECT COUNT(*) FROM array_test WHERE 'bb' = ANY arr_str;", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE CAST('t' AS boolean) = ANY arr_bool;", dt)));
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg(
+      "SELECT COUNT(*) FROM array_test WHERE CAST('t' AS boolean) = ALL arr_bool;", dt)));
   }
 }
 
@@ -798,7 +833,7 @@ int main(int argc, char** argv)
     run_ddl_statement(drop_old_array_test);
     const std::string create_array_test {
       "CREATE TABLE array_test(x int, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str text[] encoding dict, "
-        "arr_float float[], arr_double double[], real_str text) WITH (fragment_size=2);" };
+        "arr_float float[], arr_double double[], arr_bool boolean[], real_str text) WITH (fragment_size=2);" };
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test'";

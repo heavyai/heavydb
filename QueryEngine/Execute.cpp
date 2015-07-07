@@ -988,14 +988,14 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
     CHECK_NE(kONE, qualifier);
     std::string fname { std::string("array_") +
       (qualifier == kANY ? "any" : "all") + "_" + icmp_arr_name(optype) };
-    if (elem_ti.is_integer() || elem_ti.is_string()) {
+    if (elem_ti.is_integer() || elem_ti.is_boolean() || elem_ti.is_string()) {
       fname += ("_" + ("int" + std::to_string(elem_ti.get_size() * 8) + "_t"));
     } else {
       CHECK(elem_ti.is_fp());
       fname += elem_ti.get_type() == kDOUBLE ? "_double" : "_float";
     }
     const auto& target_ti = rhs_ti.get_elem_type();
-    if (target_ti.is_integer() || target_ti.is_string()) {
+    if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
       fname += ("_" + ("int" + std::to_string(target_ti.get_size() * 8) + "_t"));
     } else {
       CHECK(target_ti.is_fp());
@@ -3086,6 +3086,9 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
 namespace {
 
 std::string cpp_to_llvm_name(const std::string& s) {
+  if (s == "int8_t") {
+    return "i8";
+  }
   if (s == "int16_t") {
     return "i16";
   }
@@ -3102,8 +3105,8 @@ std::string cpp_to_llvm_name(const std::string& s) {
 std::string gen_array_any_all_sigs() {
   std::string result;
   for (const std::string any_or_all : { "any", "all" }) {
-    for (const std::string elem_type : { "int16_t", "int32_t", "int64_t", "float", "double" }) {
-      for (const std::string needle_type : { "int16_t", "int32_t", "int64_t", "float", "double" }) {
+    for (const std::string elem_type : { "int8_t", "int16_t", "int32_t", "int64_t", "float", "double" }) {
+      for (const std::string needle_type : { "int8_t", "int16_t", "int32_t", "int64_t", "float", "double" }) {
         for (const std::string op_name : { "eq", "ne", "lt", "le", "gt", "ge" }) {
           result += ("declare i1 @array_" +
             any_or_all + "_" +
@@ -3158,11 +3161,13 @@ declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i1 @array_is_null(i8*, i64);
 declare i8* @array_buff(i8*, i64);
+declare i8 @array_at_int8_t(i8*, i64, i32);
 declare i16 @array_at_int16_t(i8*, i64, i32);
 declare i32 @array_at_int32_t(i8*, i64, i32);
 declare i64 @array_at_int64_t(i8*, i64, i32);
 declare float @array_at_float(i8*, i64, i32);
 declare double @array_at_double(i8*, i64, i32);
+declare i8 @array_at_int8_t_checked(i8*, i64, i64, i8);
 declare i16 @array_at_int16_t_checked(i8*, i64, i64, i16);
 declare i32 @array_at_int32_t_checked(i8*, i64, i64, i32);
 declare i64 @array_at_int64_t_checked(i8*, i64, i64, i64);
