@@ -339,6 +339,33 @@ public:
     }
   }
 
+  void render(std::string& _return, const TSessionId session, const std::string &query, const TRenderType::type render_type, const TRenderPropertyMap &render_properties) {
+    try {
+      client_.render(_return, session, query, render_type, render_properties);
+    }
+    catch (TMapDException &e) {
+      throw e;
+    }
+    catch (TException &te) {
+      try {
+        transport_.open();
+        client_.render(_return, session, query, render_type, render_properties);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    }
+    catch (std::exception &e) {
+      std::cerr << "render caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
 private:
   MapDClient &client_;
   TTransport &transport_;

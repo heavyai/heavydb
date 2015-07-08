@@ -77,6 +77,20 @@ exception ThriftException {
   1: string error_msg
 }
 
+enum TRenderType {
+  NONE,
+  POINT,
+  LINE,
+  POLYGON
+}
+
+struct TRenderProperty {
+  1: TDatumType property_type
+  2: TDatumVal property_value
+}
+
+typedef map<string, TRenderProperty> TRenderPropertyMap
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
@@ -90,4 +104,5 @@ service MapD {
   string get_version() throws (1: ThriftException te)
   void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows) throws (1: TMapDException e 2: ThriftException te)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e 2: ThriftException te)
+  binary render(1: TSessionId session, 2: string query, 3: TRenderType render_type, 4: TRenderPropertyMap render_properties) throws (1: TMapDException e 2: ThriftException te)
 }

@@ -554,6 +554,78 @@ public:
       loader.checkpoint();
   }
 
+  void render(std::string& _return, const TSessionId session, const std::string &query, const TRenderType::type render_type, const TRenderPropertyMap &render_properties) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    session_it->second->update_time();
+    auto &cat = session_it->second->get_catalog();
+    session_it->second->update_time();
+    LOG(INFO) << "Render: " << query;
+    SQLParser parser;
+    std::list<Parser::Stmt*> parse_trees;
+    std::string last_parsed;
+    int num_parse_errors = 0;
+    try {
+      num_parse_errors = parser.parse(query, parse_trees, last_parsed);
+    }
+    catch (std::exception &e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+    }
+    if (num_parse_errors > 0) {
+      TMapDException ex;
+      ex.error_msg = "Syntax error at: " + last_parsed;
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    if (parse_trees.size() != 1) {
+      TMapDException ex;
+      ex.error_msg = "Can only render a single query at a time.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    Parser::Stmt *stmt = parse_trees.front();
+    try {
+      std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
+      Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+      if (ddl != nullptr) {
+        TMapDException ex;
+        ex.error_msg = "Can only render SELECT statements.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      } else {
+        auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+        Analyzer::Query query;
+        dml->analyze(cat, query);
+        if (query.get_stmt_type() != kSELECT) {
+          TMapDException ex;
+          ex.error_msg = "Can only render SELECT statements.";
+          LOG(ERROR) << ex.error_msg;
+          throw ex;
+        }
+        Planner::Optimizer optimizer(query, cat);
+        auto root_plan = optimizer.optimize();
+        std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+        root_plan->set_render_type(render_type);
+        root_plan->set_render_properties(&render_properties);
+        // @TODO(alex) execute query, render and fill _return
+      }
+    }
+    catch (std::exception &e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+    }
+  }
+
 private:
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
