@@ -25,6 +25,7 @@
 #include "TableDescriptor.h"
 #include "ColumnDescriptor.h"
 #include "DictDescriptor.h"
+#include "FrontendViewDescriptor.h"
 #include "../DataMgr/DataMgr.h"
 
 namespace Catalog_Namespace {
@@ -59,6 +60,16 @@ typedef std::map < ColumnIdKey, ColumnDescriptor *> ColumnDescriptorMapById;
 
 typedef std::map < int, DictDescriptor *> DictDescriptorMapById;
         
+/**
+ * @type FrontendViewDescriptorMap
+ * @brief Maps frontend view names to pointers to frontend view descriptors allocated on the
+ * heap
+ */
+
+typedef std::map<std::string, FrontendViewDescriptor *> FrontendViewDescriptorMap;
+
+typedef std::map<int, FrontendViewDescriptor *> FrontendViewDescriptorMapById;
+
 /*
  * @type UserMetadata
  * @brief metadata for a mapd user
@@ -121,6 +132,7 @@ class Catalog {
         virtual ~Catalog();
 
 				void createTable(TableDescriptor &td, const std::list<ColumnDescriptor> &columns);
+				void createFrontendView(FrontendViewDescriptor &vd);
 				void dropTable(const TableDescriptor *td);
 
         /**
@@ -136,6 +148,9 @@ class Catalog {
         const ColumnDescriptor * getMetadataForColumn(int tableId, const std::string &colName) const;
         const ColumnDescriptor * getMetadataForColumn(int tableId, int columnId) const;
 
+        const FrontendViewDescriptor * getMetadataForFrontendView (const std::string &viewName) const;
+        const FrontendViewDescriptor * getMetadataForFrontendView (int viewId) const;
+
         /**
          * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the columns from a particular table 
          * specified by table id
@@ -148,6 +163,7 @@ class Catalog {
          std::list <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
 
 				 std::list<const TableDescriptor *> getAllTableMetadata() const;
+				 std::list<const FrontendViewDescriptor *> getAllFrontendViewMetadata() const;
          const DBMetadata &get_currentDB() const { return currentDB_; }
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
 				 Data_Namespace::DataMgr &get_dataMgr() const { return dataMgr_; }
@@ -158,6 +174,7 @@ class Catalog {
     protected:
         void buildMaps();
         void addTableToMap(TableDescriptor &td, const std::list<ColumnDescriptor> &columns, const std::list<DictDescriptor> &dicts);
+        void addFrontendViewToMap(FrontendViewDescriptor &vd);
         void removeTableFromMap(const std::string &tableName, int tableId);
 				void instantiateFragmenter(TableDescriptor *td) const;
 				void getAllColumnMetadataForTable(const TableDescriptor *td, std::list<const ColumnDescriptor *> &colDescs) const;
@@ -168,6 +185,8 @@ class Catalog {
         ColumnDescriptorMap columnDescriptorMap_;
         ColumnDescriptorMapById columnDescriptorMapById_;
         DictDescriptorMapById dictDescriptorMapById_;
+        FrontendViewDescriptorMap frontendViewDescriptorMap_;
+        FrontendViewDescriptorMapById frontendViewDescriptorMapById_;
         SqliteConnector sqliteConnector_;
         DBMetadata currentDB_;
 				Data_Namespace::DataMgr &dataMgr_;

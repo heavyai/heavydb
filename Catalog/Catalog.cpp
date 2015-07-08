@@ -74,6 +74,7 @@ SysCatalog::createDatabase(const string &name, int owner)
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, partitions text)");
 	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, size integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, refresh int)");
+	dbConn.query("CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references mapd_users, view_state text)");
 	dbConn.query("CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean)");
 }
 
@@ -252,6 +253,18 @@ void Catalog::buildMaps() {
 				td->isReady = !td->isMaterialized;
 				td->fragmenter = nullptr;
     }
+
+    string frontendViewQuery("SELECT viewid, view_state, name FROM mapd_frontend_views");
+    sqliteConnector_.query(frontendViewQuery);
+    numRows = sqliteConnector_.getNumRows();
+    for (size_t r = 0; r < numRows; ++r) {
+      FrontendViewDescriptor *vd = new FrontendViewDescriptor();
+      vd->viewId = sqliteConnector_.getData<int>(r,0);
+      vd->viewState = sqliteConnector_.getData<string>(r,1);
+      vd->viewName  = sqliteConnector_.getData<string>(r,2);
+      frontendViewDescriptorMap_[vd->viewName] = vd;
+      frontendViewDescriptorMapById_[vd->viewId] = vd;
+    }
 }
 
 void
@@ -311,6 +324,16 @@ Catalog::removeTableFromMap(const string &tableName, int tableId)
     }
 		delete cd;
 	}
+}
+
+void
+Catalog::addFrontendViewToMap(FrontendViewDescriptor &vd)
+{
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  FrontendViewDescriptor *new_vd = new FrontendViewDescriptor();
+  *new_vd = vd;
+  frontendViewDescriptorMap_[vd.viewName] = new_vd;
+  frontendViewDescriptorMapById_[vd.viewId] = new_vd;
 }
 
 void
@@ -388,7 +411,31 @@ const ColumnDescriptor * Catalog::getMetadataForColumn (int tableId, int columnI
     return colDescIt -> second;
 }
 
-void 
+const FrontendViewDescriptor * Catalog::getMetadataForFrontendView (const string &viewName) const  {
+  auto viewDescIt = frontendViewDescriptorMap_.find(viewName);
+  if (viewDescIt == frontendViewDescriptorMap_.end()) { // check to make sure view exists
+    return nullptr;
+  }
+  FrontendViewDescriptor *vd = viewDescIt->second;
+  {
+    std::lock_guard<std::mutex> lock(cat_mutex_);
+  }
+  return vd; // returns pointer to view descriptor
+}
+
+const FrontendViewDescriptor * Catalog::getMetadataForFrontendView (int viewId) const  {
+  auto frontendViewDescIt = frontendViewDescriptorMapById_.find(viewId);
+  if (frontendViewDescIt == frontendViewDescriptorMapById_.end()) { // check to make sure view exists
+    return nullptr;
+  }
+  FrontendViewDescriptor *vd = frontendViewDescIt->second;
+  {
+    std::lock_guard<std::mutex> lock(cat_mutex_);
+  }
+  return vd; // returns pointer to view descriptor
+}
+
+void
 Catalog::getAllColumnMetadataForTable(const TableDescriptor *td, list<const ColumnDescriptor *> &columnDescriptors) const {
 		for (int i = 1; i <= td->nColumns; i++) {
 			const ColumnDescriptor *cd = getMetadataForColumn(td->tableId, i);
@@ -411,6 +458,15 @@ Catalog::getAllTableMetadata() const
 	for (auto p : tableDescriptorMapById_)
 		table_list.push_back(p.second);
 	return table_list;
+}
+
+list<const FrontendViewDescriptor*>
+Catalog::getAllFrontendViewMetadata() const
+{
+  list<const FrontendViewDescriptor*> view_list;
+  for (auto p : frontendViewDescriptorMapById_)
+    view_list.push_back(p.second);
+  return view_list;
 }
 
 void
@@ -483,6 +539,30 @@ Catalog::dropTable(const TableDescriptor *td)
 	}
 	sqliteConnector_.query("END TRANSACTION");
 	removeTableFromMap(td->tableName, td->tableId);
+}
+
+void
+Catalog::createFrontendView(FrontendViewDescriptor &vd)
+{
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    // TODO(andrew): this should be an upsert
+    sqliteConnector_.query("SELECT viewId FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
+    if (sqliteConnector_.getNumRows() > 0) {
+      sqliteConnector_.query("UPDATE mapd_frontend_views SET name = '"+vd.viewName+"', view_state = '"+vd.viewState+"' where viewid = " + std::to_string(vd.viewId));
+    } else {
+      sqliteConnector_.query("INSERT INTO mapd_frontend_views (name, view_state) VALUES ('" + vd.viewName + "', '" + vd.viewState + "')");
+    }
+    // now get the auto generated viewid
+    sqliteConnector_.query("SELECT viewId FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
+    vd.viewId = sqliteConnector_.getData<int>(0, 0);
+  }
+  catch (std::exception &e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+  addFrontendViewToMap(vd);
 }
 
 } // Catalog_Namespace

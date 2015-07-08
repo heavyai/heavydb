@@ -419,6 +419,26 @@ public:
     }
   }
 
+  void get_frontend_view(std::string& _return, const TSessionId session, const std::string& view_name) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    session_it->second->update_time();
+    auto &cat = session_it->second->get_catalog();
+    auto vd = cat.getMetadataForFrontendView(view_name);
+    if (!vd) {
+      TMapDException ex;
+      ex.error_msg = "View " + view_name + " doesn't exist";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    _return.append(vd->viewState);
+  }
+
   void get_tables(std::vector<std::string> & table_names, const TSessionId session) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
@@ -459,6 +479,22 @@ public:
         }
       }
       dbinfos.push_back(dbinfo);
+    }
+  }
+
+  void get_frontend_views(std::vector<std::string> & view_names, const TSessionId session) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    session_it->second->update_time();
+    auto &cat = session_it->second->get_catalog();
+    const auto views = cat.getAllFrontendViewMetadata();
+    for (const auto vd : views) {
+      view_names.push_back(vd->viewName);
     }
   }
 
@@ -659,6 +695,22 @@ public:
         LOG(ERROR) << ex.error_msg;
         throw ex;
     }
+  }
+  void create_frontend_view(const TSessionId session, const std::string &view_name, const std::string &view_state) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    session_it->second->update_time();
+    auto &cat = session_it->second->get_catalog();
+    FrontendViewDescriptor vd;
+    vd.viewName = view_name;
+    vd.viewState = view_state;
+
+    cat.createFrontendView(vd);
   }
 
 private:

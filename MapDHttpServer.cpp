@@ -174,6 +174,42 @@ public:
     }
   }
 
+  void get_frontend_view(std::string& _return, const TSessionId session, const std::string& view_name) {
+    try {
+      client_.get_frontend_view(_return, session, view_name);
+    }
+    catch (TMapDException &e) {
+      throw e;
+    }
+    catch (TException &te) {
+      try {
+        transport_.open();
+        client_.get_frontend_view(_return, session, view_name);
+      }
+      catch (TMapDException &e) {
+        throw e;
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+      catch (std::exception &e) {
+        std::cerr << "get_view_descriptor caught exception: " << e.what() << std::endl;
+        TMapDException ex;
+        ex.error_msg = e.what();
+        throw ex;
+      }
+    }
+    catch (std::exception &e) {
+      std::cerr << "get_view_descriptor caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
   void get_tables(std::vector<std::string> & _return, const TSessionId session)
   {
     try {
@@ -205,6 +241,43 @@ public:
     }
     catch (std::exception &e) {
       std::cerr << "get_tables caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
+  void get_frontend_views(std::vector<std::string> & _return, const TSessionId session)
+  {
+    try {
+      client_.get_frontend_views(_return, session);
+    }
+    catch (TMapDException &e) {
+      throw e;
+    }
+    catch (TException &te) {
+      try {
+        transport_.open();
+        client_.get_frontend_views(_return, session);
+      }
+      catch (TMapDException &e) {
+        throw e;
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+      catch (std::exception &e) {
+        std::cerr << "get_frontend_views caught exception: " << e.what() << std::endl;
+        TMapDException ex;
+        ex.error_msg = e.what();
+        throw ex;
+      }
+    }
+    catch (std::exception &e) {
+      std::cerr << "get_frontend_views caught exception: " << e.what() << std::endl;
       TMapDException ex;
       ex.error_msg = e.what();
       throw ex;
@@ -360,6 +433,33 @@ public:
     }
     catch (std::exception &e) {
       std::cerr << "render caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
+  void create_frontend_view(const TSessionId session, const std::string &view_name, const std::string &view) {
+    try {
+      client_.create_frontend_view(session, view_name, view);
+    }
+    catch (TMapDException &e) {
+      throw e;
+    }
+    catch (TException &te) {
+      try {
+        transport_.open();
+        client_.create_frontend_view(session, view_name, view);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    }
+    catch (std::exception &e) {
+      std::cerr << "create_frontend_view caught exception: " << e.what() << std::endl;
       TMapDException ex;
       ex.error_msg = e.what();
       throw ex;
