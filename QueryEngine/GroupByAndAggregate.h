@@ -423,8 +423,10 @@ public:
                   const size_t col_idx,
                   const bool translate_strings) const;
 
-  SQLTypeInfo getType(const size_t col_idx) const {
-    return targets_[col_idx].sql_type;
+  SQLTypeInfo getColType(const size_t col_idx) const {
+    return targets_[col_idx].agg_kind == kAVG
+      ? SQLTypeInfo(kDOUBLE, false)
+      : targets_[col_idx].sql_type;
   }
 private:
   void beginRow(const int64_t key) {
@@ -613,7 +615,7 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
 
 inline std::string row_col_to_string(const ResultRows& rows, const size_t row_idx, const size_t i, const std::string& delim = ", ") {
   const auto tv = rows.get(row_idx, i, true);
-  const auto ti = rows.getType(i);
+  const auto ti = rows.getColType(i);
   return datum_to_string(tv, ti, delim);
 }
 

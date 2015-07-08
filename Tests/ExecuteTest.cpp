@@ -84,7 +84,7 @@ public:
         CHECK(scalar_mapd_variant);
         switch (ref_col_type) {
         case SQLITE_INTEGER: {
-          ASSERT_TRUE(mapd_results.getType(col_idx).is_integer());
+          ASSERT_TRUE(mapd_results.getColType(col_idx).is_integer());
           const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
           const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
           ASSERT_NE(nullptr, mapd_as_int_p);
@@ -93,9 +93,9 @@ public:
           break;
         }
         case SQLITE_FLOAT: {
-          ASSERT_TRUE(mapd_results.getType(col_idx).is_integer() ||
-                      mapd_results.getType(col_idx).get_type() == kFLOAT ||
-                      mapd_results.getType(col_idx).get_type() == kDOUBLE);
+          ASSERT_TRUE(mapd_results.getColType(col_idx).is_integer() ||
+                      mapd_results.getColType(col_idx).get_type() == kFLOAT ||
+                      mapd_results.getColType(col_idx).get_type() == kDOUBLE);
           const auto ref_val = connector_.getData<double>(row_idx, col_idx);
           const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
           ASSERT_NE(nullptr, mapd_as_double_p);
@@ -104,11 +104,11 @@ public:
           break;
         }
         case SQLITE_TEXT: {
-          ASSERT_TRUE(mapd_results.getType(col_idx).is_string() ||
-                      mapd_results.getType(col_idx).is_time() ||
-                      mapd_results.getType(col_idx).is_boolean());
+          ASSERT_TRUE(mapd_results.getColType(col_idx).is_string() ||
+                      mapd_results.getColType(col_idx).is_time() ||
+                      mapd_results.getColType(col_idx).is_boolean());
           const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-          if (mapd_results.getType(col_idx).is_string()) {
+          if (mapd_results.getColType(col_idx).is_string()) {
             const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
             ASSERT_NE(nullptr, mapd_as_str_p);
             const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
@@ -116,7 +116,7 @@ public:
             const auto mapd_val = *mapd_str_notnull;
             ASSERT_EQ(ref_val, mapd_val);
           } else {
-            const auto mapd_type = mapd_results.getType(col_idx).get_type();
+            const auto mapd_type = mapd_results.getColType(col_idx).get_type();
             switch (mapd_type) {
               case kTIMESTAMP:
               case kDATE: {
