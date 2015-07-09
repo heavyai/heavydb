@@ -244,6 +244,8 @@ ExpressionRange getExpressionRange(
   case kSMALLINT:
   case kINT:
   case kBIGINT:
+  case kDECIMAL:
+  case kNUMERIC:
   case kDATE:
   case kTIMESTAMP:
   case kTIME:

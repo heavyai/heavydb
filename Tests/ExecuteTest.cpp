@@ -308,7 +308,7 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", dt);
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", dt);
     c("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", dt);
-    c("SELECT x, dec, COUNT(*) FROM test GROUP BY x, dec;", dt);
+    c("SELECT x, dec, COUNT(*) FROM test GROUP BY x, dec ORDER BY x;", dt);
   }
 }
 
