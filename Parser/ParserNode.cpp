@@ -837,7 +837,7 @@ namespace Parser {
   {
     Analyzer::Expr *p = nullptr;
     if (having_clause != nullptr) {
-      p = having_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_REF);
+      p = having_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
       if (p->get_type_info().get_type() != kBOOLEAN)
         throw std::runtime_error("Only boolean expressions can be in HAVING clause.");
       p->check_group_by(query.get_group_by());
