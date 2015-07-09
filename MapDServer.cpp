@@ -554,7 +554,7 @@ public:
       loader.checkpoint();
   }
 
-  void render(std::string& _return, const TSessionId session, const std::string &query, const TRenderType::type render_type, const TRenderPropertyMap &render_properties) {
+  void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -615,6 +615,7 @@ public:
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         root_plan->set_render_type(render_type);
         root_plan->set_render_properties(&render_properties);
+        root_plan->set_column_render_properties(&col_render_properties);
         // @TODO(alex) execute query, render and fill _return
       }
     }

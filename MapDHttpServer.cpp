@@ -339,9 +339,9 @@ public:
     }
   }
 
-  void render(std::string& _return, const TSessionId session, const std::string &query, const TRenderType::type render_type, const TRenderPropertyMap &render_properties) {
+  void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {
     try {
-      client_.render(_return, session, query, render_type, render_properties);
+      client_.render(_return, session, query, render_type, render_properties, col_render_properties);
     }
     catch (TMapDException &e) {
       throw e;
@@ -349,7 +349,7 @@ public:
     catch (TException &te) {
       try {
         transport_.open();
-        client_.render(_return, session, query, render_type, render_properties);
+        client_.render(_return, session, query, render_type, render_properties, col_render_properties);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;

@@ -12,8 +12,13 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <map>
 #include "../Analyzer/Analyzer.h"
-#include "gen-cpp/MapD.h"
+
+// forward class references to avoid including Thrift headers
+class TRenderProperty;
+typedef std::map<std::string, TRenderProperty> TRenderPropertyMap;
+typedef std::map<std::string, TRenderPropertyMap> TColumnRenderMap;
 
 namespace Planner {
 	/*
@@ -182,7 +187,7 @@ namespace Planner {
 	 */
 	class RootPlan {
 		public:
-			RootPlan(Plan *p, SQLStmtType t, int r, const std::list<int> &c, const Catalog_Namespace::Catalog &cat, int64_t l, int64_t o) : plan(p), stmt_type(t), result_table_id(r), result_col_list(c), catalog(cat), limit(l), offset(o), render_type(TRenderType::NONE), render_properties(nullptr) {}
+			RootPlan(Plan *p, SQLStmtType t, int r, const std::list<int> &c, const Catalog_Namespace::Catalog &cat, int64_t l, int64_t o) : plan(p), stmt_type(t), result_table_id(r), result_col_list(c), catalog(cat), limit(l), offset(o), render_type("NONE"), render_properties(nullptr), column_render_properties(nullptr) {}
 			~RootPlan();
 			const Plan *get_plan() const { return plan; }
 			SQLStmtType get_stmt_type() const { return stmt_type; }
@@ -192,10 +197,12 @@ namespace Planner {
 			virtual void print() const;
 			int64_t get_limit() const { return limit; }
 			int64_t get_offset() const { return offset; }
-      TRenderType::type get_render_type() const { return render_type; }
-      void set_render_type(TRenderType::type t) { render_type = t; }
+      const std::string &get_render_type() const { return render_type; }
+      void set_render_type(std::string t) { render_type = t; }
       const TRenderPropertyMap *get_render_properties() const { return render_properties; }
       void set_render_properties(const TRenderPropertyMap *r) { render_properties = r; }
+      const TColumnRenderMap *get_column_render_properties() const { return column_render_properties; }
+      void set_column_render_properties(const TColumnRenderMap *p) { column_render_properties = p; }
 		private:
 			Plan *plan; // query plan
 			SQLStmtType stmt_type; // SELECT, UPDATE, DELETE or INSERT
@@ -204,8 +211,9 @@ namespace Planner {
 			const Catalog_Namespace::Catalog &catalog; // include the current catalog here for the executor
 			int64_t limit; // limit from LIMIT clause.  0 means ALL
 			int64_t offset; // offset from OFFSET clause.  0 means no offset.
-      TRenderType::type render_type;
+      std::string render_type;
       const TRenderPropertyMap *render_properties;
+      const TColumnRenderMap *column_render_properties;
 	};
 
 	/*

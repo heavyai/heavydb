@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include "../Analyzer/Analyzer.h"
 #include "Planner.h"
+#include "gen-cpp/MapD.h"
 
 namespace Planner {
 	Plan::~Plan()
