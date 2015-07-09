@@ -279,8 +279,21 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
 
 namespace {
 
+inline SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
+  switch (ti.get_size()) {
+  case 2:
+    return kSMALLINT;
+  case 4:
+    return kINT;
+  case 8:
+    return kBIGINT;
+  default:
+    CHECK(false);
+  }
+}
+
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
-  auto type = ti.get_type();
+  auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
   if (ti.is_string()) {
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     CHECK_EQ(4, ti.get_size());
@@ -604,7 +617,9 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   }
   auto dptr = boost::get<double>(scalar_tv);
   if (dptr) {
-    return *dptr == inline_fp_null_val(ti) ? "NULL" : std::to_string(*dptr);
+    return *dptr == inline_fp_null_val(ti.is_decimal() ? SQLTypeInfo(kDOUBLE, false) : ti)
+      ? "NULL"
+      : std::to_string(*dptr);
   }
   auto sptr = boost::get<NullableString>(scalar_tv);
   CHECK(sptr);
@@ -777,8 +792,9 @@ private:
 
 namespace {
 
-inline size_t get_bit_width(const SQLTypes type) {
-  switch (type) {
+inline size_t get_bit_width(const SQLTypeInfo& ti) {
+  const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (int_type) {
     case kBOOLEAN:
       return 8;
     case kSMALLINT:
@@ -865,7 +881,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
         col_widths.push_back(sizeof(int64_t));
         continue;
       }
-      const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type.get_type());
+      const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type);
       CHECK_EQ(0, col_expr_bitwidth % 8);
       col_widths.push_back(col_expr_bitwidth / 8);
       // for average, we'll need to keep the count as well

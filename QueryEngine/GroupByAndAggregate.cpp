@@ -130,9 +130,9 @@ void ResultRows::reduce(const ResultRows& other_results) {
 
   auto reduce_impl = [this](InternalTargetValue* crt_val, const InternalTargetValue* new_val,
       const TargetInfo& agg_info, const size_t agg_col_idx) {
-    CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_time() ||
-          agg_info.sql_type.get_type() == kBOOLEAN || agg_info.sql_type.is_string() ||
-          agg_info.sql_type.get_type() == kFLOAT || agg_info.sql_type.get_type() == kDOUBLE);
+    CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_decimal() ||
+          agg_info.sql_type.is_time() || agg_info.sql_type.is_boolean()||
+          agg_info.sql_type.is_string() || agg_info.sql_type.is_fp());
     switch (agg_info.agg_kind) {
     case kSUM:
     case kCOUNT:
@@ -168,14 +168,14 @@ void ResultRows::reduce(const ResultRows& other_results) {
         agg_sum(&crt_val->i2, new_val->i2);
         break;
       }
-      if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time()) {
+      if (!agg_info.sql_type.is_fp()) {
         agg_sum(&crt_val->i1, new_val->i1);
       } else {
         agg_sum_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
       }
       break;
     case kMIN:
-      if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time() || agg_info.sql_type.is_boolean()) {
+      if (!agg_info.sql_type.is_fp()) {
         if (agg_info.skip_null_val) {
           agg_min_skip_val(&crt_val->i1, new_val->i1, inline_int_null_val(agg_info.sql_type));
         } else {
@@ -191,7 +191,7 @@ void ResultRows::reduce(const ResultRows& other_results) {
       }
       break;
     case kMAX:
-      if (agg_info.sql_type.is_integer() || agg_info.sql_type.is_time()) {
+      if (!agg_info.sql_type.is_fp()) {
         if (agg_info.skip_null_val) {
           agg_max_skip_val(&crt_val->i1, new_val->i1, inline_int_null_val(agg_info.sql_type));
         } else {
@@ -278,12 +278,22 @@ void ResultRows::reduce(const ResultRows& other_results) {
 namespace {
 
 __attribute__((always_inline))
-inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const bool is_int) {
+uint64_t exp_to_scale(const unsigned exp) {
+  uint64_t res = 1;
+  for (unsigned i = 0; i < exp; ++i) {
+    res *= 10;
+  }
+  return res;
+}
+
+__attribute__((always_inline))
+inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const SQLTypeInfo& ti) {
   if (!fp_pair.second) {
     return inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
   }
-  return is_int
-    ? static_cast<double>(fp_pair.first) / static_cast<double>(fp_pair.second)
+  return ti.is_integer() || ti.is_decimal()
+    ? (static_cast<double>(fp_pair.first) / exp_to_scale(ti.is_decimal() ? ti.get_scale() : 0)) /
+       static_cast<double>(fp_pair.second)
     : *reinterpret_cast<const double*>(&fp_pair.first) / static_cast<double>(fp_pair.second);
 }
 
@@ -307,7 +317,6 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
       // as the compare function for descending order, std::sort will trigger
       // a segmentation fault (or corrupt memory).
       const auto& entry_ti = targets_[order_entry.tle_no - 1].sql_type;
-      const auto is_int = entry_ti.is_integer();
       const auto is_dict = entry_ti.is_string() &&
         entry_ti.get_compression() == kENCODING_DICT;
       const auto& lhs_v = lhs[order_entry.tle_no - 1];
@@ -343,8 +352,8 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
         if (lhs_v.isPair()) {
           CHECK(rhs_v.isPair());
           return use_desc_cmp
-            ? pair_to_double({ lhs_v.i1, lhs_v.i2 }, is_int) > pair_to_double({ rhs_v.i1, rhs_v.i2 }, is_int)
-            : pair_to_double({ lhs_v.i1, lhs_v.i2 }, is_int) < pair_to_double({ rhs_v.i1, rhs_v.i2 }, is_int);
+            ? pair_to_double({ lhs_v.i1, lhs_v.i2 }, entry_ti) > pair_to_double({ rhs_v.i1, rhs_v.i2 }, entry_ti)
+            : pair_to_double({ lhs_v.i1, lhs_v.i2 }, entry_ti) < pair_to_double({ rhs_v.i1, rhs_v.i2 }, entry_ti);
         } else {
           CHECK(lhs_v.isStr() && rhs_v.isStr());
           return use_desc_cmp ? lhs_v.strVal() > rhs_v.strVal() : lhs_v.strVal() < rhs_v.strVal();
@@ -382,16 +391,18 @@ TargetValue ResultRows::get(const size_t row_idx,
   CHECK_GE(col_idx, 0);
   CHECK_LT(col_idx, targets_.size());
   const auto agg_info = targets_[col_idx];
+  const auto ti = targets_[col_idx].sql_type;
   if (agg_info.agg_kind == kAVG) {
-    CHECK(!targets_[col_idx].sql_type.is_string());
+    CHECK(!ti.is_string());
     const auto& row_vals = target_values_[row_idx];
     CHECK_LT(col_idx, row_vals.size());
     CHECK(row_vals[col_idx].isPair());
-    return pair_to_double({ row_vals[col_idx].i1, row_vals[col_idx].i2 }, targets_[col_idx].sql_type.is_integer());
+    return pair_to_double({ row_vals[col_idx].i1, row_vals[col_idx].i2 }, ti);
   }
-  if (targets_[col_idx].sql_type.is_integer() ||
-      targets_[col_idx].sql_type.is_boolean() ||
-      targets_[col_idx].sql_type.is_time()) {
+  if (ti.is_integer() ||
+      ti.is_decimal() ||
+      ti.is_boolean() ||
+      ti.is_time()) {
     if (agg_info.is_distinct) {
       return TargetValue(bitmap_set_size(target_values_[row_idx][col_idx].i1, col_idx,
         row_set_mem_owner_->count_distinct_descriptors_));
@@ -399,10 +410,16 @@ TargetValue ResultRows::get(const size_t row_idx,
     CHECK_LT(col_idx, target_values_[row_idx].size());
     const auto v = target_values_[row_idx][col_idx];
     CHECK(v.isInt());
+    if (ti.is_decimal()) {
+      if (v.i1 == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(ti), false))) {
+        return NULL_DOUBLE;
+      }
+      return static_cast<double>(v.i1) / exp_to_scale(ti.get_scale());
+    }
     return v.i1;
-  } else if (targets_[col_idx].sql_type.is_string()) {
-    if (targets_[col_idx].sql_type.get_compression() == kENCODING_DICT) {
-      const int dict_id = targets_[col_idx].sql_type.get_comp_param();
+  } else if (ti.is_string()) {
+    if (ti.get_compression() == kENCODING_DICT) {
+      const int dict_id = ti.get_comp_param();
       const auto string_id = target_values_[row_idx][col_idx].i1;
       if (!translate_strings) {
         return TargetValue(string_id);
@@ -665,9 +682,9 @@ int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_strea
       : fixed_width_double_decode_noinline(byte_stream, pos);
     return *reinterpret_cast<int64_t*>(&fval);
   }
-  CHECK(type_info.is_integer() || type_info.is_time() || type_info.is_boolean() ||
-        (type_info.is_string() && enc_type == kENCODING_DICT));
-  size_t type_bitwidth = get_bit_width(col_var->get_type_info().get_type());
+  CHECK(type_info.is_integer() || type_info.is_decimal() || type_info.is_time() ||
+        type_info.is_boolean() || (type_info.is_string() && enc_type == kENCODING_DICT));
+  size_t type_bitwidth = get_bit_width(col_var->get_type_info());
   if (col_var->get_type_info().get_compression() == kENCODING_FIXED) {
     type_bitwidth = col_var->get_type_info().get_comp_param();
   }

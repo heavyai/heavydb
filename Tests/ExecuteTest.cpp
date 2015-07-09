@@ -95,7 +95,8 @@ public:
         case SQLITE_FLOAT: {
           ASSERT_TRUE(mapd_results.getColType(col_idx).is_integer() ||
                       mapd_results.getColType(col_idx).get_type() == kFLOAT ||
-                      mapd_results.getColType(col_idx).get_type() == kDOUBLE);
+                      mapd_results.getColType(col_idx).get_type() == kDOUBLE ||
+                      mapd_results.getColType(col_idx).get_type() == kDECIMAL);
           const auto ref_val = connector_.getData<double>(row_idx, col_idx);
           const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
           ASSERT_NE(nullptr, mapd_as_double_p);
@@ -241,9 +242,13 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT AVG(x + y + z) FROM test;", dt);
     c("SELECT AVG(x + y + z + t) FROM test;", dt);
     c("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;", dt);
-    c("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;", dt);
     c("SELECT AVG(y) FROM test WHERE z > 100 AND z < 102;", dt);
     c("SELECT AVG(y) FROM test WHERE t > 1000 AND t < 1002;", dt);
+    c("SELECT MIN(dec) FROM test;", dt);
+    c("SELECT MAX(dec) FROM test;", dt);
+    c("SELECT SUM(dec) FROM test;", dt);
+    c("SELECT AVG(dec) FROM test;", dt);
+    c("SELECT AVG(dec) FROM test  WHERE x > 6 AND x < 8;", dt);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)), numeric_limits<int32_t>::min());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)), numeric_limits<int32_t>::min());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)), numeric_limits<int32_t>::min());
@@ -303,6 +308,7 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", dt);
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", dt);
     c("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", dt);
+    c("SELECT x, dec, COUNT(*) FROM test GROUP BY x, dec;", dt);
   }
 }
 
@@ -339,6 +345,7 @@ TEST(Select, CountDistinct) {
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct x) FROM test GROUP BY y;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct x + 1) FROM test GROUP BY y;", dt);
+    c("SELECT COUNT(distinct dec) FROM test GROUP BY y;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt), std::runtime_error);
   }
 }
@@ -816,27 +823,27 @@ int main(int argc, char** argv)
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test {
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16)) WITH (fragment_size=2);" };
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dec decimal(10, 2)) WITH (fragment_size=2);" };
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date, fx int);");
+      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date, fx int, dec decimal(10, 2));");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
   }
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13T222315', '15:13:14', '1999-09-09', 9);" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13T222315', '15:13:14', '1999-09-09', 9, 111.1);" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13T222315', '15:13:14', '1999-09-09', 10);" };
+    const std::string insert_query { "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13T222315', '15:13:14', '1999-09-09', 10, 222.2);" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
-    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13T222315', '15:13:14', '1999-09-09', 11);" };
+    const std::string insert_query { "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13T222315', '15:13:14', '1999-09-09', 11, 333.3);" };
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
