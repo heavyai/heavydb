@@ -367,31 +367,32 @@ private:
 
     size_t getOrAddLiteral(const Analyzer::Constant* constant,
                            const EncodingType enc_type, const int dict_id) {
-      const auto& type_info = constant->get_type_info();
-      switch (type_info.get_type()) {
+      const auto& ti = constant->get_type_info();
+      const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+      switch (type) {
       case kBOOLEAN:
         return getOrAddLiteral(constant->get_is_null()
-          ? int8_t(inline_int_null_val(type_info))
+          ? int8_t(inline_int_null_val(ti))
           : int8_t(constant->get_constval().boolval));
       case kSMALLINT:
         return getOrAddLiteral(constant->get_is_null()
-          ? int16_t(inline_int_null_val(type_info))
+          ? int16_t(inline_int_null_val(ti))
           : constant->get_constval().smallintval);
       case kINT:
         return getOrAddLiteral(constant->get_is_null()
-          ? int32_t(inline_int_null_val(type_info))
+          ? int32_t(inline_int_null_val(ti))
           : constant->get_constval().intval);
       case kBIGINT:
         return getOrAddLiteral(constant->get_is_null()
-          ? int64_t(inline_int_null_val(type_info))
+          ? int64_t(inline_int_null_val(ti))
           : constant->get_constval().bigintval);
       case kFLOAT:
         return getOrAddLiteral(constant->get_is_null()
-          ? float(inline_fp_null_val(type_info))
+          ? float(inline_fp_null_val(ti))
           : constant->get_constval().floatval);
       case kDOUBLE:
         return getOrAddLiteral(constant->get_is_null()
-          ? inline_fp_null_val(type_info)
+          ? inline_fp_null_val(ti)
           : constant->get_constval().doubleval);
       case kCHAR:
       case kTEXT:
