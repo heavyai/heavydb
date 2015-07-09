@@ -2431,6 +2431,23 @@ int32_t Executor::executePlanWithGroupBy(
   return 0;
 }
 
+namespace {
+
+SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
+  switch (ti.get_size()) {
+  case 2:
+    return kSMALLINT;
+  case 4:
+    return kINT;
+  case 8:
+    return kBIGINT;
+  default:
+    CHECK(false);
+  }
+}
+
+}  // namespace
+
 void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   const auto plan = root_plan->get_plan();
   CHECK(plan);
@@ -2486,7 +2503,10 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     CHECK(col_cv);
     const auto cd = col_descriptors[col_idx];
     auto col_datum = col_cv->get_constval();
-    switch (cd->columnType.get_type()) {
+    auto col_type = cd->columnType.is_decimal()
+      ? decimal_to_int_type(cd->columnType)
+      : cd->columnType.get_type();
+    switch (col_type) {
     case kBOOLEAN: {
       auto col_data = reinterpret_cast<int8_t*>(malloc(sizeof(int8_t)));
       *col_data = col_cv->get_is_null()

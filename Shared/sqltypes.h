@@ -153,6 +153,7 @@ class SQLTypeInfo {
     inline bool is_string() const { return IS_STRING(type); }
     inline bool is_string_array() const { return (type == kARRAY) && IS_STRING(subtype); }
     inline bool is_integer() const { return IS_INTEGER(type); }
+    inline bool is_decimal() const { return type == kDECIMAL || type == kNUMERIC; }
     inline bool is_fp() const { return type == kFLOAT || type == kDOUBLE; }
     inline bool is_number() const { return IS_NUMBER(type); }
     inline bool is_time() const { return IS_TIME(type); }
