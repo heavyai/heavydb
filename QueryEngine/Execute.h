@@ -159,7 +159,8 @@ private:
     const Catalog_Namespace::Catalog&,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
-    const bool allow_multifrag);
+    const bool allow_multifrag,
+    const bool just_explain);
   ResultRows executeAggScanPlan(
     const Planner::Plan* plan,
     const int64_t limit,
@@ -170,7 +171,8 @@ private:
     std::shared_ptr<RowSetMemoryOwner>,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
-    const bool allow_multifrag);
+    const bool allow_multifrag,
+    const bool just_explain);
   void dispatchFragments(
     std::vector<ResultRows>& all_fragment_results,
     const std::function<void(
@@ -204,7 +206,8 @@ private:
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
     size_t& max_groups_buffer_entry_guess,
-    int32_t* error_code);
+    int32_t* error_code,
+    const bool just_explain);
   ResultRows executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
@@ -214,7 +217,8 @@ private:
     const ExecutorOptLevel,
     const Catalog_Namespace::Catalog&,
     size_t& max_groups_buffer_entry_guess,
-    int32_t* error_code);
+    int32_t* error_code,
+    const bool just_explain);
 
   struct CompilationResult {
     std::vector<void*> native_functions;
@@ -266,7 +270,9 @@ private:
     const bool allow_lazy_fetch,
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
-    const int64_t scan_limit);
+    const int64_t scan_limit,
+    const bool serialize_llvm_ir,
+    std::string& llvm_ir);
 
   void nukeOldState(const bool allow_lazy_fetch);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,

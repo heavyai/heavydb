@@ -386,6 +386,9 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
 TargetValue ResultRows::get(const size_t row_idx,
                             const size_t col_idx,
                             const bool translate_strings) const {
+  if (just_explain_) {
+    return explanation_;
+  }
   CHECK_GE(row_idx, 0);
   CHECK_LT(row_idx, target_values_.size());
   CHECK_GE(col_idx, 0);

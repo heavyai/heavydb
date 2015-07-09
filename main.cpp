@@ -329,10 +329,11 @@ main(int argc, char* argv[])
 			for (auto stmt : parse_trees) {
 				unique_ptr<Stmt> stmt_ptr(stmt); // make sure it's deleted
 				Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt *>(stmt);
-				if ( ddl != nullptr)
+				Parser::ExplainStmt *explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
+				if (ddl != nullptr && !explain_stmt)
 					ddl->execute(session);
 				else {
-					Parser::DMLStmt *dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+					auto dml = explain_stmt ? explain_stmt->get_stmt() : static_cast<const Parser::DMLStmt *>(stmt);
 					Query query;
 					dml->analyze(cat, query);
 					Optimizer optimizer(query, cat);
@@ -340,6 +341,9 @@ main(int argc, char* argv[])
 					unique_ptr<RootPlan> plan_ptr(plan); // make sure it's deleted
 					if (debug) plan->print();
 					if (execute) {
+						if (explain_stmt != nullptr) {
+							plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
+						}
 						auto executor = Executor::getExecutor(plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
 						ResultRows results({}, nullptr, nullptr);
 						ResultRows results_cpu({}, nullptr, nullptr);

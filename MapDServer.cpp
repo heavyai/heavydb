@@ -293,40 +293,61 @@ public:
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
         if (explain_stmt != nullptr) {
           root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
-          // @TODO(alex) complete EXPLAIN
-        } else {
-          auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
-          ResultRows results({}, nullptr, nullptr);
-          execute_time += measure<>::execution([&]() {
-            results = executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
-          });
-          const auto plan = root_plan->get_plan();
-          const auto& targets = plan->get_targetlist();
-          {
-            CHECK(plan);
-            TColumnType proj_info;
-            size_t i = 0;
-            for (const auto target : targets) {
-              proj_info.col_name = target->get_resname();
-              if (proj_info.col_name.empty()) {
-                proj_info.col_name = "result_" + std::to_string(i + 1);
-              }
-              const auto& target_ti = target->get_expr()->get_type_info();
-              proj_info.col_type.type = type_to_thrift(target_ti);
-              proj_info.col_type.nullable = !target_ti.get_notnull();
-              proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-              _return.row_set.row_desc.push_back(proj_info);
-              ++i;
+        }
+        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
+        ResultRows results({}, nullptr, nullptr);
+        execute_time += measure<>::execution([&]() {
+          results = executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
+        });
+        if (explain_stmt) {
+          CHECK_EQ(size_t(1), results.size());
+          TColumnType proj_info;
+          proj_info.col_name = "Explanation";
+          proj_info.col_type.type = TDatumType::STR;
+          proj_info.col_type.nullable = false;
+          proj_info.col_type.is_array = false;
+          _return.row_set.row_desc.push_back(proj_info);
+          TRow trow;
+          TDatum explanation;
+          const auto tv = results.get(0, 0, false);
+          const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+          CHECK(scalar_tv);
+          const auto s_n = boost::get<NullableString>(scalar_tv);
+          CHECK(s_n);
+          const auto s = boost::get<std::string>(s_n);
+          CHECK(s);
+          explanation.val.str_val = *s;
+          explanation.is_null = false;
+          trow.cols.push_back(explanation);
+          _return.row_set.rows.push_back(trow);
+          return;
+        }
+        const auto plan = root_plan->get_plan();
+        const auto& targets = plan->get_targetlist();
+        {
+          CHECK(plan);
+          TColumnType proj_info;
+          size_t i = 0;
+          for (const auto target : targets) {
+            proj_info.col_name = target->get_resname();
+            if (proj_info.col_name.empty()) {
+              proj_info.col_name = "result_" + std::to_string(i + 1);
             }
+            const auto& target_ti = target->get_expr()->get_type_info();
+            proj_info.col_type.type = type_to_thrift(target_ti);
+            proj_info.col_type.nullable = !target_ti.get_notnull();
+            proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+            _return.row_set.row_desc.push_back(proj_info);
+            ++i;
           }
-          for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
-            TRow trow;
-            for (size_t i = 0; i < results.colCount(); ++i) {
-              const auto agg_result = results.get(row_idx, i, true);
-              trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
-            }
-            _return.row_set.rows.push_back(trow);
+        }
+        for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+          TRow trow;
+          for (size_t i = 0; i < results.colCount(); ++i) {
+            const auto agg_result = results.get(row_idx, i, true);
+            trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
           }
+          _return.row_set.rows.push_back(trow);
         }
       }
     }

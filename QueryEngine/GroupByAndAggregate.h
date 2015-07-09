@@ -333,12 +333,17 @@ public:
     , group_by_buffer_(group_by_buffer)
     , groups_buffer_entry_count_(groups_buffer_entry_count)
     , min_val_(min_val)
-    , warp_count_(warp_count) {
+    , warp_count_(warp_count)
+    , just_explain_(false) {
     for (const auto target_expr : targets) {
       const auto agg_info = target_info(target_expr);
       targets_.push_back(agg_info);
     }
   }
+
+  explicit ResultRows(const std::string& explanation)
+    : just_explain_(true)
+    , explanation_(explanation) {}
 
   void beginRow() {
     target_values_.emplace_back();
@@ -408,15 +413,15 @@ public:
   }
 
   size_t size() const {
-    return target_values_.size();
+    return just_explain_ ? 1 : target_values_.size();
   }
 
   size_t colCount() const {
-    return targets_.size();
+    return just_explain_ ? 1 : targets_.size();
   }
 
   bool empty() const {
-    return !size() && !group_by_buffer_;
+    return !size() && !group_by_buffer_ && !just_explain_;
   }
 
   TargetValue get(const size_t row_idx,
@@ -424,6 +429,9 @@ public:
                   const bool translate_strings) const;
 
   SQLTypeInfo getColType(const size_t col_idx) const {
+    if (just_explain_) {
+      return SQLTypeInfo(kTEXT, false);
+    }
     return targets_[col_idx].agg_kind == kAVG
       ? SQLTypeInfo(kDOUBLE, false)
       : targets_[col_idx].sql_type;
@@ -556,6 +564,8 @@ private:
   int32_t groups_buffer_entry_count_;
   int64_t min_val_;
   int8_t warp_count_;
+  bool just_explain_;
+  std::string explanation_;
 
   friend class Executor;
 };
