@@ -69,7 +69,7 @@ using namespace Parser;
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE COPY CREATE CURRENT
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
-%token ELSE END ESCAPE EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
+%token ELSE END ESCAPE EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
@@ -104,6 +104,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| create_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| alter_user_statement { $<nodeval>$ = $<nodeval>1; }
+  | explain_statement { $<nodeval>$ = $<nodeval>1; }
 	;
 	
 /* NOT SUPPORTED
@@ -454,6 +455,12 @@ manipulative_statement:
 	/* |	update_statement_positioned */
 	|	update_statement
 	;
+
+explain_statement: EXPLAIN manipulative_statement
+  {
+    $<nodeval>$ = new ExplainStmt(dynamic_cast<DMLStmt*>($<nodeval>2));
+  }
+  ;
 
 /* NOT SUPPORTED
 close_statement:

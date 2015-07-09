@@ -273,48 +273,60 @@ public:
       try {
       std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
       Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-      if (ddl != nullptr) {
+      Parser::ExplainStmt *explain_stmt = nullptr;
+      if (ddl != nullptr)
+        explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
+      if (ddl != nullptr && explain_stmt == nullptr) {
         execute_time += measure<>::execution([&]() {
           ddl->execute(*session_it->second);
         });
       } else {
-        auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+        const Parser::DMLStmt *dml; 
+        if (explain_stmt != nullptr)
+          dml = explain_stmt->get_stmt();
+        else
+          dml = dynamic_cast<Parser::DMLStmt*>(stmt);
         Analyzer::Query query;
         dml->analyze(cat, query);
         Planner::Optimizer optimizer(query, cat);
         auto root_plan = optimizer.optimize();
         std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
-        ResultRows results({}, nullptr, nullptr);
-        execute_time += measure<>::execution([&]() {
-          results = executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
-        });
-        const auto plan = root_plan->get_plan();
-        const auto& targets = plan->get_targetlist();
-        {
-          CHECK(plan);
-          TColumnType proj_info;
-          size_t i = 0;
-          for (const auto target : targets) {
-            proj_info.col_name = target->get_resname();
-            if (proj_info.col_name.empty()) {
-              proj_info.col_name = "result_" + std::to_string(i + 1);
+        if (explain_stmt != nullptr) {
+          root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
+          // @TODO(alex) complete EXPLAIN
+        } else {
+          auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
+          ResultRows results({}, nullptr, nullptr);
+          execute_time += measure<>::execution([&]() {
+            results = executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
+          });
+          const auto plan = root_plan->get_plan();
+          const auto& targets = plan->get_targetlist();
+          {
+            CHECK(plan);
+            TColumnType proj_info;
+            size_t i = 0;
+            for (const auto target : targets) {
+              proj_info.col_name = target->get_resname();
+              if (proj_info.col_name.empty()) {
+                proj_info.col_name = "result_" + std::to_string(i + 1);
+              }
+              const auto& target_ti = target->get_expr()->get_type_info();
+              proj_info.col_type.type = type_to_thrift(target_ti);
+              proj_info.col_type.nullable = !target_ti.get_notnull();
+              proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+              _return.row_set.row_desc.push_back(proj_info);
+              ++i;
             }
-            const auto& target_ti = target->get_expr()->get_type_info();
-            proj_info.col_type.type = type_to_thrift(target_ti);
-            proj_info.col_type.nullable = !target_ti.get_notnull();
-            proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-            _return.row_set.row_desc.push_back(proj_info);
-            ++i;
           }
-        }
-        for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
-          TRow trow;
-          for (size_t i = 0; i < results.colCount(); ++i) {
-            const auto agg_result = results.get(row_idx, i, true);
-            trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
+          for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+            TRow trow;
+            for (size_t i = 0; i < results.colCount(); ++i) {
+              const auto agg_result = results.get(row_idx, i, true);
+              trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
+            }
+            _return.row_set.rows.push_back(trow);
           }
-          _return.row_set.rows.push_back(trow);
         }
       }
     }
@@ -615,6 +627,7 @@ public:
         root_plan->set_render_type(render_type);
         root_plan->set_render_properties(&render_properties);
         root_plan->set_column_render_properties(&col_render_properties);
+        root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
         // @TODO(alex) execute query, render and fill _return
       }
     }

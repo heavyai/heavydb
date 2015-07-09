@@ -753,6 +753,19 @@ namespace Parser {
   };
 
   /*
+   * @type ExplainStmt
+   * @brief EXPLAIN DMLStmt
+   */
+  class ExplainStmt : public DDLStmt {
+    public:
+      ExplainStmt(DMLStmt *s) : stmt(s) {}
+      const DMLStmt *get_stmt() const { return stmt; }
+      virtual void execute(Catalog_Namespace::SessionInfo &session) { assert(false); }
+    private:
+      DMLStmt *stmt;
+  };
+
+  /*
    * @type ExportQueryStmt
    * @brief COPY ( query ) TO file ...
    */
