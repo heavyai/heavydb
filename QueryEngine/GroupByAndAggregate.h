@@ -279,19 +279,6 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
 
 namespace {
 
-inline SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
-  switch (ti.get_size()) {
-  case 2:
-    return kSMALLINT;
-  case 4:
-    return kINT;
-  case 8:
-    return kBIGINT;
-  default:
-    CHECK(false);
-  }
-}
-
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
   if (ti.is_string()) {

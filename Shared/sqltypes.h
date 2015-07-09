@@ -381,6 +381,20 @@ class SQLTypeInfo {
 		}
 };
 
+inline SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
+  switch (ti.get_size()) {
+  case 2:
+    return kSMALLINT;
+  case 4:
+    return kINT;
+  case 8:
+    return kBIGINT;
+  default:
+    assert(false);
+  }
+  return kNULLT;
+}
+
 #ifndef __CUDACC__
 Datum
 StringToDatum(const std::string &s, SQLTypeInfo &ti);

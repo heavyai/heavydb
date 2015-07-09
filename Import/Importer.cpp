@@ -250,6 +250,64 @@ parseStringArray(const std::string &s, const CopyParams &copy_params, std::vecto
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
 }
 
+void
+addBinaryStringArray(const TDatum &datum, std::vector<std::string> &string_vec)
+{
+  const auto& arr = datum.val.arr_val;
+  for (const auto& elem_datum : arr) {
+    string_vec.push_back(elem_datum.val.str_val);
+  }
+}
+
+Datum
+TDatumToDatum(const TDatum &datum, SQLTypeInfo &ti)
+{
+	Datum d;
+  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+	switch (type) {
+		case kBOOLEAN:
+      d.boolval = datum.is_null ? NULL_BOOLEAN : datum.val.int_val;
+			break;
+		case kBIGINT:
+			d.bigintval = datum.is_null ? NULL_BIGINT : datum.val.int_val;
+			break;
+		case kINT:
+			d.intval = datum.is_null ? NULL_INT : datum.val.int_val;
+			break;
+		case kSMALLINT:
+			d.smallintval = datum.is_null ? NULL_SMALLINT : datum.val.int_val;
+			break;
+		case kFLOAT:
+			d.floatval = datum.is_null ? NULL_FLOAT : datum.val.real_val;
+			break;
+		case kDOUBLE:
+			d.doubleval = datum.is_null ? NULL_DOUBLE : datum.val.real_val;
+			break;
+		case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      d.timeval = datum.is_null ? (sizeof(time_t) == 8 ? NULL_BIGINT : NULL_INT) : datum.val.int_val;
+      break;
+		default:
+			throw std::runtime_error("Internal error: invalid type in StringToDatum.");
+	}
+	return d;
+}
+
+ArrayDatum
+TDatumToArrayDatum(const TDatum &datum, const SQLTypeInfo &ti)
+{
+  SQLTypeInfo elem_ti = ti.get_elem_type();
+  CHECK(!elem_ti.is_string());
+  size_t len = datum.val.arr_val.size() * elem_ti.get_size();
+  int8_t *buf = (int8_t*)malloc(len);
+  int8_t *p = buf;
+  for (auto &e : datum.val.arr_val) {
+    p = appendDatum(p, TDatumToDatum(e, elem_ti), elem_ti);
+  }
+  return ArrayDatum(len, buf, len == 0);
+}
+
 static size_t
 find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &copy_params)
 {
@@ -267,7 +325,8 @@ find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &c
 void
 TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null, const CopyParams &copy_params)
 {
-  switch (cd->columnType.get_type()) {
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+  switch (type) {
   case kBOOLEAN: {
     if (is_null) {
       if (cd->columnType.get_notnull())
@@ -280,33 +339,42 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val,
     }
     break;
   }
-  case kSMALLINT:
+  case kSMALLINT: {
     if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addSmallint((int16_t)std::atoi(val.c_str()));
+      addSmallint(cd->columnType.is_decimal()
+        ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
+        : std::atoi(val.c_str()));
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
       addSmallint(NULL_SMALLINT);
     }
     break;
-  case kINT:
+  }
+  case kINT: {
     if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addInt(std::atoi(val.c_str()));
+      addInt(cd->columnType.is_decimal()
+        ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
+        : std::atoi(val.c_str()));
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
       addInt(NULL_INT);
     }
     break;
-  case kBIGINT:
+  }
+  case kBIGINT: {
     if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addBigint(std::atoll(val.c_str()));
+      addBigint(cd->columnType.is_decimal()
+        ? std::strtod(val.c_str(), NULL) * pow(10, cd->columnType.get_scale())
+        : std::atoll(val.c_str()));
     } else {
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
       addBigint(NULL_BIGINT);
     }
     break;
+  }
   case kFLOAT:
     if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
       addFloat((float)std::atof(val.c_str()));
@@ -373,7 +441,8 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val,
 void
 TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &datum, const bool is_null)
 {
-  switch (cd->columnType.get_type()) {
+  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
+  switch (type) {
   case kBOOLEAN: {
     if (is_null) {
       if (cd->columnType.get_notnull())
@@ -450,6 +519,20 @@ TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &datum, co
       if (cd->columnType.get_notnull())
         throw std::runtime_error("NULL for column " + cd->columnName);
       addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+    }
+    break;
+  case kARRAY:
+    if (!is_null) {
+      if (IS_STRING(cd->columnType.get_subtype())) {
+        std::vector<std::string> &string_vec = addStringArray();
+        addBinaryStringArray(datum, string_vec);
+      } else {
+        addArray(TDatumToArrayDatum(datum, cd->columnType));
+      }
+    } else {
+      if (cd->columnType.get_notnull())
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      addArray(ArrayDatum(0, NULL, true));
     }
     break;
   default:
