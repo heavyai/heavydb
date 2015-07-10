@@ -21,9 +21,15 @@ parse_numeric(const std::string &s, SQLTypeInfo &ti)
 {
 	assert(s.length() <= 20);
 	size_t dot = s.find_first_of('.', 0);
-	assert(dot != std::string::npos);
-	std::string before_dot = s.substr(0, dot);
-	std::string after_dot = s.substr(dot+1);
+  std::string before_dot;
+  std::string after_dot;
+  if (dot != std::string::npos) {
+    before_dot = s.substr(0, dot);
+    after_dot = s.substr(dot+1);
+  } else {
+    before_dot = s;
+    after_dot = "0";
+  }
 	int64_t result;
 	result = std::stoll(before_dot);
 	int64_t fraction = std::stoll(after_dot);
