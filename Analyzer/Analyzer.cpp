@@ -415,18 +415,18 @@ namespace Analyzer {
         switch (type2.get_type()) {
           case kSMALLINT:
             common_type.set_type(kNUMERIC);
-            common_type.set_dimension(std::max(5+type2.get_scale(), type2.get_dimension()));
-            common_type.set_scale(type2.get_scale());
+            common_type.set_dimension(std::max(5+type1.get_scale(), type1.get_dimension()));
+            common_type.set_scale(type1.get_scale());
             break;
           case kINT:
             common_type.set_type(kNUMERIC);
-            common_type.set_dimension(std::max(std::min(19, 10+type2.get_scale()), type2.get_dimension()));
-            common_type.set_scale(type2.get_scale());
+            common_type.set_dimension(std::max(std::min(19, 10+type1.get_scale()), type2.get_dimension()));
+            common_type.set_scale(type1.get_scale());
             break;
           case kBIGINT:
             common_type.set_type(kNUMERIC);
             common_type.set_dimension(19); // maximum precision of BIGINT
-            common_type.set_scale(type2.get_scale());
+            common_type.set_scale(type1.get_scale());
             break;
           case kFLOAT:
             common_type.set_type(kFLOAT);
@@ -1464,7 +1464,7 @@ namespace Analyzer {
         op = "EXISTS ";
         break;
       case kCAST:
-        op = "CAST " + type_info.get_type_name() + " " + type_info.get_compression_name() + "(" + std::to_string(type_info.get_comp_param()) + ") ";
+        op = "CAST " + type_info.get_type_name() + "(" + std::to_string(type_info.get_precision()) + "," + std::to_string(type_info.get_scale()) + ") " + type_info.get_compression_name() + "(" + std::to_string(type_info.get_comp_param()) + ") ";
         break;
       case kUNNEST:
         op = "UNNEST ";
