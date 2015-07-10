@@ -742,6 +742,10 @@ TEST(Select, ArrayIndex) {
         "SELECT COUNT(*) FROM array_test WHERE arr_bool[7];", dt)));
     ASSERT_EQ(0, v<int64_t>(run_simple_agg(
         "SELECT COUNT(*) FROM array_test WHERE arr_bool[0];", dt)));
+    ASSERT_EQ(int64_t(0), v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE NOT (arr_i16[7] > 0 AND arr_i16[7] <= 0);", dt)));
+    ASSERT_EQ(int64_t(g_array_test_row_count), v<int64_t>(run_simple_agg(
+        "SELECT COUNT(*) FROM array_test WHERE NOT (arr_i16[2] > 0 AND arr_i16[2] <= 0);", dt)));
   }
 }
 

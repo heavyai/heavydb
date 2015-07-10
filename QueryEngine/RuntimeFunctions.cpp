@@ -161,6 +161,27 @@ DEF_CAST_NULLABLE_BIDIR(double, int64_t)
 #undef DEF_CAST_NULLABLE_BIDIR
 #undef DEF_CAST_NULLABLE
 
+extern "C" __attribute__((always_inline))
+int8_t logical_not(const int8_t operand, const int8_t null_val) {
+  return operand == null_val ? operand : (operand ? 0 : 1);
+}
+
+extern "C" __attribute__((always_inline))
+int8_t logical_and(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
+  if (lhs == null_val || rhs == null_val) {
+    return null_val;
+  }
+  return (lhs && rhs) ? 1 : 0;
+}
+
+extern "C" __attribute__((always_inline))
+int8_t logical_or(const int8_t lhs, const int8_t rhs, const int8_t null_val) {
+  if (lhs == null_val || rhs == null_val) {
+    return null_val;
+  }
+  return (lhs || rhs) ? 1 : 0;
+}
+
 #define DEF_TRANSLATE_NULL_KEY(key_type)                                                                             \
 extern "C" __attribute__((always_inline))                                                                            \
 int64_t translate_null_key_##key_type(const key_type key, const key_type null_val, const key_type translated_val) {  \

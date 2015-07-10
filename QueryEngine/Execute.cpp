@@ -1088,15 +1088,34 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const b
   CHECK(IS_LOGIC(optype));
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  const auto lhs_lv = toBool(codegen(lhs, true, hoist_literals).front());
-  const auto rhs_lv = toBool(codegen(rhs, true, hoist_literals).front());
+  auto lhs_lv = codegen(lhs, true, hoist_literals).front();
+  auto rhs_lv = codegen(rhs, true, hoist_literals).front();
+  const auto& ti = bin_oper->get_type_info();
+  if (ti.get_notnull()) {
+    switch (optype) {
+    case kAND:
+      return cgen_state_->ir_builder_.CreateAnd(lhs_lv, rhs_lv);
+    case kOR:
+      return cgen_state_->ir_builder_.CreateOr(lhs_lv, rhs_lv);
+    default:
+      CHECK(false);
+    }
+  }
+  CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
+  CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
+  if (lhs_lv->getType()->isIntegerTy(1)) {
+    lhs_lv = cgen_state_->ir_builder_.CreateZExt(lhs_lv, get_int_type(8, cgen_state_->context_));
+  }
+  if (rhs_lv->getType()->isIntegerTy(1)) {
+    rhs_lv = cgen_state_->ir_builder_.CreateZExt(rhs_lv, get_int_type(8, cgen_state_->context_));
+  }
   switch (optype) {
-  case kAND:
-    return cgen_state_->ir_builder_.CreateAnd(lhs_lv, rhs_lv);
-  case kOR:
-    return cgen_state_->ir_builder_.CreateOr(lhs_lv, rhs_lv);
-  default:
-    CHECK(false);
+    case kAND:
+      return cgen_state_->emitCall("logical_and", { lhs_lv, rhs_lv, inlineIntNull(ti) });
+    case kOR:
+      return cgen_state_->emitCall("logical_or", { lhs_lv, rhs_lv, inlineIntNull(ti) });
+    default:
+      CHECK(false);
   }
 }
 
@@ -1240,15 +1259,16 @@ llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper, const bool ho
 
 llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper, const bool hoist_literals) {
   const auto optype = uoper->get_optype();
-  CHECK(optype == kNOT || optype == kUMINUS || optype == kISNULL);
+  CHECK_EQ(kNOT, optype);
   const auto operand = uoper->get_operand();
-  const auto operand_lv = toBool(codegen(operand, true, hoist_literals).front());
-  switch (optype) {
-  case kNOT:
-    return cgen_state_->ir_builder_.CreateNot(operand_lv);
-  default:
-    CHECK(false);
-  }
+  const auto& operand_ti = operand->get_type_info();
+  CHECK(operand_ti.is_boolean());
+  const auto operand_lv = codegen(operand, true, hoist_literals).front();
+  CHECK(operand_lv->getType()->isIntegerTy());
+  CHECK(operand_ti.get_notnull() || operand_lv->getType()->isIntegerTy(8));
+  return operand_ti.get_notnull()
+    ? cgen_state_->ir_builder_.CreateNot(toBool(operand_lv))
+    : cgen_state_->emitCall("logical_not", { operand_lv, inlineIntNull(operand_ti) });
 }
 
 llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool hoist_literals) {
