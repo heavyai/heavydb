@@ -1110,12 +1110,12 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const b
     rhs_lv = cgen_state_->ir_builder_.CreateZExt(rhs_lv, get_int_type(8, cgen_state_->context_));
   }
   switch (optype) {
-    case kAND:
-      return cgen_state_->emitCall("logical_and", { lhs_lv, rhs_lv, inlineIntNull(ti) });
-    case kOR:
-      return cgen_state_->emitCall("logical_or", { lhs_lv, rhs_lv, inlineIntNull(ti) });
-    default:
-      CHECK(false);
+  case kAND:
+    return cgen_state_->emitCall("logical_and", { lhs_lv, rhs_lv, inlineIntNull(ti) });
+  case kOR:
+    return cgen_state_->emitCall("logical_or", { lhs_lv, rhs_lv, inlineIntNull(ti) });
+  default:
+    CHECK(false);
   }
 }
 
