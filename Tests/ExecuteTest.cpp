@@ -249,9 +249,9 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(dec) FROM test;", dt);
     c("SELECT AVG(dec) FROM test;", dt);
     c("SELECT AVG(dec) FROM test  WHERE x > 6 AND x < 8;", dt);
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)), numeric_limits<int32_t>::min());
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)), numeric_limits<int32_t>::min());
-    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)), numeric_limits<int32_t>::min());
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)), numeric_limits<int64_t>::max());
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)), numeric_limits<int64_t>::max());
+    ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)), numeric_limits<int64_t>::max());
   }
 }
 
@@ -827,10 +827,10 @@ int main(int argc, char** argv)
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test {
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dec decimal(10, 2)) WITH (fragment_size=2);" };
+      "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dec decimal(10, 2)) WITH (fragment_size=2);" };
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-      "CREATE TABLE test(x int, y int, z smallint, t bigint, b boolean, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date, fx int, dec decimal(10, 2));");
+      "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text, real_str text, m timestamp(0), n time(0), o date, fx int, dec decimal(10, 2));");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
