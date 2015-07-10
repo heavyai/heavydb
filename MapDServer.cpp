@@ -50,11 +50,12 @@ TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
     case kINT:
     case kBIGINT:
       return TDatumType::INT;
+    case kFLOAT:
+      return TDatumType::FLOAT;
     case kNUMERIC:
     case kDECIMAL:
-    case kFLOAT:
     case kDOUBLE:
-      return TDatumType::REAL;
+      return TDatumType::DOUBLE;
     case kTEXT:
     case kVARCHAR:
     case kCHAR:

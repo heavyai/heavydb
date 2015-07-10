@@ -1,6 +1,7 @@
 enum TDatumType {
   INT,
-  REAL,
+  FLOAT,
+  DOUBLE,
   STR,
   TIME,
   TIMESTAMP,

@@ -127,7 +127,8 @@ namespace {
           case TDatumType::INT:
             std::cout << gen_int();
             break;
-          case TDatumType::REAL:
+          case TDatumType::FLOAT:
+          case TDatumType::DOUBLE:
             std::cout << gen_real();
             break;
           case TDatumType::STR:

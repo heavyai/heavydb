@@ -244,7 +244,10 @@ process_backslash_commands(char *command, ClientContext &context)
               case TDatumType::INT:
                 std::cout << "INTEGER";
                 break;
-              case TDatumType::REAL:
+              case TDatumType::FLOAT:
+                std::cout << "FLOAT";
+                break;
+              case TDatumType::DOUBLE:
                 std::cout << "DOUBLE";
                 break;
               case TDatumType::STR:
@@ -331,7 +334,8 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
   switch (type_info.type) {
   case TDatumType::INT:
     return std::to_string(datum.val.int_val);
-  case TDatumType::REAL:
+  case TDatumType::FLOAT:
+  case TDatumType::DOUBLE:
     return std::to_string(datum.val.real_val);
   case TDatumType::STR:
     return datum.val.str_val;
