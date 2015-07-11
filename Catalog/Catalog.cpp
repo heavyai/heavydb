@@ -412,27 +412,21 @@ const ColumnDescriptor * Catalog::getMetadataForColumn (int tableId, int columnI
 }
 
 const FrontendViewDescriptor * Catalog::getMetadataForFrontendView (const string &viewName) const  {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
   auto viewDescIt = frontendViewDescriptorMap_.find(viewName);
   if (viewDescIt == frontendViewDescriptorMap_.end()) { // check to make sure view exists
     return nullptr;
   }
-  FrontendViewDescriptor *vd = viewDescIt->second;
-  {
-    std::lock_guard<std::mutex> lock(cat_mutex_);
-  }
-  return vd; // returns pointer to view descriptor
+  return viewDescIt->second; // returns pointer to view descriptor
 }
 
 const FrontendViewDescriptor * Catalog::getMetadataForFrontendView (int viewId) const  {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
   auto frontendViewDescIt = frontendViewDescriptorMapById_.find(viewId);
   if (frontendViewDescIt == frontendViewDescriptorMapById_.end()) { // check to make sure view exists
     return nullptr;
   }
-  FrontendViewDescriptor *vd = frontendViewDescIt->second;
-  {
-    std::lock_guard<std::mutex> lock(cat_mutex_);
-  }
-  return vd; // returns pointer to view descriptor
+  return frontendViewDescIt->second;
 }
 
 void
