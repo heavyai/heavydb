@@ -94,9 +94,8 @@ public:
         }
         case SQLITE_FLOAT: {
           ASSERT_TRUE(mapd_results.getColType(col_idx).is_integer() ||
-                      mapd_results.getColType(col_idx).get_type() == kFLOAT ||
-                      mapd_results.getColType(col_idx).get_type() == kDOUBLE ||
-                      mapd_results.getColType(col_idx).get_type() == kDECIMAL);
+                      mapd_results.getColType(col_idx).is_decimal() ||
+                      mapd_results.getColType(col_idx).is_fp());
           const auto ref_val = connector_.getData<double>(row_idx, col_idx);
           const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
           ASSERT_NE(nullptr, mapd_as_double_p);
@@ -248,7 +247,14 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT MAX(dec) FROM test;", dt);
     c("SELECT SUM(dec) FROM test;", dt);
     c("SELECT AVG(dec) FROM test;", dt);
-    c("SELECT AVG(dec) FROM test  WHERE x > 6 AND x < 8;", dt);
+    c("SELECT AVG(dec) FROM test WHERE x > 6 AND x < 8;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dec > 100;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dec > 200;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dec > 300;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dec > 111.0;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dec > 111.1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dec > 222.2;", dt);
+    c("SELECT MAX(x + dec) FROM test;", dt);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)), numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)), numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)), numeric_limits<int64_t>::max());

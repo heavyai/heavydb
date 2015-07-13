@@ -819,6 +819,14 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
   }
 }
 
+inline uint64_t exp_to_scale(const unsigned exp) {
+  uint64_t res = 1;
+  for (unsigned i = 0; i < exp; ++i) {
+    res *= 10;
+  }
+  return res;
+}
+
 inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
   const auto& target_list = plan->get_targetlist();
   std::vector<Analyzer::Expr*> result;

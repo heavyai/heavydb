@@ -6,6 +6,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include <glog/logging.h>
 #include <string>
 #include <stdexcept>
 #include <cassert>
@@ -216,4 +217,18 @@ DatumToString(Datum d, const SQLTypeInfo &ti)
 			throw std::runtime_error("Internal error: invalid type in DatumToString.");
 	}
 	return "";
+}
+
+SQLTypes decimal_to_int_type(const SQLTypeInfo& ti) {
+  switch (ti.get_size()) {
+  case 2:
+    return kSMALLINT;
+  case 4:
+    return kINT;
+  case 8:
+    return kBIGINT;
+  default:
+    CHECK(false);
+  }
+  return kNULLT;
 }

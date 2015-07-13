@@ -687,7 +687,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     llvm::Type* val_ptr_type { nullptr };
     const auto val_bits = get_bit_width(type_info);
     CHECK_EQ(0, val_bits % 8);
-    if (type_info.is_integer() || type_info.is_time() || type_info.is_string() || type_info.is_boolean()) {
+    if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() ||
+        type_info.is_string() || type_info.is_boolean()) {
       val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
     } else {
       CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
@@ -699,7 +700,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
       cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
     return { lit_lv };
   }
-  switch (type_info.get_type()) {
+  const auto type = type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
+  switch (type) {
   case kBOOLEAN:
     return { llvm::ConstantInt::get(get_int_type(8, cgen_state_->context_), constant->get_constval().boolval) };
   case kSMALLINT:
@@ -1036,7 +1038,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
         (lhs_ti.is_string() && rhs_ti.is_string()));
   const bool not_null { lhs_ti.get_notnull() && rhs_ti.get_notnull() };
-  if (lhs_ti.is_integer() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string()) {
+  if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string()) {
     if (lhs_ti.is_string()) {
       CHECK(rhs_ti.is_string());
       CHECK_EQ(lhs_ti.get_compression(), rhs_ti.get_compression());
@@ -1164,7 +1166,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
       CHECK_EQ(kENCODING_DICT, ti.get_compression());
       return operand_lv;
     }
-    CHECK(operand_ti.is_integer() || operand_ti.is_time() || operand_ti.is_boolean());
+    CHECK(operand_ti.is_integer() || operand_ti.is_decimal() || operand_ti.is_time() || operand_ti.is_boolean());
     if (operand_ti.is_boolean()) {
       CHECK(operand_lv->getType()->isIntegerTy(1) ||
             operand_lv->getType()->isIntegerTy(8));
@@ -1172,7 +1174,13 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
         operand_lv = cgen_state_->ir_builder_.CreateZExt(operand_lv, get_int_type(8, cgen_state_->context_));
       }
     }
-    if (ti.is_integer() || ti.is_time()) {
+    if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
+      if (ti.is_decimal()) {
+        CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
+        operand_lv = cgen_state_->ir_builder_.CreateMul(
+          operand_lv,
+          llvm::ConstantInt::get(operand_lv->getType(), exp_to_scale(ti.get_scale() - operand_ti.get_scale())));
+      }
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
       const auto target_width = get_bit_width(ti);
       if (target_width == operand_width) {
@@ -1194,9 +1202,13 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
         throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " +
           ti.get_type_name() + " not supported");
       }
-      return cgen_state_->ir_builder_.CreateSIToFP(operand_lv, ti.get_type() == kFLOAT
+      operand_lv = cgen_state_->ir_builder_.CreateSIToFP(operand_lv, ti.get_type() == kFLOAT
         ? llvm::Type::getFloatTy(cgen_state_->context_)
         : llvm::Type::getDoubleTy(cgen_state_->context_));
+      operand_lv = cgen_state_->ir_builder_.CreateFDiv(
+          operand_lv,
+          llvm::ConstantFP::get(operand_lv->getType(), exp_to_scale(operand_ti.get_scale())));
+      return operand_lv;
     }
   } else {
     if (!operand_ti.is_fp()) {
@@ -1343,7 +1355,8 @@ llvm::ConstantInt* Executor::codegenIntConst(const Analyzer::Constant* constant)
   if (constant->get_is_null()) {
     return inlineIntNull(type_info);
   }
-  switch (type_info.get_type()) {
+  const auto type = type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
+  switch (type) {
   case kSMALLINT:
     return ll_int(constant->get_constval().smallintval);
   case kINT:
@@ -1415,7 +1428,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
   const auto rhs_lv = codegen(rhs, true, hoist_literals).front();
   CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   const bool not_null { lhs_type.get_notnull() && rhs_type.get_notnull() };
-  if (lhs_type.is_integer()) {
+  if (lhs_type.is_integer() || lhs_type.is_decimal()) {
     const std::string int_typename { "int" + std::to_string(get_bit_width(lhs_type)) + "_t" };
     switch (optype) {
     case kMINUS:

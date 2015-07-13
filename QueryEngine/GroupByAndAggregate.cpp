@@ -278,15 +278,6 @@ void ResultRows::reduce(const ResultRows& other_results) {
 namespace {
 
 __attribute__((always_inline))
-uint64_t exp_to_scale(const unsigned exp) {
-  uint64_t res = 1;
-  for (unsigned i = 0; i < exp; ++i) {
-    res *= 10;
-  }
-  return res;
-}
-
-__attribute__((always_inline))
 inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair, const SQLTypeInfo& ti) {
   if (!fp_pair.second) {
     return inline_fp_null_val(SQLTypeInfo(kDOUBLE, false));
