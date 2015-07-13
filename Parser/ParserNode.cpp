@@ -1656,6 +1656,13 @@ namespace Parser {
             throw std::runtime_error("Array option must be exactly two characters.  Default is {}.");
           copy_params.array_begin = (*str_literal->get_stringval())[0];
           copy_params.array_end = (*str_literal->get_stringval())[1];
+        } else if (boost::iequals(*p->get_name(), "array_delimiter")) {
+          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+          if (str_literal == nullptr)
+            throw std::runtime_error("Array Delimiter option must be a string.");
+          else if (str_literal->get_stringval()->length() != 1)
+            throw std::runtime_error("Array Delimiter must be a single character string.");
+          copy_params.array_delim = (*str_literal->get_stringval())[0];
         } else
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

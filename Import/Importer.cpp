@@ -211,7 +211,7 @@ StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &cop
   }
   std::vector<std::string> elem_strs;
   size_t last = 1;
-  for (size_t i = s.find(copy_params.delimiter, 1); i != std::string::npos; i = s.find(copy_params.delimiter, last)) {
+  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos; i = s.find(copy_params.array_delim, last)) {
     elem_strs.push_back(s.substr(last, i - last));
     last = i + 1;
   }
@@ -241,7 +241,7 @@ parseStringArray(const std::string &s, const CopyParams &copy_params, std::vecto
     return;
   }
   size_t last = 1;
-  for (size_t i = s.find(copy_params.delimiter, 1); i != std::string::npos; i = s.find(copy_params.delimiter, last)) {
+  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos; i = s.find(copy_params.array_delim, last)) {
     if (i > last) // if not empty string - disallow empty strings for now
       string_vec.push_back(s.substr(last, i - last));
     last = i + 1;
