@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+
+BASEURL="http://data.mapd.com/"
+
+files[1]="flights-2008.tar.xz"
+files[2]="flights-2008-small.tar.bz2"
+
+tables[1]="flights"
+tables[2]="flights"
+
+if hash wget 2>/dev/null; then
+  GETTER="wget --continue"
+elif hash curl 2>/dev/null; then
+  GETTER="curl --continue - --remote-name"
+else
+  GETTER="echo 'Please download: '"
+fi
+
+download_and_extract_file() {
+  echo "- downloading and extracting $1"
+  $GETTER "$BASEURL/$1"
+  tar xvf "$1"
+}
+
+start_server() {
+  if [ -z "$PID" ]; then
+    if ! pgrep mapd_server; then
+      ./bin/mapd_server data --cpu &
+      PID=$!
+    fi
+    echo "- mapd_server started"
+    echo "- sleeping for 5s while server starts"
+    sleep 5
+  fi
+}
+
+echo "Enter number of dataset to download, or 'q' to quit:"
+for key in "${!files[@]}"; do
+  echo " $key) ${files[$key]}"
+done
+
+read idxs
+
+if [ -z "$idxs" ]; then
+  idxs=(${!files[@]})
+fi
+
+for idx in $idxs; do
+  if [ ${files[$idx]} ]; then
+    filename="${files[$idx]}"
+    download_and_extract_file $filename
+
+    filebase="${filename%%.*}"
+
+    start_server
+
+    echo "- adding schema"
+    ./bin/mapdql mapd -u mapd -p HyperInteractive < $filebase/*.sql
+    table=${tables[$idx]}
+    for csv in $PWD/$filebase/*csv; do
+      echo "- inserting file: $csv"
+      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/mapdql mapd -u mapd -p HyperInteractive
+    done
+
+    DASH="$PWD/$filebase/$filebase.dash"
+    if [ -f $DASH ]; then
+      MAPDDASH=$(head -n 1 "$DASH")
+      MAPDDASH="&table=$table$MAPDDASH"
+    fi
+
+    #echo "- killing mapd_server"
+    #kill -15 $(pgrep -n mapd_server)
+    #kill -15 $PID
+  fi
+done

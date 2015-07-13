@@ -1,14 +1,52 @@
 #!/bin/bash
 
-if ! ps aux | grep -v grep | grep mapd_server
-then
-    ./mapd_server data --cpu &
+if [ ! -d data ]; then
+    mkdir data
+    ./bin/initdb -f --path data
+    echo "Download and insert sample data? Y/n"
+    read choice
+    if [ -z "$choice" ]; then choice="Y"; fi
+    case $choice in
+        [yY]* )
+            DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+            . $DIR/insert_sample_data ;;
+    esac
 fi
 
-if ! ps aux | grep -v grep | grep mapd_http_server
-then
-    ./mapd_http_server &
+if ! pgrep mapd_server; then
+    ./bin/mapd_server data --cpu &
 fi
 
-curdir=`pwd`
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --allow-file-access-from-files "file:///${curdir}/mapd-explorer/index.html" & > /dev/null
+if ! pgrep mapd_http_server; then
+    ./bin/mapd_http_server &
+fi
+
+if [ -d frontend ]; then
+    pushd frontend
+    if [ ! -e downloads ]; then
+        ln -s ../data/mapd_export downloads
+    fi
+    trap 'kill -TERM $WEBPID' TERM INT
+    PYTHONVERS=$(python -c 'import sys; print(sys.version_info[0])')
+    if [ "$PYTHONVERS" -eq "2" ]; then
+        python -m SimpleHTTPServer 9092 &
+    else
+        python -m http.server 9092 &
+    fi
+    WEBPID=$!
+
+    MAPDFRONTEND="http://localhost:9092"
+    if [ ! -z "$MAPDDASH" ]; then
+        MAPDFRONTEND="$MAPDFRONTEND/?style=light-style&platform=mapd&host=localhost&port=9090&db=mapd&$MAPDDASH"
+    fi
+    if hash open 2>/dev/null; then
+        open $MAPDFRONTEND
+    elif hash xdg-open 2>/dev/null; then
+        xdg-open $MAPDFRONTEND
+    else
+        echo "Navigate to: $MAPDFRONTEND"
+    fi
+    wait $WEBPID
+    trap - TERM INT
+    wait $WEBPID
+fi
