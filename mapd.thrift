@@ -9,6 +9,15 @@ enum TDatumType {
   BOOL
 }
 
+enum TEncodingType {
+  NONE,
+  FIXED,
+  RL,
+  DIFF,
+  DICT,
+  SPARSE
+}
+
 enum TExecuteMode {
   HYBRID,
   GPU,
@@ -34,6 +43,7 @@ struct TStringValue {
 
 struct TTypeInfo {
   1: TDatumType type,
+  4: TEncodingType encoding,
   2: bool nullable,
   3: bool is_array
 }
