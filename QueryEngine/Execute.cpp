@@ -1424,9 +1424,12 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
-  const auto lhs_lv = codegen(lhs, true, hoist_literals).front();
-  const auto rhs_lv = codegen(rhs, true, hoist_literals).front();
+  auto lhs_lv = codegen(lhs, true, hoist_literals).front();
+  auto rhs_lv = codegen(rhs, true, hoist_literals).front();
   CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
+  if (lhs_type.is_decimal()) {
+    CHECK_EQ(lhs_type.get_scale(), rhs_type.get_scale());
+  }
   const bool not_null { lhs_type.get_notnull() && rhs_type.get_notnull() };
   if (lhs_type.is_integer() || lhs_type.is_decimal()) {
     const std::string int_typename { "int" + std::to_string(get_bit_width(lhs_type)) + "_t" };
@@ -1445,15 +1448,38 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
         return cgen_state_->emitCall("add_" + int_typename + "_nullable",
           { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
       }
-    case kMULTIPLY:
+    case kMULTIPLY: {
+      llvm::Value* result { nullptr };
+      bool dec_adjusted { false };
+      if (dynamic_cast<const Analyzer::Constant*>(rhs) && rhs_type.is_decimal()) {
+        rhs_lv = cgen_state_->ir_builder_.CreateSDiv(rhs_lv,
+          llvm::ConstantInt::get(rhs_lv->getType(), exp_to_scale(rhs_type.get_scale())));
+        dec_adjusted = true;
+      } else if (dynamic_cast<const Analyzer::Constant*>(lhs) && lhs_type.is_decimal()) {
+        lhs_lv = cgen_state_->ir_builder_.CreateSDiv(lhs_lv,
+          llvm::ConstantInt::get(lhs_lv->getType(), exp_to_scale(lhs_type.get_scale())));
+        dec_adjusted = true;
+      }
       if (not_null) {
-        return cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
+        result = cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
       } else {
-        return cgen_state_->emitCall("mul_" + int_typename + "_nullable",
+        result = cgen_state_->emitCall("mul_" + int_typename + "_nullable",
           { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
       }
-    case kDIVIDE:
-      return codegenDiv(lhs_lv, rhs_lv, not_null ? "" : int_typename, lhs_type);
+      if (lhs_type.is_decimal() && !dec_adjusted) {
+        result = cgen_state_->ir_builder_.CreateSDiv(result,
+          llvm::ConstantInt::get(result->getType(), exp_to_scale(lhs_type.get_scale())));
+      }
+      return result;
+    }
+    case kDIVIDE: {
+      auto result = codegenDiv(lhs_lv, rhs_lv, not_null ? "" : int_typename, lhs_type);
+      if (lhs_type.is_decimal()) {
+        result = cgen_state_->ir_builder_.CreateMul(result,
+          llvm::ConstantInt::get(result->getType(), exp_to_scale(lhs_type.get_scale())));
+      }
+      return result;
+    }
     default:
       CHECK(false);
     }
