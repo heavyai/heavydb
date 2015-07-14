@@ -995,7 +995,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       CHECK(!group_by_buffers_.empty());
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, small_group_by_buffers_, query_mem_desc_,
-        block_size_x, grid_size_x, device_id);
+        block_size_x, num_buffers_ / executor_->blockSize(), device_id);
       if (hoist_literals) {
         void* kernel_params[] = {
           &multifrag_col_buffers_dev_ptr,
