@@ -1028,7 +1028,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        query_mem_desc_.sharedMemBytes(ExecutorDeviceType::GPU),
                                        nullptr, kernel_params, nullptr));
       }
-      copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
+      copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x,
+        num_buffers_ / executor_->blockSize(), device_id);
       copy_from_gpu(data_mgr, &error_codes[0], error_code_dev_ptr, grid_size_x * sizeof(error_codes[0]), device_id);
       *error_code = 0;
       for (const auto err : error_codes) {
