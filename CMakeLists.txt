@@ -104,6 +104,7 @@ endif()
 
 install(TARGETS initdb mapd mapd_server mapd_http_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
+install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
 install(FILES mapd.thrift DESTINATION ".")
 install(FILES MapDBetaGuide.md DESTINATION docs)
 
