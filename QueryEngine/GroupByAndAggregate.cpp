@@ -502,7 +502,7 @@ QueryExecutionContext::QueryExecutionContext(
   , col_buffers_(col_buffers)
   , num_buffers_ { device_type == ExecutorDeviceType::CPU
       ? 1
-      : executor->blockSize() * executor->gridSize() }
+      : executor->blockSize() * (query_mem_desc_.blocksShareMemory() ? 1 : executor->gridSize()) }
   , row_set_mem_owner_(row_set_mem_owner) {
   if (query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
@@ -995,7 +995,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       CHECK(!group_by_buffers_.empty());
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, small_group_by_buffers_, query_mem_desc_,
-        block_size_x, num_buffers_ / executor_->blockSize(), device_id);
+        block_size_x, grid_size_x, device_id);
       if (hoist_literals) {
         void* kernel_params[] = {
           &multifrag_col_buffers_dev_ptr,
@@ -1028,8 +1028,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        query_mem_desc_.sharedMemBytes(ExecutorDeviceType::GPU),
                                        nullptr, kernel_params, nullptr));
       }
-      copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x,
-        num_buffers_ / executor_->blockSize(), device_id);
+      copy_group_by_buffers_from_gpu(data_mgr, this, gpu_query_mem, block_size_x, grid_size_x, device_id);
       copy_from_gpu(data_mgr, &error_codes[0], error_code_dev_ptr, grid_size_x * sizeof(error_codes[0]), device_id);
       *error_code = 0;
       for (const auto err : error_codes) {
@@ -1433,6 +1432,10 @@ bool QueryMemoryDescriptor::usesCachedContext() const {
 
 bool QueryMemoryDescriptor::threadsShareMemory() const {
   return sharing == GroupByMemSharing::Shared;
+}
+
+bool QueryMemoryDescriptor::blocksShareMemory() const {
+  return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && max_val - min_val > 1000000;
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {

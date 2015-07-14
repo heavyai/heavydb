@@ -117,6 +117,7 @@ struct QueryMemoryDescriptor {
   // TODO(alex): remove
   bool usesCachedContext() const;
 
+  bool blocksShareMemory() const;
   bool threadsShareMemory() const;
 
   bool lazyInitGroups(const ExecutorDeviceType) const;
