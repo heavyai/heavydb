@@ -256,6 +256,11 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE dec > 222.2;", dt);
     c("SELECT MAX(x + dec) FROM test;", dt);
     c("SELECT MAX(x + 2 * dec), MIN(x + 2 * dec) FROM test;", dt);
+    c("SELECT COUNT(*) FROM test where dec > CAST(111.0 AS decimal(10, 2));", dt);
+    c("SELECT COUNT(*) FROM test where dec > CAST(222.0 AS decimal(10, 2));", dt);
+    c("SELECT COUNT(*) FROM test where dec > CAST(333.0 AS decimal(10, 2));", dt);
+    c("SELECT MIN(dec * dec) FROM test;", dt);
+    c("SELECT MAX(dec * dec) FROM test;", dt);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)), numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)), numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE t <> 1001 AND t <> 1002;", dt)), numeric_limits<int64_t>::max());
