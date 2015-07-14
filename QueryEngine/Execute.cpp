@@ -38,6 +38,7 @@
 #include <map>
 #include <set>
 #include <boost/filesystem/path.hpp>
+#include <boost/filesystem/operations.hpp>
 
 
 Executor::Executor(const int db_id, const size_t block_size_x, const size_t grid_size_x,
@@ -3415,6 +3416,9 @@ R"(
     boost::filesystem::path gpu_rt_path { mapd_root_abs_path() };
     gpu_rt_path /= "QueryEngine";
     gpu_rt_path /= "cuda_mapd_rt.a";
+    if (!boost::filesystem::exists(gpu_rt_path)) {
+      throw std::runtime_error("MapD GPU runtime library not found at " + gpu_rt_path.string());
+    }
     auto gpu_context = new GpuCompilationContext(ptx, func_name, gpu_rt_path.string(),
       device_id, cuda_mgr, blockSize());
     auto native_code = gpu_context->kernel();
