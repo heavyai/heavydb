@@ -163,7 +163,7 @@ namespace Analyzer {
     if (IS_LOGIC(op)) {
       if (left_type.get_type() != kBOOLEAN || right_type.get_type() != kBOOLEAN)
         throw std::runtime_error("non-boolean operands cannot be used in logic operations.");
-      result_type.set_type(kBOOLEAN);
+      result_type = SQLTypeInfo(kBOOLEAN, false);
     } else if (IS_COMPARISON(op)) {
       if (left_type != right_type) {
         if (left_type.is_number() && right_type.is_number()) {
@@ -241,7 +241,7 @@ namespace Analyzer {
         } else
           throw std::runtime_error("Cannot compare between " + left_type.get_type_name() + " and " + right_type.get_type_name());
       }
-      result_type.set_type(kBOOLEAN);
+      result_type = SQLTypeInfo(kBOOLEAN, false);
     } else if (IS_ARITHMETIC(op)) {
       if (!left_type.is_number() || !right_type.is_number())
         throw std::runtime_error("non-numeric operands in arithmetic operations.");
@@ -262,6 +262,8 @@ namespace Analyzer {
   BinOper::common_string_type(const SQLTypeInfo &type1, const SQLTypeInfo &type2)
   {
     SQLTypeInfo common_type;
+    EncodingType comp = kENCODING_NONE;
+    int comp_param = 0;
     CHECK(type1.is_string() && type2.is_string());
     // if type1 and type2 have the same DICT encoding then keep it
     // otherwise, they must be decompressed
@@ -269,24 +271,20 @@ namespace Analyzer {
         type2.get_compression() == kENCODING_DICT) {
       if (type1.get_comp_param() == type2.get_comp_param() ||
          type1.get_comp_param() == TRANSIENT_DICT(type2.get_comp_param())) {
-        common_type.set_compression(kENCODING_DICT);
-        common_type.set_comp_param(std::min(type1.get_comp_param(), type2.get_comp_param()));
+        comp = kENCODING_DICT;
+        comp_param = std::min(type1.get_comp_param(), type2.get_comp_param());
       }
-      else
-        common_type.set_comp_param(0);
     } else if (type1.get_compression() == kENCODING_DICT && type2.get_compression() == kENCODING_NONE) {
-      common_type.set_comp_param(type1.get_comp_param());
+      comp_param = type1.get_comp_param();
     } else if (type1.get_compression() == kENCODING_NONE && type2.get_compression() == kENCODING_DICT) {
-      common_type.set_comp_param(type2.get_comp_param());
+      comp_param = type2.get_comp_param();
     } else
-      common_type.set_comp_param(std::max(type1.get_comp_param(), type2.get_comp_param())); // preserve previous comp_param if set
+      comp_param = std::max(type1.get_comp_param(), type2.get_comp_param()); // preserve previous comp_param if set
     if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
-      common_type.set_type(kTEXT);
+      common_type = SQLTypeInfo(kTEXT, 0, 0, false, comp, comp_param, kNULLT);
       return common_type;
     }
-    common_type.set_type(kVARCHAR);
-    common_type.set_dimension(std::max(type1.get_dimension(), type2.get_dimension()));
-    common_type.set_fixed_size();
+    common_type = SQLTypeInfo(kVARCHAR, std::max(type1.get_dimension(), type2.get_dimension()), 0, false, comp, comp_param, kNULLT);
     return common_type;
   }
 
@@ -296,31 +294,27 @@ namespace Analyzer {
     SQLTypeInfo common_type;
     CHECK(type1.is_number() && type2.is_number());
     if (type1.get_type() == type2.get_type()) {
-      common_type.set_type(type1.get_type());
-      common_type.set_dimension(std::max(type1.get_dimension(), type2.get_dimension()));
-      common_type.set_scale(std::max(type1.get_scale(), type2.get_scale()));
+      common_type = SQLTypeInfo(type1.get_type(), std::max(type1.get_dimension(), type2.get_dimension()), std::max(type1.get_scale(), type2.get_scale()), false);
       return common_type;
     }
     switch (type1.get_type()) {
       case kSMALLINT:
         switch (type2.get_type()) {
         case kINT:
-          common_type.set_type(kINT);
+          common_type = SQLTypeInfo(kINT, false);
           break;
         case kBIGINT:
-          common_type.set_type(kBIGINT);
+          common_type = SQLTypeInfo(kBIGINT, false);
           break;
         case kFLOAT:
-          common_type.set_type(kFLOAT);
+          common_type = SQLTypeInfo(kFLOAT, false);
           break;
         case kDOUBLE:
-          common_type.set_type(kDOUBLE);
+          common_type = SQLTypeInfo(kDOUBLE, false);
           break;
         case kNUMERIC:
         case kDECIMAL:
-          common_type.set_type(kNUMERIC);
-          common_type.set_dimension(std::max(5+type2.get_scale(), type2.get_dimension()));
-          common_type.set_scale(type2.get_scale());
+          common_type = SQLTypeInfo(kNUMERIC, std::max(5+type2.get_scale(), type2.get_dimension()), type2.get_scale(), false);
           break;
         default:
           CHECK(false);
@@ -329,22 +323,20 @@ namespace Analyzer {
       case kINT:
         switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.set_type(kINT);
+            common_type = SQLTypeInfo(kINT, false);
             break;
           case kBIGINT:
-            common_type.set_type(kBIGINT);
+            common_type = SQLTypeInfo(kBIGINT, false);
             break;
           case kFLOAT:
-            common_type.set_type(kFLOAT);
+            common_type = SQLTypeInfo(kFLOAT, false);
             break;
           case kDOUBLE:
-            common_type.set_type(kDOUBLE);
+            common_type = SQLTypeInfo(kDOUBLE, false);
             break;
           case kNUMERIC:
           case kDECIMAL:
-            common_type.set_type(kNUMERIC);
-            common_type.set_dimension(std::max(std::min(19, 10+type2.get_scale()), type2.get_dimension()));
-            common_type.set_scale(type2.get_scale());
+            common_type = SQLTypeInfo(kNUMERIC, std::max(std::min(19, 10+type2.get_scale()), type2.get_dimension()), type2.get_scale(), false);
             break;
           default:
             CHECK(false);
@@ -353,22 +345,20 @@ namespace Analyzer {
       case kBIGINT:
         switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.set_type(kBIGINT);
+            common_type = SQLTypeInfo(kBIGINT, false);
             break;
           case kINT:
-            common_type.set_type(kBIGINT);
+            common_type = SQLTypeInfo(kBIGINT, false);
             break;
           case kFLOAT:
-            common_type.set_type(kFLOAT);
+            common_type = SQLTypeInfo(kFLOAT, false);
             break;
           case kDOUBLE:
-            common_type.set_type(kDOUBLE);
+            common_type = SQLTypeInfo(kDOUBLE, false);
             break;
           case kNUMERIC:
           case kDECIMAL:
-            common_type.set_type(kNUMERIC);
-            common_type.set_dimension(19); // maximum precision of BIGINT
-            common_type.set_scale(type2.get_scale());
+            common_type = SQLTypeInfo(kNUMERIC, 19, type2.get_scale(), false);
             break;
           default:
             CHECK(false);
@@ -377,20 +367,20 @@ namespace Analyzer {
       case kFLOAT:
         switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.set_type(kFLOAT);
+            common_type = SQLTypeInfo(kFLOAT, false);
             break;
           case kINT:
-            common_type.set_type(kFLOAT);
+            common_type = SQLTypeInfo(kFLOAT, false);
             break;
           case kBIGINT:
-            common_type.set_type(kFLOAT);
+            common_type = SQLTypeInfo(kFLOAT, false);
             break;
           case kDOUBLE:
-            common_type.set_type(kDOUBLE);
+            common_type = SQLTypeInfo(kDOUBLE, false);
             break;
           case kNUMERIC:
           case kDECIMAL:
-            common_type.set_type(kFLOAT);
+            common_type = SQLTypeInfo(kFLOAT, false);
             break;
           default:
             CHECK(false);
@@ -404,7 +394,7 @@ namespace Analyzer {
           case kFLOAT:
           case kNUMERIC:
           case kDECIMAL:
-            common_type.set_type(kDOUBLE);
+            common_type = SQLTypeInfo(kDOUBLE, false);
             break;
           default:
             CHECK(false);
@@ -414,31 +404,25 @@ namespace Analyzer {
       case kDECIMAL:
         switch (type2.get_type()) {
           case kSMALLINT:
-            common_type.set_type(kNUMERIC);
-            common_type.set_dimension(std::max(5+type1.get_scale(), type1.get_dimension()));
-            common_type.set_scale(type1.get_scale());
+            common_type = SQLTypeInfo(kNUMERIC, std::max(5+type1.get_scale(), type1.get_dimension()), type1.get_scale(), false);
             break;
           case kINT:
-            common_type.set_type(kNUMERIC);
-            common_type.set_dimension(std::max(std::min(19, 10+type1.get_scale()), type2.get_dimension()));
-            common_type.set_scale(type1.get_scale());
+            common_type = SQLTypeInfo(kNUMERIC, std::max(std::min(19, 10+type1.get_scale()), type2.get_dimension()), type1.get_scale(), false);
             break;
           case kBIGINT:
-            common_type.set_type(kNUMERIC);
-            common_type.set_dimension(19); // maximum precision of BIGINT
-            common_type.set_scale(type1.get_scale());
+            common_type = SQLTypeInfo(kNUMERIC, 19, type1.get_scale(), false);
             break;
           case kFLOAT:
-            common_type.set_type(kFLOAT);
+            common_type = SQLTypeInfo(kFLOAT, false);
             break;
           case kDOUBLE:
-            common_type.set_type(kDOUBLE);
+            common_type = SQLTypeInfo(kDOUBLE, false);
             break;
           case kNUMERIC:
-          case kDECIMAL:
-            common_type.set_type(kNUMERIC);
-            common_type.set_scale(std::max(type1.get_scale(), type2.get_scale()));
-            common_type.set_dimension(std::max(type1.get_dimension() - type1.get_scale(), type2.get_dimension() - type2.get_scale()) + common_type.get_scale());
+          case kDECIMAL: {
+            int common_scale = std::max(type1.get_scale(), type2.get_scale());
+            common_type = SQLTypeInfo(kNUMERIC, std::max(type1.get_dimension() - type1.get_scale(), type2.get_dimension() - type2.get_scale()) + common_scale, common_scale, false);
+            }
             break;
           default:
             CHECK(false);

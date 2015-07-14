@@ -247,10 +247,7 @@ namespace Parser {
   Analyzer::Expr *
   StringLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
-    SQLTypeInfo ti;
-    ti.set_type(kVARCHAR);
-    ti.set_dimension(stringval->length());
-    ti.set_scale(0);
+    SQLTypeInfo ti(kVARCHAR, stringval->length(), 0, true);
     Datum d;
     d.stringval = new std::string(*stringval);
     return new Analyzer::Constant(ti, false, d);
@@ -278,10 +275,7 @@ namespace Parser {
   Analyzer::Expr *
   FixedPtLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
   {
-    SQLTypeInfo ti;
-    ti.set_type(kNUMERIC);
-    ti.set_dimension(0); // to be filled in by StringToDatum()
-    ti.set_scale(0);
+    SQLTypeInfo ti(kNUMERIC, 0, 0, false);
     Datum d = StringToDatum(*fixedptval, ti);
     return new Analyzer::Constant(ti, false, d);
   }
@@ -615,7 +609,7 @@ namespace Parser {
     Analyzer::Expr *arg_expr;
     bool is_distinct = false;
     if (boost::iequals(*name, "count")) {
-      result_type.set_type(kBIGINT);
+      result_type = SQLTypeInfo(kBIGINT, false);
       agg_type = kCOUNT;
       if (arg == nullptr)
         arg_expr = nullptr;
@@ -647,7 +641,7 @@ namespace Parser {
         if (!arg_expr->get_type_info().is_number())
           throw std::runtime_error("Cannot compute AVG on non-number-type arguments.");
         arg_expr = arg_expr->decompress();
-        result_type.set_type(kDOUBLE);
+        result_type = SQLTypeInfo(kDOUBLE, false);
       }
       else if (boost::iequals(*name, "sum")) {
         agg_type = kSUM;
@@ -1656,13 +1650,13 @@ namespace Parser {
             throw std::runtime_error("Array option must be exactly two characters.  Default is {}.");
           copy_params.array_begin = (*str_literal->get_stringval())[0];
           copy_params.array_end = (*str_literal->get_stringval())[1];
-        } else if (boost::iequals(*p->get_name(), "array_delimiter")) {
-          const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
-          if (str_literal == nullptr)
-            throw std::runtime_error("Array Delimiter option must be a string.");
-          else if (str_literal->get_stringval()->length() != 1)
-            throw std::runtime_error("Array Delimiter must be a single character string.");
-          copy_params.array_delim = (*str_literal->get_stringval())[0];
+         } else if (boost::iequals(*p->get_name(), "array_delimiter")) {
+           const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
+           if (str_literal == nullptr)
+             throw std::runtime_error("Array Delimiter option must be a string.");
+           else if (str_literal->get_stringval()->length() != 1)
+             throw std::runtime_error("Array Delimiter must be a single character string.");
+           copy_params.array_delim = (*str_literal->get_stringval())[0];
         } else
           throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
