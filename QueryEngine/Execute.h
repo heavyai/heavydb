@@ -207,6 +207,7 @@ private:
     const Catalog_Namespace::Catalog&,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
+    const bool allow_multifrag,
     const bool just_explain);
   ResultRows executeSortPlan(
     const Planner::Sort* sort_plan,
@@ -218,6 +219,7 @@ private:
     const Catalog_Namespace::Catalog&,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
+    const bool allow_multifrag,
     const bool just_explain);
 
   struct CompilationResult {

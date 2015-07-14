@@ -120,7 +120,7 @@ ResultRows Executor::executeSelectPlan(
   if (result_plan) {
     if (limit || offset) {
       auto rows = executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
-        cat, max_groups_buffer_entry_guess, error_code, just_explain);
+        cat, max_groups_buffer_entry_guess, error_code, allow_multifrag, just_explain);
       rows.dropFirstN(offset);
       if (limit) {
         rows.keepFirstN(limit);
@@ -128,12 +128,12 @@ ResultRows Executor::executeSelectPlan(
       return rows;
     }
     return executeResultPlan(result_plan, hoist_literals, device_type, opt_level,
-      cat, max_groups_buffer_entry_guess, error_code, just_explain);
+      cat, max_groups_buffer_entry_guess, error_code, allow_multifrag, just_explain);
   }
   const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
   if (sort_plan) {
     return executeSortPlan(sort_plan, limit, offset, hoist_literals, device_type, opt_level,
-      cat, max_groups_buffer_entry_guess, error_code, just_explain);
+      cat, max_groups_buffer_entry_guess, error_code, allow_multifrag, just_explain);
   }
   CHECK(false);
 }
@@ -1907,12 +1907,13 @@ ResultRows Executor::executeResultPlan(
     const Catalog_Namespace::Catalog& cat,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
+    const bool allow_multifrag,
     const bool just_explain) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
-    row_set_mem_owner_, max_groups_buffer_entry_guess, error_code, false, just_explain);
+    row_set_mem_owner_, max_groups_buffer_entry_guess, error_code, allow_multifrag, just_explain);
   if (just_explain) {
     return result_rows;
   }
@@ -1993,11 +1994,12 @@ ResultRows Executor::executeSortPlan(
     const Catalog_Namespace::Catalog& cat,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
+    const bool allow_multifrag,
     const bool just_explain) {
   *error_code = 0;
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
-    error_code, false, just_explain);
+    error_code, allow_multifrag, just_explain);
   if (just_explain) {
     return rows_to_sort;
   }
