@@ -301,7 +301,7 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
   for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
     CHECK_GE(order_entry.tle_no, 1);
     CHECK_LE(order_entry.tle_no, target_list.size());
-    auto compare = [this, &order_entry, use_heap](const TargetValues& lhs, const TargetValues& rhs) {
+    auto compare = [this, &order_entry, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
       // The compare function must define a strict weak ordering, which means
       // we can't use the overloaded less than operator for boost::variant since
       // there's not greater than counterpart. If we naively use "not less than"
@@ -352,22 +352,13 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
       }
     };
     if (use_heap) {
-      std::make_heap(target_values_.begin(), target_values_.end(), compare);
-      decltype(target_values_) top_target_values;
-      top_target_values.reserve(top_n);
-      for (int64_t i = 0; i < top_n && !target_values_.empty(); ++i) {
-        top_target_values.push_back(target_values_.front());
-        std::pop_heap(target_values_.begin(), target_values_.end(), compare);
-        target_values_.pop_back();
-      }
-      target_values_.swap(top_target_values);
+      target_values_.top(top_n, compare);
       return;
     }
-    std::sort(target_values_.begin(), target_values_.end(), compare);
+    target_values_.sort(compare);
   }
   if (sort_plan->get_remove_duplicates()) {
-    std::sort(target_values_.begin(), target_values_.end());
-    target_values_.erase(std::unique(target_values_.begin(), target_values_.end()), target_values_.end());
+    target_values_.removeDuplicates();
   }
 }
 

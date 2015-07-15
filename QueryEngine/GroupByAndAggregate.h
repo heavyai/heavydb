@@ -15,6 +15,7 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
 
+#include <functional>
 #include <mutex>
 #include <unordered_set>
 #include <unordered_map>
@@ -347,13 +348,13 @@ public:
     , explanation_(explanation) {}
 
   void beginRow() {
-    target_values_.emplace_back();
+    target_values_.beginRow(row_set_mem_owner_.get());
   }
 
   void beginRow(const std::vector<int64_t>& key) {
     CHECK(simple_keys_.empty());
     multi_keys_.push_back(key);
-    target_values_.emplace_back();
+    target_values_.beginRow(row_set_mem_owner_.get());
   }
 
   void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
@@ -362,24 +363,24 @@ public:
                                const int8_t warp_count);
 
   void addValue(const int64_t val) {
-    target_values_.back().emplace_back(val);
+    target_values_.addValue(val);
   }
 
   // used for kAVG
   void addValue(const int64_t val1, const int64_t val2) {
-    target_values_.back().emplace_back(val1, val2);
+    target_values_.addValue(val1, val2);
   }
 
   void addValue(const std::string& val) {
-    target_values_.back().emplace_back(row_set_mem_owner_->addString(val));
+    target_values_.addValue(val);
   }
 
   void addValue(const std::vector<int64_t>& val) {
-    target_values_.back().emplace_back(row_set_mem_owner_->addArray(val));
+    target_values_.addValue(val);
   }
 
   void addValue() {
-    target_values_.back().emplace_back();
+    target_values_.addValue();
   }
 
   void append(const ResultRows& more_results) {
@@ -387,8 +388,7 @@ public:
       more_results.simple_keys_.begin(), more_results.simple_keys_.end());
     multi_keys_.insert(multi_keys_.end(),
       more_results.multi_keys_.begin(), more_results.multi_keys_.end());
-    target_values_.insert(target_values_.end(),
-      more_results.target_values_.begin(), more_results.target_values_.end());
+    target_values_.append(more_results.target_values_);
   }
 
   void reduce(const ResultRows& other_results);
@@ -399,18 +399,14 @@ public:
     if (n >= size()) {
       return;
     }
-    target_values_.resize(n);
+    target_values_.truncate(n);
   }
 
   void dropFirstN(const size_t n) {
     if (!n) {
       return;
     }
-    if (n >= target_values_.size()) {
-      decltype(target_values_)().swap(target_values_);
-      return;
-    }
-    decltype(target_values_)(target_values_.begin() + n, target_values_.end()).swap(target_values_);
+    target_values_.drop(n);
   }
 
   size_t size() const {
@@ -441,13 +437,13 @@ private:
   void beginRow(const int64_t key) {
     CHECK(multi_keys_.empty());
     simple_keys_.push_back(key);
-    target_values_.emplace_back();
+    target_values_.beginRow(row_set_mem_owner_.get());
   }
 
   void addValues(const std::vector<int64_t>& vals) {
-    target_values_.reserve(vals.size());
+    target_values_.reserveRow(vals.size());
     for (const auto val : vals) {
-      target_values_.back().emplace_back(val);
+      target_values_.addValue(val);
     }
   }
 
@@ -458,7 +454,7 @@ private:
     } else {
       multi_keys_.pop_back();
     }
-    target_values_.pop_back();
+    target_values_.discardRow();
   }
 
   void createReductionMap() const {
@@ -550,14 +546,175 @@ private:
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
+  class InternalRow {
+  public:
+    InternalRow(RowSetMemoryOwner* row_set_mem_owner) : row_set_mem_owner_(row_set_mem_owner) {};
+
+    size_t size() const {
+      return row_.size();
+    }
+
+    void reserve(const size_t n) {
+      row_.reserve(n);
+    }
+
+    void addValue(const int64_t val) {
+      row_.emplace_back(val);
+    }
+
+    // used for kAVG
+    void addValue(const int64_t val1, const int64_t val2) {
+      row_.emplace_back(val1, val2);
+    }
+
+    void addValue(const std::string& val) {
+      row_.emplace_back(row_set_mem_owner_->addString(val));
+    }
+
+    void addValue(const std::vector<int64_t>& val) {
+      row_.emplace_back(row_set_mem_owner_->addArray(val));
+    }
+
+    void addValue() {
+      row_.emplace_back();
+    }
+
+    InternalTargetValue& operator[](const size_t i) {
+      return row_[i];
+    }
+
+    const InternalTargetValue& operator[](const size_t i) const {
+      return row_[i];
+    }
+
+    bool operator<(const InternalRow& other) const {
+      return row_ < other.row_;
+    }
+
+    bool operator==(const InternalRow& other) const {
+      return row_ == other.row_;
+    }
+
+  private:
+    std::vector<InternalTargetValue> row_;
+    RowSetMemoryOwner* row_set_mem_owner_;
+  };
+
+  class RowStorage {
+  public:
+    size_t size() const {
+      return rows_.size();
+    }
+
+    void clear() {
+      rows_.clear();
+    }
+
+    void reserve(const size_t n) {
+      rows_.reserve(n);
+    }
+
+    void beginRow(RowSetMemoryOwner* row_set_mem_owner) {
+      rows_.emplace_back(row_set_mem_owner);
+    }
+
+    void reserveRow(const size_t n) {
+      rows_.back().reserve(n);
+    }
+
+    void discardRow() {
+      rows_.pop_back();
+    }
+
+    void addValue(const int64_t val) {
+      rows_.back().addValue(val);
+    }
+
+    // used for kAVG
+    void addValue(const int64_t val1, const int64_t val2) {
+      rows_.back().addValue(val1, val2);
+    }
+
+    void addValue(const std::string& val) {
+      rows_.back().addValue(val);
+    }
+
+    void addValue(const std::vector<int64_t>& val) {
+      rows_.back().addValue(val);
+    }
+
+    void addValue() {
+      rows_.back().addValue();
+    }
+
+    void push_back(const InternalRow& v) {
+      rows_.push_back(v);
+    }
+
+    void append(const RowStorage& other) {
+      rows_.insert(rows_.end(), other.rows_.begin(), other.rows_.end());
+    }
+
+    void truncate(const size_t n) {
+      rows_.erase(rows_.begin() + n, rows_.end());
+    }
+
+    void drop(const size_t n) {
+      if (n >= rows_.size()) {
+        decltype(rows_)().swap(rows_);
+        return;
+      }
+      decltype(rows_)(rows_.begin() + n, rows_.end()).swap(rows_);
+    }
+
+    InternalRow& operator[](const size_t i) {
+      return rows_[i];
+    }
+
+    const InternalRow& operator[](const size_t i) const {
+      return rows_[i];
+    }
+
+    InternalRow& front() {
+      return rows_.front();
+    }
+
+    const InternalRow& front() const {
+      return rows_.front();
+    }
+
+    void top(const int64_t n, const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
+      std::make_heap(rows_.begin(), rows_.end(), compare);
+      decltype(rows_) top_target_values;
+      top_target_values.reserve(n);
+      for (int64_t i = 0; i < n && !rows_.empty(); ++i) {
+        top_target_values.push_back(rows_.front());
+        std::pop_heap(rows_.begin(), rows_.end(), compare);
+        rows_.pop_back();
+      }
+      rows_.swap(top_target_values);
+    }
+
+    void sort(const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
+      std::sort(rows_.begin(), rows_.end(), compare);
+    }
+
+    void removeDuplicates() {
+      std::sort(rows_.begin(), rows_.end());
+      rows_.erase(std::unique(rows_.begin(), rows_.end()), rows_.end());
+    }
+
+  private:
+    std::vector<InternalRow> rows_;
+  };
+
   std::vector<TargetInfo> targets_;
   std::vector<int64_t> simple_keys_;
   typedef std::vector<int64_t> MultiKey;
   std::vector<MultiKey> multi_keys_;
-  typedef std::vector<InternalTargetValue> TargetValues;
-  std::vector<TargetValues> target_values_;
-  mutable std::map<MultiKey, TargetValues> as_map_;
-  mutable std::unordered_map<int64_t, TargetValues> as_unordered_map_;
+  RowStorage target_values_;
+  mutable std::map<MultiKey, InternalRow> as_map_;
+  mutable std::unordered_map<int64_t, InternalRow> as_unordered_map_;
   const Executor* executor_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
