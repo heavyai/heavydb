@@ -3194,8 +3194,10 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   execution_engine = eb.create();
   CHECK(execution_engine);
 
-  if (llvm::verifyFunction(*query_func)) {
-    LOG(FATAL) << "Generated invalid code. ";
+  std::stringstream ss;
+  llvm::raw_os_ostream raw_os(ss);
+  if (llvm::verifyFunction(*query_func, &raw_os)) {
+    LOG(FATAL) << ss.str();
   }
 
 #ifndef __x86_64__
