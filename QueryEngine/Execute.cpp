@@ -1473,14 +1473,8 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
       }
       return result;
     }
-    case kDIVIDE: {
-      auto result = codegenDiv(lhs_lv, rhs_lv, not_null ? "" : int_typename, lhs_type);
-      if (lhs_type.is_decimal()) {
-        result = cgen_state_->ir_builder_.CreateMul(result,
-          llvm::ConstantInt::get(result->getType(), exp_to_scale(lhs_type.get_scale())));
-      }
-      return result;
-    }
+    case kDIVIDE:
+      return codegenDiv(lhs_lv, rhs_lv, not_null ? "" : int_typename, lhs_type);
     default:
       CHECK(false);
     }
@@ -1513,6 +1507,15 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
 llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv, llvm::Value* rhs_lv,
     const std::string& null_typename, const SQLTypeInfo& ti) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
+  if (ti.is_decimal()) {
+    CHECK(lhs_lv->getType()->isIntegerTy());
+    const std::string int_typename { "int" + std::to_string(get_bit_width(ti)) + "_t" };
+    const auto scale_lv = llvm::ConstantInt::get(lhs_lv->getType(), exp_to_scale(ti.get_scale()));
+    lhs_lv = null_typename.empty()
+      ? cgen_state_->ir_builder_.CreateMul(lhs_lv, scale_lv)
+      : cgen_state_->emitCall("mul_" + int_typename + "_nullable",
+          { lhs_lv, scale_lv, ll_int(inline_int_null_val(ti)) });
+  }
   cgen_state_->uses_div_ = true;
   auto div_ok = llvm::BasicBlock::Create(cgen_state_->context_, "div_ok", cgen_state_->row_func_);
   auto div_zero = llvm::BasicBlock::Create(cgen_state_->context_, "div_zero", cgen_state_->row_func_);
