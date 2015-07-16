@@ -321,6 +321,245 @@ inline double inline_fp_null_val(const SQLTypeInfo& ti) {
 
 }  // namespace
 
+struct InternalTargetValue {
+  int64_t i1;
+  int64_t i2;
+
+  enum class ITVType {
+    Int,
+    Pair,
+    Str,
+    Arr,
+    Null
+  };
+
+  ITVType ty;
+
+  explicit InternalTargetValue(const int64_t i1_) : i1(i1_), ty(ITVType::Int) {}
+
+  explicit InternalTargetValue(const int64_t i1_, const int64_t i2_) : i1(i1_), i2(i2_), ty(ITVType::Pair) {}
+
+  explicit InternalTargetValue(const std::string* s) : i1(reinterpret_cast<int64_t>(s)), ty(ITVType::Str) {}
+
+  explicit InternalTargetValue(const std::vector<int64_t>* v) : i1(reinterpret_cast<int64_t>(v)), ty(ITVType::Arr) {}
+
+  explicit InternalTargetValue() : ty(ITVType::Null) {}
+
+  std::string strVal() const {
+    return *reinterpret_cast<std::string*>(i1);
+  }
+
+  std::vector<int64_t> arrVal() const {
+    return *reinterpret_cast<std::vector<int64_t>*>(i1);
+  }
+
+  bool isInt() const {
+    return ty == ITVType::Int;
+  }
+
+  bool isPair() const {
+    return ty == ITVType::Pair;
+  }
+
+  bool isNull() const {
+    return ty == ITVType::Null;
+  }
+
+  bool isStr() const {
+    return ty == ITVType::Str;
+  }
+
+  bool operator<(const InternalTargetValue& other) const {
+    switch (ty) {
+    case ITVType::Int:
+      CHECK(other.ty == ITVType::Int);
+      return i1 < other.i1;
+    case ITVType::Pair:
+      CHECK(other.ty == ITVType::Pair);
+      if (i1 != other.i1) {
+        return i1 < other.i1;
+      }
+      return i2 < other.i2;
+    case ITVType::Str:
+      CHECK(other.ty == ITVType::Str);
+      return strVal() < other.strVal();
+    case ITVType::Null:
+      return false;
+    default:
+      CHECK(false);
+    }
+  }
+
+  bool operator==(const InternalTargetValue& other) const {
+    return !(*this < other || other < *this);
+  }
+};
+
+class InternalRow {
+public:
+  InternalRow(RowSetMemoryOwner* row_set_mem_owner) : row_set_mem_owner_(row_set_mem_owner) {};
+
+  bool operator==(const InternalRow& other) const {
+    return row_ == other.row_;
+  }
+
+  bool operator<(const InternalRow& other) const {
+    return row_ < other.row_;
+  }
+
+  InternalTargetValue& operator[](const size_t i) {
+    return row_[i];
+  }
+
+  const InternalTargetValue& operator[](const size_t i) const {
+    return row_[i];
+  }
+
+  size_t size() const {
+    return row_.size();
+  }
+
+private:
+  void reserve(const size_t n) {
+    row_.reserve(n);
+  }
+
+  void addValue(const int64_t val) {
+    row_.emplace_back(val);
+  }
+
+  // used for kAVG
+  void addValue(const int64_t val1, const int64_t val2) {
+    row_.emplace_back(val1, val2);
+  }
+
+  void addValue(const std::string& val) {
+    row_.emplace_back(row_set_mem_owner_->addString(val));
+  }
+
+  void addValue(const std::vector<int64_t>& val) {
+    row_.emplace_back(row_set_mem_owner_->addArray(val));
+  }
+
+  void addValue() {
+    row_.emplace_back();
+  }
+
+  std::vector<InternalTargetValue> row_;
+  RowSetMemoryOwner* row_set_mem_owner_;
+
+  friend class RowStorage;
+};
+
+class RowStorage {
+private:
+  size_t size() const {
+    return rows_.size();
+  }
+
+  void clear() {
+    rows_.clear();
+  }
+
+  void reserve(const size_t n) {
+    rows_.reserve(n);
+  }
+
+  void beginRow(RowSetMemoryOwner* row_set_mem_owner) {
+    rows_.emplace_back(row_set_mem_owner);
+  }
+
+  void reserveRow(const size_t n) {
+    rows_.back().reserve(n);
+  }
+
+  void discardRow() {
+    rows_.pop_back();
+  }
+
+  void addValue(const int64_t val) {
+    rows_.back().addValue(val);
+  }
+
+  // used for kAVG
+  void addValue(const int64_t val1, const int64_t val2) {
+    rows_.back().addValue(val1, val2);
+  }
+
+  void addValue(const std::string& val) {
+    rows_.back().addValue(val);
+  }
+
+  void addValue(const std::vector<int64_t>& val) {
+    rows_.back().addValue(val);
+  }
+
+  void addValue() {
+    rows_.back().addValue();
+  }
+
+  void push_back(const InternalRow& v) {
+    rows_.push_back(v);
+  }
+
+  void append(const RowStorage& other) {
+    rows_.insert(rows_.end(), other.rows_.begin(), other.rows_.end());
+  }
+
+  void truncate(const size_t n) {
+    rows_.erase(rows_.begin() + n, rows_.end());
+  }
+
+  void drop(const size_t n) {
+    if (n >= rows_.size()) {
+      decltype(rows_)().swap(rows_);
+      return;
+    }
+    decltype(rows_)(rows_.begin() + n, rows_.end()).swap(rows_);
+  }
+
+  InternalRow& operator[](const size_t i) {
+    return rows_[i];
+  }
+
+  const InternalRow& operator[](const size_t i) const {
+    return rows_[i];
+  }
+
+  InternalRow& front() {
+    return rows_.front();
+  }
+
+  const InternalRow& front() const {
+    return rows_.front();
+  }
+
+  void top(const int64_t n, const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
+    std::make_heap(rows_.begin(), rows_.end(), compare);
+    decltype(rows_) top_target_values;
+    top_target_values.reserve(n);
+    for (int64_t i = 0; i < n && !rows_.empty(); ++i) {
+      top_target_values.push_back(rows_.front());
+      std::pop_heap(rows_.begin(), rows_.end(), compare);
+      rows_.pop_back();
+    }
+    rows_.swap(top_target_values);
+  }
+
+  void sort(const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
+    std::sort(rows_.begin(), rows_.end(), compare);
+  }
+
+  void removeDuplicates() {
+    std::sort(rows_.begin(), rows_.end());
+    rows_.erase(std::unique(rows_.begin(), rows_.end()), rows_.end());
+  }
+
+  std::vector<InternalRow> rows_;
+
+  friend class ResultRows;
+};
+
 class ResultRows {
 public:
   ResultRows(const std::vector<Analyzer::Expr*>& targets,
@@ -421,6 +660,8 @@ public:
     return !size() && !group_by_buffer_ && !just_explain_;
   }
 
+  static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
+
   TargetValue get(const size_t row_idx,
                   const size_t col_idx,
                   const bool translate_strings) const;
@@ -469,244 +710,6 @@ private:
       as_map_.insert(std::make_pair(multi_keys_[i], target_values_[i]));
     }
   }
-
-  struct InternalTargetValue {
-    int64_t i1;
-    int64_t i2;
-
-    enum class ITVType {
-      Int,
-      Pair,
-      Str,
-      Arr,
-      Null
-    };
-
-    ITVType ty;
-
-    explicit InternalTargetValue(const int64_t i1_) : i1(i1_), ty(ITVType::Int) {}
-
-    explicit InternalTargetValue(const int64_t i1_, const int64_t i2_) : i1(i1_), i2(i2_), ty(ITVType::Pair) {}
-
-    explicit InternalTargetValue(const std::string* s) : i1(reinterpret_cast<int64_t>(s)), ty(ITVType::Str) {}
-
-    explicit InternalTargetValue(const std::vector<int64_t>* v) : i1(reinterpret_cast<int64_t>(v)), ty(ITVType::Arr) {}
-
-    explicit InternalTargetValue() : ty(ITVType::Null) {}
-
-    std::string strVal() const {
-      return *reinterpret_cast<std::string*>(i1);
-    }
-
-    std::vector<int64_t> arrVal() const {
-      return *reinterpret_cast<std::vector<int64_t>*>(i1);
-    }
-
-    bool isInt() const {
-      return ty == ITVType::Int;
-    }
-
-    bool isPair() const {
-      return ty == ITVType::Pair;
-    }
-
-    bool isNull() const {
-      return ty == ITVType::Null;
-    }
-
-    bool isStr() const {
-      return ty == ITVType::Str;
-    }
-
-    bool operator<(const InternalTargetValue& other) const {
-      switch (ty) {
-      case ITVType::Int:
-        CHECK(other.ty == ITVType::Int);
-        return i1 < other.i1;
-      case ITVType::Pair:
-        CHECK(other.ty == ITVType::Pair);
-        if (i1 != other.i1) {
-          return i1 < other.i1;
-        }
-        return i2 < other.i2;
-      case ITVType::Str:
-        CHECK(other.ty == ITVType::Str);
-        return strVal() < other.strVal();
-      case ITVType::Null:
-        return false;
-      default:
-        CHECK(false);
-      }
-    }
-
-    bool operator==(const InternalTargetValue& other) const {
-      return !(*this < other || other < *this);
-    }
-  };
-
-  static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
-
-  class InternalRow {
-  public:
-    InternalRow(RowSetMemoryOwner* row_set_mem_owner) : row_set_mem_owner_(row_set_mem_owner) {};
-
-    size_t size() const {
-      return row_.size();
-    }
-
-    void reserve(const size_t n) {
-      row_.reserve(n);
-    }
-
-    void addValue(const int64_t val) {
-      row_.emplace_back(val);
-    }
-
-    // used for kAVG
-    void addValue(const int64_t val1, const int64_t val2) {
-      row_.emplace_back(val1, val2);
-    }
-
-    void addValue(const std::string& val) {
-      row_.emplace_back(row_set_mem_owner_->addString(val));
-    }
-
-    void addValue(const std::vector<int64_t>& val) {
-      row_.emplace_back(row_set_mem_owner_->addArray(val));
-    }
-
-    void addValue() {
-      row_.emplace_back();
-    }
-
-    InternalTargetValue& operator[](const size_t i) {
-      return row_[i];
-    }
-
-    const InternalTargetValue& operator[](const size_t i) const {
-      return row_[i];
-    }
-
-    bool operator<(const InternalRow& other) const {
-      return row_ < other.row_;
-    }
-
-    bool operator==(const InternalRow& other) const {
-      return row_ == other.row_;
-    }
-
-  private:
-    std::vector<InternalTargetValue> row_;
-    RowSetMemoryOwner* row_set_mem_owner_;
-  };
-
-  class RowStorage {
-  public:
-    size_t size() const {
-      return rows_.size();
-    }
-
-    void clear() {
-      rows_.clear();
-    }
-
-    void reserve(const size_t n) {
-      rows_.reserve(n);
-    }
-
-    void beginRow(RowSetMemoryOwner* row_set_mem_owner) {
-      rows_.emplace_back(row_set_mem_owner);
-    }
-
-    void reserveRow(const size_t n) {
-      rows_.back().reserve(n);
-    }
-
-    void discardRow() {
-      rows_.pop_back();
-    }
-
-    void addValue(const int64_t val) {
-      rows_.back().addValue(val);
-    }
-
-    // used for kAVG
-    void addValue(const int64_t val1, const int64_t val2) {
-      rows_.back().addValue(val1, val2);
-    }
-
-    void addValue(const std::string& val) {
-      rows_.back().addValue(val);
-    }
-
-    void addValue(const std::vector<int64_t>& val) {
-      rows_.back().addValue(val);
-    }
-
-    void addValue() {
-      rows_.back().addValue();
-    }
-
-    void push_back(const InternalRow& v) {
-      rows_.push_back(v);
-    }
-
-    void append(const RowStorage& other) {
-      rows_.insert(rows_.end(), other.rows_.begin(), other.rows_.end());
-    }
-
-    void truncate(const size_t n) {
-      rows_.erase(rows_.begin() + n, rows_.end());
-    }
-
-    void drop(const size_t n) {
-      if (n >= rows_.size()) {
-        decltype(rows_)().swap(rows_);
-        return;
-      }
-      decltype(rows_)(rows_.begin() + n, rows_.end()).swap(rows_);
-    }
-
-    InternalRow& operator[](const size_t i) {
-      return rows_[i];
-    }
-
-    const InternalRow& operator[](const size_t i) const {
-      return rows_[i];
-    }
-
-    InternalRow& front() {
-      return rows_.front();
-    }
-
-    const InternalRow& front() const {
-      return rows_.front();
-    }
-
-    void top(const int64_t n, const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
-      std::make_heap(rows_.begin(), rows_.end(), compare);
-      decltype(rows_) top_target_values;
-      top_target_values.reserve(n);
-      for (int64_t i = 0; i < n && !rows_.empty(); ++i) {
-        top_target_values.push_back(rows_.front());
-        std::pop_heap(rows_.begin(), rows_.end(), compare);
-        rows_.pop_back();
-      }
-      rows_.swap(top_target_values);
-    }
-
-    void sort(const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
-      std::sort(rows_.begin(), rows_.end(), compare);
-    }
-
-    void removeDuplicates() {
-      std::sort(rows_.begin(), rows_.end());
-      rows_.erase(std::unique(rows_.begin(), rows_.end()), rows_.end());
-    }
-
-  private:
-    std::vector<InternalRow> rows_;
-  };
 
   std::vector<TargetInfo> targets_;
   std::vector<int64_t> simple_keys_;
