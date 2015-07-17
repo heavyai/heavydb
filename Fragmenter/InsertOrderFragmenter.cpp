@@ -83,7 +83,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
 
 
 void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
-    boost::lock_guard<boost::mutex> insertLock (insertMutex_); // prevent two threads from trying to insert into the same table simultaneously
+    mapd_lock_guard<std::mutex> insertLock (insertMutex_); // prevent two threads from trying to insert into the same table simultaneously
 
     size_t numRowsLeft = insertDataStruct.numRows;
     size_t numRowsInserted = 0;
@@ -125,7 +125,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
         numRowsLeft -= numRowsToInsert;
         numRowsInserted += numRowsToInsert;
     }
-    boost::unique_lock < boost::shared_mutex > writeLock (fragmentInfoMutex_);
+    mapd_unique_lock < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
     for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) { 
         partIt->numTuples = partIt->shadowNumTuples;
         partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
@@ -157,7 +157,7 @@ FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::Me
 				colMapIt->second.init_encoder();
     }
 
-    boost::unique_lock < boost::shared_mutex > writeLock (fragmentInfoMutex_);
+    mapd_unique_lock < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
     fragmentInfoVec_.push_back(newFragmentInfo);
     return &(fragmentInfoVec_.back());
 }
@@ -166,7 +166,7 @@ void InsertOrderFragmenter::getFragmentsForQuery(QueryInfo &queryInfo) {
     queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
     // right now we don't test predicate, so just return (copy of) all fragments 
     {
-        boost::shared_lock < boost::shared_mutex > readLock (fragmentInfoMutex_);
+        mapd_shared_lock < mapd_shared_mutex > readLock (fragmentInfoMutex_);
         queryInfo.fragments = fragmentInfoVec_; //makes a copy
     }
     queryInfo.numTuples = 0;

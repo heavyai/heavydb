@@ -5,6 +5,7 @@
 #ifndef INSERT_ORDER_FRAGMENTER_H
 #define INSERT_ORDER_FRAGMENTER_H
 
+#include "../Shared/mapd_shared_mutex.h"
 #include "../Shared/types.h"
 #include "AbstractFragmenter.h"
 #include "../DataMgr/MemoryLevel.h"
@@ -12,7 +13,6 @@
 
 #include <vector>
 #include <map>
-#include <boost/thread.hpp>
 
 #include <mutex>
 
@@ -78,8 +78,8 @@ private:
     size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
     int maxFragmentId_;
     std::string fragmenterType_;
-    boost::shared_mutex fragmentInfoMutex_; // to prevent read-write conflicts for fragmentInfoVec_
-    boost::mutex insertMutex_; // to prevent race conditions on insert - only one insert statement should be going to a table at a time
+    mapd_shared_mutex fragmentInfoMutex_; // to prevent read-write conflicts for fragmentInfoVec_
+    std::mutex insertMutex_; // to prevent race conditions on insert - only one insert statement should be going to a table at a time
     Data_Namespace::MemoryLevel defaultInsertLevel_;
     
     
