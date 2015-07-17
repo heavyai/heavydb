@@ -33,7 +33,9 @@ parse_numeric(const std::string &s, SQLTypeInfo &ti)
   }
 	int64_t result;
 	result = std::stoll(before_dot);
-	int64_t fraction = std::stoll(after_dot);
+	int64_t fraction = 0;
+  if (!after_dot.empty())
+    fraction = std::stoll(after_dot);
 	if (ti.get_dimension() == 0) {
 		// set the type info based on the literal string
 		ti.set_scale(after_dot.length());

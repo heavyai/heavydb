@@ -749,7 +749,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
   const auto case_ti = case_expr->get_type_info();
   llvm::Type* case_llvm_type = nullptr;
   bool is_real_str = false;
-  if (case_ti.is_integer() || case_ti.is_time()) {
+  if (case_ti.is_integer() || case_ti.is_time() || case_ti.is_decimal()) {
     case_llvm_type = get_int_type(get_bit_width(case_ti), cgen_state_->context_);
   } else if (case_ti.is_fp()) {
     case_llvm_type = case_ti.get_type() == kFLOAT
@@ -1289,6 +1289,7 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
   const auto& ti = operand->get_type_info();
   CHECK(ti.is_integer() ||
         ti.is_boolean() ||
+        ti.is_decimal() ||
         ti.is_time() ||
         ti.is_string() ||
         ti.is_fp() ||
