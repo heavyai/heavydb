@@ -5,6 +5,7 @@
  */
 
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <cstdio>
 #include <unistd.h>
@@ -684,6 +685,126 @@ Loader::init()
     }
   }
   insert_data.numRows = 0;
+}
+
+void Detector::split_raw_data() {
+  for (auto line : raw_data) {
+    std::vector<std::string> row;
+    boost::char_separator<char> sep{delim.c_str(), "", boost::keep_empty_tokens};
+    boost::tokenizer<boost::char_separator<char>> tok{line, sep};
+    for (const auto& s : tok) {
+      row.push_back(s);
+    }
+    raw_rows.push_back(row);
+  }
+}
+
+void Detector::detect_row_delimiter() {
+  if (delim.length() == 0) {
+    delim = ",";
+  }
+  if (boost::filesystem::extension(file_path) == ".tsv") {
+    delim = "\t";
+  }
+}
+
+void Detector::read_file() {
+  if (!boost::filesystem::exists(file_path)) {
+    LOG(ERROR) << "File does not exist: " << file_path;
+    return;
+  }
+  std::ifstream infile(file_path.string());
+  std::string line;
+  try {
+    while (std::getline(infile, line)) {
+      raw_data.push_back(line);
+    }
+  } catch (std::exception& e) {
+  }
+  infile.close();
+}
+
+std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
+  n = std::min(n, raw_rows.size());
+  std::vector<std::vector<std::string>> sample_rows(raw_rows.begin(), raw_rows.begin() + n);
+  return sample_rows;
+}
+
+void Detector::init() {
+  detect_row_delimiter();
+  split_raw_data();
+  best_sqltypes = find_best_sqltypes();
+}
+
+template <class T>
+bool try_cast(const std::string& str) {
+  try {
+    boost::lexical_cast<T>(str);
+  } catch (const boost::bad_lexical_cast& e) {
+    return false;
+  }
+  return true;
+}
+
+SQLTypes Detector::detect_sqltype(const std::string& str) {
+  SQLTypes type = kTEXT;
+  if (try_cast<double>(str)) {
+    type = kDOUBLE;
+    if (try_cast<bool>(str)) {
+      type = kBOOLEAN;
+    } else if (try_cast<int16_t>(str)) {
+      type = kSMALLINT;
+    } else if (try_cast<int32_t>(str)) {
+      type = kINT;
+    } else if (try_cast<int64_t>(str)) {
+      type = kBIGINT;
+    } else if (try_cast<float>(str)) {
+      type = kFLOAT;
+    }
+  }
+  return type;
+}
+
+std::vector<SQLTypes> Detector::detect_column_types(const std::vector<std::string>& row) {
+  std::vector<SQLTypes> types(row.size());
+  for (auto col : row) {
+    types.push_back(detect_sqltype(col));
+  }
+  return types;
+}
+
+std::vector<SQLTypes> Detector::find_best_sqltypes() {
+  typedef boost::bimap<SQLTypes, int> type_bm;
+  type_bm typeorder;
+  typeorder.insert(type_bm::value_type(kDOUBLE, 7));
+  typeorder.insert(type_bm::value_type(kFLOAT, 6));
+  typeorder.insert(type_bm::value_type(kBIGINT, 5));
+  typeorder.insert(type_bm::value_type(kINT, 4));
+  typeorder.insert(type_bm::value_type(kSMALLINT, 3));
+  typeorder.insert(type_bm::value_type(kCHAR, 0));
+  typeorder.insert(type_bm::value_type(kTEXT, 8));
+  typeorder.insert(type_bm::value_type(kBOOLEAN, 2));
+
+  std::vector<SQLTypes> best_types;
+  if (raw_rows.size() < 1) {
+    throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
+  }
+  best_types.resize(raw_rows.front().size());
+
+  std::vector<int> col_types(raw_rows.front().size(), 0);
+
+  for (auto row : raw_rows) {
+    int col_idx = 0;
+    for (col_idx = 0; col_idx < row.size(); col_idx++) {
+      SQLTypes t = detect_sqltype(row[col_idx]);
+      int detected_type = typeorder.left.find(t)->second;
+      if (col_types[col_idx] < detected_type) {
+        col_types[col_idx] = detected_type;
+        best_types[col_idx] = t;
+      }
+    }
+  }
+  return best_types;
 }
 
 #define IMPORT_FILE_BUFFER_SIZE   100000000

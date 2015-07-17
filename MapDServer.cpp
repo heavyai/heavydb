@@ -16,6 +16,8 @@
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/tokenizer.hpp>
+#include <boost/bimap.hpp>
 #include <memory>
 #include <string>
 #include <fstream>
@@ -24,6 +26,8 @@
 #include <sys/wait.h>
 #include <random>
 #include <map>
+#include <cmath>
+#include <typeinfo>
 #include <glog/logging.h>
 #include <signal.h>
 #include <unistd.h>
@@ -659,6 +663,59 @@ public:
     }
     if (loader.load(import_buffers, rows.size()))
       loader.checkpoint();
+  }
+
+  void detect_column_types(TRowSet& _return,
+                           const TSessionId session,
+                           const std::string& file_name,
+                           const std::string& delimiter) {
+    boost::filesystem::path file_path = file_name;  // FIXME
+    if (!boost::filesystem::exists(file_path)) {
+      TMapDException ex;
+      ex.error_msg = "File does not exist.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+
+    Importer_NS::Detector detector(file_path);
+    std::vector<SQLTypes> best_types = detector.best_sqltypes;
+
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    session_it->second->update_time();
+
+    _return.row_desc.resize(best_types.size());
+    TColumnType col;
+    for (int col_idx = 0; col_idx < best_types.size(); col_idx++) {
+      SQLTypes t = best_types[col_idx];
+      SQLTypeInfo* ti = new SQLTypeInfo(t, true);
+      col.col_type.type = type_to_thrift(*ti);
+      _return.row_desc[col_idx] = col;
+    }
+
+    size_t num_samples = 10;
+    auto sample_data = detector.get_sample_rows(num_samples);
+
+    TRow sample_row;
+    for (auto row : sample_data) {
+      {
+        std::vector<TDatum> empty;
+        sample_row.cols.swap(empty);
+      }
+      for (const auto &s : row) {
+        TDatum td;
+        td.val.str_val = s;
+        td.is_null = s.empty();
+        sample_row.cols.push_back(td);
+      }
+      _return.rows.push_back(sample_row);
+    }
+
   }
 
   void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {

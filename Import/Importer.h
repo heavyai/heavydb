@@ -13,6 +13,9 @@
 #include <map>
 #include <memory>
 #include <boost/noncopyable.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/tokenizer.hpp>
+#include <boost/bimap.hpp>
 #include <glog/logging.h>
 #include "../Catalog/TableDescriptor.h"
 #include "../Catalog/Catalog.h"
@@ -358,6 +361,25 @@ class Loader {
     Fragmenter_Namespace::InsertData insert_data;
     std::map<int, StringDictionary*> dict_map;
     void init();
+};
+
+class Detector {
+  public:
+    Detector(const boost::filesystem::path &fp) : file_path(fp) { read_file(); init(); };
+    SQLTypes detect_sqltype(const std::string &str);
+    std::vector<SQLTypes> best_sqltypes;
+    std::vector<std::vector<std::string>> get_sample_rows(size_t n);
+  private:
+    void split_raw_data();
+    void detect_row_delimiter();
+    std::vector<SQLTypes> detect_column_types(const std::vector<std::string> &row);
+    std::vector<SQLTypes> find_best_sqltypes();
+    void read_file();
+    void init();
+    std::vector<std::string> raw_data;
+    std::vector<std::vector<std::string>> raw_rows;
+    std::string delim;
+    boost::filesystem::path file_path;
 };
 
 class Importer {

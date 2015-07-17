@@ -452,6 +452,33 @@ public:
     }
   }
 
+  void detect_column_types(TRowSet& _return, const TSessionId session, const std::string &file_name, const std::string &delimiter) {
+    try {
+      (*client_)->detect_column_types(_return, session, file_name, delimiter);
+    }
+    catch (TMapDException &e) {
+      throw e;
+    }
+    catch (TException &te) {
+      try {
+        client_->reopen();
+        (*client_)->detect_column_types(_return, session, file_name, delimiter);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    }
+    catch (std::exception &e) {
+      std::cerr << "detect_column_types caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
   void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {
     instantiateClient();
     try {

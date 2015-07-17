@@ -208,6 +208,23 @@ copy_table(char *filepath, char *table, ClientContext &context)
   }
 }
 
+static void detect_table(char* file_name, ClientContext& context) {
+  if (context.session == INVALID_SESSION_ID) {
+    std::cerr << "Not connected to any databases." << std::endl;
+    return;
+  }
+
+  TRowSet _return;
+
+  try {
+    context.client.detect_column_types(_return, context.session, file_name, "");
+  } catch (TMapDException& e) {
+    std::cerr << e.error_msg << std::endl;
+  } catch (TException& te) {
+    std::cerr << "Thrift error in detect_table: " << te.what() << std::endl;
+  }
+}
+
 static void
 process_backslash_commands(char *command, ClientContext &context)
 {
@@ -545,6 +562,9 @@ int main(int argc, char **argv) {
         char *filepath = strtok(line+6, " ");
         char *table = strtok(NULL, " ");
         copy_table(filepath, table, context);
+      } else if (!strncmp(line,"\\detect",7)) {
+        char *filepath = strtok(line+8, " ");
+        detect_table(filepath, context);
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);
