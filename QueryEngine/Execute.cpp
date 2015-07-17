@@ -1648,7 +1648,7 @@ int64_t init_agg_val(const SQLAgg agg, const SQLTypeInfo& ti) {
       : (ti.get_notnull() ? std::numeric_limits<int64_t>::max() : inline_int_null_val(ti));
   }
   case kMAX: {
-    const auto min_double { std::numeric_limits<double>::min() };
+    const auto min_double = std::numeric_limits<double>::min();
     const double null_double { ti.is_fp() ? inline_fp_null_val(ti) : 0. };
     return (ti.is_fp())
       ? (ti.get_notnull()

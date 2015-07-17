@@ -584,8 +584,8 @@ namespace Parser {
           i++;
         }
         if (found) {
-          if (typeid(*tle->get_expr()) == typeid(Analyzer::Var)) {
-            Analyzer::Var *v = dynamic_cast<Analyzer::Var*>(tle->get_expr());
+          if (!dynamic_cast<Analyzer::Var*>(tle->get_expr())) {
+            Analyzer::Var *v = static_cast<Analyzer::Var*>(tle->get_expr());
             if (v->get_which_row() == Analyzer::Var::kGROUPBY)
               return v->deep_copy();
           }
@@ -1534,16 +1534,16 @@ namespace Parser {
     if (storage_options != nullptr) {
       for (auto p : *storage_options) {
         if (boost::iequals(*p->get_name(), "fragment_size")) {
-          if (typeid(*p->get_value()) != typeid(IntLiteral))
+          if (!dynamic_cast<const IntLiteral*>(p->get_value()))
             throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
-          int frag_size = dynamic_cast<const IntLiteral*>(p->get_value())->get_intval();
+          int frag_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
           if (frag_size <= 0)
             throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
           td.maxFragRows = frag_size;
         } else if (boost::iequals(*p->get_name(), "page_size")) {
-          if (typeid(*p->get_value()) != typeid(IntLiteral))
+          if (!dynamic_cast<const IntLiteral*>(p->get_value()))
             throw std::runtime_error("PAGE_SIZE must be an integer literal.");
-          int page_size =  dynamic_cast<const IntLiteral*>(p->get_value())->get_intval();
+          int page_size =  static_cast<const IntLiteral*>(p->get_value())->get_intval();
           if (page_size <= 0)
             throw std::runtime_error("PAGE_SIZE must be a positive number.");
           td.fragPageSize = page_size;
@@ -1888,9 +1888,9 @@ namespace Parser {
     if (matview_options != nullptr) {
       for (auto p : *matview_options) {
         if (boost::iequals(*p->get_name(), "storage")) {
-          if (typeid(*p->get_value()) != typeid(StringLiteral))
+          if (!dynamic_cast<const StringLiteral*>(p->get_value()))
             throw std::runtime_error("Storage option must be a string literal.");
-          const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+          const std::string *str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
           if (boost::iequals(*str, "gpu") || boost::iequals(*str, "mic"))
             matview_storage = kGPU;
           else if (boost::iequals(*str, "cpu"))
@@ -1900,9 +1900,9 @@ namespace Parser {
           else
             throw std::runtime_error("Invalid storage option " + *str + ". Should be GPU, MIC, CPU or DISK.");
         } else if (boost::iequals(*p->get_name(), "refresh")) {
-          if (typeid(*p->get_value()) != typeid(StringLiteral))
+          if (!dynamic_cast<const StringLiteral*>(p->get_value()))
             throw std::runtime_error("Refresh option must be a string literal.");
-          const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+          const std::string *str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
           if (boost::iequals(*str, "auto"))
             matview_refresh = kAUTO;
           else if (boost::iequals(*str, "manual"))
@@ -2031,9 +2031,9 @@ namespace Parser {
     if (name_value_list != nullptr) {
       for (auto p : *name_value_list) {
         if (boost::iequals(*p->get_name(), "owner")) {
-          if (typeid(*p->get_value()) != typeid(StringLiteral))
+          if (!dynamic_cast<const StringLiteral*>(p->get_value()))
             throw std::runtime_error("Owner name must be a string literal.");
-          const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+          const std::string *str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
           Catalog_Namespace::UserMetadata user;
           if (!syscat.getMetadataForUser(*str, user))
             throw std::runtime_error("User " + *str + " does not exist.");
@@ -2071,13 +2071,13 @@ namespace Parser {
     bool is_super = false;
     for (auto p : *name_value_list) {
       if (boost::iequals(*p->get_name(), "password")) {
-        if (typeid(*p->get_value()) != typeid(StringLiteral))
+        if (!dynamic_cast<const StringLiteral*>(p->get_value()))
           throw std::runtime_error("Password must be a string literal.");
-        passwd = *dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
       } else if (boost::iequals(*p->get_name(), "is_super")) {
-        if (typeid(*p->get_value()) != typeid(StringLiteral))
+        if (!dynamic_cast<const StringLiteral*>(p->get_value()))
           throw std::runtime_error("IS_SUPER option must be a string literal.");
-        const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        const std::string *str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
         if (boost::iequals(*str, "true"))
           is_super = true;
         else if (boost::iequals(*str, "false"))
@@ -2116,13 +2116,13 @@ namespace Parser {
     bool *is_superp = nullptr;
     for (auto p : *name_value_list) {
       if (boost::iequals(*p->get_name(), "password")) {
-        if (typeid(*p->get_value()) != typeid(StringLiteral))
+        if (!dynamic_cast<const StringLiteral*>(p->get_value()))
           throw std::runtime_error("Password must be a string literal.");
-        passwd = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        passwd = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
       } else if (boost::iequals(*p->get_name(), "is_super")) {
-        if (typeid(*p->get_value()) != typeid(StringLiteral))
+        if (!dynamic_cast<const StringLiteral*>(p->get_value()))
           throw std::runtime_error("IS_SUPER option must be a string literal.");
-        const std::string *str = dynamic_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        const std::string *str = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
         if (boost::iequals(*str, "true")) {
           is_super = true;
           is_superp = &is_super;

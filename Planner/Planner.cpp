@@ -212,9 +212,9 @@ namespace Planner {
 		for (auto tle : cur_query->get_targetlist()) {
 			// collect all the aggregate functions from targetlist
 			tle->get_expr()->find_expr(is_agg, aggexpr_list);
-			if (typeid(*tle->get_expr()) != typeid(Analyzer::ColumnVar) && 
-				  typeid(*tle->get_expr()) != typeid(Analyzer::Var) && 
-					typeid(*tle->get_expr()) != typeid(Analyzer::AggExpr))
+			if (!dynamic_cast<Analyzer::ColumnVar*>(tle->get_expr()) &&
+					!dynamic_cast<Analyzer::Var*>(tle->get_expr()) &&
+					!dynamic_cast<Analyzer::AggExpr*>(tle->get_expr()))
 				no_expression = false;
 		}
 		// collect all the group by columns in having clause
