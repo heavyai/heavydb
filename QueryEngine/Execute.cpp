@@ -251,7 +251,7 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
     off = addAligned(off, lit_bytes);
     switch (lit.which()) {
       case 0: {
-        const auto p = boost::get<bool>(&lit);
+        const auto p = boost::get<int8_t>(&lit);
         CHECK(p);
         serialized[off - lit_bytes] = *p;
         break;

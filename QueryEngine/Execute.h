@@ -97,7 +97,7 @@ public:
     const int dictId,
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
 
-  typedef boost::variant<bool, int16_t, int32_t, int64_t, float, double,
+  typedef boost::variant<int8_t, int16_t, int32_t, int64_t, float, double,
     std::pair<std::string, int>, std::string> LiteralValue;
   typedef std::vector<LiteralValue> LiteralValues;
 
@@ -375,7 +375,7 @@ private:
       case kBOOLEAN:
         return getOrAddLiteral(constant->get_is_null()
           ? int8_t(inline_int_null_val(ti))
-          : int8_t(constant->get_constval().boolval));
+          : int8_t(constant->get_constval().boolval ? 1 : 0));
       case kSMALLINT:
         return getOrAddLiteral(constant->get_is_null()
           ? int16_t(inline_int_null_val(ti))
