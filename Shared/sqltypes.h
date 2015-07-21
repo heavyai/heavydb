@@ -222,9 +222,18 @@ class SQLTypeInfo {
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
-          if (sizeof(time_t) == 4)
-            return d.timeval == NULL_INT;
+          // @TODO(alex): remove the ifdef
+#ifdef __ARM_ARCH_7A__
+#ifndef __CUDACC__
+          static_assert(sizeof(time_t) == 4, "Unsupported time_t size");
+#endif
+          return d.timeval == NULL_INT;
+#else
+#ifndef __CUDACC__
+          static_assert(sizeof(time_t) == 8, "Unsupported time_t size");
+#endif
           return d.timeval == NULL_BIGINT;
+#endif
         case kTEXT:
         case kVARCHAR:
         case kCHAR:

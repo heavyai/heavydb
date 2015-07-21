@@ -774,10 +774,14 @@ namespace Analyzer {
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
-        if (sizeof(time_t) == 4)
-          constval.timeval = NULL_INT;
-        else
-          constval.timeval = NULL_BIGINT;
+      // @TODO(alex): store it as 64 bit on ARMv7l and remove the ifdef
+#ifdef __ARM_ARCH_7A__
+        static_assert(sizeof(time_t) == 4, "Unsupported time_t size");
+        constval.timeval = NULL_INT;
+#else
+        static_assert(sizeof(time_t) == 8, "Unsupported time_t size");
+        constval.timeval = NULL_BIGINT;
+#endif
         break;
       case kVARCHAR:
       case kCHAR:
