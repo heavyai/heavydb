@@ -1341,7 +1341,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
         col_range_info.hash_type_, false, false,
         group_col_widths, agg_col_widths,
         max_groups_buffer_entry_count,
-        scan_limit_ ? scan_limit_ : executor_->small_groups_buffer_entry_count_,
+        scan_limit_ ? static_cast<size_t>(scan_limit_) : executor_->small_groups_buffer_entry_count_,
         col_range_info.min, col_range_info.max, col_range_info.has_nulls,
         GroupByMemSharing::Shared,
         count_distinct_descriptors
