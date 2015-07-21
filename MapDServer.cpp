@@ -133,7 +133,7 @@ public:
   }
 
   TSessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
-    mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     Catalog_Namespace::UserMetadata user_meta;
     if (!sys_cat_->getMetadataForUser(user, user_meta)) {
       TMapDException ex;
@@ -179,7 +179,7 @@ public:
   }
 
   void disconnect(const TSessionId session) {
-    mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     std::string dbname;
     if (session_it == sessions_.end()) {

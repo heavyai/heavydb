@@ -64,7 +64,7 @@ StringDictionary::StringDictionary(
     const size_t bytes = file_size(offset_fd_);
     const unsigned str_count = bytes / sizeof(StringIdxEntry);
     unsigned string_id = 0;
-    mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     for (string_id = 0; string_id < str_count; ++string_id) {
       const auto recovered = getStringFromStorage(string_id);
       if (std::get<2>(recovered)) {
@@ -89,20 +89,20 @@ StringDictionary::~StringDictionary() {
 }
 
 int32_t StringDictionary::getOrAdd(const std::string& str) {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   return getOrAddImpl(str, false);
 }
 
 void StringDictionary::addBulk(const std::vector<std::string> &stringVec, std::vector<int32_t> &encodedVec) {
   encodedVec.reserve(stringVec.size());
-  mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   for (const auto &str : stringVec) {
     encodedVec.push_back(getOrAddImpl(str, false));
   }
 }
 
 int32_t StringDictionary::getOrAddTransient(const std::string& str) {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   auto transient_id = getUnlocked(str);
   if (transient_id != INVALID_STR_ID) {
     return transient_id;
@@ -157,7 +157,7 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) con
 }
 
 void StringDictionary::clearTransient() {
-  mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   decltype(transient_int_to_str_)().swap(transient_int_to_str_);
   decltype(transient_str_to_int_)().swap(transient_str_to_int_);
 }

@@ -125,7 +125,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
         numRowsLeft -= numRowsToInsert;
         numRowsInserted += numRowsToInsert;
     }
-    mapd_unique_lock < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
+    mapd_lock_guard < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
     for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) { 
         partIt->numTuples = partIt->shadowNumTuples;
         partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
@@ -157,7 +157,7 @@ FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::Me
 				colMapIt->second.init_encoder();
     }
 
-    mapd_unique_lock < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
+    mapd_lock_guard < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
     fragmentInfoVec_.push_back(newFragmentInfo);
     return &(fragmentInfoVec_.back());
 }
