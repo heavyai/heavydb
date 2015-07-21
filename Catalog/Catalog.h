@@ -13,6 +13,7 @@
 #ifndef CATALOG_H
 #define CATALOG_H
 
+#include <atomic>
 #include <string>
 #include <map>
 #include <list>
@@ -229,10 +230,10 @@ class SessionInfo {
     void update_time() { last_used_time = time(0); }
   private:
     std::shared_ptr<Catalog> catalog_;
-    UserMetadata currentUser_;
-    ExecutorDeviceType executor_device_type_;
-    int32_t session_id;
-    time_t last_used_time; // for cleaning up SessionInfo after client dies
+    const UserMetadata currentUser_;
+    std::atomic<ExecutorDeviceType> executor_device_type_;
+    const int32_t session_id;
+    std::atomic<time_t> last_used_time; // for cleaning up SessionInfo after client dies
 };
 
 } // Catalog_Namespace

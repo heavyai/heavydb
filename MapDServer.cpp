@@ -9,6 +9,7 @@
 #include "QueryEngine/Execute.h"
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
+#include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Import/Importer.h"
 #include "MapDRelease.h"
@@ -132,6 +133,7 @@ public:
   }
 
   TSessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
+    mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
     Catalog_Namespace::UserMetadata user_meta;
     if (!sys_cat_->getMetadataForUser(user, user_meta)) {
       TMapDException ex;
@@ -177,6 +179,7 @@ public:
   }
 
   void disconnect(const TSessionId session) {
+    mapd_unique_lock<mapd_shared_mutex> write_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     std::string dbname;
     if (session_it == sessions_.end()) {
@@ -255,7 +258,7 @@ public:
   }
 
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
-
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -386,6 +389,7 @@ public:
   }
 
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -414,6 +418,7 @@ public:
   }
 
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -443,6 +448,7 @@ public:
   }
 
   void get_frontend_view(std::string& _return, const TSessionId session, const std::string& view_name) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -463,6 +469,7 @@ public:
   }
 
   void get_tables(std::vector<std::string> & table_names, const TSessionId session) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -479,6 +486,7 @@ public:
   }
 
   void get_users(std::vector<std::string> &user_names) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto u : user_list) {
       user_names.push_back(u.userName);
@@ -506,6 +514,7 @@ public:
   }
 
   void get_frontend_views(std::vector<std::string> & view_names, const TSessionId session) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -522,6 +531,7 @@ public:
   }
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -558,6 +568,7 @@ public:
   }
 
   void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -602,6 +613,7 @@ public:
   }
 
   void load_table(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -647,6 +659,7 @@ public:
   }
 
   void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -720,6 +733,7 @@ public:
     }
   }
   void create_frontend_view(const TSessionId session, const std::string &view_name, const std::string &view_state) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
       TMapDException ex;
@@ -746,9 +760,10 @@ private:
   ExecutorDeviceType executor_device_type_;
   std::default_random_engine random_gen_;
   std::uniform_int_distribution<int64_t> session_id_dist_;
-  bool jit_debug_;
-  bool allow_multifrag_;
+  const bool jit_debug_;
+  const bool allow_multifrag_;
   bool cpu_mode_only_;
+  mapd_shared_mutex rw_mutex_;
 };
 
 int main(int argc, char **argv) {
