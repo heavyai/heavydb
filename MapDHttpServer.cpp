@@ -10,6 +10,7 @@
 #include <boost/program_options.hpp>
 #include <string>
 #include <iostream>
+#include <mutex>
 
 #include "MapDRelease.h"
 
@@ -21,22 +22,48 @@ using namespace ::apache::thrift::server;
 
 using boost::shared_ptr;
 
+class MapDClientHandle {
+public:
+  MapDClientHandle(const int server_port) {
+    socket_.reset(new TSocket("localhost", server_port));
+    transport_.reset(new TBufferedTransport(socket_));
+    protocol_.reset(new TBinaryProtocol(transport_));
+    client_.reset(new MapDClient(protocol_));
+    transport_->open();
+  }
+
+  MapDClient* operator->() const {
+    return client_.get();
+  }
+
+  void reopen() {
+    transport_->open();
+  }
+
+private:
+  shared_ptr<TSocket> socket_;
+  shared_ptr<TTransport> transport_;
+  shared_ptr<TProtocol> protocol_;
+  std::unique_ptr<MapDClient> client_;
+};
+
 class MapDHandler : virtual public MapDIf {
 public:
-  MapDHandler(TTransport &transport, MapDClient &client) : client_(client), transport_(transport) {}
+  MapDHandler(const int server_port) : server_port_(server_port) {}
 
   TSessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
+    instantiateClient();
     TSessionId session = -1;
     try {
-      session = client_.connect(user, passwd, dbname);
+      session = (*client_)->connect(user, passwd, dbname);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        session = client_.connect(user, passwd, dbname);
+        client_->reopen();
+        session = (*client_)->connect(user, passwd, dbname);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -55,8 +82,9 @@ public:
   }
 
   void disconnect(TSessionId session) {
+    instantiateClient();
     try {
-      client_.disconnect(session);
+      (*client_)->disconnect(session);
     }
     catch (TException &te) {
       std::cerr << "Thrift exception: " << te.what() << std::endl;
@@ -67,16 +95,17 @@ public:
   }
 
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
+    instantiateClient();
     try {
-      client_.sql_execute(_return, session, query_str);
+      (*client_)->sql_execute(_return, session, query_str);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.sql_execute(_return, session, query_str);
+        client_->reopen();
+        (*client_)->sql_execute(_return, session, query_str);
       }
       catch (TMapDException &e) {
         throw e;
@@ -103,16 +132,17 @@ public:
   }
 
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
+    instantiateClient();
     try {
-      client_.get_table_descriptor(_return, session, table_name);
+      (*client_)->get_table_descriptor(_return, session, table_name);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_table_descriptor(_return, session, table_name);
+        client_->reopen();
+        (*client_)->get_table_descriptor(_return, session, table_name);
       }
       catch (TMapDException &e) {
         throw e;
@@ -139,16 +169,17 @@ public:
   }
 
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
+    instantiateClient();
     try {
-      client_.get_row_descriptor(_return, session, table_name);
+      (*client_)->get_row_descriptor(_return, session, table_name);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_row_descriptor(_return, session, table_name);
+        client_->reopen();
+        (*client_)->get_row_descriptor(_return, session, table_name);
       }
       catch (TMapDException &e) {
         throw e;
@@ -175,16 +206,17 @@ public:
   }
 
   void get_frontend_view(std::string& _return, const TSessionId session, const std::string& view_name) {
+    instantiateClient();
     try {
-      client_.get_frontend_view(_return, session, view_name);
+      (*client_)->get_frontend_view(_return, session, view_name);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_frontend_view(_return, session, view_name);
+        client_->reopen();
+        (*client_)->get_frontend_view(_return, session, view_name);
       }
       catch (TMapDException &e) {
         throw e;
@@ -212,16 +244,17 @@ public:
 
   void get_tables(std::vector<std::string> & _return, const TSessionId session)
   {
+    instantiateClient();
     try {
-      client_.get_tables(_return, session);
+      (*client_)->get_tables(_return, session);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_tables(_return, session);
+        client_->reopen();
+        (*client_)->get_tables(_return, session);
       }
       catch (TMapDException &e) {
         throw e;
@@ -249,16 +282,17 @@ public:
 
   void get_frontend_views(std::vector<std::string> & _return, const TSessionId session)
   {
+    instantiateClient();
     try {
-      client_.get_frontend_views(_return, session);
+      (*client_)->get_frontend_views(_return, session);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_frontend_views(_return, session);
+        client_->reopen();
+        (*client_)->get_frontend_views(_return, session);
       }
       catch (TMapDException &e) {
         throw e;
@@ -286,13 +320,14 @@ public:
 
   void get_users(std::vector<std::string> & _return)
   {
+    instantiateClient();
     try {
-      client_.get_users(_return);
+      (*client_)->get_users(_return);
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_users(_return);
+        client_->reopen();
+        (*client_)->get_users(_return);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -305,13 +340,14 @@ public:
 
   void get_databases(std::vector<TDBInfo> & _return)
   {
+    instantiateClient();
     try {
-      client_.get_databases(_return);
+      (*client_)->get_databases(_return);
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_databases(_return);
+        client_->reopen();
+        (*client_)->get_databases(_return);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -323,13 +359,14 @@ public:
   }
 
   void get_version(std::string &version) {
+    instantiateClient();
     try {
-      client_.get_version(version);
+      (*client_)->get_version(version);
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.get_version(version);
+        client_->reopen();
+        (*client_)->get_version(version);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -341,13 +378,14 @@ public:
   }
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
+    instantiateClient();
     try {
-      client_.set_execution_mode(session, mode);
+      (*client_)->set_execution_mode(session, mode);
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.set_execution_mode(session, mode);
+        client_->reopen();
+        (*client_)->set_execution_mode(session, mode);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -359,16 +397,17 @@ public:
   }
 
   void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
+    instantiateClient();
     try {
-      client_.load_table_binary(session, table_name, rows);
+      (*client_)->load_table_binary(session, table_name, rows);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.load_table_binary(session, table_name, rows);
+        client_->reopen();
+        (*client_)->load_table_binary(session, table_name, rows);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -386,16 +425,17 @@ public:
   }
 
   void load_table(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
+    instantiateClient();
     try {
-      client_.load_table(session, table_name, rows);
+      (*client_)->load_table(session, table_name, rows);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.load_table(session, table_name, rows);
+        client_->reopen();
+        (*client_)->load_table(session, table_name, rows);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -413,16 +453,17 @@ public:
   }
 
   void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {
+    instantiateClient();
     try {
-      client_.render(_return, session, query, render_type, render_properties, col_render_properties);
+      (*client_)->render(_return, session, query, render_type, render_properties, col_render_properties);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.render(_return, session, query, render_type, render_properties, col_render_properties);
+        client_->reopen();
+        (*client_)->render(_return, session, query, render_type, render_properties, col_render_properties);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -440,16 +481,17 @@ public:
   }
 
   void create_frontend_view(const TSessionId session, const std::string &view_name, const std::string &view) {
+    instantiateClient();
     try {
-      client_.create_frontend_view(session, view_name, view);
+      (*client_)->create_frontend_view(session, view_name, view);
     }
     catch (TMapDException &e) {
       throw e;
     }
     catch (TException &te) {
       try {
-        transport_.open();
-        client_.create_frontend_view(session, view_name, view);
+        client_->reopen();
+        (*client_)->create_frontend_view(session, view_name, view);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -467,9 +509,16 @@ public:
   }
 
 private:
-  MapDClient &client_;
-  TTransport &transport_;
+  void instantiateClient() {
+    if (!client_) {
+      client_ = new MapDClientHandle(server_port_);
+    }
+  }
+  const int server_port_;
+  static __thread MapDClientHandle* client_;
 };
+
+__thread MapDClientHandle* MapDHandler::client_ { nullptr };
 
 int main(int argc, char **argv) {
   int port = 9090;
@@ -506,18 +555,12 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 
-  shared_ptr<TTransport> socket(new TSocket("localhost", server_port));
-  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  MapDClient client(protocol);
-  transport->open();
-  shared_ptr<MapDHandler> handler(new MapDHandler(*transport, client));
+  shared_ptr<MapDHandler> handler(new MapDHandler(server_port));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new THttpServerTransportFactory());
   shared_ptr<TProtocolFactory> protocolFactory(new TJSONProtocolFactory());
   TThreadedServer server (processor, serverTransport, transportFactory, protocolFactory);
   server.serve();
-  transport->close();
   return 0;
 }
