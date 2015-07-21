@@ -11,7 +11,7 @@
 #include "boost/filesystem.hpp"
 #include "DataMgr/DataMgr.h"
 #include "Catalog/Catalog.h"
-#include "Parser/parser.h"
+#include "Parser/MTSQLParser.h"
 #include "Analyzer/Analyzer.h"
 #include "Parser/ParserNode.h"
 #include "Planner/Planner.h"
@@ -320,7 +320,7 @@ main(int argc, char* argv[])
 				process_backslash_commands(input_str, cat, sys_cat);
 				continue;
 			}
-			SQLParser parser;
+			MTSQLParser parser;
 			list<Parser::Stmt*> parse_trees;
 			string last_parsed;
 			int numErrors = parser.parse(input_str, parse_trees, last_parsed);
