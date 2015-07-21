@@ -1,5 +1,5 @@
 #ifndef MT_SQL_PARSER_H
-#define	MT_SQL_PARSER_H
+#define MT_SQL_PARSER_H
 
 #include "parser.h"
 
