@@ -64,7 +64,8 @@ namespace Buffer_Namespace {
         // following should be safe outside the lock b/c first thing Buffer
         // constructor does is pin (and its still in unsized segs at this point
         // so can't be evicted)
-        allocateBuffer(chunkIndex_[chunkKey],actualChunkPageSize,initialSize); 
+        allocateBuffer(chunkIndex_[chunkKey],actualChunkPageSize,initialSize);
+        assert(chunkIndex_[chunkKey]->buffer->getMemoryPtr());
         //chunkIndex_[chunkKey]->buffer->pin();
         std::lock_guard < std::mutex > lock (chunkIndexMutex_);
         return chunkIndex_[chunkKey]->buffer;
