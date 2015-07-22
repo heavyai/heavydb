@@ -1179,8 +1179,9 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
       if (ti.is_decimal()) {
         CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
         operand_lv = cgen_state_->ir_builder_.CreateMul(
-          operand_lv,
-          llvm::ConstantInt::get(operand_lv->getType(), exp_to_scale(ti.get_scale() - operand_ti.get_scale())));
+          cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_)),
+          llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+            exp_to_scale(ti.get_scale() - operand_ti.get_scale())));
       }
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
       const auto target_width = get_bit_width(ti);
