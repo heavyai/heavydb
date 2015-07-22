@@ -37,7 +37,7 @@ namespace File_Namespace {
         */
     }
 
-    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), chunkKey_(chunkKey)  {
+    FileBuffer::FileBuffer(FileMgr *fm, const size_t pageSize,const ChunkKey &chunkKey, const SQLTypeInfo sqlType, const size_t initialSize): AbstractBuffer(fm->getDeviceId(),sqlType), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(pageSize), chunkKey_(chunkKey)  {
         CHECK(fm_);
         calcHeaderBuffer();
         pageDataSize_ = pageSize_-reservedHeaderSize_;
