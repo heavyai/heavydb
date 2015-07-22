@@ -15,7 +15,7 @@ class FixedLengthEncoder : public Encoder {
 
         ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) {
             T * unencodedData = reinterpret_cast<T *> (srcData); 
-            std::unique_ptr<V> encodedData = std::unique_ptr<V>(new V [numAppendElems]);  
+            auto encodedData = std::unique_ptr<V[]>(new V [numAppendElems]);
             for (size_t i = 0; i < numAppendElems; ++i) {
                 //std::cout << "Unencoded: " << unencodedData[i] << std::endl;
                 //std::cout << "Min: " << dataMin << " Max: " <<  dataMax << std::endl;

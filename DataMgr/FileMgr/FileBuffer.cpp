@@ -46,7 +46,7 @@ namespace File_Namespace {
 
 
 
-    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), /* pageSize_(pageSize),*/chunkKey_(chunkKey) {
+    FileBuffer::FileBuffer(FileMgr *fm,/* const size_t pageSize,*/ const ChunkKey &chunkKey, const std::vector<HeaderInfo>::const_iterator &headerStartIt, const std::vector<HeaderInfo>::const_iterator &headerEndIt): AbstractBuffer(fm->getDeviceId()), fm_(fm), metadataPages_(METADATA_PAGE_SIZE), pageSize_(0), chunkKey_(chunkKey) {
         // We are being assigned an existing FileBuffer on disk
 
         CHECK(fm_);

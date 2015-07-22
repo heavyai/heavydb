@@ -41,8 +41,8 @@ StringNoneEncoder::appendData(const std::vector<std::string> *srcData, const int
 	buffer_->reserve(data_size);
 
 	size_t inbuf_size = std::min(std::max(index_size, data_size), (size_t)MAX_INPUT_BUF_SIZE);
-	int8_t *inbuf = (int8_t*)malloc(inbuf_size);
-	std::unique_ptr<int8_t> gc_inbuf(inbuf);
+	auto inbuf = new int8_t[inbuf_size];
+	std::unique_ptr<int8_t[]> gc_inbuf(inbuf);
 	for (size_t num_appended = 0; num_appended < numAppendElems; ) {
 		StringOffsetT *p = (StringOffsetT*)inbuf;
 		size_t i;

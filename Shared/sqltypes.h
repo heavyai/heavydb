@@ -60,7 +60,11 @@ struct ArrayDatum {
 
   DEVICE ArrayDatum() : length(0), pointer(NULL), is_null(true) {}
 #ifndef __CUDACC__
-  ArrayDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n), data_ptr(std::shared_ptr<int8_t>(p)) {}
+  ArrayDatum(int l, int8_t *p, bool n)
+  : length(l)
+  , pointer(p)
+  , is_null(n)
+  , data_ptr(p, [](int8_t *p) { free(p); }) {}
 #else
   ArrayDatum(int l, int8_t *p, bool n) : length(l), pointer(p), is_null(n) {}
 #endif

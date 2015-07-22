@@ -46,8 +46,8 @@ GpuCompilationContext::GpuCompilationContext(char* ptx,
   }
   checkCudaErrors(cuLinkAddData(link_state_, CU_JIT_INPUT_PTX, static_cast<void*>(ptx), strlen(ptx) + 1,
     0, num_options, &option_keys[0], &option_values[0]));
-  void* cubin;
-  size_t cubinSize;
+  void* cubin { nullptr };
+  size_t cubinSize { 0 };
   checkCudaErrors(cuLinkComplete(link_state_, &cubin, &cubinSize));
   checkCudaErrors(cuModuleLoadDataEx(&module_, cubin, num_options, &option_keys[0], &option_values[0]));
   CHECK(module_);
