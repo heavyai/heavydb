@@ -584,7 +584,7 @@ namespace Parser {
           i++;
         }
         if (found) {
-          if (!dynamic_cast<Analyzer::Var*>(tle->get_expr())) {
+          if (dynamic_cast<Analyzer::Var*>(tle->get_expr())) {
             Analyzer::Var *v = static_cast<Analyzer::Var*>(tle->get_expr());
             if (v->get_which_row() == Analyzer::Var::kGROUPBY)
               return v->deep_copy();
