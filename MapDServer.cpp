@@ -7,7 +7,7 @@
 
 #include "Catalog/Catalog.h"
 #include "QueryEngine/Execute.h"
-#include "Parser/MTSQLParser.h"
+#include "Parser/parser.h"
 #include "Planner/Planner.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -273,7 +273,7 @@ public:
     LOG(INFO) << query_str;
     auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
-    MTSQLParser parser;
+    SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
     std::string last_parsed;
     int num_parse_errors = 0;
@@ -671,7 +671,7 @@ public:
     auto &cat = session_it->second->get_catalog();
     session_it->second->update_time();
     LOG(INFO) << "Render: " << query;
-    MTSQLParser parser;
+    SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
     std::string last_parsed;
     int num_parse_errors = 0;

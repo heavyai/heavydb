@@ -4,9 +4,10 @@
 %define CONSTRUCTOR_INIT : lexer(yylval)
 %define MEMBERS                 \
 		virtual ~SQLParser() {} \
-    int parse(const std::string & inputStr, std::list<Stmt*>& parseTrees, std::string &lastParsed) { std::istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseTrees); lastParsed = lexer.YYText(); return yynerrs; } \
+    int parse(const std::string & inputStr, std::list<Stmt*>& parseTrees, std::string &lastParsed) { std::lock_guard<std::mutex> lock(mutex_); std::istringstream ss(inputStr); lexer.switch_streams(&ss,0);  yyparse(parseTrees); lastParsed = lexer.YYText(); return yynerrs; } \
     private:                   \
-       SQLLexer lexer;
+       SQLLexer lexer;         \
+       std::mutex mutex_;
 %define LEX_BODY {return lexer.yylex();}
 %define ERROR_BODY {} /*{ std::cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed: " << lexer.YYText() << std::endl; } */
 
@@ -16,6 +17,7 @@
 #include <fstream>
 #include <sstream>
 #include <list>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <stdexcept>

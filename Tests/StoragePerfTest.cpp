@@ -8,7 +8,7 @@
 #include "boost/filesystem.hpp"
 #include <boost/functional/hash.hpp>
 #include "../Catalog/Catalog.h"
-#include "../Parser/MTSQLParser.h"
+#include "../Parser/parser.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
 #include "../DataMgr/DataMgr.h"
@@ -32,7 +32,7 @@ namespace {
 
 	void run_ddl(const string &input_str)
 	{
-		MTSQLParser parser;
+		SQLParser parser;
 		list<Parser::Stmt*> parse_trees;
 		string last_parsed;
 		CHECK_EQ(parser.parse(input_str, parse_trees, last_parsed), 0);

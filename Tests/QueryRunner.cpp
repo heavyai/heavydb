@@ -1,6 +1,6 @@
 #include "QueryRunner.h"
 
-#include "../Parser/MTSQLParser.h"
+#include "../Parser/parser.h"
 
 #include <boost/filesystem/operations.hpp>
 
@@ -30,7 +30,7 @@ ResultRows run_multiple_agg(
     const std::string& query_str,
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
     const ExecutorDeviceType device_type) {
-  MTSQLParser parser;
+  SQLParser parser;
   std::list<Parser::Stmt*> parse_trees;
   std::string last_parsed;
   CHECK_EQ(parser.parse(query_str, parse_trees, last_parsed), 0);

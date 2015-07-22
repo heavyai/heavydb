@@ -1,6 +1,6 @@
 #include "QueryRunner.h"
 
-#include "../Parser/MTSQLParser.h"
+#include "../Parser/parser.h"
 #include "../SqliteConnector/SqliteConnector.h"
 #include "../Import/Importer.h"
 
@@ -36,7 +36,7 @@ T v(const TargetValue& r) {
 }
 
 void run_ddl_statement(const string& create_table_stmt) {
-  MTSQLParser parser;
+  SQLParser parser;
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
   CHECK_EQ(parser.parse(create_table_stmt, parse_trees, last_parsed), 0);

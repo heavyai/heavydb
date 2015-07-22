@@ -18,7 +18,7 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Import/Importer.h"
 #include "../Shared/measure.h"
-#include "MTSQLParser.h"
+#include "parser.h"
 
 namespace Parser {
   SubqueryExpr::~SubqueryExpr() 
@@ -1967,7 +1967,7 @@ namespace Parser {
       throw std::runtime_error(*view_name + " is a table not a materialized view.");
     if (!td->isMaterialized)
       throw std::runtime_error(*view_name + " is not a materialized view.");
-    MTSQLParser parser;
+    SQLParser parser;
     std::list<Stmt*> parse_trees;
     std::string last_parsed;
     std::string query_str = "INSERT INTO " + *view_name + " " + td->viewSQL;
