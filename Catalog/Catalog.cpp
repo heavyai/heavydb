@@ -541,14 +541,14 @@ Catalog::createFrontendView(FrontendViewDescriptor &vd)
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // TODO(andrew): this should be an upsert
-    sqliteConnector_.query("SELECT viewId FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
+    sqliteConnector_.query("SELECT viewid FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
     if (sqliteConnector_.getNumRows() > 0) {
-      sqliteConnector_.query("UPDATE mapd_frontend_views SET name = '"+vd.viewName+"', view_state = '"+vd.viewState+"' where viewid = " + std::to_string(vd.viewId));
+      sqliteConnector_.query("UPDATE mapd_frontend_views SET view_state = '"+vd.viewState+"' where name = '" + vd.viewName + "'");
     } else {
       sqliteConnector_.query("INSERT INTO mapd_frontend_views (name, view_state) VALUES ('" + vd.viewName + "', '" + vd.viewState + "')");
     }
     // now get the auto generated viewid
-    sqliteConnector_.query("SELECT viewId FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
+    sqliteConnector_.query("SELECT viewid FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
     vd.viewId = sqliteConnector_.getData<int>(0, 0);
   }
   catch (std::exception &e) {
