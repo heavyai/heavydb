@@ -1681,7 +1681,7 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* o
     }
   case kMIN: {
     const int64_t agg_init_val = init_agg_val(agg, ti);
-    if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
+    if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
       int64_t agg_result = agg_init_val;
       for (size_t i = 0; i < out_vec_sz; ++i) {
         agg_min_skip_val(&agg_result, out_vec[i], agg_init_val);
@@ -1700,7 +1700,7 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* o
   }
   case kMAX: {
     const int64_t agg_init_val = init_agg_val(agg, ti);
-    if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
+    if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
       int64_t agg_result = agg_init_val;
       for (size_t i = 0; i < out_vec_sz; ++i) {
         agg_max_skip_val(&agg_result, out_vec[i], agg_init_val);
@@ -1760,12 +1760,15 @@ public:
     }
     for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
       for (size_t i = 0; i < num_columns; ++i) {
-        const auto col_val = rows.get(row_idx, i, false);
+        const auto col_val = rows.get(row_idx, i, false, false);
         const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
         CHECK(scalar_col_val);
         auto i64_p = boost::get<int64_t>(scalar_col_val);
         if (i64_p) {
           switch (get_bit_width(target_types[i])) {
+          case 8:
+            ((int8_t*) column_buffers_[i])[row_idx] = *i64_p;
+            break;
           case 16:
             ((int16_t*) column_buffers_[i])[row_idx] = *i64_p;
             break;
@@ -1779,7 +1782,7 @@ public:
             CHECK(false);
           }
         } else {
-          CHECK(target_types[i].get_type() == kFLOAT || target_types[i].get_type() == kDOUBLE);
+          CHECK(target_types[i].is_fp());
           auto double_p = boost::get<double>(scalar_col_val);
           switch (target_types[i].get_type()) {
           case kFLOAT:

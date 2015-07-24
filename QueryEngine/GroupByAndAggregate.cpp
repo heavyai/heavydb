@@ -367,7 +367,8 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
 
 TargetValue ResultRows::get(const size_t row_idx,
                             const size_t col_idx,
-                            const bool translate_strings) const {
+                            const bool translate_strings,
+                            const bool decimal_to_double /* = true */) const {
   if (just_explain_) {
     return explanation_;
   }
@@ -395,7 +396,7 @@ TargetValue ResultRows::get(const size_t row_idx,
     CHECK_LT(col_idx, target_values_[row_idx].size());
     const auto v = target_values_[row_idx][col_idx];
     CHECK(v.isInt());
-    if (ti.is_decimal()) {
+    if (ti.is_decimal() && decimal_to_double) {
       if (v.i1 == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(ti), false))) {
         return NULL_DOUBLE;
       }

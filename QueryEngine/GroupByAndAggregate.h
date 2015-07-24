@@ -664,7 +664,8 @@ public:
 
   TargetValue get(const size_t row_idx,
                   const size_t col_idx,
-                  const bool translate_strings) const;
+                  const bool translate_strings,
+                  const bool decimal_to_double = true) const;
 
   SQLTypeInfo getColType(const size_t col_idx) const {
     if (just_explain_) {
