@@ -1,6 +1,9 @@
 enum TDatumType {
+  SMALLINT,
   INT,
+  BIGINT,
   FLOAT,
+  DECIMAL,
   DOUBLE,
   STR,
   TIME,
