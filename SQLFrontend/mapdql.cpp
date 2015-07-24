@@ -332,8 +332,11 @@ std::string scalar_datum_to_string(const TDatum& datum, const TTypeInfo& type_in
     return "NULL";
   }
   switch (type_info.type) {
+  case TDatumType::SMALLINT:
   case TDatumType::INT:
+  case TDatumType::BIGINT:
     return std::to_string(datum.val.int_val);
+  case TDatumType::DECIMAL:
   case TDatumType::FLOAT:
   case TDatumType::DOUBLE:
     return std::to_string(datum.val.real_val);
