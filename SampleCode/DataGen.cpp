@@ -124,11 +124,14 @@ namespace {
         else
           not_first = true;
         switch (p->second.col_type.type) {
+          case TDatumType::SMALLINT:
           case TDatumType::INT:
+          case TDatumType::BIGINT:
             std::cout << gen_int();
             break;
           case TDatumType::FLOAT:
           case TDatumType::DOUBLE:
+          case TDatumType::DECIMAL:
             std::cout << gen_real();
             break;
           case TDatumType::STR:
