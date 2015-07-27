@@ -64,7 +64,10 @@ namespace Parser {
        * @param catalog The catalog object for the current database
        * @return An Analyzer::Expr object for the expression post semantic analysis
        */
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
       virtual std::string to_string() const = 0;
   };
 
@@ -74,7 +77,10 @@ namespace Parser {
    */
   class Literal : public Expr {
     public:
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
       virtual std::string to_string() const = 0;
   };
 
@@ -85,7 +91,10 @@ namespace Parser {
   class NullLiteral : public Literal {
     public:
       NullLiteral() {}
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return "NULL"; }
   };
 
@@ -98,7 +107,10 @@ namespace Parser {
       explicit StringLiteral(std::string *s) : stringval(s) {}
       virtual ~StringLiteral() { delete stringval; }
       const std::string *get_stringval() const { return stringval; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return "'" + *stringval + "'"; }
     private:
       std::string *stringval;
@@ -112,7 +124,10 @@ namespace Parser {
     public:
       explicit IntLiteral(int64_t i) : intval(i) {}
       int64_t get_intval() const { return intval; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return boost::lexical_cast<std::string>(intval); }
     private:
       int64_t intval;
@@ -127,7 +142,10 @@ namespace Parser {
       explicit FixedPtLiteral(std::string *n) : fixedptval(n) {}
       virtual ~FixedPtLiteral() { delete fixedptval; }
       const std::string *get_fixedptval() const { return fixedptval; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return *fixedptval; }
     private:
       std::string *fixedptval;
@@ -141,7 +159,10 @@ namespace Parser {
     public:
       explicit FloatLiteral(float f) : floatval(f) {}
       float get_floatval() const { return floatval; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return boost::lexical_cast<std::string>(floatval); }
     private:
       float floatval;
@@ -155,7 +176,10 @@ namespace Parser {
     public:
       explicit DoubleLiteral(double d) : doubleval(d) {}
       double get_doubleval() const { return doubleval; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return boost::lexical_cast<std::string>(doubleval); }
     private:
       double doubleval;
@@ -168,7 +192,10 @@ namespace Parser {
   class UserLiteral : public Literal {
     public:
       UserLiteral() {}
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return "USER"; }
   };
       
@@ -184,7 +211,10 @@ namespace Parser {
       SQLOps get_optype() const { return optype; }
       const Expr *get_left() const { return left; }
       const Expr *get_right() const { return right; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       SQLOps  optype;
@@ -205,7 +235,10 @@ namespace Parser {
       explicit SubqueryExpr(QuerySpec *q) : query(q) {}
       virtual ~SubqueryExpr();
       const QuerySpec *get_query() const { return query; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       QuerySpec *query;
@@ -216,7 +249,10 @@ namespace Parser {
       IsNullExpr(bool n, Expr *a) : is_not(n), arg(a) {}
       virtual ~IsNullExpr() { delete arg; }
       bool get_is_not() const { return is_not; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       bool is_not;
@@ -233,7 +269,10 @@ namespace Parser {
       virtual ~InExpr() { delete arg; }
       bool get_is_not() const { return is_not; }
       const Expr *get_arg() const { return arg; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
       virtual std::string to_string() const;
     protected:
       bool is_not;
@@ -249,7 +288,10 @@ namespace Parser {
       InSubquery(bool n, Expr *a, SubqueryExpr *q) : InExpr(n, a), subquery(q) {}
       virtual ~InSubquery() { delete subquery; }
       const SubqueryExpr *get_subquery() const { return subquery; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       SubqueryExpr *subquery;
@@ -264,7 +306,10 @@ namespace Parser {
       InValues(bool n, Expr *a, std::list<Expr*> *v) : InExpr(n, a), value_list(v) {}
       virtual ~InValues();
       const std::list<Expr*> *get_value_list() const { return value_list; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       std::list<Expr*> *value_list;
@@ -282,7 +327,10 @@ namespace Parser {
       const Expr *get_arg() const { return arg; }
       const Expr *get_lower() const { return lower; }
       const Expr *get_upper() const { return upper; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       bool is_not;
@@ -303,7 +351,10 @@ namespace Parser {
       const Expr *get_arg() const { return arg; }
       const Expr *get_like_string() const { return like_string; }
       const Expr *get_escape_string() const { return escape_string; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       bool is_not;
@@ -327,7 +378,10 @@ namespace Parser {
       explicit ExistsExpr(QuerySpec *q) : query(q) {}
       virtual ~ExistsExpr();
       const QuerySpec *get_query() const { return query; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       QuerySpec *query;
@@ -344,7 +398,10 @@ namespace Parser {
       virtual ~ColumnRef();
       const std::string *get_table() const { return table; }
       const std::string *get_column() const { return column; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       std::string *table;
@@ -364,7 +421,10 @@ namespace Parser {
       const std::string *get_name() const { return name; }
       bool get_distinct() const { return distinct; }
       Expr *get_arg() const { return arg; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       std::string *name;
@@ -376,7 +436,10 @@ namespace Parser {
     public:
       CastExpr(Expr *a, SQLType *t) : arg(a), target_type(t) {}
       virtual ~CastExpr() { delete arg; delete target_type; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return "CAST(" + arg->to_string() + " AS " + target_type->to_string() + ")"; }
     private:
       Expr *arg;
@@ -398,7 +461,10 @@ namespace Parser {
     public:
       CaseExpr(std::list<ExprPair*> *w, Expr *e) : when_then_list(w), else_expr(e) {}
       virtual ~CaseExpr();
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
       std::list<ExprPair*> *when_then_list;
@@ -409,7 +475,10 @@ namespace Parser {
     public:
       ExtractExpr(std::string *f, Expr *a) : field(f), from_arg(a) {}
       virtual ~ExtractExpr() { delete field; delete from_arg; }
-      virtual Analyzer::Expr *analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref = TLIST_NONE) const;
+      virtual std::shared_ptr<Analyzer::Expr> analyze(
+        const Catalog_Namespace::Catalog &catalog,
+        Analyzer::Query &query,
+        TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
      private:
       std::string *field;

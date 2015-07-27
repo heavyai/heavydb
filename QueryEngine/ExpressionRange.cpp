@@ -304,7 +304,7 @@ ExpressionRange getExpressionRange(
   for (const auto& expr_pair : expr_pair_list) {
     CHECK_EQ(expr_pair.first->get_type_info().get_type(), kBOOLEAN);
     CHECK(expr_pair.second->get_type_info() == case_ti);
-    const auto crt_range = getExpressionRange(expr_pair.second, fragments, executor);
+    const auto crt_range = getExpressionRange(expr_pair.second.get(), fragments, executor);
     if (crt_range.type == ExpressionRangeType::Invalid) {
       return { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
     }

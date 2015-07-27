@@ -27,13 +27,14 @@ namespace Planner {
 	 */
 	class Plan {
 		public:
-			Plan(const std::vector<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p) : targetlist(t), quals(q), cost(c), child_plan(p) {}
+			Plan(const std::vector<Analyzer::TargetEntry*> &t, const std::list<std::shared_ptr<Analyzer::Expr>>& q, double c, Plan *p)
+        : targetlist(t), quals(q), cost(c), child_plan(p) {}
 			Plan(const std::vector<Analyzer::TargetEntry*> &t, double c, Plan *p) : targetlist(t), cost(c), child_plan(p) {}
 			Plan() : cost(0.0), child_plan(nullptr) {}
 			Plan(const std::vector<Analyzer::TargetEntry*> &t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
 			virtual ~Plan();
-			const std::vector<Analyzer::TargetEntry*> &get_targetlist() const { return targetlist; }
-			const std::list<Analyzer::Expr*> &get_quals() const { return quals; }
+			const std::vector<Analyzer::TargetEntry*>& get_targetlist() const { return targetlist; }
+			const std::list<std::shared_ptr<Analyzer::Expr>>& get_quals() const { return quals; }
 			double get_cost() const { return cost; }
 			const Plan *get_child_plan() const { return child_plan; }
 			void add_tle(Analyzer::TargetEntry *tle) { targetlist.push_back(tle); }
@@ -41,7 +42,7 @@ namespace Planner {
 			virtual void print() const;
 		protected:
 			std::vector<Analyzer::TargetEntry*> targetlist; // projection of this plan node
-			std::list<Analyzer::Expr*> quals; // list of boolean expressions, implicitly conjunctive
+			std::list<std::shared_ptr<Analyzer::Expr>> quals; // list of boolean expressions, implicitly conjunctive
 			double cost; // Planner assigned cost for optimization purpose
 			Plan *child_plan; // most plan nodes have at least one child, therefore keep it in super class
 	};
@@ -59,12 +60,16 @@ namespace Planner {
 	 */
 	class Result : public Plan {
 		public:
-			Result(std::vector<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::Expr*> &cq) : Plan(t, q, c, p), const_quals(cq) {}
-			virtual ~Result();
-			const std::list<Analyzer::Expr*> &get_constquals() const { return const_quals; }
+			Result(
+        std::vector<Analyzer::TargetEntry*>& t,
+        const std::list<std::shared_ptr<Analyzer::Expr>>& q,
+        double c,
+        Plan *p,
+        const std::list<std::shared_ptr<Analyzer::Expr>>& cq) : Plan(t, q, c, p), const_quals(cq) {}
+			const std::list<std::shared_ptr<Analyzer::Expr>>& get_constquals() const { return const_quals; }
 			virtual void print() const;
 		private:
-			std::list<Analyzer::Expr*> const_quals; // constant quals to evaluate only once
+			std::list<std::shared_ptr<Analyzer::Expr>> const_quals; // constant quals to evaluate only once
 	};
 
 	/*
@@ -73,19 +78,26 @@ namespace Planner {
 	 */
 	class Scan : public Plan {
 		public:
-			Scan(const std::vector<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Analyzer::Expr*> &sq, int r, const std::list<int> &cl) : Plan(t, q, c, p), simple_quals(sq), table_id(r), col_list(cl) {}
+			Scan(
+          const std::vector<Analyzer::TargetEntry*>& t,
+          const std::list<std::shared_ptr<Analyzer::Expr>>& q,
+          double c,
+          Plan *p,
+          std::list<std::shared_ptr<Analyzer::Expr>>& sq,
+          int r,
+          const std::list<int>& cl)
+        : Plan(t, q, c, p), simple_quals(sq), table_id(r), col_list(cl) {}
 			Scan(const Analyzer::RangeTblEntry &rte);
-			virtual ~Scan();
-			const std::list<Analyzer::Expr*> &get_simple_quals() const { return simple_quals; };
+			const std::list<std::shared_ptr<Analyzer::Expr>>& get_simple_quals() const { return simple_quals; };
 			int get_table_id() const { return table_id; }
 			const std::list<int> &get_col_list() const { return col_list; }
-			void add_predicate(Analyzer::Expr *pred) { quals.push_back(pred); }
-			void add_simple_predicate(Analyzer::Expr *pred) { simple_quals.push_back(pred); }
+			void add_predicate(std::shared_ptr<Analyzer::Expr> pred) { quals.push_back(pred); }
+			void add_simple_predicate(std::shared_ptr<Analyzer::Expr> pred) { simple_quals.push_back(pred); }
 			virtual void print() const;
 		private:
 			// simple_quals consists of predicates of the form 'ColumnVar BinOper Constant'
 			// it can be used for eliminating fragments and/or partitions from the scan.
-			std::list<Analyzer::Expr*> simple_quals;
+			std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
 			int table_id; // rangetable entry index for the table to scan
 			std::list<int> col_list; // list of column ids to scan
 	};
@@ -108,7 +120,11 @@ namespace Planner {
 	 */
 	class Join : public Plan {
 		public:
-			Join(const std::vector<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, Plan *cp2) : Plan(t, q, c, p), child_plan2(cp2) {}
+			Join(
+          const std::vector<Analyzer::TargetEntry*>& t,
+          const std::list<std::shared_ptr<Analyzer::Expr>>& q,
+          double c, Plan *p, Plan *cp2)
+        : Plan(t, q, c, p), child_plan2(cp2) {}
 			virtual ~Join();
 			virtual void print() const;
 			const Plan *get_outerplan() const { return child_plan; }
@@ -123,12 +139,15 @@ namespace Planner {
 	 */
 	class AggPlan : public Plan {
 		public:
-			AggPlan(const std::vector<Analyzer::TargetEntry*> &t, double c, Plan *p, const std::list<Analyzer::Expr*> &gl) : Plan(t, c, p), groupby_list(gl) {}
-			virtual ~AggPlan();
-			const std::list<Analyzer::Expr*> &get_groupby_list() const { return groupby_list; }
+			AggPlan(
+          const std::vector<Analyzer::TargetEntry*>& t,
+          double c,
+          Plan *p,
+          const std::list<std::shared_ptr<Analyzer::Expr>>& gl) : Plan(t, c, p), groupby_list(gl) {}
+			const std::list<std::shared_ptr<Analyzer::Expr>>& get_groupby_list() const { return groupby_list; }
 			virtual void print() const;
 		private:
-			std::list<Analyzer::Expr*> groupby_list; // list of expressions for group by.  only Var nodes are allow now.
+			std::list<std::shared_ptr<Analyzer::Expr>> groupby_list; // list of expressions for group by.  only Var nodes are allow now.
 	};
 
 	/*
@@ -138,7 +157,12 @@ namespace Planner {
 	 */
 	class Append : public Plan {
 		public:
-			Append(const std::vector<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Plan*> &pl) : Plan(t, q, c, p), plan_list(pl) {}
+			Append(
+          const std::vector<Analyzer::TargetEntry*>& t,
+          const std::list<std::shared_ptr<Analyzer::Expr>>& q,
+          double c,
+          Plan *p,
+          const std::list<Plan*> &pl) : Plan(t, q, c, p), plan_list(pl) {}
 			virtual ~Append();
 			const std::list<Plan*> &get_plan_list() const { return plan_list; }
 			virtual void print() const;
@@ -153,7 +177,13 @@ namespace Planner {
 	 */
 	class MergeAppend : public Plan {
 		public:
-			MergeAppend(const std::vector<Analyzer::TargetEntry*> &t, const std::list<Analyzer::Expr*> &q, double c, Plan *p, const std::list<Plan*> &pl, const std::list<Analyzer::OrderEntry> &oe) : Plan(t, q, c, p), mergeplan_list(pl), order_entries(oe) {}
+			MergeAppend(
+          const std::vector<Analyzer::TargetEntry*>& t,
+          const std::list<std::shared_ptr<Analyzer::Expr>>& q,
+          double c,
+          Plan *p,
+          const std::list<Plan*>& pl,
+          const std::list<Analyzer::OrderEntry>& oe) : Plan(t, q, c, p), mergeplan_list(pl), order_entries(oe) {}
 			virtual ~MergeAppend();
 			const std::list<Plan*> &get_mergeplan_list() const { return mergeplan_list; }
 			const std::list<Analyzer::OrderEntry> &get_order_entries() const { return order_entries; }

@@ -189,7 +189,7 @@ private:
     const Planner::AggPlan* agg_plan,
     const int64_t limit,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const std::list<Analyzer::Expr*>& simple_quals,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const size_t context_count,
     std::condition_variable& scheduler_cv,
     std::mutex& scheduler_mutex,
@@ -269,8 +269,8 @@ private:
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<int>& scan_cols,
-    const std::list<Analyzer::Expr*>& simple_quals,
-    const std::list<Analyzer::Expr*>& quals,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
@@ -314,7 +314,7 @@ private:
 
   bool skipFragment(
     const Fragmenter_Namespace::FragmentInfo& frag_info,
-    const std::list<Analyzer::Expr*>& simple_quals);
+    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals);
 
   typedef std::pair<std::string, std::string> CodeCacheKey;
   typedef std::vector<std::tuple<void*,

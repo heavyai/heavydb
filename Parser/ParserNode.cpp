@@ -237,25 +237,27 @@ namespace Parser {
       delete where_clause;
   }
   
-  Analyzer::Expr *
-  NullLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
-    Analyzer::Constant *c = new Analyzer::Constant(kNULLT, true);
-    return c;
+  std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
+    return makeExpr<Analyzer::Constant>(kNULLT, true);
   }
   
-  Analyzer::Expr *
-  StringLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> StringLiteral::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const  {
     SQLTypeInfo ti(kVARCHAR, stringval->length(), 0, true);
     Datum d;
     d.stringval = new std::string(*stringval);
-    return new Analyzer::Constant(ti, false, d);
+    return makeExpr<Analyzer::Constant>(ti, false, d);
   }
 
-  Analyzer::Expr *
-  IntLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> IntLiteral::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const  {
     SQLTypes t;
     Datum d;
     if (intval >= INT16_MIN && intval <= INT16_MAX) {
@@ -268,63 +270,66 @@ namespace Parser {
       t = kBIGINT;
       d.bigintval = intval;
     }
-    Analyzer::Constant *c = new Analyzer::Constant(t, false, d);
-    return c;
+    return makeExpr<Analyzer::Constant>(t, false, d);
   }
 
-  Analyzer::Expr *
-  FixedPtLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> FixedPtLiteral::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const  {
     SQLTypeInfo ti(kNUMERIC, 0, 0, false);
     Datum d = StringToDatum(*fixedptval, ti);
-    return new Analyzer::Constant(ti, false, d);
+    return makeExpr<Analyzer::Constant>(ti, false, d);
   }
 
-  Analyzer::Expr *
-  FloatLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> FloatLiteral::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     Datum d;
     d.floatval = floatval;
-    return new Analyzer::Constant(kFLOAT, false, d);
+    return makeExpr<Analyzer::Constant>(kFLOAT, false, d);
   }
   
-  Analyzer::Expr *
-  DoubleLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> DoubleLiteral::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     Datum d;
     d.doubleval = doubleval;
-    return new Analyzer::Constant(kDOUBLE, false, d);
+    return makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
   }
 
-  Analyzer::Expr *
-  UserLiteral::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> UserLiteral::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     throw std::runtime_error("USER literal not supported yet.");
     return nullptr;
   }
 
-  Analyzer::Expr *
-  OperExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> OperExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     SQLTypeInfo result_type, left_type, right_type;
     SQLTypeInfo new_left_type, new_right_type;
-    Analyzer::Expr *left_expr, *right_expr;
-    left_expr = left->analyze(catalog, query, allow_tlist_ref);
+    auto left_expr = left->analyze(catalog, query, allow_tlist_ref);
     left_type = left_expr->get_type_info();
     if (right == nullptr) {
-      return new Analyzer::UOper(left_type, left_expr->get_contains_agg(), optype, left_expr->decompress());
+      return makeExpr<Analyzer::UOper>(left_type, left_expr->get_contains_agg(), optype, left_expr->decompress());
     }
     if (optype == kARRAY_AT) {
       if (left_type.get_type() != kARRAY)
         throw std::runtime_error(left->to_string() + " is not of array type.");
-      right_expr = right->analyze(catalog, query, allow_tlist_ref);
+      auto right_expr = right->analyze(catalog, query, allow_tlist_ref);
       right_type = right_expr->get_type_info();
       if (!right_type.is_integer())
         throw std::runtime_error(right->to_string() + " is not of integer type.");
-      return new Analyzer::BinOper(left_type.get_elem_type(), false, kARRAY_AT, kONE, left_expr, right_expr);
+      return makeExpr<Analyzer::BinOper>(left_type.get_elem_type(), false, kARRAY_AT, kONE, left_expr, right_expr);
     }
     SQLQualifier qual = opqualifier;
-    right_expr = right->analyze(catalog, query, allow_tlist_ref);
+    auto right_expr = right->analyze(catalog, query, allow_tlist_ref);
     bool has_agg = (left_expr->get_contains_agg() || right_expr->get_contains_agg());
     right_type = right_expr->get_type_info();
     if (qual != kONE) {
@@ -338,7 +343,7 @@ namespace Parser {
     if (left_type != new_left_type)
       left_expr = left_expr->add_cast(new_left_type);
     if (right_type != new_right_type) {
-      if (qual == kONE) 
+      if (qual == kONE)
         right_expr = right_expr->add_cast(new_right_type);
       else
         right_expr = right_expr->add_cast(new_right_type.get_array_type());
@@ -364,42 +369,46 @@ namespace Parser {
       left_expr = left_expr->decompress();
       right_expr = right_expr->decompress();
     }
-    return new Analyzer::BinOper(result_type, has_agg, optype, qual, left_expr, right_expr);
+    return makeExpr<Analyzer::BinOper>(result_type, has_agg, optype, qual, left_expr, right_expr);
   }
 
-  Analyzer::Expr *
-  SubqueryExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> SubqueryExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const  {
     throw std::runtime_error("Subqueries are not supported yet.");
     return nullptr;
   }
 
-  Analyzer::Expr *
-  IsNullExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
-    Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-    Analyzer::Expr *result = new Analyzer::UOper(kBOOLEAN, kISNULL, arg_expr);
+  std::shared_ptr<Analyzer::Expr> IsNullExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
+    auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+    auto result = makeExpr<Analyzer::UOper>(kBOOLEAN, kISNULL, arg_expr);
     if (is_not)
-      result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
+      result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
     return result;
   }
 
-  Analyzer::Expr *
-  InSubquery::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> InSubquery::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     throw std::runtime_error("Subqueries are not supported yet.");
     return nullptr;
   }
 
-  Analyzer::Expr *
-  InValues::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
-    Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  std::shared_ptr<Analyzer::Expr> InValues::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
+    auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     SQLTypeInfo ti = arg_expr->get_type_info();
     bool dict_comp = ti.get_compression() == kENCODING_DICT;
-    std::list<Analyzer::Expr*> *value_exprs = new std::list<Analyzer::Expr*>();
+    std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
     for (auto p : *value_list) {
-      Analyzer::Expr *e = p->analyze(catalog, query, allow_tlist_ref);
+      auto e = p->analyze(catalog, query, allow_tlist_ref);
       if (ti != e->get_type_info()) {
         if (ti.is_string() && e->get_type_info().is_string())
           ti = Analyzer::BinOper::common_string_type(ti, e->get_type_info());
@@ -409,39 +418,42 @@ namespace Parser {
           throw std::runtime_error("IN expressions must contain compatible types.");
       }
       if (dict_comp)
-        value_exprs->push_back(e->add_cast(arg_expr->get_type_info()));
+        value_exprs.push_back(e->add_cast(arg_expr->get_type_info()));
       else
-        value_exprs->push_back(e);
+        value_exprs.push_back(e);
     }
     if (!dict_comp) {
       arg_expr = arg_expr->decompress();
       arg_expr = arg_expr->add_cast(ti);
-      std::list<Analyzer::Expr*> cast_vals;
-      for (auto p : *value_exprs) {
+      std::list<std::shared_ptr<Analyzer::Expr>> cast_vals;
+      for (auto p : value_exprs) {
         cast_vals.push_back(p->add_cast(ti));
       }
-      value_exprs->swap(cast_vals);
+      value_exprs.swap(cast_vals);
     }
-    Analyzer::Expr *result = new Analyzer::InValues(arg_expr, value_exprs);
+    std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::InValues>(arg_expr, value_exprs);
     if (is_not)
-      result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
+      result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
     return result;
   }
 
-  Analyzer::Expr *
-  BetweenExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
-    Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-    Analyzer::Expr *lower_expr = lower->analyze(catalog, query, allow_tlist_ref);
-    Analyzer::Expr *upper_expr = upper->analyze(catalog, query, allow_tlist_ref);
+  std::shared_ptr<Analyzer::Expr> BetweenExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
+    auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+    auto lower_expr = lower->analyze(catalog, query, allow_tlist_ref);
+    auto upper_expr = upper->analyze(catalog, query, allow_tlist_ref);
     SQLTypeInfo new_left_type, new_right_type;
     (void)Analyzer::BinOper::analyze_type_info(kGE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-    Analyzer::BinOper *lower_pred = new Analyzer::BinOper(kBOOLEAN, kGE, kONE, arg_expr->add_cast(new_left_type)->decompress(), lower_expr->add_cast(new_right_type)->decompress());
+    auto lower_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN, kGE, kONE,
+      arg_expr->add_cast(new_left_type)->decompress(), lower_expr->add_cast(new_right_type)->decompress());
     (void)Analyzer::BinOper::analyze_type_info(kLE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-    Analyzer::BinOper *upper_pred = new Analyzer::BinOper(kBOOLEAN, kLE, kONE, arg_expr->deep_copy()->add_cast(new_left_type)->decompress(), upper_expr->add_cast(new_right_type)->decompress());
-    Analyzer::Expr *result = new Analyzer::BinOper(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
+    auto upper_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN, kLE, kONE,
+      arg_expr->deep_copy()->add_cast(new_left_type)->decompress(), upper_expr->add_cast(new_right_type)->decompress());
+    std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::BinOper>(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
     if (is_not)
-      result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
+      result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
     return result;
   }
 
@@ -490,12 +502,13 @@ namespace Parser {
     like_str = new_str;
   }
 
-  Analyzer::Expr *
-  LikeExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
-    Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-    Analyzer::Expr *like_expr = like_string->analyze(catalog, query, allow_tlist_ref);
-    Analyzer::Expr *escape_expr = escape_string == nullptr ? nullptr: escape_string->analyze(catalog, query, allow_tlist_ref);
+  std::shared_ptr<Analyzer::Expr> LikeExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
+    auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+    auto like_expr = like_string->analyze(catalog, query, allow_tlist_ref);
+    auto escape_expr = escape_string == nullptr ? nullptr: escape_string->analyze(catalog, query, allow_tlist_ref);
     if (!arg_expr->get_type_info().is_string())
       throw std::runtime_error("expression before LIKE must be of a string type.");
     if (!like_expr->get_type_info().is_string())
@@ -506,12 +519,12 @@ namespace Parser {
         throw std::runtime_error("expression after ESCAPE must be of a string type.");
       if (!escape_expr->get_type_info().is_string())
         throw std::runtime_error("expression after ESCAPE must be of a string type.");
-      Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(escape_expr);
+      auto c = std::dynamic_pointer_cast<Analyzer::Constant>(escape_expr);
       if (c != nullptr && c->get_constval().stringval->length() > 1)
         throw std::runtime_error("String after ESCAPE must have a single character.");
       escape_char = (*c->get_constval().stringval)[0];
     }
-    Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(like_expr);
+    auto c = std::dynamic_pointer_cast<Analyzer::Constant>(like_expr);
     bool is_simple = false;
     if (c != nullptr) {
       std::string &pattern = *c->get_constval().stringval;
@@ -525,22 +538,25 @@ namespace Parser {
           erase_cntl_chars(pattern, escape_char);
         }
     }
-    Analyzer::Expr *result = new Analyzer::LikeExpr(arg_expr->decompress(), like_expr, escape_expr, is_ilike, is_simple);
+    std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::LikeExpr>(arg_expr->decompress(),
+      like_expr, escape_expr, is_ilike, is_simple);
     if (is_not)
-      result = new Analyzer::UOper(kBOOLEAN, kNOT, result);
+      result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
     return result;
   }
 
-  Analyzer::Expr *
-  ExistsExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> ExistsExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const  {
     throw std::runtime_error("Subqueries are not supported yet.");
     return nullptr;
   }
 
-  Analyzer::Expr *
-  ColumnRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     int table_id { 0 };
     int rte_idx { 0 };
     const ColumnDescriptor *cd { nullptr };
@@ -592,28 +608,27 @@ namespace Parser {
           if (allow_tlist_ref == TlistRefType::TLIST_COPY)
             return tle->get_expr()->deep_copy();
           else
-            return new Analyzer::Var(tle->get_expr()->get_type_info(), Analyzer::Var::kOUTPUT, varno);
+            return makeExpr<Analyzer::Var>(tle->get_expr()->get_type_info(), Analyzer::Var::kOUTPUT, varno);
         }
       }
       if (cd == nullptr)
         throw std::runtime_error("Column name " + *column + " does not exist.");
     }
-    return new Analyzer::ColumnVar(cd->columnType, table_id, cd->columnId, rte_idx);
+    return makeExpr<Analyzer::ColumnVar>(cd->columnType, table_id, cd->columnId, rte_idx);
   }
 
-  Analyzer::Expr *
-  FunctionRef::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const 
-  {
+  std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     SQLTypeInfo result_type;
     SQLAgg agg_type;
-    Analyzer::Expr *arg_expr;
+    std::shared_ptr<Analyzer::Expr> arg_expr;
     bool is_distinct = false;
     if (boost::iequals(*name, "count")) {
       result_type = SQLTypeInfo(kBIGINT, false);
       agg_type = kCOUNT;
-      if (arg == nullptr)
-        arg_expr = nullptr;
-      else {
+      if (arg) {
         arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
         const SQLTypeInfo &ti = arg_expr->get_type_info();
         if (ti.is_string() && (ti.get_compression() != kENCODING_DICT || !distinct))
@@ -656,7 +671,7 @@ namespace Parser {
         const SQLTypeInfo &arg_ti = arg_expr->get_type_info();
         if (arg_ti.get_type() != kARRAY)
           throw std::runtime_error(arg->to_string() + " is not of array type.");
-        return new Analyzer::UOper(arg_ti.get_elem_type(), false, kUNNEST, arg_expr);
+        return makeExpr<Analyzer::UOper>(arg_ti.get_elem_type(), false, kUNNEST, arg_expr);
       }
       else
         throw std::runtime_error("invalid function name: " + *name);
@@ -666,14 +681,15 @@ namespace Parser {
     }
     int naggs = query.get_num_aggs();
     query.set_num_aggs(naggs+1);
-    return new Analyzer::AggExpr(result_type, agg_type, arg_expr, is_distinct);
+    return makeExpr<Analyzer::AggExpr>(result_type, agg_type, arg_expr, is_distinct);
   }
 
-  Analyzer::Expr *
-  CastExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const
-  {
+  std::shared_ptr<Analyzer::Expr> CastExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     target_type->check_type();
-    Analyzer::Expr *arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+    auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
     SQLTypeInfo ti(target_type->get_type(), target_type->get_param1(), target_type->get_param2(), arg_expr->get_type_info().get_notnull());;
     if (arg_expr->get_type_info().get_type() != target_type->get_type() &&
         arg_expr->get_type_info().get_compression() != kENCODING_NONE)
@@ -690,18 +706,18 @@ namespace Parser {
       delete else_expr;
   }
 
-  Analyzer::Expr *
-  CaseExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const
-  {
+  std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     SQLTypeInfo ti;
-    std::list<std::pair<Analyzer::Expr*, Analyzer::Expr*>> expr_pair_list;
+    std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_pair_list;
     bool has_agg = false;
     for (auto p : *when_then_list) {
-      Analyzer::Expr *e1, *e2;
-      e1 = p->get_expr1()->analyze(catalog, query, allow_tlist_ref);
+      auto e1 = p->get_expr1()->analyze(catalog, query, allow_tlist_ref);
       if (e1->get_type_info().get_type() != kBOOLEAN)
         throw std::runtime_error("Only boolean expressions can be used after WHEN.");
-      e2 = p->get_expr2()->analyze(catalog, query, allow_tlist_ref);
+      auto e2 = p->get_expr2()->analyze(catalog, query, allow_tlist_ref);
       if (ti.get_type() == kNULLT)
         ti = e2->get_type_info();
       else if (e2->get_type_info().get_type() == kNULLT)
@@ -718,7 +734,7 @@ namespace Parser {
         has_agg = true;
       expr_pair_list.push_back(std::make_pair(e1, e2));
     }
-    Analyzer::Expr *else_e = nullptr;
+    std::shared_ptr<Analyzer::Expr> else_e;
     if (else_expr != nullptr) {
       else_e = else_expr->analyze(catalog, query, allow_tlist_ref);
       if (else_e->get_contains_agg())
@@ -734,7 +750,7 @@ namespace Parser {
           throw std::runtime_error("expressions in ELSE clause must be of the same or compatible types as those in the THEN clauses.");
       }
     }
-    std::list<std::pair<Analyzer::Expr*, Analyzer::Expr*>> cast_expr_pair_list;
+    std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> cast_expr_pair_list;
     for (auto p : expr_pair_list) {
       cast_expr_pair_list.push_back(std::make_pair(p.first, p.second->add_cast(ti)));;
     }
@@ -743,9 +759,9 @@ namespace Parser {
     else {
       Datum d;
       // always create an else expr so that executor doesn't need to worry about it
-      else_e = new Analyzer::Constant(ti, true, d);
+      else_e = makeExpr<Analyzer::Constant>(ti, true, d);
     }
-    return new Analyzer::CaseExpr(ti, has_agg, cast_expr_pair_list, else_e);
+    return makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
   }
 
   std::string
@@ -761,9 +777,10 @@ namespace Parser {
     return str;
   }
 
-  Analyzer::Expr *
-  ExtractExpr::analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query, TlistRefType allow_tlist_ref) const
-  {
+  std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(
+      const Catalog_Namespace::Catalog &catalog,
+      Analyzer::Query &query,
+      TlistRefType allow_tlist_ref) const {
     ExtractField fieldno;
     if (boost::iequals(*field, "year"))
       fieldno = kYEAR;
@@ -785,7 +802,7 @@ namespace Parser {
       fieldno = kEPOCH;
     else
       throw std::runtime_error("Invalid field in EXTRACT function " + *field);
-    Analyzer::Expr *from_expr = from_arg->analyze(catalog, query, allow_tlist_ref);
+    auto from_expr = from_arg->analyze(catalog, query, allow_tlist_ref);
     if (!from_expr->get_type_info().is_time())
       throw std::runtime_error("Only TIME, TIMESTAMP and DATE types can be in EXTRACT function.");
     switch (from_expr->get_type_info().get_type()) {
@@ -797,7 +814,7 @@ namespace Parser {
         break;
     }
     SQLTypeInfo ti(kBIGINT, 0, 0, from_expr->get_type_info().get_notnull());
-    Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(from_expr);
+    auto c = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
     if (c != nullptr) {
       c->set_type_info(ti);
       Datum d;
@@ -805,7 +822,7 @@ namespace Parser {
       c->set_constval(d);
       return c;
     }
-    return new Analyzer::ExtractExpr(ti, from_expr->get_contains_agg(), fieldno, from_expr->decompress());
+    return makeExpr<Analyzer::ExtractExpr>(ti, from_expr->get_contains_agg(), fieldno, from_expr->decompress());
   }
 
   std::string
@@ -829,7 +846,7 @@ namespace Parser {
   void
   QuerySpec::analyze_having_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
   {
-    Analyzer::Expr *p = nullptr;
+    std::shared_ptr<Analyzer::Expr> p;
     if (having_clause != nullptr) {
       p = having_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
       if (p->get_type_info().get_type() != kBOOLEAN)
@@ -842,11 +859,10 @@ namespace Parser {
   void
   QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
   {
-    std::list<Analyzer::Expr*> *groupby = nullptr;
+    std::list<std::shared_ptr<Analyzer::Expr>> groupby;
     if (groupby_clause != nullptr) {
-      groupby = new std::list<Analyzer::Expr*>();
       int gexpr_no = 1;
-      Analyzer::Expr *gexpr;
+      std::shared_ptr<Analyzer::Expr> gexpr;
       const std::vector<Analyzer::TargetEntry*> &tlist = query.get_targetlist();
       for (auto c : *groupby_clause) {
         // special-case ordinal numbers in GROUP BY
@@ -859,7 +875,7 @@ namespace Parser {
             throw std::runtime_error("Invalid ordinal number in GROUP BY clause.");
           if (tlist[varno-1]->get_expr()->get_contains_agg())
             throw std::runtime_error("Ordinal number in GROUP BY cannot reference an expression containing aggregate functions.");
-          gexpr = new Analyzer::Var(tlist[varno-1]->get_expr()->get_type_info(), Analyzer::Var::kOUTPUT, varno);
+          gexpr = makeExpr<Analyzer::Var>(tlist[varno-1]->get_expr()->get_type_info(), Analyzer::Var::kOUTPUT, varno);
         } else {
           gexpr = c->analyze(catalog, query, Expr::TlistRefType::TLIST_REF);
         }
@@ -872,33 +888,33 @@ namespace Parser {
           ti.set_comp_param(TRANSIENT_DICT_ID);
           ti.set_fixed_size();
         }
-        Analyzer::Var *v = nullptr;
+        std::shared_ptr<Analyzer::Var> v;
         if (typeid(*gexpr) == typeid(Analyzer::Var)) {
-          v = dynamic_cast<Analyzer::Var*>(gexpr);
+          v = std::static_pointer_cast<Analyzer::Var>(gexpr);
           int n = v->get_varno();
-          gexpr = tlist[n - 1]->get_expr();
-          Analyzer::ColumnVar *cv = dynamic_cast<Analyzer::ColumnVar*>(gexpr);
+          gexpr = tlist[n - 1]->get_own_expr();
+          auto cv = std::dynamic_pointer_cast<Analyzer::ColumnVar>(gexpr);
           if (cv != nullptr) {
             // inherit all ColumnVar info for lineage.
-            *dynamic_cast<Analyzer::ColumnVar*>(v) = *cv;
+            *std::static_pointer_cast<Analyzer::ColumnVar>(v) = *cv;
           }
           v->set_which_row(Analyzer::Var::kGROUPBY);
           v->set_varno(gexpr_no);
           tlist[n - 1]->set_expr(v);
         }
         if (set_new_type) {
-          Analyzer::Expr *new_e = gexpr->add_cast(ti);
-          groupby->push_back(new_e);
+          auto new_e = gexpr->add_cast(ti);
+          groupby.push_back(new_e);
           if (v != nullptr)
             v->set_type_info(new_e->get_type_info());
         } else
-          groupby->push_back(gexpr);
+          groupby.push_back(gexpr);
         gexpr_no++;
       }
     }
-    if (query.get_num_aggs() > 0 || groupby != nullptr) {
+    if (query.get_num_aggs() > 0 || !groupby.empty()) {
       for (auto t : query.get_targetlist()) {
-        Analyzer::Expr *e = t->get_expr();
+        auto e = t->get_expr();
         e->check_group_by(groupby);
       }
     }
@@ -912,7 +928,7 @@ namespace Parser {
       query.set_where_predicate(nullptr);
       return;
     }
-    Analyzer::Expr *p = where_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
+    auto p = where_clause->analyze(catalog, query, Expr::TlistRefType::TLIST_COPY);
     if (p->get_type_info().get_type() != kBOOLEAN)
       throw std::runtime_error("Only boolean expressions can be in WHERE clause.");
     query.set_where_predicate(p);
@@ -943,19 +959,19 @@ namespace Parser {
             rte->expand_star_in_targetlist(catalog, tlist, rte_idx);
         }
         else {
-          Analyzer::Expr *e = select_expr->analyze(catalog, query);
+          auto e = select_expr->analyze(catalog, query);
           std::string resname;
 
           if (p->get_alias() != nullptr)
             resname = *p->get_alias();
           else if (typeid(*e) == typeid(Analyzer::ColumnVar)) {
-            Analyzer::ColumnVar *colvar = dynamic_cast<Analyzer::ColumnVar*>(e);
+            auto colvar = std::static_pointer_cast<Analyzer::ColumnVar>(e);
             const ColumnDescriptor *col_desc = catalog.getMetadataForColumn(colvar->get_table_id(), colvar->get_column_id());
             resname = col_desc->columnName;
           }
           if (e->get_type_info().get_type() == kNULLT)
             throw std::runtime_error("Untyped NULL in SELECT clause.  Use CAST to specify a type.");
-          Analyzer::UOper *o = dynamic_cast<Analyzer::UOper*>(e);
+          auto o = std::static_pointer_cast<Analyzer::UOper>(e);
           bool unnest = (o != nullptr && o->get_optype() == kUNNEST);
           Analyzer::TargetEntry *tle = new Analyzer::TargetEntry(resname, e, unnest);
           tlist.push_back(tle);
@@ -1342,11 +1358,11 @@ namespace Parser {
     std::vector<Analyzer::TargetEntry*> &tlist = query.get_targetlist_nonconst();
     std::list<int>::const_iterator it = query.get_result_col_list().begin();
     for (auto v : *value_list) {
-      Analyzer::Expr *e = v->analyze(catalog, query);
+      auto e = v->analyze(catalog, query);
       const ColumnDescriptor *cd = catalog.getMetadataForColumn(query.get_result_table_id(), *it);
       assert (cd != nullptr);
       if (cd->columnType.get_notnull()) {
-        Analyzer::Constant *c = dynamic_cast<Analyzer::Constant*>(e);
+        auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
         if (c != nullptr && c->get_is_null())
           throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
       }

@@ -445,9 +445,9 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
 
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const bool hoist_literals) {
   llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
-  for (auto in_val : *expr->get_value_list()) {
+  for (auto in_val : expr->get_value_list()) {
     result = cgen_state_->ir_builder_.CreateOr(result,
-      toBool(codegenCmp(kEQ, kONE, expr->get_arg(), in_val, hoist_literals)));
+      toBool(codegenCmp(kEQ, kONE, expr->get_arg(), in_val.get(), hoist_literals)));
   }
   return result;
 }
@@ -818,8 +818,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
   // (code generation is easier this way because of how 'BasicBlock::Create' works).
   // Reverse the actual arguments to compensate for this, then call the function.
   for (const auto& expr_pair : boost::adaptors::reverse(expr_pair_list)) {
-    case_func_args.push_back(toBool(codegen(expr_pair.first, true, hoist_literals).front()));
-    auto branch_val_lvs = codegen(expr_pair.second, true, hoist_literals);
+    case_func_args.push_back(toBool(codegen(expr_pair.first.get(), true, hoist_literals).front()));
+    auto branch_val_lvs = codegen(expr_pair.second.get(), true, hoist_literals);
     if (is_real_str) {
       if (branch_val_lvs.size() == 3) {
         case_func_args.push_back(cgen_state_->emitCall("string_pack", { branch_val_lvs[1], branch_val_lvs[2] }));
@@ -1952,7 +1952,7 @@ ResultRows Executor::executeResultPlan(
   is_nested_ = true;
   std::vector<Analyzer::Expr*> target_exprs;
   for (auto target_entry : targets) {
-    target_exprs.push_back(target_entry->get_expr());
+    target_exprs.emplace_back(target_entry->get_expr());
   }
   QueryMemoryDescriptor query_mem_desc {
     this,
@@ -2049,7 +2049,7 @@ ResultRows Executor::executeAggScanPlan(
       break;
     }
   }
-  std::list<Analyzer::Expr*> groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<Analyzer::Expr*> { nullptr };
+  auto groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<std::shared_ptr<Analyzer::Expr>> { nullptr };
   const int table_id = scan_plan->get_table_id();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto fragmenter = table_descriptor->fragmenter;
@@ -2070,7 +2070,7 @@ ResultRows Executor::executeAggScanPlan(
     max_groups_buffer_entry_guess = it->numTuples;  // not a guess anymore
   }
 
-  const std::list<Analyzer::Expr*>& simple_quals = scan_plan->get_simple_quals();
+  const auto& simple_quals = scan_plan->get_simple_quals();
 
   const int64_t scan_limit { get_scan_limit(plan, limit) };
 
@@ -2299,7 +2299,7 @@ void Executor::dispatchFragments(
     const Planner::AggPlan* agg_plan,
     const int64_t limit,
     const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const std::list<Analyzer::Expr*>& simple_quals,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const size_t context_count,
     std::condition_variable& scheduler_cv,
     std::mutex& scheduler_mutex,
@@ -2910,8 +2910,8 @@ Executor::CompilationResult Executor::compilePlan(
     const Fragmenter_Namespace::QueryInfo& query_info,
     const std::vector<Executor::AggInfo>& agg_infos,
     const std::list<int>& scan_cols,
-    const std::list<Analyzer::Expr*>& simple_quals,
-    const std::list<Analyzer::Expr*>& quals,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
     const bool hoist_literals,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
@@ -2969,18 +2969,18 @@ Executor::CompilationResult Executor::compilePlan(
   std::vector<Analyzer::Expr*> deferred_quals;
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
-    if (dynamic_cast<Analyzer::LikeExpr*>(expr)) {
-      deferred_quals.push_back(expr);
+    if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
+      deferred_quals.push_back(expr.get());
       continue;
     }
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, hoist_literals).front()));
   }
   for (auto expr : quals) {
-    if (dynamic_cast<Analyzer::LikeExpr*>(expr)) {
-      deferred_quals.push_back(expr);
+    if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
+      deferred_quals.push_back(expr.get());
       continue;
     }
-    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, hoist_literals).front()));
   }
 
   auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
@@ -3588,9 +3588,9 @@ int Executor::getLocalColumnId(const int global_col_id, const bool fetch_column)
 
 bool Executor::skipFragment(
     const Fragmenter_Namespace::FragmentInfo& fragment,
-    const std::list<Analyzer::Expr*>& simple_quals) {
+    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals) {
   for (const auto simple_qual : simple_quals) {
-    const auto comp_expr = dynamic_cast<const Analyzer::BinOper*>(simple_qual);
+    const auto comp_expr = std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
     if (!comp_expr) {
       // is this possible?
       return false;

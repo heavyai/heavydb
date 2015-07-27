@@ -750,7 +750,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(
         bool is_array = target_expr && target_expr->get_type_info().is_array();
         CHECK(!is_real_string || !is_array);
         const int global_col_id { dynamic_cast<Analyzer::ColumnVar*>(target_expr)
-          ? dynamic_cast<Analyzer::ColumnVar*>(target_expr)->get_column_id()
+          ? static_cast<Analyzer::ColumnVar*>(target_expr)->get_column_id()
           : -1 };
         const auto agg_info = target_info(target_expr);
         if (is_real_string || is_array) {
@@ -1158,7 +1158,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
       checked_int64_t cardinality { 1 };
       bool has_nulls { false };
       for (const auto groupby_expr : groupby_exprs) {
-        auto col_range_info = getExprRangeInfo(groupby_expr, fragments);
+        auto col_range_info = getExprRangeInfo(groupby_expr.get(), fragments);
         if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
           return { GroupByColRangeType::MultiCol, 0, 0, false };
         }
@@ -1177,7 +1177,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
       return { GroupByColRangeType::MultiCol, 0, 0, false };
     }
   }
-  return getExprRangeInfo(groupby_exprs.front(), fragments);
+  return getExprRangeInfo(groupby_exprs.front().get(), fragments);
 }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
@@ -1210,9 +1210,15 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // For non-aggregate (scan only) plans, execute them like a group by
   // row index -- the null pointer means row index to Executor::codegen().
-  return agg_plan
-    ? agg_plan->get_groupby_list()
-    : std::list<Analyzer::Expr*> { nullptr };
+  if (agg_plan) {
+    const auto& owned_groupby_list = agg_plan->get_groupby_list();
+    std::list<Analyzer::Expr*> result;
+    for (const auto g : owned_groupby_list) {
+      result.push_back(g.get());
+    }
+    return result;
+  }
+  return { nullptr };
 }
 
 }  // namespace
@@ -1306,7 +1312,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       auto it_ok = count_distinct_descriptors.insert(std::make_pair(target_idx, count_distinct_desc));
       CHECK(it_ok.second);
     }
-    target_expr_list.push_back(target_expr);
+    target_expr_list.emplace_back(target_expr);
     ++target_idx;
   }
   if (!count_distinct_descriptors.empty()) {
@@ -1568,7 +1574,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
   // row index -- the null pointer means row index to Executor::codegen().
   const auto groupby_list = agg_plan
     ? agg_plan->get_groupby_list()
-    : std::list<Analyzer::Expr*> { nullptr };
+    : std::list<std::shared_ptr<Analyzer::Expr>> { nullptr };
 
   std::stack<llvm::BasicBlock*> array_loops;
 
@@ -1578,7 +1584,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
   case GroupByColRangeType::Scan: {
     CHECK_EQ(1, groupby_list.size());
     const auto group_expr = groupby_list.front();
-    const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
+    const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr.get(), hoist_literals,
       query_mem_desc.has_nulls, query_mem_desc.max_val + 1, diamond_codegen, array_loops);
     auto small_groups_buffer = arg_it;
     if (query_mem_desc.usesGetGroupValueFast()) {
@@ -1632,8 +1638,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       key_size_lv);
     int32_t subkey_idx = 0;
     for (const auto group_expr : groupby_list) {
-      auto col_range_info = getExprRangeInfo(group_expr, query_info_.fragments);
-      const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr, hoist_literals,
+      auto col_range_info = getExprRangeInfo(group_expr.get(), query_info_.fragments);
+      const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr.get(), hoist_literals,
         col_range_info.has_nulls, col_range_info.max + 1, diamond_codegen, array_loops);
       // store the sub-key to the buffer
       LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
@@ -1695,7 +1701,7 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   llvm::Value* hash_lv { llvm::ConstantInt::get(get_int_type(64, LL_CONTEXT), 0) };
   std::vector<int64_t> cardinalities;
   for (const auto groupby_expr : groupby_exprs) {
-    auto col_range_info = getExprRangeInfo(groupby_expr, query_info_.fragments);
+    auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_info_.fragments);
     CHECK(col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange);
     cardinalities.push_back(col_range_info.max - col_range_info.min + 1);
   }
@@ -1703,7 +1709,7 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   for (const auto groupby_expr : groupby_exprs) {
     auto key_comp_lv = key_hash_func_builder.CreateLoad(
       key_hash_func_builder.CreateGEP(key_buff_lv, LL_INT(dim_idx)));
-    auto col_range_info = getExprRangeInfo(groupby_expr, query_info_.fragments);
+    auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_info_.fragments);
     auto crt_term_lv = key_hash_func_builder.CreateSub(key_comp_lv, LL_INT(col_range_info.min));
     for (size_t prev_dim_idx = 0; prev_dim_idx < dim_idx; ++prev_dim_idx) {
       crt_term_lv = key_hash_func_builder.CreateMul(crt_term_lv, LL_INT(cardinalities[prev_dim_idx]));
