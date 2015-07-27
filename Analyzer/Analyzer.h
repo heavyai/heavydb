@@ -14,10 +14,21 @@
 #include <utility>
 #include <list>
 #include <set>
+#include <type_traits>
 #include <glog/logging.h>
 #include "../Shared/sqltypes.h"
 #include "../Shared/sqldefs.h"
 #include "../Catalog/Catalog.h"
+
+namespace Analyzer {
+  class Expr;
+}
+
+template<typename Tp, typename... Args>
+inline typename std::enable_if<std::is_base_of<Analyzer::Expr, Tp>::value, Tp*>::type
+makeExpr(Args&&... args) {
+  return new Tp(std::forward<Args>(args)...);
+}
 
 namespace Analyzer {
 
@@ -219,9 +230,15 @@ namespace Analyzer {
       virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
       virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { operand->collect_rte_idx(rte_idx_set); }
       virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { operand->collect_column_var(colvar_set, include_agg); }
-      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return new UOper(type_info, contains_agg, optype, operand->rewrite_with_targetlist(tlist)); }
-      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return new UOper(type_info, contains_agg, optype, operand->rewrite_with_child_targetlist(tlist)); }
-      virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return new UOper(type_info, contains_agg, optype, operand->rewrite_agg_to_var(tlist)); }
+      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const {
+        return makeExpr<UOper>(type_info, contains_agg, optype, operand->rewrite_with_targetlist(tlist));
+      }
+      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const {
+        return makeExpr<UOper>(type_info, contains_agg, optype, operand->rewrite_with_child_targetlist(tlist));
+      }
+      virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const {
+        return makeExpr<UOper>(type_info, contains_agg, optype, operand->rewrite_agg_to_var(tlist));
+      }
       virtual bool operator==(const Expr &rhs) const;
       virtual void print() const;
       virtual void find_expr(bool (*f)(const Expr *), std::list<const Expr*> &expr_list) const;
@@ -255,8 +272,14 @@ namespace Analyzer {
       virtual void group_predicates(std::list<const Expr*> &scan_predicates, std::list<const Expr*> &join_predicates, std::list<const Expr*> &const_predicates) const;
       virtual void collect_rte_idx(std::set<int> &rte_idx_set) const { left_operand->collect_rte_idx(rte_idx_set); right_operand->collect_rte_idx(rte_idx_set); }
       virtual void collect_column_var(std::set<const ColumnVar*, bool(*)(const ColumnVar*, const ColumnVar*)> &colvar_set, bool include_agg) const { left_operand->collect_column_var(colvar_set, include_agg); right_operand->collect_column_var(colvar_set, include_agg); }
-      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const { return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->rewrite_with_targetlist(tlist), right_operand->rewrite_with_targetlist(tlist)); }
-      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const { return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->rewrite_with_child_targetlist(tlist), right_operand->rewrite_with_child_targetlist(tlist)); }
+      virtual Expr *rewrite_with_targetlist(const std::vector<TargetEntry*> &tlist) const {
+        return makeExpr<BinOper>(type_info, contains_agg, optype, qualifier,
+          left_operand->rewrite_with_targetlist(tlist), right_operand->rewrite_with_targetlist(tlist));
+      }
+      virtual Expr *rewrite_with_child_targetlist(const std::vector<TargetEntry*> &tlist) const {
+        return makeExpr<BinOper>(type_info, contains_agg, optype, qualifier,
+          left_operand->rewrite_with_child_targetlist(tlist), right_operand->rewrite_with_child_targetlist(tlist));
+      }
       virtual Expr *rewrite_agg_to_var(const std::vector<TargetEntry*> &tlist) const { return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->rewrite_agg_to_var(tlist), right_operand->rewrite_agg_to_var(tlist)); }
       virtual bool operator==(const Expr &rhs) const;
       virtual void print() const;

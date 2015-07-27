@@ -77,13 +77,13 @@ namespace Analyzer {
   Expr *
   ColumnVar::deep_copy() const
   {
-    return new ColumnVar(type_info, table_id, column_id, rte_idx);
+    return makeExpr<ColumnVar>(type_info, table_id, column_id, rte_idx);
   }
 
   Expr *
   Var::deep_copy() const
   {
-    return new Var(type_info, table_id, column_id, rte_idx, which_row, varno);
+    return makeExpr<Var>(type_info, table_id, column_id, rte_idx, which_row, varno);
   }
 
   Expr *
@@ -93,19 +93,20 @@ namespace Analyzer {
     if (type_info.is_string() && !is_null) {
       d.stringval = new std::string(*constval.stringval);
     }
-    return new Constant(type_info, is_null, d);
+    return makeExpr<Constant>(type_info, is_null, d);
   }
 
   Expr *
   UOper::deep_copy() const
   {
-    return new UOper(type_info, contains_agg, optype, operand->deep_copy());
+    return makeExpr<UOper>(type_info, contains_agg, optype, operand->deep_copy());
   }
   
   Expr *
   BinOper::deep_copy() const
   {
-    return new BinOper(type_info, contains_agg, optype, qualifier, left_operand->deep_copy(), right_operand->deep_copy());
+    return makeExpr<BinOper>(type_info, contains_agg, optype, qualifier,
+      left_operand->deep_copy(), right_operand->deep_copy());
   }
 
   Expr *
@@ -122,19 +123,20 @@ namespace Analyzer {
     std::list<Expr*> *new_value_list = new std::list<Expr*>();
     for (auto p : *value_list)
       new_value_list->push_back(p->deep_copy());
-    return new InValues(arg->deep_copy(), new_value_list);
+    return makeExpr<InValues>(arg->deep_copy(), new_value_list);
   }
 
   Expr *
   LikeExpr::deep_copy() const
   {
-    return new LikeExpr(arg->deep_copy(), like_expr->deep_copy(), escape_expr == nullptr?nullptr:escape_expr->deep_copy(), is_ilike, is_simple);
+    return makeExpr<LikeExpr>(arg->deep_copy(), like_expr->deep_copy(),
+      escape_expr ? escape_expr->deep_copy() : nullptr, is_ilike, is_simple);
   }
 
   Expr *
   AggExpr::deep_copy() const
   {
-    return new AggExpr(type_info, aggtype, arg == nullptr?nullptr:arg->deep_copy(), is_distinct);
+    return makeExpr<AggExpr>(type_info, aggtype, arg == nullptr?nullptr:arg->deep_copy(), is_distinct);
   }
 
   Expr *
@@ -144,13 +146,13 @@ namespace Analyzer {
     for (auto p : expr_pair_list) {
       new_list.push_back(std::make_pair(p.first->deep_copy(), p.second->deep_copy()));
     }
-    return new CaseExpr(type_info, contains_agg, new_list, else_expr == nullptr ? nullptr : else_expr->deep_copy());
+    return makeExpr<CaseExpr>(type_info, contains_agg, new_list, else_expr == nullptr ? nullptr : else_expr->deep_copy());
   }
 
   Expr *
   ExtractExpr::deep_copy() const
   {
-    return new ExtractExpr(type_info, contains_agg, field, from_expr->deep_copy());
+    return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->deep_copy());
   }
 
   SQLTypeInfo
@@ -443,7 +445,7 @@ namespace Analyzer {
     SQLTypeInfo new_type_info = type_info;
     new_type_info.set_compression(kENCODING_NONE);
     new_type_info.set_comp_param(0);
-    return new UOper(new_type_info, contains_agg, kCAST, this);
+    return makeExpr<UOper>(new_type_info, contains_agg, kCAST, this);
   }
 
   Expr *
@@ -463,7 +465,7 @@ namespace Analyzer {
     if (typeid(*this) != typeid(Constant) &&
         new_type_info.is_string() && new_type_info.get_compression() == kENCODING_DICT && new_type_info.get_comp_param() <= TRANSIENT_DICT_ID)
       throw std::runtime_error("Internal error: Cannot apply transient dictionary encoding to non-literal expression yet.");
-    return new UOper(new_type_info, contains_agg, kCAST, this);
+    return makeExpr<UOper>(new_type_info, contains_agg, kCAST, this);
   }
 
   void
@@ -884,7 +886,7 @@ namespace Analyzer {
   {
     column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId);
     for (auto col_desc : column_descs) {
-      ColumnVar *cv = new ColumnVar(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
+      ColumnVar *cv = makeExpr<ColumnVar>(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
       TargetEntry *tle = new TargetEntry(col_desc->columnName, cv, false);
       tlist.push_back(tle);
     }
@@ -967,7 +969,8 @@ namespace Analyzer {
     } else if (typeid(*left_operand) == typeid(Constant) && typeid(*right_operand) == typeid(ColumnVar)) {
       ColumnVar *cv = dynamic_cast<ColumnVar*>(right_operand);
       rte_idx = cv->get_rte_idx();
-      return new BinOper(type_info, contains_agg, COMMUTE_COMPARISON(optype), qualifier, right_operand->deep_copy(), left_operand->deep_copy());
+      return makeExpr<BinOper>(type_info, contains_agg, COMMUTE_COMPARISON(optype),
+        qualifier, right_operand->deep_copy(), left_operand->deep_copy());
     }
     return nullptr;
   }
@@ -1107,7 +1110,8 @@ namespace Analyzer {
       if (colvar == nullptr)
         throw std::runtime_error("Internal Error: targetlist in rewrite_with_child_targetlist is not all columns.");
       if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
-        return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
+        return makeExpr<Var>(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(),
+          colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
       varno++;
     }
     throw std::runtime_error("Internal error: cannot find ColumnVar in child targetlist.");
@@ -1124,7 +1128,8 @@ namespace Analyzer {
         if (colvar == nullptr)
           throw std::runtime_error("Internal Error: targetlist in rewrite_agg_to_var is not all columns and aggregates.");
         if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
-          return new Var(colvar->get_type_info(), colvar->get_table_id(), colvar->get_column_id(), colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
+          return makeExpr<Var>(colvar->get_type_info(), colvar->get_table_id(),
+            colvar->get_column_id(), colvar->get_rte_idx(), Var::kINPUT_OUTER, varno);
       }
       varno++;
     }
