@@ -1454,23 +1454,13 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
       }
     case kMULTIPLY: {
       llvm::Value* result { nullptr };
-      bool dec_adjusted { false };
-      if (dynamic_cast<const Analyzer::Constant*>(rhs) && rhs_type.is_decimal()) {
-        rhs_lv = cgen_state_->ir_builder_.CreateSDiv(rhs_lv,
-          llvm::ConstantInt::get(rhs_lv->getType(), exp_to_scale(rhs_type.get_scale())));
-        dec_adjusted = true;
-      } else if (dynamic_cast<const Analyzer::Constant*>(lhs) && lhs_type.is_decimal()) {
-        lhs_lv = cgen_state_->ir_builder_.CreateSDiv(lhs_lv,
-          llvm::ConstantInt::get(lhs_lv->getType(), exp_to_scale(lhs_type.get_scale())));
-        dec_adjusted = true;
-      }
       if (not_null) {
         result = cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
       } else {
         result = cgen_state_->emitCall("mul_" + int_typename + "_nullable",
           { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
       }
-      if (lhs_type.is_decimal() && !dec_adjusted) {
+      if (lhs_type.is_decimal()) {
         result = cgen_state_->ir_builder_.CreateSDiv(result,
           llvm::ConstantInt::get(result->getType(), exp_to_scale(lhs_type.get_scale())));
       }
