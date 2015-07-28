@@ -882,6 +882,7 @@ int main(int argc, char** argv)
   } catch (const exception& e) {
     LOG(ERROR) << e.what();
   }
+  Executor::nukeCacheOfExecutors();
   const std::string drop_test { "DROP TABLE test;" };
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);

@@ -84,6 +84,12 @@ public:
     const size_t block_size_x = 0,
     const size_t grid_size_x = 0);
 
+  static void nukeCacheOfExecutors() {
+    std::lock_guard<std::mutex> flush_lock(execute_mutex_);  // don't want native code to vanish while executing
+    std::lock_guard<std::mutex> lock(executors_cache_mutex_);
+    (decltype(executors_) {}).swap(executors_);
+  }
+
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
 
   ResultRows execute(
@@ -563,6 +569,7 @@ private:
 
   static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;
+  static std::mutex executors_cache_mutex_;
 
   static const int32_t ERR_DIV_BY_ZERO { 1 };
   static const int32_t ERR_OUT_OF_GPU_MEM { 2 };
