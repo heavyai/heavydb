@@ -29,9 +29,9 @@ namespace Buffer_Namespace {
     }
 
     void BufferMgr::clear() {
+        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_);
         std::lock_guard < std::mutex > chunkIndexLock (chunkIndexMutex_);
         std::lock_guard < std::mutex > unsizedSegsLock (unsizedSegsMutex_);
-        std::lock_guard < std::mutex > sizedSegsLock (sizedSegsMutex_);
         for (auto bufferIt = chunkIndex_.begin(); bufferIt != chunkIndex_.end(); ++bufferIt) {
             delete bufferIt->second->buffer;
         }
