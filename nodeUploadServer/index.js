@@ -4,6 +4,8 @@ var fs = require('fs');
 var cors = require('cors');
 var port = process.env.PORT || 8000;
 var app = express();
+var path = require('path');
+
 
 app.use(cors());
 
@@ -21,9 +23,11 @@ var storage = multer.diskStorage({
   destination: function (req, file, cb) {
     var sessionId = req.headers.sessionid;
     mkdirSync('./uploads/' + sessionId);
+    req.toSendClient = path.dirname(require.main.filename) + '/uploads/' + sessionId
     cb(null, './uploads/' + sessionId);
   },
   filename: function (req, file, cb) {
+    req.toSendClient += '/' + file.originalname
     cb(null, file.originalname);
   }
 })
@@ -36,9 +40,8 @@ app.post('/upload', function (req, res) {
     if (err) {
       res.send('error');
     }
-    res.send(200);
+    res.send(req.toSendClient);
   })
 });
 
 var server = app.listen(port);
-
