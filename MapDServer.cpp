@@ -701,7 +701,7 @@ public:
 
     _return.row_desc.resize(best_types.size());
     TColumnType col;
-    for (int col_idx = 0; col_idx < best_types.size(); col_idx++) {
+    for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
       SQLTypes t = best_types[col_idx];
       SQLTypeInfo* ti = new SQLTypeInfo(t, true);
       col.col_type.type = type_to_thrift(*ti);

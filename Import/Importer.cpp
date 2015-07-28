@@ -794,8 +794,7 @@ std::vector<SQLTypes> Detector::find_best_sqltypes() {
   std::vector<int> col_types(raw_rows.front().size(), 0);
 
   for (auto row : raw_rows) {
-    int col_idx = 0;
-    for (col_idx = 0; col_idx < row.size(); col_idx++) {
+    for (size_t col_idx = 0; col_idx < row.size(); col_idx++) {
       SQLTypes t = detect_sqltype(row[col_idx]);
       int detected_type = typeorder.left.find(t)->second;
       if (col_types[col_idx] < detected_type) {
