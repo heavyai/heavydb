@@ -58,15 +58,24 @@ std::shared_ptr<Executor> Executor::getExecutor(
     const std::string& debug_file,
     const size_t block_size_x,
     const size_t grid_size_x) {
-  std::lock_guard<std::mutex> lock(executors_cache_mutex_);
-  auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
-  if (it != executors_.end()) {
-    return it->second;
+  {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
+    auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
+    if (it != executors_.end()) {
+      return it->second;
+    }
   }
-  auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file);
-  auto it_ok = executors_.insert(std::make_pair(std::make_tuple(db_id, block_size_x, grid_size_x), executor));
-  CHECK(it_ok.second);
-  return executor;
+  {
+    mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
+    auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
+    if (it != executors_.end()) {
+      return it->second;
+    }
+    auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file);
+    auto it_ok = executors_.insert(std::make_pair(std::make_tuple(db_id, block_size_x, grid_size_x), executor));
+    CHECK(it_ok.second);
+    return executor;
+  }
 }
 
 namespace {
@@ -3641,4 +3650,4 @@ bool Executor::skipFragment(
 
 std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> Executor::executors_;
 std::mutex Executor::execute_mutex_;
-std::mutex Executor::executors_cache_mutex_;
+mapd_shared_mutex Executor::executors_cache_mutex_;
