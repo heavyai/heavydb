@@ -575,24 +575,29 @@ public:
   }
 
   void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+    const Catalog_Namespace::Catalog* cat_ptr { nullptr };
+    {
+      mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+      auto session_it = sessions_.find(session);
+      if (session_it == sessions_.end()) {
+        TMapDException ex;
+        ex.error_msg = "Session not valid.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      session_it->second->update_time();
+      auto& cat = session_it->second->get_catalog();
+      cat_ptr = &cat;
     }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog(); 
-    const TableDescriptor *td = cat.getMetadataForTable(table_name);
+    CHECK(cat_ptr);
+    const TableDescriptor *td = cat_ptr->getMetadataForTable(table_name);
     if (td == nullptr) {
       TMapDException ex;
       ex.error_msg = "Table " + table_name + " does not exist.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    Importer_NS::Loader loader(cat, td);
+    Importer_NS::Loader loader(*cat_ptr, td);
     if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
       ex.error_msg = "Wrong number of columns to load into Table " + table_name;
@@ -620,24 +625,29 @@ public:
   }
 
   void load_table(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
+    const Catalog_Namespace::Catalog* cat_ptr { nullptr };
+    {
+      mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+      auto session_it = sessions_.find(session);
+      if (session_it == sessions_.end()) {
+        TMapDException ex;
+        ex.error_msg = "Session not valid.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      session_it->second->update_time();
+      auto& cat = session_it->second->get_catalog();
+      cat_ptr = &cat;
     }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog(); 
-    const TableDescriptor *td = cat.getMetadataForTable(table_name);
+    CHECK(cat_ptr);
+    const TableDescriptor *td = cat_ptr->getMetadataForTable(table_name);
     if (td == nullptr) {
       TMapDException ex;
       ex.error_msg = "Table " + table_name + " does not exist.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    Importer_NS::Loader loader(cat, td);
+    Importer_NS::Loader loader(*cat_ptr, td);
     Importer_NS::CopyParams copy_params;
     if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
