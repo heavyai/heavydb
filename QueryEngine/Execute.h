@@ -24,6 +24,7 @@
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
+#include <deque>
 #include "../Shared/measure.h"
 
 
@@ -197,7 +198,7 @@ private:
     const bool allow_multifrag,
     const Planner::AggPlan* agg_plan,
     const int64_t limit,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const size_t context_count,
     std::condition_variable& scheduler_cv,
@@ -209,7 +210,7 @@ private:
     const std::list<int>&,
     const int device_id,
     const Data_Namespace::MemoryLevel,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>&,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>&,
     const std::vector<size_t>& selected_fragments,
     const Catalog_Namespace::Catalog&,
     std::list<ChunkIter>&,

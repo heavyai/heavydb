@@ -5,6 +5,7 @@
 #include "../Fragmenter/Fragmenter.h"
 
 #include <boost/multiprecision/cpp_int.hpp>
+#include <deque>
 
 
 typedef boost::multiprecision::number<
@@ -112,7 +113,7 @@ class Executor;
 
 ExpressionRange getExpressionRange(
   const Analyzer::Expr*,
-  const std::vector<Fragmenter_Namespace::FragmentInfo>&,
+  const std::deque<Fragmenter_Namespace::FragmentInfo>&,
   const Executor*);
 
 #endif  // QUERYENGINE_EXPRESSIONRANGE_H

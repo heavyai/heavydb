@@ -99,10 +99,9 @@ scan_table_return_hash(const string &table_name, const Catalog &cat)
 	const TableDescriptor *td = cat.getMetadataForTable(table_name);
 	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId);
 	vector<size_t> col_hashs(cds.size());
-	QueryInfo query_info;
   int64_t elapsed_time = 0;
   size_t total_bytes = 0;
-	td->fragmenter->getFragmentsForQuery(query_info);
+	Fragmenter_Namespace::QueryInfo query_info = td->fragmenter->getFragmentsForQuery();
 	for (auto frag : query_info.fragments) {
 		int i = 0;
 		for (auto cd : cds) {
@@ -129,8 +128,7 @@ scan_table_return_hash_non_iter(const string &table_name, const Catalog &cat)
 	const TableDescriptor *td = cat.getMetadataForTable(table_name);
 	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId);
 	vector<size_t> col_hashs(cds.size());
-	QueryInfo query_info;
-	td->fragmenter->getFragmentsForQuery(query_info);
+	Fragmenter_Namespace::QueryInfo query_info = td->fragmenter->getFragmentsForQuery();
   int64_t elapsed_time = 0;
   size_t total_bytes = 0;
 	for (auto frag : query_info.fragments) {

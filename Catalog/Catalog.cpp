@@ -72,7 +72,7 @@ SysCatalog::createDatabase(const string &name, int owner)
 		throw runtime_error("Database " + name + " already exists.");
 	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + std::to_string(owner) + ")");
 	SqliteConnector dbConn(name, basePath_+"/mapd_catalogs/");
-	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, partitions text)");
+	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, max_rows bigint, partitions text)");
 	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, size integer, chunks text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, refresh int)");
 	dbConn.query("CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references mapd_users, view_state text)");
@@ -193,7 +193,7 @@ void Catalog::buildMaps() {
 				DictDescriptor *dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
         dictDescriptorMapById_[dd->dictId] = dd;
     }
-    string tableQuery("SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions from mapd_tables");
+    string tableQuery("SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, max_rows, partitions from mapd_tables");
     sqliteConnector_.query(tableQuery);
     numRows = sqliteConnector_.getNumRows();
     for (size_t r = 0; r < numRows; ++r) {
@@ -206,7 +206,8 @@ void Catalog::buildMaps() {
 				td->fragType = (Fragmenter_Namespace::FragmenterType)sqliteConnector_.getData<int>(r, 5);
 				td->maxFragRows = sqliteConnector_.getData<int>(r, 6);
 				td->fragPageSize = sqliteConnector_.getData<int>(r, 7);
-				td->partitions = sqliteConnector_.getData<string>(r, 8);
+				td->maxRows = sqliteConnector_.getData<int64_t>(r, 8);
+				td->partitions = sqliteConnector_.getData<string>(r, 9);
 				if (!td->isView) {
 					// initialize view fields even though irrelevant
 					td->isMaterialized = false;
@@ -348,7 +349,7 @@ Catalog::instantiateFragmenter(TableDescriptor *td) const
 	getAllColumnMetadataForTable(td, columnDescs);
 	Chunk::translateColumnDescriptorsToChunkVec(columnDescs , chunkVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, chunkVec, dataMgr_.get(), td->maxFragRows, td->fragPageSize);
+	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, chunkVec, dataMgr_.get(), td->maxFragRows, td->fragPageSize, td->maxRows);
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {
@@ -471,7 +472,7 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
   list<DictDescriptor> dds;
 	sqliteConnector_.query("BEGIN TRANSACTION");
 	try {
-		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, partitions) VALUES ('" + td.tableName + "', " + std::to_string(columns.size()) + ", " + std::to_string(td.isView) + ", '', " + std::to_string(td.fragType) + ", " + std::to_string(td.maxFragRows) + ", " + std::to_string(td.fragPageSize) +  ", '')");
+		sqliteConnector_.query("INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, max_rows, partitions) VALUES ('" + td.tableName + "', " + std::to_string(columns.size()) + ", " + std::to_string(td.isView) + ", '', " + std::to_string(td.fragType) + ", " + std::to_string(td.maxFragRows) + ", " + std::to_string(td.fragPageSize) +"," + std::to_string(td.maxRows) +  ", '')");
 		// now get the auto generated tableid
 		sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + td.tableName + "'");
 		td.tableId = sqliteConnector_.getData<int>(0, 0);

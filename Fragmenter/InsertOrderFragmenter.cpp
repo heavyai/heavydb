@@ -8,6 +8,8 @@
 #include <assert.h>
 #include <boost/lexical_cast.hpp>
 
+#define DROP_FRAGMENT_FACTOR 0.9 // drop to 90% of max so we don't keep adding and dropping fragments
+
 using Data_Namespace::AbstractBuffer;
 using Data_Namespace::DataMgr;
 using Chunk_NS::Chunk;
@@ -17,8 +19,8 @@ using namespace std;
 namespace Fragmenter_Namespace {
 
 
-InsertOrderFragmenter::InsertOrderFragmenter(const vector <int> chunkKeyPrefix, vector <Chunk> &chunkVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows, const size_t pageSize /*default 1MB*/, const Data_Namespace::MemoryLevel defaultInsertLevel) :
-		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxFragmentRows_(maxFragmentRows), pageSize_(pageSize), maxFragmentId_(-1), fragmenterType_("insert_order"), defaultInsertLevel_(defaultInsertLevel) {
+InsertOrderFragmenter::InsertOrderFragmenter(const vector <int> chunkKeyPrefix, vector <Chunk> &chunkVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows, const size_t pageSize /*default 1MB*/, const size_t maxRows, const Data_Namespace::MemoryLevel defaultInsertLevel) :
+		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxFragmentRows_(maxFragmentRows), pageSize_(pageSize), numTuples_(0), maxFragmentId_(-1), maxRows_(maxRows), fragmenterType_("insert_order"), defaultInsertLevel_(defaultInsertLevel) {
 
     for (auto colIt = chunkVec.begin(); colIt != chunkVec.end(); ++colIt) {
         columnMap_[colIt ->get_column_desc()->columnId] = *colIt; 
@@ -52,6 +54,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
             fragmentInfoVec_.push_back(FragmentInfo());
             fragmentInfoVec_.back().fragmentId = curFragmentId;
             fragmentInfoVec_.back().numTuples = chunkIt->second.numElements;
+            numTuples_ += fragmentInfoVec_.back().numTuples;
             for (const auto levelSize: dataMgr_->levelSizes_) { 
                 fragmentInfoVec_.back().deviceIds.push_back(curFragmentId  % levelSize);
             }
@@ -79,8 +82,37 @@ void InsertOrderFragmenter::getChunkMetadata() {
     }
 }
 
+void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
+    // not safe to call from outside insertData
+    // b/c depends on insertLock around numTuples_
 
+    if (numTuples_ > maxRows) {
+        vector<int> dropFragIds;
+        size_t targetRows = maxRows * DROP_FRAGMENT_FACTOR;
+        while (numTuples_ > targetRows) {
+            assert(fragmentInfoVec_.size() > 0);
+            size_t numFragTuples = fragmentInfoVec_[0].numTuples;
+            dropFragIds.push_back(fragmentInfoVec_[0].fragmentId);
+            fragmentInfoVec_.pop_front();
+            assert(numTuples_ >= numFragTuples);
+            numTuples_ -= numFragTuples;
+        }
+        deleteFragments(dropFragIds);
+    }
+}
 
+void InsertOrderFragmenter::deleteFragments(const vector<int> &dropFragIds) {
+    mapd_unique_lock <mapd_shared_mutex> tableLock(tableMutex_);
+    for (const auto fragId: dropFragIds) {
+        for (const auto &col: columnMap_) {
+            int colId = col.first;
+            vector <int> fragPrefix = chunkKeyPrefix_;
+            fragPrefix.push_back(colId);
+            fragPrefix.push_back(fragId);
+            dataMgr_->deleteChunksWithPrefix(fragPrefix);
+        }
+    }
+}
 
 void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
     mapd_lock_guard<std::mutex> insertLock (insertMutex_); // prevent two threads from trying to insert into the same table simultaneously
@@ -119,27 +151,23 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
         }
 
         currentFragment->shadowNumTuples = fragmentInfoVec_.back().numTuples + numRowsToInsert;
-        //fragmentInfoVec_.back().shadowNumTuples = fragmentInfoVec_.back().numTuples + numRowsToInsert;
-        //cout << "Shadow tuples"  << fragmentInfoVec_.back().shadowNumTuples << endl;
-        //fragmentsToBeUpdated.push_back(&(fragmentInfoVec_.back()));
         numRowsLeft -= numRowsToInsert;
         numRowsInserted += numRowsToInsert;
     }
-    mapd_lock_guard < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
+    mapd_unique_lock < mapd_shared_mutex > writeLock (fragmentInfoMutex_);
     for (auto partIt = fragmentInfoVec_.begin() + startFragment; partIt != fragmentInfoVec_.end(); ++partIt) { 
         partIt->numTuples = partIt->shadowNumTuples;
         partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
     }
+    numTuples_ += insertDataStruct.numRows;
+    dropFragmentsToSize(50000);
     // dataMgr_->checkpoint(); leave to upper layer to call checkpoint
 }
 
 FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::MemoryLevel memoryLevel) { 
     // also sets the new fragment as the insertBuffer for each column
 
-    // iterate through all Chunk's in map, unpin previous insert buffer and
-    // create new insert buffer
     maxFragmentId_++;
-    //cout << "Create new fragment: " << maxFragmentId_ << endl;
     FragmentInfo newFragmentInfo;
     newFragmentInfo.fragmentId = maxFragmentId_;
     newFragmentInfo.shadowNumTuples = 0; 
@@ -162,13 +190,13 @@ FragmentInfo * InsertOrderFragmenter::createNewFragment(const Data_Namespace::Me
     return &(fragmentInfoVec_.back());
 }
 
-void InsertOrderFragmenter::getFragmentsForQuery(QueryInfo &queryInfo) {
+QueryInfo InsertOrderFragmenter::getFragmentsForQuery() {
+    mapd_shared_lock < mapd_shared_mutex > readLock (fragmentInfoMutex_);
+    QueryInfo queryInfo(&tableMutex_);
     queryInfo.chunkKeyPrefix = chunkKeyPrefix_;
     // right now we don't test predicate, so just return (copy of) all fragments 
-    {
-        mapd_shared_lock < mapd_shared_mutex > readLock (fragmentInfoMutex_);
-        queryInfo.fragments = fragmentInfoVec_; //makes a copy
-    }
+    queryInfo.fragments = fragmentInfoVec_; //makes a copy
+    readLock.unlock();
     queryInfo.numTuples = 0;
     auto partIt = queryInfo.fragments.begin();
     while (partIt != queryInfo.fragments.end()) {
@@ -184,6 +212,7 @@ void InsertOrderFragmenter::getFragmentsForQuery(QueryInfo &queryInfo) {
             ++partIt;
         }
     }
+    return queryInfo;
 }
 
 

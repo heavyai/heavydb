@@ -23,6 +23,7 @@ struct TableDescriptor {
 		Fragmenter_Namespace::FragmenterType fragType; // fragmentation type. Only INSERT_ORDER is supported now.
 		int32_t maxFragRows; // max number of rows per fragment
 		int32_t fragPageSize; // page size
+		int64_t maxRows; // max number of rows in the table
 		std::string partitions; // placeholder for distributed partition scheme
 		StorageOption storageOption; // only relevant to materialized views
 		ViewRefreshOption refreshOption; // only relevant to materialized views

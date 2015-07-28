@@ -1283,6 +1283,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
   td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
   td.fragPageSize = DEFAULT_PAGE_SIZE;
+  td.maxRows = DEFAULT_MAX_ROWS;
   if (!storage_options.empty()) {
     for (auto& p : storage_options) {
       if (boost::iequals(*p->get_name(), "fragment_size")) {
@@ -1299,9 +1300,16 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (page_size <= 0)
           throw std::runtime_error("PAGE_SIZE must be a positive number.");
         td.fragPageSize = page_size;
-      } else
+      } else if (boost::iequals(*p->get_name(), "max_rows")) {
+        auto max_rows = static_cast <const IntLiteral*>(p->get_value())->get_intval();
+        if (max_rows <= 0) {
+          throw std::runtime_error("MAX_ROWS must be a positive number.");
+        }
+        td.maxRows = max_rows;
+      } else {
         throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
-                                 ".  Should be FRAGMENT_SIZE or PAGE_SIZE.");
+                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE or MAX_ROWS.");
+      }
     }
   }
   catalog.createTable(td, columns);
@@ -1697,8 +1705,9 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   td.isReady = !is_materialized;
   td.fragmenter = nullptr;
   td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-  td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
+  td.maxFragRows = DEFAULT_FRAGMENT_SIZE; // @todo this stuff should not be InsertOrderFragmenter
   td.fragPageSize = DEFAULT_PAGE_SIZE;
+  td.maxRows = DEFAULT_MAX_ROWS;
   catalog.createTable(td, columns);
 }
 

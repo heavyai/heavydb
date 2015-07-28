@@ -20,8 +20,9 @@ namespace Data_Namespace {
     class DataMgr; 
 }
 
-#define DEFAULT_FRAGMENT_SIZE		8000000 // in tuples
+#define DEFAULT_FRAGMENT_SIZE		4000000 // in tuples
 #define DEFAULT_PAGE_SIZE				1048576 // in bytes
+#define DEFAULT_MAX_ROWS				(1L)<<62 // in rows
 
 namespace Fragmenter_Namespace {
 
@@ -36,7 +37,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 
 public:
 
-    InsertOrderFragmenter(const std::vector <int> chunkKeyPrefix, std::vector <Chunk_NS::Chunk> &chunkVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/, const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
+    InsertOrderFragmenter(const std::vector <int> chunkKeyPrefix, std::vector <Chunk_NS::Chunk> &chunkVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows = DEFAULT_FRAGMENT_SIZE, const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/, const size_t maxRows = DEFAULT_MAX_ROWS, const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
 
     virtual ~InsertOrderFragmenter();
     /**
@@ -46,7 +47,7 @@ public:
      */
 
     //virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0);
-    virtual void getFragmentsForQuery(QueryInfo &queryInfo);
+    virtual QueryInfo getFragmentsForQuery();
 
     /**
      * @brief appends data onto the most recently occuring
@@ -56,6 +57,7 @@ public:
      * multi-row insert before creating new fragment
      */
     virtual void insertData (const InsertData &insertDataStruct);
+    virtual void dropFragmentsToSize(const size_t maxRows);
     /**
      * @brief get fragmenter's id
      */
@@ -71,14 +73,17 @@ private:
 	int fragmenterId_; /**< Stores the id of the fragmenter - passed to constructor */
     std::vector<int> chunkKeyPrefix_;
     std::map <int, Chunk_NS::Chunk> columnMap_; /**< stores a map of column id to metadata about that column */ 
-    std::vector<FragmentInfo> fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */  
+    std::deque<FragmentInfo> fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */
     //int currentInsertBufferFragmentId_;
     Data_Namespace::DataMgr *dataMgr_;
 	size_t maxFragmentRows_;
     size_t pageSize_; /* Page size in bytes of each page making up a given chunk - passed to BufferMgr in createChunk() */
+    size_t numTuples_;
     int maxFragmentId_;
+    size_t maxRows_;
     std::string fragmenterType_;
     mapd_shared_mutex fragmentInfoMutex_; // to prevent read-write conflicts for fragmentInfoVec_
+    mapd_shared_mutex tableMutex_; // to prevent read-write conflicts for fragmentInfoVec_
     std::mutex insertMutex_; // to prevent race conditions on insert - only one insert statement should be going to a table at a time
     Data_Namespace::MemoryLevel defaultInsertLevel_;
     
@@ -93,6 +98,7 @@ private:
      */
 
     FragmentInfo * createNewFragment(const Data_Namespace::MemoryLevel memoryLevel = Data_Namespace::DISK_LEVEL);
+    void deleteFragments(const std::vector<int> &dropFragIds);
 
     /**
      * @brief Called at readState to associate chunks of 

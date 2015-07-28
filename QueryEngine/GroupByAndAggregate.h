@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <set>
 #include <vector>
+#include <deque>
 
 
 class Executor;
@@ -925,11 +926,11 @@ private:
   llvm::Function* codegenPerfectHashFunction();
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>&);
+    const std::deque<Fragmenter_Namespace::FragmentInfo>&);
 
   GroupByAndAggregate::ColRangeInfo getExprRangeInfo(
     const Analyzer::Expr* expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments);
 
   void codegenAggCalls(
     llvm::Value* agg_out_start_ptr,

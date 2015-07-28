@@ -2086,8 +2086,8 @@ ResultRows Executor::executeAggScanPlan(
   const auto table_descriptor = cat.getMetadataForTable(table_id);
   const auto fragmenter = table_descriptor->fragmenter;
   CHECK(fragmenter);
-  Fragmenter_Namespace::QueryInfo query_info;
-  fragmenter->getFragmentsForQuery(query_info);
+  Fragmenter_Namespace::QueryInfo query_info = fragmenter->getFragmentsForQuery();
+
   const auto& fragments = query_info.fragments;
 
   if (!max_groups_buffer_entry_guess) {
@@ -2337,7 +2337,7 @@ void Executor::dispatchFragments(
     const bool allow_multifrag,
     const Planner::AggPlan* agg_plan,
     const int64_t limit,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const size_t context_count,
     std::condition_variable& scheduler_cv,
@@ -2411,7 +2411,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const std::list<int>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const std::vector<size_t>& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,

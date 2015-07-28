@@ -1191,7 +1191,7 @@ int32_t get_agg_count(const Planner::Plan* plan) {
 }  // namespace
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
   if (!agg_plan) {
@@ -1227,7 +1227,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
     const Analyzer::Expr* expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments) {
   const int64_t guessed_range_max { 255 };  // TODO(alex): replace with educated guess
 
   const auto expr_range = getExpressionRange(expr, fragments, executor_);

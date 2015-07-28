@@ -2,9 +2,10 @@
 #define FRAGMENTER_H
 
 #include <map>
-#include <vector>
+#include <deque>
 #include <list>
 #include "../Shared/types.h"
+#include "../Shared/mapd_shared_mutex.h"
 #include "../DataMgr/ChunkMetadata.h"
 #include "../Catalog/ColumnDescriptor.h"
 
@@ -74,8 +75,12 @@ namespace Fragmenter_Namespace {
     
     struct QueryInfo {
         std::vector <int> chunkKeyPrefix; 
-        std::vector<FragmentInfo> fragments;
+        std::deque<FragmentInfo> fragments;
         size_t numTuples;
+        mapd_shared_mutex *tableMutex;
+        mapd_shared_lock <mapd_shared_mutex> tableLock;
+        QueryInfo(): tableMutex(0) {}
+        QueryInfo(mapd_shared_mutex *tableMutexIn): tableMutex(tableMutexIn), tableLock(*tableMutex) {}
     };
    
 } // Fragmenter_Namespace

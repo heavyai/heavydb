@@ -74,8 +74,7 @@ process_backslash_commands(const string &command, const Catalog &cat, SysCatalog
           const ColumnDescriptor *cd = cat.getMetadataForColumn(td->tableId, col_name);
           if (cd == nullptr)
             throw runtime_error("Column " + col_name + " does not exist.");
-          QueryInfo query_info;
-          td->fragmenter->getFragmentsForQuery(query_info);
+          QueryInfo query_info = td->fragmenter->getFragmentsForQuery();
           cout << "Chunk Stats for " + table_name + "." + col_name << ":" << std::endl;
           for (const auto& frag : query_info.fragments) {
             auto chunk_meta_it = frag.chunkMetadataMap.find(cd->columnId);

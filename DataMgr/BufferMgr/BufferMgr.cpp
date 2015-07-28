@@ -486,6 +486,11 @@ namespace Buffer_Namespace {
             catch (std::runtime_error &error) {
                 // if here, fetch chunk was unsuccessful - delete chunk we just
                 // created
+                cout << "Could not find chunk: ";
+                for (auto subKey: key) {
+                    std::cout << subKey << ",";
+                }
+                cout << endl;
                 deleteBuffer(key);
                 printMap();
                 cout << endl << endl;

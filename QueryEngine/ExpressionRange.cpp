@@ -68,35 +68,35 @@ ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const 
 
 ExpressionRange getExpressionRange(
     const Analyzer::BinOper* expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor*);
 
 ExpressionRange getExpressionRange(const Analyzer::Constant* expr);
 
 ExpressionRange getExpressionRange(
     const Analyzer::ColumnVar* col_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments);
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments);
 
 ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr);
 
 ExpressionRange getExpressionRange(
     const Analyzer::CaseExpr* case_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor*);
 
 ExpressionRange getExpressionRange(
     const Analyzer::UOper* u_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor*);
 
 ExpressionRange getExpressionRange(
     const Analyzer::ExtractExpr* extract_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor*);
 
 ExpressionRange getExpressionRange(
     const Analyzer::Expr* expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
   auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper_expr) {
@@ -131,7 +131,7 @@ ExpressionRange getExpressionRange(
 
 ExpressionRange getExpressionRange(
     const Analyzer::BinOper* expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
   const auto& lhs = getExpressionRange(expr->get_left_operand(), fragments, executor);
   const auto& rhs = getExpressionRange(expr->get_right_operand(), fragments, executor);
@@ -230,7 +230,7 @@ inline double extract_max_stat_double(const ChunkStats& stats, const SQLTypeInfo
 
 ExpressionRange getExpressionRange(
     const Analyzer::ColumnVar* col_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments) {
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments) {
   int col_id = col_expr->get_column_id();
   const auto& col_ti = col_expr->get_type_info().is_array()
     ? col_expr->get_type_info().get_elem_type()
@@ -296,7 +296,7 @@ ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
 
 ExpressionRange getExpressionRange(
     const Analyzer::CaseExpr* case_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   ExpressionRange expr_range { ExpressionRangeType::Invalid, false, { 0 }, { 0 } };
@@ -317,7 +317,7 @@ ExpressionRange getExpressionRange(
 
 ExpressionRange getExpressionRange(
     const Analyzer::UOper* u_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
   if (u_expr->get_optype() == kUNNEST) {
     return getExpressionRange(u_expr->get_operand(), fragments, executor);
@@ -379,7 +379,7 @@ ExpressionRange getExpressionRange(
 
 ExpressionRange getExpressionRange(
     const Analyzer::ExtractExpr* extract_expr,
-    const std::vector<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const Executor* executor) {
   const int32_t extract_field { extract_expr->get_field() };
   ExpressionRange result;

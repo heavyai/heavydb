@@ -48,7 +48,7 @@ class AbstractFragmenter {
          */
 
         //virtual void getFragmentsForQuery(QueryInfo &queryInfo, const void *predicate = 0) = 0;
-        virtual void getFragmentsForQuery(QueryInfo &queryInfo) = 0;
+        virtual QueryInfo getFragmentsForQuery() = 0;
 
         /**
          * @brief Given data wrapped in an InsertData struct,
@@ -56,6 +56,13 @@ class AbstractFragmenter {
          */
 
         virtual void insertData (const InsertData &insertDataStruct) = 0;
+
+        /**
+         * @brief Will truncate table to less than maxRows by dropping
+         * fragments
+         */
+
+        virtual void dropFragmentsToSize(const size_t maxRows) = 0;
 
         /**
          * @brief Gets the id of the partitioner
