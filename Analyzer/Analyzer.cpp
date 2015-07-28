@@ -1536,7 +1536,7 @@ namespace Analyzer {
   void
   TargetEntry::print() const
   {
-    std::cout << "(" << resname << " ";;
+    std::cout << "(" << resname << " ";
     expr->print();
     if (unnest)
       std::cout << " UNNEST";

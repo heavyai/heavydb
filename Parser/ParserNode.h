@@ -104,16 +104,15 @@ namespace Parser {
    */
   class StringLiteral : public Literal {
     public:
-      explicit StringLiteral(std::string *s) : stringval(s) {}
-      virtual ~StringLiteral() { delete stringval; }
-      const std::string *get_stringval() const { return stringval; }
+      explicit StringLiteral(std::string* s) : stringval(s) {}
+      const std::string* get_stringval() const { return stringval.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return "'" + *stringval + "'"; }
     private:
-      std::string *stringval;
+      std::unique_ptr<std::string> stringval;
   };
 
   /*
@@ -139,16 +138,15 @@ namespace Parser {
    */
   class FixedPtLiteral : public Literal {
     public:
-      explicit FixedPtLiteral(std::string *n) : fixedptval(n) {}
-      virtual ~FixedPtLiteral() { delete fixedptval; }
-      const std::string *get_fixedptval() const { return fixedptval; }
+      explicit FixedPtLiteral(std::string* n) : fixedptval(n) {}
+      const std::string* get_fixedptval() const { return fixedptval.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return *fixedptval; }
     private:
-      std::string *fixedptval;
+      std::unique_ptr<std::string> fixedptval;
   };
 
   /*
@@ -205,12 +203,11 @@ namespace Parser {
    */
   class OperExpr : public Expr {
     public:
-      OperExpr(SQLOps t, Expr *l, Expr *r) : optype(t), opqualifier(kONE), left(l), right(r) {}
-      OperExpr(SQLOps t, SQLQualifier q, Expr *l, Expr *r) : optype(t), opqualifier(q), left(l), right(r) {}
-      virtual ~OperExpr() { delete left; delete right; }
+      OperExpr(SQLOps t, Expr* l, Expr* r) : optype(t), opqualifier(kONE), left(l), right(r) {}
+      OperExpr(SQLOps t, SQLQualifier q, Expr* l, Expr* r) : optype(t), opqualifier(q), left(l), right(r) {}
       SQLOps get_optype() const { return optype; }
-      const Expr *get_left() const { return left; }
-      const Expr *get_right() const { return right; }
+      const Expr* get_left() const { return left.get(); }
+      const Expr* get_right() const { return right.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
@@ -219,8 +216,8 @@ namespace Parser {
     private:
       SQLOps  optype;
       SQLQualifier opqualifier;
-      Expr *left;
-      Expr *right;
+      std::unique_ptr<Expr> left;
+      std::unique_ptr<Expr> right;
   };
 
   // forward reference of QuerySpec
@@ -232,22 +229,20 @@ namespace Parser {
    */
   class SubqueryExpr : public Expr {
     public:
-      explicit SubqueryExpr(QuerySpec *q) : query(q) {}
-      virtual ~SubqueryExpr();
-      const QuerySpec *get_query() const { return query; }
+      explicit SubqueryExpr(QuerySpec* q) : query(q) {}
+      const QuerySpec* get_query() const { return query.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      QuerySpec *query;
+      std::unique_ptr<QuerySpec> query;
   };
 
   class IsNullExpr : public Expr {
     public:
-      IsNullExpr(bool n, Expr *a) : is_not(n), arg(a) {}
-      virtual ~IsNullExpr() { delete arg; }
+      IsNullExpr(bool n, Expr* a) : is_not(n), arg(a) {}
       bool get_is_not() const { return is_not; }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
@@ -256,7 +251,7 @@ namespace Parser {
       virtual std::string to_string() const;
     private:
       bool is_not;
-      Expr *arg;
+      std::unique_ptr<Expr> arg;
   };
 
   /*
@@ -265,10 +260,9 @@ namespace Parser {
    */
   class InExpr : public Expr {
     public:
-      InExpr(bool n, Expr *a) : is_not(n), arg(a) {}
-      virtual ~InExpr() { delete arg; }
+      InExpr(bool n, Expr* a) : is_not(n), arg(a) {}
       bool get_is_not() const { return is_not; }
-      const Expr *get_arg() const { return arg; }
+      const Expr* get_arg() const { return arg.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
@@ -276,7 +270,7 @@ namespace Parser {
       virtual std::string to_string() const;
     protected:
       bool is_not;
-      Expr *arg;
+      std::unique_ptr<Expr> arg;
   };
 
   /*
@@ -285,16 +279,15 @@ namespace Parser {
    */
   class InSubquery : public InExpr {
     public:
-      InSubquery(bool n, Expr *a, SubqueryExpr *q) : InExpr(n, a), subquery(q) {}
-      virtual ~InSubquery() { delete subquery; }
-      const SubqueryExpr *get_subquery() const { return subquery; }
+      InSubquery(bool n, Expr* a, SubqueryExpr* q) : InExpr(n, a), subquery(q) {}
+      const SubqueryExpr* get_subquery() const { return subquery.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      SubqueryExpr *subquery;
+      std::unique_ptr<SubqueryExpr>  subquery;
   };
 
   /*
@@ -303,16 +296,21 @@ namespace Parser {
    */
   class InValues : public InExpr {
     public:
-      InValues(bool n, Expr *a, std::list<Expr*> *v) : InExpr(n, a), value_list(v) {}
-      virtual ~InValues();
-      const std::list<Expr*> *get_value_list() const { return value_list; }
+      InValues(bool n, Expr* a, std::list<Expr*>* v) : InExpr(n, a) {
+          CHECK(v);
+          for (const auto e : *v) {
+              value_list.emplace_back(e);
+          }
+          delete v;
+      }
+      const std::list<std::unique_ptr<Expr>>& get_value_list() const { return value_list; }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      std::list<Expr*> *value_list;
+      std::list<std::unique_ptr<Expr>> value_list;
   };
 
   /*
@@ -321,12 +319,11 @@ namespace Parser {
    */
   class BetweenExpr : public Expr {
     public:
-      BetweenExpr(bool n, Expr *a, Expr *l, Expr *u) : is_not(n), arg(a), lower(l), upper(u) {}
-      virtual ~BetweenExpr();
+      BetweenExpr(bool n, Expr* a, Expr* l, Expr* u) : is_not(n), arg(a), lower(l), upper(u) {}
       bool get_is_not() const { return is_not; }
-      const Expr *get_arg() const { return arg; }
-      const Expr *get_lower() const { return lower; }
-      const Expr *get_upper() const { return upper; }
+      const Expr* get_arg() const { return arg.get(); }
+      const Expr* get_lower() const { return lower.get(); }
+      const Expr* get_upper() const { return upper.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
@@ -334,9 +331,9 @@ namespace Parser {
       virtual std::string to_string() const;
     private:
       bool is_not;
-      Expr *arg;
-      Expr *lower;
-      Expr *upper;
+      std::unique_ptr<Expr> arg;
+      std::unique_ptr<Expr> lower;
+      std::unique_ptr<Expr> upper;
   };
 
   /*
@@ -345,12 +342,11 @@ namespace Parser {
    */
   class LikeExpr : public Expr {
     public:
-      LikeExpr(bool n, bool i, Expr *a, Expr *l, Expr *e) : is_not(n), is_ilike(i), arg(a), like_string(l), escape_string(e) {}
-      virtual ~LikeExpr();
+      LikeExpr(bool n, bool i, Expr* a, Expr* l, Expr* e) : is_not(n), is_ilike(i), arg(a), like_string(l), escape_string(e) {}
       bool get_is_not() const { return is_not; }
-      const Expr *get_arg() const { return arg; }
-      const Expr *get_like_string() const { return like_string; }
-      const Expr *get_escape_string() const { return escape_string; }
+      const Expr* get_arg() const { return arg.get(); }
+      const Expr* get_like_string() const { return like_string.get(); }
+      const Expr* get_escape_string() const { return escape_string.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
@@ -359,9 +355,9 @@ namespace Parser {
     private:
       bool is_not;
       bool is_ilike;
-      Expr *arg;
-      Expr *like_string;
-      Expr *escape_string;
+      std::unique_ptr<Expr> arg;
+      std::unique_ptr<Expr> like_string;
+      std::unique_ptr<Expr> escape_string;
 
       static void check_like_expr(const std::string &like_str, char escape_char);
       static bool test_is_simple_expr(const std::string &like_str, char escape_char);
@@ -376,15 +372,14 @@ namespace Parser {
   class ExistsExpr : public Expr {
     public:
       explicit ExistsExpr(QuerySpec *q) : query(q) {}
-      virtual ~ExistsExpr();
-      const QuerySpec *get_query() const { return query; }
+      const QuerySpec* get_query() const { return query.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      QuerySpec *query;
+      std::unique_ptr<QuerySpec> query;
   };
 
   /*
@@ -393,19 +388,18 @@ namespace Parser {
    */
   class ColumnRef : public Expr {
     public:
-      explicit ColumnRef(std::string *n1) : table(nullptr), column(n1) {}
-      ColumnRef(std::string *n1, std::string *n2) : table(n1), column(n2) {}
-      virtual ~ColumnRef();
-      const std::string *get_table() const { return table; }
-      const std::string *get_column() const { return column; }
+      explicit ColumnRef(std::string* n1) : table(nullptr), column(n1) {}
+      ColumnRef(std::string* n1, std::string* n2) : table(n1), column(n2) {}
+      const std::string* get_table() const { return table.get(); }
+      const std::string* get_column() const { return column.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      std::string *table;
-      std::string *column; // can be nullptr in the t.* case
+      std::unique_ptr<std::string> table;
+      std::unique_ptr<std::string> column; // can be nullptr in the t.* case
   };
 
   /*
@@ -414,75 +408,76 @@ namespace Parser {
    */
   class FunctionRef : public Expr {
     public:
-      explicit FunctionRef(std::string *n) : name(n), distinct(false), arg(nullptr) {}
-      FunctionRef(std::string *n, Expr *a) : name(n), distinct(false), arg(a) {}
-      FunctionRef(std::string *n, bool d, Expr *a) : name(n), distinct(d), arg(a) {} 
-      virtual ~FunctionRef();
-      const std::string *get_name() const { return name; }
+      explicit FunctionRef(std::string* n) : name(n), distinct(false), arg(nullptr) {}
+      FunctionRef(std::string* n, Expr* a) : name(n), distinct(false), arg(a) {}
+      FunctionRef(std::string* n, bool d, Expr* a) : name(n), distinct(d), arg(a) {} 
+      const std::string* get_name() const { return name.get(); }
       bool get_distinct() const { return distinct; }
-      Expr *get_arg() const { return arg; }
+      Expr* get_arg() const { return arg.get(); }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      std::string *name;
+      std::unique_ptr<std::string> name;
       bool distinct; // only true for COUNT(DISTINCT x)
-      Expr *arg; // for COUNT, nullptr means '*'
+      std::unique_ptr<Expr> arg; // for COUNT, nullptr means '*'
   };
 
   class CastExpr : public Expr {
     public:
-      CastExpr(Expr *a, SQLType *t) : arg(a), target_type(t) {}
-      virtual ~CastExpr() { delete arg; delete target_type; }
+      CastExpr(Expr* a, SQLType* t) : arg(a), target_type(t) {}
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const { return "CAST(" + arg->to_string() + " AS " + target_type->to_string() + ")"; }
     private:
-      Expr *arg;
-      SQLType *target_type;
+      std::unique_ptr<Expr> arg;
+      std::unique_ptr<SQLType> target_type;
   };
 
   class ExprPair : public Node {
     public:
-      ExprPair(Expr *e1, Expr *e2) : expr1(e1), expr2(e2) {}
-      virtual ~ExprPair() { delete expr1; delete expr2; }
-      const Expr *get_expr1() const { return expr1; }
-      const Expr *get_expr2() const { return expr2; }
+      ExprPair(Expr* e1, Expr* e2) : expr1(e1), expr2(e2) {}
+      const Expr* get_expr1() const { return expr1.get(); }
+      const Expr* get_expr2() const { return expr2.get(); }
     private:
-      Expr *expr1;
-      Expr *expr2;
+      std::unique_ptr<Expr> expr1;
+      std::unique_ptr<Expr> expr2;
   };
 
   class CaseExpr : public Expr {
     public:
-      CaseExpr(std::list<ExprPair*> *w, Expr *e) : when_then_list(w), else_expr(e) {}
-      virtual ~CaseExpr();
+      CaseExpr(std::list<ExprPair*>* w, Expr* e) : else_expr(e) {
+          CHECK(w);
+          for (const auto e : *w) {
+              when_then_list.emplace_back(e);
+          }
+          delete w;
+      }
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
     private:
-      std::list<ExprPair*> *when_then_list;
-      Expr *else_expr;
+      std::list<std::unique_ptr<ExprPair>> when_then_list;
+      std::unique_ptr<Expr> else_expr;
   };
 
   class ExtractExpr : public Expr {
     public:
-      ExtractExpr(std::string *f, Expr *a) : field(f), from_arg(a) {}
-      virtual ~ExtractExpr() { delete field; delete from_arg; }
+      ExtractExpr(std::string* f, Expr* a) : field(f), from_arg(a) {}
       virtual std::shared_ptr<Analyzer::Expr> analyze(
         const Catalog_Namespace::Catalog &catalog,
         Analyzer::Query &query,
         TlistRefType allow_tlist_ref = TLIST_NONE) const;
       virtual std::string to_string() const;
      private:
-      std::string *field;
-      Expr *from_arg;
+      std::unique_ptr<std::string> field;
+      std::unique_ptr<Expr> from_arg;
   };
 
   /*
@@ -491,15 +486,14 @@ namespace Parser {
    */
   class TableRef : public Node {
     public:
-      explicit TableRef(std::string *t) : table_name(t), range_var(nullptr) {}
-      TableRef(std::string *t, std::string *r) : table_name(t), range_var(r) {}
-      virtual ~TableRef();
-      const std::string *get_table_name() const { return table_name; }
-      const std::string *get_range_var() const { return range_var; }
+      explicit TableRef(std::string* t) : table_name(t), range_var(nullptr) {}
+      TableRef(std::string* t, std::string* r) : table_name(t), range_var(r) {}
+      const std::string* get_table_name() const { return table_name.get(); }
+      const std::string* get_range_var() const { return range_var.get(); }
       std::string to_string() const;
     private:
-      std::string *table_name;
-      std::string *range_var;
+      std::unique_ptr<std::string> table_name;
+      std::unique_ptr<std::string> range_var;
   };
 
   /*
@@ -542,26 +536,37 @@ namespace Parser {
    */
   class ColumnConstraintDef : public Node {
     public:
-      ColumnConstraintDef(bool n, bool u, bool p, Literal *d) :
-        notnull(n), unique(u), is_primarykey(p), defaultval(d), check_condition(nullptr), foreign_table(nullptr), foreign_column(nullptr) {}
-      ColumnConstraintDef(Expr *c) : notnull(false), unique(false), is_primarykey(false), defaultval(nullptr), check_condition(c), foreign_table(nullptr), foreign_column(nullptr) {}
-      ColumnConstraintDef(std::string *t, std::string *c) : notnull(false), unique(false), is_primarykey(false), defaultval(nullptr), check_condition(nullptr), foreign_table(t), foreign_column(c) {}
-      virtual ~ColumnConstraintDef();
+      ColumnConstraintDef(bool n, bool u, bool p, Literal* d)
+        : notnull(n)
+        , unique(u)
+        , is_primarykey(p)
+        , defaultval(d) {}
+      ColumnConstraintDef(Expr* c)
+        : notnull(false)
+        , unique(false)
+        , is_primarykey(false)
+        , check_condition(c) {}
+      ColumnConstraintDef(std::string* t, std::string* c)
+        : notnull(false)
+        , unique(false)
+        , is_primarykey(false)
+        , foreign_table(t)
+        , foreign_column(c) {}
       bool get_notnull() const { return notnull; }
       bool get_unique() const { return unique; }
       bool get_is_primarykey() const { return is_primarykey; }
-      const Literal *get_defaultval() const { return defaultval; }
-      const Expr *get_check_condition() const { return check_condition; }
-      const std::string *get_foreign_table() const { return foreign_table; }
-      const std::string *get_foreign_column() const { return foreign_column; }
+      const Literal* get_defaultval() const { return defaultval.get(); }
+      const Expr* get_check_condition() const { return check_condition.get(); }
+      const std::string* get_foreign_table() const { return foreign_table.get(); }
+      const std::string* get_foreign_column() const { return foreign_column.get(); }
     private:
       bool notnull;
       bool unique;
       bool is_primarykey;
-      Literal *defaultval;
-      Expr *check_condition;
-      std::string *foreign_table;
-      std::string *foreign_column;
+      std::unique_ptr<Literal> defaultval;
+      std::unique_ptr<Expr> check_condition;
+      std::unique_ptr<std::string> foreign_table;
+      std::unique_ptr<std::string> foreign_column;
   };
 
   /*
@@ -570,12 +575,11 @@ namespace Parser {
    */
   class CompressDef : public Node {
     public:
-      CompressDef(std::string *n, int p) : encoding_name(n), encoding_param(p) {}
-      virtual ~CompressDef() { delete encoding_name; }
-      const std::string *get_encoding_name() const { return encoding_name; }
+      CompressDef(std::string* n, int p) : encoding_name(n), encoding_param(p) {}
+      const std::string* get_encoding_name() const { return encoding_name.get(); }
       int get_encoding_param() const { return encoding_param; }
     private:
-      std::string *encoding_name;
+      std::unique_ptr<std::string> encoding_name;
       int encoding_param;
   };
 
@@ -585,17 +589,20 @@ namespace Parser {
    */
   class ColumnDef : public TableElement {
     public:
-      ColumnDef(std::string *c, SQLType *t, CompressDef *cp, ColumnConstraintDef *cc) : column_name(c), column_type(t), compression(cp), column_constraint(cc) {}
-      virtual ~ColumnDef();
-      const std::string *get_column_name() const { return column_name; }
-      SQLType *get_column_type() const { return column_type; }
-      const CompressDef *get_compression() const { return compression; }
-      const ColumnConstraintDef *get_column_constraint() const { return column_constraint; }
+      ColumnDef(std::string* c, SQLType* t, CompressDef* cp, ColumnConstraintDef* cc)
+        : column_name(c)
+        , column_type(t)
+        , compression(cp)
+        , column_constraint(cc) {}
+      const std::string* get_column_name() const { return column_name.get(); }
+      SQLType* get_column_type() const { return column_type.get(); }
+      const CompressDef* get_compression() const { return compression.get(); }
+      const ColumnConstraintDef* get_column_constraint() const { return column_constraint.get(); }
     private:
-      std::string *column_name;
-      SQLType *column_type;
-      CompressDef *compression;
-      ColumnConstraintDef *column_constraint;
+      std::unique_ptr<std::string> column_name;
+      std::unique_ptr<SQLType> column_type;
+      std::unique_ptr<CompressDef> compression;
+      std::unique_ptr<ColumnConstraintDef> column_constraint;
   };
 
   /*
@@ -612,13 +619,18 @@ namespace Parser {
    */
   class UniqueDef : public TableConstraintDef {
     public:
-      UniqueDef(bool p, std::list<std::string*> *cl) : is_primarykey(p), column_list(cl) {}
-      virtual ~UniqueDef();
+      UniqueDef(bool p, std::list<std::string*>* cl) : is_primarykey(p) {
+        CHECK(cl);
+        for (const auto s : *cl) {
+          column_list.emplace_back(s);
+        }
+        delete cl;
+      }
       bool get_is_primarykey() const { return is_primarykey; }
-      std::list<std::string*> *get_column_list() const { return column_list; }
+      const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
     private:
       bool is_primarykey;
-      std::list<std::string*> *column_list;
+      std::list<std::unique_ptr<std::string>> column_list;
   };
   
   /*
@@ -627,15 +639,26 @@ namespace Parser {
    */
   class ForeignKeyDef : public TableConstraintDef {
     public:
-      ForeignKeyDef(std::list<std::string*> *cl, std::string *t, std::list<std::string*> *fcl) : column_list(cl), foreign_table(t), foreign_column_list(fcl) {}
-      virtual ~ForeignKeyDef();
-      const std::list<std::string*> *get_column_list() const { return column_list; }
-      const std::string *get_foreign_table() const { return foreign_table; }
-      const std::list<std::string*> *get_foreign_column_list() const { return foreign_column_list; }
+      ForeignKeyDef(std::list<std::string*>* cl, std::string* t, std::list<std::string*>* fcl) : foreign_table(t) {
+        CHECK(cl);
+        for (const auto s : *cl) {
+          column_list.emplace_back(s);
+        }
+        delete cl;
+        if (fcl) {
+          for (const auto s : *fcl) {
+            foreign_column_list.emplace_back(s);
+          }
+        }
+        delete fcl;
+      }
+      const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
+      const std::string* get_foreign_table() const { return foreign_table.get(); }
+      const std::list<std::unique_ptr<std::string>>& get_foreign_column_list() const { return foreign_column_list; }
     private:
-      std::list<std::string*> *column_list;
-      std::string *foreign_table;
-      std::list<std::string*> *foreign_column_list;
+      std::list<std::unique_ptr<std::string>> column_list;
+      std::unique_ptr<std::string> foreign_table;
+      std::list<std::unique_ptr<std::string>> foreign_column_list;
   };
 
   /*
@@ -644,11 +667,10 @@ namespace Parser {
    */
   class CheckDef : public TableConstraintDef {
     public:
-      CheckDef(Expr *c): check_condition(c) {}
-      virtual ~CheckDef() { delete check_condition; }
-      const Expr *get_check_condition() const { return check_condition; }
+      CheckDef(Expr* c): check_condition(c) {}
+      const Expr* get_check_condition() const { return check_condition.get(); }
     private:
-      Expr *check_condition;
+      std::unique_ptr<Expr> check_condition;
   };
 
   /*
@@ -657,13 +679,12 @@ namespace Parser {
    */
   class NameValueAssign : public Node {
     public:
-      NameValueAssign(std::string *n, Literal *v) : name(n), value(v) {}
-      virtual ~NameValueAssign() { delete name; delete value; }
-      const std::string *get_name() const { return name; }
-      const Literal *get_value() const { return value; }
+      NameValueAssign(std::string* n, Literal* v) : name(n), value(v) {}
+      const std::string* get_name() const { return name.get(); }
+      const Literal* get_value() const { return value.get(); }
     private:
-      std::string *name;
-      Literal *value;
+      std::unique_ptr<std::string> name;
+      std::unique_ptr<Literal> value;
   };
 
   /*
@@ -672,17 +693,31 @@ namespace Parser {
    */
   class CreateTableStmt : public DDLStmt {
     public:
-      CreateTableStmt(std::string *tab, std::list<TableElement*> * table_elems, bool i, std::list<NameValueAssign*> *s) :
-      table(tab), table_element_list(table_elems), if_not_exists(i), storage_options(s) {}
-      virtual ~CreateTableStmt();
-      const std::string *get_table() const { return table; }
-      const std::list<TableElement*> *get_table_element_list() const { return table_element_list; }
+      CreateTableStmt(std::string* tab, std::list<TableElement*>* table_elems, bool i, std::list<NameValueAssign*>* s)
+        : table(tab)
+        , if_not_exists(i) {
+        CHECK(table_elems);
+        for (const auto e : *table_elems) {
+            table_element_list.emplace_back(e);
+        }
+        delete table_elems;
+        if (s) {
+            for (const auto e : *s) {
+                storage_options.emplace_back(e);
+            }
+            delete s;
+        }
+      }
+      const std::string* get_table() const { return table.get(); }
+      const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
+          return table_element_list;}
+      
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *table;
-      std::list<TableElement*> *table_element_list;
+      std::unique_ptr<std::string> table;
+      std::list<std::unique_ptr<TableElement>> table_element_list;
       bool if_not_exists;
-      std::list<NameValueAssign*> *storage_options;
+      std::list<std::unique_ptr<NameValueAssign>> storage_options;
   };
 
   /*
@@ -692,11 +727,10 @@ namespace Parser {
   class DropTableStmt : public DDLStmt {
     public:
       DropTableStmt(std::string *tab, bool i) : table(tab), if_exists(i) {}
-      virtual ~DropTableStmt() { delete table; }
-      const std::string *get_table() const { return table; }
+      const std::string* get_table() const { return table.get(); }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *table;
+      std::unique_ptr<std::string> table;
       bool if_exists;
   };
 
@@ -706,13 +740,20 @@ namespace Parser {
    */
   class CopyTableStmt : public DDLStmt {
     public:
-      CopyTableStmt(std::string *t, std::string *f, std::list<NameValueAssign*> *o) : table(t), file_path(f), options(o) {}
-      virtual ~CopyTableStmt();
+      CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o)
+        : table(t), file_path(f) {
+        if (o) {
+            for (const auto e : *o) {
+                options.emplace_back(e);
+            }
+            delete o;
+        }
+      }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *table;
-      std::string *file_path;
-      std::list<NameValueAssign*> *options;
+      std::unique_ptr<std::string> table;
+      std::unique_ptr<std::string> file_path;
+      std::list<std::unique_ptr<NameValueAssign>> options;
   };
 
   /*
@@ -730,28 +771,26 @@ namespace Parser {
    */
   class UnionQuery : public QueryExpr {
     public:
-      UnionQuery(bool u, QueryExpr *l, QueryExpr *r) : is_unionall(u), left(l), right(r) {}
-      virtual ~UnionQuery() { delete left; delete right; }
+      UnionQuery(bool u, QueryExpr* l, QueryExpr* r) : is_unionall(u), left(l), right(r) {}
       bool get_is_unionall() const { return is_unionall; }
-      const QueryExpr *get_left() const { return left; }
-      const QueryExpr *get_right() const { return right; }
+      const QueryExpr* get_left() const { return left.get(); }
+      const QueryExpr* get_right() const { return right.get(); }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
     private:
       bool is_unionall;
-      QueryExpr *left;
-      QueryExpr *right;
+      std::unique_ptr<QueryExpr> left;
+      std::unique_ptr<QueryExpr> right;
   };
 
   class SelectEntry : public Node {
     public:
-      SelectEntry(Expr *e, std::string *r) : select_expr(e), alias(r) {}
-      virtual ~SelectEntry();
-      const Expr *get_select_expr() const { return select_expr; }
-      const std::string *get_alias() const { return alias; }
+      SelectEntry(Expr* e, std::string* r) : select_expr(e), alias(r) {}
+      const Expr* get_select_expr() const { return select_expr.get(); }
+      const std::string* get_alias() const { return alias.get(); }
       std::string to_string() const;
     private:
-      Expr *select_expr;
-      std::string *alias;
+      std::unique_ptr<Expr> select_expr;
+      std::unique_ptr<std::string> alias;
   };
 
   /*
@@ -760,23 +799,41 @@ namespace Parser {
    */
   class QuerySpec : public QueryExpr {
     public:
-      QuerySpec(bool d, std::list<SelectEntry*> *s, std::list<TableRef*> *f, Expr *w, std::list<Expr*> *g, Expr *h) : is_distinct(d), select_clause(s), from_clause(f), where_clause(w), groupby_clause(g), having_clause(h) {}
-      virtual ~QuerySpec();
+      QuerySpec(bool d, std::list<SelectEntry*>* s, std::list<TableRef*>* f, Expr* w, std::list<Expr*>* g, Expr* h)
+        : is_distinct(d), where_clause(w), having_clause(h) {
+        if (s) {
+            for (const auto e : *s) {
+                select_clause.emplace_back(e);
+            }
+            delete s;
+        }
+        CHECK(f);
+        for (const auto e : *f) {
+            from_clause.emplace_back(e);
+        }
+        delete f;
+        if (g) {
+            for (const auto e : *g) {
+                groupby_clause.emplace_back(e);
+            }
+            delete g;
+        }
+    }
       bool get_is_distinct() const { return is_distinct; }
-      const std::list<SelectEntry*> *get_select_clause() const { return select_clause; }
-      const std::list<TableRef*> *get_from_clause() const { return from_clause; }
-      const Expr *get_where_clause() const { return where_clause; }
-      const std::list<Expr*> *get_groupby_clause() const { return groupby_clause; }
-      const Expr *get_having_clause() const { return having_clause; }
+      const std::list<std::unique_ptr<SelectEntry>>& get_select_clause() const { return select_clause; }
+      const std::list<std::unique_ptr<TableRef>>& get_from_clause() const { return from_clause; }
+      const Expr* get_where_clause() const { return where_clause.get(); }
+      const std::list<std::unique_ptr<Expr>>& get_groupby_clause() const { return groupby_clause; }
+      const Expr* get_having_clause() const { return having_clause.get(); }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
       std::string to_string() const;
     private:
       bool is_distinct;
-      std::list<SelectEntry*> *select_clause; /* nullptr means SELECT * */
-      std::list<TableRef*> *from_clause;
-      Expr *where_clause;
-      std::list<Expr*> *groupby_clause;
-      Expr *having_clause;
+      std::list<std::unique_ptr<SelectEntry>> select_clause; /* nullptr means SELECT * */
+      std::list<std::unique_ptr<TableRef>> from_clause;
+      std::unique_ptr<Expr> where_clause;
+      std::list<std::unique_ptr<Expr>> groupby_clause;
+      std::unique_ptr<Expr> having_clause;
       void analyze_from_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
       void analyze_select_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
       void analyze_where_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
@@ -790,15 +847,14 @@ namespace Parser {
    */
   class OrderSpec : public Node {
     public:
-      OrderSpec(int n, ColumnRef *c, bool d, bool f) : colno(n), column(c), is_desc(d), nulls_first(f) {}
-      virtual ~OrderSpec() { if (column != nullptr) delete column; }
+      OrderSpec(int n, ColumnRef* c, bool d, bool f) : colno(n), column(c), is_desc(d), nulls_first(f) {}
       int get_colno() const { return colno; }
-      const ColumnRef *get_column() const { return column; }
+      const ColumnRef* get_column() const { return column.get(); }
       bool get_is_desc() const { return is_desc; }
       bool get_nulls_first() const { return nulls_first; }
     private:
       int colno; /* 0 means use column name */
-      ColumnRef *column;
+      std::unique_ptr<ColumnRef> column;
       bool is_desc;
       bool nulls_first;
   };
@@ -809,14 +865,20 @@ namespace Parser {
    */
   class SelectStmt : public DMLStmt {
     public:
-      SelectStmt(QueryExpr *q, std::list<OrderSpec*> *o, int64_t l, int64_t f) : query_expr(q), orderby_clause(o), limit(l), offset(f) {}
-      virtual ~SelectStmt();
-      const QueryExpr *get_query_expr() const { return query_expr; }
-      const std::list<OrderSpec*> *get_orderby_clause() const { return orderby_clause; }
+      SelectStmt(QueryExpr* q, std::list<OrderSpec*>* o, int64_t l, int64_t f) : query_expr(q), limit(l), offset(f) {
+          if (o) {
+              for (const auto e : *o) {
+                  orderby_clause.emplace_back(e);
+              }
+              delete o;
+          }
+      }
+      const QueryExpr* get_query_expr() const { return query_expr.get(); }
+      const std::list<std::unique_ptr<OrderSpec>>& get_orderby_clause() const { return orderby_clause; }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
     private:
-      QueryExpr *query_expr;
-      std::list<OrderSpec*> *orderby_clause;
+      std::unique_ptr<QueryExpr> query_expr;
+      std::list<std::unique_ptr<OrderSpec>> orderby_clause;
       int64_t limit;
       int64_t offset;
   };
@@ -827,11 +889,11 @@ namespace Parser {
    */
   class ExplainStmt : public DDLStmt {
     public:
-      ExplainStmt(DMLStmt *s) : stmt(s) {}
-      const DMLStmt *get_stmt() const { return stmt; }
-      virtual void execute(Catalog_Namespace::SessionInfo &session) { assert(false); }
+      ExplainStmt(DMLStmt* s) : stmt(s) {}
+      const DMLStmt* get_stmt() const { return stmt.get(); }
+      virtual void execute(Catalog_Namespace::SessionInfo &session) { CHECK(false); }
     private:
-      DMLStmt *stmt;
+      std::unique_ptr<DMLStmt> stmt;
   };
 
   /*
@@ -840,13 +902,19 @@ namespace Parser {
    */
   class ExportQueryStmt : public DDLStmt {
     public:
-      ExportQueryStmt(SelectStmt *q, std::string *p, std::list<NameValueAssign*> *o) : select_stmt(q), file_path(p), options(o) {}
-      virtual ~ExportQueryStmt();
+      ExportQueryStmt(SelectStmt* q, std::string* p, std::list<NameValueAssign*>* o) : select_stmt(q), file_path(p) {
+          if (o) {
+              for (const auto e : *o) {
+                  options.emplace_back(e);
+              }
+              delete o;
+          }
+      }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      SelectStmt *select_stmt;
-      std::string *file_path;
-      std::list<NameValueAssign*> *options;
+      std::unique_ptr<SelectStmt> select_stmt;
+      std::unique_ptr<std::string> file_path;
+      std::list<std::unique_ptr<NameValueAssign>> options;
   };
 
   /*
@@ -855,30 +923,46 @@ namespace Parser {
    */
   class CreateViewStmt : public DDLStmt {
     public:
-      CreateViewStmt(std::string *v, std::list<std::string*> *c, QuerySpec *q, bool ck, bool m, std::list<NameValueAssign*> *o, bool i) : view_name(v), column_list(c), query(q), checkoption(ck), is_materialized(m), matview_options(o), if_not_exists(i) {}
-      virtual ~CreateViewStmt();
-      const std::string *get_view_name() const { return view_name; }
-      const std::list<std::string*> *get_column_list() const { return column_list; }
-      const QuerySpec *get_query() const { return query; }
+      CreateViewStmt(std::string* v, std::list<std::string*> *c, QuerySpec *q, bool ck, bool m, std::list<NameValueAssign*> *o, bool i)
+        : view_name(v)
+        , query(q)
+        , checkoption(ck)
+        , is_materialized(m)
+        , if_not_exists(i) {
+          if (c) {
+              for (const auto e : *c) {
+                  column_list.emplace_back(e);
+              }
+              delete c;
+          }
+          if (o) {
+              for (const auto e : *o) {
+                  matview_options.emplace_back(e);
+              }
+              delete o;
+          }
+      }
+      const std::string* get_view_name() const { return view_name.get(); }
+      const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
+      const QuerySpec* get_query() const { return query.get(); }
       bool get_checkoption() const { return checkoption; }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *view_name;
-      std::list<std::string*> *column_list;
-      QuerySpec *query;
+      std::unique_ptr<std::string> view_name;
+      std::list<std::unique_ptr<std::string>> column_list;
+      std::unique_ptr<QuerySpec> query;
       bool checkoption;
       bool is_materialized;
-      std::list<NameValueAssign*> *matview_options;
+      std::list<std::unique_ptr<NameValueAssign>> matview_options;
       bool if_not_exists;
   };
 
   class RefreshViewStmt : public DDLStmt {
     public:
-      explicit RefreshViewStmt(std::string *v) : view_name(v) {}
-      virtual ~RefreshViewStmt() { delete view_name; }
+      explicit RefreshViewStmt(std::string* v) : view_name(v) {}
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *view_name;
+      std::unique_ptr<std::string> view_name;
   };
 
   /*
@@ -887,12 +971,11 @@ namespace Parser {
    */
   class DropViewStmt : public DDLStmt {
     public:
-      DropViewStmt(std::string *v, bool i) : view_name(v), if_exists(i) {}
-      virtual ~DropViewStmt() { delete view_name; };
-      const std::string *get_view_name() const { return view_name; }
+      DropViewStmt(std::string* v, bool i) : view_name(v), if_exists(i) {}
+      const std::string* get_view_name() const { return view_name.get(); }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *view_name;
+      std::unique_ptr<std::string> view_name;
       bool if_exists;
   };
 
@@ -902,12 +985,18 @@ namespace Parser {
    */
   class CreateDBStmt : public DDLStmt {
     public:
-      CreateDBStmt(std::string *n, std::list<NameValueAssign*> *l) : db_name(n), name_value_list(l) {}
-      virtual ~CreateDBStmt(); 
+      CreateDBStmt(std::string *n, std::list<NameValueAssign*>* l) : db_name(n) {
+          if (l) {
+              for (const auto e : *l) {
+                  name_value_list.emplace_back(e);
+              }
+              delete l;
+          }
+      }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *db_name;
-      std::list<NameValueAssign*> *name_value_list;
+      std::unique_ptr<std::string> db_name;
+      std::list<std::unique_ptr<NameValueAssign>> name_value_list;
   };
 
   /*
@@ -916,11 +1005,10 @@ namespace Parser {
    */
   class DropDBStmt : public DDLStmt {
     public:
-      explicit DropDBStmt(std::string *n) : db_name(n) {}
-      virtual ~DropDBStmt() { delete db_name; }
+      explicit DropDBStmt(std::string* n) : db_name(n) {}
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *db_name;
+      std::unique_ptr<std::string> db_name;
   };
 
   /*
@@ -929,12 +1017,19 @@ namespace Parser {
    */
   class CreateUserStmt : public DDLStmt {
     public:
-      CreateUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
-      virtual ~CreateUserStmt();
+      CreateUserStmt(std::string* n, std::list<NameValueAssign*>* l)
+        : user_name(n) {
+          if (l) {
+              for (const auto e : *l) {
+                  name_value_list.emplace_back(e);
+              }
+              delete l;
+          }
+      }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *user_name;
-      std::list<NameValueAssign*> *name_value_list;
+      std::unique_ptr<std::string> user_name;
+      std::list<std::unique_ptr<NameValueAssign>> name_value_list;
   };
 
   /*
@@ -943,12 +1038,18 @@ namespace Parser {
    */
   class AlterUserStmt : public DDLStmt {
     public:
-      AlterUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n), name_value_list(l) {}
-      virtual ~AlterUserStmt();
+      AlterUserStmt(std::string *n, std::list<NameValueAssign*> *l) : user_name(n) {
+          if (l) {
+              for (const auto e : *l) {
+                  name_value_list.emplace_back(e);
+              }
+              delete l;
+          }
+      }
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *user_name;
-      std::list<NameValueAssign*> *name_value_list;
+      std::unique_ptr<std::string> user_name;
+      std::list<std::unique_ptr<NameValueAssign>> name_value_list;
   };
 
   /*
@@ -957,11 +1058,10 @@ namespace Parser {
    */
   class DropUserStmt : public DDLStmt {
     public:
-      DropUserStmt(std::string *n) : user_name(n) {}
-      virtual ~DropUserStmt() { delete user_name; }
+      DropUserStmt(std::string* n) : user_name(n) {}
       virtual void execute(Catalog_Namespace::SessionInfo &session);
     private:
-      std::string *user_name;
+      std::unique_ptr<std::string> user_name;
   };
 
   /*
@@ -970,14 +1070,20 @@ namespace Parser {
    */
   class InsertStmt : public DMLStmt {
     public:
-      InsertStmt(std::string *t, std::list<std::string*> *c) : table(t), column_list(c) {}
-      virtual ~InsertStmt();
-      const std::string *get_table() const { return table; }
-      const std::list<std::string*> *get_column_list() const { return column_list; }
+      InsertStmt(std::string* t, std::list<std::string*>* c) : table(t) {
+          if (c) {
+              for (const auto e : *c) {
+                  column_list.emplace_back(e);
+              }
+              delete c;
+          }
+      }
+      const std::string* get_table() const { return table.get(); }
+      const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const = 0;
     private:
-      std::string *table;
-      std::list<std::string*> *column_list;
+      std::unique_ptr<std::string> table;
+      std::list<std::unique_ptr<std::string>> column_list;
   };
 
   /*
@@ -986,12 +1092,17 @@ namespace Parser {
    */
   class InsertValuesStmt : public InsertStmt {
     public:
-      InsertValuesStmt(std::string *t, std::list<std::string*> *c, std::list<Expr*> *v) : InsertStmt(t, c), value_list(v) {}
-      virtual ~InsertValuesStmt();
-      const std::list<Expr*> *get_value_list() const { return value_list; }
+      InsertValuesStmt(std::string *t, std::list<std::string*> *c, std::list<Expr*> *v) : InsertStmt(t, c) {
+          CHECK(v);
+          for (const auto e : *v) {
+              value_list.emplace_back(e);
+          }
+          delete v;
+      }
+      const std::list<std::unique_ptr<Expr>>& get_value_list() const { return value_list; }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
     private:
-      std::list<Expr*> *value_list;
+      std::list<std::unique_ptr<Expr>> value_list;
   };
 
   /*
@@ -1001,11 +1112,10 @@ namespace Parser {
   class InsertQueryStmt : public InsertStmt {
     public:
       InsertQueryStmt(std::string *t, std::list<std::string*> *c, QuerySpec *q) : InsertStmt(t, c), query(q) {}
-      virtual ~InsertQueryStmt() { delete query; }
-      const QuerySpec *get_query() const { return query; }
+      const QuerySpec* get_query() const { return query.get(); }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
     private:
-      QuerySpec *query;
+      std::unique_ptr<QuerySpec> query;
   };
 
   /*
@@ -1014,13 +1124,12 @@ namespace Parser {
    */
   class Assignment : public Node {
     public:
-      Assignment(std::string *c, Expr *a) : column(c), assignment(a) {}
-      virtual ~Assignment() { delete column; delete assignment; }
-      const std::string *get_column() const { return column; }
-      const Expr *get_assignment() const { return assignment; }
+      Assignment(std::string* c, Expr* a) : column(c), assignment(a) {}
+      const std::string* get_column() const { return column.get(); }
+      const Expr* get_assignment() const { return assignment.get(); }
     private:
-      std::string *column;
-      Expr *assignment;
+      std::unique_ptr<std::string> column;
+      std::unique_ptr<Expr> assignment;
   };
 
   /*
@@ -1029,16 +1138,21 @@ namespace Parser {
    */
   class UpdateStmt : public DMLStmt {
     public:
-      UpdateStmt(std::string *t, std::list<Assignment*> *a, Expr *w) : table(t), assignment_list(a), where_clause(w) {}
-      virtual ~UpdateStmt();
-      const std::string *get_table() const { return table; }
-      const std::list<Assignment*> *get_assignment_list() const { return assignment_list; }
-      const Expr *get_where_clause() const { return where_clause; }
+      UpdateStmt(std::string *t, std::list<Assignment*> *a, Expr *w) : table(t), where_clause(w) {
+          CHECK(a);
+          for (const auto e : *a) {
+              assignment_list.emplace_back(e);
+          }
+          delete a;
+      }
+      const std::string* get_table() const { return table.get(); }
+      const std::list<std::unique_ptr<Assignment>>& get_assignment_list() const { return assignment_list; }
+      const Expr* get_where_clause() const { return where_clause.get(); }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
     private:
-      std::string *table;
-      std::list<Assignment*> *assignment_list;
-      Expr *where_clause;
+      std::unique_ptr<std::string> table;
+      std::list<std::unique_ptr<Assignment>> assignment_list;
+      std::unique_ptr<Expr> where_clause;
   };
 
   /*
@@ -1047,14 +1161,13 @@ namespace Parser {
    */
   class DeleteStmt : public DMLStmt {
     public:
-      DeleteStmt(std::string *t, Expr *w) : table(t), where_clause(w) {}
-      virtual ~DeleteStmt();
-      const std::string *get_table() const { return table; }
-      const Expr *get_where_clause() const { return where_clause; }
+      DeleteStmt(std::string* t, Expr* w) : table(t), where_clause(w) {}
+      const std::string* get_table() const { return table.get(); }
+      const Expr* get_where_clause() const { return where_clause.get(); }
       virtual void analyze(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const;
     private:
-      std::string *table;
-      Expr *where_clause;
+      std::unique_ptr<std::string> table;
+      std::unique_ptr<Expr> where_clause;
   };
 }
 #endif // PARSERNODE_H_

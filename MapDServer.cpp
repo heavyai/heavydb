@@ -178,7 +178,7 @@ public:
     if (cat_it == cat_map_.end()) {
       Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, db_meta, *data_mgr_);
       cat_map_[dbname].reset(cat);
-      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));;
+      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
     } else
       sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
     LOG(INFO) << "User " << user << " connected to database " << dbname << std::endl;

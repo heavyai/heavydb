@@ -241,12 +241,14 @@ opt_compression:
 		{
 			if (!boost::iequals(*$<stringval>1, "encoding"))
 				throw std::runtime_error("Invalid identifier " + *$<stringval>1 + " in column definition.");
+			delete $<stringval>1;
 			$<nodeval>$ = new CompressDef($<stringval>2, 0);
 		}
 		| NAME NAME '(' INTNUM ')'
 		{
 			if (!boost::iequals(*$<stringval>1, "encoding"))
 				throw std::runtime_error("Invalid identifier " + *$<stringval>1 + " in column definition.");
+			delete $<stringval>1;
 			$<nodeval>$ = new CompressDef($<stringval>2, (int)$<intval>4);
 		}
 		| /* empty */ { $<nodeval>$ = nullptr; }
@@ -322,6 +324,7 @@ create_view_statement:
 		{
 			if (!boost::iequals(*$<stringval>2, "materialized"))
 				throw std::runtime_error("Invalid word " + *$<stringval>2);
+			delete $<stringval>2;
 			$<nodeval>$ = new CreateViewStmt($<stringval>5, $<slistval>6, dynamic_cast<QuerySpec*>($<nodeval>9), false, true, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7), $<boolval>4);
 		}
 	;
@@ -333,6 +336,8 @@ refresh_view_statement:
 				throw std::runtime_error("Invalid word " + *$<stringval>1);
 			if (!boost::iequals(*$<stringval>2, "materialized"))
 				throw std::runtime_error("Invalid word " + *$<stringval>2);
+			delete $<stringval>1;
+			delete $<stringval>2;
 			$<nodeval>$ = new RefreshViewStmt($<stringval>4);
 		}
 		;
@@ -574,6 +579,7 @@ opt_offset_clause:
 	{
 		if (!boost::iequals(*$<stringval>3, "row") && !boost::iequals(*$<stringval>3, "rows"))
 			throw std::runtime_error("Invalid word in OFFSET clause " + *$<stringval>3);
+		delete $<stringval>3;
 		$<intval>$ = $<intval>2;
 	}
 	| /* empty */ 

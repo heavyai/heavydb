@@ -44,7 +44,7 @@ class SqliteConnector {
         bool atFirstResult_;
         std::vector<std::vector<std::string> > results_;
         size_t numCols_;
-        size_t numRows_;;
+        size_t numRows_;
 
 };
 

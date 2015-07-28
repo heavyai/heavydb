@@ -497,7 +497,7 @@ namespace Analyzer {
       TargetEntry(const std::string &n, std::shared_ptr<Analyzer::Expr> e, bool u) : resname(n), expr(e), unnest(u) {}
       virtual ~TargetEntry() {}
       const std::string &get_resname() const { return resname; }
-      void set_resname( const std::string &name) { resname = name; }
+      void set_resname( const std::string& name) { resname = name; }
       Expr* get_expr() const { return expr.get(); }
       std::shared_ptr<Expr> get_own_expr() const { return expr; }
       void set_expr(std::shared_ptr<Analyzer::Expr> e) { expr = e; }

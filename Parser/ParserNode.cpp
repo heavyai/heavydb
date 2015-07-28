@@ -21,222 +21,6 @@
 #include "parser.h"
 
 namespace Parser {
-  SubqueryExpr::~SubqueryExpr() 
-  {
-    delete query;
-  }
-
-  ExistsExpr::~ExistsExpr() 
-  {
-    delete query;
-  }
-
-  InValues::~InValues()
-  {
-    for (auto p : *value_list)
-      delete p;
-    delete value_list;
-  }
-
-  BetweenExpr::~BetweenExpr() 
-  {
-    delete arg;
-    delete lower;
-    delete upper;
-  }
-
-  LikeExpr::~LikeExpr() 
-  {
-    delete arg;
-    delete like_string;
-    if (escape_string != nullptr)
-      delete escape_string;
-  }
-
-  ColumnRef::~ColumnRef() 
-  {
-    if (table != nullptr)
-      delete table;
-    if (column != nullptr)
-      delete column;
-  }
-
-  FunctionRef::~FunctionRef() 
-  {
-    delete name;
-    if (arg != nullptr)
-      delete arg;
-  }
-  
-  TableRef::~TableRef() 
-  {
-    delete table_name;
-    if (range_var != nullptr)
-      delete range_var;
-  }
-
-  ColumnConstraintDef::~ColumnConstraintDef() 
-  {
-    if (defaultval != nullptr)
-      delete defaultval;
-    if (check_condition != nullptr)
-      delete check_condition;
-    if (foreign_table != nullptr)
-      delete foreign_table;
-    if (foreign_column != nullptr)
-      delete foreign_column;
-  }
-
-  ColumnDef::~ColumnDef() 
-  {
-    delete column_name;
-    delete column_type;
-    if (compression != nullptr)
-      delete compression;
-    if (column_constraint != nullptr)
-      delete column_constraint;
-  }
-
-  UniqueDef::~UniqueDef() 
-  {
-    for (auto p : *column_list)
-      delete p;
-    delete column_list;
-  }
-
-  ForeignKeyDef::~ForeignKeyDef() 
-  {
-    for (auto p : *column_list)
-      delete p;
-    delete column_list;
-    delete foreign_table;
-    if (foreign_column_list != nullptr) {
-      for (auto p : *foreign_column_list)
-        delete p;
-      delete foreign_column_list;
-    }
-  }
-
-  CreateTableStmt::~CreateTableStmt() 
-  {
-    delete table;
-    for (auto p : *table_element_list)
-      delete p;
-    delete table_element_list;
-    if (storage_options != nullptr) {
-      for (auto p : *storage_options)
-        delete p;
-      delete storage_options;
-    }
-  }
-
-  CopyTableStmt::~CopyTableStmt()
-  {
-    delete table;
-    delete file_path;
-    if (options != nullptr) {
-      for (auto p : *options)
-        delete p;
-      delete options;
-    }
-  }
-
-  ExportQueryStmt::~ExportQueryStmt()
-  {
-    delete select_stmt;
-    delete file_path;
-    if (options != nullptr) {
-      for (auto p : *options)
-        delete p;
-      delete options;
-    }
-  }
-
-  SelectEntry::~SelectEntry()
-  {
-    delete select_expr;
-    if (alias != nullptr)
-      delete alias;
-  }
-
-  QuerySpec::~QuerySpec() 
-  {
-    if (select_clause != nullptr) {
-      for (auto p : *select_clause)
-        delete p;
-      delete select_clause;
-    }
-    for (auto p : *from_clause)
-      delete p;
-    delete from_clause;
-    if (where_clause != nullptr)
-      delete where_clause;
-    if (groupby_clause != nullptr)
-      delete groupby_clause;
-    if (having_clause != nullptr)
-      delete having_clause;
-  }
-
-  SelectStmt::~SelectStmt()
-  {
-    delete query_expr;
-    if (orderby_clause != nullptr) {
-      for (auto p : *orderby_clause)
-        delete p;
-      delete orderby_clause;
-    }
-  }
-
-  CreateViewStmt::~CreateViewStmt() 
-  {
-    delete view_name;
-    if (column_list != nullptr) {
-      for (auto p : *column_list)
-        delete p;
-      delete column_list;
-    }
-    delete query;
-    if (matview_options != nullptr) {
-      for (auto p : *matview_options)
-        delete p;
-      delete matview_options;
-    }
-  }
-
-  InsertStmt::~InsertStmt()
-  {
-    delete table;
-    if (column_list != nullptr) {
-      for (auto p : *column_list)
-        delete p;
-      delete column_list;
-    }
-  }
-
-  InsertValuesStmt::~InsertValuesStmt()
-  {
-    for (auto p : *value_list)
-      delete p;
-    delete value_list;
-  }
-
-  UpdateStmt::~UpdateStmt()
-  {
-    delete table;
-    for (auto p : *assignment_list)
-      delete p;
-    delete assignment_list;
-    if (where_clause != nullptr)
-      delete where_clause;
-  }
-
-  DeleteStmt::~DeleteStmt()
-  {
-    delete table;
-    if (where_clause != nullptr)
-      delete where_clause;
-  }
-  
   std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
       const Catalog_Namespace::Catalog &catalog,
       Analyzer::Query &query,
@@ -407,7 +191,7 @@ namespace Parser {
     SQLTypeInfo ti = arg_expr->get_type_info();
     bool dict_comp = ti.get_compression() == kENCODING_DICT;
     std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-    for (auto p : *value_list) {
+    for (auto& p : value_list) {
       auto e = p->analyze(catalog, query, allow_tlist_ref);
       if (ti != e->get_type_info()) {
         if (ti.is_string() && e->get_type_info().is_string())
@@ -690,20 +474,11 @@ namespace Parser {
       TlistRefType allow_tlist_ref) const {
     target_type->check_type();
     auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-    SQLTypeInfo ti(target_type->get_type(), target_type->get_param1(), target_type->get_param2(), arg_expr->get_type_info().get_notnull());;
+    SQLTypeInfo ti(target_type->get_type(), target_type->get_param1(), target_type->get_param2(), arg_expr->get_type_info().get_notnull());
     if (arg_expr->get_type_info().get_type() != target_type->get_type() &&
         arg_expr->get_type_info().get_compression() != kENCODING_NONE)
       arg_expr->decompress();
     return arg_expr->add_cast(ti);
-  }
-
-  CaseExpr::~CaseExpr()
-  {
-    for (auto p : *when_then_list)
-      delete p;
-    delete when_then_list;
-    if (else_expr != nullptr)
-      delete else_expr;
   }
 
   std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(
@@ -713,7 +488,7 @@ namespace Parser {
     SQLTypeInfo ti;
     std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_pair_list;
     bool has_agg = false;
-    for (auto p : *when_then_list) {
+    for (auto& p : when_then_list) {
       auto e1 = p->get_expr1()->analyze(catalog, query, allow_tlist_ref);
       if (e1->get_type_info().get_type() != kBOOLEAN)
         throw std::runtime_error("Only boolean expressions can be used after WHEN.");
@@ -752,7 +527,7 @@ namespace Parser {
     }
     std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> cast_expr_pair_list;
     for (auto p : expr_pair_list) {
-      cast_expr_pair_list.push_back(std::make_pair(p.first, p.second->add_cast(ti)));;
+      cast_expr_pair_list.push_back(std::make_pair(p.first, p.second->add_cast(ti)));
     }
     if (else_expr != nullptr)
       else_e = else_e->add_cast(ti);
@@ -768,7 +543,7 @@ namespace Parser {
   CaseExpr::to_string() const
   {
     std::string str("CASE ");
-    for (auto p : *when_then_list) {
+    for (auto& p : when_then_list) {
       str += "WHEN " + p->get_expr1()->to_string() + " THEN " + p->get_expr2()->to_string() + " ";
     }
     if (else_expr != nullptr)
@@ -860,15 +635,15 @@ namespace Parser {
   QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
   {
     std::list<std::shared_ptr<Analyzer::Expr>> groupby;
-    if (groupby_clause != nullptr) {
+    if (!groupby_clause.empty()) {
       int gexpr_no = 1;
       std::shared_ptr<Analyzer::Expr> gexpr;
       const std::vector<Analyzer::TargetEntry*> &tlist = query.get_targetlist();
-      for (auto c : *groupby_clause) {
+      for (auto& c : groupby_clause) {
         // special-case ordinal numbers in GROUP BY
-        if (dynamic_cast<Literal*>(c) != nullptr) {
-          IntLiteral *i = dynamic_cast<IntLiteral*>(c);
-          if (i == nullptr)
+        if (dynamic_cast<Literal*>(c.get())) {
+          IntLiteral *i = dynamic_cast<IntLiteral*>(c.get());
+          if (!i)
             throw std::runtime_error("Invalid literal in GROUP BY clause.");
           int varno = (int)i->get_intval();
           if (varno <= 0 || varno > static_cast<int>(tlist.size()))
@@ -938,7 +713,7 @@ namespace Parser {
   QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
   {
     std::vector<Analyzer::TargetEntry*> &tlist = query.get_targetlist_nonconst();
-    if (select_clause == nullptr) {
+    if (select_clause.empty()) {
       // this means SELECT *
       int rte_idx = 0;
       for (auto rte : query.get_rangetable()) {
@@ -946,7 +721,7 @@ namespace Parser {
       }
     }
     else {
-      for (auto p : *select_clause) {
+      for (auto& p : select_clause) {
         const Parser::Expr *select_expr = p->get_select_expr();
         // look for the case of range_var.*
         if (typeid(*select_expr) == typeid(ColumnRef) &&
@@ -984,7 +759,7 @@ namespace Parser {
   QuerySpec::analyze_from_clause(const Catalog_Namespace::Catalog &catalog, Analyzer::Query &query) const
   {
     Analyzer::RangeTblEntry *rte;
-    for (auto p : *from_clause) {
+    for (auto& p : from_clause) {
       const TableDescriptor *table_desc;
       table_desc = catalog.getMetadataForTable(*p->get_table_name());
       if (table_desc == nullptr)
@@ -1021,14 +796,14 @@ namespace Parser {
       throw std::runtime_error("OFFSET cannot be negative.");
     query.set_offset(offset);
     query_expr->analyze(catalog, query);
-    if (orderby_clause == nullptr && !query.get_is_distinct()) {
+    if (orderby_clause.empty() && !query.get_is_distinct()) {
       query.set_order_by(nullptr);
       return;
     }
     const std::vector<Analyzer::TargetEntry*> &tlist = query.get_targetlist();
     std::list<Analyzer::OrderEntry> *order_by = new std::list<Analyzer::OrderEntry>();
-    if (orderby_clause != nullptr) {
-      for (auto p : *orderby_clause) {
+    if (!orderby_clause.empty()) {
+      for (auto& p : orderby_clause) {
         int tle_no = p->get_colno();
         if (tle_no == 0) {
           // use column name
@@ -1227,7 +1002,7 @@ namespace Parser {
   {
     std::string str = InExpr::to_string() + "(";
     bool notfirst = false;
-    for (auto p : *value_list) {
+    for (auto& p : value_list) {
       if (notfirst)
         str += ", ";
       else
@@ -1283,11 +1058,11 @@ namespace Parser {
     std::string query_str = "SELECT ";
     if (is_distinct)
       query_str += "DISTINCT ";
-    if (select_clause == nullptr)
+    if (select_clause.empty())
       query_str += "* ";
     else {
       bool notfirst = false;
-      for (auto p : *select_clause) {
+      for (auto& p : select_clause) {
         if (notfirst)
           query_str += ", ";
         else
@@ -1297,19 +1072,19 @@ namespace Parser {
     }
     query_str += " FROM ";
     bool notfirst = false;
-    for (auto p : *from_clause) {
+    for (auto& p : from_clause) {
       if (notfirst)
         query_str += ", ";
       else
         notfirst = true;
       query_str += p->to_string();
     }
-    if (where_clause != nullptr)
+    if (where_clause)
       query_str += " WHERE " + where_clause->to_string();
-    if (groupby_clause != nullptr) {
+    if (!groupby_clause.empty()) {
       query_str += " GROUP BY ";
       bool notfirst = false;
-      for (auto p : *groupby_clause) {
+      for (auto& p : groupby_clause) {
         if (notfirst)
           query_str += ", ";
         else
@@ -1317,7 +1092,7 @@ namespace Parser {
         query_str += p->to_string();
       }
     }
-    if (having_clause != nullptr) {
+    if (having_clause) {
       query_str += " HAVING " + having_clause->to_string();
     }
     query_str += ";";
@@ -1335,12 +1110,12 @@ namespace Parser {
       throw std::runtime_error("Insert to views is not supported yet.");
     query.set_result_table_id(td->tableId);
     std::list<int> result_col_list;
-    if (column_list == nullptr) {
+    if (column_list.empty()) {
       const std::list<const ColumnDescriptor *> all_cols = catalog.getAllColumnMetadataForTable(td->tableId);
       for (auto cd : all_cols)
         result_col_list.push_back(cd->columnId);
     } else {
-      for (auto c : *column_list) {
+      for (auto& c : column_list) {
         const ColumnDescriptor *cd = catalog.getMetadataForColumn(td->tableId, *c);
         if (cd == nullptr)
           throw std::runtime_error("Column " + *c + " does not exist.");
@@ -1357,7 +1132,7 @@ namespace Parser {
     InsertStmt::analyze(catalog, query);
     std::vector<Analyzer::TargetEntry*> &tlist = query.get_targetlist_nonconst();
     std::list<int>::const_iterator it = query.get_result_col_list().begin();
-    for (auto v : *value_list) {
+    for (auto& v : value_list) {
       auto e = v->analyze(catalog, query);
       const ColumnDescriptor *cd = catalog.getMetadataForColumn(query.get_result_table_id(), *it);
       assert (cd != nullptr);
@@ -1436,10 +1211,10 @@ namespace Parser {
       throw std::runtime_error("Table " + *table + " already exits.");
     }
     std::list<ColumnDescriptor> columns;
-    for (auto e : *table_element_list) {
+    for (auto& e : table_element_list) {
       if (typeid(*e) != typeid(ColumnDef))
         throw std::runtime_error("Table constraints are not supported yet.");
-      ColumnDef *coldef = dynamic_cast<ColumnDef*>(e);
+      ColumnDef *coldef = static_cast<ColumnDef*>(e.get());
       ColumnDescriptor cd;
       cd.columnName = *coldef->get_column_name();
       SQLType *t = coldef->get_column_type();
@@ -1547,8 +1322,8 @@ namespace Parser {
     td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
     td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
     td.fragPageSize = DEFAULT_PAGE_SIZE;
-    if (storage_options != nullptr) {
-      for (auto p : *storage_options) {
+    if (!storage_options.empty()) {
+      for (auto& p : storage_options) {
         if (boost::iequals(*p->get_name(), "fragment_size")) {
           if (!dynamic_cast<const IntLiteral*>(p->get_value()))
             throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
@@ -1595,8 +1370,8 @@ namespace Parser {
     if (!boost::filesystem::exists(*file_path))
       throw std::runtime_error("File " + *file_path + " does not exist.");
     Importer_NS::CopyParams copy_params;
-    if (options != nullptr) {
-      for (auto p : *options) {
+    if (!options.empty()) {
+      for (auto& p : options) {
         if (boost::iequals(*p->get_name(), "threads")) {
           const IntLiteral *int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
           if (int_literal == nullptr)
@@ -1690,8 +1465,8 @@ namespace Parser {
     auto &catalog = session.get_catalog();
     auto device_type = session.get_executor_device_type();
     Importer_NS::CopyParams copy_params;
-    if (options != nullptr) {
-      for (auto p : *options) {
+    if (!options.empty()) {
+      for (auto& p : options) {
         if (boost::iequals(*p->get_name(), "delimiter")) {
           const StringLiteral *str_literal = dynamic_cast<const StringLiteral*>(p->get_value());
           if (str_literal == nullptr)
@@ -1901,8 +1676,8 @@ namespace Parser {
     }
     StorageOption matview_storage = kDISK;
     ViewRefreshOption matview_refresh = kMANUAL;
-    if (matview_options != nullptr) {
-      for (auto p : *matview_options) {
+    if (!matview_options.empty()) {
+      for (auto& p : matview_options) {
         if (boost::iequals(*p->get_name(), "storage")) {
           if (!dynamic_cast<const StringLiteral*>(p->get_value()))
             throw std::runtime_error("Storage option must be a string literal.");
@@ -1935,10 +1710,10 @@ namespace Parser {
     query->analyze(catalog, analyzed_query);
     const std::vector<Analyzer::TargetEntry*> &tlist = analyzed_query.get_targetlist();
     // @TODO check column name uniqueness.  for now let sqlite enforce.
-    if (column_list != nullptr) {
-      if (column_list->size() != tlist.size())
+    if (!column_list.empty()) {
+      if (column_list.size() != tlist.size())
         throw std::runtime_error("Number of column names does not match the number of expressions in SELECT clause.");
-      std::list<std::string*>::iterator it = column_list->begin();
+      auto it = column_list.cbegin();
       for (auto tle : tlist) { 
         tle->set_resname(**it);
         ++it;
@@ -2016,26 +1791,6 @@ namespace Parser {
     catalog.dropTable(td);
   }
 
-  CreateUserStmt::~CreateUserStmt()
-  {
-    delete user_name;
-    if (name_value_list != nullptr) {
-      for (auto p : *name_value_list)
-        delete p;
-      delete name_value_list;
-    }
-  }
-
-  CreateDBStmt::~CreateDBStmt()
-  {
-    delete db_name;
-    if (name_value_list != nullptr) {
-      for (auto p : *name_value_list)
-        delete p;
-      delete name_value_list;
-    }
-  }
-
   void
   CreateDBStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
@@ -2044,8 +1799,8 @@ namespace Parser {
       throw std::runtime_error("Must be in the system database to create databases.");
     Catalog_Namespace::SysCatalog &syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
     int ownerId = session.get_currentUser().userId;
-    if (name_value_list != nullptr) {
-      for (auto p : *name_value_list) {
+    if (!name_value_list.empty()) {
+      for (auto& p : name_value_list) {
         if (boost::iequals(*p->get_name(), "owner")) {
           if (!dynamic_cast<const StringLiteral*>(p->get_value()))
             throw std::runtime_error("Owner name must be a string literal.");
@@ -2085,7 +1840,7 @@ namespace Parser {
     auto &catalog = session.get_catalog();
     std::string passwd;
     bool is_super = false;
-    for (auto p : *name_value_list) {
+    for (auto& p : name_value_list) {
       if (boost::iequals(*p->get_name(), "password")) {
         if (!dynamic_cast<const StringLiteral*>(p->get_value()))
           throw std::runtime_error("Password must be a string literal.");
@@ -2113,16 +1868,6 @@ namespace Parser {
     syscat.createUser(*user_name, passwd, is_super);
   }
 
-  AlterUserStmt::~AlterUserStmt()
-  {
-    delete user_name;
-    if (name_value_list != nullptr) {
-      for (auto p : *name_value_list)
-        delete p;
-      delete name_value_list;
-    }
-  }
-
   void
   AlterUserStmt::execute(Catalog_Namespace::SessionInfo &session)
   {
@@ -2130,7 +1875,7 @@ namespace Parser {
     const std::string *passwd = nullptr;
     bool is_super = false;
     bool *is_superp = nullptr;
-    for (auto p : *name_value_list) {
+    for (auto& p : name_value_list) {
       if (boost::iequals(*p->get_name(), "password")) {
         if (!dynamic_cast<const StringLiteral*>(p->get_value()))
           throw std::runtime_error("Password must be a string literal.");
