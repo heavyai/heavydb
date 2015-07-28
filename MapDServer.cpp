@@ -132,8 +132,8 @@ public:
         cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_)); // second param is whether to initialize GPU buffer pool
-    sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, *data_mgr_));
+    data_mgr_ = new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_); // second param is whether to initialize GPU buffer pool
+    sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
   }
   ~MapDHandler() {
     LOG(INFO) << "mapd_server exits." << std::endl;
@@ -176,7 +176,7 @@ public:
     }
     auto cat_it = cat_map_.find(dbname);
     if (cat_it == cat_map_.end()) {
-      Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, db_meta, *data_mgr_);
+      Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, db_meta, data_mgr_);
       cat_map_[dbname].reset(cat);
       sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
     } else
@@ -822,7 +822,7 @@ public:
 
 private:
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
-  std::unique_ptr<Data_Namespace::DataMgr> data_mgr_;
+  Data_Namespace::DataMgr* data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
   std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 

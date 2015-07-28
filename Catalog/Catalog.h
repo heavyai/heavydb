@@ -111,7 +111,7 @@ struct DBMetadata {
 class Catalog {
 
     public:
-				Catalog(const std::string &basePath, const std::string &dbname, Data_Namespace::DataMgr &dataMgr, bool is_initdb);
+        Catalog(const std::string &basePath, const std::string &dbname, Data_Namespace::DataMgr* dataMgr, bool is_initdb);
 
         /**
          * @brief Constructor - takes basePath to already extant
@@ -122,7 +122,7 @@ class Catalog {
          * metadata - expects for this directory to already exist
          */
 
-        Catalog(const std::string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr);
+        Catalog(const std::string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr* dataMgr);
 
         /**
          * @brief Destructor - deletes all
@@ -167,7 +167,7 @@ class Catalog {
 				 std::list<const FrontendViewDescriptor *> getAllFrontendViewMetadata() const;
          const DBMetadata &get_currentDB() const { return currentDB_; }
          void set_currentDB(const DBMetadata &db) { currentDB_ = db; }
-				 Data_Namespace::DataMgr &get_dataMgr() const { return dataMgr_; }
+				 Data_Namespace::DataMgr &get_dataMgr() const { return *dataMgr_; }
          const std::string &get_basePath() const { return basePath_; }
 
          const DictDescriptor *getMetadataForDict(int dictId) const;
@@ -190,7 +190,7 @@ class Catalog {
         FrontendViewDescriptorMapById frontendViewDescriptorMapById_;
         SqliteConnector sqliteConnector_;
         DBMetadata currentDB_;
-				Data_Namespace::DataMgr &dataMgr_;
+        std::unique_ptr<Data_Namespace::DataMgr> dataMgr_;
         mutable std::mutex cat_mutex_;
 };
 
@@ -200,7 +200,7 @@ class Catalog {
  */
 class SysCatalog : public Catalog {
 	public:
-		SysCatalog(const std::string &basePath, Data_Namespace::DataMgr &dataMgr, bool is_initdb = false) : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {}
+		SysCatalog(const std::string &basePath, Data_Namespace::DataMgr* dataMgr, bool is_initdb = false) : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {}
 		virtual ~SysCatalog() {};
 		void initDB();
 		void createUser(const std::string &name, const std::string &passwd, bool issuper);

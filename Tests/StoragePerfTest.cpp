@@ -26,9 +26,7 @@ using namespace Fragmenter_Namespace;
 #define BASE_PATH "/tmp"
 
 namespace {
-	SysCatalog *gsys_cat = nullptr;
-	SessionInfo *gsession = nullptr;
-	Data_Namespace::DataMgr *dataMgr = nullptr;
+	std::unique_ptr<SessionInfo> gsession;;
 
 	void run_ddl(const string &input_str)
 	{
@@ -52,34 +50,28 @@ namespace {
 				CHECK(boost::filesystem::exists(base_path));
 				auto system_db_file = base_path / "mapd_catalogs" / MAPD_SYSTEM_DB ;
 				auto data_dir = base_path / "mapd_data";
-				dataMgr = new Data_Namespace::DataMgr(data_dir.string(), false); // false is for useGpus
-				if (!boost::filesystem::exists(system_db_file)) {
-					SysCatalog syscat(base_path.string(), *dataMgr, true);
-					syscat.initDB();
-				}
-				gsys_cat = new SysCatalog(base_path.string(), *dataMgr);
 				UserMetadata user;
-				CHECK(gsys_cat->getMetadataForUser(MAPD_ROOT_USER, user));
-				if (!gsys_cat->getMetadataForUser("gtest", user)) {
-					gsys_cat->createUser("gtest", "test!test!", false);
-					CHECK(gsys_cat->getMetadataForUser("gtest", user));
-				}
 				DBMetadata db;
-				if (!gsys_cat->getMetadataForDB("gtest_db", db)) {
-					gsys_cat->createDatabase("gtest_db", user.userId);
-					CHECK(gsys_cat->getMetadataForDB("gtest_db", db));
+				{
+					auto dataMgr = new Data_Namespace::DataMgr(data_dir.string(), false); // false is for use gpus
+					if (!boost::filesystem::exists(system_db_file)) {
+						SysCatalog sys_cat(base_path.string(), dataMgr, true);
+						sys_cat.initDB();
+					}
+					SysCatalog sys_cat(base_path.string(), dataMgr);
+					CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
+					if (!sys_cat.getMetadataForUser("gtest", user)) {
+						sys_cat.createUser("gtest", "test!test!", false);
+						CHECK(sys_cat.getMetadataForUser("gtest", user));
+					}
+					if (!sys_cat.getMetadataForDB("gtest_db", db)) {
+						sys_cat.createDatabase("gtest_db", user.userId);
+						CHECK(sys_cat.getMetadataForDB("gtest_db", db));
+					}
 				}
-				Catalog *cat = new Catalog(base_path.string(), db, *dataMgr);
-        gsession = new SessionInfo(std::shared_ptr<Catalog>(cat), user, ExecutorDeviceType::GPU, 0);
-			}
-			virtual void TearDown()
-			{
-				if (gsys_cat != nullptr)
-					delete gsys_cat;
-				if (gsession != nullptr)
-					delete gsession;
-				if (dataMgr != nullptr)
-					delete dataMgr;
+				auto dataMgr = new Data_Namespace::DataMgr(data_dir.string(), false); // false is for use gpus
+				gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(), db, dataMgr),
+					user, ExecutorDeviceType::GPU, 0));
 			}
 	};
 

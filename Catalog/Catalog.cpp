@@ -9,6 +9,7 @@
 #include <list>
 #include <exception>
 #include <cassert>
+#include <memory>
 #include "boost/filesystem.hpp"
 #include "Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
@@ -85,8 +86,8 @@ SysCatalog::dropDatabase(const int32_t dbid, const std::string &name)
 	sqliteConnector_.query("DELETE FROM mapd_databases WHERE dbid = " + std::to_string(dbid));
 	boost::filesystem::remove(basePath_+"/mapd_catalogs/" + name);
 	ChunkKey chunkKeyPrefix = {dbid};
-	dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);
-    dataMgr_.checkpoint();
+	dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
+  dataMgr_->checkpoint();
 }
 
 bool
@@ -152,13 +153,13 @@ SysCatalog::getMetadataForDB(const string &name, DBMetadata &db)
 	return true;
 }
 
-Catalog::Catalog(const string &basePath, const string &dbname, Data_Namespace::DataMgr &dataMgr, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname, basePath + "/mapd_catalogs/"), dataMgr_(dataMgr)
+Catalog::Catalog(const string &basePath, const string &dbname, Data_Namespace::DataMgr* dataMgr, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname, basePath + "/mapd_catalogs/"), dataMgr_(dataMgr)
 {
 		if (!is_initdb)
 			buildMaps();
 }
 
-Catalog::Catalog(const string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr &dataMgr): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentDB_(curDB), dataMgr_(dataMgr) 
+Catalog::Catalog(const string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr* dataMgr): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentDB_(curDB), dataMgr_(dataMgr)
 {
     buildMaps();
 }
@@ -347,7 +348,7 @@ Catalog::instantiateFragmenter(TableDescriptor *td) const
 	getAllColumnMetadataForTable(td, columnDescs);
 	Chunk::translateColumnDescriptorsToChunkVec(columnDescs , chunkVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, chunkVec, &dataMgr_, td->maxFragRows, td->fragPageSize);
+	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, chunkVec, dataMgr_.get(), td->maxFragRows, td->fragPageSize);
 }
 
 const TableDescriptor * Catalog::getMetadataForTable (const string &tableName) const  {
@@ -524,8 +525,8 @@ Catalog::dropTable(const TableDescriptor *td)
     }
 		ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
 		// assuming deleteChunksWithPrefix is atomic
-		dataMgr_.deleteChunksWithPrefix(chunkKeyPrefix);
-		dataMgr_.checkpoint();
+		dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
+		dataMgr_->checkpoint();
 	}
 	catch (std::exception &e) {
 		sqliteConnector_.query("ROLLBACK TRANSACTION");

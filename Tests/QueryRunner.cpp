@@ -14,16 +14,22 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   auto system_db_file = base_path / "mapd_catalogs" / "mapd";
   CHECK(boost::filesystem::exists(system_db_file));
 	auto data_dir = base_path / "mapd_data";
-	Data_Namespace::DataMgr *dataMgr = new Data_Namespace::DataMgr(data_dir.string(), true); // true is for useGpus
-  Catalog_Namespace::SysCatalog sys_cat(base_path.string(), *dataMgr);
   Catalog_Namespace::UserMetadata user;
-  CHECK(sys_cat.getMetadataForUser(user_name, user));
-  CHECK_EQ(user.passwd, passwd);
   Catalog_Namespace::DBMetadata db;
-  CHECK(sys_cat.getMetadataForDB(db_name, db));
-  CHECK(user.isSuper || (user.userId == db.dbOwner));
-  Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_path.string(), db, *dataMgr);
-  return new Catalog_Namespace::SessionInfo(std::shared_ptr<Catalog_Namespace::Catalog>(cat), user, ExecutorDeviceType::GPU, 0);
+  {
+    auto dataMgr = new Data_Namespace::DataMgr(data_dir.string(), true); // true is for useGpus
+    Catalog_Namespace::SysCatalog sys_cat(base_path.string(), dataMgr);
+    CHECK(sys_cat.getMetadataForUser(user_name, user));
+    CHECK_EQ(user.passwd, passwd);
+    CHECK(sys_cat.getMetadataForDB(db_name, db));
+    CHECK(user.isSuper || (user.userId == db.dbOwner));
+  }
+  auto dataMgr = new Data_Namespace::DataMgr(data_dir.string(), true); // true is for useGpus
+  return new Catalog_Namespace::SessionInfo(
+      std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr),
+      user,
+      ExecutorDeviceType::GPU,
+      0);
 }
 
 ResultRows run_multiple_agg(
