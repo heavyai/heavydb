@@ -364,22 +364,36 @@ class Loader {
 };
 
 class Detector {
-  public:
-    Detector(const boost::filesystem::path &fp) : file_path(fp) { read_file(); init(); };
-    SQLTypes detect_sqltype(const std::string &str);
-    std::vector<SQLTypes> best_sqltypes;
-    std::vector<std::vector<std::string>> get_sample_rows(size_t n);
-  private:
-    void split_raw_data();
-    void detect_row_delimiter();
-    std::vector<SQLTypes> detect_column_types(const std::vector<std::string> &row);
-    std::vector<SQLTypes> find_best_sqltypes();
-    void read_file();
-    void init();
-    std::vector<std::string> raw_data;
-    std::vector<std::vector<std::string>> raw_rows;
-    std::string delim;
-    boost::filesystem::path file_path;
+ public:
+  Detector(const boost::filesystem::path& fp) : file_path(fp) {
+    read_file();
+    init();
+  };
+  SQLTypes detect_sqltype(const std::string& str);
+  std::vector<std::string> get_headers();
+  std::vector<std::vector<std::string>> get_sample_rows(size_t n);
+  std::vector<SQLTypes> best_sqltypes;
+  bool has_headers = false;
+
+ private:
+  void init();
+  void read_file();
+  void detect_row_delimiter();
+  void split_raw_data();
+  std::vector<SQLTypes> detect_column_types(const std::vector<std::string>& row);
+  bool more_restrictive_sqltype(const SQLTypes a, const SQLTypes b);
+  void find_best_sqltypes();
+  std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows);
+  std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>::const_iterator& row_begin,
+                                           const std::vector<std::vector<std::string>>::const_iterator& row_end);
+  void detect_headers();
+  bool detect_headers(const std::vector<std::vector<std::string>>& raw_rows);
+  bool detect_headers(const std::vector<SQLTypes>& first_types, const std::vector<SQLTypes>& rest_types);
+  void find_best_sqltypes_and_headers();
+  std::vector<std::string> raw_data;
+  std::vector<std::vector<std::string>> raw_rows;
+  std::string delim;
+  boost::filesystem::path file_path;
 };
 
 class Importer {

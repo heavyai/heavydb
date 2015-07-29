@@ -687,25 +687,10 @@ Loader::init()
   insert_data.numRows = 0;
 }
 
-void Detector::split_raw_data() {
-  for (auto line : raw_data) {
-    std::vector<std::string> row;
-    boost::char_separator<char> sep{delim.c_str(), "", boost::keep_empty_tokens};
-    boost::tokenizer<boost::char_separator<char>> tok{line, sep};
-    for (const auto& s : tok) {
-      row.push_back(s);
-    }
-    raw_rows.push_back(row);
-  }
-}
-
-void Detector::detect_row_delimiter() {
-  if (delim.length() == 0) {
-    delim = ",";
-  }
-  if (boost::filesystem::extension(file_path) == ".tsv") {
-    delim = "\t";
-  }
+void Detector::init() {
+  detect_row_delimiter();
+  split_raw_data();
+  find_best_sqltypes_and_headers();
 }
 
 void Detector::read_file() {
@@ -724,16 +709,25 @@ void Detector::read_file() {
   infile.close();
 }
 
-std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
-  n = std::min(n, raw_rows.size());
-  std::vector<std::vector<std::string>> sample_rows(raw_rows.begin(), raw_rows.begin() + n);
-  return sample_rows;
+void Detector::detect_row_delimiter() {
+  if (delim.length() == 0) {
+    delim = ",";
+  }
+  if (boost::filesystem::extension(file_path) == ".tsv") {
+    delim = "\t";
+  }
 }
 
-void Detector::init() {
-  detect_row_delimiter();
-  split_raw_data();
-  best_sqltypes = find_best_sqltypes();
+void Detector::split_raw_data() {
+  for (auto line : raw_data) {
+    std::vector<std::string> row;
+    boost::char_separator<char> sep{delim.c_str(), "", boost::keep_empty_tokens};
+    boost::tokenizer<boost::char_separator<char>> tok{line, sep};
+    for (const auto& s : tok) {
+      row.push_back(s);
+    }
+    raw_rows.push_back(row);
+  }
 }
 
 template <class T>
@@ -767,13 +761,13 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
 
 std::vector<SQLTypes> Detector::detect_column_types(const std::vector<std::string>& row) {
   std::vector<SQLTypes> types(row.size());
-  for (auto col : row) {
-    types.push_back(detect_sqltype(col));
+  for (size_t i = 0; i < row.size(); i++) {
+    types[i] = detect_sqltype(row[i]);
   }
   return types;
 }
 
-std::vector<SQLTypes> Detector::find_best_sqltypes() {
+bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
   typedef boost::bimap<SQLTypes, int> type_bm;
   type_bm typeorder;
   typeorder.insert(type_bm::value_type(kDOUBLE, 7));
@@ -785,25 +779,85 @@ std::vector<SQLTypes> Detector::find_best_sqltypes() {
   typeorder.insert(type_bm::value_type(kTEXT, 8));
   typeorder.insert(type_bm::value_type(kBOOLEAN, 2));
 
-  std::vector<SQLTypes> best_types;
+  // note: b < a instead of a < b because the bimap is ordered most to least restrictive
+  return typeorder.left.find(b)->second < typeorder.left.find(a)->second;
+}
+
+void Detector::find_best_sqltypes_and_headers() {
+  best_sqltypes = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end());
+  std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
+  has_headers = detect_headers(head_types, best_sqltypes);
+}
+
+void Detector::find_best_sqltypes() {
+  best_sqltypes = find_best_sqltypes(raw_rows.begin(), raw_rows.end());
+}
+
+std::vector<SQLTypes> Detector::find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows) {
+  return find_best_sqltypes(raw_rows.begin(), raw_rows.end());
+}
+
+std::vector<SQLTypes> Detector::find_best_sqltypes(
+    const std::vector<std::vector<std::string>>::const_iterator& row_begin,
+    const std::vector<std::vector<std::string>>::const_iterator& row_end) {
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
   }
-  best_types.resize(raw_rows.front().size());
-
-  std::vector<int> col_types(raw_rows.front().size(), 0);
-
-  for (auto row : raw_rows) {
-    for (size_t col_idx = 0; col_idx < row.size(); col_idx++) {
-      SQLTypes t = detect_sqltype(row[col_idx]);
-      int detected_type = typeorder.left.find(t)->second;
-      if (col_types[col_idx] < detected_type) {
-        col_types[col_idx] = detected_type;
+  std::vector<SQLTypes> best_types(raw_rows.front().size(), kCHAR);
+  for (auto row = row_begin; row != row_end; row++) {
+    for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
+      SQLTypes t = detect_sqltype(row->at(col_idx));
+      if (!more_restrictive_sqltype(best_types[col_idx], t)) {
         best_types[col_idx] = t;
       }
     }
   }
   return best_types;
+}
+
+void Detector::detect_headers() {
+  has_headers = detect_headers(raw_rows);
+}
+
+bool Detector::detect_headers(const std::vector<std::vector<std::string>>& raw_rows) {
+  if (raw_rows.size() < 3) {
+    return false;
+  }
+  std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
+  std::vector<SQLTypes> tail_types = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end());
+  return detect_headers(head_types, tail_types);
+}
+
+// detect_headers returns true if:
+// - all elements of the first argument are kTEXT
+// - there is at least one instance where tail_types is more restrictive than head_types (ie, not kTEXT)
+bool Detector::detect_headers(const std::vector<SQLTypes>& head_types, const std::vector<SQLTypes>& tail_types) {
+  if (head_types.size() != tail_types.size()) {
+    return false;
+  }
+  bool has_headers= false;
+  for (size_t col_idx = 0; col_idx < tail_types.size(); col_idx++) {
+    if (head_types[col_idx] != kTEXT) {
+      return false;
+    }
+    has_headers = has_headers || tail_types[col_idx] != kTEXT;
+  }
+  return has_headers;
+}
+
+std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
+  n = std::min(n, raw_rows.size());
+  size_t offset = (has_headers && raw_rows.size() > 1) ? 1 : 0;
+  std::vector<std::vector<std::string>> sample_rows(raw_rows.begin() + offset, raw_rows.begin() + n);
+  return sample_rows;
+}
+
+std::vector<std::string> Detector::get_headers() {
+  std::vector<std::string> headers(best_sqltypes.size());
+  for (size_t i = 0; i < best_sqltypes.size(); i++) {
+    headers[i] = has_headers ? raw_rows[0][i] : "column_" + std::to_string(i + 1);
+  }
+  return headers;
 }
 
 #define IMPORT_FILE_BUFFER_SIZE   100000000

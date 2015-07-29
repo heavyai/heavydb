@@ -689,6 +689,7 @@ public:
 
     Importer_NS::Detector detector(file_path);
     std::vector<SQLTypes> best_types = detector.best_sqltypes;
+    std::vector<std::string> headers = detector.get_headers();
 
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
@@ -705,6 +706,7 @@ public:
       SQLTypes t = best_types[col_idx];
       SQLTypeInfo* ti = new SQLTypeInfo(t, true);
       col.col_type.type = type_to_thrift(*ti);
+      col.col_name = headers[col_idx];
       _return.row_desc[col_idx] = col;
     }
 
