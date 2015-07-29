@@ -756,6 +756,16 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
       type = kFLOAT;
     }
   }
+
+  // see StringToDatum in Shared/Datum.cpp
+  if (type == kTEXT) {
+    std::tm tm_struct;
+    if (strptime(str.c_str(), "%Y-%m-%d", &tm_struct) != nullptr ||
+        strptime(str.c_str(), "%m/%d/%Y", &tm_struct) != nullptr) {
+      type = kDATE;
+    }
+  }
+
   return type;
 }
 
@@ -776,7 +786,8 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
   typeorder.insert(type_bm::value_type(kINT, 4));
   typeorder.insert(type_bm::value_type(kSMALLINT, 3));
   typeorder.insert(type_bm::value_type(kCHAR, 0));
-  typeorder.insert(type_bm::value_type(kTEXT, 8));
+  typeorder.insert(type_bm::value_type(kTEXT, 9));
+  typeorder.insert(type_bm::value_type(kDATE, 8));
   typeorder.insert(type_bm::value_type(kBOOLEAN, 2));
 
   // note: b < a instead of a < b because the bimap is ordered most to least restrictive
