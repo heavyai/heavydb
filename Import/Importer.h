@@ -371,6 +371,7 @@ class Detector {
   };
   SQLTypes detect_sqltype(const std::string& str);
   std::vector<std::string> get_headers();
+  std::vector<std::vector<std::string>> raw_rows;
   std::vector<std::vector<std::string>> get_sample_rows(size_t n);
   std::vector<SQLTypes> best_sqltypes;
   bool has_headers = false;
@@ -391,7 +392,6 @@ class Detector {
   bool detect_headers(const std::vector<SQLTypes>& first_types, const std::vector<SQLTypes>& rest_types);
   void find_best_sqltypes_and_headers();
   std::vector<std::string> raw_data;
-  std::vector<std::vector<std::string>> raw_rows;
   std::string delim;
   boost::filesystem::path file_path;
 };

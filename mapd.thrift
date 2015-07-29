@@ -118,4 +118,5 @@ service MapD {
   void create_frontend_view(1: TSessionId session, 2: string view_name, 3: string view_state) throws (1: TMapDException e 2: ThriftException te)
   TRowSet detect_column_types(1: TSessionId session, 2: string file_name, 3: string delimiter) throws (1: TMapDException e 2: ThriftException te)
   void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
+  void import_table(1: TSessionId session, 2: string table_name, 3: string file_name) throws (1: TMapDException e 2: ThriftException te)
 }
