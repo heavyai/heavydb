@@ -14,6 +14,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <boost/algorithm/string.hpp>
 #include <glog/logging.h>
 #include "../Shared/measure.h"
 #include "Importer.h"
@@ -723,8 +724,10 @@ void Detector::split_raw_data() {
     std::vector<std::string> row;
     boost::char_separator<char> sep{delim.c_str(), "", boost::keep_empty_tokens};
     boost::tokenizer<boost::char_separator<char>> tok{line, sep};
-    for (const auto& s : tok) {
-      row.push_back(s);
+    for (auto& s : tok) {
+      std::string str(s);
+      boost::algorithm::trim(str);
+      row.push_back(str);
     }
     raw_rows.push_back(row);
   }
