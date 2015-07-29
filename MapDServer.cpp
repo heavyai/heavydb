@@ -187,16 +187,8 @@ public:
 
   void disconnect(const TSessionId session) {
     mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    std::string dbname;
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    dbname = session_it->second->get_catalog().get_currentDB().dbName;
+    auto session_it = get_session_it(session);
+    const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname << std::endl;
     sessions_.erase(session_it);
   }
@@ -265,18 +257,9 @@ public:
   }
 
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog();
-    auto executor_device_type = session_it->second->get_executor_device_type();
-    session_it->second->update_time();
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
+    auto executor_device_type = session_info.get_executor_device_type();
     LOG(INFO) << query_str;
     auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
@@ -309,7 +292,7 @@ public:
         explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
       if (ddl != nullptr && explain_stmt == nullptr) {
         execute_time += measure<>::execution([&]() {
-          ddl->execute(*session_it->second);
+          ddl->execute(session_info);
         });
       } else {
         const Parser::DMLStmt *dml; 
@@ -396,16 +379,8 @@ public:
   }
 
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog(); 
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
     auto td = cat.getMetadataForTable(table_name);
     if (!td) {
       TMapDException ex;
@@ -425,16 +400,8 @@ public:
   }
 
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog(); 
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
     auto td = cat.getMetadataForTable(table_name);
     if (!td) {
       TMapDException ex;
@@ -455,16 +422,8 @@ public:
   }
 
   void get_frontend_view(std::string& _return, const TSessionId session, const std::string& view_name) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog();
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
     auto vd = cat.getMetadataForFrontendView(view_name);
     if (!vd) {
       TMapDException ex;
@@ -476,16 +435,8 @@ public:
   }
 
   void get_tables(std::vector<std::string> & table_names, const TSessionId session) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog(); 
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
     const auto tables = cat.getAllTableMetadata();
     for (const auto td : tables) {
       table_names.push_back(td->tableName);
@@ -493,7 +444,6 @@ public:
   }
 
   void get_users(std::vector<std::string> &user_names) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto u : user_list) {
       user_names.push_back(u.userName);
@@ -521,16 +471,8 @@ public:
   }
 
   void get_frontend_views(std::vector<std::string> & view_names, const TSessionId session) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog();
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
     const auto views = cat.getAllFrontendViewMetadata();
     for (const auto vd : views) {
       view_names.push_back(vd->viewName);
@@ -539,14 +481,7 @@ public:
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
     mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
+    auto session_it = get_session_it(session);
     const std::string &user_name = session_it->second->get_currentUser().userName;
     switch (mode) {
       case TExecuteMode::GPU:
@@ -575,29 +510,16 @@ public:
   }
 
   void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
-    const Catalog_Namespace::Catalog* cat_ptr { nullptr };
-    {
-      mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-      auto session_it = sessions_.find(session);
-      if (session_it == sessions_.end()) {
-        TMapDException ex;
-        ex.error_msg = "Session not valid.";
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
-      }
-      session_it->second->update_time();
-      auto& cat = session_it->second->get_catalog();
-      cat_ptr = &cat;
-    }
-    CHECK(cat_ptr);
-    const TableDescriptor *td = cat_ptr->getMetadataForTable(table_name);
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
+    const TableDescriptor *td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
       TMapDException ex;
       ex.error_msg = "Table " + table_name + " does not exist.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    Importer_NS::Loader loader(*cat_ptr, td);
+    Importer_NS::Loader loader(cat, td);
     if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
       ex.error_msg = "Wrong number of columns to load into Table " + table_name;
@@ -625,29 +547,16 @@ public:
   }
 
   void load_table(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
-    const Catalog_Namespace::Catalog* cat_ptr { nullptr };
-    {
-      mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-      auto session_it = sessions_.find(session);
-      if (session_it == sessions_.end()) {
-        TMapDException ex;
-        ex.error_msg = "Session not valid.";
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
-      }
-      session_it->second->update_time();
-      auto& cat = session_it->second->get_catalog();
-      cat_ptr = &cat;
-    }
-    CHECK(cat_ptr);
-    const TableDescriptor *td = cat_ptr->getMetadataForTable(table_name);
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
+    const TableDescriptor *td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
       TMapDException ex;
       ex.error_msg = "Table " + table_name + " does not exist.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    Importer_NS::Loader loader(*cat_ptr, td);
+    Importer_NS::Loader loader(cat, td);
     Importer_NS::CopyParams copy_params;
     if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
@@ -679,6 +588,8 @@ public:
                            const TSessionId session,
                            const std::string& file_name,
                            const std::string& delimiter) {
+    get_session(session);
+
     boost::filesystem::path file_path = file_name;  // FIXME
     if (!boost::filesystem::exists(file_path)) {
       TMapDException ex;
@@ -690,15 +601,6 @@ public:
     Importer_NS::Detector detector(file_path);
     std::vector<SQLTypes> best_types = detector.best_sqltypes;
     std::vector<std::string> headers = detector.get_headers();
-
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
 
     _return.row_desc.resize(best_types.size());
     TColumnType col;
@@ -731,17 +633,8 @@ public:
   }
 
   void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog();
-    session_it->second->update_time();
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
     LOG(INFO) << "Render: " << query;
     SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
@@ -805,16 +698,8 @@ public:
     }
   }
   void create_frontend_view(const TSessionId session, const std::string &view_name, const std::string &view_state) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-    auto session_it = sessions_.find(session);
-    if (session_it == sessions_.end()) {
-      TMapDException ex;
-      ex.error_msg = "Session not valid.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    session_it->second->update_time();
-    auto &cat = session_it->second->get_catalog();
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
     FrontendViewDescriptor vd;
     vd.viewName = view_name;
     vd.viewState = view_state;
@@ -823,6 +708,25 @@ public:
   }
 
 private:
+  typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
+
+  SessionMap::iterator get_session_it(const TSessionId session) {
+    auto session_it = sessions_.find(session);
+    if (session_it == sessions_.end()) {
+      TMapDException ex;
+      ex.error_msg = "Session not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    session_it->second->update_time();
+    return session_it;
+  }
+
+  Catalog_Namespace::SessionInfo get_session(const TSessionId session) {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    return *get_session_it(session)->second;
+  }
+
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
   Data_Namespace::DataMgr* data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;

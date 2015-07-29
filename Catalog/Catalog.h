@@ -221,6 +221,12 @@ class SysCatalog : public Catalog {
 class SessionInfo {
   public:
     SessionInfo(std::shared_ptr<Catalog> cat, const UserMetadata &user, const ExecutorDeviceType t, int32_t sid) : catalog_(cat), currentUser_(user), executor_device_type_(t), session_id(sid), last_used_time(time(0)) {}
+    SessionInfo(const SessionInfo& s)
+        : catalog_(s.catalog_)
+        , currentUser_(s.currentUser_)
+        , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
+        , session_id(s.session_id) {
+    }
     Catalog &get_catalog() const { return *catalog_; };
     const UserMetadata &get_currentUser() const { return currentUser_; }
     const ExecutorDeviceType get_executor_device_type() const { return executor_device_type_; }

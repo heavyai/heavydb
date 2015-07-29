@@ -1202,7 +1202,7 @@ namespace Parser {
   }
 
   void
-  CreateTableStmt::execute(Catalog_Namespace::SessionInfo &session)
+  CreateTableStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     if (catalog.getMetadataForTable(*table) != nullptr) {
@@ -1346,7 +1346,7 @@ namespace Parser {
   }
 
   void
-  DropTableStmt::execute(Catalog_Namespace::SessionInfo &session)
+  DropTableStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*table);
@@ -1361,7 +1361,7 @@ namespace Parser {
   }
 
   void
-  CopyTableStmt::execute(Catalog_Namespace::SessionInfo &session)
+  CopyTableStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*table);
@@ -1460,7 +1460,7 @@ namespace Parser {
   }
 
   void
-  ExportQueryStmt::execute(Catalog_Namespace::SessionInfo &session)
+  ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     auto device_type = session.get_executor_device_type();
@@ -1666,7 +1666,7 @@ namespace Parser {
   }
 
   void
-  CreateViewStmt::execute(Catalog_Namespace::SessionInfo &session)
+  CreateViewStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     if (catalog.getMetadataForTable(*view_name) != nullptr) {
@@ -1748,7 +1748,7 @@ namespace Parser {
   }
 
   void
-  RefreshViewStmt::execute(Catalog_Namespace::SessionInfo &session)
+  RefreshViewStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
@@ -1777,7 +1777,7 @@ namespace Parser {
   }
 
   void
-  DropViewStmt::execute(Catalog_Namespace::SessionInfo &session)
+  DropViewStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     const TableDescriptor *td = catalog.getMetadataForTable(*view_name);
@@ -1792,7 +1792,7 @@ namespace Parser {
   }
 
   void
-  CreateDBStmt::execute(Catalog_Namespace::SessionInfo &session)
+  CreateDBStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
@@ -1818,7 +1818,7 @@ namespace Parser {
   }
 
   void
-  DropDBStmt::execute(Catalog_Namespace::SessionInfo &session)
+  DropDBStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)
@@ -1835,7 +1835,7 @@ namespace Parser {
   }
 
   void
-  CreateUserStmt::execute(Catalog_Namespace::SessionInfo &session)
+  CreateUserStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     std::string passwd;
@@ -1869,7 +1869,7 @@ namespace Parser {
   }
 
   void
-  AlterUserStmt::execute(Catalog_Namespace::SessionInfo &session)
+  AlterUserStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     const std::string *passwd = nullptr;
@@ -1905,7 +1905,7 @@ namespace Parser {
   }
 
   void
-  DropUserStmt::execute(Catalog_Namespace::SessionInfo &session)
+  DropUserStmt::execute(const Catalog_Namespace::SessionInfo &session)
   {
     auto &catalog = session.get_catalog();
     if (catalog.get_currentDB().dbName != MAPD_SYSTEM_DB)

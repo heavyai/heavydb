@@ -519,7 +519,7 @@ namespace Parser {
    */
   class DDLStmt : public Stmt {
     public:
-      virtual void execute(Catalog_Namespace::SessionInfo &session) = 0;
+      virtual void execute(const Catalog_Namespace::SessionInfo &session) = 0;
   };
 
   /*
@@ -712,7 +712,7 @@ namespace Parser {
       const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
           return table_element_list;}
       
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> table;
       std::list<std::unique_ptr<TableElement>> table_element_list;
@@ -728,7 +728,7 @@ namespace Parser {
     public:
       DropTableStmt(std::string *tab, bool i) : table(tab), if_exists(i) {}
       const std::string* get_table() const { return table.get(); }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> table;
       bool if_exists;
@@ -749,7 +749,7 @@ namespace Parser {
             delete o;
         }
       }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> table;
       std::unique_ptr<std::string> file_path;
@@ -891,7 +891,7 @@ namespace Parser {
     public:
       ExplainStmt(DMLStmt* s) : stmt(s) {}
       const DMLStmt* get_stmt() const { return stmt.get(); }
-      virtual void execute(Catalog_Namespace::SessionInfo &session) { CHECK(false); }
+      virtual void execute(const Catalog_Namespace::SessionInfo &session) { CHECK(false); }
     private:
       std::unique_ptr<DMLStmt> stmt;
   };
@@ -910,7 +910,7 @@ namespace Parser {
               delete o;
           }
       }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<SelectStmt> select_stmt;
       std::unique_ptr<std::string> file_path;
@@ -946,7 +946,7 @@ namespace Parser {
       const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
       const QuerySpec* get_query() const { return query.get(); }
       bool get_checkoption() const { return checkoption; }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> view_name;
       std::list<std::unique_ptr<std::string>> column_list;
@@ -960,7 +960,7 @@ namespace Parser {
   class RefreshViewStmt : public DDLStmt {
     public:
       explicit RefreshViewStmt(std::string* v) : view_name(v) {}
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> view_name;
   };
@@ -973,7 +973,7 @@ namespace Parser {
     public:
       DropViewStmt(std::string* v, bool i) : view_name(v), if_exists(i) {}
       const std::string* get_view_name() const { return view_name.get(); }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> view_name;
       bool if_exists;
@@ -993,7 +993,7 @@ namespace Parser {
               delete l;
           }
       }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> db_name;
       std::list<std::unique_ptr<NameValueAssign>> name_value_list;
@@ -1006,7 +1006,7 @@ namespace Parser {
   class DropDBStmt : public DDLStmt {
     public:
       explicit DropDBStmt(std::string* n) : db_name(n) {}
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> db_name;
   };
@@ -1026,7 +1026,7 @@ namespace Parser {
               delete l;
           }
       }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> user_name;
       std::list<std::unique_ptr<NameValueAssign>> name_value_list;
@@ -1046,7 +1046,7 @@ namespace Parser {
               delete l;
           }
       }
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> user_name;
       std::list<std::unique_ptr<NameValueAssign>> name_value_list;
@@ -1059,7 +1059,7 @@ namespace Parser {
   class DropUserStmt : public DDLStmt {
     public:
       DropUserStmt(std::string* n) : user_name(n) {}
-      virtual void execute(Catalog_Namespace::SessionInfo &session);
+      virtual void execute(const Catalog_Namespace::SessionInfo &session);
     private:
       std::unique_ptr<std::string> user_name;
   };
