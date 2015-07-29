@@ -1,3 +1,4 @@
+// clang-format off
 #include "Execute.h"
 
 #include "Codec.h"
