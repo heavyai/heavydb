@@ -535,6 +535,33 @@ public:
     }
   }
 
+  void create_table(const TSessionId session, const std::string &table_name, const TRowDescriptor &row_desc) {
+    try {
+      (*client_)->create_table(session, table_name, row_desc);
+    }
+    catch (TMapDException &e) {
+      throw e;
+    }
+    catch (TException &te) {
+      try {
+        client_->reopen();
+        (*client_)->create_table(session, table_name, row_desc);
+      }
+      catch (TException &te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    }
+    catch (std::exception &e) {
+      std::cerr << "create_table caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
 private:
   void instantiateClient() {
     if (!client_) {

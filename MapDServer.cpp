@@ -643,6 +643,7 @@ public:
         throw ex;
     }
   }
+
   void create_frontend_view(const TSessionId session, const std::string &view_name, const std::string &view_state) {
     const auto session_info = get_session(session);
     auto &cat = session_info.get_catalog();
@@ -652,6 +653,30 @@ public:
 
     cat.createFrontendView(vd);
   }
+
+  void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) {
+    const auto session_info = get_session(session);
+    auto &cat = session_info.get_catalog();
+
+    TableDescriptor td;
+    td.tableName = table_name;
+    td.isView = false;
+    td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
+    td.maxFragRows = 8000000; //DEFAULT_FRAGMENT_SIZE
+    td.fragPageSize = 1048576; //DEFAULT_PAGE_SIZE
+
+    std::list<ColumnDescriptor> cds;
+    for (auto col : rd) {
+      ColumnDescriptor cd;
+      cd.columnName = col.col_name;
+      SQLTypeInfo ti(thrift_to_type(col.col_type.type), false);
+      cd.columnType = ti;
+      cds.push_back(cd);
+    }
+
+    cat.createTable(td, cds);
+  }
+
 
 private:
   typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
