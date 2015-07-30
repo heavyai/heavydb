@@ -155,6 +155,12 @@ private:
   llvm::Value* posArg() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
+
+  struct GpuSortInfo {
+    const std::list<Analyzer::OrderEntry>& order_entries;
+    const int64_t top_count;
+  };
+
   ResultRows executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,
@@ -165,6 +171,7 @@ private:
     const Catalog_Namespace::Catalog&,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
+    const GpuSortInfo& gpu_sort_info,
     const bool allow_multifrag,
     const bool just_explain);
   ResultRows executeAggScanPlan(
@@ -177,6 +184,7 @@ private:
     std::shared_ptr<RowSetMemoryOwner>,
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
+    const GpuSortInfo& gpu_sort_info,
     const bool allow_multifrag,
     const bool just_explain);
   void dispatchFragments(
@@ -215,6 +223,7 @@ private:
     int32_t* error_code,
     const bool allow_multifrag,
     const bool just_explain);
+  bool canSortOnGpu(const Planner::Sort* sort_plan) const;
   ResultRows executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
@@ -279,6 +288,7 @@ private:
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
+    const Executor::GpuSortInfo& gpu_sort_info,
     const bool serialize_llvm_ir,
     std::string& llvm_ir);
 
