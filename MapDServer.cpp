@@ -8,6 +8,7 @@
 
 #include "Catalog/Catalog.h"
 #include "QueryEngine/Execute.h"
+#include "Fragmenter/InsertOrderFragmenter.h"
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -655,6 +656,7 @@ public:
   }
 
   void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) {
+    // TODO(alex): de-couple CreateTableStmt from the parser and reuse it here
     const auto session_info = get_session(session);
     auto &cat = session_info.get_catalog();
 
@@ -662,8 +664,8 @@ public:
     td.tableName = table_name;
     td.isView = false;
     td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-    td.maxFragRows = 8000000; //DEFAULT_FRAGMENT_SIZE
-    td.fragPageSize = 1048576; //DEFAULT_PAGE_SIZE
+    td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
+    td.fragPageSize = DEFAULT_PAGE_SIZE;
 
     std::list<ColumnDescriptor> cds;
     for (auto col : rd) {
@@ -673,6 +675,14 @@ public:
       cd.columnType = ti;
       cds.push_back(cd);
     }
+
+    td.nColumns = cds.size();
+    td.isMaterialized = false;
+    td.storageOption = kDISK;
+    td.refreshOption = kMANUAL;
+    td.checkOption = false;
+    td.isReady = true;
+    td.fragmenter = nullptr;
 
     cat.createTable(td, cds);
   }
