@@ -826,6 +826,16 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
       }
     }
   }
+  size_t num_cols = raw_rows[0].size();
+  for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
+    // determine whether dictionary 
+    if (IS_STRING(best_types[col_idx])) {
+
+
+    }
+
+  }
+
   return best_types;
 }
 

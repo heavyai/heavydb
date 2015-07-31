@@ -553,13 +553,14 @@ public:
     TColumnType col;
     for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
       SQLTypes t = best_types[col_idx];
-      SQLTypeInfo* ti = new SQLTypeInfo(t, true);
+      SQLTypeInfo* ti = new SQLTypeInfo(t, false);
       col.col_type.type = type_to_thrift(*ti);
+      col.col_type.encoding = encoding_to_thrift(*ti);
       col.col_name = headers[col_idx];
       _return.row_desc[col_idx] = col;
     }
 
-    size_t num_samples = 10;
+    size_t num_samples = 100;
     auto sample_data = detector.get_sample_rows(num_samples);
 
     TRow sample_row;
@@ -710,7 +711,7 @@ public:
 
     Importer_NS::Detector detector(file_path);
 
-    auto rows = detector.raw_rows;
+    auto &rows = detector.raw_rows;
 
     if (rows.front().size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
@@ -723,7 +724,7 @@ public:
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
-    for (auto row : rows) {
+    for (auto &row : rows) {
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
