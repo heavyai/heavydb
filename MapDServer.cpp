@@ -471,7 +471,8 @@ public:
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
-    for (auto row : rows) {
+    size_t valid_rows { 0 };
+    for (const auto& row : rows) {
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
@@ -480,9 +481,11 @@ public:
         }
       } catch (const std::exception &e) {
         LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
+        continue;
       }
+      ++valid_rows;
     }
-    if (loader.load(import_buffers, rows.size()))
+    if (loader.load(import_buffers, valid_rows))
       loader.checkpoint();
   }
 
@@ -509,7 +512,8 @@ public:
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
-    for (auto row : rows) {
+    size_t valid_rows { 0 };
+    for (const auto& row : rows) {
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
@@ -518,9 +522,11 @@ public:
         }
       } catch (const std::exception &e) {
         LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
+        continue;
       }
+      ++valid_rows;
     }
-    if (loader.load(import_buffers, rows.size()))
+    if (loader.load(import_buffers, valid_rows))
       loader.checkpoint();
   }
 
