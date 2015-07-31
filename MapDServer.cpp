@@ -1,3 +1,4 @@
+#include "MapDServer.h"
 #include "gen-cpp/MapD.h"
 #include <thrift/protocol/TBinaryProtocol.h>
 //#include <thrift/server/TSimpleServer.h>
@@ -40,67 +41,6 @@ using namespace ::apache::thrift::server;
 
 
 using boost::shared_ptr;
-
-namespace {
-
-TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
-  SQLTypes type = type_info.get_type();
-  if (type == kARRAY) {
-    type = type_info.get_subtype();
-  }
-  switch (type) {
-    case kBOOLEAN:
-      return TDatumType::BOOL;
-    case kSMALLINT:
-      return TDatumType::SMALLINT;
-    case kINT:
-      return TDatumType::INT;
-    case kBIGINT:
-      return TDatumType::BIGINT;
-    case kFLOAT:
-      return TDatumType::FLOAT;
-    case kNUMERIC:
-    case kDECIMAL:
-      return TDatumType::DECIMAL;
-    case kDOUBLE:
-      return TDatumType::DOUBLE;
-    case kTEXT:
-    case kVARCHAR:
-    case kCHAR:
-      return TDatumType::STR;
-    case kTIME:
-      return TDatumType::TIME;
-    case kTIMESTAMP:
-      return TDatumType::TIMESTAMP;
-    case kDATE:
-      return TDatumType::DATE;
-    default:
-      break;
-  }
-  CHECK(false);
-}
-
-#define ENCODING_CASE(encoding)       \
-  case kENCODING_##encoding:          \
-    return TEncodingType::encoding;
-
-TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
-  switch (type_info.get_compression()) {
-  ENCODING_CASE(NONE)
-  ENCODING_CASE(FIXED)
-  ENCODING_CASE(RL)
-  ENCODING_CASE(DIFF)
-  ENCODING_CASE(DICT)
-  ENCODING_CASE(SPARSE)
-  default:
-    CHECK(false);
-  }
-  CHECK(false);
-}
-
-#undef ENCODING_CASE
-
-}  // namespace
 
 #define INVALID_SESSION_ID  -1
 
