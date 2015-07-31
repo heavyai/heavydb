@@ -668,8 +668,11 @@ public:
     for (auto col : rd) {
       ColumnDescriptor cd;
       cd.columnName = col.col_name;
-      SQLTypeInfo ti(thrift_to_type(col.col_type.type), false,thrift_to_encoding(col.col_type.encoding));
+      SQLTypeInfo ti(thrift_to_type(col.col_type.type), false, thrift_to_encoding(col.col_type.encoding));
       cd.columnType = ti;
+      if (cd.columnType.get_compression() == kENCODING_DICT) {
+        cd.columnType.set_comp_param(32);
+      }
       cds.push_back(cd);
     }
 
