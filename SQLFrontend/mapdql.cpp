@@ -18,6 +18,7 @@
 #include <boost/tokenizer.hpp>
 
 #include "gen-cpp/MapD.h"
+#include "MapDServer.h"
 #include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -256,38 +257,7 @@ process_backslash_commands(char *command, ClientContext &context)
         std::string table_name(command+3);
         if (thrift_with_retry(kGET_ROW_DESC, context, command+3))
           for (auto p : context.rowdesc_return) {
-            std::cout << p.col_name << " ";
-            switch (p.col_type.type) {
-              case TDatumType::INT:
-                std::cout << "INTEGER";
-                break;
-              case TDatumType::FLOAT:
-                std::cout << "FLOAT";
-                break;
-              case TDatumType::DOUBLE:
-                std::cout << "DOUBLE";
-                break;
-              case TDatumType::STR:
-                std::cout << "STRING";
-                break;
-              case TDatumType::TIME:
-                std::cout << "TIME";
-                break;
-              case TDatumType::TIMESTAMP:
-                std::cout << "TIMESTAMP";
-                break;
-              case TDatumType::DATE:
-                std::cout << "DATE";
-                break;
-              case TDatumType::BOOL:
-                std::cout << "BOOLEAN";
-                break;
-              default:
-                std::cerr << "Invalid Column Type.";
-            }
-            if (p.col_type.is_array)
-              std::cout << "[]";
-            std::cout << "\n";
+            std::cout << p.col_name << " " << thrift_to_name(p.col_type) << "\n";
           }
         return;
       }

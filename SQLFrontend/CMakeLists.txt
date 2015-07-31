@@ -13,6 +13,6 @@ set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
 
-target_link_libraries (mapdql ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lthrift")
+target_link_libraries (mapdql Shared ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "-lglog -lthrift")
 
 install(TARGETS mapdql DESTINATION bin)
