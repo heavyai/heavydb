@@ -69,9 +69,9 @@ StringToDatum(const std::string &s, SQLTypeInfo &ti)
 	Datum d;
 	switch (ti.get_type()) {
 		case kBOOLEAN:
-			if (s == "t" || s == "true" || s == "T" || s == "True")
+			if (s == "t" || s == "true" || s == "T" || s == "True" || s == "1")
 				d.boolval = true;
-			else if (s == "f" || s == "false" || s == "F" || s == "False")
+			else if (s == "f" || s == "false" || s == "F" || s == "False" || s == "0")
 				d.boolval = false;
 			else
 				throw std::runtime_error("Invalid string for boolean " + s);
