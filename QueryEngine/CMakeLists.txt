@@ -8,6 +8,7 @@ set(query_engine_source_files
     Execute.cpp
     ExpressionRange.cpp
     GpuMemUtils.cpp
+    GpuSort.cpp
     GroupByAndAggregate.cpp
     DeviceSideLaunch.cpp
     NvidiaKernel.cpp
@@ -54,7 +55,7 @@ add_custom_command(
 
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
-add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
+add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o)
 target_link_libraries(QueryEngine CsvImport StringDictionary Utils)
 
 add_custom_command(
@@ -68,6 +69,12 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
+
+add_custom_command(
+    DEPENDS GpuSortImpl.cu
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o
+    COMMAND nvcc
+    ARGS -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest "-pthread -lglog")

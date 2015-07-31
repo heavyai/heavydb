@@ -157,11 +157,6 @@ private:
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
 
-  struct GpuSortInfo {
-    const std::list<Analyzer::OrderEntry>& order_entries;
-    const int64_t top_count;
-  };
-
   ResultRows executeSelectPlan(
     const Planner::Plan* plan,
     const int64_t limit,
@@ -225,7 +220,6 @@ private:
     int32_t* error_code,
     const bool allow_multifrag,
     const bool just_explain);
-  bool canSortOnGpu(const Planner::Sort* sort_plan) const;
   ResultRows executeSortPlan(
     const Planner::Sort* sort_plan,
     const int64_t limit,
@@ -238,6 +232,7 @@ private:
     int32_t* error_code,
     const bool allow_multifrag,
     const bool just_explain);
+  static bool canSortOnGpu(const Planner::Sort*);
 
   struct CompilationResult {
     std::vector<void*> native_functions;
@@ -257,6 +252,7 @@ private:
     const QueryExecutionContext*,
     const std::vector<int64_t>& num_rows,
     Data_Namespace::DataMgr*,
+    const GpuSortInfo& gpu_sort_info,
     const int device_id,
     const int64_t limit,
     const bool was_auto_device);
@@ -292,7 +288,7 @@ private:
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
-    const Executor::GpuSortInfo& gpu_sort_info,
+    const GpuSortInfo& gpu_sort_info,
     const bool output_columnar_hint,
     const bool serialize_llvm_ir,
     std::string& llvm_ir);

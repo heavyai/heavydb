@@ -23,12 +23,12 @@ ADD_EXECUTABLE (UtilTest UtilTest.cpp)
 ADD_EXECUTABLE (StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 ADD_EXECUTABLE (StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 
-target_link_libraries (PlanTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (PlanTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (UtilTest Utils gtest)
-target_link_libraries (StorageTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lz -lncurses -ldl -pthread")
-target_link_libraries (StoragePerfTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lz -lncurses -ldl -pthread")
-target_link_libraries (ExecuteTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lz -lncurses -ldl -pthread")
-target_link_libraries (RunQueryLoop gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS}-lnvvm -lcuda -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (StorageTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (StoragePerfTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (ExecuteTest gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -pthread")
+target_link_libraries (RunQueryLoop gtest ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -pthread")
 target_link_libraries (StringDictionaryTest StringDictionary gtest ${Boost_LIBRARIES})
 
 install(TARGETS ExecuteTest RunQueryLoop StringDictionaryTest PlanTest

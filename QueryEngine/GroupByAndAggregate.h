@@ -84,6 +84,11 @@ typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescrip
 
 class RowSetMemoryOwner;
 
+struct GpuSortInfo {
+  const std::list<Analyzer::OrderEntry>& order_entries;
+  const int64_t top_count;
+};
+
 struct QueryMemoryDescriptor {
   const Executor* executor_;
   GroupByColRangeType hash_type;
@@ -106,7 +111,8 @@ struct QueryMemoryDescriptor {
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner>,
-    const bool output_columnar) const;
+    const bool output_columnar,
+    const bool sort_on_gpu) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
@@ -128,6 +134,8 @@ struct QueryMemoryDescriptor {
   bool interleavedBins(const ExecutorDeviceType) const;
 
   size_t sharedMemBytes(const ExecutorDeviceType) const;
+
+  bool canSortOnGpu(const GpuSortInfo&) const;
 };
 
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
@@ -577,6 +585,8 @@ public:
     , groups_buffer_entry_count_(groups_buffer_entry_count)
     , min_val_(min_val)
     , warp_count_(warp_count)
+    , sorted_(false)
+    , truncation_size_(0)
     , just_explain_(false) {
     for (const auto target_expr : targets) {
       const auto agg_info = target_info(target_expr);
@@ -678,6 +688,11 @@ public:
       ? SQLTypeInfo(kDOUBLE, false)
       : targets_[col_idx].sql_type;
   }
+
+  bool isSorted() const {
+    return sorted_;
+  }
+
 private:
   void beginRow(const int64_t key) {
     CHECK(multi_keys_.empty());
@@ -729,6 +744,8 @@ private:
   int32_t groups_buffer_entry_count_;
   int64_t min_val_;
   int8_t warp_count_;
+  bool sorted_;             // true iff this result has been sorted on the GPU
+  size_t truncation_size_;  // if not zero, this result only contains first truncation_size_ rows
   bool just_explain_;
   std::string explanation_;
 
@@ -807,7 +824,8 @@ public:
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const bool output_columnar);
+    const bool output_columnar,
+    const bool sort_on_gpu);
 
   // TOOD(alex): get rid of targets parameter
   ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets, const bool was_auto_device) const;
@@ -825,6 +843,7 @@ public:
     const int64_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     Data_Namespace::DataMgr* data_mgr,
+    const GpuSortInfo& gpu_sort_info,
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const int device_id,
@@ -858,6 +877,7 @@ private:
   std::vector<int64_t*> small_group_by_buffers_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
+  const bool sort_on_gpu_;
 
   friend class Executor;
   friend void copy_group_by_buffers_from_gpu(
@@ -866,7 +886,8 @@ private:
     const GpuQueryMemory& gpu_query_mem,
     const unsigned block_size_x,
     const unsigned grid_size_x,
-    const int device_id);
+    const int device_id,
+    const bool prepend_index_buffer);
 };
 
 class GroupByAndAggregate {
@@ -878,11 +899,14 @@ public:
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
+    const GpuSortInfo& gpu_sort_info,
     const bool output_columnar_hint);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count);
 
   bool outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const;
+
+  void setOutputColumnarHint();  // TODO(alex): remove
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
@@ -962,7 +986,7 @@ private:
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const size_t max_groups_buffer_entry_count_;
   const int64_t scan_limit_;
-  const bool output_columnar_hint_;
+  bool output_columnar_hint_;
 
   friend class Executor;
 };

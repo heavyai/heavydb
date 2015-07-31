@@ -44,7 +44,8 @@ GpuQueryMemory create_dev_group_by_buffers(
     const QueryMemoryDescriptor&,
     const unsigned block_size_x,
     const unsigned grid_size_x,
-    const int device_id);
+    const int device_id,
+    const bool prepend_index_buffer);
 
 class QueryExecutionContext;
 
@@ -53,7 +54,8 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const GpuQueryMemory&,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
-                                    const int device_id);
+                                    const int device_id,
+                                    const bool prepend_index_buffer);
 
 // TODO(alex): remove
 bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,

@@ -45,21 +45,31 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const int device_id,
-    const bool small_buffers) {
+    const bool small_buffers,
+    const bool prepend_index_buffer) {
   if (group_by_buffers.empty()) {
     return std::make_pair(0, 0);
   }
 
+  CHECK(!small_buffers || !prepend_index_buffer);
+
   size_t groups_buffer_size { small_buffers
     ? query_mem_desc.getSmallBufferSizeBytes()
     : query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU) };
+
   CHECK_GT(groups_buffer_size, 0);
 
   const size_t mem_size {
     coalesced_size(query_mem_desc, groups_buffer_size, block_size_x,
       query_mem_desc.blocksShareMemory() ? 1 : grid_size_x)
   };
-  CUdeviceptr group_by_dev_buffers_mem = alloc_gpu_mem(data_mgr, mem_size, device_id);
+
+  const size_t prepended_buff_size {
+    prepend_index_buffer ? query_mem_desc.entry_count * sizeof(int64_t) : 0
+  };
+
+  CUdeviceptr group_by_dev_buffers_mem = alloc_gpu_mem(data_mgr,
+    mem_size + prepended_buff_size, device_id) + prepended_buff_size;
 
   const size_t step { query_mem_desc.threadsShareMemory() ? block_size_x : 1 };
 
@@ -106,12 +116,15 @@ GpuQueryMemory create_dev_group_by_buffers(
     const QueryMemoryDescriptor& query_mem_desc,
     const unsigned block_size_x,
     const unsigned grid_size_x,
-    const int device_id) {
+    const int device_id,
+    const bool prepend_index_buffer) {
   auto dev_group_by_buffers = create_dev_group_by_buffers(
-    data_mgr, group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id, false);
+    data_mgr, group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id,
+    false, prepend_index_buffer);
   if (query_mem_desc.getSmallBufferSizeBytes()) {
     auto small_dev_group_by_buffers = create_dev_group_by_buffers(
-      data_mgr, small_group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id, true);
+      data_mgr, small_group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id,
+      true, prepend_index_buffer);
     return { dev_group_by_buffers, small_dev_group_by_buffers };
   }
   return GpuQueryMemory { dev_group_by_buffers };
@@ -138,19 +151,23 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const QueryMemoryDescriptor& query_mem_desc,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
-                                    const int device_id) {
+                                    const int device_id,
+                                    const bool prepend_index_buffer) {
   if (group_by_buffers.empty()) {
     return;
   }
   const unsigned block_buffer_count { query_mem_desc.blocksShareMemory() ? 1 : grid_size_x };
   const size_t num_buffers { block_size_x * block_buffer_count };
+  const size_t index_buffer_sz { prepend_index_buffer ? query_mem_desc.entry_count * sizeof(int64_t) : 0 };
   std::vector<int8_t> buff_from_gpu(coalesced_size(
-    query_mem_desc, groups_buffer_size, block_size_x, block_buffer_count));
-  copy_from_gpu(data_mgr, &buff_from_gpu[0], group_by_dev_buffers_mem, buff_from_gpu.size(), device_id);
+    query_mem_desc, groups_buffer_size, block_size_x, block_buffer_count) +
+    index_buffer_sz);
+  copy_from_gpu(data_mgr, &buff_from_gpu[0], group_by_dev_buffers_mem - index_buffer_sz,
+    buff_from_gpu.size(), device_id);
   auto buff_from_gpu_ptr = &buff_from_gpu[0];
   for (size_t i = 0; i < num_buffers; ++i) {
     if (buffer_not_null(query_mem_desc, block_size_x, ExecutorDeviceType::GPU, i)) {
-      memcpy(group_by_buffers[i], buff_from_gpu_ptr, groups_buffer_size);
+      memcpy(group_by_buffers[i], buff_from_gpu_ptr, groups_buffer_size + index_buffer_sz);
       buff_from_gpu_ptr += groups_buffer_size;
     }
   }
@@ -163,22 +180,24 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const GpuQueryMemory& gpu_query_mem,
                                     const unsigned block_size_x,
                                     const unsigned grid_size_x,
-                                    const int device_id) {
+                                    const int device_id,
+                                    const bool prepend_index_buffer) {
   copy_group_by_buffers_from_gpu(
     data_mgr,
     query_exe_context->group_by_buffers_,
     query_exe_context->query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU),
     gpu_query_mem.group_by_buffers.second,
     query_exe_context->query_mem_desc_,
-    block_size_x, grid_size_x, device_id);
+    block_size_x, grid_size_x, device_id, prepend_index_buffer);
   if (query_exe_context->query_mem_desc_.getSmallBufferSizeBytes()) {
+    CHECK(!prepend_index_buffer);
     CHECK(!query_exe_context->small_group_by_buffers_.empty());
     copy_group_by_buffers_from_gpu(
       data_mgr,
       query_exe_context->small_group_by_buffers_, query_exe_context->query_mem_desc_.getSmallBufferSizeBytes(),
       gpu_query_mem.small_group_by_buffers.second,
       query_exe_context->query_mem_desc_,
-      block_size_x, grid_size_x, device_id);
+      block_size_x, grid_size_x, device_id, false);
   }
 }
 
