@@ -2026,9 +2026,9 @@ ResultRows Executor::executeSortPlan(
     const bool allow_multifrag,
     const bool just_explain) {
   *error_code = 0;
-  // we'll ask for more top rows than the quert requires so that we have a very
+  // We'll ask for more top rows than the query requires so that we have a very
   // high chance to reconstitute the full top out of the fragments; since we
-  // don't have any data about what'd be a good value, we might need to tweak it
+  // don't have any data about what'd be a good value, we might need to tweak it.
   const int64_t top_fudge_factor { 16 };
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
