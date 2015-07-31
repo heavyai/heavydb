@@ -888,5 +888,6 @@ int main(int argc, char** argv)
   g_sqlite_comparator.query(drop_test);
   const std::string drop_array_test { "DROP TABLE array_test;" };
   run_ddl_statement(drop_array_test);
+  g_session.reset(nullptr);
   return err;
 }
