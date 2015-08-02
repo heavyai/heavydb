@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <list>
 #include <vector>
+#include <unordered_set>
 #include <thread>
 #include <mutex>
 #include <boost/algorithm/string.hpp>
@@ -839,11 +840,18 @@ std::vector<EncodingType> Detector::find_best_encodings(
     throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
   }
   size_t num_cols = raw_rows.front().size();
+  size_t num_rows = raw_rows.size();
   std::vector<EncodingType> best_encodes(num_cols, kENCODING_NONE);
   for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
     // determine whether dictionary 
     if (IS_STRING(best_types[col_idx])) {
-      best_encodes[col_idx] = kENCODING_DICT;
+      std::unordered_set<std::string> count_set;
+      for (size_t row_idx=1; row_idx < num_rows; row_idx++)
+        count_set.insert(raw_rows[row_idx][col_idx]);
+      float uniqueRatio = num_rows / static_cast <float> (count_set.size()) / num_rows;
+      //float uniqueScore = uniqueRatio * (num_row)
+      if (uniqueRatio < 0.75) 
+        best_encodes[col_idx] = kENCODING_DICT;
     }
 
   }
