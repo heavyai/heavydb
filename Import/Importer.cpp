@@ -748,9 +748,9 @@ SQLTypes Detector::detect_sqltype(const std::string& str) {
   SQLTypes type = kTEXT;
   if (try_cast<double>(str)) {
     type = kDOUBLE;
-    if (try_cast<bool>(str)) {
+    /*if (try_cast<bool>(str)) {
       type = kBOOLEAN;
-    } else if (try_cast<int16_t>(str)) {
+    }*/ if (try_cast<int16_t>(str)) {
       type = kSMALLINT;
     } else if (try_cast<int32_t>(str)) {
       type = kINT;
@@ -821,13 +821,23 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
   }
   size_t num_cols = raw_rows.front().size();
   std::vector<SQLTypes> best_types(num_cols, kCHAR);
+  std::vector<size_t> non_null_col_counts (num_cols,0);
   for (auto row = row_begin; row != row_end; row++) {
     for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
+      if (row->at(col_idx) == "") // empty means null so don't count this
+        continue;
       SQLTypes t = detect_sqltype(row->at(col_idx));
+      non_null_col_counts[col_idx]++;
       if (!more_restrictive_sqltype(best_types[col_idx], t)) {
         best_types[col_idx] = t;
       }
     }
+  }
+  for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
+    // if we don't have any non-null values for this column make it text to be
+    // safe b/c that is least restrictive type
+    if (non_null_col_counts[col_idx] == 0)
+      best_types[col_idx] = kTEXT;
   }
 
   return best_types;
