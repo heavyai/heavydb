@@ -2963,7 +2963,6 @@ Executor::CompilationResult Executor::compilePlan(
   GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner,
     max_groups_buffer_entry_guess, scan_limit, output_columnar);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor(max_groups_buffer_entry_guess);
-  CHECK(!output_columnar);
 
   if (device_type == ExecutorDeviceType::GPU &&
       query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {

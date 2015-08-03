@@ -1595,6 +1595,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         get_group_fn_name += "_keyless";
       }
       if (query_mem_desc.interleavedBins(device_type)) {
+        CHECK(!output_columnar_);
         CHECK(query_mem_desc.keyless_hash);
         get_group_fn_name += "_semiprivate";
       }
@@ -1604,9 +1605,12 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         LL_INT(query_mem_desc.min_val)
       };
       if (!query_mem_desc.keyless_hash) {
+        CHECK(!output_columnar_);
         get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
       } else {
-        get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
+        get_group_fn_args.push_back(LL_INT(output_columnar_
+          ? 1
+          : static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
         if (query_mem_desc.interleavedBins(device_type)) {
           auto warp_idx = emitCall("thread_warp_idx", { LL_INT(executor_->warpSize()) });
           get_group_fn_args.push_back(warp_idx);
@@ -1756,6 +1760,13 @@ const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
 
 }  // namespace
 
+uint32_t GroupByAndAggregate::aggColumnarOff(
+    const uint32_t agg_out_off,
+    const QueryMemoryDescriptor& query_mem_desc) {
+  CHECK(!output_columnar_ || query_mem_desc.usesGetGroupValueFast());
+  return agg_out_off * (output_columnar_ ? query_mem_desc.entry_count : 1);
+}
+
 void GroupByAndAggregate::codegenAggCalls(
     llvm::Value* agg_out_start_ptr,
     const std::vector<llvm::Value*>& agg_out_vec,
@@ -1808,7 +1819,7 @@ void GroupByAndAggregate::codegenAggCalls(
       auto acc_i32 = LL_BUILDER.CreateCast(
         llvm::Instruction::CastOps::BitCast,
         is_group_by
-          ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
+          ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(aggColumnarOff(agg_out_off, query_mem_desc)))
           : agg_out_vec[agg_out_off],
         llvm::PointerType::get(get_int_type(32, LL_CONTEXT), 0));
       LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add, acc_i32, LL_INT(1),
@@ -1829,7 +1840,7 @@ void GroupByAndAggregate::codegenAggCalls(
           llvm::Type::getVoidTy(LL_CONTEXT),
           {
             is_group_by
-              ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
+              ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(aggColumnarOff(agg_out_off, query_mem_desc)))
               : agg_out_vec[agg_out_off],
             target_lvs[target_lv_idx],
             executor_->posArg(),
@@ -1845,7 +1856,7 @@ void GroupByAndAggregate::codegenAggCalls(
       auto arg_expr = agg_arg(target_expr);
       std::vector<llvm::Value*> agg_args {
         is_group_by
-          ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(agg_out_off))
+          ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(aggColumnarOff(agg_out_off, query_mem_desc)))
           : agg_out_vec[agg_out_off],
         (is_simple_count && !arg_expr)
           ? LL_INT(int64_t(0))

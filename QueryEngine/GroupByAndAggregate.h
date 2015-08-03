@@ -927,6 +927,10 @@ private:
     const ExecutorDeviceType,
     const bool hoist_literals);
 
+  uint32_t aggColumnarOff(
+    const uint32_t agg_out_off,
+    const QueryMemoryDescriptor& query_mem_desc);
+
   void codegenCountDistinct(
     const size_t target_idx,
     const Analyzer::Expr* target_expr,
