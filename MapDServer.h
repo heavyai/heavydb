@@ -83,18 +83,22 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
   CHECK(false);
 }
 
-#define ENCODING_CASE(encoding)       \
+#define THRIFT_ENCODING_CASE(encoding)       \
   case kENCODING_##encoding:          \
     return TEncodingType::encoding;
 
+#define UNTHRIFT_ENCODING_CASE(encoding)       \
+  case TEncodingType::encoding:          \
+    return kENCODING_##encoding;
+
 inline TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
   switch (type_info.get_compression()) {
-  ENCODING_CASE(NONE)
-  ENCODING_CASE(FIXED)
-  ENCODING_CASE(RL)
-  ENCODING_CASE(DIFF)
-  ENCODING_CASE(DICT)
-  ENCODING_CASE(SPARSE)
+  THRIFT_ENCODING_CASE(NONE)
+  THRIFT_ENCODING_CASE(FIXED)
+  THRIFT_ENCODING_CASE(RL)
+  THRIFT_ENCODING_CASE(DIFF)
+  THRIFT_ENCODING_CASE(DICT)
+  THRIFT_ENCODING_CASE(SPARSE)
   default:
     CHECK(false);
   }
@@ -102,6 +106,20 @@ inline TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
 }
 
 #undef ENCODING_CASE
+
+inline EncodingType thrift_to_encoding(const TEncodingType::type tEncodingType) {
+  switch (tEncodingType) {
+  UNTHRIFT_ENCODING_CASE(NONE)
+  UNTHRIFT_ENCODING_CASE(FIXED)
+  UNTHRIFT_ENCODING_CASE(RL)
+  UNTHRIFT_ENCODING_CASE(DIFF)
+  UNTHRIFT_ENCODING_CASE(DICT)
+  UNTHRIFT_ENCODING_CASE(SPARSE)
+  default:
+    CHECK(false);
+  }
+  CHECK(false);
+}
 
 inline std::string thrift_to_name(const TTypeInfo& ti) {
   const auto type = thrift_to_type(ti.type);

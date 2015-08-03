@@ -472,8 +472,7 @@ public:
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
-    size_t valid_rows { 0 };
-    for (const auto& row : rows) {
+    for (auto row : rows) {
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
@@ -482,11 +481,9 @@ public:
         }
       } catch (const std::exception &e) {
         LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
-        continue;
       }
-      ++valid_rows;
     }
-    if (loader.load(import_buffers, valid_rows))
+    if (loader.load(import_buffers, rows.size()))
       loader.checkpoint();
   }
 
@@ -513,8 +510,7 @@ public:
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
-    size_t valid_rows { 0 };
-    for (const auto& row : rows) {
+    for (auto row : rows) {
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
@@ -523,11 +519,9 @@ public:
         }
       } catch (const std::exception &e) {
         LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
-        continue;
       }
-      ++valid_rows;
     }
-    if (loader.load(import_buffers, valid_rows))
+    if (loader.load(import_buffers, rows.size()))
       loader.checkpoint();
   }
 
@@ -547,13 +541,15 @@ public:
 
     Importer_NS::Detector detector(file_path);
     std::vector<SQLTypes> best_types = detector.best_sqltypes;
+    std::vector<EncodingType> best_encodings = detector.best_encodings;
     std::vector<std::string> headers = detector.get_headers();
 
     _return.row_desc.resize(best_types.size());
     TColumnType col;
     for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
       SQLTypes t = best_types[col_idx];
-      SQLTypeInfo* ti = new SQLTypeInfo(t, false);
+      EncodingType encodingType = best_encodings[col_idx];
+      SQLTypeInfo* ti = new SQLTypeInfo(t, false, encodingType);
       col.col_type.type = type_to_thrift(*ti);
       col.col_type.encoding = encoding_to_thrift(*ti);
       col.col_name = headers[col_idx];
@@ -672,7 +668,7 @@ public:
     for (auto col : rd) {
       ColumnDescriptor cd;
       cd.columnName = col.col_name;
-      SQLTypeInfo ti(thrift_to_type(col.col_type.type), false);
+      SQLTypeInfo ti(thrift_to_type(col.col_type.type), false,thrift_to_encoding(col.col_type.encoding));
       cd.columnType = ti;
       cds.push_back(cd);
     }
@@ -699,6 +695,7 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    Importer_NS::Loader loader(cat, td);
 
     boost::filesystem::path file_path = file_name;  // FIXME
     if (!boost::filesystem::exists(file_path)) {
@@ -710,7 +707,7 @@ public:
 
     Importer_NS::Detector detector(file_path);
 
-    const auto& rows = detector.raw_rows;
+    auto &rows = detector.raw_rows;
 
     if (rows.front().size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
@@ -718,40 +715,24 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-
-    std::vector<TStringRow> str_rows;
-    for (auto& row : rows) {
-      str_rows.emplace_back();
-      for (const auto& col_str : row) {
-        TStringValue thrift_col_str;
-        thrift_col_str.str_val = col_str;
-        thrift_col_str.is_null = col_str.empty();
-        str_rows.back().cols.push_back(thrift_col_str);
-      }
-    }
-
-    Importer_NS::Loader loader(cat, td);
-    Importer_NS::CopyParams copy_params;
     auto col_descs = loader.get_column_descs();
     std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
       import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
-    size_t valid_rows { 0 };
-    for (const auto& row : str_rows) {
+    for (auto &row : rows) {
       try {
         int col_idx = 0;
         for (auto cd : col_descs) {
-          import_buffers[col_idx]->add_value(cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null, copy_params);
+          TDatum td = value_to_thrift(row[col_idx], cd->columnType);
+          import_buffers[col_idx]->add_value(cd, td, row[col_idx].size() == 0);
           col_idx++;
         }
       } catch (const std::exception &e) {
         LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
-        continue;
       }
-      ++valid_rows;
     }
-    if (loader.load(import_buffers, valid_rows))
+    if (loader.load(import_buffers, rows.size()))
       loader.checkpoint();
   }
 

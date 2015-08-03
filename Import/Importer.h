@@ -374,6 +374,7 @@ class Detector {
   std::vector<std::vector<std::string>> raw_rows;
   std::vector<std::vector<std::string>> get_sample_rows(size_t n);
   std::vector<SQLTypes> best_sqltypes;
+  std::vector<EncodingType> best_encodings;
   bool has_headers = false;
 
  private:
@@ -387,6 +388,9 @@ class Detector {
   std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows);
   std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>::const_iterator& row_begin,
                                            const std::vector<std::vector<std::string>>::const_iterator& row_end);
+
+std::vector<EncodingType> find_best_encodings(const std::vector<std::vector<std::string>>::const_iterator& row_begin, const std::vector<std::vector<std::string>>::const_iterator& row_end, const std::vector<SQLTypes> &best_types);
+
   void detect_headers();
   bool detect_headers(const std::vector<std::vector<std::string>>& raw_rows);
   bool detect_headers(const std::vector<SQLTypes>& first_types, const std::vector<SQLTypes>& rest_types);

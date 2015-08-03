@@ -799,6 +799,7 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
 
 void Detector::find_best_sqltypes_and_headers() {
   best_sqltypes = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end());
+  best_encodings = find_best_encodings(raw_rows.begin() +1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
   has_headers = detect_headers(head_types, best_sqltypes);
 }
@@ -817,7 +818,8 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
   }
-  std::vector<SQLTypes> best_types(raw_rows.front().size(), kCHAR);
+  size_t num_cols = raw_rows.front().size();
+  std::vector<SQLTypes> best_types(num_cols, kCHAR);
   for (auto row = row_begin; row != row_end; row++) {
     for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
       SQLTypes t = detect_sqltype(row->at(col_idx));
@@ -826,18 +828,28 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
       }
     }
   }
-  size_t num_cols = raw_rows[0].size();
-  for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
-    // determine whether dictionary 
-    if (IS_STRING(best_types[col_idx])) {
-
-
-    }
-
-  }
 
   return best_types;
 }
+
+std::vector<EncodingType> Detector::find_best_encodings(
+    const std::vector<std::vector<std::string>>::const_iterator& row_begin,
+    const std::vector<std::vector<std::string>>::const_iterator& row_end, const std::vector<SQLTypes> &best_types) {
+  if (raw_rows.size() < 1) {
+    throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
+  }
+  size_t num_cols = raw_rows.front().size();
+  std::vector<EncodingType> best_encodes(num_cols, kENCODING_NONE);
+  for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
+    // determine whether dictionary 
+    if (IS_STRING(best_types[col_idx])) {
+      best_encodes[col_idx] = kENCODING_DICT;
+    }
+
+  }
+  return best_encodes;
+}
+
 
 void Detector::detect_headers() {
   has_headers = detect_headers(raw_rows);

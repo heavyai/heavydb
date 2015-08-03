@@ -129,6 +129,7 @@ class SQLTypeInfo {
     SQLTypeInfo(SQLTypes t, int d, int s, bool n, EncodingType c, int p, SQLTypes st) : type(t), subtype(st), dimension(d), scale(s), notnull(n), compression(c), comp_param(p), size(get_storage_size()) {}
     SQLTypeInfo(SQLTypes t, int d, int s, bool n) : type(t), subtype(kNULLT), dimension(d), scale(s), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
     SQLTypeInfo(SQLTypes t, bool n) : type(t), subtype(kNULLT), dimension(0), scale(0), notnull(n), compression(kENCODING_NONE), comp_param(0), size(get_storage_size()) {}
+    SQLTypeInfo(SQLTypes t, bool n, EncodingType c) : type(t), subtype(kNULLT), dimension(0), scale(0), notnull(n), compression(c), comp_param(0), size(get_storage_size()) {}
     SQLTypeInfo() : type(kNULLT), subtype(kNULLT), dimension(0), scale(0), notnull(false), compression(kENCODING_NONE), comp_param(0), size(0) {}
 
     DEVICE inline SQLTypes get_type() const { return type; }
