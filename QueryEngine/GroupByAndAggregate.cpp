@@ -1229,13 +1229,15 @@ GroupByAndAggregate::GroupByAndAggregate(
     const Fragmenter_Namespace::QueryInfo& query_info,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const size_t max_groups_buffer_entry_count,
-    const int64_t scan_limit)
+    const int64_t scan_limit,
+    const bool output_columnar)
   : executor_(executor)
   , plan_(plan)
   , query_info_(query_info)
   , row_set_mem_owner_(row_set_mem_owner)
   , max_groups_buffer_entry_count_(max_groups_buffer_entry_count)
-  , scan_limit_(scan_limit) {
+  , scan_limit_(scan_limit)
+  , output_columnar_(output_columnar) {
   CHECK(plan_);
   for (const auto groupby_expr : group_by_exprs(plan_)) {
     if (!groupby_expr) {
