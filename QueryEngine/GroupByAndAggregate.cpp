@@ -1238,14 +1238,14 @@ GroupByAndAggregate::GroupByAndAggregate(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
-    const bool output_columnar)
+    const bool output_columnar_hint)
   : executor_(executor)
   , plan_(plan)
   , query_info_(query_info)
   , row_set_mem_owner_(row_set_mem_owner)
   , max_groups_buffer_entry_count_(max_groups_buffer_entry_count)
   , scan_limit_(scan_limit)
-  , output_columnar_(output_columnar) {
+  , output_columnar_hint_(output_columnar_hint) {
   CHECK(plan_);
   for (const auto groupby_expr : group_by_exprs(plan_)) {
     if (!groupby_expr) {
@@ -1430,6 +1430,11 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
   return {};
 }
 
+bool GroupByAndAggregate::outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const {
+  return output_columnar_hint_ && query_mem_desc.usesGetGroupValueFast() && query_mem_desc.keyless_hash &&
+    !query_mem_desc.interleavedBins(ExecutorDeviceType::GPU);
+}
+
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
   return (hash_type == GroupByColRangeType::OneColKnownRange && !getSmallBufferSizeBytes());
 }
@@ -1603,7 +1608,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         get_group_fn_name += "_keyless";
       }
       if (query_mem_desc.interleavedBins(device_type)) {
-        CHECK(!output_columnar_);
+        CHECK(!outputColumnar(query_mem_desc));
         CHECK(query_mem_desc.keyless_hash);
         get_group_fn_name += "_semiprivate";
       }
@@ -1613,10 +1618,10 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         LL_INT(query_mem_desc.min_val)
       };
       if (!query_mem_desc.keyless_hash) {
-        CHECK(!output_columnar_);
+        CHECK(!outputColumnar(query_mem_desc));
         get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
       } else {
-        get_group_fn_args.push_back(LL_INT(output_columnar_
+        get_group_fn_args.push_back(LL_INT(outputColumnar(query_mem_desc)
           ? 1
           : static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
         if (query_mem_desc.interleavedBins(device_type)) {
@@ -1771,8 +1776,7 @@ const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
 uint32_t GroupByAndAggregate::aggColumnarOff(
     const uint32_t agg_out_off,
     const QueryMemoryDescriptor& query_mem_desc) {
-  CHECK(!output_columnar_ || query_mem_desc.usesGetGroupValueFast());
-  return agg_out_off * (output_columnar_ ? query_mem_desc.entry_count : 1);
+  return agg_out_off * (outputColumnar(query_mem_desc) ? query_mem_desc.entry_count : 1);
 }
 
 void GroupByAndAggregate::codegenAggCalls(

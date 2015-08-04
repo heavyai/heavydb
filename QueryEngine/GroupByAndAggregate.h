@@ -872,9 +872,11 @@ public:
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
-    const bool output_columnar);
+    const bool output_columnar_hint);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count);
+
+  bool outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const;
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
@@ -954,7 +956,7 @@ private:
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const size_t max_groups_buffer_entry_count_;
   const int64_t scan_limit_;
-  const bool output_columnar_;
+  const bool output_columnar_hint_;
 
   friend class Executor;
 };

@@ -185,7 +185,7 @@ private:
     size_t& max_groups_buffer_entry_guess,
     int32_t* error_code,
     const GpuSortInfo& gpu_sort_info,
-    const bool output_columnar,
+    const bool output_columnar_hint,
     const bool allow_multifrag,
     const bool just_explain);
   void dispatchFragments(
@@ -242,6 +242,7 @@ private:
     std::vector<void*> native_functions;
     LiteralValues literal_values;
     QueryMemoryDescriptor query_mem_desc;
+    bool output_columnar;
   };
 
   int32_t executePlanWithGroupBy(
@@ -290,7 +291,7 @@ private:
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
     const Executor::GpuSortInfo& gpu_sort_info,
-    const bool output_columnar,
+    const bool output_columnar_hint,
     const bool serialize_llvm_ir,
     std::string& llvm_ir);
 
