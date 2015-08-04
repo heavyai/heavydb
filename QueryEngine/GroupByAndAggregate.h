@@ -104,7 +104,8 @@ struct QueryMemoryDescriptor {
     const ExecutorDeviceType device_type,
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
-    std::shared_ptr<RowSetMemoryOwner>) const;
+    std::shared_ptr<RowSetMemoryOwner>,
+    const bool output_columnar) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
@@ -599,7 +600,8 @@ public:
   void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
                                const int32_t groups_buffer_entry_count,
                                const int64_t min_val,
-                               const int8_t warp_count);
+                               const int8_t warp_count,
+                               const bool is_columnar);
 
   void addValue(const int64_t val) {
     target_values_.addValue(val);
@@ -803,7 +805,8 @@ public:
     const ExecutorDeviceType device_type,
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner);
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar);
 
   // TOOD(alex): get rid of targets parameter
   ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets, const bool was_auto_device) const;
@@ -848,6 +851,7 @@ private:
   std::vector<int64_t*> group_by_buffers_;
   std::vector<int64_t*> small_group_by_buffers_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+  const bool output_columnar_;
 
   friend class Executor;
   friend void copy_group_by_buffers_from_gpu(

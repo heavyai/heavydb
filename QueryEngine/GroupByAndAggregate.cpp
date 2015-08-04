@@ -14,7 +14,8 @@
 void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
                                          const int32_t groups_buffer_entry_count,
                                          const int64_t min_val,
-                                         const int8_t warp_count) {
+                                         const int8_t warp_count,
+                                         const bool is_columnar) {
   const size_t agg_col_count { targets_.size() };
   std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
   std::vector<int64_t> agg_vals(agg_col_count, 0);
@@ -485,7 +486,8 @@ QueryExecutionContext::QueryExecutionContext(
     const ExecutorDeviceType device_type,
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner)
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar)
   : query_mem_desc_(query_mem_desc)
   , init_agg_vals_(executor->plan_state_->init_agg_vals_)
   , executor_(executor)
@@ -495,7 +497,8 @@ QueryExecutionContext::QueryExecutionContext(
   , num_buffers_ { device_type == ExecutorDeviceType::CPU
       ? 1
       : executor->blockSize() * (query_mem_desc_.blocksShareMemory() ? 1 : executor->gridSize()) }
-  , row_set_mem_owner_(row_set_mem_owner) {
+  , row_set_mem_owner_(row_set_mem_owner)
+  , output_columnar_(output_columnar) {
   if (query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
     return;
@@ -727,7 +730,8 @@ ResultRows QueryExecutionContext::groupBufferToResults(
       }
       // Can't do the fast reduction in auto mode for interleaved bins, warp count isn't the same
       ResultRows results(targets, executor_, row_set_mem_owner_);
-      results.addKeylessGroupByBuffer(group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count);
+      results.addKeylessGroupByBuffer(group_by_buffer, groups_buffer_entry_count,
+        query_mem_desc_.min_val, warp_count, output_columnar_);
       return results;
     }
     ResultRows results(targets, executor_, row_set_mem_owner_);
@@ -1089,9 +1093,11 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const ExecutorDeviceType device_type,
     const int device_id,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar) const {
   return std::unique_ptr<QueryExecutionContext>(
-    new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id, col_buffers, row_set_mem_owner));
+    new QueryExecutionContext(*this, init_agg_vals, executor, device_type, device_id,
+      col_buffers, row_set_mem_owner, output_columnar));
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {

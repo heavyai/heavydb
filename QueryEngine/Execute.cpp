@@ -1988,7 +1988,7 @@ ResultRows Executor::executeResultPlan(
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(init_agg_vals, this,
-    ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_);
+    ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_, false);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   *error_code = 0;
   std::vector<std::vector<const int8_t*>> multi_frag_col_buffers { column_buffers };
@@ -2206,7 +2206,7 @@ ResultRows Executor::executeAggScanPlan(
   std::vector<std::mutex> query_context_mutexes(context_count);
   auto dispatch = [this, plan, scan_limit, current_dbid, device_type, table_id,
       &available_cpus, &available_gpus, &scheduler_cv, &scheduler_mutex,
-      &compilation_result_cpu, &compilation_result_gpu, hoist_literals,
+      &compilation_result_cpu, &compilation_result_gpu, hoist_literals, output_columnar,
       &all_fragment_results, &cat, &col_global_ids, &fragments, &groupby_exprs,
       &query_context_mutexes, &query_contexts, row_set_mem_owner, error_code]
       (const ExecutorDeviceType chosen_device_type, int chosen_device_id,
@@ -2241,14 +2241,16 @@ ResultRows Executor::executeAggScanPlan(
     auto query_exe_context_owned = compilation_result.query_mem_desc.usesCachedContext()
       ? nullptr
       : compilation_result.query_mem_desc.getQueryExecutionContext(
-          plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
+          plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id,
+          col_buffers, row_set_mem_owner, output_columnar);
     QueryExecutionContext* query_exe_context { query_exe_context_owned.get() };
     std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
     if (compilation_result.query_mem_desc.usesCachedContext()) {
       query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes[ctx_idx]));
       if (!query_contexts[ctx_idx]) {
         query_contexts[ctx_idx] = compilation_result.query_mem_desc.getQueryExecutionContext(
-          plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id, col_buffers, row_set_mem_owner);
+          plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id,
+          col_buffers, row_set_mem_owner, output_columnar);
       }
       query_exe_context = query_contexts[ctx_idx].get();
     }
@@ -2316,7 +2318,8 @@ ResultRows Executor::executeAggScanPlan(
         reduced_results.group_by_buffer_,
         reduced_results.groups_buffer_entry_count_,
         reduced_results.min_val_,
-        reduced_results.warp_count_);
+        reduced_results.warp_count_,
+        output_columnar);
     }
     return reduced_results;
   }
