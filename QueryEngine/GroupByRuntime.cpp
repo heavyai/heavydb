@@ -45,6 +45,17 @@ int64_t* get_group_value_fast(int64_t* groups_buffer,
 }
 
 extern "C" ALWAYS_INLINE DEVICE
+int64_t* get_columnar_group_value_fast(int64_t* groups_buffer,
+                                       const int64_t key,
+                                       const int64_t min_key) {
+  int64_t off = key - min_key;
+  if (groups_buffer[off] == EMPTY_KEY) {
+    groups_buffer[off] = key;
+  }
+  return groups_buffer + off;
+}
+
+extern "C" ALWAYS_INLINE DEVICE
 int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                  const uint32_t groups_buffer_entry_count,
                                  int64_t* small_groups_buffer,

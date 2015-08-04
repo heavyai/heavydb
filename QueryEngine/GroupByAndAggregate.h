@@ -836,6 +836,11 @@ private:
                   const bool keyless,
                   const size_t warp_size);
 
+  void initColumnarGroups(int64_t* groups_buffer,
+                          const int64_t* init_vals,
+                          const int32_t groups_buffer_entry_count,
+                          const bool keyless);
+
   std::vector<ssize_t> allocateCountDistinctBuffers(const bool deferred);
   int64_t allocateCountDistinctBitmap(const size_t bitmap_sz);
   int64_t allocateCountDistinctSet();

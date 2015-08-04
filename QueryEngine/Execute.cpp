@@ -3313,6 +3313,7 @@ declare void @write_back_nop(i64*, i64*, i32);
 declare void @init_group_by_buffer_impl(i64*, i64*, i32, i32, i32);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*);
 declare i64* @get_group_value_fast(i64*, i64, i64, i32);
+declare i64* @get_columnar_group_value_fast(i64*, i64, i64);
 declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
 declare void @agg_count_shared(i64*, i64);
 declare void @agg_count_skip_val_shared(i64*, i64, i64);

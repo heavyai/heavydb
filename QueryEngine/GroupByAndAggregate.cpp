@@ -508,9 +508,14 @@ QueryExecutionContext::QueryExecutionContext(
 
   std::vector<int64_t> group_by_buffer_template(query_mem_desc_.getBufferSizeQuad(device_type));
   if (!query_mem_desc_.lazyInitGroups(device_type)) {
-    initGroups(&group_by_buffer_template[0], &init_agg_vals[0],
-      query_mem_desc_.entry_count, query_mem_desc_.keyless_hash,
-      query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1);
+    if (output_columnar_) {
+      initColumnarGroups(&group_by_buffer_template[0], &init_agg_vals[0],
+        query_mem_desc_.entry_count, query_mem_desc_.keyless_hash);
+    } else {
+      initGroups(&group_by_buffer_template[0], &init_agg_vals[0],
+        query_mem_desc_.entry_count, query_mem_desc_.keyless_hash,
+        query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1);
+    }
   }
 
   if (query_mem_desc_.interleavedBins(device_type_)) {
@@ -523,6 +528,7 @@ QueryExecutionContext::QueryExecutionContext(
 
   std::vector<int64_t> group_by_small_buffer_template;
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
+    CHECK(!output_columnar_);
     group_by_small_buffer_template.resize(query_mem_desc_.getSmallBufferSizeQuad());
     initGroups(&group_by_small_buffer_template[0], &init_agg_vals[0],
       query_mem_desc_.entry_count_small, false, 1);
@@ -562,8 +568,8 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
   const int32_t agg_col_count = query_mem_desc_.agg_col_widths.size();
   const int32_t key_qw_count = query_mem_desc_.group_col_widths.size();
   if (keyless) {
-    assert(warp_size >= 1);
-    assert(key_qw_count == 1);
+    CHECK(warp_size >= 1);
+    CHECK(key_qw_count == 1);
     for (int32_t i = 0; i < groups_buffer_entry_count * agg_col_count * static_cast<int32_t>(warp_size); ++i) {
       auto init_idx = i % agg_col_count;
       const ssize_t bitmap_sz { agg_bitmap_size[init_idx] };
@@ -588,6 +594,33 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
         groups_buffer[i] = bitmap_sz > 0 ? allocateCountDistinctBitmap(bitmap_sz) : allocateCountDistinctSet();
       }
     }
+  }
+}
+
+void QueryExecutionContext::initColumnarGroups(int64_t* groups_buffer,
+                                               const int64_t* init_vals,
+                                               const int32_t groups_buffer_entry_count,
+                                               const bool keyless) {
+  auto agg_bitmap_size = allocateCountDistinctBuffers(true);
+  const int32_t agg_col_count = query_mem_desc_.agg_col_widths.size();
+  const int32_t key_qw_count = query_mem_desc_.group_col_widths.size();
+  CHECK(key_qw_count == 1);
+  int32_t i = 0;
+  if (!keyless) {
+    for (; i < groups_buffer_entry_count; ++i) {
+      groups_buffer[i] = EMPTY_KEY;
+    }
+  }
+  for (int32_t init_idx = 0; init_idx < agg_col_count; ++init_idx) {
+    const ssize_t bitmap_sz { agg_bitmap_size[init_idx] };
+    for (int32_t j = i; j < i + groups_buffer_entry_count; ++j) {
+      if (!bitmap_sz) {
+        groups_buffer[j] = init_vals[init_idx];
+      } else {
+        groups_buffer[j] = bitmap_sz > 0 ? allocateCountDistinctBitmap(bitmap_sz) : allocateCountDistinctSet();
+      }
+    }
+    i += groups_buffer_entry_count;
   }
 }
 
@@ -719,7 +752,10 @@ ResultRows QueryExecutionContext::groupBufferToResults(
     const bool was_auto_device) const {
   const size_t group_by_col_count { query_mem_desc_.group_col_widths.size() };
   const size_t agg_col_count { query_mem_desc_.agg_col_widths.size() };
-  auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets](
+  auto aggColumnarOff = [group_by_col_count, this](const size_t out_vec_idx, const size_t groups_buffer_entry_count) {
+    return (out_vec_idx + group_by_col_count) * (output_columnar_ ? groups_buffer_entry_count : 1);
+  };
+  auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets, aggColumnarOff](
       const size_t groups_buffer_entry_count,
       int64_t* group_by_buffer) {
     if (query_mem_desc_.keyless_hash) {
@@ -738,10 +774,11 @@ ResultRows QueryExecutionContext::groupBufferToResults(
     }
     ResultRows results(targets, executor_, row_set_mem_owner_);
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
-      const size_t key_off = (group_by_col_count + agg_col_count) * bin;
+      const size_t key_off = (output_columnar_ ? 1 : (group_by_col_count + agg_col_count)) * bin;
       if (group_by_buffer[key_off] == EMPTY_KEY) {
         continue;
       }
+      CHECK(!output_columnar_ || group_by_col_count == 1);
       size_t out_vec_idx = 0;
       std::vector<int64_t> multi_key;
       for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
@@ -760,8 +797,8 @@ ResultRows QueryExecutionContext::groupBufferToResults(
           : -1 };
         const auto agg_info = target_info(target_expr);
         if (is_real_string || is_array) {
-          int64_t str_len = group_by_buffer[key_off + out_vec_idx + group_by_col_count + 1];
-          int64_t str_ptr = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
+          int64_t str_len = group_by_buffer[key_off + aggColumnarOff(out_vec_idx, groups_buffer_entry_count) + 1];
+          int64_t str_ptr = group_by_buffer[key_off + aggColumnarOff(out_vec_idx, groups_buffer_entry_count)];
           if (executor_->plan_state_->isLazyFetchColumn(target_expr)) {  // TODO(alex): expensive!!!, remove
             CHECK_GE(str_len, 0);
             CHECK_EQ(str_ptr, str_len);  // both are the row index in this cases
@@ -879,7 +916,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(
           }
           out_vec_idx += 2;
         } else {
-          int64_t val1 = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
+          int64_t val1 = group_by_buffer[key_off + aggColumnarOff(out_vec_idx, groups_buffer_entry_count)];
           if (executor_->plan_state_->isLazyFetchColumn(target_expr)) {
             CHECK_GE(global_col_id, 0);
             auto col_id = executor_->getLocalColumnId(global_col_id, false);
@@ -890,7 +927,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(
           if (agg_info.agg_kind == kAVG) {
             CHECK(!executor_->plan_state_->isLazyFetchColumn(target_expr));
             ++out_vec_idx;
-            int64_t val2 = group_by_buffer[key_off + out_vec_idx + group_by_col_count];
+            int64_t val2 = group_by_buffer[key_off + aggColumnarOff(out_vec_idx, groups_buffer_entry_count)];
             results.addValue(val1, val2);
           } else {
             results.addValue(val1);
@@ -1431,7 +1468,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
 }
 
 bool GroupByAndAggregate::outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const {
-  return output_columnar_hint_ && query_mem_desc.usesGetGroupValueFast() && query_mem_desc.keyless_hash &&
+  return output_columnar_hint_ && query_mem_desc.usesGetGroupValueFast() &&
     !query_mem_desc.interleavedBins(ExecutorDeviceType::GPU);
 }
 
@@ -1603,7 +1640,10 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
       query_mem_desc.has_nulls, query_mem_desc.max_val + 1, diamond_codegen, array_loops);
     auto small_groups_buffer = arg_it;
     if (query_mem_desc.usesGetGroupValueFast()) {
-      std::string get_group_fn_name { "get_group_value_fast" };
+      std::string get_group_fn_name { outputColumnar(query_mem_desc) && !query_mem_desc.keyless_hash
+        ? "get_columnar_group_value_fast"
+        : "get_group_value_fast"
+      };
       if (query_mem_desc.keyless_hash) {
         get_group_fn_name += "_keyless";
       }
@@ -1618,8 +1658,9 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(
         LL_INT(query_mem_desc.min_val)
       };
       if (!query_mem_desc.keyless_hash) {
-        CHECK(!outputColumnar(query_mem_desc));
-        get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
+        if (!outputColumnar(query_mem_desc)) {
+          get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
+        }
       } else {
         get_group_fn_args.push_back(LL_INT(outputColumnar(query_mem_desc)
           ? 1
@@ -1776,7 +1817,10 @@ const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
 uint32_t GroupByAndAggregate::aggColumnarOff(
     const uint32_t agg_out_off,
     const QueryMemoryDescriptor& query_mem_desc) {
-  return agg_out_off * (outputColumnar(query_mem_desc) ? query_mem_desc.entry_count : 1);
+  if (!outputColumnar(query_mem_desc)) {
+    return agg_out_off;
+  }
+  return (agg_out_off + (query_mem_desc.keyless_hash ? 0 : 1)) * query_mem_desc.entry_count;
 }
 
 void GroupByAndAggregate::codegenAggCalls(
