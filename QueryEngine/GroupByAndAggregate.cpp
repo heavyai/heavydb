@@ -16,6 +16,7 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
                                          const int64_t min_val,
                                          const int8_t warp_count,
                                          const bool is_columnar) {
+  CHECK(!is_columnar || warp_count == 1);
   const size_t agg_col_count { targets_.size() };
   std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
   std::vector<int64_t> agg_vals(agg_col_count, 0);
@@ -26,14 +27,15 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
     memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
     beginRow(bin + min_val);
     bool discard_row = true;
-    size_t group_by_buffer_base_idx { warp_count * bin * agg_col_count };
+    size_t group_by_buffer_base_idx { is_columnar ? bin : warp_count * bin * agg_col_count };
     for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
       bool discard_partial_result = true;
       for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
         const auto& agg_info = targets_[target_idx];
         CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
-        partial_agg_vals[target_idx] = group_by_buffer[group_by_buffer_base_idx + target_idx];
-        auto partial_bin_val = partial_agg_vals[target_idx];
+        auto partial_bin_val = partial_agg_vals[target_idx] = group_by_buffer[is_columnar
+          ? group_by_buffer_base_idx + target_idx * groups_buffer_entry_count
+          : group_by_buffer_base_idx + target_idx];
         if (agg_info.is_distinct) {
           CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
           partial_bin_val = bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
