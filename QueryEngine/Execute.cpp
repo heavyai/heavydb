@@ -1731,7 +1731,8 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* o
 
 ResultRows Executor::reduceMultiDeviceResults(
     const std::vector<ResultRows>& results_per_device,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar) const {
   if (results_per_device.empty()) {
     return ResultRows({}, nullptr, nullptr);
   }
@@ -1739,7 +1740,7 @@ ResultRows Executor::reduceMultiDeviceResults(
   auto reduced_results = results_per_device.front();
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results.reduce(results_per_device[i]);
+    reduced_results.reduce(results_per_device[i], output_columnar);
   }
 
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
@@ -2312,16 +2313,17 @@ ResultRows Executor::executeAggScanPlan(
       all_fragment_results.push_back(query_exe_context->getRowSet(get_agg_target_exprs(plan),
         device_type == ExecutorDeviceType::Hybrid));
     }
-    auto reduced_results = reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner);
+    const bool output_columnar = compilation_result_cpu.native_functions.empty()
+      ? compilation_result_gpu.output_columnar
+      : false;
+    auto reduced_results = reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner, output_columnar);
     if (reduced_results.group_by_buffer_) {
       reduced_results.addKeylessGroupByBuffer(
         reduced_results.group_by_buffer_,
         reduced_results.groups_buffer_entry_count_,
         reduced_results.min_val_,
         reduced_results.warp_count_,
-        compilation_result_cpu.native_functions.empty()
-          ? compilation_result_gpu.output_columnar
-          : false);
+        output_columnar);
     }
     return reduced_results;
   }

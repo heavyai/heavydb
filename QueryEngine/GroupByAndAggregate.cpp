@@ -72,7 +72,7 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
   }
 }
 
-void ResultRows::reduce(const ResultRows& other_results) {
+void ResultRows::reduce(const ResultRows& other_results, const bool output_columnar) {
   if (other_results.empty()) {
     return;
   }
@@ -99,8 +99,13 @@ void ResultRows::reduce(const ResultRows& other_results) {
           bitmap_sz_bytes = count_distinct_desc_it->second.bitmapSizeBytes();
         }
       }
+      CHECK(warp_count_ == 1 || !output_columnar);
       for (int32_t bin = 0; bin < groups_buffer_entry_count_; ++bin) {
-        size_t group_by_buffer_base_idx { bin * warp_count_ * agg_col_count + target_idx };
+        size_t group_by_buffer_base_idx {
+          output_columnar
+            ? target_idx * groups_buffer_entry_count_ + bin
+            : bin * warp_count_ * agg_col_count + target_idx
+        };
         for (int8_t warp_idx = 0; warp_idx < warp_count_; ++warp_idx) {
           const auto val = other_results.group_by_buffer_[group_by_buffer_base_idx];
           if (agg_info.is_agg) {
@@ -692,7 +697,7 @@ ResultRows QueryExecutionContext::getRowSet(
     results_per_sm.emplace_back(groupBufferToResults(i, targets, was_auto_device));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return executor_->reduceMultiDeviceResults(results_per_sm, row_set_mem_owner_);
+  return executor_->reduceMultiDeviceResults(results_per_sm, row_set_mem_owner_, output_columnar_);
 }
 
 namespace {

@@ -633,7 +633,7 @@ public:
     target_values_.append(more_results.target_values_);
   }
 
-  void reduce(const ResultRows& other_results);
+  void reduce(const ResultRows& other_results, const bool output_columnar);
 
   void sort(const Planner::Sort* sort_plan, const int64_t top_n);
 

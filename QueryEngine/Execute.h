@@ -273,7 +273,8 @@ private:
     const int device_id);
   ResultRows reduceMultiDeviceResults(
     const std::vector<ResultRows>&,
-    std::shared_ptr<RowSetMemoryOwner>) const;
+    std::shared_ptr<RowSetMemoryOwner>,
+    const bool output_columnar) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compilePlan(
