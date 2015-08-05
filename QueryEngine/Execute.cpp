@@ -115,10 +115,12 @@ ResultRows Executor::executeSelectPlan(
     if (limit || offset) {
       const size_t scan_limit = get_scan_limit(plan, limit);
       size_t max_groups_buffer_entry_guess_limit {
-        scan_limit && !offset ? scan_limit : max_groups_buffer_entry_guess };
-      auto rows = executeAggScanPlan(plan, limit, hoist_literals, device_type, opt_level, cat,
-        row_set_mem_owner_, max_groups_buffer_entry_guess_limit,
-        error_code, gpu_sort_info, output_columnar_hint, allow_multifrag, just_explain);
+        scan_limit ? scan_limit + offset : max_groups_buffer_entry_guess
+      };
+      auto rows = executeAggScanPlan(plan, scan_limit ? scan_limit + offset : 0,
+        hoist_literals, device_type, opt_level, cat, row_set_mem_owner_,
+        max_groups_buffer_entry_guess_limit, error_code, gpu_sort_info,
+        output_columnar_hint, allow_multifrag, just_explain);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       rows.dropFirstN(offset);
       if (limit) {

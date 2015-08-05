@@ -267,6 +267,25 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, LimitAndOffset) {
+  CHECK(g_num_rows >= 4);
+  for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5;", dt);
+      ASSERT_EQ(5, rows.size());
+    }
+    {
+      const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5 OFFSET 3;", dt);
+      ASSERT_EQ(5, rows.size());
+    }
+    {
+      const auto rows = run_multiple_agg("SELECT * FROM test WHERE x <> 8 LIMIT 3 OFFSET 1;", dt);
+      ASSERT_EQ(3, rows.size());
+    }
+  }
+}
+
 TEST(Select, FloatAndDoubleTests) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
