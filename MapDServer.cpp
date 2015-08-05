@@ -657,6 +657,8 @@ public:
     const auto session_info = get_session(session);
     auto &cat = session_info.get_catalog();
 
+    LOG(INFO) << "create_table: " << table_name;
+
     TableDescriptor td;
     td.tableName = table_name;
     td.isView = false;
@@ -687,20 +689,23 @@ public:
     cat.createTable(td, cds);
   }
 
-  void import_table(const TSessionId session, const std::string& table_name, const std::string& file_name) {
+  void import_table(const TSessionId session,
+                    const std::string& table_name,
+                    const std::string& file_name) {
+    LOG(INFO) << "import_table " << table_name << " from " << file_name;
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
 
-    const TableDescriptor *td = cat.getMetadataForTable(table_name);
+    const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
       TMapDException ex;
       ex.error_msg = "Table " + table_name + " does not exist.";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    Importer_NS::Loader loader(cat, td);
 
-    boost::filesystem::path file_path = file_name;  // FIXME
+    // FIXME(andrew): file_path should be built from the session info
+    boost::filesystem::path file_path = file_name;
     if (!boost::filesystem::exists(file_path)) {
       TMapDException ex;
       ex.error_msg = "File does not exist.";
@@ -708,35 +713,16 @@ public:
       throw ex;
     }
 
-    Importer_NS::Detector detector(file_path);
+    Importer_NS::CopyParams copy_params;
 
-    auto &rows = detector.raw_rows;
+    // TODO(andrew): add delimiter detection to Importer
+    if (boost::filesystem::extension(file_path) == ".tsv") {
+      copy_params.delimiter = '\t';
+    }
 
-    if (rows.front().size() != static_cast<size_t>(td->nColumns)) {
-      TMapDException ex;
-      ex.error_msg = "Wrong number of columns to load into Table " + table_name;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    auto col_descs = loader.get_column_descs();
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-    for (auto cd : col_descs) {
-      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
-    }
-    for (auto &row : rows) {
-      try {
-        int col_idx = 0;
-        for (auto cd : col_descs) {
-          TDatum td = value_to_thrift(row[col_idx], cd->columnType);
-          import_buffers[col_idx]->add_value(cd, td, row[col_idx].size() == 0);
-          col_idx++;
-        }
-      } catch (const std::exception &e) {
-        LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
-      }
-    }
-    if (loader.load(import_buffers, rows.size()))
-      loader.checkpoint();
+    Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);
+    auto ms = measure<>::execution([&]() { importer.import(); });
+    std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
 
 private:
