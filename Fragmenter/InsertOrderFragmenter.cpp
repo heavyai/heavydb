@@ -160,7 +160,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
         partIt->chunkMetadataMap=partIt->shadowChunkMetadataMap;
     }
     numTuples_ += insertDataStruct.numRows;
-    dropFragmentsToSize(50000);
+    dropFragmentsToSize(maxRows_);
     // dataMgr_->checkpoint(); leave to upper layer to call checkpoint
 }
 
