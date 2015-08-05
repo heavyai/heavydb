@@ -273,15 +273,15 @@ TEST(Select, LimitAndOffset) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5;", dt);
-      ASSERT_EQ(5, rows.size());
+      ASSERT_EQ(size_t(5), rows.size());
     }
     {
       const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5 OFFSET 3;", dt);
-      ASSERT_EQ(5, rows.size());
+      ASSERT_EQ(size_t(5), rows.size());
     }
     {
       const auto rows = run_multiple_agg("SELECT * FROM test WHERE x <> 8 LIMIT 3 OFFSET 1;", dt);
-      ASSERT_EQ(3, rows.size());
+      ASSERT_EQ(size_t(3), rows.size());
     }
   }
 }
