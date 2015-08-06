@@ -702,9 +702,13 @@ void Detector::read_file() {
   }
   std::ifstream infile(file_path.string());
   std::string line;
+  auto end_time = std::chrono::system_clock::now() + timeout;
   try {
     while (std::getline(infile, line)) {
       raw_data.push_back(line);
+      if (std::chrono::system_clock::now() > end_time) {
+        break;
+      }
     }
   } catch (std::exception& e) {
   }
@@ -819,6 +823,7 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
   }
+  auto end_time = std::chrono::system_clock::now() + timeout;
   size_t num_cols = raw_rows.front().size();
   std::vector<SQLTypes> best_types(num_cols, kCHAR);
   std::vector<size_t> non_null_col_counts (num_cols,0);
@@ -831,6 +836,9 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
       if (!more_restrictive_sqltype(best_types[col_idx], t)) {
         best_types[col_idx] = t;
       }
+    }
+    if (std::chrono::system_clock::now() > end_time) {
+      break;
     }
   }
   for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
