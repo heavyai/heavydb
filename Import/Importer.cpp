@@ -729,23 +729,20 @@ void Detector::read_file() {
 
 void Detector::detect_row_delimiter() {
   if (delim.length() == 0) {
-    delim = ",";
+    delim = ',';
   }
   if (boost::filesystem::extension(file_path) == ".tsv") {
-    delim = "\t";
+    delim = '\t';
   }
+  copy_params.delimiter = *delim.c_str();
 }
 
 void Detector::split_raw_data() {
   for (auto line : raw_data) {
     std::vector<std::string> row;
-    boost::char_separator<char> sep{delim.c_str(), "", boost::keep_empty_tokens};
-    boost::tokenizer<boost::char_separator<char>> tok{line, sep};
-    for (auto& s : tok) {
-      std::string str(s);
-      boost::algorithm::trim(str);
-      row.push_back(str);
-    }
+    line += copy_params.line_delim;
+    const char* buf = line.c_str();
+    get_row(buf, buf + line.size(), buf + line.size(), copy_params, true, nullptr, row);
     raw_rows.push_back(row);
   }
 }

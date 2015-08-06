@@ -399,6 +399,7 @@ std::vector<EncodingType> find_best_encodings(const std::vector<std::vector<std:
   std::string delim;
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
+  CopyParams copy_params;
 };
 
 class Importer {
