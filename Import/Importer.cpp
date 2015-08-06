@@ -62,6 +62,14 @@ Importer::~Importer()
     free(buffer[1]);
 }
 
+static const std::string trim_space(const char* field, const size_t len, const CopyParams& copy_params) {
+  size_t i = 0;
+  size_t j = len;
+  if (field[i] == ' ') i++;
+  if (field[j] == ' ' || field[j] == copy_params.line_delim) j--;
+  return std::string(field + i, j - i);
+}
+
 static const char *
 get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const CopyParams &copy_params, bool is_begin, const bool *is_array, std::vector<std::string> &row)
 {
@@ -86,7 +94,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
     } else if (*p == copy_params.delimiter) {
       if (!in_quote && !in_array) {
         if (!has_escape && !strip_quotes) {
-          std::string s(field, p - field);
+          std::string s = trim_space(field, p - field, copy_params);
           row.push_back(s);
         } else {
           char field_buf[p - field + 1];
@@ -104,7 +112,8 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
             field_buf[j - 1] = '\0';
           else
             field_buf[j] = '\0';
-          row.push_back(std::string(field_buf));
+          std::string s = trim_space(field_buf, j, copy_params);
+          row.push_back(s);
         }
         field = p + 1;
         has_escape = false;
@@ -113,7 +122,8 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
     }
   }
   if (*p == copy_params.line_delim) {
-    row.push_back(std::string(field, p - field));
+    std::string s = trim_space(field, p - field, copy_params);
+    row.push_back(s);
     return p;
   }
   for (; p < entire_buf_end && (in_quote || *p != copy_params.line_delim); p++) {
@@ -131,7 +141,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
     } else if (*p == copy_params.delimiter) {
       if (!in_quote && !in_array) {
         if (!has_escape) {
-          std::string s(field, p - field);
+          std::string s = trim_space(field, p - field, copy_params);
           row.push_back(s);
         } else {
           char field_buf[p - field + 1];
@@ -142,14 +152,15 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
             if (has_escape && field[i] == copy_params.escape && field[i+1] == copy_params.quote) {
               field_buf[j] = copy_params.quote;
               i++;
-          } else
-            field_buf[j] = field[i];
+            } else
+              field_buf[j] = field[i];
           }
           if (strip_quotes)
             field_buf[j - 1] = '\0';
           else
             field_buf[j] = '\0';
-          row.push_back(std::string(field_buf));
+          std::string s = trim_space(field_buf, j, copy_params);
+          row.push_back(s);
         }
         field = p + 1;
         has_escape = false;
@@ -158,7 +169,8 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
     } 
   }
   if (*p == copy_params.line_delim) {
-    row.push_back(std::string(field, p - field));
+    std::string s = trim_space(field, p - field, copy_params);
+    row.push_back(s);
     return p;
   }
   /*
