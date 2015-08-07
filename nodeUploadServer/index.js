@@ -2,12 +2,21 @@ var express = require('express');
 var multer  = require('multer');
 var fs = require('fs');
 var cors = require('cors');
+var bodyParser = require('body-parser');
 var port = process.env.PORT || 8000;
 var app = express();
 var path = require('path');
 
-
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 app.use(cors());
+
+
+var parentDirectory = path.dirname(require.main.filename).split('/');
+parentDirectory.pop();
+parentDirectory = parentDirectory.join('/');
+// serve up static assets
+app.use(express.static(parentDirectory +  '/build/frontend/'));
 
 var mkdirSync = function (path) {
   try {
@@ -16,6 +25,20 @@ var mkdirSync = function (path) {
     if ( e.code != 'EEXIST' ) throw e;
   }
 }
+
+var deleteFolderRecursive = function(path) {
+  if( fs.existsSync(path) ) {
+    fs.readdirSync(path).forEach(function(file,index){
+      var curPath = path + "/" + file;
+      if(fs.lstatSync(curPath).isDirectory()) { 
+        deleteFolderRecursive(curPath);
+      } else { // delete file
+        fs.unlinkSync(curPath);
+      }
+    });
+    fs.rmdirSync(path);
+  }
+};
 
 mkdirSync('./uploads/');
 
@@ -42,6 +65,12 @@ app.post('/upload', function (req, res) {
     }
     res.send(req.toSendClient);
   })
+});
+
+app.post('/deleteUpload', function (req, res) {
+  var folderPath = path.dirname(req.body.file);
+  deleteFolderRecursive(folderPath);
+  res.sendStatus(200);
 });
 
 var server = app.listen(port);
