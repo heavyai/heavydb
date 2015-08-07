@@ -1469,16 +1469,17 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
           { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
       }
     case kMULTIPLY: {
+      if (lhs_type.is_decimal()) {
+        return cgen_state_->emitCall("mul_" + int_typename + "_decimal", {
+          lhs_lv, rhs_lv, ll_int(exp_to_scale(lhs_type.get_scale())),
+          ll_int(inline_int_null_val(lhs_type)) });
+      }
       llvm::Value* result { nullptr };
       if (not_null) {
         result = cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
       } else {
         result = cgen_state_->emitCall("mul_" + int_typename + "_nullable",
           { lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type)) });
-      }
-      if (lhs_type.is_decimal()) {
-        result = cgen_state_->ir_builder_.CreateSDiv(result,
-          llvm::ConstantInt::get(result->getType(), exp_to_scale(lhs_type.get_scale())));
       }
       return result;
     }

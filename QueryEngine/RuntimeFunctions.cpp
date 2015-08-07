@@ -117,6 +117,21 @@ DEF_CMP_NULLABLE(int8_t, int64_t, ne, !=)
 #undef DEF_CMP_NULLABLE
 #undef DEF_ARITH_NULLABLE
 
+#define DEF_MUL_DECIMAL(type)                                                                           \
+extern "C" __attribute__((always_inline))                                                               \
+type mul_##type##_decimal(const type lhs, const type rhs, const uint64_t scale, const type null_val) {  \
+  if (lhs != null_val && rhs != null_val) {                                                             \
+    return (static_cast<double>(lhs) * rhs) / scale;                                                    \
+  }                                                                                                     \
+  return null_val;                                                                                      \
+}
+
+DEF_MUL_DECIMAL(int16_t)
+DEF_MUL_DECIMAL(int32_t)
+DEF_MUL_DECIMAL(int64_t)
+
+#undef DEF_MUL_DECIMAL
+
 #define DEF_UMINUS_NULLABLE(type, null_type)                                   \
 extern "C" __attribute__((always_inline))                                      \
 type uminus_##type##_nullable(const type operand, const null_type null_val) {  \
