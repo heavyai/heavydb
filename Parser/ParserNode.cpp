@@ -442,7 +442,9 @@ std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(const Catalog_Namespace::Ca
       if (!arg_expr->get_type_info().is_number())
         throw std::runtime_error("Cannot compute SUM on non-number-type arguments.");
       arg_expr = arg_expr->decompress();
-      result_type = arg_expr->get_type_info();
+      result_type = arg_expr->get_type_info().is_integer()
+        ? SQLTypeInfo(kBIGINT, false)
+        : arg_expr->get_type_info();
     } else if (boost::iequals(*name, "unnest")) {
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
       const SQLTypeInfo& arg_ti = arg_expr->get_type_info();
