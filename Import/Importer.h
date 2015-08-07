@@ -365,7 +365,7 @@ class Loader {
 
 class Detector {
  public:
-  Detector(const boost::filesystem::path& fp) : file_path(fp) {
+  Detector(const boost::filesystem::path& fp, CopyParams& cp) : file_path(fp), copy_params(cp) {
     read_file();
     init();
   };

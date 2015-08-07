@@ -452,9 +452,9 @@ public:
     }
   }
 
-  void detect_column_types(TRowSet& _return, const TSessionId session, const std::string &file_name, const std::string &delimiter) {
+  void detect_column_types(TRowSet& _return, const TSessionId session, const std::string &file_name, const std::string &delimiter, const bool quoted) {
     try {
-      (*client_)->detect_column_types(_return, session, file_name, delimiter);
+      (*client_)->detect_column_types(_return, session, file_name, delimiter, quoted);
     }
     catch (TMapDException &e) {
       throw e;
@@ -462,7 +462,7 @@ public:
     catch (TException &te) {
       try {
         client_->reopen();
-        (*client_)->detect_column_types(_return, session, file_name, delimiter);
+        (*client_)->detect_column_types(_return, session, file_name, delimiter, quoted);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;
@@ -562,9 +562,9 @@ public:
     }
   }
 
-  void import_table(const TSessionId session, const std::string &table_name, const std::string &file_name) {
+  void import_table(const TSessionId session, const std::string &table_name, const std::string &file_name, const std::string &delimiter, const bool quoted) {
     try {
-      (*client_)->import_table(session, table_name, file_name);
+      (*client_)->import_table(session, table_name, file_name, delimiter, quoted);
     }
     catch (TMapDException &e) {
       throw e;
@@ -572,7 +572,7 @@ public:
     catch (TException &te) {
       try {
         client_->reopen();
-        (*client_)->import_table(session, table_name, file_name);
+        (*client_)->import_table(session, table_name, file_name, delimiter, quoted);
       }
       catch (TException &te1) {
         std::cerr << "Thrift exception: " << te1.what() << std::endl;

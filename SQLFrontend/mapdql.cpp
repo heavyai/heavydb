@@ -218,7 +218,7 @@ static void detect_table(char* file_name, ClientContext& context) {
   TRowSet _return;
 
   try {
-    context.client.detect_column_types(_return, context.session, file_name, "");
+    context.client.detect_column_types(_return, context.session, file_name, "", true);
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {

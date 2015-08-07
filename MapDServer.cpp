@@ -525,10 +525,23 @@ public:
       loader.checkpoint();
   }
 
+  char unescape_char(std::string str) {
+    char out = str[0];
+    if (str.size() == 2 && str[0] == '\\') {
+      if (str[1] == 't') out = '\t';
+      else if (str[1] == 'n') out = '\n';
+      else if (str[1] == '0') out = '\0';
+      else if (str[1] == '\'') out = '\'';
+      else if (str[1] == '\\') out = '\\';
+    }
+    return out;
+  }
+
   void detect_column_types(TRowSet& _return,
                            const TSessionId session,
                            const std::string& file_name,
-                           const std::string& delimiter) {
+                           const std::string& delimiter,
+                           const bool quoted) {
     get_session(session);
 
     boost::filesystem::path file_path = file_name;  // FIXME
@@ -539,7 +552,11 @@ public:
       throw ex;
     }
 
-    Importer_NS::Detector detector(file_path);
+    Importer_NS::CopyParams copy_params;
+    copy_params.delimiter = unescape_char(delimiter);
+    copy_params.quoted = quoted;
+
+    Importer_NS::Detector detector(file_path, copy_params);
     std::vector<SQLTypes> best_types = detector.best_sqltypes;
     std::vector<EncodingType> best_encodings = detector.best_encodings;
     std::vector<std::string> headers = detector.get_headers();
@@ -691,7 +708,9 @@ public:
 
   void import_table(const TSessionId session,
                     const std::string& table_name,
-                    const std::string& file_name) {
+                    const std::string& file_name,
+                    const std::string& delimiter,
+                    const bool quoted) {
     LOG(INFO) << "import_table " << table_name << " from " << file_name;
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -714,6 +733,8 @@ public:
     }
 
     Importer_NS::CopyParams copy_params;
+    copy_params.delimiter = unescape_char(delimiter);
+    copy_params.quoted = quoted;
 
     // TODO(andrew): add delimiter detection to Importer
     if (boost::filesystem::extension(file_path) == ".tsv") {

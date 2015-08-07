@@ -116,7 +116,7 @@ service MapD {
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e 2: ThriftException te)
   binary render(1: TSessionId session, 2: string query, 3: string render_type, 4: TRenderPropertyMap render_properties, 5: TColumnRenderMap col_render_properties) throws (1: TMapDException e 2: ThriftException te)
   void create_frontend_view(1: TSessionId session, 2: string view_name, 3: string view_state) throws (1: TMapDException e 2: ThriftException te)
-  TRowSet detect_column_types(1: TSessionId session, 2: string file_name, 3: string delimiter) throws (1: TMapDException e 2: ThriftException te)
+  TRowSet detect_column_types(1: TSessionId session, 2: string file_name, 3: string delimiter, 4: bool quoted) throws (1: TMapDException e 2: ThriftException te)
   void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
-  void import_table(1: TSessionId session, 2: string table_name, 3: string file_name) throws (1: TMapDException e 2: ThriftException te)
+  void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: string delimiter, 5: bool quoted) throws (1: TMapDException e 2: ThriftException te)
 }
