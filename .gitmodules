@@ -1,3 +1,0 @@
-[submodule "QueryEngine/thrust"]
-	path = QueryEngine/thrust
-	url = git@github.com:thrust/thrust.git
