@@ -184,6 +184,15 @@ private:
     const bool output_columnar_hint,
     const bool allow_multifrag,
     const bool just_explain);
+  ResultRows collectAllDeviceResults(
+    std::vector<ResultRows>& all_fragment_results,
+    const Planner::Plan* plan,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const GpuSortInfo& gpu_sort_info,
+    const ExecutorDeviceType device_type,
+    const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar);
   void dispatchFragments(
     std::vector<ResultRows>& all_fragment_results,
     const std::function<void(
@@ -232,7 +241,6 @@ private:
     int32_t* error_code,
     const bool allow_multifrag,
     const bool just_explain);
-  static bool canSortOnGpu(const Planner::Sort*);
 
   struct CompilationResult {
     std::vector<void*> native_functions;
@@ -270,6 +278,8 @@ private:
   ResultRows reduceMultiDeviceResults(
     const std::vector<ResultRows>&,
     std::shared_ptr<RowSetMemoryOwner>,
+    const GpuSortInfo&,
+    const QueryMemoryDescriptor&,
     const bool output_columnar) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
@@ -281,6 +291,7 @@ private:
     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
     const bool hoist_literals,
+    const bool allow_multifrag,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,

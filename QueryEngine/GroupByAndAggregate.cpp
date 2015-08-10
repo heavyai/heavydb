@@ -74,7 +74,11 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
   }
 }
 
-void ResultRows::reduce(const ResultRows& other_results, const bool output_columnar) {
+void ResultRows::reduce(
+    const ResultRows& other_results,
+    const GpuSortInfo& gpu_sort_info,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool output_columnar) {
   if (other_results.empty()) {
     return;
   }
@@ -84,6 +88,7 @@ void ResultRows::reduce(const ResultRows& other_results, const bool output_colum
   }
 
   if (group_by_buffer_) {
+    CHECK(!query_mem_desc.sortOnGpu(gpu_sort_info));
     CHECK(other_results.group_by_buffer_);
     const size_t agg_col_count { targets_.size() };
     for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
@@ -222,6 +227,7 @@ void ResultRows::reduce(const ResultRows& other_results, const bool output_colum
   };
 
   if (simple_keys_.empty() && multi_keys_.empty()) {
+    CHECK(!query_mem_desc.sortOnGpu(gpu_sort_info));
     CHECK_EQ(1, size());
     CHECK_EQ(1, other_results.size());
     auto& crt_results = target_values_.front();
@@ -235,6 +241,7 @@ void ResultRows::reduce(const ResultRows& other_results, const bool output_colum
   }
 
   CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
+  CHECK(!query_mem_desc.sortOnGpu(gpu_sort_info) || multi_keys_.empty());
   createReductionMap();
   other_results.createReductionMap();
   for (const auto& kv : other_results.as_map_) {
@@ -249,6 +256,21 @@ void ResultRows::reduce(const ResultRows& other_results, const bool output_colum
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
       reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+    }
+  }
+  if (query_mem_desc.sortOnGpu(gpu_sort_info) && gpu_sort_info.top_count) {
+    // TODO(alex): refine
+    for (const auto& kv : other_results.as_unordered_map_) {
+      auto it = as_unordered_map_.find(kv.first);
+      if (it == as_unordered_map_.end()) {
+        throw SpeculativeTopFailed();
+      }
+    }
+    for (const auto& kv : as_unordered_map_) {
+      auto it = other_results.as_unordered_map_.find(kv.first);
+      if (it == other_results.as_unordered_map_.end()) {
+        throw SpeculativeTopFailed();
+      }
     }
   }
   for (const auto& kv : other_results.as_unordered_map_) {
@@ -510,6 +532,7 @@ QueryExecutionContext::QueryExecutionContext(
   , row_set_mem_owner_(row_set_mem_owner)
   , output_columnar_(output_columnar)
   , sort_on_gpu_(sort_on_gpu) {
+  CHECK(!sort_on_gpu_ || output_columnar);
   if (query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
     return;
@@ -696,19 +719,27 @@ int64_t QueryExecutionContext::allocateCountDistinctSet() {
 
 ResultRows QueryExecutionContext::getRowSet(
     const std::vector<Analyzer::Expr*>& targets,
-    const bool was_auto_device) const {
+    const GpuSortInfo& gpu_sort_info,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool was_auto_device) const noexcept {
   std::vector<ResultRows> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(1, num_buffers_);
-    return groupBufferToResults(0, targets, was_auto_device);
+    return groupBufferToResults(0, targets, 0, was_auto_device);
   }
   size_t step { query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1 };
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
-    results_per_sm.emplace_back(groupBufferToResults(i, targets, was_auto_device));
+    results_per_sm.emplace_back(groupBufferToResults(
+      i, targets,
+      query_mem_desc.sortOnGpu(gpu_sort_info)
+        ? gpu_sort_info.topFudged()
+        : 0,
+      was_auto_device));
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
-  return executor_->reduceMultiDeviceResults(results_per_sm, row_set_mem_owner_, output_columnar_);
+  return executor_->reduceMultiDeviceResults(results_per_sm, row_set_mem_owner_,
+    gpu_sort_info, query_mem_desc, output_columnar_);
 }
 
 namespace {
@@ -765,13 +796,14 @@ std::vector<int64_t> arr_from_buffer(const int8_t* buff, const size_t buff_sz) {
 ResultRows QueryExecutionContext::groupBufferToResults(
     const size_t i,
     const std::vector<Analyzer::Expr*>& targets,
+    const size_t truncate_count,
     const bool was_auto_device) const {
   const size_t group_by_col_count { query_mem_desc_.group_col_widths.size() };
   const size_t agg_col_count { query_mem_desc_.agg_col_widths.size() };
   auto aggColumnarOff = [group_by_col_count, this](const size_t out_vec_idx, const size_t groups_buffer_entry_count) {
     return (out_vec_idx + group_by_col_count) * (output_columnar_ ? groups_buffer_entry_count : 1);
   };
-  auto impl = [group_by_col_count, agg_col_count, was_auto_device, this, &targets, aggColumnarOff](
+  auto impl = [group_by_col_count, agg_col_count, was_auto_device, truncate_count, this, &targets, aggColumnarOff](
       const size_t groups_buffer_entry_count,
       int64_t* group_by_buffer) {
     if (query_mem_desc_.keyless_hash && (!sort_on_gpu_ || device_type_ == ExecutorDeviceType::CPU)) {
@@ -790,6 +822,9 @@ ResultRows QueryExecutionContext::groupBufferToResults(
     }
     ResultRows results(targets, executor_, row_set_mem_owner_);
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
+      if (truncate_count && results.size() >= truncate_count) {
+        break;
+      }
       const size_t key_off = (output_columnar_ ? 1 : (group_by_col_count + agg_col_count)) * bin;
       if (group_by_buffer[key_off] == EMPTY_KEY) {
         continue;
@@ -964,14 +999,22 @@ ResultRows QueryExecutionContext::groupBufferToResults(
   };
   ResultRows results(targets, executor_, row_set_mem_owner_);
   if (query_mem_desc_.getSmallBufferSizeBytes()) {
+    CHECK(!sort_on_gpu_);
     results = impl(query_mem_desc_.entry_count_small, small_group_by_buffers_[i]);
   }
   CHECK_LT(i, group_by_buffers_.size());
   auto more_results = impl(query_mem_desc_.entry_count, group_by_buffers_[i]);
   if (query_mem_desc_.keyless_hash) {
+    CHECK(!sort_on_gpu_);
     return more_results;
   }
   results.append(more_results);
+  if (sort_on_gpu_ && device_type_ == ExecutorDeviceType::GPU) {
+    results.setSorted();
+    if (truncate_count && truncate_count < query_mem_desc_.entry_count) {
+      results.setTruncationSize(truncate_count);
+    }
+  }
   return results;
 }
 
@@ -1053,7 +1096,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned grid_size_z  = 1;
     if (query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0) {  // group by path
       CHECK(!group_by_buffers_.empty());
-      bool can_sort_on_gpu = query_mem_desc_.canSortOnGpu(gpu_sort_info);
+      bool can_sort_on_gpu = query_mem_desc_.sortOnGpu(gpu_sort_info);
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, small_group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id, can_sort_on_gpu && query_mem_desc_.keyless_hash);
@@ -1102,7 +1145,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
           sort_groups(
             reinterpret_cast<int64_t*>(val_buff),
             reinterpret_cast<int64_t*>(idx_buff),
-            query_mem_desc_.entry_count);
+            query_mem_desc_.entry_count,
+            order_entry.is_desc);
           if (!query_mem_desc_.keyless_hash) {
             apply_permutation(
               reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
@@ -1337,6 +1381,7 @@ GroupByAndAggregate::GroupByAndAggregate(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
+    const bool allow_multifrag,
     const GpuSortInfo& gpu_sort_info,
     const bool output_columnar_hint)
   : executor_(executor)
@@ -1354,13 +1399,15 @@ GroupByAndAggregate::GroupByAndAggregate(
       throw std::runtime_error("Group by not supported for none-encoding strings");
     }
   }
-  initQueryMemoryDescriptor(max_groups_buffer_entry_count);
-  output_columnar_ = output_columnar_hint && query_mem_desc_.usesGetGroupValueFast() &&
-    query_mem_desc_.threadsShareMemory() && query_mem_desc_.blocksShareMemory() &&
-    !query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU);
+  initQueryMemoryDescriptor(max_groups_buffer_entry_count, allow_multifrag, /* gpu_sort_info.sort_plan */ false);
+  output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) ||
+    query_mem_desc_.sortOnGpu(gpu_sort_info);
 }
 
-void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count) {
+void GroupByAndAggregate::initQueryMemoryDescriptor(
+    const size_t max_groups_buffer_entry_count,
+    const bool allow_multifrag,
+    const bool sort_on_gpu_hint) {
   auto group_cols = group_by_exprs(plan_);
   for (const auto group_expr : group_cols) {
     const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(group_expr);
@@ -1435,7 +1482,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
 
   if (group_col_widths.empty()) {
     query_mem_desc_ = {
-      executor_,
+      executor_, allow_multifrag,
       GroupByColRangeType::Scan, false, false,
       group_col_widths, agg_col_widths,
       0, 0,
@@ -1457,7 +1504,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
         ((group_cols.size() != 1 || !group_cols.front()->get_type_info().is_string()) &&
           col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count))) {
       query_mem_desc_ = {
-        executor_,
+        executor_, allow_multifrag,
         col_range_info.hash_type_, false, false,
         group_col_widths, agg_col_widths,
         max_groups_buffer_entry_count,
@@ -1468,32 +1515,34 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
       };
       return;
     } else {
-      bool keyless = true;
-      bool found_count = false;  // shouldn't use keyless for projection only
-      for (const auto target_expr : target_expr_list) {
-        auto agg_info = target_info(target_expr);
-        if (agg_info.is_agg) {
-          if (agg_info.agg_kind != kCOUNT) {
+      bool keyless = !sort_on_gpu_hint;
+      if (keyless) {
+        bool found_count = false;  // shouldn't use keyless for projection only
+        for (const auto target_expr : target_expr_list) {
+          auto agg_info = target_info(target_expr);
+          if (agg_info.is_agg) {
+            if (agg_info.agg_kind != kCOUNT) {
+              keyless = false;
+              break;
+            } else {
+              found_count = true;
+            }
+          }
+          if (!agg_info.is_agg && !dynamic_cast<Analyzer::ColumnVar*>(target_expr)) {
             keyless = false;
             break;
-          } else {
-            found_count = true;
           }
         }
-        if (!agg_info.is_agg && !dynamic_cast<Analyzer::ColumnVar*>(target_expr)) {
+        if (!found_count) {
           keyless = false;
-          break;
         }
-      }
-      if (!found_count) {
-        keyless = false;
       }
       const size_t bin_count = col_range_info.max - col_range_info.min + 1 + (col_range_info.has_nulls ? 1 : 0);
       const size_t interleaved_max_threshold { 20 };
       bool interleaved_bins = keyless &&
         bin_count <= interleaved_max_threshold;
       query_mem_desc_ = {
-        executor_,
+        executor_, allow_multifrag,
         col_range_info.hash_type_, keyless, interleaved_bins,
         group_col_widths, agg_col_widths,
         bin_count, 0,
@@ -1506,7 +1555,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   }
   case GroupByColRangeType::MultiCol: {
     query_mem_desc_ = {
-      executor_,
+      executor_, allow_multifrag,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       max_groups_buffer_entry_count, 0,
@@ -1518,7 +1567,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   }
   case GroupByColRangeType::MultiColPerfectHash: {
     query_mem_desc_ = {
-      executor_,
+      executor_, allow_multifrag,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       static_cast<size_t>(col_range_info.max), 0,
@@ -1580,8 +1629,40 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
   return shared_mem_bytes;
 }
 
-bool QueryMemoryDescriptor::canSortOnGpu(const GpuSortInfo& gpu_sort_info) const {
-  return false;
+bool QueryMemoryDescriptor::canOutputColumnar() const {
+  return usesGetGroupValueFast() &&
+    threadsShareMemory() && blocksShareMemory() &&
+    !interleavedBins(ExecutorDeviceType::GPU);
+}
+
+bool QueryMemoryDescriptor::sortOnGpu(const GpuSortInfo& gpu_sort_info) const {
+  if (!allow_multifrag_ || !gpu_sort_info.sort_plan || !canOutputColumnar() || keyless_hash) {
+    return false;
+  }
+  const auto& target_list = gpu_sort_info.sort_plan->get_child_plan()->get_targetlist();
+  const auto& order_entries = gpu_sort_info.sort_plan->get_order_entries();
+  if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
+    return false;
+  }
+  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
+    CHECK_GE(order_entry.tle_no, 1);
+    CHECK_LE(order_entry.tle_no, target_list.size());
+    const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
+    if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
+      return false;
+    }
+    // TODO(alex): relax the restrictions
+    auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
+    if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG) {
+      return false;
+    }
+    const auto& target_ti = target_expr->get_type_info();
+    CHECK(!target_ti.is_array());
+    if (!target_ti.is_integer()) {
+      return false;
+    }
+  }
+  return /* true */ false;
 }
 
 GroupByAndAggregate::DiamondCodegen::DiamondCodegen(

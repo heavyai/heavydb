@@ -1741,6 +1741,8 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* o
 ResultRows Executor::reduceMultiDeviceResults(
     const std::vector<ResultRows>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const GpuSortInfo& gpu_sort_info,
+    const QueryMemoryDescriptor& query_mem_desc,
     const bool output_columnar) const {
   if (results_per_device.empty()) {
     return ResultRows({}, nullptr, nullptr);
@@ -1749,7 +1751,7 @@ ResultRows Executor::reduceMultiDeviceResults(
   auto reduced_results = results_per_device.front();
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results.reduce(results_per_device[i], output_columnar);
+    reduced_results.reduce(results_per_device[i], gpu_sort_info, query_mem_desc, output_columnar);
   }
 
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
@@ -1972,7 +1974,7 @@ ResultRows Executor::executeResultPlan(
     target_exprs.emplace_back(target_entry->get_expr());
   }
   QueryMemoryDescriptor query_mem_desc {
-    this,
+    this, allow_multifrag,
     GroupByColRangeType::OneColGuessedRange, false, false,
     { sizeof(int64_t) },
     get_col_byte_widths(target_exprs),
@@ -1992,7 +1994,7 @@ ResultRows Executor::executeResultPlan(
   }
   std::string llvm_ir;
   auto compilation_result = compilePlan(result_plan, {}, agg_infos, pseudo_scan_cols,
-    result_plan->get_constquals(), result_plan->get_quals(), hoist_literals,
+    result_plan->get_constquals(), result_plan->get_quals(), hoist_literals, allow_multifrag,
     ExecutorDeviceType::CPU, opt_level, nullptr, false, row_set_mem_owner_, result_rows.size(), 0,
       empty_gpu_sort_info, false, just_explain, llvm_ir);
   auto column_buffers = result_columns.getColumnBuffers();
@@ -2006,7 +2008,7 @@ ResultRows Executor::executeResultPlan(
     multi_frag_col_buffers, { static_cast<int64_t>(result_columns.size()) }, 0, init_agg_vals,
     query_exe_context->group_by_buffers_, query_exe_context->small_group_by_buffers_, error_code);
   CHECK(!*error_code);
-  return query_exe_context->groupBufferToResults(0, target_exprs, false);
+  return query_exe_context->groupBufferToResults(0, target_exprs, 0, false);
 }
 
 ResultRows Executor::executeSortPlan(
@@ -2022,13 +2024,9 @@ ResultRows Executor::executeSortPlan(
     const bool allow_multifrag,
     const bool just_explain) {
   *error_code = 0;
-  // We'll ask for more top rows than the query requires so that we have a very
-  // high chance to reconstitute the full top out of the fragments; since we
-  // don't have any data about what'd be a good value, we might need to tweak it.
-  const int64_t top_fudge_factor { 16 };
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
-    error_code, { sort_plan, top_fudge_factor * (limit + offset) },
+    error_code, { sort_plan,  limit + offset },
     allow_multifrag, just_explain);
   if (just_explain) {
     return rows_to_sort;
@@ -2043,22 +2041,6 @@ ResultRows Executor::executeSortPlan(
     }
   }
   return rows_to_sort;
-}
-
-bool Executor::canSortOnGpu(const Planner::Sort* sort_plan) {
-  const auto& target_list = sort_plan->get_child_plan()->get_targetlist();
-  const auto& order_entries = sort_plan->get_order_entries();
-  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
-    CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(order_entry.tle_no, target_list.size());
-    const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
-    const auto& target_ti = target_expr->get_type_info();
-    CHECK(!target_ti.is_array());
-    if (target_ti.is_string()) {
-      return false;
-    }
-  }
-  return false;
 }
 
 ResultRows Executor::executeAggScanPlan(
@@ -2123,7 +2105,7 @@ ResultRows Executor::executeAggScanPlan(
       compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
-        hoist_literals, ExecutorDeviceType::CPU, opt_level,
+        hoist_literals, allow_multifrag, ExecutorDeviceType::CPU, opt_level,
         cat.get_dataMgr().cudaMgr_, true, row_set_mem_owner,
         max_groups_buffer_entry_guess, scan_limit, gpu_sort_info,
         output_columnar_hint, just_explain, llvm_ir_cpu);
@@ -2131,7 +2113,7 @@ ResultRows Executor::executeAggScanPlan(
       compilation_result_cpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
-        hoist_literals, ExecutorDeviceType::CPU, opt_level,
+        hoist_literals, allow_multifrag, ExecutorDeviceType::CPU, opt_level,
         cat.get_dataMgr().cudaMgr_, false, row_set_mem_owner,
         max_groups_buffer_entry_guess, scan_limit, gpu_sort_info,
         output_columnar_hint, just_explain, llvm_ir_cpu);
@@ -2150,7 +2132,7 @@ ResultRows Executor::executeAggScanPlan(
       compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
-        hoist_literals, ExecutorDeviceType::GPU, opt_level,
+        hoist_literals, allow_multifrag, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
         true, row_set_mem_owner, max_groups_buffer_entry_guess, scan_limit,
         gpu_sort_info, output_columnar_hint, just_explain, llvm_ir_gpu);
@@ -2158,7 +2140,7 @@ ResultRows Executor::executeAggScanPlan(
       compilation_result_gpu = compilePlan(plan, query_info, agg_infos,
         scan_plan->get_col_list(),
         simple_quals, scan_plan->get_quals(),
-        hoist_literals, ExecutorDeviceType::GPU, opt_level,
+        hoist_literals, allow_multifrag, ExecutorDeviceType::GPU, opt_level,
         cat.get_dataMgr().cudaMgr_,
         false, row_set_mem_owner, max_groups_buffer_entry_guess, scan_limit,
         gpu_sort_info, output_columnar_hint, just_explain, llvm_ir_gpu);
@@ -2253,7 +2235,7 @@ ResultRows Executor::executeAggScanPlan(
       : compilation_result.query_mem_desc.getQueryExecutionContext(
           plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id,
           col_buffers, row_set_mem_owner, compilation_result.output_columnar,
-          compilation_result.query_mem_desc.canSortOnGpu(gpu_sort_info));
+          compilation_result.query_mem_desc.sortOnGpu(gpu_sort_info));
     QueryExecutionContext* query_exe_context { query_exe_context_owned.get() };
     std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
     if (compilation_result.query_mem_desc.usesCachedContext()) {
@@ -2263,7 +2245,7 @@ ResultRows Executor::executeAggScanPlan(
           plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id,
           col_buffers, row_set_mem_owner,
           compilation_result.output_columnar,
-          compilation_result.query_mem_desc.canSortOnGpu(gpu_sort_info));
+          compilation_result.query_mem_desc.sortOnGpu(gpu_sort_info));
       }
       query_exe_context = query_contexts[ctx_idx].get();
     }
@@ -2317,29 +2299,56 @@ ResultRows Executor::executeAggScanPlan(
     agg_plan, limit, fragments, simple_quals, context_count,
     scheduler_cv, scheduler_mutex, available_gpus, available_cpus);
   cat.get_dataMgr().freeAllBuffers();
+  const bool frag_vec_was_empty { all_fragment_results.empty() };
   if (agg_plan) {
-    for (const auto& query_exe_context : query_contexts) {
-      if (!query_exe_context) {
-        continue;
-      }
-      all_fragment_results.push_back(query_exe_context->getRowSet(get_agg_target_exprs(plan),
-        device_type == ExecutorDeviceType::Hybrid));
-    }
     const bool output_columnar = compilation_result_cpu.native_functions.empty()
       ? compilation_result_gpu.output_columnar
       : false;
-    auto reduced_results = reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner, output_columnar);
-    if (reduced_results.group_by_buffer_) {
-      reduced_results.addKeylessGroupByBuffer(
-        reduced_results.group_by_buffer_,
-        reduced_results.groups_buffer_entry_count_,
-        reduced_results.min_val_,
-        reduced_results.warp_count_,
-        output_columnar);
+    try {
+      return collectAllDeviceResults(all_fragment_results, plan, query_mem_desc,
+        gpu_sort_info, device_type, query_contexts, row_set_mem_owner, output_columnar);
+    } catch (SpeculativeTopFailed&) {
+      // Optimistic reduction for top has failed, redo the result rows.
+      CHECK(frag_vec_was_empty);
+      decltype(all_fragment_results)().swap(all_fragment_results);
+      return collectAllDeviceResults(all_fragment_results, plan, query_mem_desc,
+        { gpu_sort_info.sort_plan, 0 }, device_type, query_contexts,
+        row_set_mem_owner, output_columnar);
     }
-    return reduced_results;
   }
   return results_union(all_fragment_results);
+}
+
+ResultRows Executor::collectAllDeviceResults(
+    std::vector<ResultRows>& all_fragment_results,
+    const Planner::Plan* plan,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const GpuSortInfo& gpu_sort_info,
+    const ExecutorDeviceType device_type,
+    const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar) {
+  for (const auto& query_exe_context : query_contexts) {
+    if (!query_exe_context) {
+      continue;
+    }
+    all_fragment_results.push_back(query_exe_context->getRowSet(
+      get_agg_target_exprs(plan),
+      gpu_sort_info,
+      query_mem_desc,
+      device_type == ExecutorDeviceType::Hybrid));
+  }
+  auto reduced_results = reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner,
+    gpu_sort_info, query_mem_desc, output_columnar);
+  if (reduced_results.group_by_buffer_) {
+    reduced_results.addKeylessGroupByBuffer(
+      reduced_results.group_by_buffer_,
+      reduced_results.groups_buffer_entry_count_,
+      reduced_results.min_val_,
+      reduced_results.warp_count_,
+      output_columnar);
+  }
+  return reduced_results;
 }
 
 void Executor::dispatchFragments(
@@ -2581,7 +2590,9 @@ int32_t Executor::executePlanWithGroupBy(
     }
   }
   if (!query_exe_context->query_mem_desc_.usesCachedContext()) {
-    results = query_exe_context->getRowSet(target_exprs, was_auto_device);
+    CHECK(!query_exe_context->query_mem_desc_.sortOnGpu(gpu_sort_info));
+    results = query_exe_context->getRowSet(
+      target_exprs, gpu_sort_info, query_exe_context->query_mem_desc_, was_auto_device);
   }
   if (error_code && (!scan_limit || results.size() < static_cast<size_t>(scan_limit))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
@@ -2968,6 +2979,7 @@ Executor::CompilationResult Executor::compilePlan(
     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
     const bool hoist_literals,
+    const bool allow_multifrag,
     const ExecutorDeviceType device_type,
     const ExecutorOptLevel opt_level,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
@@ -2982,7 +2994,7 @@ Executor::CompilationResult Executor::compilePlan(
   nukeOldState(allow_lazy_fetch);
 
   GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner,
-    max_groups_buffer_entry_guess, scan_limit, gpu_sort_info,
+    max_groups_buffer_entry_guess, scan_limit, allow_multifrag, gpu_sort_info,
     output_columnar_hint && device_type == ExecutorDeviceType::GPU);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
