@@ -1458,21 +1458,19 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
     } else {
       bool keyless = true;
       bool found_count = false;  // shouldn't use keyless for projection only
-      if (keyless) {
-        for (const auto target_expr : target_expr_list) {
-          auto agg_info = target_info(target_expr);
-          if (agg_info.is_agg) {
-            if (agg_info.agg_kind != kCOUNT) {
-              keyless = false;
-              break;
-            } else {
-              found_count = true;
-            }
-          }
-          if (!agg_info.is_agg && !dynamic_cast<Analyzer::ColumnVar*>(target_expr)) {
+      for (const auto target_expr : target_expr_list) {
+        auto agg_info = target_info(target_expr);
+        if (agg_info.is_agg) {
+          if (agg_info.agg_kind != kCOUNT) {
             keyless = false;
             break;
+          } else {
+            found_count = true;
           }
+        }
+        if (!agg_info.is_agg && !dynamic_cast<Analyzer::ColumnVar*>(target_expr)) {
+          keyless = false;
+          break;
         }
       }
       if (!found_count) {
