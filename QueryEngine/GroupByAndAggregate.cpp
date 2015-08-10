@@ -1333,7 +1333,6 @@ GroupByAndAggregate::GroupByAndAggregate(
   , plan_(plan)
   , query_info_(query_info)
   , row_set_mem_owner_(row_set_mem_owner)
-  , max_groups_buffer_entry_count_(max_groups_buffer_entry_count)
   , scan_limit_(scan_limit)
   , output_columnar_hint_(output_columnar_hint) {
   CHECK(plan_);
@@ -1346,9 +1345,10 @@ GroupByAndAggregate::GroupByAndAggregate(
       throw std::runtime_error("Group by not supported for none-encoding strings");
     }
   }
+  initQueryMemoryDescriptor(max_groups_buffer_entry_count);
 }
 
-QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count) {
+void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count) {
   auto group_cols = group_by_exprs(plan_);
   for (const auto group_expr : group_cols) {
     const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(group_expr);
@@ -1422,7 +1422,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
   auto agg_col_widths = get_col_byte_widths(target_expr_list);
 
   if (group_col_widths.empty()) {
-    return {
+    query_mem_desc_ = {
       executor_,
       GroupByColRangeType::Scan, false, false,
       group_col_widths, agg_col_widths,
@@ -1431,6 +1431,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       GroupByMemSharing::Private,
       count_distinct_descriptors
     };
+    return;
   }
 
   const auto col_range_info = getColRangeInfo(query_info_.fragments);
@@ -1443,7 +1444,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
         col_range_info.hash_type_ == GroupByColRangeType::Scan ||
         ((group_cols.size() != 1 || !group_cols.front()->get_type_info().is_string()) &&
           col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count))) {
-      return {
+      query_mem_desc_ = {
         executor_,
         col_range_info.hash_type_, false, false,
         group_col_widths, agg_col_widths,
@@ -1453,6 +1454,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
         GroupByMemSharing::Shared,
         count_distinct_descriptors
       };
+      return;
     } else {
       bool keyless = true;
       bool found_count = false;  // shouldn't use keyless for projection only
@@ -1480,7 +1482,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       const size_t interleaved_max_threshold { 20 };
       bool interleaved_bins = keyless &&
         bin_count <= interleaved_max_threshold;
-      return {
+      query_mem_desc_ = {
         executor_,
         col_range_info.hash_type_, keyless, interleaved_bins,
         group_col_widths, agg_col_widths,
@@ -1489,10 +1491,11 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
         GroupByMemSharing::Shared,
         count_distinct_descriptors
       };
+      return;
     }
   }
   case GroupByColRangeType::MultiCol: {
-    return {
+    query_mem_desc_ = {
       executor_,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
@@ -1501,9 +1504,10 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       GroupByMemSharing::Shared,
       count_distinct_descriptors
     };
+    return;
   }
   case GroupByColRangeType::MultiColPerfectHash: {
-    return {
+    query_mem_desc_ = {
       executor_,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
@@ -1512,12 +1516,17 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor(const size_t
       GroupByMemSharing::Shared,
       count_distinct_descriptors
     };
+    return;
   }
   default:
     CHECK(false);
   }
   CHECK(false);
-  return {};
+  return;
+}
+
+QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
+  return query_mem_desc_;
 }
 
 bool GroupByAndAggregate::outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const {
@@ -1619,7 +1628,7 @@ bool GroupByAndAggregate::codegen(
 
   {
     const bool is_group_by = !group_by_exprs(plan_).empty();
-    auto query_mem_desc = getQueryMemoryDescriptor(max_groups_buffer_entry_count_);
+    auto query_mem_desc = getQueryMemoryDescriptor();
 
     DiamondCodegen filter_cfg(filter_result, executor_,
       !is_group_by || query_mem_desc.usesGetGroupValueFast(), "filter");

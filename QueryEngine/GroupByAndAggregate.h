@@ -902,7 +902,7 @@ public:
     const GpuSortInfo& gpu_sort_info,
     const bool output_columnar_hint);
 
-  QueryMemoryDescriptor getQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count);
+  QueryMemoryDescriptor getQueryMemoryDescriptor();
 
   bool outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const;
 
@@ -940,6 +940,8 @@ private:
     bool chain_to_next_;
     DiamondCodegen* parent_;
   };
+
+  void initQueryMemoryDescriptor(const size_t);
 
   llvm::Value* codegenGroupBy(
     const QueryMemoryDescriptor&,
@@ -980,11 +982,11 @@ private:
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
 
+  QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;
   const Planner::Plan* plan_;
   const Fragmenter_Namespace::QueryInfo& query_info_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-  const size_t max_groups_buffer_entry_count_;
   const int64_t scan_limit_;
   bool output_columnar_hint_;
 

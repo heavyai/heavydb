@@ -2984,7 +2984,7 @@ Executor::CompilationResult Executor::compilePlan(
   GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner,
     max_groups_buffer_entry_guess, scan_limit, gpu_sort_info,
     output_columnar_hint && device_type == ExecutorDeviceType::GPU);
-  auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor(max_groups_buffer_entry_guess);
+  auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   const bool output_columnar =
     group_by_and_aggregate.outputColumnar(query_mem_desc) ||
