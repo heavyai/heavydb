@@ -902,7 +902,7 @@ public:
     const GpuSortInfo& gpu_sort_info,
     const bool output_columnar_hint);
 
-  QueryMemoryDescriptor getQueryMemoryDescriptor();
+  QueryMemoryDescriptor getQueryMemoryDescriptor() const;
 
   bool outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const;
 

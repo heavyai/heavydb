@@ -1525,7 +1525,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   return;
 }
 
-QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() {
+QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() const {
   return query_mem_desc_;
 }
 
