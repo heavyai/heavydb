@@ -1333,8 +1333,7 @@ GroupByAndAggregate::GroupByAndAggregate(
   , plan_(plan)
   , query_info_(query_info)
   , row_set_mem_owner_(row_set_mem_owner)
-  , scan_limit_(scan_limit)
-  , output_columnar_hint_(output_columnar_hint) {
+  , scan_limit_(scan_limit) {
   CHECK(plan_);
   for (const auto groupby_expr : group_by_exprs(plan_)) {
     if (!groupby_expr) {
@@ -1346,6 +1345,9 @@ GroupByAndAggregate::GroupByAndAggregate(
     }
   }
   initQueryMemoryDescriptor(max_groups_buffer_entry_count);
+  output_columnar_ = output_columnar_hint && query_mem_desc_.usesGetGroupValueFast() &&
+    query_mem_desc_.threadsShareMemory() && query_mem_desc_.blocksShareMemory() &&
+    !query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU);
 }
 
 void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count) {
@@ -1528,12 +1530,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() const {
 }
 
 bool GroupByAndAggregate::outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const {
-  return output_columnar_hint_ && query_mem_desc.usesGetGroupValueFast() &&
-    !query_mem_desc.interleavedBins(ExecutorDeviceType::GPU);
-}
-
-void GroupByAndAggregate::setOutputColumnarHint() {
-  output_columnar_hint_ = true;
+  return output_columnar_;
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {

@@ -906,8 +906,6 @@ public:
 
   bool outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const;
 
-  void setOutputColumnarHint();  // TODO(alex): remove
-
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
   bool codegen(
@@ -988,7 +986,7 @@ private:
   const Fragmenter_Namespace::QueryInfo& query_info_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const int64_t scan_limit_;
-  bool output_columnar_hint_;
+  bool output_columnar_;
 
   friend class Executor;
 };
