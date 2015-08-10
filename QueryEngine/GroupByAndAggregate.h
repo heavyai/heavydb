@@ -87,10 +87,19 @@ class RowSetMemoryOwner;
 struct GpuSortInfo {
   const Planner::Sort* sort_plan;
   const int64_t top_count;
+
+  int64_t topFudged() const {
+    // We'll ask for more top rows than the query requires so that we have a very
+    // high chance to reconstitute the full top out of the fragments; since we
+    // don't have any data about what'd be a good value, we might need to tweak it.
+    const int64_t top_fudge_factor { 16 };
+    return top_count * top_fudge_factor;
+  }
 };
 
 struct QueryMemoryDescriptor {
   const Executor* executor_;
+  bool allow_multifrag_;
   GroupByColRangeType hash_type;
   bool keyless_hash;
   bool interleaved_bins_on_gpu;
@@ -135,7 +144,9 @@ struct QueryMemoryDescriptor {
 
   size_t sharedMemBytes(const ExecutorDeviceType) const;
 
-  bool canSortOnGpu(const GpuSortInfo&) const;
+  bool canOutputColumnar() const;
+
+  bool sortOnGpu(const GpuSortInfo&) const;
 };
 
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
@@ -570,6 +581,11 @@ private:
   friend class ResultRows;
 };
 
+class SpeculativeTopFailed : public std::runtime_error {
+public:
+  SpeculativeTopFailed() : std::runtime_error("SpeculativeTopFailed") {}
+};
+
 class ResultRows {
 public:
   ResultRows(const std::vector<Analyzer::Expr*>& targets,
@@ -597,6 +613,14 @@ public:
   explicit ResultRows(const std::string& explanation)
     : just_explain_(true)
     , explanation_(explanation) {}
+
+  void setTruncationSize(const size_t truncation_size) {
+    truncation_size_ = truncation_size;
+  }
+
+  void setSorted() {
+    sorted_ = true;
+  }
 
   void beginRow() {
     target_values_.beginRow(row_set_mem_owner_.get());
@@ -649,7 +673,11 @@ public:
     target_values_.append(more_results.target_values_);
   }
 
-  void reduce(const ResultRows& other_results, const bool output_columnar);
+  void reduce(
+    const ResultRows& other_results,
+    const GpuSortInfo& gpu_sort_info,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool output_columnar);
 
   void sort(const Planner::Sort* sort_plan, const int64_t top_n);
 
@@ -828,10 +856,15 @@ public:
     const bool sort_on_gpu);
 
   // TOOD(alex): get rid of targets parameter
-  ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets, const bool was_auto_device) const;
+  ResultRows getRowSet(
+      const std::vector<Analyzer::Expr*>& targets,
+      const GpuSortInfo& gpu_sort_info,
+      const QueryMemoryDescriptor& query_mem_desc,
+      const bool was_auto_device) const noexcept;
   ResultRows groupBufferToResults(
     const size_t i,
     const std::vector<Analyzer::Expr*>& targets,
+    const size_t truncate_count,
     const bool was_auto_device) const;
 
   std::vector<int64_t*> launchGpuCode(
@@ -899,6 +932,7 @@ public:
     std::shared_ptr<RowSetMemoryOwner>,
     const size_t max_groups_buffer_entry_count,
     const int64_t scan_limit,
+    const bool allow_multifrag,
     const GpuSortInfo& gpu_sort_info,
     const bool output_columnar_hint);
 
@@ -939,7 +973,7 @@ private:
     DiamondCodegen* parent_;
   };
 
-  void initQueryMemoryDescriptor(const size_t);
+  void initQueryMemoryDescriptor(const size_t, const bool allow_multifrag, const bool sort_on_gpu_hint);
 
   llvm::Value* codegenGroupBy(
     const QueryMemoryDescriptor&,
