@@ -737,6 +737,9 @@ public:
     copy_params.quoted = quoted;
 
     // TODO(andrew): add delimiter detection to Importer
+    if (delimiter.length() == 0) {
+      copy_params.delimiter= ',';
+    }
     if (boost::filesystem::extension(file_path) == ".tsv") {
       copy_params.delimiter = '\t';
     }
