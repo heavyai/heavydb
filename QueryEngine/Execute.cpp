@@ -171,7 +171,7 @@ ResultRows Executor::execute(
   const auto stmt_type = root_plan->get_stmt_type();
   std::lock_guard<std::mutex> lock(execute_mutex_);
   RowSetHolder row_set_holder(this);
-  GpuSortInfo empty_gpu_sort_info { {}, 0 };
+  GpuSortInfo empty_gpu_sort_info { nullptr, 0 };
   switch (stmt_type) {
   case kSELECT: {
     int32_t error_code { 0 };
@@ -1934,7 +1934,7 @@ ResultRows Executor::executeResultPlan(
     const bool just_explain) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
-  GpuSortInfo empty_gpu_sort_info { {}, 0 };
+  GpuSortInfo empty_gpu_sort_info { nullptr, 0 };
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   auto result_rows = executeAggScanPlan(agg_plan, 0, hoist_literals, device_type, opt_level, cat,
     row_set_mem_owner_, max_groups_buffer_entry_guess, error_code, empty_gpu_sort_info,
@@ -2028,7 +2028,7 @@ ResultRows Executor::executeSortPlan(
   const int64_t top_fudge_factor { 16 };
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(), 0, 0,
     hoist_literals, device_type, opt_level, cat, max_groups_buffer_entry_guess,
-    error_code, { sort_plan->get_order_entries(), top_fudge_factor * (limit + offset) },
+    error_code, { sort_plan, top_fudge_factor * (limit + offset) },
     allow_multifrag, just_explain);
   if (just_explain) {
     return rows_to_sort;
@@ -2504,7 +2504,7 @@ int32_t Executor::executePlanWithoutGroupBy(
       col_buffers, num_rows, 0, query_exe_context->init_agg_vals_, {}, {}, &error_code);
   } else {
     try {
-      GpuSortInfo empty_gpu_sort_info { {}, 0 };
+      GpuSortInfo empty_gpu_sort_info { nullptr, 0 };
       out_vec = query_exe_context->launchGpuCode(
         compilation_result.native_functions, hoist_literals, hoist_buf,
         col_buffers, num_rows, 0, query_exe_context->init_agg_vals_,

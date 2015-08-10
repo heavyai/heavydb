@@ -1082,10 +1082,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        nullptr, kernel_params, nullptr));
       }
       if (can_sort_on_gpu) {
-        CHECK_EQ(size_t(1), gpu_sort_info.order_entries.size());
+        CHECK(gpu_sort_info.sort_plan);
+        const auto& order_entries = gpu_sort_info.sort_plan->get_order_entries();
+        CHECK_EQ(size_t(1), order_entries.size());
         const auto idx_buff = gpu_query_mem.group_by_buffers.second -
           query_mem_desc_.entry_count * sizeof(int64_t);
-        for (const auto& order_entry : gpu_sort_info.order_entries) {
+        for (const auto& order_entry : order_entries) {
           const auto val_buff = gpu_query_mem.group_by_buffers.second +
             (order_entry.tle_no - 1 + (query_mem_desc_.keyless_hash ? 0 : 1)) *
             query_mem_desc_.entry_count * sizeof(int64_t);

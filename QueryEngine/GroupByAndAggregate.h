@@ -85,7 +85,7 @@ typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescrip
 class RowSetMemoryOwner;
 
 struct GpuSortInfo {
-  const std::list<Analyzer::OrderEntry>& order_entries;
+  const Planner::Sort* sort_plan;
   const int64_t top_count;
 };
 
