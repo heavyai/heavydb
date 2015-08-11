@@ -26,13 +26,15 @@ if [ -d frontend ]; then
     if [ ! -e downloads ]; then
         ln -s ../data/mapd_export downloads
     fi
-    trap 'kill -TERM $WEBPID' TERM INT
-    PYTHONVERS=$(python -c 'import sys; print(sys.version_info[0])')
-    if [ "$PYTHONVERS" -eq "2" ]; then
-        python -m SimpleHTTPServer 9092 &
-    else
-        python -m http.server 9092 &
+    popd
+
+    pushd upload_server
+    if [ ! -e uploads ]; then
+        #ln -s ../data/mapd_import uploads
+        mkdir -p uploads
     fi
+    trap 'kill -TERM $WEBPID' TERM INT
+    PORT=9092 bin/node index.js &
     WEBPID=$!
 
     MAPDFRONTEND="http://localhost:9092"

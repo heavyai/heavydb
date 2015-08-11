@@ -3,20 +3,22 @@ var multer  = require('multer');
 var fs = require('fs');
 var cors = require('cors');
 var bodyParser = require('body-parser');
-var port = process.env.PORT || 8000;
+var port = process.env.PORT || 9092;
 var app = express();
 var path = require('path');
+var logger = require('morgan');
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cors());
+app.use(logger('combined'));
 
 
 var parentDirectory = path.dirname(require.main.filename).split('/');
 parentDirectory.pop();
 parentDirectory = parentDirectory.join('/');
 // serve up static assets
-app.use(express.static(parentDirectory +  '/build/frontend/'));
+app.use(express.static(parentDirectory +  '/frontend/'));
 
 var mkdirSync = function (path) {
   try {

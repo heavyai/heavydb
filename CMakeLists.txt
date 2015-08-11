@@ -106,6 +106,29 @@ if(MAPD2_FRONTEND_DOWNLOAD)
     )
   ExternalProject_Get_Property(frontend source_dir)
   install(DIRECTORY ${source_dir} DESTINATION "." PATTERN .git EXCLUDE)
+  file(COPY ${source_dir}/ DESTINATION frontend)
+endif()
+
+## Node server
+option(MAPD2_NODEJS_SERVER "Download Node server for uploads and frontend" OFF)
+set(MAPD2_NODE_VERSION "0.12.7" CACHE STRING "Version of Node to download")
+string(TOLOWER ${CMAKE_SYSTEM_NAME} MAPD2_NODE_SYSTEM_NAME)
+if(MAPD2_NODEJS_SERVER)
+  include(ExternalProject)
+  ExternalProject_Add(upload_server
+    URL "http://nodejs.org/dist/v${MAPD2_NODE_VERSION}/node-v${MAPD2_NODE_VERSION}-${MAPD2_NODE_SYSTEM_NAME}-x64.tar.gz" #TODO: architecture
+    PREFIX external
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+    UPDATE_COMMAND ""
+    )
+  ExternalProject_Get_Property(upload_server source_dir)
+  install(DIRECTORY ${source_dir}/ DESTINATION "upload_server" USE_SOURCE_PERMISSIONS)
+  install(FILES ${CMAKE_SOURCE_DIR}/nodeUploadServer/index.js ${CMAKE_SOURCE_DIR}/nodeUploadServer/package.json DESTINATION upload_server)
+  file(COPY ${source_dir}/ ${CMAKE_SOURCE_DIR}/nodeUploadServer/index.js ${CMAKE_SOURCE_DIR}/nodeUploadServer/package.json DESTINATION upload_server)
+  add_custom_command(TARGET upload_server COMMAND ${source_dir}/bin/npm install WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/upload_server)
+  install(DIRECTORY ${CMAKE_BINARY_DIR}/upload_server/node_modules DESTINATION upload_server)
 endif()
 
 install(TARGETS initdb mapd mapd_server mapd_http_server DESTINATION bin)
