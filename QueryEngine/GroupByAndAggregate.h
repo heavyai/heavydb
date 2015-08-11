@@ -602,6 +602,12 @@ public:
     target_values_.beginRow(row_set_mem_owner_.get());
   }
 
+  void beginRow(const int64_t key) {
+    CHECK(multi_keys_.empty());
+    simple_keys_.push_back(key);
+    target_values_.beginRow(row_set_mem_owner_.get());
+  }
+
   void beginRow(const std::vector<int64_t>& key) {
     CHECK(simple_keys_.empty());
     multi_keys_.push_back(key);
@@ -694,12 +700,6 @@ public:
   }
 
 private:
-  void beginRow(const int64_t key) {
-    CHECK(multi_keys_.empty());
-    simple_keys_.push_back(key);
-    target_values_.beginRow(row_set_mem_owner_.get());
-  }
-
   void addValues(const std::vector<int64_t>& vals) {
     target_values_.reserveRow(vals.size());
     for (const auto val : vals) {

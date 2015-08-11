@@ -310,17 +310,17 @@ TEST(Select, FloatAndDoubleTests) {
     c("SELECT SUM(f + d) FROM test WHERE x + y + 1 = 50;", dt);
     c("SELECT SUM(f * d + 15) FROM test WHERE x + y + 1 = 50;", dt);
     c("SELECT MIN(x), AVG(x * y), MAX(y + 7), AVG(x * f + 15), COUNT(*) FROM test WHERE x + y > 47 AND x + y < 51;", dt);
-    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(y) > 42.0;", dt);
-    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09;", dt);
-    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09 AND AVG(y) > 42.0;", dt);
-    c("SELECT AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(d) > 2.2 AND AVG(y) > 42.0;", dt);
-    c("SELECT AVG(f), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(d) > 2.2 AND AVG(y) > 42.0;", dt);
-    c("SELECT AVG(f) + AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.0;", dt);
-    c("SELECT AVG(f) + AVG(d), MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.5;", dt);
+    c("SELECT AVG(f), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(y) > 42.0 ORDER BY n;", dt);
+    c("SELECT AVG(f), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09 ORDER BY n;", dt);
+    c("SELECT AVG(f), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) > 1.09 AND AVG(y) > 42.0 ORDER BY n;", dt);
+    c("SELECT AVG(d), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(d) > 2.2 AND AVG(y) > 42.0 ORDER BY n;", dt);
+    c("SELECT AVG(f), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(d) > 2.2 AND AVG(y) > 42.0 ORDER BY n;", dt);
+    c("SELECT AVG(f) + AVG(d), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.0 ORDER BY n;", dt);
+    c("SELECT AVG(f) + AVG(d), MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING AVG(f) + AVG(d) > 3.5 ORDER BY n;", dt);
     c("SELECT f + d AS s, x * y FROM test ORDER by s DESC;", dt);
-    c("SELECT COUNT(*) FROM test GROUP BY f;", dt);
-    c("SELECT COUNT(*) FROM test GROUP BY d;", dt);
-    c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d;", dt);
+    c("SELECT COUNT(*) AS n FROM test GROUP BY f ORDER BY n;", dt);
+    c("SELECT COUNT(*) AS n FROM test GROUP BY d ORDER BY n;", dt);
+    c("SELECT MIN(x + y) AS n FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, f + d ORDER BY n;", dt);
     c("SELECT f + d AS s FROM test GROUP BY s ORDER BY s DESC;", dt);
   }
 }
@@ -355,14 +355,14 @@ TEST(Select, FilterAndGroupByMultipleAgg) {
 TEST(Select, Having) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
-    c("SELECT MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING MAX(x) > 5;", dt);
-    c("SELECT MAX(y) FROM test WHERE x = 7 GROUP BY z HAVING MAX(x) > 5 LIMIT 1;", dt);
-    c("SELECT MAX(y) FROM test WHERE x > 7 GROUP BY z HAVING MAX(x) < 100;", dt);
-    c("SELECT z, SUM(y) FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100;", dt);
-    c("SELECT z, SUM(y) FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 AND COUNT(*) > 5;", dt);
-    c("SELECT z, SUM(y) FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 AND COUNT(*) > 9;", dt);
-    c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING str IN ('bar', 'baz');", dt);
-    c("SELECT str, COUNT(*) FROM test GROUP BY str HAVING str LIKE 'ba_';", dt);
+    c("SELECT MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING MAX(x) > 5 ORDER BY n;", dt);
+    c("SELECT MAX(y) AS n FROM test WHERE x = 7 GROUP BY z HAVING MAX(x) > 5 ORDER BY n LIMIT 1;", dt);
+    c("SELECT MAX(y) AS n FROM test WHERE x > 7 GROUP BY z HAVING MAX(x) < 100 ORDER BY n;", dt);
+    c("SELECT z, SUM(y) AS n FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 ORDER BY n;", dt);
+    c("SELECT z, SUM(y) AS n FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 AND COUNT(*) > 5 ORDER BY n;", dt);
+    c("SELECT z, SUM(y) AS n FROM test WHERE x > 6 GROUP BY z HAVING MAX(x) < 100 AND COUNT(*) > 9 ORDER BY n;", dt);
+    c("SELECT str, COUNT(*) AS n FROM test GROUP BY str HAVING str IN ('bar', 'baz') ORDER BY n;", dt);
+    c("SELECT str, COUNT(*) AS n FROM test GROUP BY str HAVING str LIKE 'ba_' ORDER BY n;", dt);
   }
 }
 
@@ -375,9 +375,9 @@ TEST(Select, CountDistinct) {
     c("SELECT COUNT(distinct d) FROM test;", dt);
     c("SELECT COUNT(distinct str) FROM test;", dt);
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
-    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct x) FROM test GROUP BY y;", dt);
-    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z), COUNT(distinct x + 1) FROM test GROUP BY y;", dt);
-    c("SELECT COUNT(distinct dec) FROM test GROUP BY y;", dt);
+    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x) FROM test GROUP BY y ORDER BY n;", dt);
+    c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM test GROUP BY y ORDER BY n;", dt);
+    c("SELECT COUNT(distinct dec) AS n FROM test GROUP BY y ORDER BY n;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", dt), std::runtime_error);
   }
 }
@@ -444,7 +444,7 @@ TEST(Select, ComplexQueries) {
 TEST(Select, GroupByExprNoFilterNoAggregate) {
   for (auto dt : { ExecutorDeviceType::CPU, ExecutorDeviceType::GPU }) {
     SKIP_NO_GPU();
-    c("SELECT x + y AS a FROM test GROUP BY a;", dt);
+    c("SELECT x + y AS a FROM test GROUP BY a ORDER BY a;", dt);
   }
 }
 
