@@ -542,7 +542,7 @@ public:
     copy_params.has_header = cp.has_header;
     copy_params.quoted = cp.quoted;
     if (cp.delimiter.length() > 0) copy_params.delimiter = unescape_char(cp.delimiter);
-    if (cp.null_str.length() > 0) copy_params.null_str = unescape_char(cp.null_str);
+    if (cp.null_str.length() > 0) copy_params.null_str = cp.null_str;
     if (cp.quote.length() > 0) copy_params.quote = unescape_char(cp.quote);
     if (cp.escape.length() > 0) copy_params.escape = unescape_char(cp.escape);
     if (cp.line_delim.length() > 0) copy_params.line_delim = unescape_char(cp.line_delim);
