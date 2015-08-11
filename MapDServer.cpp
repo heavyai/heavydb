@@ -329,8 +329,10 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId,false);
     for (const auto cd : col_descriptors) {
+      //if (cd->isSystemCol)
+      //  continue;
       TColumnType col_type;
       col_type.col_type.type = type_to_thrift(cd->columnType);
       col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
@@ -350,8 +352,10 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId,false);
     for (const auto cd : col_descriptors) {
+      //if (cd->isSystemCol)
+      //  continue;
       TColumnType col_type;
       col_type.col_name = cd->columnName;
       col_type.col_type.type = type_to_thrift(cd->columnType);

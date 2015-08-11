@@ -97,7 +97,7 @@ vector<size_t>
 scan_table_return_hash(const string &table_name, const Catalog &cat)
 {
 	const TableDescriptor *td = cat.getMetadataForTable(table_name);
-	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId);
+	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId,false);
 	vector<size_t> col_hashs(cds.size());
   int64_t elapsed_time = 0;
   size_t total_bytes = 0;
@@ -126,7 +126,7 @@ vector<size_t>
 scan_table_return_hash_non_iter(const string &table_name, const Catalog &cat)
 {
 	const TableDescriptor *td = cat.getMetadataForTable(table_name);
-	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId);
+	list<const ColumnDescriptor *> cds = cat.getAllColumnMetadataForTable(td->tableId,false);
 	vector<size_t> col_hashs(cds.size());
 	Fragmenter_Namespace::QueryInfo query_info = td->fragmenter->getFragmentsForQuery();
   int64_t elapsed_time = 0;

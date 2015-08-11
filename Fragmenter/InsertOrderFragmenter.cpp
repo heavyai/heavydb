@@ -20,10 +20,15 @@ namespace Fragmenter_Namespace {
 
 
 InsertOrderFragmenter::InsertOrderFragmenter(const vector <int> chunkKeyPrefix, vector <Chunk> &chunkVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows, const size_t pageSize /*default 1MB*/, const size_t maxRows, const Data_Namespace::MemoryLevel defaultInsertLevel) :
-		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxFragmentRows_(maxFragmentRows), pageSize_(pageSize), numTuples_(0), maxFragmentId_(-1), maxRows_(maxRows), fragmenterType_("insert_order"), defaultInsertLevel_(defaultInsertLevel) {
+		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxFragmentRows_(maxFragmentRows), pageSize_(pageSize), numTuples_(0), maxFragmentId_(-1), maxRows_(maxRows), fragmenterType_("insert_order"), defaultInsertLevel_(defaultInsertLevel), hasRowId_(false) {
 
     for (auto colIt = chunkVec.begin(); colIt != chunkVec.end(); ++colIt) {
-        columnMap_[colIt ->get_column_desc()->columnId] = *colIt; 
+        int columnId = colIt->get_column_desc()->columnId;
+        columnMap_[columnId] = *colIt; 
+        if (colIt->get_column_desc()->columnName == "rowid") {
+            hasRowId_ = true;
+            rowIdColId_ = columnId;
+        }
     }
     getChunkMetadata();
 
@@ -77,7 +82,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
             ChunkKey insertKey = chunkKeyPrefix_; //database_id and table_id
             insertKey.push_back(colIt->first); // column id
             insertKey.push_back(lastFragmentId); // fragment id
-						colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
+            colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
         }
     }
 }
@@ -149,6 +154,21 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
             assert(colMapIt != columnMap_.end());
             currentFragment->shadowChunkMetadataMap[columnId] = colMapIt->second.appendData(dataCopy[i],numRowsToInsert, numRowsInserted);
         }
+        if (hasRowId_) {
+            size_t startId = maxFragmentRows_ * currentFragment->fragmentId + currentFragment->shadowNumTuples;
+            int64_t * rowIdData =  new int64_t [numRowsToInsert];
+            for (size_t i = 0; i < numRowsToInsert; ++i) {
+                rowIdData[i] = i + startId;
+            }
+            DataBlockPtr rowIdBlock;
+            rowIdBlock.numbersPtr = reinterpret_cast <int8_t *> (rowIdData);
+            auto colMapIt = columnMap_.find(rowIdColId_);
+            currentFragment->shadowChunkMetadataMap[rowIdColId_] = colMapIt->second.appendData(rowIdBlock,numRowsToInsert, numRowsInserted);
+            delete [] rowIdData;
+        }
+
+
+
 
         currentFragment->shadowNumTuples = fragmentInfoVec_.back().numTuples + numRowsToInsert;
         numRowsLeft -= numRowsToInsert;

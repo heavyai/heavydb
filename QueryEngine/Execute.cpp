@@ -1491,6 +1491,11 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
     }
     case kDIVIDE:
       return codegenDiv(lhs_lv, rhs_lv, not_null ? "" : int_typename, lhs_type);
+      /*
+    case kMODULO:
+        return cgen_state_->ir_builder_.CreateMod(lhs_lv,rhs_lv);
+      */
+
     default:
       CHECK(false);
     }

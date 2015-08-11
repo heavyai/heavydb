@@ -539,11 +539,11 @@ namespace File_Namespace {
             }
             cout << endl;
             */
-						if (chunkIt->second->hasEncoder) {
-							ChunkMetadata chunkMetadata;
-							chunkIt->second->encoder->getMetadata(chunkMetadata);
-							chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
-						}
+            if (chunkIt->second->hasEncoder) {
+                ChunkMetadata chunkMetadata;
+                chunkIt->second->encoder->getMetadata(chunkMetadata);
+                chunkMetadataVec.push_back(std::make_pair(chunkIt->first, chunkMetadata));
+            }
             chunkIt++;
         }
     }

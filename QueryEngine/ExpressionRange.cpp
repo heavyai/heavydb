@@ -24,6 +24,7 @@ ExpressionRange fname(const ExpressionRange& other) const {                     
 DEF_OPERATOR(ExpressionRange::operator+, +)
 DEF_OPERATOR(ExpressionRange::operator-, -)
 DEF_OPERATOR(ExpressionRange::operator*, *)
+//DEF_OPERATOR(ExpressionRange::operator%, %)
 
 ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
   if (type != ExpressionRangeType::Integer || other.type != ExpressionRangeType::Integer) {
@@ -144,6 +145,8 @@ ExpressionRange getExpressionRange(
     return lhs * rhs;
   case kDIVIDE:
     return lhs / rhs;
+  //case kMODULO:
+  //  return lhs % rhs;
   default:
     break;
   }

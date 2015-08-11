@@ -63,7 +63,7 @@ using namespace Parser;
 %left NOT
 %left EQUAL COMPARISON /* = <> < > <= >= */
 %left '+' '-'
-%left '*' '/'
+%left '*' '/' '%'
 %nonassoc UMINUS
 
 	/* literal keyword tokens */

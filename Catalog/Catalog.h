@@ -161,7 +161,7 @@ class Catalog {
          *
          */
 
-         std::list <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId) const;
+         std::list <const ColumnDescriptor *> getAllColumnMetadataForTable(const int tableId, const bool fetchSystemColumns) const;
 
 				 std::list<const TableDescriptor *> getAllTableMetadata() const;
 				 std::list<const FrontendViewDescriptor *> getAllFrontendViewMetadata() const;
@@ -178,7 +178,7 @@ class Catalog {
         void addFrontendViewToMap(FrontendViewDescriptor &vd);
         void removeTableFromMap(const std::string &tableName, int tableId);
 				void instantiateFragmenter(TableDescriptor *td) const;
-				void getAllColumnMetadataForTable(const TableDescriptor *td, std::list<const ColumnDescriptor *> &colDescs) const;
+				void getAllColumnMetadataForTable(const TableDescriptor *td, std::list<const ColumnDescriptor *> &colDescs, const bool fetchSystemColumns) const;
 
         std::string basePath_; /**< The OS file system path containing the catalog files. */
         TableDescriptorMap tableDescriptorMap_;

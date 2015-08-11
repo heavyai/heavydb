@@ -17,9 +17,10 @@ struct ColumnDescriptor {
     std::string columnName;
     SQLTypeInfo columnType;
     std::string chunks;
+    bool isSystemCol;
 
-    ColumnDescriptor() {}
-    ColumnDescriptor(const int tableId, const int columnId, const std::string &columnName, const SQLTypeInfo columnType): tableId(tableId), columnId(columnId), columnName(columnName),columnType(columnType) {
+    ColumnDescriptor(): isSystemCol(false) {}
+    ColumnDescriptor(const int tableId, const int columnId, const std::string &columnName, const SQLTypeInfo columnType): tableId(tableId), columnId(columnId), columnName(columnName),columnType(columnType), isSystemCol(false) {
     } 
 
 };
