@@ -537,11 +537,42 @@ public:
     return out;
   }
 
-  void detect_column_types(TRowSet& _return,
+  Importer_NS::CopyParams thrift_to_copyparams(const TCopyParams& cp) {
+    Importer_NS::CopyParams copy_params;
+    copy_params.has_header = cp.has_header;
+    copy_params.quoted = cp.quoted;
+    if (cp.delimiter.length() > 0) copy_params.delimiter = unescape_char(cp.delimiter);
+    if (cp.null_str.length() > 0) copy_params.null_str = unescape_char(cp.null_str);
+    if (cp.quote.length() > 0) copy_params.quote = unescape_char(cp.quote);
+    if (cp.escape.length() > 0) copy_params.escape = unescape_char(cp.escape);
+    if (cp.line_delim.length() > 0) copy_params.line_delim = unescape_char(cp.line_delim);
+    if (cp.array_delim.length() > 0) copy_params.array_delim = unescape_char(cp.array_delim);
+    if (cp.array_begin.length() > 0) copy_params.array_begin = unescape_char(cp.array_begin);
+    if (cp.array_end.length() > 0) copy_params.array_end = unescape_char(cp.array_end);
+    if (cp.threads != 0) copy_params.threads = cp.threads;
+    return copy_params;
+  }
+
+  TCopyParams copyparams_to_thrift(const Importer_NS::CopyParams& cp) {
+    TCopyParams copy_params;
+    copy_params.delimiter = cp.delimiter;
+    copy_params.null_str = cp.null_str;
+    copy_params.has_header = cp.has_header;
+    copy_params.quoted = cp.quoted;
+    copy_params.quote = cp.quote;
+    copy_params.escape = cp.escape;
+    copy_params.line_delim = cp.line_delim;
+    copy_params.array_delim = cp.array_delim;
+    copy_params.array_begin = cp.array_begin;
+    copy_params.array_end = cp.array_end;
+    copy_params.threads = cp.threads;
+    return copy_params;
+  }
+
+  void detect_column_types(TDetectResult& _return,
                            const TSessionId session,
                            const std::string& file_name,
-                           const std::string& delimiter,
-                           const bool quoted) {
+                           const TCopyParams& cp) {
     get_session(session);
 
     boost::filesystem::path file_path = file_name;  // FIXME
@@ -552,16 +583,16 @@ public:
       throw ex;
     }
 
-    Importer_NS::CopyParams copy_params;
-    copy_params.delimiter = unescape_char(delimiter);
-    copy_params.quoted = quoted;
+    Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
     Importer_NS::Detector detector(file_path, copy_params);
     std::vector<SQLTypes> best_types = detector.best_sqltypes;
     std::vector<EncodingType> best_encodings = detector.best_encodings;
     std::vector<std::string> headers = detector.get_headers();
+    copy_params = detector.get_copy_params();
 
-    _return.row_desc.resize(best_types.size());
+    _return.copy_params = copyparams_to_thrift(copy_params);
+    _return.row_set.row_desc.resize(best_types.size());
     TColumnType col;
     for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
       SQLTypes t = best_types[col_idx];
@@ -570,7 +601,7 @@ public:
       col.col_type.type = type_to_thrift(*ti);
       col.col_type.encoding = encoding_to_thrift(*ti);
       col.col_name = headers[col_idx];
-      _return.row_desc[col_idx] = col;
+      _return.row_set.row_desc[col_idx] = col;
     }
 
     size_t num_samples = 100;
@@ -588,7 +619,7 @@ public:
         td.is_null = s.empty();
         sample_row.cols.push_back(td);
       }
-      _return.rows.push_back(sample_row);
+      _return.row_set.rows.push_back(sample_row);
     }
 
   }
@@ -709,8 +740,7 @@ public:
   void import_table(const TSessionId session,
                     const std::string& table_name,
                     const std::string& file_name,
-                    const std::string& delimiter,
-                    const bool quoted) {
+                    const TCopyParams& cp) {
     LOG(INFO) << "import_table " << table_name << " from " << file_name;
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -732,12 +762,10 @@ public:
       throw ex;
     }
 
-    Importer_NS::CopyParams copy_params;
-    copy_params.delimiter = unescape_char(delimiter);
-    copy_params.quoted = quoted;
+    Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
 
     // TODO(andrew): add delimiter detection to Importer
-    if (delimiter.length() == 0) {
+    if (copy_params.delimiter == '\0') {
       copy_params.delimiter= ',';
     }
     if (boost::filesystem::extension(file_path) == ".tsv") {

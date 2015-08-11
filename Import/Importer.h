@@ -371,6 +371,7 @@ class Detector {
   };
   SQLTypes detect_sqltype(const std::string& str);
   std::vector<std::string> get_headers();
+  const CopyParams &get_copy_params() const { return copy_params; }
   std::vector<std::vector<std::string>> raw_rows;
   std::vector<std::vector<std::string>> get_sample_rows(size_t n);
   std::vector<SQLTypes> best_sqltypes;

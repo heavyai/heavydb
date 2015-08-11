@@ -821,6 +821,7 @@ void Detector::find_best_sqltypes_and_headers() {
   best_encodings = find_best_encodings(raw_rows.begin() +1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
   has_headers = detect_headers(head_types, best_sqltypes);
+  copy_params.has_header = has_headers;
 }
 
 void Detector::find_best_sqltypes() {

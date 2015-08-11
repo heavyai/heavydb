@@ -209,16 +209,16 @@ copy_table(char *filepath, char *table, ClientContext &context)
   }
 }
 
-static void detect_table(char* file_name, ClientContext& context) {
+static void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
     return;
   }
 
-  TRowSet _return;
+  TDetectResult _return;
 
   try {
-    context.client.detect_column_types(_return, context.session, file_name, "", true);
+    context.client.detect_column_types(_return, context.session, file_name, copy_params);
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -534,7 +534,9 @@ int main(int argc, char **argv) {
         copy_table(filepath, table, context);
       } else if (!strncmp(line,"\\detect",7)) {
         char *filepath = strtok(line+8, " ");
-        detect_table(filepath, context);
+        TCopyParams copy_params;
+        copy_params.delimiter = delimiter;
+        detect_table(filepath, copy_params, context);
       } else if (!strncmp(line,"\\historylen",11)) {
           /* The "/historylen" command will change the history len. */
           int len = atoi(line+11);
