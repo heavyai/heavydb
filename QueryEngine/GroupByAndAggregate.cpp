@@ -1099,7 +1099,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       bool can_sort_on_gpu = query_mem_desc_.sortOnGpu(gpu_sort_info);
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, small_group_by_buffers_, query_mem_desc_,
-        block_size_x, grid_size_x, device_id, can_sort_on_gpu && query_mem_desc_.keyless_hash);
+        block_size_x, grid_size_x, device_id, can_sort_on_gpu);
       if (hoist_literals) {
         void* kernel_params[] = {
           &multifrag_col_buffers_dev_ptr,
