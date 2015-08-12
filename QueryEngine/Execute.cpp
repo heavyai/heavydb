@@ -2452,10 +2452,14 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const auto& fragment = fragments[frag_id];
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const int col_id : col_global_ids) {
+      const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
+      if (cd->isVirtualCol) {
+        //TODO(alex): Handle virtual columns - currently crashes 
+        continue; 
+      }
       auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
       CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
       ChunkKey chunk_key { cat.get_currentDB().dbId, table_id, col_id, fragment.fragmentId };
-      const ColumnDescriptor *cd = cat.getMetadataForColumn(table_id, col_id);
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
       CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());

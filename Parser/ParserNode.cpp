@@ -20,6 +20,7 @@
 #include "../Shared/measure.h"
 #include "parser.h"
 
+
 namespace Parser {
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
                                                      Analyzer::Query& query,
@@ -1073,7 +1074,7 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
   std::list<int> result_col_list;
   if (column_list.empty()) {
     const std::list<const ColumnDescriptor*> all_cols =
-        catalog.getAllColumnMetadataForTable(td->tableId, false);
+        catalog.getAllColumnMetadataForTable(td->tableId, false,false);
     for (auto cd : all_cols) {
       result_col_list.push_back(cd->columnId);
     }
@@ -1273,17 +1274,25 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error(
           "Array of strings must be dictionary encoded. Specify ENCODING DICT");
     cd.columnType.set_fixed_size();
+    cd.isSystemCol = false;
+    cd.isVirtualCol = false;
     columns.push_back(cd);
   }
-  // add row_id column
-  ColumnDescriptor cd;
-  cd.columnName = "rowid";
-  cd.isSystemCol = true;
-  cd.columnType.set_type(kBIGINT);
-  cd.columnType.set_notnull(true);
-  cd.columnType.set_compression(kENCODING_NONE);
-  cd.columnType.set_comp_param(0);
-  columns.push_back(cd);
+    // add row_id column
+    ColumnDescriptor cd;
+    cd.columnName = "rowid";
+    cd.isSystemCol = true;
+    cd.columnType.set_type(kBIGINT);
+    cd.columnType.set_notnull(true);
+    cd.columnType.set_compression(kENCODING_NONE);
+    cd.columnType.set_comp_param(0);
+    #ifdef MATERIALIZED_ROWID
+    cd.isVirtualCol = false;
+    #else
+    cd.isVirtualCol = true;
+    cd.virtualExpr = "MAPD_FRAG_ID * MAPD_ROWS_PER_FRAG + MAPD_FRAG_ROW_ID";
+    #endif
+    columns.push_back(cd);
 
   TableDescriptor td;
   td.tableName = *table;

@@ -73,7 +73,7 @@ SysCatalog::createDatabase(const string &name, int owner)
 	sqliteConnector_.query("INSERT INTO mapd_databases (name, owner) VALUES ('" + name + "', " + std::to_string(owner) + ")");
 	SqliteConnector dbConn(name, basePath_+"/mapd_catalogs/");
 	dbConn.query("CREATE TABLE mapd_tables (tableid integer primary key, name text unique, ncolumns integer, isview boolean, fragments text, frag_type integer, max_frag_rows integer, frag_page_size integer, max_rows bigint, partitions text)");
-	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, size integer, chunks text, is_systemcol boolean, primary key(tableid, columnid), unique(tableid, name))");
+	dbConn.query("CREATE TABLE mapd_columns (tableid integer references mapd_tables, columnid integer, name text, coltype integer, colsubtype integer, coldim integer, colscale integer, is_notnull boolean, compression integer, comp_param integer, size integer, chunks text, is_systemcol boolean, is_virtualcol boolean, virtual_expr text, primary key(tableid, columnid), unique(tableid, name))");
 	dbConn.query("CREATE TABLE mapd_views (tableid integer references mapd_tables, sql text, materialized boolean, storage int, refresh int)");
 	dbConn.query("CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references mapd_users, view_state text)");
 	dbConn.query("CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean)");
@@ -220,7 +220,7 @@ void Catalog::buildMaps() {
         tableDescriptorMap_[td->tableName] = td;
         tableDescriptorMapById_[td->tableId] = td;
     }
-    string columnQuery("SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, size, chunks, is_systemcol from mapd_columns");
+    string columnQuery("SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr from mapd_columns");
     sqliteConnector_.query(columnQuery);
     numRows = sqliteConnector_.getNumRows();
     for (size_t r = 0; r < numRows; ++r) {
@@ -238,6 +238,8 @@ void Catalog::buildMaps() {
         cd->columnType.set_size(sqliteConnector_.getData<int>(r,10));
 				cd->chunks = sqliteConnector_.getData<string>(r,11);
 				cd->isSystemCol = sqliteConnector_.getData<bool>(r,12);
+				cd->isVirtualCol = sqliteConnector_.getData<bool>(r,13);
+				cd->virtualExpr = sqliteConnector_.getData<string>(r,14);
         ColumnKey columnKey(cd->tableId, cd->columnName);
         columnDescriptorMap_[columnKey] = cd;
 				ColumnIdKey columnIdKey(cd->tableId, cd->columnId);
@@ -347,7 +349,7 @@ Catalog::instantiateFragmenter(TableDescriptor *td) const
 	assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
 	vector<Chunk> chunkVec;
 	list<const ColumnDescriptor *> columnDescs;
-	getAllColumnMetadataForTable(td, columnDescs, true);
+	getAllColumnMetadataForTable(td, columnDescs, true, false);
 	Chunk::translateColumnDescriptorsToChunkVec(columnDescs , chunkVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
 	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, chunkVec, dataMgr_.get(), td->maxFragRows, td->fragPageSize, td->maxRows);
@@ -433,20 +435,22 @@ const FrontendViewDescriptor * Catalog::getMetadataForFrontendView (int viewId) 
 }
 
 void
-Catalog::getAllColumnMetadataForTable(const TableDescriptor *td, list<const ColumnDescriptor *> &columnDescriptors, const bool fetchSystemColumns) const {
+Catalog::getAllColumnMetadataForTable(const TableDescriptor *td, list<const ColumnDescriptor *> &columnDescriptors, const bool fetchSystemColumns, const bool fetchVirtualColumns) const {
 		for (int i = 1; i <= td->nColumns; i++) {
 			const ColumnDescriptor *cd = getMetadataForColumn(td->tableId, i);
 			assert(cd != nullptr);
 			if (!fetchSystemColumns && cd->isSystemCol)
 			  continue;
+			if (!fetchVirtualColumns && cd->isVirtualCol)
+			  continue;
 			columnDescriptors.push_back(cd);
 		}
 }
 
-list <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId, const bool fetchSystemColumns) const {
+list <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId, const bool fetchSystemColumns, const bool fetchVirtualColumns) const {
     list <const ColumnDescriptor *> columnDescriptors;
 		const TableDescriptor *td = getMetadataForTable(tableId);
-		getAllColumnMetadataForTable(td, columnDescriptors, fetchSystemColumns);
+		getAllColumnMetadataForTable(td, columnDescriptors, fetchSystemColumns, fetchVirtualColumns);
     return columnDescriptors;
 }
 
@@ -494,7 +498,7 @@ Catalog::createTable(TableDescriptor &td, const list<ColumnDescriptor> &columns)
         }
         cd.columnType.set_comp_param(dictId);
       }
-			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, size, chunks, is_systemcol) VALUES (" + std::to_string(td.tableId) + ", " + std::to_string(colId) + ", '" + cd.columnName + "', " + std::to_string(cd.columnType.get_type()) + ", " + std::to_string(cd.columnType.get_subtype()) + ", " + std::to_string(cd.columnType.get_dimension()) + ", " + std::to_string(cd.columnType.get_scale()) + ", " + std::to_string(cd.columnType.get_notnull()) + ", " + std::to_string(cd.columnType.get_compression()) + ", " + std::to_string(cd.columnType.get_comp_param()) + ", " + std::to_string(cd.columnType.get_size()) + ",''," + std::to_string(cd.isSystemCol) + ")");
+			sqliteConnector_.query("INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (" + std::to_string(td.tableId) + ", " + std::to_string(colId) + ", '" + cd.columnName + "', " + std::to_string(cd.columnType.get_type()) + ", " + std::to_string(cd.columnType.get_subtype()) + ", " + std::to_string(cd.columnType.get_dimension()) + ", " + std::to_string(cd.columnType.get_scale()) + ", " + std::to_string(cd.columnType.get_notnull()) + ", " + std::to_string(cd.columnType.get_compression()) + ", " + std::to_string(cd.columnType.get_comp_param()) + ", " + std::to_string(cd.columnType.get_size()) + ",''," + std::to_string(cd.isSystemCol) + "," + std::to_string(cd.isVirtualCol) + ",'" + cd.virtualExpr +  "')");
 			cd.tableId = td.tableId;
 			cd.columnId = colId++;
 			cds.push_back(cd);

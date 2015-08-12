@@ -86,7 +86,7 @@ private:
     mapd_shared_mutex tableMutex_; // to prevent read-write conflicts for fragmentInfoVec_
     std::mutex insertMutex_; // to prevent race conditions on insert - only one insert statement should be going to a table at a time
     Data_Namespace::MemoryLevel defaultInsertLevel_;
-    bool hasRowId_;
+    bool hasMaterializedRowId_;
     int rowIdColId_;
     
     

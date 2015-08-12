@@ -20,13 +20,15 @@ namespace Fragmenter_Namespace {
 
 
 InsertOrderFragmenter::InsertOrderFragmenter(const vector <int> chunkKeyPrefix, vector <Chunk> &chunkVec, Data_Namespace::DataMgr *dataMgr, const size_t maxFragmentRows, const size_t pageSize /*default 1MB*/, const size_t maxRows, const Data_Namespace::MemoryLevel defaultInsertLevel) :
-		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxFragmentRows_(maxFragmentRows), pageSize_(pageSize), numTuples_(0), maxFragmentId_(-1), maxRows_(maxRows), fragmenterType_("insert_order"), defaultInsertLevel_(defaultInsertLevel), hasRowId_(false) {
+		chunkKeyPrefix_(chunkKeyPrefix), dataMgr_(dataMgr), maxFragmentRows_(maxFragmentRows), pageSize_(pageSize), numTuples_(0), maxFragmentId_(-1), maxRows_(maxRows), fragmenterType_("insert_order"), defaultInsertLevel_(defaultInsertLevel), hasMaterializedRowId_(false) {
+    // Note that Fragmenter is not passed virtual columns and so should only
+    // find row id column if it is non virtual
 
     for (auto colIt = chunkVec.begin(); colIt != chunkVec.end(); ++colIt) {
         int columnId = colIt->get_column_desc()->columnId;
         columnMap_[columnId] = *colIt; 
         if (colIt->get_column_desc()->columnName == "rowid") {
-            hasRowId_ = true;
+            hasMaterializedRowId_ = true;
             rowIdColId_ = columnId;
         }
     }
@@ -154,7 +156,7 @@ void InsertOrderFragmenter::insertData (const InsertData &insertDataStruct) {
             assert(colMapIt != columnMap_.end());
             currentFragment->shadowChunkMetadataMap[columnId] = colMapIt->second.appendData(dataCopy[i],numRowsToInsert, numRowsInserted);
         }
-        if (hasRowId_) {
+        if (hasMaterializedRowId_) {
             size_t startId = maxFragmentRows_ * currentFragment->fragmentId + currentFragment->shadowNumTuples;
             int64_t * rowIdData =  new int64_t [numRowsToInsert];
             for (size_t i = 0; i < numRowsToInsert; ++i) {
