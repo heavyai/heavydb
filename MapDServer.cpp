@@ -1,7 +1,6 @@
 #include "MapDServer.h"
 #include "gen-cpp/MapD.h"
 #include <thrift/protocol/TBinaryProtocol.h>
-//#include <thrift/server/TSimpleServer.h>
 #include <thrift/server/TThreadedServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
@@ -329,10 +328,8 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId,false);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false);
     for (const auto cd : col_descriptors) {
-      //if (cd->isSystemCol)
-      //  continue;
       TColumnType col_type;
       col_type.col_type.type = type_to_thrift(cd->columnType);
       col_type.col_type.encoding = encoding_to_thrift(cd->columnType);
@@ -352,10 +349,8 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId,false);
+    const auto col_descriptors = cat.getAllColumnMetadataForTable(td->tableId, false);
     for (const auto cd : col_descriptors) {
-      //if (cd->isSystemCol)
-      //  continue;
       TColumnType col_type;
       col_type.col_name = cd->columnName;
       col_type.col_type.type = type_to_thrift(cd->columnType);

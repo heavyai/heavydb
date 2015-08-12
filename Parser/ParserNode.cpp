@@ -1073,9 +1073,9 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
   std::list<int> result_col_list;
   if (column_list.empty()) {
     const std::list<const ColumnDescriptor*> all_cols =
-        catalog.getAllColumnMetadataForTable(td->tableId,false);
+        catalog.getAllColumnMetadataForTable(td->tableId, false);
     for (auto cd : all_cols) {
-        result_col_list.push_back(cd->columnId);
+      result_col_list.push_back(cd->columnId);
     }
   } else {
     for (auto& c : column_list) {

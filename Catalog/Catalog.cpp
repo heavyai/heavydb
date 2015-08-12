@@ -347,7 +347,7 @@ Catalog::instantiateFragmenter(TableDescriptor *td) const
 	assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
 	vector<Chunk> chunkVec;
 	list<const ColumnDescriptor *> columnDescs;
-	getAllColumnMetadataForTable(td, columnDescs,true);
+	getAllColumnMetadataForTable(td, columnDescs, true);
 	Chunk::translateColumnDescriptorsToChunkVec(columnDescs , chunkVec);
 	ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
 	td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix, chunkVec, dataMgr_.get(), td->maxFragRows, td->fragPageSize, td->maxRows);
@@ -446,7 +446,7 @@ Catalog::getAllColumnMetadataForTable(const TableDescriptor *td, list<const Colu
 list <const ColumnDescriptor *> Catalog::getAllColumnMetadataForTable(const int tableId, const bool fetchSystemColumns) const {
     list <const ColumnDescriptor *> columnDescriptors;
 		const TableDescriptor *td = getMetadataForTable(tableId);
-		getAllColumnMetadataForTable(td, columnDescriptors,fetchSystemColumns);
+		getAllColumnMetadataForTable(td, columnDescriptors, fetchSystemColumns);
     return columnDescriptors;
 }
 
