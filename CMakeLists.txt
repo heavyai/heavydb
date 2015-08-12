@@ -93,7 +93,7 @@ target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector Da
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
 ## Frontend
-option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" OFF)
+option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" ON)
 if(MAPD2_FRONTEND_DOWNLOAD)
   include(ExternalProject)
   ExternalProject_Add(frontend
@@ -110,7 +110,7 @@ if(MAPD2_FRONTEND_DOWNLOAD)
 endif()
 
 ## Node server
-option(MAPD2_NODEJS_SERVER "Download Node server for uploads and frontend" OFF)
+option(MAPD2_NODEJS_SERVER "Download Node server for uploads and frontend" ON)
 set(MAPD2_NODE_VERSION "0.12.7" CACHE STRING "Version of Node to download")
 string(TOLOWER ${CMAKE_SYSTEM_NAME} MAPD2_NODE_SYSTEM_NAME)
 if(MAPD2_NODEJS_SERVER)
