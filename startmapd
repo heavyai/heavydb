@@ -34,7 +34,7 @@ if [ -d frontend ]; then
         mkdir -p uploads
     fi
     trap 'kill -TERM $WEBPID' TERM INT
-    PORT=9092 bin/node index.js &
+    PORT=9092 nodejs/bin/node index.js &
     WEBPID=$!
 
     MAPDFRONTEND="http://localhost:9092"
