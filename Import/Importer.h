@@ -342,7 +342,7 @@ private:
 
 class Loader {
   public:
-    Loader(const Catalog_Namespace::Catalog &c, const TableDescriptor *t) : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId,false,false)) { init(); };
+    Loader(const Catalog_Namespace::Catalog &c, const TableDescriptor *t) : catalog(c), table_desc(t), column_descs(c.getAllColumnMetadataForTable(t->tableId, false, false)) { init(); };
     const Catalog_Namespace::Catalog &get_catalog() const { return catalog; }
     const TableDescriptor *get_table_desc() const { return table_desc; }
     const std::list<const ColumnDescriptor *> &get_column_descs() const { return column_descs; }
