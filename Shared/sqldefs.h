@@ -24,6 +24,7 @@ enum SQLOps {
 	kPLUS,
 	kMULTIPLY,
 	kDIVIDE,
+	//kMODULO,
 	kUMINUS,
 	kISNULL,
 	kEXISTS,

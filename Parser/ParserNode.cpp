@@ -1073,9 +1073,10 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
   std::list<int> result_col_list;
   if (column_list.empty()) {
     const std::list<const ColumnDescriptor*> all_cols =
-        catalog.getAllColumnMetadataForTable(td->tableId);
-    for (auto cd : all_cols)
-      result_col_list.push_back(cd->columnId);
+        catalog.getAllColumnMetadataForTable(td->tableId,false);
+    for (auto cd : all_cols) {
+        result_col_list.push_back(cd->columnId);
+    }
   } else {
     for (auto& c : column_list) {
       const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *c);
@@ -1169,6 +1170,8 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
     ColumnDescriptor cd;
     cd.columnName = *coldef->get_column_name();
+    if (cd.columnName == "rowid")
+      throw std::runtime_error("Cannot create column with name rowid. rowid is a system defined column.");
     SQLType* t = coldef->get_column_type();
     t->check_type();
     if (t->get_is_array()) {
@@ -1272,6 +1275,16 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     cd.columnType.set_fixed_size();
     columns.push_back(cd);
   }
+  // add row_id column
+  ColumnDescriptor cd;
+  cd.columnName = "rowid";
+  cd.isSystemCol = true;
+  cd.columnType.set_type(kBIGINT);
+  cd.columnType.set_notnull(true);
+  cd.columnType.set_compression(kENCODING_NONE);
+  cd.columnType.set_comp_param(0);
+  columns.push_back(cd);
+
   TableDescriptor td;
   td.tableName = *table;
   td.nColumns = columns.size();
