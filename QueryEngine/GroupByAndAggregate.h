@@ -618,8 +618,8 @@ public:
     truncation_size_ = truncation_size;
   }
 
-  void setSorted() {
-    sorted_ = true;
+  void setSorted(const bool sorted = true) {
+    sorted_ = sorted;
   }
 
   void beginRow() {

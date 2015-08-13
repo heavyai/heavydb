@@ -2356,6 +2356,7 @@ ResultRows Executor::collectAllDeviceResults(
       reduced_results.warp_count_,
       output_columnar);
   }
+  reduced_results.setSorted(false);
   return reduced_results;
 }
 
