@@ -1988,7 +1988,7 @@ ResultRows Executor::executeResultPlan(
     small_groups_buffer_entry_count_,
     0, 0, false,
     GroupByMemSharing::Shared,
-    {},
+    CountDistinctDescriptors {},
     false
   };
   auto query_func = query_group_by_template(cgen_state_->module_, is_nested_,
