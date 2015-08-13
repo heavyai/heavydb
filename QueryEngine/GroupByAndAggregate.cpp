@@ -88,7 +88,7 @@ void ResultRows::reduce(
   }
 
   if (group_by_buffer_) {
-    CHECK(!query_mem_desc.sortOnGpu(gpu_sort_info));
+    CHECK(!query_mem_desc.sortOnGpu());
     CHECK(other_results.group_by_buffer_);
     const size_t agg_col_count { targets_.size() };
     for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
@@ -227,7 +227,7 @@ void ResultRows::reduce(
   };
 
   if (simple_keys_.empty() && multi_keys_.empty()) {
-    CHECK(!query_mem_desc.sortOnGpu(gpu_sort_info));
+    CHECK(!query_mem_desc.sortOnGpu());
     CHECK_EQ(1, size());
     CHECK_EQ(1, other_results.size());
     auto& crt_results = target_values_.front();
@@ -241,7 +241,7 @@ void ResultRows::reduce(
   }
 
   CHECK_NE(simple_keys_.empty(), multi_keys_.empty());
-  CHECK(!query_mem_desc.sortOnGpu(gpu_sort_info) || multi_keys_.empty());
+  CHECK(!query_mem_desc.sortOnGpu() || multi_keys_.empty());
   createReductionMap();
   other_results.createReductionMap();
   for (const auto& kv : other_results.as_map_) {
@@ -258,7 +258,7 @@ void ResultRows::reduce(
       reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
     }
   }
-  if (query_mem_desc.sortOnGpu(gpu_sort_info) && gpu_sort_info.top_count) {
+  if (query_mem_desc.sortOnGpu() && gpu_sort_info.top_count) {
     // TODO(alex): refine
     for (const auto& kv : other_results.as_unordered_map_) {
       auto it = as_unordered_map_.find(kv.first);
@@ -732,7 +732,7 @@ ResultRows QueryExecutionContext::getRowSet(
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     results_per_sm.emplace_back(groupBufferToResults(
       i, targets,
-      query_mem_desc.sortOnGpu(gpu_sort_info)
+      query_mem_desc.sortOnGpu()
         ? gpu_sort_info.topFudged()
         : 0,
       was_auto_device));
@@ -1096,7 +1096,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const unsigned grid_size_z  = 1;
     if (query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0) {  // group by path
       CHECK(!group_by_buffers_.empty());
-      bool can_sort_on_gpu = query_mem_desc_.sortOnGpu(gpu_sort_info);
+      bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
       auto gpu_query_mem = create_dev_group_by_buffers(
         data_mgr, group_by_buffers_, small_group_by_buffers_, query_mem_desc_,
         block_size_x, grid_size_x, device_id, can_sort_on_gpu);
@@ -1372,47 +1372,6 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
   return { nullptr };
 }
 
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-function"
-#else
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-function"
-#endif
-
-bool types_are_sortable_on_gpu(const GpuSortInfo& gpu_sort_info) {
-  const auto& target_list = gpu_sort_info.sort_plan->get_child_plan()->get_targetlist();
-  const auto& order_entries = gpu_sort_info.sort_plan->get_order_entries();
-  if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
-    return false;
-  }
-  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
-    CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(order_entry.tle_no, target_list.size());
-    const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
-    if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
-      return false;
-    }
-    // TODO(alex): relax the restrictions
-    auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
-    if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG) {
-      return false;
-    }
-    const auto& target_ti = target_expr->get_type_info();
-    CHECK(!target_ti.is_array());
-    if (!target_ti.is_integer()) {
-      return false;
-    }
-  }
-  return true;
-}
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#else
-#pragma GCC diagnostic pop
-#endif
-
 }  // namespace
 
 GroupByAndAggregate::GroupByAndAggregate(
@@ -1441,12 +1400,19 @@ GroupByAndAggregate::GroupByAndAggregate(
       throw std::runtime_error("Group by not supported for none-encoding strings");
     }
   }
-  initQueryMemoryDescriptor(max_groups_buffer_entry_count, allow_multifrag,
-    /* device_type == ExecutorDeviceType::GPU && allow_multifrag &&
-     * gpu_sort_info.sort_plan &&
-     * types_are_sortable_on_gpu(gpu_sort_info) */ false);
+  bool sort_on_gpu_hint =
+    device_type == ExecutorDeviceType::GPU &&
+    allow_multifrag &&
+    gpu_sort_info.sort_plan &&
+    gpuCanHandleOrderEntries(gpu_sort_info);
+  sort_on_gpu_hint = false;  // disable for now to test it more
+  initQueryMemoryDescriptor(max_groups_buffer_entry_count, allow_multifrag, sort_on_gpu_hint);
+  query_mem_desc_.sort_on_gpu_ =
+    sort_on_gpu_hint &&
+    query_mem_desc_.canOutputColumnar() &&
+    !query_mem_desc_.keyless_hash;
   output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) ||
-    query_mem_desc_.sortOnGpu(gpu_sort_info);
+    query_mem_desc_.sortOnGpu();
 }
 
 void GroupByAndAggregate::initQueryMemoryDescriptor(
@@ -1527,13 +1493,14 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
 
   if (group_col_widths.empty()) {
     query_mem_desc_ = {
-      executor_, allow_multifrag,
+      executor_,
       GroupByColRangeType::Scan, false, false,
       group_col_widths, agg_col_widths,
       0, 0,
       0, 0, false,
       GroupByMemSharing::Private,
-      count_distinct_descriptors
+      count_distinct_descriptors,
+      false
     };
     return;
   }
@@ -1549,14 +1516,15 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
         ((group_cols.size() != 1 || !group_cols.front()->get_type_info().is_string()) &&
           col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count))) {
       query_mem_desc_ = {
-        executor_, allow_multifrag,
+        executor_,
         col_range_info.hash_type_, false, false,
         group_col_widths, agg_col_widths,
         max_groups_buffer_entry_count,
         scan_limit_ ? static_cast<size_t>(scan_limit_) : executor_->small_groups_buffer_entry_count_,
         col_range_info.min, col_range_info.max, col_range_info.has_nulls,
         GroupByMemSharing::Shared,
-        count_distinct_descriptors
+        count_distinct_descriptors,
+        false
       };
       return;
     } else {
@@ -1587,38 +1555,41 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
       bool interleaved_bins = keyless &&
         bin_count <= interleaved_max_threshold;
       query_mem_desc_ = {
-        executor_, allow_multifrag,
+        executor_,
         col_range_info.hash_type_, keyless, interleaved_bins,
         group_col_widths, agg_col_widths,
         bin_count, 0,
         col_range_info.min, col_range_info.max, col_range_info.has_nulls,
         GroupByMemSharing::Shared,
-        count_distinct_descriptors
+        count_distinct_descriptors,
+        false
       };
       return;
     }
   }
   case GroupByColRangeType::MultiCol: {
     query_mem_desc_ = {
-      executor_, allow_multifrag,
+      executor_,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       max_groups_buffer_entry_count, 0,
       0, 0, false,
       GroupByMemSharing::Shared,
-      count_distinct_descriptors
+      count_distinct_descriptors,
+      false
     };
     return;
   }
   case GroupByColRangeType::MultiColPerfectHash: {
     query_mem_desc_ = {
-      executor_, allow_multifrag,
+      executor_,
       col_range_info.hash_type_, false, false,
       group_col_widths, agg_col_widths,
       static_cast<size_t>(col_range_info.max), 0,
       0, 0, col_range_info.has_nulls,
       GroupByMemSharing::Shared,
-      count_distinct_descriptors
+      count_distinct_descriptors,
+      false
     };
     return;
   }
@@ -1635,6 +1606,40 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() const {
 
 bool GroupByAndAggregate::outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const {
   return output_columnar_;
+}
+
+bool GroupByAndAggregate::gpuCanHandleOrderEntries(const GpuSortInfo& gpu_sort_info) {
+  const auto& target_list = gpu_sort_info.sort_plan->get_child_plan()->get_targetlist();
+  const auto& order_entries = gpu_sort_info.sort_plan->get_order_entries();
+  if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
+    return false;
+  }
+  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
+    CHECK_GE(order_entry.tle_no, 1);
+    CHECK_LE(order_entry.tle_no, target_list.size());
+    const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
+    if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
+      return false;
+    }
+    // TODO(alex): relax the restrictions
+    auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
+    if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG) {
+      return false;
+    }
+    if (agg_expr->get_arg()) {
+      auto expr_range_info = getExprRangeInfo(agg_expr->get_arg(), query_info_.fragments);
+      if ((expr_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange || expr_range_info.has_nulls) &&
+          order_entry.is_desc == order_entry.nulls_first) {
+        return false;
+      }
+    }
+    const auto& target_ti = target_expr->get_type_info();
+    CHECK(!target_ti.is_array());
+    if (!target_ti.is_integer()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
@@ -1683,11 +1688,8 @@ bool QueryMemoryDescriptor::canOutputColumnar() const {
     !interleavedBins(ExecutorDeviceType::GPU);
 }
 
-bool QueryMemoryDescriptor::sortOnGpu(const GpuSortInfo& gpu_sort_info) const {
-  if (!allow_multifrag_ || !gpu_sort_info.sort_plan || !canOutputColumnar() || keyless_hash) {
-    return false;
-  }
-  return /* types_are_sortable_on_gpu(gpu_sort_info) */ false;
+bool QueryMemoryDescriptor::sortOnGpu() const {
+  return sort_on_gpu_;
 }
 
 GroupByAndAggregate::DiamondCodegen::DiamondCodegen(

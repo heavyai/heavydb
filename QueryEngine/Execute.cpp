@@ -1980,14 +1980,16 @@ ResultRows Executor::executeResultPlan(
     target_exprs.emplace_back(target_entry->get_expr());
   }
   QueryMemoryDescriptor query_mem_desc {
-    this, allow_multifrag,
+    this,
     GroupByColRangeType::OneColGuessedRange, false, false,
     { sizeof(int64_t) },
     get_col_byte_widths(target_exprs),
     result_rows.size(),
     small_groups_buffer_entry_count_,
     0, 0, false,
-    GroupByMemSharing::Shared
+    GroupByMemSharing::Shared,
+    {},
+    false
   };
   auto query_func = query_group_by_template(cgen_state_->module_, is_nested_,
     hoist_literals, query_mem_desc, ExecutorDeviceType::CPU, false);
@@ -2241,7 +2243,7 @@ ResultRows Executor::executeAggScanPlan(
       : compilation_result.query_mem_desc.getQueryExecutionContext(
           plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id,
           col_buffers, row_set_mem_owner, compilation_result.output_columnar,
-          compilation_result.query_mem_desc.sortOnGpu(gpu_sort_info));
+          compilation_result.query_mem_desc.sortOnGpu());
     QueryExecutionContext* query_exe_context { query_exe_context_owned.get() };
     std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
     if (compilation_result.query_mem_desc.usesCachedContext()) {
@@ -2251,7 +2253,7 @@ ResultRows Executor::executeAggScanPlan(
           plan_state_->init_agg_vals_, this, chosen_device_type, chosen_device_id,
           col_buffers, row_set_mem_owner,
           compilation_result.output_columnar,
-          compilation_result.query_mem_desc.sortOnGpu(gpu_sort_info));
+          compilation_result.query_mem_desc.sortOnGpu());
       }
       query_exe_context = query_contexts[ctx_idx].get();
     }
@@ -2597,7 +2599,7 @@ int32_t Executor::executePlanWithGroupBy(
     }
   }
   if (!query_exe_context->query_mem_desc_.usesCachedContext()) {
-    CHECK(!query_exe_context->query_mem_desc_.sortOnGpu(gpu_sort_info));
+    CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getRowSet(
       target_exprs, gpu_sort_info, query_exe_context->query_mem_desc_, was_auto_device);
   }

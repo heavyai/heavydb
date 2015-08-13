@@ -99,7 +99,6 @@ struct GpuSortInfo {
 
 struct QueryMemoryDescriptor {
   const Executor* executor_;
-  bool allow_multifrag_;
   GroupByColRangeType hash_type;
   bool keyless_hash;
   bool interleaved_bins_on_gpu;
@@ -112,6 +111,7 @@ struct QueryMemoryDescriptor {
   bool has_nulls;
   GroupByMemSharing sharing;             // meaningful for GPU only
   CountDistinctDescriptors count_distinct_descriptors_;
+  bool sort_on_gpu_;
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
     const std::vector<int64_t>& init_agg_vals,
@@ -146,7 +146,7 @@ struct QueryMemoryDescriptor {
 
   bool canOutputColumnar() const;
 
-  bool sortOnGpu(const GpuSortInfo&) const;
+  bool sortOnGpu() const;
 };
 
 inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
@@ -940,6 +940,8 @@ public:
   QueryMemoryDescriptor getQueryMemoryDescriptor() const;
 
   bool outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const;
+
+  bool gpuCanHandleOrderEntries(const GpuSortInfo& gpu_sort_info);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
