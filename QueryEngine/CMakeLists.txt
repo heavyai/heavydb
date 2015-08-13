@@ -77,4 +77,4 @@ add_custom_command(
     ARGS -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
-target_link_libraries(group_by_hash_test gtest "-pthread -lglog")
+target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES})

@@ -2,14 +2,35 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT(mapd2)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
+
+option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
+if(PREFER_STATIC_LIBS)
+  set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+  set(Boost_USE_STATIC_LIBS ON)
+
+  if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
+  endif()
+endif()
+
 find_package(Git)
+find_package(Glog REQUIRED)
+find_package(Thrift REQUIRED)
+
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.5) OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9)))
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
+    AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.6 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 3.6))
+    OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9)))
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -DHAS_SHARED_MUTEX")
   FIND_PACKAGE( Boost COMPONENTS filesystem program_options system REQUIRED )
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
   FIND_PACKAGE( Boost COMPONENTS filesystem program_options thread system REQUIRED )
+  if(PREFER_STATIC_LIBS AND ${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+    list(APPEND Boost_LIBRARIES rt)
+    list(INSERT Boost_LIBRARIES 0 pthread)
+  endif()
 endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/nvvm/lib -L/usr/local/cuda/nvvm/lib64")
 set(llvm_config_cmd "llvm-config")
@@ -84,10 +105,10 @@ set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -pthread")
-target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -lthrift -pthread")
-target_link_libraries (mapd_http_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -L/usr/local/cuda/lib -lnvvm -lcuda -lcudart -lglog -lz -lncurses -ldl -lthrift -pthread")
-target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} )
+target_link_libraries (mapd ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lz -lncurses")
+target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${Thrift_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lz -lncurses")
+target_link_libraries (mapd_http_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${Thrift_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lz -lncurses")
+target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 
 # Packaging
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
@@ -150,7 +171,9 @@ install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEn
 install(FILES mapd.thrift DESTINATION ".")
 install(FILES MapDBetaGuide.md DESTINATION docs)
 
-install(FILES ${Boost_LIBRARIES} DESTINATION thirdparty)
+if(NOT PREFER_STATIC_LIBS)
+  install(FILES ${Boost_LIBRARIES} DESTINATION thirdparty)
+endif()
 
 if(EXISTS "${CMAKE_SOURCE_DIR}/LICENSE.md")
   install(FILES LICENSE.md DESTINATION ".")
