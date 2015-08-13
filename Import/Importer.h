@@ -397,7 +397,6 @@ std::vector<EncodingType> find_best_encodings(const std::vector<std::vector<std:
   bool detect_headers(const std::vector<SQLTypes>& first_types, const std::vector<SQLTypes>& rest_types);
   void find_best_sqltypes_and_headers();
   std::vector<std::string> raw_data;
-  std::string delim;
   boost::filesystem::path file_path;
   std::chrono::duration<double> timeout{1};
   CopyParams copy_params;

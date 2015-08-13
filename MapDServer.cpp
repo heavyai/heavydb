@@ -766,9 +766,9 @@ public:
     // TODO(andrew): add delimiter detection to Importer
     if (copy_params.delimiter == '\0') {
       copy_params.delimiter= ',';
-    }
-    if (boost::filesystem::extension(file_path) == ".tsv") {
-      copy_params.delimiter = '\t';
+      if (boost::filesystem::extension(file_path) == ".tsv") {
+        copy_params.delimiter = '\t';
+      }
     }
 
     Importer_NS::Importer importer(cat, td, file_path.string(), copy_params);

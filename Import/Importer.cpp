@@ -733,13 +733,12 @@ void Detector::read_file() {
 }
 
 void Detector::detect_row_delimiter() {
-  if (delim.length() == 0) {
-    delim = ',';
+  if (copy_params.delimiter == '\0') {
+    copy_params.delimiter = ',';
+    if (boost::filesystem::extension(file_path) == ".tsv") {
+      copy_params.delimiter = '\t';
+    }
   }
-  if (boost::filesystem::extension(file_path) == ".tsv") {
-    delim = '\t';
-  }
-  copy_params.delimiter = *delim.c_str();
 }
 
 void Detector::split_raw_data() {
