@@ -28,13 +28,19 @@ if [ -d frontend ]; then
     fi
     popd
 
-    pushd upload_server
     if [ ! -e uploads ]; then
         #ln -s ../data/mapd_import uploads
         mkdir -p uploads
     fi
+    if [ -e bin/mapd_web_server ]; then
+        server=bin/mapd_web_server
+    elif [ -e upload_server/nodejs/bin/node ]; then
+        pushd upload_server
+        ln -s ../uploads .
+        server="nodejs/bin/node index.js"
+    fi
     trap 'kill -TERM $WEBPID' TERM INT
-    PORT=9092 nodejs/bin/node index.js &
+    PORT=9092 $server &
     WEBPID=$!
 
     MAPDFRONTEND="http://localhost:9092"

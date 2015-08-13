@@ -109,11 +109,23 @@ if(MAPD2_FRONTEND_DOWNLOAD)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
 endif()
 
+## Go server
+find_program(GO_EXECUTABLE NAMES go)
+if(GO_EXECUTABLE)
+  set(MAPD2_NODEJS_SERVER OFF)
+  add_custom_target(mapd_web_server ALL
+    COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} get github.com/gorilla/handlers github.com/namsral/flag
+    COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    SOURCES MapDWebServer.go
+    )
+endif()
+
 ## Node server
 option(MAPD2_NODEJS_SERVER "Download Node server for uploads and frontend" ON)
 set(MAPD2_NODE_VERSION "0.12.7" CACHE STRING "Version of Node to download")
 string(TOLOWER ${CMAKE_SYSTEM_NAME} MAPD2_NODE_SYSTEM_NAME)
-if(MAPD2_NODEJS_SERVER)
+if(MAPD2_NODEJS_SERVER AND NOT GO_EXECUTABLE)
   include(ExternalProject)
   ExternalProject_Add(upload_server
     URL "http://nodejs.org/dist/v${MAPD2_NODE_VERSION}/node-v${MAPD2_NODE_VERSION}-${MAPD2_NODE_SYSTEM_NAME}-x64.tar.gz" #TODO: architecture
