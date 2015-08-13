@@ -3000,7 +3000,7 @@ Executor::CompilationResult Executor::compilePlan(
     std::string& llvm_ir) {
   nukeOldState(allow_lazy_fetch);
 
-  GroupByAndAggregate group_by_and_aggregate(this, plan, query_info, row_set_mem_owner,
+  GroupByAndAggregate group_by_and_aggregate(this, device_type, plan, query_info, row_set_mem_owner,
     max_groups_buffer_entry_guess, scan_limit, allow_multifrag, gpu_sort_info,
     output_columnar_hint && device_type == ExecutorDeviceType::GPU);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();

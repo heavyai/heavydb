@@ -1372,10 +1372,52 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
   return { nullptr };
 }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
+
+bool types_are_sortable_on_gpu(const GpuSortInfo& gpu_sort_info) {
+  const auto& target_list = gpu_sort_info.sort_plan->get_child_plan()->get_targetlist();
+  const auto& order_entries = gpu_sort_info.sort_plan->get_order_entries();
+  if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
+    return false;
+  }
+  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
+    CHECK_GE(order_entry.tle_no, 1);
+    CHECK_LE(order_entry.tle_no, target_list.size());
+    const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
+    if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
+      return false;
+    }
+    // TODO(alex): relax the restrictions
+    auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
+    if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG) {
+      return false;
+    }
+    const auto& target_ti = target_expr->get_type_info();
+    CHECK(!target_ti.is_array());
+    if (!target_ti.is_integer()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#else
+#pragma GCC diagnostic pop
+#endif
+
 }  // namespace
 
 GroupByAndAggregate::GroupByAndAggregate(
     Executor* executor,
+    const ExecutorDeviceType device_type,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -1399,7 +1441,10 @@ GroupByAndAggregate::GroupByAndAggregate(
       throw std::runtime_error("Group by not supported for none-encoding strings");
     }
   }
-  initQueryMemoryDescriptor(max_groups_buffer_entry_count, allow_multifrag, /* gpu_sort_info.sort_plan */ false);
+  initQueryMemoryDescriptor(max_groups_buffer_entry_count, allow_multifrag,
+    /* device_type == ExecutorDeviceType::GPU && allow_multifrag &&
+     * gpu_sort_info.sort_plan &&
+     * types_are_sortable_on_gpu(gpu_sort_info) */ false);
   output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) ||
     query_mem_desc_.sortOnGpu(gpu_sort_info);
 }
@@ -1642,30 +1687,7 @@ bool QueryMemoryDescriptor::sortOnGpu(const GpuSortInfo& gpu_sort_info) const {
   if (!allow_multifrag_ || !gpu_sort_info.sort_plan || !canOutputColumnar() || keyless_hash) {
     return false;
   }
-  const auto& target_list = gpu_sort_info.sort_plan->get_child_plan()->get_targetlist();
-  const auto& order_entries = gpu_sort_info.sort_plan->get_order_entries();
-  if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
-    return false;
-  }
-  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
-    CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(order_entry.tle_no, target_list.size());
-    const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
-    if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
-      return false;
-    }
-    // TODO(alex): relax the restrictions
-    auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
-    if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG) {
-      return false;
-    }
-    const auto& target_ti = target_expr->get_type_info();
-    CHECK(!target_ti.is_array());
-    if (!target_ti.is_integer()) {
-      return false;
-    }
-  }
-  return /* true */ false;
+  return /* types_are_sortable_on_gpu(gpu_sort_info) */ false;
 }
 
 GroupByAndAggregate::DiamondCodegen::DiamondCodegen(

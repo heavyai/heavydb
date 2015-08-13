@@ -927,6 +927,7 @@ class GroupByAndAggregate {
 public:
   GroupByAndAggregate(
     Executor* executor,
+    const ExecutorDeviceType device_type,
     const Planner::Plan* plan,
     const Fragmenter_Namespace::QueryInfo& query_info,
     std::shared_ptr<RowSetMemoryOwner>,
