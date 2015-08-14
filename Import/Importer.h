@@ -15,7 +15,6 @@
 #include <boost/noncopyable.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
-#include <boost/bimap.hpp>
 #include <glog/logging.h>
 #include "../Catalog/TableDescriptor.h"
 #include "../Catalog/Catalog.h"
@@ -384,7 +383,7 @@ class Detector {
   void detect_row_delimiter();
   void split_raw_data();
   std::vector<SQLTypes> detect_column_types(const std::vector<std::string>& row);
-  bool more_restrictive_sqltype(const SQLTypes a, const SQLTypes b);
+  static bool more_restrictive_sqltype(const SQLTypes a, const SQLTypes b);
   void find_best_sqltypes();
   std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows);
   std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>::const_iterator& row_begin,

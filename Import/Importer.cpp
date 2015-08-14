@@ -799,20 +799,20 @@ std::vector<SQLTypes> Detector::detect_column_types(const std::vector<std::strin
 }
 
 bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
-  typedef boost::bimap<SQLTypes, int> type_bm;
-  type_bm typeorder;
-  typeorder.insert(type_bm::value_type(kDOUBLE, 7));
-  typeorder.insert(type_bm::value_type(kFLOAT, 6));
-  typeorder.insert(type_bm::value_type(kBIGINT, 5));
-  typeorder.insert(type_bm::value_type(kINT, 4));
-  typeorder.insert(type_bm::value_type(kSMALLINT, 3));
-  typeorder.insert(type_bm::value_type(kCHAR, 0));
-  typeorder.insert(type_bm::value_type(kTEXT, 9));
-  typeorder.insert(type_bm::value_type(kDATE, 8));
-  typeorder.insert(type_bm::value_type(kBOOLEAN, 2));
+  static std::map<SQLTypes, int> typeorder = {
+    {kDOUBLE, 7},
+    {kFLOAT, 6},
+    {kBIGINT, 5},
+    {kINT, 4},
+    {kSMALLINT, 3},
+    {kCHAR, 0},
+    {kTEXT, 9},
+    {kDATE, 8},
+    {kBOOLEAN, 2}
+  };
 
-  // note: b < a instead of a < b because the bimap is ordered most to least restrictive
-  return typeorder.left.find(b)->second < typeorder.left.find(a)->second;
+  // note: b < a instead of a < b because the map is ordered most to least restrictive
+  return typeorder.find(b)->second < typeorder.find(a)->second;
 }
 
 void Detector::find_best_sqltypes_and_headers() {
