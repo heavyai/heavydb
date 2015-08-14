@@ -2348,6 +2348,15 @@ ResultRows Executor::collectAllDeviceResults(
   }
   auto reduced_results = reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner,
     gpu_sort_info, query_mem_desc, output_columnar);
+  if (query_mem_desc.sortOnGpu() && gpu_sort_info.top_count) {
+    reduced_results.sort(gpu_sort_info.sort_plan, gpu_sort_info.top_count);
+    for (size_t row_idx = 0; row_idx < reduced_results.size(); ++row_idx) {
+      const auto row_key = reduced_results.getSimpleKey(row_idx);
+      if (reduced_results.unkown_top_keys_.find(row_key) != reduced_results.unkown_top_keys_.end()) {
+        throw SpeculativeTopFailed();
+      }
+    }
+  }
   if (reduced_results.group_by_buffer_) {
     reduced_results.addKeylessGroupByBuffer(
       reduced_results.group_by_buffer_,

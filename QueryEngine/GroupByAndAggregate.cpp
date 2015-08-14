@@ -258,26 +258,19 @@ void ResultRows::reduce(
       reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
     }
   }
-  if (query_mem_desc.sortOnGpu() && gpu_sort_info.top_count) {
-    // TODO(alex): refine
-    for (const auto& kv : other_results.as_unordered_map_) {
-      auto it = as_unordered_map_.find(kv.first);
-      if (it == as_unordered_map_.end()) {
-        throw SpeculativeTopFailed();
-      }
-    }
-    for (const auto& kv : as_unordered_map_) {
-      auto it = other_results.as_unordered_map_.find(kv.first);
-      if (it == other_results.as_unordered_map_.end()) {
-        throw SpeculativeTopFailed();
-      }
-    }
-  }
+  const bool track_top_unknowns { query_mem_desc.sortOnGpu() && gpu_sort_info.top_count };
   for (const auto& kv : other_results.as_unordered_map_) {
     auto it = as_unordered_map_.find(kv.first);
     if (it == as_unordered_map_.end()) {
-      as_unordered_map_.insert(std::make_pair(kv.first, kv.second));
-      continue;
+      auto it_ok = track_top_unknowns
+        ? as_unordered_map_.insert(std::make_pair(kv.first, target_values_.back()))
+        : as_unordered_map_.insert(std::make_pair(kv.first, kv.second));
+      CHECK(it_ok.second);
+      if (!track_top_unknowns) {
+        continue;
+      }
+      unkown_top_keys_.insert(kv.first);
+      it = it_ok.first;
     }
     auto& old_agg_results = it->second;
     CHECK_EQ(old_agg_results.size(), kv.second.size());
@@ -285,6 +278,20 @@ void ResultRows::reduce(
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
       reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+    }
+  }
+  if (track_top_unknowns) {
+    for (auto& kv : as_unordered_map_) {
+      auto it = other_results.as_unordered_map_.find(kv.first);
+      if (it == other_results.as_unordered_map_.end()) {
+        unkown_top_keys_.insert(kv.first);
+        auto& old_agg_results = kv.second;
+        const size_t agg_col_count = old_agg_results.size();
+        for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
+          const auto agg_info = targets_[agg_col_idx];
+          reduce_impl(&old_agg_results[agg_col_idx], &other_results.target_values_.back()[agg_col_idx], agg_info, agg_col_idx);
+        }
+      }
     }
   }
   CHECK(simple_keys_.empty() != multi_keys_.empty());
@@ -490,6 +497,12 @@ TargetValue ResultRows::get(const size_t row_idx,
     return TargetValue(*reinterpret_cast<const double*>(&target_values_[row_idx][col_idx].i1));
   }
   CHECK(false);
+}
+
+int64_t ResultRows::getSimpleKey(const size_t row_idx) const {
+  CHECK_GE(row_idx, 0);
+  CHECK_LT(row_idx, target_values_.size());
+  return target_values_[row_idx].getSimpleKey();
 }
 
 bool ResultRows::isNull(const SQLTypeInfo& ti, const InternalTargetValue& val) {
@@ -1623,7 +1636,8 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(const GpuSortInfo& gpu_sort_i
     }
     // TODO(alex): relax the restrictions
     auto agg_expr = static_cast<Analyzer::AggExpr*>(target_expr);
-    if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG) {
+    if (agg_expr->get_is_distinct() || agg_expr->get_aggtype() == kAVG ||
+        agg_expr->get_aggtype() == kMIN || agg_expr->get_aggtype() == kMAX) {
       return false;
     }
     if (agg_expr->get_arg()) {

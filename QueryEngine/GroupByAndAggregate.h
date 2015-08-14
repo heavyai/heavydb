@@ -5,6 +5,7 @@
 #include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
 #include "../Shared/sqltypes.h"
+#include "RuntimeFunctions.h"
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/noncopyable.hpp>
@@ -418,7 +419,9 @@ struct InternalTargetValue {
 
 class InternalRow {
 public:
-  InternalRow(RowSetMemoryOwner* row_set_mem_owner) : row_set_mem_owner_(row_set_mem_owner) {};
+  InternalRow(RowSetMemoryOwner* row_set_mem_owner, const int64_t simple_key)
+    : row_set_mem_owner_(row_set_mem_owner)
+    , simple_key_(simple_key) {};
 
   bool operator==(const InternalRow& other) const {
     return row_ == other.row_;
@@ -434,6 +437,10 @@ public:
 
   const InternalTargetValue& operator[](const size_t i) const {
     return row_[i];
+  }
+
+  int64_t getSimpleKey() const {
+    return simple_key_;
   }
 
   size_t size() const {
@@ -468,6 +475,7 @@ private:
 
   std::vector<InternalTargetValue> row_;
   RowSetMemoryOwner* row_set_mem_owner_;
+  int64_t simple_key_;
 
   friend class RowStorage;
 };
@@ -486,8 +494,8 @@ private:
     rows_.reserve(n);
   }
 
-  void beginRow(RowSetMemoryOwner* row_set_mem_owner) {
-    rows_.emplace_back(row_set_mem_owner);
+  void beginRow(RowSetMemoryOwner* row_set_mem_owner, const int64_t simple_key) {
+    rows_.emplace_back(row_set_mem_owner, simple_key);
   }
 
   void reserveRow(const size_t n) {
@@ -553,6 +561,10 @@ private:
 
   const InternalRow& front() const {
     return rows_.front();
+  }
+
+  const InternalRow& back() const {
+    return rows_.back();
   }
 
   void top(const int64_t n, const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
@@ -623,19 +635,19 @@ public:
   }
 
   void beginRow() {
-    target_values_.beginRow(row_set_mem_owner_.get());
+    target_values_.beginRow(row_set_mem_owner_.get(), EMPTY_KEY);
   }
 
   void beginRow(const int64_t key) {
     CHECK(multi_keys_.empty());
     simple_keys_.push_back(key);
-    target_values_.beginRow(row_set_mem_owner_.get());
+    target_values_.beginRow(row_set_mem_owner_.get(), key);
   }
 
   void beginRow(const std::vector<int64_t>& key) {
     CHECK(simple_keys_.empty());
     multi_keys_.push_back(key);
-    target_values_.beginRow(row_set_mem_owner_.get());
+    target_values_.beginRow(row_set_mem_owner_.get(), EMPTY_KEY);
   }
 
   void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
@@ -714,6 +726,8 @@ public:
                   const bool translate_strings,
                   const bool decimal_to_double = true) const;
 
+  int64_t getSimpleKey(const size_t row_idx) const;
+
   SQLTypeInfo getColType(const size_t col_idx) const {
     if (just_explain_) {
       return SQLTypeInfo(kTEXT, false);
@@ -776,6 +790,7 @@ private:
   size_t truncation_size_;  // if not zero, this result only contains first truncation_size_ rows
   bool just_explain_;
   std::string explanation_;
+  std::unordered_set<int64_t> unkown_top_keys_;
 
   friend class Executor;
 };
