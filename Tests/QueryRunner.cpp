@@ -15,15 +15,20 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   auto data_dir = base_path / "mapd_data";
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
+#ifdef HAVE_CUDA
+  bool useGpus = true;
+#else
+  bool useGpus = false;
+#endif
   {
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), true);
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), useGpus);
     Catalog_Namespace::SysCatalog sys_cat(base_path.string(), dataMgr);
     CHECK(sys_cat.getMetadataForUser(user_name, user));
     CHECK_EQ(user.passwd, passwd);
     CHECK(sys_cat.getMetadataForDB(db_name, db));
     CHECK(user.isSuper || (user.userId == db.dbOwner));
   }
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), true);
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), useGpus);
   return new Catalog_Namespace::SessionInfo(
       std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr), user, ExecutorDeviceType::GPU, 0);
 }
@@ -49,5 +54,9 @@ ResultRows run_multiple_agg(const std::string& query_str,
   Planner::RootPlan* plan = optimizer.optimize();
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
   auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId);
+#ifdef HAVE_CUDA
   return executor->execute(plan, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, true, true);
+#else
+  return executor->execute(plan, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, false, true);
+#endif
 }

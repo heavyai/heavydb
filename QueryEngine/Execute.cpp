@@ -4221,6 +4221,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                                                    llvm::Module* module,
                                                    const bool no_inline,
                                                    const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+#ifdef HAVE_CUDA
   CHECK(cuda_mgr);
   CodeCacheKey key{serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_)};
   for (const auto helper : cgen_state_->helper_functions_) {
@@ -4348,6 +4349,9 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   addCodeToCache(key, cached_functions, module, gpu_code_cache_);
 
   return native_functions;
+#else
+  return {};
+#endif
 }
 
 std::string Executor::generatePTX(const std::string& cuda_llir) const {

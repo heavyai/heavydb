@@ -5,5 +5,5 @@ SET (cudamgr_source_files
 
 ADD_LIBRARY (CudaMgr ${cudamgr_source_files})
 
-TARGET_LINK_LIBRARIES (CudaMgr -L/usr/local/cuda/lib -lcuda)
+TARGET_LINK_LIBRARIES (CudaMgr -L/usr/local/cuda/lib ${CUDA_LIBRARIES})
 

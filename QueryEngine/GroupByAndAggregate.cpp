@@ -1595,6 +1595,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                            const int device_id,
                                                            int32_t* error_code,
                                                            const uint32_t num_tables) const {
+#ifdef HAVE_CUDA
   data_mgr->cudaMgr_->setContext(device_id);
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
@@ -1837,6 +1838,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
     }
   }
   return out_vec;
+#else
+  return {};
+#endif
 }
 
 std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionContext(

@@ -4,6 +4,7 @@
 
 #include <glog/logging.h>
 
+#ifdef HAVE_CUDA
 namespace {
 
 void fill_options(std::vector<CUjit_option>& option_keys,
@@ -16,6 +17,7 @@ void fill_options(std::vector<CUjit_option>& option_keys,
 }
 
 }  // namespace
+#endif
 
 GpuCompilationContext::GpuCompilationContext(const char* ptx,
                                              const std::string& func_name,
@@ -24,6 +26,7 @@ GpuCompilationContext::GpuCompilationContext(const char* ptx,
                                              const void* cuda_mgr,
                                              const unsigned block_size_x)
     : module_(nullptr), kernel_(nullptr), link_state_(nullptr), device_id_(device_id), cuda_mgr_(cuda_mgr) {
+#ifdef HAVE_CUDA
   CHECK(ptx);
   static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr_)->setContext(device_id_);
   std::vector<CUjit_option> option_keys;
@@ -53,9 +56,11 @@ GpuCompilationContext::GpuCompilationContext(const char* ptx,
   checkCudaErrors(cuModuleLoadDataEx(&module_, cubin, num_options, &option_keys[0], &option_values[0]));
   CHECK(module_);
   checkCudaErrors(cuModuleGetFunction(&kernel_, module_, func_name.c_str()));
+#endif
 }
 
 GpuCompilationContext::~GpuCompilationContext() {
+#ifdef HAVE_CUDA
   static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr_)->setContext(device_id_);
   auto status = cuModuleUnload(module_);
   // TODO(alex): handle this race better
@@ -64,4 +69,5 @@ GpuCompilationContext::~GpuCompilationContext() {
   }
   checkCudaErrors(status);
   checkCudaErrors(cuLinkDestroy(link_state_));
+#endif
 }

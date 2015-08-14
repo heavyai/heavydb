@@ -50,7 +50,11 @@ void run_ddl_statement(const string& create_table_stmt) {
 }
 
 bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU && !g_session->get_catalog().get_dataMgr().gpusPresent();
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
 }
 
 bool approx_eq(const double v, const double target, const double eps = 0.01) {

@@ -9,19 +9,24 @@ using std::endl;
 namespace CudaMgr_Namespace {
 
 CudaMgr::CudaMgr() {
+#ifdef HAVE_CUDA
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&deviceCount));
   fillDeviceProperties();
   createDeviceContexts();
+#endif
 }
 
 CudaMgr::~CudaMgr() {
+#ifdef HAVE_CUDA
   for (int d = 0; d < deviceCount; ++d) {
     checkError(cuCtxDestroy(deviceContexts[d]));
   }
+#endif
 }
 
 void CudaMgr::fillDeviceProperties() {
+#ifdef HAVE_CUDA
   deviceProperties.resize(deviceCount);
   for (int deviceNum = 0; deviceNum < deviceCount; ++deviceNum) {
     checkError(cuDeviceGet(&deviceProperties[deviceNum].device, deviceNum));
@@ -63,9 +68,11 @@ void CudaMgr::fillDeviceProperties() {
     deviceProperties[deviceNum].memoryBandwidthGBs =
         deviceProperties[deviceNum].memoryClockKhz / 1000000.0 / 8.0 * deviceProperties[deviceNum].memoryBusWidth;
   }
+#endif
 }
 
 void CudaMgr::createDeviceContexts() {
+#ifdef HAVE_CUDA
   deviceContexts.resize(deviceCount);
   for (int d = 0; d < deviceCount; ++d) {
     CUresult status = cuCtxCreate(&deviceContexts[d], 0, deviceProperties[d].device);
@@ -80,9 +87,11 @@ void CudaMgr::createDeviceContexts() {
       checkError(status);
     }
   }
+#endif
 }
 
 void CudaMgr::printDeviceProperties() const {
+#ifdef HAVE_CUDA
   cout << "Num devices: " << deviceCount << endl << endl;
   for (int d = 0; d < deviceCount; ++d) {
     cout << "Device: " << deviceProperties[d].device << endl;
@@ -95,43 +104,62 @@ void CudaMgr::printDeviceProperties() const {
     cout << "Memory bandwidth: " << deviceProperties[d].memoryBandwidthGBs << " GB/sec" << endl;
     cout << endl;
   }
+#endif
 }
 
 void CudaMgr::setContext(const int deviceNum) const {
+#ifdef HAVE_CUDA
   // assert (deviceNum < deviceCount);
   cuCtxSetCurrent(deviceContexts[deviceNum]);
+#endif
 }
 
 int8_t* CudaMgr::allocatePinnedHostMem(const size_t numBytes) {
+#ifdef HAVE_CUDA
   setContext(0);
   void* hostPtr;
   checkError(cuMemHostAlloc(&hostPtr, numBytes, CU_MEMHOSTALLOC_PORTABLE));
   return (reinterpret_cast<int8_t*>(hostPtr));
+#else
+  return nullptr;
+#endif
 }
 
 int8_t* CudaMgr::allocateDeviceMem(const size_t numBytes, const int deviceNum) {
+#ifdef HAVE_CUDA
   setContext(deviceNum);
   CUdeviceptr devicePtr;
   checkError(cuMemAlloc(&devicePtr, numBytes));
   return (reinterpret_cast<int8_t*>(devicePtr));
+#else
+  return nullptr;
+#endif
 }
 
 void CudaMgr::freePinnedHostMem(int8_t* hostPtr) {
+#ifdef HAVE_CUDA
   checkError(cuMemFreeHost(reinterpret_cast<void*>(hostPtr)));
+#endif
 }
 
 void CudaMgr::freeDeviceMem(int8_t* devicePtr) {
+#ifdef HAVE_CUDA
   checkError(cuMemFree(reinterpret_cast<CUdeviceptr>(devicePtr)));
+#endif
 }
 
 void CudaMgr::copyHostToDevice(int8_t* devicePtr, const int8_t* hostPtr, const size_t numBytes, const int deviceNum) {
+#ifdef HAVE_CUDA
   setContext(deviceNum);
   checkError(cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(devicePtr), hostPtr, numBytes));
+#endif
 }
 
 void CudaMgr::copyDeviceToHost(int8_t* hostPtr, const int8_t* devicePtr, const size_t numBytes, const int deviceNum) {
+#ifdef HAVE_CUDA
   setContext(deviceNum);
   checkError(cuMemcpyDtoH(hostPtr, reinterpret_cast<const CUdeviceptr>(devicePtr), numBytes));
+#endif
 }
 
 void CudaMgr::copyDeviceToDevice(int8_t* destPtr,
@@ -139,6 +167,7 @@ void CudaMgr::copyDeviceToDevice(int8_t* destPtr,
                                  const size_t numBytes,
                                  const int destDeviceNum,
                                  const int srcDeviceNum) {
+#ifdef HAVE_CUDA
   // std::cout << "Source device: " << srcDeviceNum << std::endl;
   // std::cout << "Dest device: " << destDeviceNum << std::endl;
   if (srcDeviceNum == destDeviceNum) {
@@ -151,20 +180,25 @@ void CudaMgr::copyDeviceToDevice(int8_t* destPtr,
                             deviceContexts[srcDeviceNum],
                             numBytes));  // will we always have peer?
   }
+#endif
 }
 
 void CudaMgr::zeroDeviceMem(int8_t* devicePtr, const size_t numBytes, const int deviceNum) {
+#ifdef HAVE_CUDA
   setContext(deviceNum);
   checkError(cuMemsetD8(reinterpret_cast<CUdeviceptr>(devicePtr), 0, numBytes));
+#endif
 }
 
 void CudaMgr::checkError(CUresult status) {
+#ifdef HAVE_CUDA
   if (status != CUDA_SUCCESS) {
     const char* errorString{nullptr};
     cuGetErrorString(status, &errorString);
     // should clean up here - delete any contexts, etc.
     throw std::runtime_error(errorString ? errorString : "Unkown error");
   }
+#endif
 }
 
 }  // CudaMgr_Namespace
