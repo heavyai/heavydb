@@ -1429,7 +1429,6 @@ GroupByAndAggregate::GroupByAndAggregate(
     allow_multifrag &&
     gpu_sort_info.sort_plan &&
     gpuCanHandleOrderEntries(gpu_sort_info);
-  sort_on_gpu_hint = false;  // disable for now to test it more
   initQueryMemoryDescriptor(max_groups_buffer_entry_count, allow_multifrag, sort_on_gpu_hint);
   query_mem_desc_.sort_on_gpu_ =
     sort_on_gpu_hint &&
