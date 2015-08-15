@@ -282,7 +282,7 @@ void ResultRows::reduce(
       if (agg_info.is_agg) {
         reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
       } else {
-        old_agg_results[agg_col_idx].i1 = kv.first;
+        old_agg_results[agg_col_idx] = kv.second[agg_col_idx];
       }
     }
   }
@@ -298,7 +298,7 @@ void ResultRows::reduce(
           if (agg_info.is_agg) {
             reduce_impl(&old_agg_results[agg_col_idx], &other_results.target_values_.back()[agg_col_idx], agg_info, agg_col_idx);
           } else {
-            old_agg_results[agg_col_idx].i1 = kv.first;
+            old_agg_results[agg_col_idx] = other_results.target_values_.back()[agg_col_idx];
           }
         }
       }
