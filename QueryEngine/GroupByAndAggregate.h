@@ -995,7 +995,7 @@ private:
     DiamondCodegen* parent_;
   };
 
-  void initQueryMemoryDescriptor(const size_t, const bool allow_multifrag, const bool sort_on_gpu_hint);
+  void initQueryMemoryDescriptor(const size_t, const bool sort_on_gpu_hint);
 
   llvm::Value* codegenGroupBy(
     const QueryMemoryDescriptor&,

@@ -1429,7 +1429,7 @@ GroupByAndAggregate::GroupByAndAggregate(
     allow_multifrag &&
     gpu_sort_info.sort_plan &&
     gpuCanHandleOrderEntries(gpu_sort_info);
-  initQueryMemoryDescriptor(max_groups_buffer_entry_count, allow_multifrag, sort_on_gpu_hint);
+  initQueryMemoryDescriptor(max_groups_buffer_entry_count, sort_on_gpu_hint);
   query_mem_desc_.sort_on_gpu_ =
     sort_on_gpu_hint &&
     query_mem_desc_.canOutputColumnar() &&
@@ -1440,7 +1440,6 @@ GroupByAndAggregate::GroupByAndAggregate(
 
 void GroupByAndAggregate::initQueryMemoryDescriptor(
     const size_t max_groups_buffer_entry_count,
-    const bool allow_multifrag,
     const bool sort_on_gpu_hint) {
   auto group_cols = group_by_exprs(plan_);
   for (const auto group_expr : group_cols) {
