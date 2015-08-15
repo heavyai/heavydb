@@ -166,6 +166,7 @@ if(MAPD2_NODEJS_SERVER AND NOT GO_EXECUTABLE)
 endif()
 
 install(TARGETS initdb mapd mapd_server mapd_http_server DESTINATION bin)
+install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
 install(FILES mapd.thrift DESTINATION ".")
