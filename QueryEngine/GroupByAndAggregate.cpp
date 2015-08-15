@@ -1396,6 +1396,10 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
   return { nullptr };
 }
 
+bool many_entries(const int64_t max_val, const int64_t min_val) {
+  return max_val - min_val > 1000000;
+}
+
 }  // namespace
 
 GroupByAndAggregate::GroupByAndAggregate(
@@ -1550,7 +1554,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(
       };
       return;
     } else {
-      bool keyless = !sort_on_gpu_hint;
+      bool keyless = !sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min);
       if (keyless) {
         bool found_count = false;  // shouldn't use keyless for projection only
         for (const auto target_expr : target_expr_list) {
@@ -1681,7 +1685,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
   if (executor_->isCPUOnly()) {
     return true;
   }
-  return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && max_val - min_val > 1000000;
+  return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && many_entries(max_val, min_val);
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
