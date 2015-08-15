@@ -271,13 +271,19 @@ void ResultRows::reduce(
       }
       unkown_top_keys_.insert(kv.first);
       it = it_ok.first;
+      // borrow the key from the result which has it
+      it->second.setSimpleKey(kv.first);
     }
     auto& old_agg_results = it->second;
     CHECK_EQ(old_agg_results.size(), kv.second.size());
     const size_t agg_col_count = old_agg_results.size();
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
-      reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+      if (agg_info.is_agg) {
+        reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+      } else {
+        old_agg_results[agg_col_idx].i1 = kv.first;
+      }
     }
   }
   if (track_top_unknowns) {
@@ -289,7 +295,11 @@ void ResultRows::reduce(
         const size_t agg_col_count = old_agg_results.size();
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
           const auto agg_info = targets_[agg_col_idx];
-          reduce_impl(&old_agg_results[agg_col_idx], &other_results.target_values_.back()[agg_col_idx], agg_info, agg_col_idx);
+          if (agg_info.is_agg) {
+            reduce_impl(&old_agg_results[agg_col_idx], &other_results.target_values_.back()[agg_col_idx], agg_info, agg_col_idx);
+          } else {
+            old_agg_results[agg_col_idx].i1 = kv.first;
+          }
         }
       }
     }
@@ -308,6 +318,7 @@ void ResultRows::reduce(
     simple_keys_.clear();
     simple_keys_.reserve(as_unordered_map_.size());
     for (const auto& kv : as_unordered_map_) {
+      CHECK_EQ(kv.first, kv.second.getSimpleKey());
       simple_keys_.push_back(kv.first);
       target_values_.push_back(kv.second);
     }

@@ -443,6 +443,10 @@ public:
     return simple_key_;
   }
 
+  void setSimpleKey(const int64_t simple_key) {
+    simple_key_ = simple_key;
+  }
+
   size_t size() const {
     return row_.size();
   }
