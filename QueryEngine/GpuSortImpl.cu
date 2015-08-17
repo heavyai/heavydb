@@ -15,9 +15,10 @@ void sort_on_device(int64_t* val_buff, int64_t* idx_buff, const uint64_t entry_c
   }
 }
 
-void apply_permutation_on_device(int64_t* val_buff, int64_t* idx_buff, const uint64_t entry_count) {
+void apply_permutation_on_device(int64_t* val_buff, int64_t* idx_buff, const uint64_t entry_count, int64_t* tmp_buff) {
   thrust::device_ptr<int64_t> key_ptr(val_buff);
   thrust::device_ptr<int64_t> idx_ptr(idx_buff);
-  thrust::device_vector<int64_t> temp(key_ptr, key_ptr + entry_count);
-  thrust::gather(idx_ptr, idx_ptr + entry_count, temp.begin(), key_ptr);
+  thrust::device_ptr<int64_t> tmp_ptr(tmp_buff);
+  thrust::copy(key_ptr, key_ptr + entry_count, tmp_ptr);
+  thrust::gather(idx_ptr, idx_ptr + entry_count, tmp_ptr, key_ptr);
 }

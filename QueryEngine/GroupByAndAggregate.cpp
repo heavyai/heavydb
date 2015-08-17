@@ -1042,6 +1042,26 @@ ResultRows QueryExecutionContext::groupBufferToResults(
   return results;
 }
 
+namespace {
+
+class ScopedScratchBuffer {
+public:
+  ScopedScratchBuffer(const size_t num_bytes, Data_Namespace::DataMgr* data_mgr, const int device_id)
+    : data_mgr_(data_mgr)
+    , ab_(alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id)) {}
+  ~ScopedScratchBuffer() {
+    free_gpu_abstract_buffer(data_mgr_, ab_);
+  }
+  CUdeviceptr getPtr() const {
+    return reinterpret_cast<CUdeviceptr>(ab_->getMemoryPtr());
+  }
+private:
+  Data_Namespace::DataMgr* data_mgr_;
+  Data_Namespace::AbstractBuffer* ab_;
+};
+
+}  // namespace
+
 std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     const std::vector<void*>& cu_functions,
     const bool hoist_literals,
@@ -1157,6 +1177,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                        nullptr, kernel_params, nullptr));
       }
       if (can_sort_on_gpu) {
+        ScopedScratchBuffer scratch_buff(query_mem_desc_.entry_count * sizeof(int64_t), data_mgr, device_id);
+        auto tmp_buff = reinterpret_cast<int64_t*>(scratch_buff.getPtr());
         CHECK(gpu_sort_info.sort_plan);
         const auto& order_entries = gpu_sort_info.sort_plan->get_order_entries();
         CHECK_EQ(size_t(1), order_entries.size());
@@ -1175,7 +1197,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
             apply_permutation(
               reinterpret_cast<int64_t*>(gpu_query_mem.group_by_buffers.second),
               reinterpret_cast<int64_t*>(idx_buff),
-              query_mem_desc_.entry_count);
+              query_mem_desc_.entry_count,
+              tmp_buff);
           }
           for (size_t target_idx = 0; target_idx < query_mem_desc_.agg_col_widths.size(); ++target_idx) {
             if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
@@ -1187,7 +1210,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
             apply_permutation(
               reinterpret_cast<int64_t*>(val_buff),
               reinterpret_cast<int64_t*>(idx_buff),
-              query_mem_desc_.entry_count);
+              query_mem_desc_.entry_count,
+              tmp_buff);
           }
         }
       }

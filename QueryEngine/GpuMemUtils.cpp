@@ -10,9 +10,21 @@ CUdeviceptr alloc_gpu_mem(
     Data_Namespace::DataMgr* data_mgr,
     const size_t num_bytes,
     const int device_id) {
+  auto ab = alloc_gpu_abstract_buffer(data_mgr, num_bytes, device_id);
+  return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
+}
+
+Data_Namespace::AbstractBuffer* alloc_gpu_abstract_buffer(
+    Data_Namespace::DataMgr* data_mgr,
+    const size_t num_bytes,
+    const int device_id) {
   auto ab = data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, num_bytes);
   CHECK_EQ(ab->getPinCount(), 1);
-  return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
+  return ab;
+}
+
+void free_gpu_abstract_buffer(Data_Namespace::DataMgr* data_mgr, Data_Namespace::AbstractBuffer* ab) {
+  data_mgr->free(ab);
 }
 
 void copy_to_gpu(

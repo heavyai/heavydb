@@ -16,6 +16,13 @@ CUdeviceptr alloc_gpu_mem(
   const size_t num_bytes,
   const int device_id);
 
+Data_Namespace::AbstractBuffer* alloc_gpu_abstract_buffer(
+  Data_Namespace::DataMgr* data_mgr,
+  const size_t num_bytes,
+  const int device_id);
+
+void free_gpu_abstract_buffer(Data_Namespace::DataMgr* data_mgr, Data_Namespace::AbstractBuffer* ab);
+
 void copy_to_gpu(
     Data_Namespace::DataMgr* data_mgr,
     CUdeviceptr dst,
