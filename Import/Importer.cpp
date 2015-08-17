@@ -799,20 +799,19 @@ std::vector<SQLTypes> Detector::detect_column_types(const std::vector<std::strin
 }
 
 bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
-  static std::map<SQLTypes, int> typeorder = {
-    {kDOUBLE, 7},
-    {kFLOAT, 6},
-    {kBIGINT, 5},
-    {kINT, 4},
-    {kSMALLINT, 3},
-    {kCHAR, 0},
-    {kTEXT, 9},
-    {kDATE, 8},
-    {kBOOLEAN, 2}
-  };
+  static std::array<int,kSQLTYPE_LAST> typeorder;
+  typeorder[kDATE] = 8;
+  typeorder[kTEXT] = 9;
+  typeorder[kBIGINT] = 5;
+  typeorder[kDOUBLE] = 7;
+  typeorder[kFLOAT] = 6;
+  typeorder[kSMALLINT] = 3;
+  typeorder[kINT] = 4;
+  typeorder[kCHAR] = 0;
+  typeorder[kBOOLEAN] = 2;
 
   // note: b < a instead of a < b because the map is ordered most to least restrictive
-  return typeorder.find(b)->second < typeorder.find(a)->second;
+  return typeorder[b] < typeorder[a];
 }
 
 void Detector::find_best_sqltypes_and_headers() {
