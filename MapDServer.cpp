@@ -817,7 +817,7 @@ int main(int argc, char **argv) {
   std::string device("gpu");
   bool flush_log = false;
   bool jit_debug = false;
-  bool allow_multifrag = false;
+  bool allow_multifrag = true;
 
 	namespace po = boost::program_options;
 
@@ -827,7 +827,7 @@ int main(int argc, char **argv) {
 		("path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")
     ("flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")
     ("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
-    ("allow-multifrag", "Allow execution over multiple fragments in a single round-trip to GPU")
+    ("disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")
     ("cpu", "Run on CPU only")
     ("gpu", "Run on GPUs (Default)")
     ("hybrid", "Run on both CPU and GPUs")
@@ -859,8 +859,8 @@ int main(int argc, char **argv) {
       flush_log = true;
     if (vm.count("jit-debug"))
       jit_debug = true;
-    if (vm.count("allow-multifrag"))
-      allow_multifrag = true;
+    if (vm.count("disable-multifrag"))
+      allow_multifrag = false;
 
 		po::notify(vm);
 	}
