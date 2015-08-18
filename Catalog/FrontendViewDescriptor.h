@@ -12,10 +12,10 @@
  */
 
 struct FrontendViewDescriptor {
-    int32_t viewId; /**< viewId starts at 0 for valid views. */
-    std::string viewName; /**< viewName is the name of the view view -must be unique */
-    std::string viewState;
-    int32_t userId;
+  int32_t viewId;       /**< viewId starts at 0 for valid views. */
+  std::string viewName; /**< viewName is the name of the view view -must be unique */
+  std::string viewState;
+  int32_t userId;
 };
 
-#endif // FRONTEND_VIEW_DESCRIPTOR
+#endif  // FRONTEND_VIEW_DESCRIPTOR

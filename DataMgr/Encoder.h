@@ -12,30 +12,29 @@
 #include <limits>
 
 namespace Data_Namespace {
-    class AbstractBuffer;
+class AbstractBuffer;
 }
 
 // default max input buffer size to 1MB
-#define MAX_INPUT_BUF_SIZE		1048576
+#define MAX_INPUT_BUF_SIZE 1048576
 
 class Encoder {
-    public: 
-        static Encoder * Create(Data_Namespace::AbstractBuffer * buffer, const SQLTypeInfo sqlType);
-        Encoder(Data_Namespace::AbstractBuffer * buffer): numElems(0), buffer_(buffer) {
-        }
-        virtual ChunkMetadata appendData(int8_t * &srcData, const size_t numAppendElems) = 0;
-        virtual void getMetadata (ChunkMetadata &chunkMetadata); 
-        virtual void copyMetadata (const Encoder * copyFromEncoder) = 0; 
-        virtual void writeMetadata(FILE *f/*, const size_t offset*/) = 0;
-        virtual void readMetadata(FILE *f/*, const size_t offset*/) = 0;
-        size_t numElems;
-				virtual ~Encoder() {}
+ public:
+  static Encoder* Create(Data_Namespace::AbstractBuffer* buffer, const SQLTypeInfo sqlType);
+  Encoder(Data_Namespace::AbstractBuffer* buffer) : numElems(0), buffer_(buffer) {}
+  virtual ChunkMetadata appendData(int8_t*& srcData, const size_t numAppendElems) = 0;
+  virtual void getMetadata(ChunkMetadata& chunkMetadata);
+  virtual void copyMetadata(const Encoder* copyFromEncoder) = 0;
+  virtual void writeMetadata(FILE* f /*, const size_t offset*/) = 0;
+  virtual void readMetadata(FILE* f /*, const size_t offset*/) = 0;
+  size_t numElems;
+  virtual ~Encoder() {}
 
-    protected:
-        Data_Namespace::AbstractBuffer * buffer_;
-        //ChunkMetadata metadataTemplate_;
+ protected:
+  Data_Namespace::AbstractBuffer* buffer_;
+  // ChunkMetadata metadataTemplate_;
 };
 
 #define CHECK_RET(x) CHECK_GE(x, 0)
 
-#endif // Encoder_h
+#endif  // Encoder_h

@@ -9,17 +9,23 @@
 /**
  * @type DictDescriptor
  * @brief Descriptor for a dictionary for a string columne
- * 
+ *
  */
 
 struct DictDescriptor {
-    int dictId; 
-    std::string dictName;
-    int dictNBits;
-    bool dictIsShared;
-    std::string dictFolderPath;
-    StringDictionary *stringDict;
-    DictDescriptor(int id, const std::string &name, int nbits, bool shared, std::string &fname) : dictId(id), dictName(name), dictNBits(nbits), dictIsShared(shared), dictFolderPath(fname), stringDict(nullptr) {}
+  int dictId;
+  std::string dictName;
+  int dictNBits;
+  bool dictIsShared;
+  std::string dictFolderPath;
+  StringDictionary* stringDict;
+  DictDescriptor(int id, const std::string& name, int nbits, bool shared, std::string& fname)
+      : dictId(id),
+        dictName(name),
+        dictNBits(nbits),
+        dictIsShared(shared),
+        dictFolderPath(fname),
+        stringDict(nullptr) {}
 };
 
-#endif // DICT_DESCRIPTOR
+#endif  // DICT_DESCRIPTOR
