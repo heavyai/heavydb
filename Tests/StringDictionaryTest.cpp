@@ -3,7 +3,6 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
-
 TEST(StringDictionary, AddAndGet) {
   StringDictionary string_dict("/tmp", false);
   auto id1 = string_dict.getOrAdd("foo bar");
@@ -41,7 +40,7 @@ TEST(StringDictionary, HandleEmpty) {
   ASSERT_EQ("", string_dict.getString(id1));
 }
 
-const int g_op_count { 250000 };
+const int g_op_count{250000};
 
 TEST(StringDictionary, ManyAddsAndGets) {
   StringDictionary string_dict("/tmp", false);
@@ -66,8 +65,7 @@ TEST(StringDictionary, RecoverMany) {
   }
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   auto err = RUN_ALL_TESTS();
   return err;

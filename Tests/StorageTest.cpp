@@ -51,8 +51,7 @@ class SQLTestEnv : public ::testing::Environment {
     UserMetadata user;
     DBMetadata db;
     {
-      auto dataMgr =
-          std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false);
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false);
       if (!boost::filesystem::exists(system_db_file)) {
         SysCatalog sys_cat(base_path.string(), dataMgr, true);
         sys_cat.initDB();
@@ -69,19 +68,15 @@ class SQLTestEnv : public ::testing::Environment {
       }
     }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false);
-    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(), db, dataMgr),
-                                   user,
-                                   ExecutorDeviceType::GPU,
-                                   0));
+    gsession.reset(
+        new SessionInfo(std::make_shared<Catalog>(base_path.string(), db, dataMgr), user, ExecutorDeviceType::GPU, 0));
   }
 };
 
 bool storage_test(const string& table_name, size_t num_rows) {
-  vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, gsession->get_catalog());
+  vector<size_t> insert_col_hashs = populate_table_random(table_name, num_rows, gsession->get_catalog());
   vector<size_t> scan_col_hashs = scan_table_return_hash(table_name, gsession->get_catalog());
-  vector<size_t> scan_col_hashs2 =
-      scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
+  vector<size_t> scan_col_hashs2 = scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
   return insert_col_hashs == scan_col_hashs && insert_col_hashs == scan_col_hashs2;
 }
 }  // namespace
@@ -107,10 +102,9 @@ TEST(StorageSmall, Strings) {
 
 TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl("drop table if exists alltypes;"););
-  ASSERT_NO_THROW(
-      run_ddl(
-          "create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
-          "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
+  ASSERT_NO_THROW(run_ddl(
+                      "create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, f float, "
+                      "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
   EXPECT_TRUE(storage_test("alltypes", SMALL));
   ASSERT_NO_THROW(run_ddl("drop table alltypes;"););
 }

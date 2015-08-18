@@ -35,8 +35,7 @@ class SQLTestEnv : public ::testing::Environment {
     UserMetadata user;
     DBMetadata db;
     {
-      auto dataMgr =
-          std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false);
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false);
       if (!boost::filesystem::exists(system_db_file)) {
         SysCatalog syscat(base_path.string(), dataMgr, true);
         syscat.initDB();
@@ -53,11 +52,10 @@ class SQLTestEnv : public ::testing::Environment {
       }
     }
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false);
-    gsession.reset(new SessionInfo(
-        std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr),
-        user,
-        ExecutorDeviceType::GPU,
-        0));
+    gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr),
+                                   user,
+                                   ExecutorDeviceType::GPU,
+                                   0));
   }
 };
 
@@ -93,12 +91,11 @@ RootPlan* plan_dml(const string& input_str) {
 }  // namespace
 
 TEST(ParseAnalyzePlan, Create) {
-  ASSERT_NO_THROW(
-      run_ddl(
-          "create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) "
-          "encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, "
-          "h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m "
-          "timestamp(0), n time(0), o date);"););
+  ASSERT_NO_THROW(run_ddl(
+                      "create table if not exists fat (a boolean, b char(5), c varchar(10), d numeric(10,2) "
+                      "encoding rl, e decimal(5,3) encoding sparse(16), f int encoding fixed(16), g smallint, "
+                      "h real, i float, j double, k bigint encoding diff, l text not null encoding dict, m "
+                      "timestamp(0), n time(0), o date);"););
   ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("fat") != nullptr);
   ASSERT_NO_THROW(run_ddl("create table if not exists skinny (a smallint, b int, c bigint);"););
   ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("skinny") != nullptr);
@@ -112,8 +109,7 @@ TEST(ParseAnalyzePlan, Create) {
                       "text encoding dict);"););
   td = gsession->get_catalog().getMetadataForTable("testdict");
   const ColumnDescriptor* cd = gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
-  const DictDescriptor* dd =
-      gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());
+  const DictDescriptor* dd = gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
   EXPECT_EQ(dd->dictNBits, 8);
 }
@@ -121,21 +117,17 @@ TEST(ParseAnalyzePlan, Create) {
 TEST(ParseAnalyzePlan, Select) {
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select * from fat;")); });
   EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select f.* from fat f;")); });
-  EXPECT_NO_THROW(
-      { unique_ptr<RootPlan> plan_ptr(plan_dml("select cast(a as int), d, l from fat;")); });
-  EXPECT_NO_THROW(
-      { unique_ptr<RootPlan> plan_ptr(plan_dml("select -1, -1.1, -1e-3, -a from fat;")); });
-  EXPECT_NO_THROW(
-      { unique_ptr<RootPlan> plan_ptr(plan_dml("select a, d, l from fat where not 1=0;")); });
-  EXPECT_NO_THROW(
-      { unique_ptr<RootPlan> plan_ptr(plan_dml("select b, d+e, f*g as y from fat;")); });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select cast(a as int), d, l from fat;")); });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select -1, -1.1, -1e-3, -a from fat;")); });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select a, d, l from fat where not 1=0;")); });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select b, d+e, f*g as y from fat;")); });
   EXPECT_NO_THROW({
     unique_ptr<RootPlan> plan_ptr(
         plan_dml("select b, d+e, f*g as y from fat order by 2 asc null last, 3 desc null first;"));
   });
   EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(plan_dml(
-        "select b, d+e, f*g as y from fat order by 2 asc null last, 3 desc null first limit 10;"));
+    unique_ptr<RootPlan> plan_ptr(
+        plan_dml("select b, d+e, f*g as y from fat order by 2 asc null last, 3 desc null first limit 10;"));
   });
   EXPECT_NO_THROW({
     unique_ptr<RootPlan> plan_ptr(plan_dml(
@@ -152,33 +144,21 @@ TEST(ParseAnalyzePlan, Select) {
         "select a, d, g from fat where f > 100 and g is not null or k <= 100000000000 and c = "
         "'xyz';"));
   });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l like '%whatever%';")); });
+  EXPECT_NO_THROW(
+      { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l like '%whatever@%_' escape '@';")); });
+  EXPECT_NO_THROW(
+      { unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l ilike '%whatever@%_' escape '@';")); });
   EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l like '%whatever%';"));
+    unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l not like '%whatever@%_' escape '@';"));
   });
   EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("select i, j, k from fat where l like '%whatever@%_' escape '@';"));
+    unique_ptr<RootPlan> plan_ptr(plan_dml("select i, j, k from fat where l not ilike '%whatever@%_' escape '@';"));
   });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("select i, j, k from fat where l ilike '%whatever@%_' escape '@';"));
-  });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("select i, j, k from fat where l not like '%whatever@%_' escape '@';"));
-  });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("select i, j, k from fat where l not ilike '%whatever@%_' escape '@';"));
-  });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("select e, f, g from fat where e in (3.5, 133.33, 222.22);"));
-  });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("select e, f, g from fat where e not in (3.5, 133.33, 222.22);"));
-  });
+  EXPECT_NO_THROW(
+      { unique_ptr<RootPlan> plan_ptr(plan_dml("select e, f, g from fat where e in (3.5, 133.33, 222.22);")); });
+  EXPECT_NO_THROW(
+      { unique_ptr<RootPlan> plan_ptr(plan_dml("select e, f, g from fat where e not in (3.5, 133.33, 222.22);")); });
   EXPECT_NO_THROW({
     unique_ptr<RootPlan> plan_ptr(plan_dml(
         "select e, f, g from fat where e not in (3.5, 133.33, 222.22) or l not like "
@@ -208,18 +188,13 @@ TEST(ParseAnalyzePlan, Select) {
         "'%whatever%' then 200 else 300 end > 100;"));
   });
   EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(plan_dml(
-        "select count(*), min(a), max(a), avg(b), sum(c), count(distinct b) from skinny;"));
-  });
-  EXPECT_NO_THROW(
-      { unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x from skinny group by x;")); });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(plan_dml("select a, b, count(*) from skinny group by a, b;"));
-  });
-  EXPECT_NO_THROW({
     unique_ptr<RootPlan> plan_ptr(
-        plan_dml("select c, avg(b) from skinny where a > 10 group by c;"));
+        plan_dml("select count(*), min(a), max(a), avg(b), sum(c), count(distinct b) from skinny;"));
   });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select a+b as x from skinny group by x;")); });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select a, b, count(*) from skinny group by a, b;")); });
+  EXPECT_NO_THROW(
+      { unique_ptr<RootPlan> plan_ptr(plan_dml("select c, avg(b) from skinny where a > 10 group by c;")); });
   EXPECT_NO_THROW({
     unique_ptr<RootPlan> plan_ptr(
         plan_dml("select c, avg(b) from skinny where a > 10 group by c having max(a) < 100;"));
@@ -229,8 +204,7 @@ TEST(ParseAnalyzePlan, Select) {
         "select c, avg(b) from skinny where a > 10 group by c having max(a) < 100 and count(*) > "
         "1000;"));
   });
-  EXPECT_NO_THROW(
-      { unique_ptr<RootPlan> plan_ptr(plan_dml("select count(*)*avg(c) - sum(c) from skinny;")); });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("select count(*)*avg(c) - sum(c) from skinny;")); });
   EXPECT_NO_THROW({
     unique_ptr<RootPlan> plan_ptr(plan_dml(
         "select a+b as x, count(*)*avg(c) - sum(c) as y from skinny where c between 100 and 200 "
@@ -287,26 +261,20 @@ TEST(ParseAnalyzePlan, Select) {
 }
 
 TEST(ParseAnalyzePlan, Insert) {
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("insert into skinny values (12345, 100000000, 100000000000);"));
-  });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny select 2*a, 2*b, 2*c from skinny;"));
-  });
+  EXPECT_NO_THROW(
+      { unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny values (12345, 100000000, 100000000000);")); });
+  EXPECT_NO_THROW({ unique_ptr<RootPlan> plan_ptr(plan_dml("insert into skinny select 2*a, 2*b, 2*c from skinny;")); });
 }
 
 TEST(ParseAnalyzePlan, Views) {
   EXPECT_NO_THROW(run_ddl("create view if not exists voo as select * from skinny where a > 15;"););
-  EXPECT_NO_THROW(
-      run_ddl("create materialized view if not exists moo as select * from skinny where a > 15;"););
+  EXPECT_NO_THROW(run_ddl("create materialized view if not exists moo as select * from skinny where a > 15;"););
   EXPECT_NO_THROW(run_ddl(
                       "create materialized view if not exists goo with (storage = 'gpu', refresh = "
                       "'auto') as select * from skinny where a > 15;"););
-  EXPECT_NO_THROW(
-      run_ddl(
-          "create materialized view if not exists mic (col, avg_b) with (storage = 'mic', refresh "
-          "= 'manual') as select c, avg(b) from skinny where a > 10 group by c;"););
+  EXPECT_NO_THROW(run_ddl(
+                      "create materialized view if not exists mic (col, avg_b) with (storage = 'mic', refresh "
+                      "= 'manual') as select c, avg(b) from skinny where a > 10 group by c;"););
   EXPECT_NO_THROW(run_ddl(
                       "create materialized view if not exists fatview with (storage = 'cpu', "
                       "refresh = 'immediate') as select a, d, g from fat where f > 100 and g is "

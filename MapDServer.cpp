@@ -33,53 +33,47 @@
 #include <signal.h>
 #include <unistd.h>
 
-
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 using namespace ::apache::thrift::server;
 
-
 using boost::shared_ptr;
 
-#define INVALID_SESSION_ID  -1
+#define INVALID_SESSION_ID -1
 
 class MapDHandler : virtual public MapDIf {
-public:
+ public:
   MapDHandler(const std::string& base_data_path,
               const std::string& executor_device,
               const bool allow_multifrag,
               const bool jit_debug)
-  : base_data_path_(base_data_path)
-  , random_gen_(std::random_device{}())
-  , session_id_dist_(0, INT32_MAX)
-  , jit_debug_(jit_debug)
-  , allow_multifrag_(allow_multifrag) {
-        LOG(INFO) << "MapD Server " << MapDRelease;
+      : base_data_path_(base_data_path),
+        random_gen_(std::random_device{}()),
+        session_id_dist_(0, INT32_MAX),
+        jit_debug_(jit_debug),
+        allow_multifrag_(allow_multifrag) {
+    LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
-        executor_device_type_ = ExecutorDeviceType::GPU;
-        LOG(INFO) << "Started in GPU Mode" << std::endl; 
-        cpu_mode_only_ = false;
-    }
-    else if (executor_device == "hybrid") {
-        executor_device_type_ = ExecutorDeviceType::Hybrid;
-        LOG(INFO) << "Started in Hybrid Mode" << std::endl; 
-        cpu_mode_only_ = false;
-    }
-    else {
-        executor_device_type_ = ExecutorDeviceType::CPU;
-        LOG(INFO) << "Started in CPU Mode" << std::endl; 
-        cpu_mode_only_ = true;
+      executor_device_type_ = ExecutorDeviceType::GPU;
+      LOG(INFO) << "Started in GPU Mode" << std::endl;
+      cpu_mode_only_ = false;
+    } else if (executor_device == "hybrid") {
+      executor_device_type_ = ExecutorDeviceType::Hybrid;
+      LOG(INFO) << "Started in Hybrid Mode" << std::endl;
+      cpu_mode_only_ = false;
+    } else {
+      executor_device_type_ = ExecutorDeviceType::CPU;
+      LOG(INFO) << "Started in CPU Mode" << std::endl;
+      cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_));
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
   }
-  ~MapDHandler() {
-    LOG(INFO) << "mapd_server exits." << std::endl;
-  }
+  ~MapDHandler() { LOG(INFO) << "mapd_server exits." << std::endl; }
 
-  TSessionId connect(const std::string &user, const std::string &passwd, const std::string &dbname) {
+  TSessionId connect(const std::string& user, const std::string& passwd, const std::string& dbname) {
     mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     Catalog_Namespace::UserMetadata user_meta;
     if (!sys_cat_->getMetadataForUser(user, user_meta)) {
@@ -116,11 +110,13 @@ public:
     }
     auto cat_it = cat_map_.find(dbname);
     if (cat_it == cat_map_.end()) {
-      Catalog_Namespace::Catalog *cat = new Catalog_Namespace::Catalog(base_data_path_, db_meta, data_mgr_);
+      Catalog_Namespace::Catalog* cat = new Catalog_Namespace::Catalog(base_data_path_, db_meta, data_mgr_);
       cat_map_[dbname].reset(cat);
-      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
+      sessions_[session].reset(
+          new Catalog_Namespace::SessionInfo(cat_map_[dbname], user_meta, executor_device_type_, session));
     } else
-      sessions_[session].reset(new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
+      sessions_[session].reset(
+          new Catalog_Namespace::SessionInfo(cat_it->second, user_meta, executor_device_type_, session));
     LOG(INFO) << "User " << user << " connected to database " << dbname << std::endl;
     return session;
   }
@@ -129,7 +125,8 @@ public:
     mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     auto session_it = get_session_it(session);
     const auto dbname = session_it->second->get_catalog().get_currentDB().dbName;
-    LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname << std::endl;
+    LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname
+              << std::endl;
     sessions_.erase(session_it);
   }
 
@@ -198,129 +195,127 @@ public:
 
   void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     auto executor_device_type = session_info.get_executor_device_type();
     LOG(INFO) << query_str;
     auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
-    SQLParser parser;
-    std::list<Parser::Stmt*> parse_trees;
-    std::string last_parsed;
-    int num_parse_errors = 0;
-    try {
-      num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
-    }
-    catch (std::exception &e) {
+      SQLParser parser;
+      std::list<Parser::Stmt*> parse_trees;
+      std::string last_parsed;
+      int num_parse_errors = 0;
+      try {
+        num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
+      } catch (std::exception& e) {
         TMapDException ex;
         ex.error_msg = std::string("Exception: ") + e.what();
         LOG(ERROR) << ex.error_msg;
         throw ex;
-    }
-    if (num_parse_errors > 0) {
-      TMapDException ex;
-      ex.error_msg = "Syntax error at: " + last_parsed;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    execute_time = 0;
-    for (auto stmt : parse_trees) {
-      try {
-      std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
-      Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-      Parser::ExplainStmt *explain_stmt = nullptr;
-      if (ddl != nullptr)
-        explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
-      if (ddl != nullptr && explain_stmt == nullptr) {
-        execute_time += measure<>::execution([&]() {
-          ddl->execute(session_info);
-        });
-      } else {
-        const Parser::DMLStmt *dml; 
-        if (explain_stmt != nullptr)
-          dml = explain_stmt->get_stmt();
-        else
-          dml = dynamic_cast<Parser::DMLStmt*>(stmt);
-        Analyzer::Query query;
-        dml->analyze(cat, query);
-        Planner::Optimizer optimizer(query, cat);
-        auto root_plan = optimizer.optimize();
-        std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        if (explain_stmt != nullptr) {
-          root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
-        }
-        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
-        ResultRows results({}, nullptr, nullptr);
-        execute_time += measure<>::execution([&]() {
-          results = executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
-        });
-        if (explain_stmt) {
-          CHECK_EQ(size_t(1), results.size());
-          TColumnType proj_info;
-          proj_info.col_name = "Explanation";
-          proj_info.col_type.type = TDatumType::STR;
-          proj_info.col_type.nullable = false;
-          proj_info.col_type.is_array = false;
-          _return.row_set.row_desc.push_back(proj_info);
-          TRow trow;
-          TDatum explanation;
-          const auto tv = results.get(0, 0, false);
-          const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-          CHECK(scalar_tv);
-          const auto s_n = boost::get<NullableString>(scalar_tv);
-          CHECK(s_n);
-          const auto s = boost::get<std::string>(s_n);
-          CHECK(s);
-          explanation.val.str_val = *s;
-          explanation.is_null = false;
-          trow.cols.push_back(explanation);
-          _return.row_set.rows.push_back(trow);
-          return;
-        }
-        const auto plan = root_plan->get_plan();
-        const auto& targets = plan->get_targetlist();
-        {
-          CHECK(plan);
-          TColumnType proj_info;
-          size_t i = 0;
-          for (const auto target : targets) {
-            proj_info.col_name = target->get_resname();
-            if (proj_info.col_name.empty()) {
-              proj_info.col_name = "result_" + std::to_string(i + 1);
+      }
+      if (num_parse_errors > 0) {
+        TMapDException ex;
+        ex.error_msg = "Syntax error at: " + last_parsed;
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      execute_time = 0;
+      for (auto stmt : parse_trees) {
+        try {
+          std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
+          Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+          Parser::ExplainStmt* explain_stmt = nullptr;
+          if (ddl != nullptr)
+            explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
+          if (ddl != nullptr && explain_stmt == nullptr) {
+            execute_time += measure<>::execution([&]() { ddl->execute(session_info); });
+          } else {
+            const Parser::DMLStmt* dml;
+            if (explain_stmt != nullptr)
+              dml = explain_stmt->get_stmt();
+            else
+              dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+            Analyzer::Query query;
+            dml->analyze(cat, query);
+            Planner::Optimizer optimizer(query, cat);
+            auto root_plan = optimizer.optimize();
+            std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+            if (explain_stmt != nullptr) {
+              root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
-            const auto& target_ti = target->get_expr()->get_type_info();
-            proj_info.col_type.type = type_to_thrift(target_ti);
-            proj_info.col_type.encoding = encoding_to_thrift(target_ti);
-            proj_info.col_type.nullable = !target_ti.get_notnull();
-            proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-            _return.row_set.row_desc.push_back(proj_info);
-            ++i;
+            auto executor = Executor::getExecutor(
+                root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
+            ResultRows results({}, nullptr, nullptr);
+            execute_time += measure<>::execution([&]() {
+              results =
+                  executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
+            });
+            if (explain_stmt) {
+              CHECK_EQ(size_t(1), results.size());
+              TColumnType proj_info;
+              proj_info.col_name = "Explanation";
+              proj_info.col_type.type = TDatumType::STR;
+              proj_info.col_type.nullable = false;
+              proj_info.col_type.is_array = false;
+              _return.row_set.row_desc.push_back(proj_info);
+              TRow trow;
+              TDatum explanation;
+              const auto tv = results.get(0, 0, false);
+              const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+              CHECK(scalar_tv);
+              const auto s_n = boost::get<NullableString>(scalar_tv);
+              CHECK(s_n);
+              const auto s = boost::get<std::string>(s_n);
+              CHECK(s);
+              explanation.val.str_val = *s;
+              explanation.is_null = false;
+              trow.cols.push_back(explanation);
+              _return.row_set.rows.push_back(trow);
+              return;
+            }
+            const auto plan = root_plan->get_plan();
+            const auto& targets = plan->get_targetlist();
+            {
+              CHECK(plan);
+              TColumnType proj_info;
+              size_t i = 0;
+              for (const auto target : targets) {
+                proj_info.col_name = target->get_resname();
+                if (proj_info.col_name.empty()) {
+                  proj_info.col_name = "result_" + std::to_string(i + 1);
+                }
+                const auto& target_ti = target->get_expr()->get_type_info();
+                proj_info.col_type.type = type_to_thrift(target_ti);
+                proj_info.col_type.encoding = encoding_to_thrift(target_ti);
+                proj_info.col_type.nullable = !target_ti.get_notnull();
+                proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+                _return.row_set.row_desc.push_back(proj_info);
+                ++i;
+              }
+            }
+            for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+              TRow trow;
+              for (size_t i = 0; i < results.colCount(); ++i) {
+                const auto agg_result = results.get(row_idx, i, true);
+                trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
+              }
+              _return.row_set.rows.push_back(trow);
+            }
           }
-        }
-        for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
-          TRow trow;
-          for (size_t i = 0; i < results.colCount(); ++i) {
-            const auto agg_result = results.get(row_idx, i, true);
-            trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
-          }
-          _return.row_set.rows.push_back(trow);
+        } catch (std::exception& e) {
+          TMapDException ex;
+          ex.error_msg = std::string("Exception: ") + e.what();
+          LOG(ERROR) << ex.error_msg;
+          throw ex;
         }
       }
-    }
-    catch (std::exception &e) {
-        TMapDException ex;
-        ex.error_msg = std::string("Exception: ") + e.what();
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
-    }
-    }
     });
     _return.execution_time_ms = execute_time;
-    LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << execute_time<< " (ms)";
+    LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << execute_time << " (ms)";
   }
 
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     auto td = cat.getMetadataForTable(table_name);
     if (!td) {
       TMapDException ex;
@@ -341,7 +336,7 @@ public:
 
   void get_row_descriptor(TRowDescriptor& _return, const TSessionId session, const std::string& table_name) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     auto td = cat.getMetadataForTable(table_name);
     if (!td) {
       TMapDException ex;
@@ -363,7 +358,7 @@ public:
 
   void get_frontend_view(std::string& _return, const TSessionId session, const std::string& view_name) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     auto vd = cat.getMetadataForFrontendView(view_name);
     if (!vd) {
       TMapDException ex;
@@ -374,27 +369,25 @@ public:
     _return.append(vd->viewState);
   }
 
-  void get_tables(std::vector<std::string> & table_names, const TSessionId session) {
+  void get_tables(std::vector<std::string>& table_names, const TSessionId session) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     const auto tables = cat.getAllTableMetadata();
     for (const auto td : tables) {
       table_names.push_back(td->tableName);
     }
   }
 
-  void get_users(std::vector<std::string> &user_names) {
+  void get_users(std::vector<std::string>& user_names) {
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto u : user_list) {
       user_names.push_back(u.userName);
     }
   }
 
-  void get_version(std::string &version) {
-    version =  MapDRelease;
-  }
+  void get_version(std::string& version) { version = MapDRelease; }
 
-  void get_databases(std::vector<TDBInfo> &dbinfos) {
+  void get_databases(std::vector<TDBInfo>& dbinfos) {
     std::list<Catalog_Namespace::DBMetadata> db_list = sys_cat_->getAllDBMetadata();
     std::list<Catalog_Namespace::UserMetadata> user_list = sys_cat_->getAllUserMetadata();
     for (auto d : db_list) {
@@ -410,9 +403,9 @@ public:
     }
   }
 
-  void get_frontend_views(std::vector<std::string> & view_names, const TSessionId session) {
+  void get_frontend_views(std::vector<std::string>& view_names, const TSessionId session) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     const auto views = cat.getAllFrontendViewMetadata();
     for (const auto vd : views) {
       view_names.push_back(vd->viewName);
@@ -422,7 +415,7 @@ public:
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
     mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
     auto session_it = get_session_it(session);
-    const std::string &user_name = session_it->second->get_currentUser().userName;
+    const std::string& user_name = session_it->second->get_currentUser().userName;
     switch (mode) {
       case TExecuteMode::GPU:
         if (cpu_mode_only_) {
@@ -449,10 +442,10 @@ public:
     }
   }
 
-  void load_table_binary(const TSessionId session, const std::string &table_name, const std::vector<TRow> &rows) {
+  void load_table_binary(const TSessionId session, const std::string& table_name, const std::vector<TRow>& rows) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
-    const TableDescriptor *td = cat.getMetadataForTable(table_name);
+    auto& cat = session_info.get_catalog();
+    const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
       TMapDException ex;
       ex.error_msg = "Table " + table_name + " does not exist.";
@@ -469,7 +462,8 @@ public:
     auto col_descs = loader.get_column_descs();
     std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
-      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+          new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
     for (auto row : rows) {
       try {
@@ -478,7 +472,7 @@ public:
           import_buffers[col_idx]->add_value(cd, row.cols[col_idx], row.cols[col_idx].is_null);
           col_idx++;
         }
-      } catch (const std::exception &e) {
+      } catch (const std::exception& e) {
         LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
       }
     }
@@ -486,10 +480,10 @@ public:
       loader.checkpoint();
   }
 
-  void load_table(const TSessionId session, const std::string &table_name, const std::vector<TStringRow> &rows) {
+  void load_table(const TSessionId session, const std::string& table_name, const std::vector<TStringRow>& rows) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
-    const TableDescriptor *td = cat.getMetadataForTable(table_name);
+    auto& cat = session_info.get_catalog();
+    const TableDescriptor* td = cat.getMetadataForTable(table_name);
     if (td == nullptr) {
       TMapDException ex;
       ex.error_msg = "Table " + table_name + " does not exist.";
@@ -500,14 +494,16 @@ public:
     Importer_NS::CopyParams copy_params;
     if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
       TMapDException ex;
-      ex.error_msg = "Wrong number of columns to load into Table " + table_name + " (" + std::to_string(rows.size()) + " vs " + std::to_string(td->nColumns) + ")";
+      ex.error_msg = "Wrong number of columns to load into Table " + table_name + " (" + std::to_string(rows.size()) +
+                     " vs " + std::to_string(td->nColumns) + ")";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
     auto col_descs = loader.get_column_descs();
     std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
     for (auto cd : col_descs) {
-      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
+      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+          new Importer_NS::TypedImportBuffer(cd, loader.get_string_dict(cd))));
     }
     for (auto row : rows) {
       try {
@@ -516,7 +512,7 @@ public:
           import_buffers[col_idx]->add_value(cd, row.cols[col_idx].str_val, row.cols[col_idx].is_null, copy_params);
           col_idx++;
         }
-      } catch (const std::exception &e) {
+      } catch (const std::exception& e) {
         LOG(WARNING) << "load_table exception thrown: " << e.what() << ". Row discarded.";
       }
     }
@@ -527,11 +523,16 @@ public:
   char unescape_char(std::string str) {
     char out = str[0];
     if (str.size() == 2 && str[0] == '\\') {
-      if (str[1] == 't') out = '\t';
-      else if (str[1] == 'n') out = '\n';
-      else if (str[1] == '0') out = '\0';
-      else if (str[1] == '\'') out = '\'';
-      else if (str[1] == '\\') out = '\\';
+      if (str[1] == 't')
+        out = '\t';
+      else if (str[1] == 'n')
+        out = '\n';
+      else if (str[1] == '0')
+        out = '\0';
+      else if (str[1] == '\'')
+        out = '\'';
+      else if (str[1] == '\\')
+        out = '\\';
     }
     return out;
   }
@@ -540,15 +541,24 @@ public:
     Importer_NS::CopyParams copy_params;
     copy_params.has_header = cp.has_header;
     copy_params.quoted = cp.quoted;
-    if (cp.delimiter.length() > 0) copy_params.delimiter = unescape_char(cp.delimiter);
-    if (cp.null_str.length() > 0) copy_params.null_str = cp.null_str;
-    if (cp.quote.length() > 0) copy_params.quote = unescape_char(cp.quote);
-    if (cp.escape.length() > 0) copy_params.escape = unescape_char(cp.escape);
-    if (cp.line_delim.length() > 0) copy_params.line_delim = unescape_char(cp.line_delim);
-    if (cp.array_delim.length() > 0) copy_params.array_delim = unescape_char(cp.array_delim);
-    if (cp.array_begin.length() > 0) copy_params.array_begin = unescape_char(cp.array_begin);
-    if (cp.array_end.length() > 0) copy_params.array_end = unescape_char(cp.array_end);
-    if (cp.threads != 0) copy_params.threads = cp.threads;
+    if (cp.delimiter.length() > 0)
+      copy_params.delimiter = unescape_char(cp.delimiter);
+    if (cp.null_str.length() > 0)
+      copy_params.null_str = cp.null_str;
+    if (cp.quote.length() > 0)
+      copy_params.quote = unescape_char(cp.quote);
+    if (cp.escape.length() > 0)
+      copy_params.escape = unescape_char(cp.escape);
+    if (cp.line_delim.length() > 0)
+      copy_params.line_delim = unescape_char(cp.line_delim);
+    if (cp.array_delim.length() > 0)
+      copy_params.array_delim = unescape_char(cp.array_delim);
+    if (cp.array_begin.length() > 0)
+      copy_params.array_begin = unescape_char(cp.array_begin);
+    if (cp.array_end.length() > 0)
+      copy_params.array_end = unescape_char(cp.array_end);
+    if (cp.threads != 0)
+      copy_params.threads = cp.threads;
     return copy_params;
   }
 
@@ -612,7 +622,7 @@ public:
         std::vector<TDatum> empty;
         sample_row.cols.swap(empty);
       }
-      for (const auto &s : row) {
+      for (const auto& s : row) {
         TDatum td;
         td.val.str_val = s;
         td.is_null = s.empty();
@@ -620,12 +630,16 @@ public:
       }
       _return.row_set.rows.push_back(sample_row);
     }
-
   }
 
-  void render(std::string& _return, const TSessionId session, const std::string &query, const std::string &render_type, const TRenderPropertyMap &render_properties, const TColumnRenderMap &col_render_properties) {
+  void render(std::string& _return,
+              const TSessionId session,
+              const std::string& query,
+              const std::string& render_type,
+              const TRenderPropertyMap& render_properties,
+              const TColumnRenderMap& col_render_properties) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     LOG(INFO) << "Render: " << query;
     SQLParser parser;
     std::list<Parser::Stmt*> parse_trees;
@@ -633,12 +647,11 @@ public:
     int num_parse_errors = 0;
     try {
       num_parse_errors = parser.parse(query, parse_trees, last_parsed);
-    }
-    catch (std::exception &e) {
-        TMapDException ex;
-        ex.error_msg = std::string("Exception: ") + e.what();
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
+    } catch (std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = std::string("Exception: ") + e.what();
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
     }
     if (num_parse_errors > 0) {
       TMapDException ex;
@@ -652,10 +665,10 @@ public:
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    Parser::Stmt *stmt = parse_trees.front();
+    Parser::Stmt* stmt = parse_trees.front();
     try {
       std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
-      Parser::DDLStmt *ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+      Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
       if (ddl != nullptr) {
         TMapDException ex;
         ex.error_msg = "Can only render SELECT statements.";
@@ -680,18 +693,17 @@ public:
         root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
         // @TODO(alex) execute query, render and fill _return
       }
-    }
-    catch (std::exception &e) {
-        TMapDException ex;
-        ex.error_msg = std::string("Exception: ") + e.what();
-        LOG(ERROR) << ex.error_msg;
-        throw ex;
+    } catch (std::exception& e) {
+      TMapDException ex;
+      ex.error_msg = std::string("Exception: ") + e.what();
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
     }
   }
 
-  void create_frontend_view(const TSessionId session, const std::string &view_name, const std::string &view_state) {
+  void create_frontend_view(const TSessionId session, const std::string& view_name, const std::string& view_state) {
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
     FrontendViewDescriptor vd;
     vd.viewName = view_name;
     vd.viewState = view_state;
@@ -702,7 +714,7 @@ public:
   void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) {
     // TODO(alex): de-couple CreateTableStmt from the parser and reuse it here
     const auto session_info = get_session(session);
-    auto &cat = session_info.get_catalog();
+    auto& cat = session_info.get_catalog();
 
     LOG(INFO) << "create_table: " << table_name;
 
@@ -765,7 +777,7 @@ public:
 
     // TODO(andrew): add delimiter detection to Importer
     if (copy_params.delimiter == '\0') {
-      copy_params.delimiter= ',';
+      copy_params.delimiter = ',';
       if (boost::filesystem::extension(file_path) == ".tsv") {
         copy_params.delimiter = '\t';
       }
@@ -776,7 +788,7 @@ public:
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
 
-private:
+ private:
   typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
 
   SessionMap::iterator get_session_it(const TSessionId session) {
@@ -811,7 +823,7 @@ private:
   mapd_shared_mutex rw_mutex_;
 };
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   int port = 9091;
   std::string base_path;
   std::string device("gpu");
@@ -819,38 +831,35 @@ int main(int argc, char **argv) {
   bool jit_debug = false;
   bool allow_multifrag = true;
 
-	namespace po = boost::program_options;
+  namespace po = boost::program_options;
 
-	po::options_description desc("Options");
-	desc.add_options()
-		("help,h", "Print help messages ")
-		("path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")
-    ("flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")
-    ("jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")
-    ("disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")
-    ("cpu", "Run on CPU only")
-    ("gpu", "Run on GPUs (Default)")
-    ("hybrid", "Run on both CPU and GPUs")
-    ("version,v", "Print Release Version Number")
-    ("port,p", po::value<int>(&port), "Port number (default 9091)");
+  po::options_description desc("Options");
+  desc.add_options()("help,h", "Print help messages ")(
+      "path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")(
+      "flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")(
+      "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
+      "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
+      "cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")("hybrid", "Run on both CPU and GPUs")(
+      "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)");
 
-	po::positional_options_description positionalOptions;
-	positionalOptions.add("path", 1);
+  po::positional_options_description positionalOptions;
+  positionalOptions.add("path", 1);
 
-	po::variables_map vm;
+  po::variables_map vm;
 
-	try {
-		po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
-		if (vm.count("help")) {
-			std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port number>][--flush-log][--version|-v]\n";
-			return 0;
-		}
-		if (vm.count("version")) {
-			std::cout << "MapD Version: " << MapDRelease << std::endl;
+  try {
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
+    if (vm.count("help")) {
+      std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
+                   "number>][--flush-log][--version|-v]\n";
       return 0;
     }
-		if (vm.count("cpu"))
-			device = "cpu";
+    if (vm.count("version")) {
+      std::cout << "MapD Version: " << MapDRelease << std::endl;
+      return 0;
+    }
+    if (vm.count("cpu"))
+      device = "cpu";
     if (vm.count("gpu"))
       device = "gpu";
     if (vm.count("hybrid"))
@@ -862,13 +871,11 @@ int main(int argc, char **argv) {
     if (vm.count("disable-multifrag"))
       allow_multifrag = false;
 
-		po::notify(vm);
-	}
-	catch (boost::program_options::error &e)
-	{
-		std::cerr << "Usage Error: " << e.what() << std::endl;
-		return 1;
-	}
+    po::notify(vm);
+  } catch (boost::program_options::error& e) {
+    std::cerr << "Usage Error: " << e.what() << std::endl;
+    return 1;
+  }
 
   if (!boost::filesystem::exists(base_path)) {
     std::cerr << "Path " << base_path << " does not exist." << std::endl;
@@ -916,7 +923,7 @@ int main(int argc, char **argv) {
     for (auto fd = sysconf(_SC_OPEN_MAX); fd > 0; --fd) {
       close(fd);
     }
-    int status { 0 };
+    int status{0};
     CHECK_NE(-1, waitpid(pid, &status, 0));
     LOG(ERROR) << "Server exit code: " << status;
   }
@@ -925,7 +932,7 @@ int main(int argc, char **argv) {
   (void)boost::filesystem::create_directory(log_path);
   FLAGS_log_dir = log_path.c_str();
   if (flush_log)
-    FLAGS_logbuflevel=-1;
+    FLAGS_logbuflevel = -1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
   shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device, allow_multifrag, jit_debug));
@@ -933,11 +940,11 @@ int main(int argc, char **argv) {
   shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
   shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
   shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
-  TThreadedServer server (processor, serverTransport, transportFactory, protocolFactory);
+  TThreadedServer server(processor, serverTransport, transportFactory, protocolFactory);
 
   try {
     server.serve();
-  } catch (std::exception &e) {
+  } catch (std::exception& e) {
     LOG(ERROR) << "Exception: " << e.what() << std::endl;
   }
   return 0;
