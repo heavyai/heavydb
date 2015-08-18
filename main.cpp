@@ -288,8 +288,8 @@ int main(int argc, char* argv[]) {
     cerr << "User " << user_name << " is not authorized to access database " << db_name << std::endl;
     return 1;
   }
-  Catalog cat(base_path, db, dataMgr);
-  SessionInfo session(std::shared_ptr<Catalog>(&cat), user, ExecutorDeviceType::GPU, 0);
+  auto cat = std::make_shared<Catalog>(base_path, db, dataMgr);
+  SessionInfo session(cat, user, ExecutorDeviceType::GPU, 0);
   while (true) {
     try {
       cout << "mapd> ";
@@ -300,7 +300,7 @@ int main(int argc, char* argv[]) {
         break;
       }
       if (input_str[0] == '\\') {
-        process_backslash_commands(input_str, cat, sys_cat);
+        process_backslash_commands(input_str, *cat, sys_cat);
         continue;
       }
       SQLParser parser;
@@ -318,8 +318,8 @@ int main(int argc, char* argv[]) {
         else {
           auto dml = explain_stmt ? explain_stmt->get_stmt() : static_cast<const Parser::DMLStmt*>(stmt);
           Query query;
-          dml->analyze(cat, query);
-          Optimizer optimizer(query, cat);
+          dml->analyze(*cat, query);
+          Optimizer optimizer(query, *cat);
           RootPlan* plan = optimizer.optimize();
           unique_ptr<RootPlan> plan_ptr(plan);  // make sure it's deleted
           if (debug)
@@ -340,7 +340,7 @@ int main(int argc, char* argv[]) {
                 cout << "Query took " << ms << " ms to execute." << endl;
               }
             }
-            if (cat.get_dataMgr().gpusPresent() && plan->get_stmt_type() == kSELECT) {
+            if (cat->get_dataMgr().gpusPresent() && plan->get_stmt_type() == kSELECT) {
               ResultRows results_gpu({}, nullptr, nullptr);
               {
                 auto ms = measure<>::execution([&]() {
