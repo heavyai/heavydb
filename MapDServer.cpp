@@ -72,7 +72,7 @@ public:
         cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_ = new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_); // second param is whether to initialize GPU buffer pool
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_));
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
   }
   ~MapDHandler() {
@@ -797,7 +797,7 @@ private:
   }
 
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
-  Data_Namespace::DataMgr* data_mgr_;
+  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
   std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 

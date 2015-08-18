@@ -17,14 +17,14 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
   {
-    auto dataMgr = new Data_Namespace::DataMgr(data_dir.string(), true); // true is for useGpus
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), true);
     Catalog_Namespace::SysCatalog sys_cat(base_path.string(), dataMgr);
     CHECK(sys_cat.getMetadataForUser(user_name, user));
     CHECK_EQ(user.passwd, passwd);
     CHECK(sys_cat.getMetadataForDB(db_name, db));
     CHECK(user.isSuper || (user.userId == db.dbOwner));
   }
-  auto dataMgr = new Data_Namespace::DataMgr(data_dir.string(), true); // true is for useGpus
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), true);
   return new Catalog_Namespace::SessionInfo(
       std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr),
       user,

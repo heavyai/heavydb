@@ -153,13 +153,25 @@ SysCatalog::getMetadataForDB(const string &name, DBMetadata &db)
 	return true;
 }
 
-Catalog::Catalog(const string &basePath, const string &dbname, Data_Namespace::DataMgr* dataMgr, bool is_initdb): basePath_(basePath), sqliteConnector_(dbname, basePath + "/mapd_catalogs/"), dataMgr_(dataMgr)
+Catalog::Catalog(const string &basePath,
+                 const string &dbname,
+                 std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                 bool is_initdb)
+  : basePath_(basePath)
+  , sqliteConnector_(dbname, basePath + "/mapd_catalogs/")
+  , dataMgr_(dataMgr)
 {
 		if (!is_initdb)
 			buildMaps();
 }
 
-Catalog::Catalog(const string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr* dataMgr): basePath_(basePath), sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"), currentDB_(curDB), dataMgr_(dataMgr)
+Catalog::Catalog(const string &basePath,
+                 const DBMetadata &curDB,
+                 std::shared_ptr<Data_Namespace::DataMgr> dataMgr)
+  : basePath_(basePath)
+  , sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/")
+  , currentDB_(curDB)
+  , dataMgr_(dataMgr)
 {
     buildMaps();
 }

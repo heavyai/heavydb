@@ -111,7 +111,10 @@ struct DBMetadata {
 class Catalog {
 
     public:
-        Catalog(const std::string &basePath, const std::string &dbname, Data_Namespace::DataMgr* dataMgr, bool is_initdb);
+        Catalog(const std::string &basePath,
+                const std::string &dbname,
+                std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                bool is_initdb);
 
         /**
          * @brief Constructor - takes basePath to already extant
@@ -122,7 +125,9 @@ class Catalog {
          * metadata - expects for this directory to already exist
          */
 
-        Catalog(const std::string &basePath, const DBMetadata &curDB, Data_Namespace::DataMgr* dataMgr);
+        Catalog(const std::string &basePath,
+                const DBMetadata &curDB,
+                std::shared_ptr<Data_Namespace::DataMgr> dataMgr);
 
         /**
          * @brief Destructor - deletes all
@@ -190,7 +195,7 @@ class Catalog {
         FrontendViewDescriptorMapById frontendViewDescriptorMapById_;
         SqliteConnector sqliteConnector_;
         DBMetadata currentDB_;
-        std::unique_ptr<Data_Namespace::DataMgr> dataMgr_;
+        std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
         mutable std::mutex cat_mutex_;
 };
 
@@ -200,7 +205,10 @@ class Catalog {
  */
 class SysCatalog : public Catalog {
 	public:
-		SysCatalog(const std::string &basePath, Data_Namespace::DataMgr* dataMgr, bool is_initdb = false) : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {}
+		SysCatalog(const std::string &basePath,
+               std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+               bool is_initdb = false)
+      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {}
 		virtual ~SysCatalog() {};
 		void initDB();
 		void createUser(const std::string &name, const std::string &passwd, bool issuper);

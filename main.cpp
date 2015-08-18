@@ -284,7 +284,7 @@ main(int argc, char* argv[])
   lockf << getpid();
   lockf.close();
 
-	auto dataMgr = new Data_Namespace::DataMgr(base_path + "/mapd_data/", true); // second param is to set up gpu buffer pool - yes in this case
+	auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(base_path + "/mapd_data/", true);
 	SysCatalog sys_cat(base_path, dataMgr);
 	UserMetadata user;
 	if (!sys_cat.getMetadataForUser(user_name, user)) {
