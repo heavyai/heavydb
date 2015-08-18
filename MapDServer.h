@@ -6,7 +6,7 @@
  */
 
 #ifndef MAPDSERVER_H
-#define	MAPDSERVER_H
+#define MAPDSERVER_H
 
 #include "gen-cpp/mapd_types.h"
 #include "Shared/sqltypes.h"
@@ -14,7 +14,6 @@
 #include <glog/logging.h>
 
 #include <string>
-
 
 inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
   SQLTypes type = type_info.get_type();
@@ -83,24 +82,24 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
   CHECK(false);
 }
 
-#define THRIFT_ENCODING_CASE(encoding)       \
-  case kENCODING_##encoding:          \
+#define THRIFT_ENCODING_CASE(encoding) \
+  case kENCODING_##encoding:           \
     return TEncodingType::encoding;
 
-#define UNTHRIFT_ENCODING_CASE(encoding)       \
+#define UNTHRIFT_ENCODING_CASE(encoding) \
   case TEncodingType::encoding:          \
     return kENCODING_##encoding;
 
 inline TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
   switch (type_info.get_compression()) {
-  THRIFT_ENCODING_CASE(NONE)
-  THRIFT_ENCODING_CASE(FIXED)
-  THRIFT_ENCODING_CASE(RL)
-  THRIFT_ENCODING_CASE(DIFF)
-  THRIFT_ENCODING_CASE(DICT)
-  THRIFT_ENCODING_CASE(SPARSE)
-  default:
-    CHECK(false);
+    THRIFT_ENCODING_CASE(NONE)
+    THRIFT_ENCODING_CASE(FIXED)
+    THRIFT_ENCODING_CASE(RL)
+    THRIFT_ENCODING_CASE(DIFF)
+    THRIFT_ENCODING_CASE(DICT)
+    THRIFT_ENCODING_CASE(SPARSE)
+    default:
+      CHECK(false);
   }
   CHECK(false);
 }
@@ -109,23 +108,23 @@ inline TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
 
 inline EncodingType thrift_to_encoding(const TEncodingType::type tEncodingType) {
   switch (tEncodingType) {
-  UNTHRIFT_ENCODING_CASE(NONE)
-  UNTHRIFT_ENCODING_CASE(FIXED)
-  UNTHRIFT_ENCODING_CASE(RL)
-  UNTHRIFT_ENCODING_CASE(DIFF)
-  UNTHRIFT_ENCODING_CASE(DICT)
-  UNTHRIFT_ENCODING_CASE(SPARSE)
-  default:
-    CHECK(false);
+    UNTHRIFT_ENCODING_CASE(NONE)
+    UNTHRIFT_ENCODING_CASE(FIXED)
+    UNTHRIFT_ENCODING_CASE(RL)
+    UNTHRIFT_ENCODING_CASE(DIFF)
+    UNTHRIFT_ENCODING_CASE(DICT)
+    UNTHRIFT_ENCODING_CASE(SPARSE)
+    default:
+      CHECK(false);
   }
   CHECK(false);
 }
 
 inline std::string thrift_to_name(const TTypeInfo& ti) {
   const auto type = thrift_to_type(ti.type);
-  auto internal_ti = SQLTypeInfo(ti.is_array ? kARRAY : type,
-    0, 0, !ti.nullable, kENCODING_NONE, 0, ti.is_array ? type : kNULLT);
+  auto internal_ti =
+      SQLTypeInfo(ti.is_array ? kARRAY : type, 0, 0, !ti.nullable, kENCODING_NONE, 0, ti.is_array ? type : kNULLT);
   return internal_ti.get_type_name();
 }
 
-#endif // MAPDSERVER_H
+#endif  // MAPDSERVER_H
