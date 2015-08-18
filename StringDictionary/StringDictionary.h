@@ -13,16 +13,13 @@
 #include <tuple>
 #include <vector>
 
-
 class StringDictionary {
-public:
-  StringDictionary(const std::string& folder,
-                   const bool recover = true,
-                   size_t initial_capacity = 256);
+ public:
+  StringDictionary(const std::string& folder, const bool recover = true, size_t initial_capacity = 256);
   ~StringDictionary();
 
   int32_t getOrAdd(const std::string& str);
-  void addBulk(const std::vector<std::string> &stringVec, std::vector<int32_t> &encodedVec);
+  void addBulk(const std::vector<std::string>& stringVec, std::vector<int32_t>& encodedVec);
   int32_t getOrAddTransient(const std::string& str);
   int32_t get(const std::string& str) const;
   std::string getString(int32_t string_id) const;
@@ -31,9 +28,9 @@ public:
   void clearTransient();
   bool checkpoint();
 
-private:
+ private:
   struct StringIdxEntry {
-    uint64_t off  : 48;
+    uint64_t off : 48;
     uint64_t size : 16;
   };
 

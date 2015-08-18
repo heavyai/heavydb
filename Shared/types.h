@@ -1,4 +1,4 @@
-/* 
+/*
  * File:        types.h
  * Author(s):   steve@map-d.com
  *
@@ -6,7 +6,7 @@
  */
 
 #ifndef _TYPES_H
-#define	_TYPES_H
+#define _TYPES_H
 
 #include <vector>
 #include <cstddef>
@@ -16,5 +16,4 @@
 // ChunkKey (also referred to as the keyspace id)
 typedef std::vector<int> ChunkKey;
 
-#endif	/* _TYPES_H */
-
+#endif /* _TYPES_H */

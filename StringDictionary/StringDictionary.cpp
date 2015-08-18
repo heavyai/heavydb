@@ -7,39 +7,39 @@
 #include <sys/fcntl.h>
 
 namespace {
-  const int PAGE_SIZE = getpagesize();
-  const size_t MAX_STRLEN = (2 << 16) - 1;
-  const int32_t INVALID_STR_ID = -1;
+const int PAGE_SIZE = getpagesize();
+const size_t MAX_STRLEN = (2 << 16) - 1;
+const int32_t INVALID_STR_ID = -1;
 
-  size_t file_size(const int fd) {
-    struct stat buf;
-    fstat(fd, &buf);
-    return buf.st_size;
-  }
+size_t file_size(const int fd) {
+  struct stat buf;
+  fstat(fd, &buf);
+  return buf.st_size;
+}
 
-  int checked_open(const char* path, const bool recover) {
-    auto fd = open(path, O_RDWR | O_CREAT | (recover ? O_APPEND : O_TRUNC), 0644);
-    CHECK_GE(fd, 0);
-    return fd;
-  }
+int checked_open(const char* path, const bool recover) {
+  auto fd = open(path, O_RDWR | O_CREAT | (recover ? O_APPEND : O_TRUNC), 0644);
+  CHECK_GE(fd, 0);
+  return fd;
+}
 
-  void* checked_mmap(const int fd, const size_t sz) {
-    auto ptr = mmap(nullptr, sz, PROT_WRITE | PROT_READ, MAP_SHARED, fd, 0);
-    CHECK(ptr != reinterpret_cast<void*>(-1));
-    return ptr;
-  }
+void* checked_mmap(const int fd, const size_t sz) {
+  auto ptr = mmap(nullptr, sz, PROT_WRITE | PROT_READ, MAP_SHARED, fd, 0);
+  CHECK(ptr != reinterpret_cast<void*>(-1));
+  return ptr;
+}
 }  // namespace
 
-StringDictionary::StringDictionary(
-    const std::string& folder,
-    const bool recover,
-    size_t initial_capacity)
-  : str_count_(0)
-  , str_ids_(initial_capacity, INVALID_STR_ID)
-  , payload_fd_(-1), offset_fd_(-1)
-  , offset_map_(nullptr), payload_map_(nullptr)
-  , offset_file_size_(0), payload_file_size_(0)
-  , payload_file_off_(0) {
+StringDictionary::StringDictionary(const std::string& folder, const bool recover, size_t initial_capacity)
+    : str_count_(0),
+      str_ids_(initial_capacity, INVALID_STR_ID),
+      payload_fd_(-1),
+      offset_fd_(-1),
+      offset_map_(nullptr),
+      payload_map_(nullptr),
+      offset_file_size_(0),
+      payload_file_size_(0),
+      payload_file_off_(0) {
   if (folder.empty()) {
     return;
   }
@@ -93,10 +93,10 @@ int32_t StringDictionary::getOrAdd(const std::string& str) {
   return getOrAddImpl(str, false);
 }
 
-void StringDictionary::addBulk(const std::vector<std::string> &stringVec, std::vector<int32_t> &encodedVec) {
+void StringDictionary::addBulk(const std::vector<std::string>& stringVec, std::vector<int32_t>& encodedVec) {
   encodedVec.reserve(stringVec.size());
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  for (const auto &str : stringVec) {
+  for (const auto& str : stringVec) {
     encodedVec.push_back(getOrAddImpl(str, false));
   }
 }
@@ -225,17 +225,14 @@ size_t rk_hash(const std::string& str) {
 
 }  // namespace
 
-int32_t StringDictionary::computeBucket(
-    const std::string& str,
-    const std::vector<int32_t>& data) const {
+int32_t StringDictionary::computeBucket(const std::string& str, const std::vector<int32_t>& data) const {
   auto bucket = rk_hash(str) & (data.size() - 1);
   while (true) {
     if (data[bucket] == INVALID_STR_ID) {
       break;
     }
     const auto old_str = getStringChecked(data[bucket]);
-    if (str.size() == old_str.size() &&
-        !memcmp(str.c_str(), old_str.c_str(), str.size())) {
+    if (str.size() == old_str.size() && !memcmp(str.c_str(), old_str.c_str(), str.size())) {
       // found the string
       break;
     }
@@ -260,7 +257,7 @@ void StringDictionary::appendToStorage(const std::string& str) {
   memcpy(payload_map_ + payload_file_off_, str.c_str(), str.size());
   // write the offset and length
   size_t offset_file_off = str_count_ * sizeof(StringIdxEntry);
-  StringIdxEntry str_meta { static_cast<uint64_t>(payload_file_off_), str.size() };
+  StringIdxEntry str_meta{static_cast<uint64_t>(payload_file_off_), str.size()};
   payload_file_off_ += str.size();
   if (offset_file_off + sizeof(str_meta) >= offset_file_size_) {
     munmap(offset_map_, offset_file_size_);
@@ -302,11 +299,9 @@ size_t StringDictionary::addStorageCapacity(int fd) {
   return CANARY_BUFF_SIZE;
 }
 
-char* StringDictionary::CANARY_BUFFER { nullptr };
+char* StringDictionary::CANARY_BUFFER{nullptr};
 
-bool
-StringDictionary::checkpoint()
-{
+bool StringDictionary::checkpoint() {
   bool ret = true;
   ret = ret && (msync((void*)offset_map_, offset_file_size_, MS_SYNC) == 0);
   ret = ret && (msync((void*)payload_map_, payload_file_size_, MS_SYNC) == 0);
