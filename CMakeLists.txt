@@ -121,12 +121,12 @@ if(MAPD2_FRONTEND_DOWNLOAD)
     GIT_REPOSITORY git@github.com:map-d/mapd2-frontend.git
     PREFIX external
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
+    BUILD_COMMAND npm install && webpack
+    BUILD_IN_SOURCE TRUE
     INSTALL_COMMAND ""
-    UPDATE_COMMAND ""
     )
   ExternalProject_Get_Property(frontend source_dir)
-  install(DIRECTORY ${source_dir} DESTINATION "." PATTERN .git EXCLUDE)
+  install(DIRECTORY ${source_dir} DESTINATION "." PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
   add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
 endif()
 
