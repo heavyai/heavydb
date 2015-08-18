@@ -813,7 +813,8 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
   };
   auto impl = [group_by_col_count, agg_col_count, was_auto_device, truncate_count, this, &targets, aggColumnarOff](
       const size_t groups_buffer_entry_count, int64_t* group_by_buffer) {
-    if (query_mem_desc_.keyless_hash && (!sort_on_gpu_ || device_type_ == ExecutorDeviceType::CPU)) {
+    if (query_mem_desc_.keyless_hash) {
+      CHECK(!sort_on_gpu_);
       CHECK_EQ(1, group_by_col_count);
       CHECK_EQ(targets.size(), agg_col_count);
       const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
@@ -1021,7 +1022,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
     return more_results;
   }
   results.append(more_results);
-  if (sort_on_gpu_ && device_type_ == ExecutorDeviceType::GPU) {
+  if (sort_on_gpu_) {
     results.setSorted();
     if (truncate_count && truncate_count < query_mem_desc_.entry_count) {
       results.setTruncationSize(truncate_count);
