@@ -1,35 +1,27 @@
 #include <stdint.h>
 #include <limits>
 
-extern "C"
-__device__ int32_t pos_start_impl(const int32_t* row_index_resume) {
-  return blockIdx.x * blockDim.x + threadIdx.x +
-    (row_index_resume ? row_index_resume[blockIdx.x] : 0);
+extern "C" __device__ int32_t pos_start_impl(const int32_t* row_index_resume) {
+  return blockIdx.x * blockDim.x + threadIdx.x + (row_index_resume ? row_index_resume[blockIdx.x] : 0);
 }
 
-extern "C"
-__device__ int32_t pos_step_impl() {
+extern "C" __device__ int32_t pos_step_impl() {
   return blockDim.x * gridDim.x;
 }
 
-extern "C"
-__device__ int8_t thread_warp_idx(const int8_t warp_sz) {
+extern "C" __device__ int8_t thread_warp_idx(const int8_t warp_sz) {
   return threadIdx.x % warp_sz;
 }
 
-extern "C"
-__device__ const int64_t* init_shared_mem_nop(const int64_t* groups_buffer,
-                                              const int32_t groups_buffer_size) {
+extern "C" __device__ const int64_t* init_shared_mem_nop(const int64_t* groups_buffer,
+                                                         const int32_t groups_buffer_size) {
   return groups_buffer;
 }
 
-extern "C"
-__device__ void write_back_nop(int64_t* dest, int64_t* src, const int32_t sz) {
+extern "C" __device__ void write_back_nop(int64_t* dest, int64_t* src, const int32_t sz) {
 }
 
-extern "C"
-__device__ const int64_t* init_shared_mem(const int64_t* groups_buffer,
-                                          const int32_t groups_buffer_size) {
+extern "C" __device__ const int64_t* init_shared_mem(const int64_t* groups_buffer, const int32_t groups_buffer_size) {
   extern __shared__ int64_t fast_bins[];
   if (threadIdx.x == 0) {
     memcpy(fast_bins, groups_buffer, groups_buffer_size);
@@ -38,8 +30,7 @@ __device__ const int64_t* init_shared_mem(const int64_t* groups_buffer,
   return fast_bins;
 }
 
-extern "C"
-__device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
+extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
   __syncthreads();
   if (threadIdx.x == 0) {
     memcpy(dest, src, sz);
@@ -48,12 +39,11 @@ __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
 
 #define EMPTY_KEY 9223372036854775807L
 
-extern "C"
-__device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
-                                          const int64_t* init_vals,
-                                          const uint32_t groups_buffer_entry_count,
-                                          const uint32_t key_qw_count,
-                                          const uint32_t agg_col_count) {
+extern "C" __device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
+                                                     const int64_t* init_vals,
+                                                     const uint32_t groups_buffer_entry_count,
+                                                     const uint32_t key_qw_count,
+                                                     const uint32_t agg_col_count) {
   const int32_t start = threadIdx.x;
   const int32_t step = blockDim.x;
   uint32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
@@ -63,17 +53,15 @@ __device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
   __syncthreads();
 }
 
-extern "C"
-__device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
-                                             const uint32_t h,
-                                             const int64_t* key,
-                                             const uint32_t key_qw_count,
-                                             const uint32_t agg_col_count,
-                                             const int64_t* init_vals) {
+extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
+                                                        const uint32_t h,
+                                                        const int64_t* key,
+                                                        const uint32_t key_qw_count,
+                                                        const uint32_t agg_col_count,
+                                                        const int64_t* init_vals) {
   uint32_t off = h * (key_qw_count + agg_col_count);
   {
-    const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off),
-      EMPTY_KEY, *key);
+    const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off), EMPTY_KEY, *key);
     if (EMPTY_KEY == old) {
       memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
       memcpy(groups_buffer + off + key_qw_count, init_vals, agg_col_count * sizeof(*init_vals));
@@ -92,188 +80,152 @@ __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
 
 #include "GroupByRuntime.cpp"
 
-__device__ int64_t atomicMax64(int64_t* address, int64_t val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+__device__ int64_t atomicMax64(int64_t* address, int64_t val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        max((long long) val, (long long) assumed));
-    } while (assumed != old);
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, max((long long)val, (long long)assumed));
+  } while (assumed != old);
 
-    return old;
+  return old;
 }
 
-__device__ int64_t atomicMin64(int64_t* address, int64_t val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+__device__ int64_t atomicMin64(int64_t* address, int64_t val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        min((long long) val, (long long) assumed));
-    } while (assumed != old);
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, min((long long)val, (long long)assumed));
+  } while (assumed != old);
 
-    return old;
+  return old;
 }
 
-__device__ double atomicAdd(double* address, double val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+__device__ double atomicAdd(double* address, double val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        __double_as_longlong(val +
-                               __longlong_as_double(assumed)));
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val + __longlong_as_double(assumed)));
 
     // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
-    } while (assumed != old);
+  } while (assumed != old);
 
-    return __longlong_as_double(old);
+  return __longlong_as_double(old);
 }
 
-__device__ double atomicMax(double* address, double val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+__device__ double atomicMax(double* address, double val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        __double_as_longlong(max(val,
-                               __longlong_as_double(assumed))));
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, __double_as_longlong(max(val, __longlong_as_double(assumed))));
 
     // Note: uses integer comparison to avoid hang in case of NaN (since NaN != NaN)
-    } while (assumed != old);
+  } while (assumed != old);
 
-    return __longlong_as_double(old);
+  return __longlong_as_double(old);
 }
 
-__device__ double atomicMin(double* address, double val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+__device__ double atomicMin(double* address, double val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        __double_as_longlong(min(val,
-                               __longlong_as_double(assumed))));
-    } while (assumed != old);
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, __double_as_longlong(min(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
 
-    return __longlong_as_double(old);
+  return __longlong_as_double(old);
 }
 
-extern "C"
-__device__ void agg_count_shared(int64_t* agg, const int64_t val) {
+extern "C" __device__ void agg_count_shared(int64_t* agg, const int64_t val) {
   atomicAdd(reinterpret_cast<int32_t*>(agg), 1L);
 }
 
-extern "C"
-__device__ void agg_count_double_shared(int64_t* agg, const double val) {
+extern "C" __device__ void agg_count_double_shared(int64_t* agg, const double val) {
   agg_count_shared(agg, val);
 }
 
-extern "C"
-__device__ void agg_sum_shared(int64_t* agg, const int64_t val) {
+extern "C" __device__ void agg_sum_shared(int64_t* agg, const int64_t val) {
   atomicAdd(reinterpret_cast<unsigned long long*>(agg), val);
 }
 
-extern "C"
-__device__ void agg_sum_double_shared(int64_t* agg, const double val) {
+extern "C" __device__ void agg_sum_double_shared(int64_t* agg, const double val) {
   atomicAdd(reinterpret_cast<double*>(agg), val);
 }
 
-extern "C"
-__device__ void agg_max_shared(int64_t* agg, const int64_t val) {
+extern "C" __device__ void agg_max_shared(int64_t* agg, const int64_t val) {
   atomicMax64(agg, val);
 }
 
-extern "C"
-__device__ void agg_max_double_shared(int64_t* agg, const double val) {
+extern "C" __device__ void agg_max_double_shared(int64_t* agg, const double val) {
   atomicMax(reinterpret_cast<double*>(agg), val);
 }
 
-extern "C"
-__device__ void agg_min_shared(int64_t* agg, const int64_t val) {
+extern "C" __device__ void agg_min_shared(int64_t* agg, const int64_t val) {
   atomicMin64(agg, val);
 }
 
-extern "C"
-__device__ void agg_min_double_shared(int64_t* agg, const double val) {
+extern "C" __device__ void agg_min_double_shared(int64_t* agg, const double val) {
   atomicMin(reinterpret_cast<double*>(agg), val);
 }
 
-extern "C"
-__device__ void agg_id_shared(int64_t* agg, const int64_t val) {
+extern "C" __device__ void agg_id_shared(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
-extern "C"
-__device__ void agg_id_double_shared(int64_t* agg, const double val) {
+extern "C" __device__ void agg_id_double_shared(int64_t* agg, const double val) {
   *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
-#define DEF_SKIP_AGG(base_agg_func)                                                                         \
-extern "C"                                                                                                  \
-__device__ void base_agg_func##_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {  \
-  if (val != skip_val) {                                                                                    \
-    base_agg_func##_shared(agg, val);                                                                       \
-  }                                                                                                         \
-}
+#define DEF_SKIP_AGG(base_agg_func)                              \
+  extern "C" __device__ void base_agg_func##_skip_val_shared(    \
+      int64_t* agg, const int64_t val, const int64_t skip_val) { \
+    if (val != skip_val) {                                       \
+      base_agg_func##_shared(agg, val);                          \
+    }                                                            \
+  }
 
 DEF_SKIP_AGG(agg_count)
 DEF_SKIP_AGG(agg_sum)
 
-__device__ int64_t atomicMin64SkipVal(int64_t* address, int64_t val, const int64_t skip_val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+__device__ int64_t atomicMin64SkipVal(int64_t* address, int64_t val, const int64_t skip_val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        assumed == skip_val ? val : min((long long) val, (long long) assumed));
-    } while (assumed != old);
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, assumed == skip_val ? val : min((long long)val, (long long)assumed));
+  } while (assumed != old);
 
-    return old;
+  return old;
 }
 
-extern "C"
-__device__ void agg_min_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
+extern "C" __device__ void agg_min_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
   if (val != skip_val) {
     atomicMin64SkipVal(agg, val, skip_val);
   }
 }
 
-__device__ int64_t atomicMax64SkipVal(int64_t* address, int64_t val, const int64_t skip_val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
+__device__ int64_t atomicMax64SkipVal(int64_t* address, int64_t val, const int64_t skip_val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        assumed == skip_val ? val : max((long long) val, (long long) assumed));
-    } while (assumed != old);
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, assumed == skip_val ? val : max((long long)val, (long long)assumed));
+  } while (assumed != old);
 
-    return old;
+  return old;
 }
 
-extern "C"
-__device__ void agg_max_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
+extern "C" __device__ void agg_max_skip_val_shared(int64_t* agg, const int64_t val, const int64_t skip_val) {
   if (val != skip_val) {
     atomicMax64SkipVal(agg, val, skip_val);
   }
@@ -281,60 +233,57 @@ __device__ void agg_max_skip_val_shared(int64_t* agg, const int64_t val, const i
 
 #undef DEF_SKIP_AGG
 
-#define DEF_SKIP_AGG(base_agg_func)                                                                       \
-extern "C"                                                                                                \
-__device__ void base_agg_func##_skip_val_shared(int64_t* agg, const double val, const double skip_val) {  \
-  if (val != skip_val) {                                                                                  \
-    base_agg_func##_shared(agg, val);                                                                     \
-  }                                                                                                       \
-}
+#define DEF_SKIP_AGG(base_agg_func)                                                                                   \
+  extern "C" __device__ void base_agg_func##_skip_val_shared(int64_t* agg, const double val, const double skip_val) { \
+    if (val != skip_val) {                                                                                            \
+      base_agg_func##_shared(agg, val);                                                                               \
+    }                                                                                                                 \
+  }
 
 DEF_SKIP_AGG(agg_count_double)
 DEF_SKIP_AGG(agg_sum_double)
 
-__device__ double atomicMinDblSkipVal(double* address, double val, const double skip_val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*) address;
-    unsigned long long int old = *address_as_ull;
-    unsigned long long int skip_val_as_ull = *((unsigned long long int*) &skip_val);
-    unsigned long long int assumed;
+__device__ double atomicMinDblSkipVal(double* address, double val, const double skip_val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull;
+  unsigned long long int skip_val_as_ull = *((unsigned long long int*)&skip_val);
+  unsigned long long int assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed, assumed == skip_val_as_ull
-          ? *((unsigned long long int*) &val) : __double_as_longlong(min(val, __longlong_as_double(assumed))));
-    } while (assumed != old);
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull,
+                    assumed,
+                    assumed == skip_val_as_ull ? *((unsigned long long int*)&val)
+                                               : __double_as_longlong(min(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
 
-    return __longlong_as_double(old);
+  return __longlong_as_double(old);
 }
 
-extern "C"
-__device__ void agg_min_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {
+extern "C" __device__ void agg_min_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {
   if (val != skip_val) {
     atomicMinDblSkipVal(reinterpret_cast<double*>(agg), val, skip_val);
   }
 }
 
-__device__ double atomicMaxDblSkipVal(double* address, double val, const double skip_val)
-{
-    unsigned long long int* address_as_ull =
-                              (unsigned long long int*) address;
-    unsigned long long int old = *address_as_ull;
-    unsigned long long int skip_val_as_ull = *((unsigned long long int*) &skip_val);
-    unsigned long long int assumed;
+__device__ double atomicMaxDblSkipVal(double* address, double val, const double skip_val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull;
+  unsigned long long int skip_val_as_ull = *((unsigned long long int*)&skip_val);
+  unsigned long long int assumed;
 
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed, assumed == skip_val_as_ull
-          ? *((unsigned long long int*) &val) : __double_as_longlong(max(val, __longlong_as_double(assumed))));
-    } while (assumed != old);
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull,
+                    assumed,
+                    assumed == skip_val_as_ull ? *((unsigned long long int*)&val)
+                                               : __double_as_longlong(max(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
 
-    return __longlong_as_double(old);
+  return __longlong_as_double(old);
 }
 
-extern "C"
-__device__ void agg_max_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {
+extern "C" __device__ void agg_max_double_skip_val_shared(int64_t* agg, const double val, const double skip_val) {
   if (val != skip_val) {
     atomicMaxDblSkipVal(reinterpret_cast<double*>(agg), val, skip_val);
   }
@@ -349,20 +298,17 @@ __device__ void agg_max_double_skip_val_shared(int64_t* agg, const double val, c
 #undef EXECUTE_INCLUDE
 #include "../Utils/StringLike.cpp"
 
-extern "C"
-__device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
+extern "C" __device__ uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   // TODO(alex): de-dup, the x64 version is basically identical
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
   bool is_end;
   ChunkIter_get_nth(chunk_iter, pos, false, &vd, &is_end);
-  return vd.is_null
-    ? 0
-    : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) | (static_cast<uint64_t>(vd.length) << 48);
+  return vd.is_null ? 0 : (reinterpret_cast<uint64_t>(vd.pointer) & 0xffffffffffff) |
+                              (static_cast<uint64_t>(vd.length) << 48);
 }
 
-extern "C"
-__device__ int32_t merge_error_code(const int32_t err_code, int32_t* merged_err_code) {
+extern "C" __device__ int32_t merge_error_code(const int32_t err_code, int32_t* merged_err_code) {
   if (err_code) {
     int32_t assumed = *merged_err_code;
     int32_t old;

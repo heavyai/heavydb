@@ -4,68 +4,65 @@
 #include <glog/logging.h>
 #endif
 
-#define SECSPERMIN	60L
-#define MINSPERHOUR	60L
-#define HOURSPERDAY	24L
-#define SECSPERHOUR	(SECSPERMIN * MINSPERHOUR)
-#define SECSPERDAY	(SECSPERHOUR * HOURSPERDAY)
-#define DAYSPERWEEK	7
-#define MONSPERYEAR	12
+#define SECSPERMIN 60L
+#define MINSPERHOUR 60L
+#define HOURSPERDAY 24L
+#define SECSPERHOUR (SECSPERMIN * MINSPERHOUR)
+#define SECSPERDAY (SECSPERHOUR * HOURSPERDAY)
+#define DAYSPERWEEK 7
+#define MONSPERYEAR 12
 
-#define YEAR_BASE	1900
+#define YEAR_BASE 1900
 
 /* move epoch from 01.01.1970 to 01.03.2000 - this is the first day of new
  * 400-year long cycle, right after additional day of leap year. This adjustment
  * is required only for date calculation, so instead of modifying time_t value
  * (which would require 64-bit operations to work correctly) it's enough to
  * adjust the calculated number of days since epoch. */
-#define EPOCH_ADJUSTMENT_DAYS	11017
+#define EPOCH_ADJUSTMENT_DAYS 11017
 /* year to which the adjustment was made */
-#define ADJUSTED_EPOCH_YEAR	2000
+#define ADJUSTED_EPOCH_YEAR 2000
 /* 1st March of 2000 is Wednesday */
-#define ADJUSTED_EPOCH_WDAY	3
+#define ADJUSTED_EPOCH_WDAY 3
 /* there are 97 leap years in 400-year periods. ((400 - 97) * 365 + 97 * 366) */
-#define DAYS_PER_400_YEARS	146097L
+#define DAYS_PER_400_YEARS 146097L
 /* there are 24 leap years in 100-year periods. ((100 - 24) * 365 + 24 * 366) */
-#define DAYS_PER_100_YEARS	36524L
+#define DAYS_PER_100_YEARS 36524L
 /* there is one leap year every 4 years */
-#define DAYS_PER_4_YEARS	(3 * 365 + 366)
+#define DAYS_PER_4_YEARS (3 * 365 + 366)
 /* number of days in a non-leap year */
-#define DAYS_PER_YEAR		365
+#define DAYS_PER_YEAR 365
 /* number of days in January */
-#define DAYS_IN_JANUARY		31
+#define DAYS_IN_JANUARY 31
 /* number of days in non-leap February */
-#define DAYS_IN_FEBRUARY	28
+#define DAYS_IN_FEBRUARY 28
 
 extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-tm* gmtime_r_newlib(const time_t *tim_p, tm* res) {
-  const int month_lengths[2][MONSPERYEAR] = {
-    {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
-    {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
-  };
+    tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
+  const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+                                             {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   long days, rem;
   const time_t lcltime = *tim_p;
   int year, month, yearday, weekday;
   int years400, years100, years4, remainingyears;
   int yearleap;
-  const int *ip;
+  const int* ip;
 
   days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
   rem = ((long)lcltime) % SECSPERDAY;
-  if (rem < 0)
-    {
-      rem += SECSPERDAY;
-      --days;
-    }
+  if (rem < 0) {
+    rem += SECSPERDAY;
+    --days;
+  }
 
   /* compute hour, min, and sec */
-  res->tm_hour = (int) (rem / SECSPERHOUR);
+  res->tm_hour = (int)(rem / SECSPERHOUR);
   rem %= SECSPERHOUR;
-  res->tm_min = (int) (rem / SECSPERMIN);
-  res->tm_sec = (int) (rem % SECSPERMIN);
+  res->tm_min = (int)(rem / SECSPERMIN);
+  res->tm_sec = (int)(rem % SECSPERMIN);
 
   /* compute day of week */
   if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
@@ -76,11 +73,10 @@ tm* gmtime_r_newlib(const time_t *tim_p, tm* res) {
   years400 = days / DAYS_PER_400_YEARS;
   days -= years400 * DAYS_PER_400_YEARS;
   /* simplify by making the values positive */
-  if (days < 0)
-    {
-      days += DAYS_PER_400_YEARS;
-      --years400;
-    }
+  if (days < 0) {
+    days += DAYS_PER_400_YEARS;
+    --years400;
+  }
 
   years100 = days / DAYS_PER_100_YEARS;
   if (years100 == 4) /* required for proper day of year calculation */
@@ -93,8 +89,7 @@ tm* gmtime_r_newlib(const time_t *tim_p, tm* res) {
     --remainingyears;
   days -= remainingyears * DAYS_PER_YEAR;
 
-  year = ADJUSTED_EPOCH_YEAR + years400 * 400 + years100 * 100 + years4 * 4 +
-      remainingyears;
+  year = ADJUSTED_EPOCH_YEAR + years400 * 400 + years100 * 100 + years4 * 4 + remainingyears;
 
   /* If remainingyears is zero, it means that the years were completely
    * "consumed" by modulo calculations by 400, 100 and 4, so the year is:
@@ -110,11 +105,10 @@ tm* gmtime_r_newlib(const time_t *tim_p, tm* res) {
 
   /* adjust back to 1st January */
   yearday = days + DAYS_IN_JANUARY + DAYS_IN_FEBRUARY + yearleap;
-  if (yearday >= DAYS_PER_YEAR + yearleap)
-    {
-      yearday -= DAYS_PER_YEAR + yearleap;
-      ++year;
-    }
+  if (yearday >= DAYS_PER_YEAR + yearleap) {
+    yearday -= DAYS_PER_YEAR + yearleap;
+    ++year;
+  }
   res->tm_yday = yearday;
   res->tm_year = year - YEAR_BASE;
 
@@ -123,12 +117,11 @@ tm* gmtime_r_newlib(const time_t *tim_p, tm* res) {
    * whether the year is actually leap or not. */
   ip = month_lengths[1];
   month = 2;
-  while (days >= ip[month])
-    {
-      days -= ip[month];
-      if (++month >= MONSPERYEAR)
-        month = 0;
-    }
+  while (days >= ip[month]) {
+    days -= ip[month];
+    if (++month >= MONSPERYEAR)
+      month = 0;
+  }
   res->tm_mon = month;
   res->tm_mday = days + 1;
 
@@ -144,7 +137,7 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-int64_t ExtractFromTime(ExtractField field, time_t timeval) {
+    int64_t ExtractFromTime(ExtractField field, time_t timeval) {
   if (field == kEPOCH)
     return timeval;
   tm tm_struct;
@@ -177,9 +170,9 @@ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
 
 extern "C"
 #ifdef __CUDACC__
-__device__
+    __device__
 #endif
-int64_t ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
+        int64_t ExtractFromTimeNullable(ExtractField field, time_t timeval, const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }

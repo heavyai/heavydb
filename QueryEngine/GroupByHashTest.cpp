@@ -4,7 +4,6 @@
 #include <gtest/gtest.h>
 #include <numeric>
 
-
 namespace {
 
 void init_groups(int64_t* groups_buffer,
@@ -13,37 +12,32 @@ void init_groups(int64_t* groups_buffer,
                  const int64_t* init_vals) {
   int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + 1);
   for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
-    groups_buffer[i] = (i % (key_qw_count + 1) < key_qw_count)
-      ? EMPTY_KEY : init_vals[(i - key_qw_count) % (key_qw_count + 1)];
+    groups_buffer[i] =
+        (i % (key_qw_count + 1) < key_qw_count) ? EMPTY_KEY : init_vals[(i - key_qw_count) % (key_qw_count + 1)];
   }
 }
 
 }  // namespace
 
 class GroupsBuffer {
-public:
+ public:
   GroupsBuffer(const size_t groups_buffer_entry_count, const size_t key_qw_count, const int64_t init_val)
-  : size_ { groups_buffer_entry_count * (key_qw_count + 1) } {
+      : size_{groups_buffer_entry_count * (key_qw_count + 1)} {
     groups_buffer_ = new int64_t[size_];
     init_groups(groups_buffer_, groups_buffer_entry_count, key_qw_count, &init_val);
   }
-  ~GroupsBuffer() {
-    delete[] groups_buffer_;
-  }
-  operator int64_t*() const {
-    return groups_buffer_;
-  }
-  size_t qw_size() const {
-    return size_;
-  }
-private:
+  ~GroupsBuffer() { delete[] groups_buffer_; }
+  operator int64_t*() const { return groups_buffer_; }
+  size_t qw_size() const { return size_; }
+
+ private:
   int64_t* groups_buffer_;
   const size_t size_;
 };
 
 TEST(InitTest, OneKey) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 1 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{1};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
   auto gb_raw = static_cast<int64_t*>(gb);
   for (size_t i = 0; i < gb.qw_size(); i += 2) {
@@ -52,8 +46,8 @@ TEST(InitTest, OneKey) {
 }
 
 TEST(SetGetTest, OneKey) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 1 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{1};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
   int64_t key = 31;
   auto gv1 = get_group_value(gb, groups_buffer_entry_count, &key, key_qw_count, 1);
@@ -68,10 +62,10 @@ TEST(SetGetTest, OneKey) {
 }
 
 TEST(SetGetTest, ManyKeys) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 5 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{5};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
-  int64_t key[] = { 31, 32, 33, 34, 35 };
+  int64_t key[] = {31, 32, 33, 34, 35};
   auto gv1 = get_group_value(gb, groups_buffer_entry_count, key, key_qw_count, 1);
   ASSERT_NE(gv1, nullptr);
   auto gv2 = get_group_value(gb, groups_buffer_entry_count, key, key_qw_count, 1);
@@ -84,8 +78,8 @@ TEST(SetGetTest, ManyKeys) {
 }
 
 TEST(SetGetTest, OneKeyCollision) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 1 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{1};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
   int64_t key1 = 31;
   auto gv1 = get_group_value(gb, groups_buffer_entry_count, &key1, key_qw_count, 1);
@@ -106,8 +100,8 @@ TEST(SetGetTest, OneKeyCollision) {
 }
 
 TEST(SetGetTest, OneKeyRandom) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 1 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{1};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
   std::vector<int64_t> keys;
   for (int32_t i = 0; i < groups_buffer_entry_count; ++i) {
@@ -125,8 +119,8 @@ TEST(SetGetTest, OneKeyRandom) {
 }
 
 TEST(SetGetTest, MultiKeyRandom) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 5 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{5};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
   std::vector<std::vector<int64_t>> keys;
   for (int32_t i = 0; i < groups_buffer_entry_count; ++i) {
@@ -147,8 +141,8 @@ TEST(SetGetTest, MultiKeyRandom) {
 }
 
 TEST(SetGetTest, OneKeyNoCollisions) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 1 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{1};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
   int64_t key_start = 31;
   for (int32_t i = 0; i < groups_buffer_entry_count; ++i) {
@@ -169,8 +163,8 @@ TEST(SetGetTest, OneKeyNoCollisions) {
 }
 
 TEST(SetGetTest, OneKeyAllCollisions) {
-  const int32_t groups_buffer_entry_count { 10 };
-  const int32_t key_qw_count { 1 };
+  const int32_t groups_buffer_entry_count{10};
+  const int32_t key_qw_count{1};
   GroupsBuffer gb(groups_buffer_entry_count, key_qw_count, 0);
   int64_t key_start = 31;
   for (int32_t i = 0; i < groups_buffer_entry_count; ++i) {

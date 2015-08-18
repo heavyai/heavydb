@@ -4,10 +4,10 @@
 #include <cuda.h>
 #include <string>
 
-char *generatePTX(const char *ll, size_t size, const char *filename);
+char* generatePTX(const char* ll, size_t size, const char* filename);
 
 class GpuCompilationContext {
-public:
+ public:
   GpuCompilationContext(char* ptx,
                         const std::string& func_name,
                         const std::string& lib_path,
@@ -15,10 +15,9 @@ public:
                         const void* cuda_mgr,
                         const unsigned block_size_x);
   ~GpuCompilationContext();
-  CUfunction kernel() {
-    return kernel_;
-  }
-private:
+  CUfunction kernel() { return kernel_; }
+
+ private:
   CUmodule module_;
   CUfunction kernel_;
   CUlinkState link_state_;

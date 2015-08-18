@@ -29,11 +29,11 @@
 #include <sys/stat.h>
 
 // The full path to the libcudadevrt.a is determined by the build environment.
-const char *_libCudaDevRt = "/usr/local/cuda-6.5/targets/x86_64-linux/lib/libcudadevrt.a";
+const char* _libCudaDevRt = "/usr/local/cuda-6.5/targets/x86_64-linux/lib/libcudadevrt.a";
 
-const char *getLibCudaDevRtName(void) {
+const char* getLibCudaDevRtName(void) {
   // double check the library exists
-  FILE *fh = fopen(_libCudaDevRt, "rb");
+  FILE* fh = fopen(_libCudaDevRt, "rb");
 
   if (fh == NULL) {
     fprintf(stderr, "Error reading file %s\n", _libCudaDevRt);
@@ -45,14 +45,18 @@ const char *getLibCudaDevRtName(void) {
 }
 
 // This will output the proper CUDA error strings in the event that a CUDA host call returns an error
-#define checkCudaErrors(err)  __checkCudaErrors (err, __FILE__, __LINE__)
+#define checkCudaErrors(err) __checkCudaErrors(err, __FILE__, __LINE__)
 
 // These are the inline versions for all of the SDK helper functions
 
-void __checkCudaErrors(CUresult err, const char *file, const int line) {
+void __checkCudaErrors(CUresult err, const char* file, const int line) {
   if (CUDA_SUCCESS != err) {
-    fprintf(stderr, "checkCudaErrors() Driver API error = %04d \"%s\" from file <%s>, line %i.\n",
-        err, getCudaDrvErrorString(err), file, line);
+    fprintf(stderr,
+            "checkCudaErrors() Driver API error = %04d \"%s\" from file <%s>, line %i.\n",
+            err,
+            getCudaDrvErrorString(err),
+            file,
+            line);
     exit(-1);
   }
 }
@@ -83,14 +87,14 @@ CUdevice cudaDeviceInit() {
   return cuDevice;
 }
 
-CUresult initCUDA(CUcontext *phContext,
-    CUdevice *phDevice,
-    CUmodule *phModule,
-    CUfunction *phKernel,
-    const char *ptx,
-    const char *libCudaDevRtName) {
+CUresult initCUDA(CUcontext* phContext,
+                  CUdevice* phDevice,
+                  CUmodule* phModule,
+                  CUfunction* phKernel,
+                  const char* ptx,
+                  const char* libCudaDevRtName) {
   CUlinkState linkState;
-  void *cubin;
+  void* cubin;
   size_t cubinSize;
 
   // Initialize
@@ -99,7 +103,7 @@ CUresult initCUDA(CUcontext *phContext,
   checkCudaErrors(cuCtxCreate(phContext, 0, *phDevice));
   // link ptx and the device library
   checkCudaErrors(cuLinkCreate(0, NULL, NULL, &linkState));
-  checkCudaErrors(cuLinkAddData(linkState, CU_JIT_INPUT_PTX, (void*) ptx, strlen(ptx) + 1, 0, 0, 0, 0));
+  checkCudaErrors(cuLinkAddData(linkState, CU_JIT_INPUT_PTX, (void*)ptx, strlen(ptx) + 1, 0, 0, 0, 0));
   checkCudaErrors(cuLinkAddFile(linkState, CU_JIT_INPUT_LIBRARY, libCudaDevRtName, 0, NULL, NULL));
   checkCudaErrors(cuLinkComplete(linkState, &cubin, &cubinSize));
   checkCudaErrors(cuLinkDestroy(linkState));
@@ -111,15 +115,15 @@ CUresult initCUDA(CUcontext *phContext,
   return CUDA_SUCCESS;
 }
 
-char *loadProgramSource(const char *filename, size_t *size) {
+char* loadProgramSource(const char* filename, size_t* size) {
   struct stat statbuf;
-  FILE *fh;
-  char *source = NULL;
+  FILE* fh;
+  char* source = NULL;
   *size = 0;
   fh = fopen(filename, "rb");
   if (fh) {
     stat(filename, &statbuf);
-    source = (char *) malloc(statbuf.st_size + 1);
+    source = (char*)malloc(statbuf.st_size + 1);
     if (source) {
       size_t bytes_read = fread(source, statbuf.st_size, 1, fh);
       if (bytes_read < static_cast<size_t>(statbuf.st_size)) {
@@ -136,12 +140,12 @@ char *loadProgramSource(const char *filename, size_t *size) {
   return source;
 }
 
-char *generatePTX(const char *ll, size_t size, const char *filename) {
+char* generatePTX(const char* ll, size_t size, const char* filename) {
   nvvmResult result;
   nvvmProgram program;
   size_t PTXSize;
-  char *PTX = NULL;
-  const char *options[] = {"-arch=compute_30"};
+  char* PTX = NULL;
+  const char* options[] = {"-arch=compute_30"};
 
   result = nvvmCreateProgram(&program);
   if (result != NVVM_SUCCESS) {
@@ -155,15 +159,13 @@ char *generatePTX(const char *ll, size_t size, const char *filename) {
     exit(-1);
   }
 
-
-
   result = nvvmCompileProgram(program, 1, options);
   if (result != NVVM_SUCCESS) {
-    char *Msg = NULL;
+    char* Msg = NULL;
     size_t LogSize;
     fprintf(stderr, "nvvmCompileProgram: Failed\n");
     nvvmGetProgramLogSize(program, &LogSize);
-    Msg = (char*) malloc(LogSize);
+    Msg = (char*)malloc(LogSize);
     nvvmGetProgramLog(program, Msg);
     fprintf(stderr, "%s\n", Msg);
     free(Msg);
@@ -176,7 +178,7 @@ char *generatePTX(const char *ll, size_t size, const char *filename) {
     exit(-1);
   }
 
-  PTX = (char*) malloc(PTXSize);
+  PTX = (char*)malloc(PTXSize);
   result = nvvmGetCompiledResult(program, PTX);
   if (result != NVVM_SUCCESS) {
     fprintf(stderr, "nvvmGetCompiledResult: Failed\n");
@@ -194,7 +196,7 @@ char *generatePTX(const char *ll, size_t size, const char *filename) {
   return PTX;
 }
 
-int main_sample(int argc, char **argv) {
+int main_sample(int argc, char** argv) {
   const unsigned int nThreads = 1;
   const unsigned int nBlocks = 1;
 
@@ -202,20 +204,20 @@ int main_sample(int argc, char **argv) {
   CUdevice hDevice = 0;
   CUmodule hModule = 0;
   CUfunction hKernel = 0;
-  char *ptx = NULL;
-  const char *libCudaDevRtName = NULL;
+  char* ptx = NULL;
+  const char* libCudaDevRtName = NULL;
   int depth = 0;
 
   // Get the ll from file
   size_t size = 0;
   // Kernel parameters
-  void *params[] = {&depth};
+  void* params[] = {&depth};
 #if BUILD_64_BIT
-  const char *filename = "gpu64.ll";
+  const char* filename = "gpu64.ll";
 #else
-  const char *filename = "gpu32.ll";
+  const char* filename = "gpu32.ll";
 #endif
-  char *ll = loadProgramSource(filename, &size);
+  char* ll = loadProgramSource(filename, &size);
   fprintf(stdout, "NVVM IR ll file loaded\n");
 
   libCudaDevRtName = getLibCudaDevRtName();

@@ -24,23 +24,19 @@
 #include <vector>
 #include <deque>
 
-
 class Executor;
 
 enum class GroupByColRangeType {
-  OneColKnownRange,       // statically known range, only possible for column expressions
-  OneColGuessedRange,     // best guess: small hash for the guess plus overflow for outliers
+  OneColKnownRange,    // statically known range, only possible for column expressions
+  OneColGuessedRange,  // best guess: small hash for the guess plus overflow for outliers
   MultiCol,
   MultiColPerfectHash,
-  Scan,                   // the plan is not a group by plan
+  Scan,  // the plan is not a group by plan
 };
 
 // Private: each thread has its own memory, no atomic operations required
 // Shared: threads in the same block share memory, atomic operations required
-enum class GroupByMemSharing {
-  Private,
-  Shared
-};
+enum class GroupByMemSharing { Private, Shared };
 
 struct QueryMemoryDescriptor;
 
@@ -56,10 +52,7 @@ struct TargetInfo {
   bool is_distinct;
 };
 
-enum class CountDistinctImplType {
-  Bitmap,
-  StdSet
-};
+enum class CountDistinctImplType { Bitmap, StdSet };
 
 inline size_t bitmap_size_bytes(const size_t bitmap_sz) {
   size_t bitmap_byte_sz = bitmap_sz / 8;
@@ -93,7 +86,7 @@ struct GpuSortInfo {
     // We'll ask for more top rows than the query requires so that we have a very
     // high chance to reconstitute the full top out of the fragments; since we
     // don't have any data about what'd be a good value, we might need to tweak it.
-    const int64_t top_fudge_factor { 16 };
+    const int64_t top_fudge_factor{16};
     return top_count * top_fudge_factor;
   }
 };
@@ -105,24 +98,24 @@ struct QueryMemoryDescriptor {
   bool interleaved_bins_on_gpu;
   std::vector<int8_t> group_col_widths;
   std::vector<int8_t> agg_col_widths;
-  size_t entry_count;                    // the number of entries in the main buffer
-  size_t entry_count_small;              // the number of entries in the small buffer
-  int64_t min_val;                       // meaningful for OneColKnownRange, MultiColPerfectHash only
+  size_t entry_count;        // the number of entries in the main buffer
+  size_t entry_count_small;  // the number of entries in the small buffer
+  int64_t min_val;           // meaningful for OneColKnownRange, MultiColPerfectHash only
   int64_t max_val;
   bool has_nulls;
-  GroupByMemSharing sharing;             // meaningful for GPU only
+  GroupByMemSharing sharing;  // meaningful for GPU only
   CountDistinctDescriptors count_distinct_descriptors_;
   bool sort_on_gpu_;
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
-    const std::vector<int64_t>& init_agg_vals,
-    const Executor* executor,
-    const ExecutorDeviceType device_type,
-    const int device_id,
-    const std::vector<std::vector<const int8_t*>>& col_buffers,
-    std::shared_ptr<RowSetMemoryOwner>,
-    const bool output_columnar,
-    const bool sort_on_gpu) const;
+      const std::vector<int64_t>& init_agg_vals,
+      const Executor* executor,
+      const ExecutorDeviceType device_type,
+      const int device_id,
+      const std::vector<std::vector<const int8_t*>>& col_buffers,
+      std::shared_ptr<RowSetMemoryOwner>,
+      const bool output_columnar,
+      const bool sort_on_gpu) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
@@ -159,7 +152,7 @@ inline int64_t bitmap_set_size(const int64_t bitmap_ptr,
     CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
     return reinterpret_cast<std::set<int64_t>*>(bitmap_ptr)->size();
   }
-  int64_t set_size { 0 };
+  int64_t set_size{0};
   auto set_vals = reinterpret_cast<const int8_t*>(bitmap_ptr);
   for (size_t i = 0; i < count_distinct_desc_it->second.bitmapSizeBytes(); ++i) {
     for (auto bit_idx = 0; bit_idx < 8; ++bit_idx) {
@@ -182,19 +175,17 @@ typedef std::vector<int64_t> ValueTuple;
 class ChunkIter;
 
 class DictStrLiteralsOwner {
-public:
+ public:
   DictStrLiteralsOwner(StringDictionary* string_dict) : string_dict_(string_dict) {}
 
-  ~DictStrLiteralsOwner() {
-    string_dict_->clearTransient();
-  }
+  ~DictStrLiteralsOwner() { string_dict_->clearTransient(); }
 
-private:
+ private:
   StringDictionary* string_dict_;
 };
 
 class RowSetMemoryOwner : boost::noncopyable {
-public:
+ public:
   void setCountDistinctDescriptors(const CountDistinctDescriptors& count_distinct_descriptors) {
     if (count_distinct_descriptors_.empty()) {
       count_distinct_descriptors_ = count_distinct_descriptors;
@@ -259,7 +250,8 @@ public:
       lit_str_dict_->clearTransient();
     }
   }
-private:
+
+ private:
   CountDistinctDescriptors count_distinct_descriptors_;
   std::vector<int8_t*> count_distinct_bitmaps_;
   std::vector<std::set<int64_t>*> count_distinct_sets_;
@@ -279,26 +271,27 @@ inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
-    return { false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT, notnull), false, false };
+    return {false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT, notnull), false, false};
   }
   const auto agg_type = agg_expr->get_aggtype();
   const auto agg_arg = agg_expr->get_arg();
   if (!agg_arg) {
     CHECK_EQ(kCOUNT, agg_type);
     CHECK(!agg_expr->get_is_distinct());
-    return { true, kCOUNT, SQLTypeInfo(kBIGINT, notnull), false, false };
+    return {true, kCOUNT, SQLTypeInfo(kBIGINT, notnull), false, false};
   }
   const auto& agg_arg_ti = agg_arg->get_type_info();
-  bool is_distinct { false };
+  bool is_distinct{false};
   if (agg_expr->get_aggtype() == kCOUNT) {
     is_distinct = agg_expr->get_is_distinct();
   }
   bool skip_null = !agg_arg_ti.get_notnull();
   return {
-    true, agg_expr->get_aggtype(),
-    agg_type == kAVG ? agg_arg_ti : (agg_type == kCOUNT ? SQLTypeInfo(kBIGINT, notnull) : agg_expr->get_type_info()),
-    skip_null, is_distinct
-  };
+      true,
+      agg_expr->get_aggtype(),
+      agg_type == kAVG ? agg_arg_ti : (agg_type == kCOUNT ? SQLTypeInfo(kBIGINT, notnull) : agg_expr->get_type_info()),
+      skip_null,
+      is_distinct};
 }
 
 namespace {
@@ -311,20 +304,20 @@ inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
     type = kINT;
   }
   switch (type) {
-  case kBOOLEAN:
-    return std::numeric_limits<int8_t>::min();
-  case kSMALLINT:
-    return std::numeric_limits<int16_t>::min();
-  case kINT:
-    return std::numeric_limits<int32_t>::min();
-  case kBIGINT:
-    return std::numeric_limits<int64_t>::min();
-  case kTIMESTAMP:
-  case kTIME:
-  case kDATE:
-    return std::numeric_limits<int64_t>::min();
-  default:
-    CHECK(false);
+    case kBOOLEAN:
+      return std::numeric_limits<int8_t>::min();
+    case kSMALLINT:
+      return std::numeric_limits<int16_t>::min();
+    case kINT:
+      return std::numeric_limits<int32_t>::min();
+    case kBIGINT:
+      return std::numeric_limits<int64_t>::min();
+    case kTIMESTAMP:
+    case kTIME:
+    case kDATE:
+      return std::numeric_limits<int64_t>::min();
+    default:
+      CHECK(false);
   }
 }
 
@@ -332,12 +325,12 @@ inline double inline_fp_null_val(const SQLTypeInfo& ti) {
   CHECK(ti.is_fp());
   const auto type = ti.get_type();
   switch (type) {
-  case kFLOAT:
-    return NULL_FLOAT;
-  case kDOUBLE:
-    return NULL_DOUBLE;
-  default:
-    CHECK(false);
+    case kFLOAT:
+      return NULL_FLOAT;
+    case kDOUBLE:
+      return NULL_DOUBLE;
+    default:
+      CHECK(false);
   }
 }
 
@@ -347,13 +340,7 @@ struct InternalTargetValue {
   int64_t i1;
   int64_t i2;
 
-  enum class ITVType {
-    Int,
-    Pair,
-    Str,
-    Arr,
-    Null
-  };
+  enum class ITVType { Int, Pair, Str, Arr, Null };
 
   ITVType ty;
 
@@ -367,115 +354,74 @@ struct InternalTargetValue {
 
   explicit InternalTargetValue() : ty(ITVType::Null) {}
 
-  std::string strVal() const {
-    return *reinterpret_cast<std::string*>(i1);
-  }
+  std::string strVal() const { return *reinterpret_cast<std::string*>(i1); }
 
-  std::vector<int64_t> arrVal() const {
-    return *reinterpret_cast<std::vector<int64_t>*>(i1);
-  }
+  std::vector<int64_t> arrVal() const { return *reinterpret_cast<std::vector<int64_t>*>(i1); }
 
-  bool isInt() const {
-    return ty == ITVType::Int;
-  }
+  bool isInt() const { return ty == ITVType::Int; }
 
-  bool isPair() const {
-    return ty == ITVType::Pair;
-  }
+  bool isPair() const { return ty == ITVType::Pair; }
 
-  bool isNull() const {
-    return ty == ITVType::Null;
-  }
+  bool isNull() const { return ty == ITVType::Null; }
 
-  bool isStr() const {
-    return ty == ITVType::Str;
-  }
+  bool isStr() const { return ty == ITVType::Str; }
 
   bool operator<(const InternalTargetValue& other) const {
     switch (ty) {
-    case ITVType::Int:
-      CHECK(other.ty == ITVType::Int);
-      return i1 < other.i1;
-    case ITVType::Pair:
-      CHECK(other.ty == ITVType::Pair);
-      if (i1 != other.i1) {
+      case ITVType::Int:
+        CHECK(other.ty == ITVType::Int);
         return i1 < other.i1;
-      }
-      return i2 < other.i2;
-    case ITVType::Str:
-      CHECK(other.ty == ITVType::Str);
-      return strVal() < other.strVal();
-    case ITVType::Null:
-      return false;
-    default:
-      CHECK(false);
+      case ITVType::Pair:
+        CHECK(other.ty == ITVType::Pair);
+        if (i1 != other.i1) {
+          return i1 < other.i1;
+        }
+        return i2 < other.i2;
+      case ITVType::Str:
+        CHECK(other.ty == ITVType::Str);
+        return strVal() < other.strVal();
+      case ITVType::Null:
+        return false;
+      default:
+        CHECK(false);
     }
   }
 
-  bool operator==(const InternalTargetValue& other) const {
-    return !(*this < other || other < *this);
-  }
+  bool operator==(const InternalTargetValue& other) const { return !(*this < other || other < *this); }
 };
 
 class InternalRow {
-public:
+ public:
   InternalRow(RowSetMemoryOwner* row_set_mem_owner, const int64_t simple_key)
-    : row_set_mem_owner_(row_set_mem_owner)
-    , simple_key_(simple_key) {};
+      : row_set_mem_owner_(row_set_mem_owner), simple_key_(simple_key){};
 
-  bool operator==(const InternalRow& other) const {
-    return row_ == other.row_;
-  }
+  bool operator==(const InternalRow& other) const { return row_ == other.row_; }
 
-  bool operator<(const InternalRow& other) const {
-    return row_ < other.row_;
-  }
+  bool operator<(const InternalRow& other) const { return row_ < other.row_; }
 
-  InternalTargetValue& operator[](const size_t i) {
-    return row_[i];
-  }
+  InternalTargetValue& operator[](const size_t i) { return row_[i]; }
 
-  const InternalTargetValue& operator[](const size_t i) const {
-    return row_[i];
-  }
+  const InternalTargetValue& operator[](const size_t i) const { return row_[i]; }
 
-  int64_t getSimpleKey() const {
-    return simple_key_;
-  }
+  int64_t getSimpleKey() const { return simple_key_; }
 
-  void setSimpleKey(const int64_t simple_key) {
-    simple_key_ = simple_key;
-  }
+  void setSimpleKey(const int64_t simple_key) { simple_key_ = simple_key; }
 
-  size_t size() const {
-    return row_.size();
-  }
+  size_t size() const { return row_.size(); }
 
-private:
-  void reserve(const size_t n) {
-    row_.reserve(n);
-  }
+ private:
+  void reserve(const size_t n) { row_.reserve(n); }
 
-  void addValue(const int64_t val) {
-    row_.emplace_back(val);
-  }
+  void addValue(const int64_t val) { row_.emplace_back(val); }
 
   // used for kAVG
-  void addValue(const int64_t val1, const int64_t val2) {
-    row_.emplace_back(val1, val2);
-  }
+  void addValue(const int64_t val1, const int64_t val2) { row_.emplace_back(val1, val2); }
 
-  void addValue(const std::string& val) {
-    row_.emplace_back(row_set_mem_owner_->addString(val));
-  }
+  void addValue(const std::string& val) { row_.emplace_back(row_set_mem_owner_->addString(val)); }
 
-  void addValue(const std::vector<int64_t>& val) {
-    row_.emplace_back(row_set_mem_owner_->addArray(val));
-  }
+  void addValue(const std::vector<int64_t>& val) { row_.emplace_back(row_set_mem_owner_->addArray(val)); }
 
-  void addValue() {
-    row_.emplace_back();
-  }
+  void addValue() { row_.emplace_back(); }
 
   std::vector<InternalTargetValue> row_;
   RowSetMemoryOwner* row_set_mem_owner_;
@@ -485,63 +431,37 @@ private:
 };
 
 class RowStorage {
-private:
-  size_t size() const {
-    return rows_.size();
-  }
+ private:
+  size_t size() const { return rows_.size(); }
 
-  void clear() {
-    rows_.clear();
-  }
+  void clear() { rows_.clear(); }
 
-  void reserve(const size_t n) {
-    rows_.reserve(n);
-  }
+  void reserve(const size_t n) { rows_.reserve(n); }
 
   void beginRow(RowSetMemoryOwner* row_set_mem_owner, const int64_t simple_key) {
     rows_.emplace_back(row_set_mem_owner, simple_key);
   }
 
-  void reserveRow(const size_t n) {
-    rows_.back().reserve(n);
-  }
+  void reserveRow(const size_t n) { rows_.back().reserve(n); }
 
-  void discardRow() {
-    rows_.pop_back();
-  }
+  void discardRow() { rows_.pop_back(); }
 
-  void addValue(const int64_t val) {
-    rows_.back().addValue(val);
-  }
+  void addValue(const int64_t val) { rows_.back().addValue(val); }
 
   // used for kAVG
-  void addValue(const int64_t val1, const int64_t val2) {
-    rows_.back().addValue(val1, val2);
-  }
+  void addValue(const int64_t val1, const int64_t val2) { rows_.back().addValue(val1, val2); }
 
-  void addValue(const std::string& val) {
-    rows_.back().addValue(val);
-  }
+  void addValue(const std::string& val) { rows_.back().addValue(val); }
 
-  void addValue(const std::vector<int64_t>& val) {
-    rows_.back().addValue(val);
-  }
+  void addValue(const std::vector<int64_t>& val) { rows_.back().addValue(val); }
 
-  void addValue() {
-    rows_.back().addValue();
-  }
+  void addValue() { rows_.back().addValue(); }
 
-  void push_back(const InternalRow& v) {
-    rows_.push_back(v);
-  }
+  void push_back(const InternalRow& v) { rows_.push_back(v); }
 
-  void append(const RowStorage& other) {
-    rows_.insert(rows_.end(), other.rows_.begin(), other.rows_.end());
-  }
+  void append(const RowStorage& other) { rows_.insert(rows_.end(), other.rows_.begin(), other.rows_.end()); }
 
-  void truncate(const size_t n) {
-    rows_.erase(rows_.begin() + n, rows_.end());
-  }
+  void truncate(const size_t n) { rows_.erase(rows_.begin() + n, rows_.end()); }
 
   void drop(const size_t n) {
     if (n >= rows_.size()) {
@@ -551,25 +471,15 @@ private:
     decltype(rows_)(rows_.begin() + n, rows_.end()).swap(rows_);
   }
 
-  InternalRow& operator[](const size_t i) {
-    return rows_[i];
-  }
+  InternalRow& operator[](const size_t i) { return rows_[i]; }
 
-  const InternalRow& operator[](const size_t i) const {
-    return rows_[i];
-  }
+  const InternalRow& operator[](const size_t i) const { return rows_[i]; }
 
-  InternalRow& front() {
-    return rows_.front();
-  }
+  InternalRow& front() { return rows_.front(); }
 
-  const InternalRow& front() const {
-    return rows_.front();
-  }
+  const InternalRow& front() const { return rows_.front(); }
 
-  const InternalRow& back() const {
-    return rows_.back();
-  }
+  const InternalRow& back() const { return rows_.back(); }
 
   void top(const int64_t n, const std::function<bool(const InternalRow& lhs, const InternalRow& rhs)> compare) {
     std::make_heap(rows_.begin(), rows_.end(), compare);
@@ -598,12 +508,12 @@ private:
 };
 
 class SpeculativeTopFailed : public std::runtime_error {
-public:
+ public:
   SpeculativeTopFailed() : std::runtime_error("SpeculativeTopFailed") {}
 };
 
 class ResultRows {
-public:
+ public:
   ResultRows(const std::vector<Analyzer::Expr*>& targets,
              const Executor* executor,
              const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -611,36 +521,28 @@ public:
              const int32_t groups_buffer_entry_count = 0,
              const int64_t min_val = 0,
              const int8_t warp_count = 0)
-    : executor_(executor)
-    , row_set_mem_owner_(row_set_mem_owner)
-    , group_by_buffer_(group_by_buffer)
-    , groups_buffer_entry_count_(groups_buffer_entry_count)
-    , min_val_(min_val)
-    , warp_count_(warp_count)
-    , sorted_(false)
-    , truncation_size_(0)
-    , just_explain_(false) {
+      : executor_(executor),
+        row_set_mem_owner_(row_set_mem_owner),
+        group_by_buffer_(group_by_buffer),
+        groups_buffer_entry_count_(groups_buffer_entry_count),
+        min_val_(min_val),
+        warp_count_(warp_count),
+        sorted_(false),
+        truncation_size_(0),
+        just_explain_(false) {
     for (const auto target_expr : targets) {
       const auto agg_info = target_info(target_expr);
       targets_.push_back(agg_info);
     }
   }
 
-  explicit ResultRows(const std::string& explanation)
-    : just_explain_(true)
-    , explanation_(explanation) {}
+  explicit ResultRows(const std::string& explanation) : just_explain_(true), explanation_(explanation) {}
 
-  void setTruncationSize(const size_t truncation_size) {
-    truncation_size_ = truncation_size;
-  }
+  void setTruncationSize(const size_t truncation_size) { truncation_size_ = truncation_size; }
 
-  void setSorted(const bool sorted = true) {
-    sorted_ = sorted;
-  }
+  void setSorted(const bool sorted = true) { sorted_ = sorted; }
 
-  void beginRow() {
-    target_values_.beginRow(row_set_mem_owner_.get(), EMPTY_KEY);
-  }
+  void beginRow() { target_values_.beginRow(row_set_mem_owner_.get(), EMPTY_KEY); }
 
   void beginRow(const int64_t key) {
     CHECK(multi_keys_.empty());
@@ -660,40 +562,27 @@ public:
                                const int8_t warp_count,
                                const bool is_columnar);
 
-  void addValue(const int64_t val) {
-    target_values_.addValue(val);
-  }
+  void addValue(const int64_t val) { target_values_.addValue(val); }
 
   // used for kAVG
-  void addValue(const int64_t val1, const int64_t val2) {
-    target_values_.addValue(val1, val2);
-  }
+  void addValue(const int64_t val1, const int64_t val2) { target_values_.addValue(val1, val2); }
 
-  void addValue(const std::string& val) {
-    target_values_.addValue(val);
-  }
+  void addValue(const std::string& val) { target_values_.addValue(val); }
 
-  void addValue(const std::vector<int64_t>& val) {
-    target_values_.addValue(val);
-  }
+  void addValue(const std::vector<int64_t>& val) { target_values_.addValue(val); }
 
-  void addValue() {
-    target_values_.addValue();
-  }
+  void addValue() { target_values_.addValue(); }
 
   void append(const ResultRows& more_results) {
-    simple_keys_.insert(simple_keys_.end(),
-      more_results.simple_keys_.begin(), more_results.simple_keys_.end());
-    multi_keys_.insert(multi_keys_.end(),
-      more_results.multi_keys_.begin(), more_results.multi_keys_.end());
+    simple_keys_.insert(simple_keys_.end(), more_results.simple_keys_.begin(), more_results.simple_keys_.end());
+    multi_keys_.insert(multi_keys_.end(), more_results.multi_keys_.begin(), more_results.multi_keys_.end());
     target_values_.append(more_results.target_values_);
   }
 
-  void reduce(
-    const ResultRows& other_results,
-    const GpuSortInfo& gpu_sort_info,
-    const QueryMemoryDescriptor& query_mem_desc,
-    const bool output_columnar);
+  void reduce(const ResultRows& other_results,
+              const GpuSortInfo& gpu_sort_info,
+              const QueryMemoryDescriptor& query_mem_desc,
+              const bool output_columnar);
 
   void sort(const Planner::Sort* sort_plan, const int64_t top_n);
 
@@ -711,17 +600,11 @@ public:
     target_values_.drop(n);
   }
 
-  size_t size() const {
-    return just_explain_ ? 1 : target_values_.size();
-  }
+  size_t size() const { return just_explain_ ? 1 : target_values_.size(); }
 
-  size_t colCount() const {
-    return just_explain_ ? 1 : targets_.size();
-  }
+  size_t colCount() const { return just_explain_ ? 1 : targets_.size(); }
 
-  bool empty() const {
-    return !size() && !group_by_buffer_ && !just_explain_;
-  }
+  bool empty() const { return !size() && !group_by_buffer_ && !just_explain_; }
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
@@ -736,16 +619,12 @@ public:
     if (just_explain_) {
       return SQLTypeInfo(kTEXT, false);
     }
-    return targets_[col_idx].agg_kind == kAVG
-      ? SQLTypeInfo(kDOUBLE, false)
-      : targets_[col_idx].sql_type;
+    return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
   }
 
-  bool isSorted() const {
-    return sorted_;
-  }
+  bool isSorted() const { return sorted_; }
 
-private:
+ private:
   void addValues(const std::vector<int64_t>& vals) {
     target_values_.reserveRow(vals.size());
     for (const auto val : vals) {
@@ -843,9 +722,8 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   }
   auto dptr = boost::get<double>(scalar_tv);
   if (dptr) {
-    return *dptr == inline_fp_null_val(ti.is_decimal() ? SQLTypeInfo(kDOUBLE, false) : ti)
-      ? "NULL"
-      : std::to_string(*dptr);
+    return *dptr == inline_fp_null_val(ti.is_decimal() ? SQLTypeInfo(kDOUBLE, false) : ti) ? "NULL"
+                                                                                           : std::to_string(*dptr);
   }
   auto sptr = boost::get<NullableString>(scalar_tv);
   CHECK(sptr);
@@ -854,54 +732,53 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
 
 }  // namespace
 
-inline std::string row_col_to_string(const ResultRows& rows, const size_t row_idx, const size_t i, const std::string& delim = ", ") {
+inline std::string row_col_to_string(const ResultRows& rows,
+                                     const size_t row_idx,
+                                     const size_t i,
+                                     const std::string& delim = ", ") {
   const auto tv = rows.get(row_idx, i, true);
   const auto ti = rows.getColType(i);
   return datum_to_string(tv, ti, delim);
 }
 
 class QueryExecutionContext : boost::noncopyable {
-public:
+ public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
-  QueryExecutionContext(
-    const QueryMemoryDescriptor&,
-    const std::vector<int64_t>& init_agg_vals,
-    const Executor* executor,
-    const ExecutorDeviceType device_type,
-    const int device_id,
-    const std::vector<std::vector<const int8_t*>>& col_buffers,
-    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const bool output_columnar,
-    const bool sort_on_gpu);
+  QueryExecutionContext(const QueryMemoryDescriptor&,
+                        const std::vector<int64_t>& init_agg_vals,
+                        const Executor* executor,
+                        const ExecutorDeviceType device_type,
+                        const int device_id,
+                        const std::vector<std::vector<const int8_t*>>& col_buffers,
+                        std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                        const bool output_columnar,
+                        const bool sort_on_gpu);
 
   // TOOD(alex): get rid of targets parameter
-  ResultRows getRowSet(
-      const std::vector<Analyzer::Expr*>& targets,
-      const GpuSortInfo& gpu_sort_info,
-      const QueryMemoryDescriptor& query_mem_desc,
-      const bool was_auto_device) const noexcept;
-  ResultRows groupBufferToResults(
-    const size_t i,
-    const std::vector<Analyzer::Expr*>& targets,
-    const size_t truncate_count,
-    const bool was_auto_device) const;
+  ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets,
+                       const GpuSortInfo& gpu_sort_info,
+                       const QueryMemoryDescriptor& query_mem_desc,
+                       const bool was_auto_device) const noexcept;
+  ResultRows groupBufferToResults(const size_t i,
+                                  const std::vector<Analyzer::Expr*>& targets,
+                                  const size_t truncate_count,
+                                  const bool was_auto_device) const;
 
-  std::vector<int64_t*> launchGpuCode(
-    const std::vector<void*>& cu_functions,
-    const bool hoist_literals,
-    const std::vector<int8_t>& literal_buff,
-    std::vector<std::vector<const int8_t*>> col_buffers,
-    const std::vector<int64_t>& num_rows,
-    const int64_t scan_limit,
-    const std::vector<int64_t>& init_agg_vals,
-    Data_Namespace::DataMgr* data_mgr,
-    const GpuSortInfo& gpu_sort_info,
-    const unsigned block_size_x,
-    const unsigned grid_size_x,
-    const int device_id,
-    int32_t* error_code) const;
+  std::vector<int64_t*> launchGpuCode(const std::vector<void*>& cu_functions,
+                                      const bool hoist_literals,
+                                      const std::vector<int8_t>& literal_buff,
+                                      std::vector<std::vector<const int8_t*>> col_buffers,
+                                      const std::vector<int64_t>& num_rows,
+                                      const int64_t scan_limit,
+                                      const std::vector<int64_t>& init_agg_vals,
+                                      Data_Namespace::DataMgr* data_mgr,
+                                      const GpuSortInfo& gpu_sort_info,
+                                      const unsigned block_size_x,
+                                      const unsigned grid_size_x,
+                                      const int device_id,
+                                      int32_t* error_code) const;
 
-private:
+ private:
   void initGroups(int64_t* groups_buffer,
                   const int64_t* init_vals,
                   const int32_t groups_buffer_entry_count,
@@ -932,29 +809,27 @@ private:
   const bool sort_on_gpu_;
 
   friend class Executor;
-  friend void copy_group_by_buffers_from_gpu(
-    Data_Namespace::DataMgr* data_mgr,
-    const QueryExecutionContext* query_exe_context,
-    const GpuQueryMemory& gpu_query_mem,
-    const unsigned block_size_x,
-    const unsigned grid_size_x,
-    const int device_id,
-    const bool prepend_index_buffer);
+  friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
+                                             const QueryExecutionContext* query_exe_context,
+                                             const GpuQueryMemory& gpu_query_mem,
+                                             const unsigned block_size_x,
+                                             const unsigned grid_size_x,
+                                             const int device_id,
+                                             const bool prepend_index_buffer);
 };
 
 class GroupByAndAggregate {
-public:
-  GroupByAndAggregate(
-    Executor* executor,
-    const ExecutorDeviceType device_type,
-    const Planner::Plan* plan,
-    const Fragmenter_Namespace::QueryInfo& query_info,
-    std::shared_ptr<RowSetMemoryOwner>,
-    const size_t max_groups_buffer_entry_count,
-    const int64_t scan_limit,
-    const bool allow_multifrag,
-    const GpuSortInfo& gpu_sort_info,
-    const bool output_columnar_hint);
+ public:
+  GroupByAndAggregate(Executor* executor,
+                      const ExecutorDeviceType device_type,
+                      const Planner::Plan* plan,
+                      const Fragmenter_Namespace::QueryInfo& query_info,
+                      std::shared_ptr<RowSetMemoryOwner>,
+                      const size_t max_groups_buffer_entry_count,
+                      const int64_t scan_limit,
+                      const bool allow_multifrag,
+                      const GpuSortInfo& gpu_sort_info,
+                      const bool output_columnar_hint);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor() const;
 
@@ -964,12 +839,9 @@ public:
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
-  bool codegen(
-    llvm::Value* filter_result,
-    const ExecutorDeviceType,
-    const bool hoist_literals);
+  bool codegen(llvm::Value* filter_result, const ExecutorDeviceType, const bool hoist_literals);
 
-private:
+ private:
   struct ColRangeInfo {
     const GroupByColRangeType hash_type_;
     const int64_t min;
@@ -997,42 +869,33 @@ private:
 
   void initQueryMemoryDescriptor(const size_t, const bool sort_on_gpu_hint);
 
-  llvm::Value* codegenGroupBy(
-    const QueryMemoryDescriptor&,
-    const ExecutorDeviceType,
-    const bool hoist_literals,
-    DiamondCodegen&);
+  llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&,
+                              const ExecutorDeviceType,
+                              const bool hoist_literals,
+                              DiamondCodegen&);
 
   llvm::Function* codegenPerfectHashFunction();
 
-  GroupByAndAggregate::ColRangeInfo getColRangeInfo(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>&);
+  GroupByAndAggregate::ColRangeInfo getColRangeInfo(const std::deque<Fragmenter_Namespace::FragmentInfo>&);
 
-  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(
-    const Analyzer::Expr* expr,
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments);
+  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr,
+                                                     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments);
 
-  void codegenAggCalls(
-    llvm::Value* agg_out_start_ptr,
-    const std::vector<llvm::Value*>& agg_out_vec,
-    const QueryMemoryDescriptor&,
-    const ExecutorDeviceType,
-    const bool hoist_literals);
+  void codegenAggCalls(llvm::Value* agg_out_start_ptr,
+                       const std::vector<llvm::Value*>& agg_out_vec,
+                       const QueryMemoryDescriptor&,
+                       const ExecutorDeviceType,
+                       const bool hoist_literals);
 
-  uint32_t aggColumnarOff(
-    const uint32_t agg_out_off,
-    const QueryMemoryDescriptor& query_mem_desc);
+  uint32_t aggColumnarOff(const uint32_t agg_out_off, const QueryMemoryDescriptor& query_mem_desc);
 
-  void codegenCountDistinct(
-    const size_t target_idx,
-    const Analyzer::Expr* target_expr,
-    std::vector<llvm::Value*>& agg_args,
-    const QueryMemoryDescriptor&,
-    const ExecutorDeviceType);
+  void codegenCountDistinct(const size_t target_idx,
+                            const Analyzer::Expr* target_expr,
+                            std::vector<llvm::Value*>& agg_args,
+                            const QueryMemoryDescriptor&,
+                            const ExecutorDeviceType);
 
-  std::vector<llvm::Value*> codegenAggArg(
-    const Analyzer::Expr* target_expr,
-    const bool hoist_literals);
+  std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr, const bool hoist_literals);
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
 
@@ -1101,24 +964,24 @@ inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* pl
 inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
   const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
   switch (type) {
-  case kBOOLEAN:
-    return datum.tinyintval;
-  case kSMALLINT:
-    return datum.smallintval;
-  case kCHAR:
-  case kVARCHAR:
-  case kTEXT:
-    CHECK_EQ(kENCODING_DICT, ti.get_compression());
-  case kINT:
-    return datum.intval;
-  case kBIGINT:
-    return datum.bigintval;
-  case kTIME:
-  case kTIMESTAMP:
-  case kDATE:
-    return datum.timeval;
-  default:
-    CHECK(false);
+    case kBOOLEAN:
+      return datum.tinyintval;
+    case kSMALLINT:
+      return datum.smallintval;
+    case kCHAR:
+    case kVARCHAR:
+    case kTEXT:
+      CHECK_EQ(kENCODING_DICT, ti.get_compression());
+    case kINT:
+      return datum.intval;
+    case kBIGINT:
+      return datum.bigintval;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return datum.timeval;
+    default:
+      CHECK(false);
   }
 }
 
@@ -1132,7 +995,7 @@ inline int64_t extract_max_stat(const ChunkStats& stats, const SQLTypeInfo& ti) 
 
 }  // namespace
 
-template<class T>
+template <class T>
 inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   std::vector<int8_t> col_widths;
   for (const auto col_expr : col_expr_list) {
@@ -1142,7 +1005,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
     } else {
       const auto agg_info = target_info(col_expr);
       if ((agg_info.sql_type.is_string() && agg_info.sql_type.get_compression() == kENCODING_NONE) ||
-           agg_info.sql_type.is_array()) {
+          agg_info.sql_type.is_array()) {
         col_widths.push_back(sizeof(int64_t));
         col_widths.push_back(sizeof(int64_t));
         continue;
@@ -1160,4 +1023,4 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   return col_widths;
 }
 
-#endif // QUERYENGINE_GROUPBYANDAGGREGATE_H
+#endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

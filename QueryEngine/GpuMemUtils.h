@@ -10,32 +10,25 @@
 #include <utility>
 #include <vector>
 
+CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr, const size_t num_bytes, const int device_id);
 
-CUdeviceptr alloc_gpu_mem(
-  Data_Namespace::DataMgr* data_mgr,
-  const size_t num_bytes,
-  const int device_id);
-
-Data_Namespace::AbstractBuffer* alloc_gpu_abstract_buffer(
-  Data_Namespace::DataMgr* data_mgr,
-  const size_t num_bytes,
-  const int device_id);
+Data_Namespace::AbstractBuffer* alloc_gpu_abstract_buffer(Data_Namespace::DataMgr* data_mgr,
+                                                          const size_t num_bytes,
+                                                          const int device_id);
 
 void free_gpu_abstract_buffer(Data_Namespace::DataMgr* data_mgr, Data_Namespace::AbstractBuffer* ab);
 
-void copy_to_gpu(
-    Data_Namespace::DataMgr* data_mgr,
-    CUdeviceptr dst,
-    const void* src,
-    const size_t num_bytes,
-    const int device_id);
+void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
+                 CUdeviceptr dst,
+                 const void* src,
+                 const size_t num_bytes,
+                 const int device_id);
 
-void copy_from_gpu(
-    Data_Namespace::DataMgr* data_mgr,
-    void* dst,
-    const CUdeviceptr src,
-    const size_t num_bytes,
-    const int device_id);
+void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
+                   void* dst,
+                   const CUdeviceptr src,
+                   const size_t num_bytes,
+                   const int device_id);
 
 struct GpuQueryMemory {
   std::pair<CUdeviceptr, CUdeviceptr> group_by_buffers;
@@ -44,15 +37,14 @@ struct GpuQueryMemory {
 
 struct QueryMemoryDescriptor;
 
-GpuQueryMemory create_dev_group_by_buffers(
-    Data_Namespace::DataMgr* data_mgr,
-    const std::vector<int64_t*>& group_by_buffers,
-    const std::vector<int64_t*>& small_group_by_buffers,
-    const QueryMemoryDescriptor&,
-    const unsigned block_size_x,
-    const unsigned grid_size_x,
-    const int device_id,
-    const bool prepend_index_buffer);
+GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
+                                           const std::vector<int64_t*>& group_by_buffers,
+                                           const std::vector<int64_t*>& small_group_by_buffers,
+                                           const QueryMemoryDescriptor&,
+                                           const unsigned block_size_x,
+                                           const unsigned grid_size_x,
+                                           const int device_id,
+                                           const bool prepend_index_buffer);
 
 class QueryExecutionContext;
 
@@ -70,4 +62,4 @@ bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
                      const ExecutorDeviceType device_type,
                      size_t i);
 
-#endif // QUERYENGINE_GPUMEMUTILS_H
+#endif  // QUERYENGINE_GPUMEMUTILS_H
