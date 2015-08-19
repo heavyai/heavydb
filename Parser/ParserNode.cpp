@@ -1058,7 +1058,8 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
         throw std::runtime_error("Column " + *c + " does not exist.");
       result_col_list.push_back(cd->columnId);
     }
-    throw std::runtime_error("Insert into a subset of columns is not supported yet.");
+    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false).size() != result_col_list.size())
+      throw std::runtime_error("Insert into a subset of columns is not supported yet.");
   }
   query.set_result_col_list(result_col_list);
 }
@@ -1066,6 +1067,8 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
 void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const {
   InsertStmt::analyze(catalog, query);
   std::vector<Analyzer::TargetEntry*>& tlist = query.get_targetlist_nonconst();
+  if (query.get_result_col_list().size() != value_list.size())
+    throw std::runtime_error("Insert has more target columns than expressions.");
   std::list<int>::const_iterator it = query.get_result_col_list().begin();
   for (auto& v : value_list) {
     auto e = v->analyze(catalog, query);
