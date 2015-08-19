@@ -833,7 +833,7 @@ class GroupByAndAggregate {
 
   QueryMemoryDescriptor getQueryMemoryDescriptor() const;
 
-  bool outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const;
+  bool outputColumnar() const;
 
   bool gpuCanHandleOrderEntries(const GpuSortInfo& gpu_sort_info);
 

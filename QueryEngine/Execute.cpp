@@ -3212,7 +3212,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                              output_columnar_hint && device_type == ExecutorDeviceType::GPU);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
-  const bool output_columnar = group_by_and_aggregate.outputColumnar(query_mem_desc);
+  const bool output_columnar = group_by_and_aggregate.outputColumnar();
 
   if (device_type == ExecutorDeviceType::GPU && query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
     const size_t required_memory{(gridSize() * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};

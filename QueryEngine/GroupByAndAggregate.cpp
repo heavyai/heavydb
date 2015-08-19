@@ -1675,7 +1675,7 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() const {
   return query_mem_desc_;
 }
 
-bool GroupByAndAggregate::outputColumnar(const QueryMemoryDescriptor& query_mem_desc) const {
+bool GroupByAndAggregate::outputColumnar() const {
   return output_columnar_;
 }
 
@@ -1891,25 +1891,25 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
                                                                  array_loops);
       auto small_groups_buffer = arg_it;
       if (query_mem_desc.usesGetGroupValueFast()) {
-        std::string get_group_fn_name{outputColumnar(query_mem_desc) && !query_mem_desc.keyless_hash
+        std::string get_group_fn_name{outputColumnar() && !query_mem_desc.keyless_hash
                                           ? "get_columnar_group_value_fast"
                                           : "get_group_value_fast"};
         if (query_mem_desc.keyless_hash) {
           get_group_fn_name += "_keyless";
         }
         if (query_mem_desc.interleavedBins(device_type)) {
-          CHECK(!outputColumnar(query_mem_desc));
+          CHECK(!outputColumnar());
           CHECK(query_mem_desc.keyless_hash);
           get_group_fn_name += "_semiprivate";
         }
         std::vector<llvm::Value*> get_group_fn_args{groups_buffer, group_expr_lv, LL_INT(query_mem_desc.min_val)};
         if (!query_mem_desc.keyless_hash) {
-          if (!outputColumnar(query_mem_desc)) {
+          if (!outputColumnar()) {
             get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
           }
         } else {
           get_group_fn_args.push_back(
-              LL_INT(outputColumnar(query_mem_desc) ? 1 : static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
+              LL_INT(outputColumnar() ? 1 : static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
           if (query_mem_desc.interleavedBins(device_type)) {
             auto warp_idx = emitCall("thread_warp_idx", {LL_INT(executor_->warpSize())});
             get_group_fn_args.push_back(warp_idx);
@@ -2050,7 +2050,7 @@ const Analyzer::Expr* agg_arg(const Analyzer::Expr* expr) {
 }  // namespace
 
 uint32_t GroupByAndAggregate::aggColumnarOff(const uint32_t agg_out_off, const QueryMemoryDescriptor& query_mem_desc) {
-  if (!outputColumnar(query_mem_desc)) {
+  if (!outputColumnar()) {
     return agg_out_off;
   }
   return (agg_out_off + (query_mem_desc.keyless_hash ? 0 : 1)) * query_mem_desc.entry_count;
