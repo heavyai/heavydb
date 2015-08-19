@@ -25,9 +25,8 @@ class Expr;
 }
 
 template <typename Tp, typename... Args>
-inline typename std::enable_if<std::is_base_of<Analyzer::Expr, Tp>::value,
-                               std::shared_ptr<Tp>>::type
-makeExpr(Args&&... args) {
+inline typename std::enable_if<std::is_base_of<Analyzer::Expr, Tp>::value, std::shared_ptr<Tp>>::type makeExpr(
+    Args&&... args) {
   return std::make_shared<Tp>(std::forward<Args>(args)...);
 }
 
@@ -56,13 +55,13 @@ class Expr : public std::enable_shared_from_this<Expr> {
   virtual std::shared_ptr<Analyzer::Expr> add_cast(const SQLTypeInfo& new_type_info);
   virtual void check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const {};
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const = 0;  // make a deep copy of self
-  /*
-   * @brief normalize_simple_predicate only applies to boolean expressions.
-   * it checks if it is an expression comparing a column
-   * with a constant.  if so, it returns a normalized copy of the predicate with ColumnVar
-   * always as the left operand with rte_idx set to the rte_idx of the ColumnVar.
-   * it returns nullptr with rte_idx set to -1 otherwise.
-   */
+                                                                  /*
+                                                                   * @brief normalize_simple_predicate only applies to boolean expressions.
+                                                                   * it checks if it is an expression comparing a column
+                                                                   * with a constant.  if so, it returns a normalized copy of the predicate with ColumnVar
+                                                                   * always as the left operand with rte_idx set to the rte_idx of the ColumnVar.
+                                                                   * it returns nullptr with rte_idx set to -1 otherwise.
+                                                                   */
   virtual std::shared_ptr<Analyzer::Expr> normalize_simple_predicate(int& rte_idx) const {
     rte_idx = -1;
     return nullptr;
@@ -85,16 +84,14 @@ class Expr : public std::enable_shared_from_this<Expr> {
    * the argument to AggExpr's.  Otherwise, they are included.
    * It does not make copies of the ColumnVar
    */
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {}
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {}
   /*
    * @brief rewrite_with_targetlist rewrite ColumnVar's in expression with entries in a targetlist.
    * targetlist expressions are expected to be only Var's or AggExpr's.
    * returns a new expression copy
    */
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return deep_copy();
   };
   /*
@@ -103,8 +100,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
    * targetlist expressions are expected to be only Var's or ColumnVar's
    * returns a new expression copy
    */
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return deep_copy();
   };
   /*
@@ -114,8 +110,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
    * All AggExpr's are written into Var's.
    * returns a new expression copy
    */
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
     return deep_copy();
   }
   virtual bool operator==(const Expr& rhs) const = 0;
@@ -154,8 +149,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
  */
 class ColumnVar : public Expr {
  public:
-  ColumnVar(const SQLTypeInfo& ti, int r, int c, int i)
-      : Expr(ti), table_id(r), column_id(c), rte_idx(i) {}
+  ColumnVar(const SQLTypeInfo& ti, int r, int c, int i) : Expr(ti), table_id(r), column_id(c), rte_idx(i) {}
   int get_table_id() const { return table_id; }
   int get_column_id() const { return column_id; }
   int get_rte_idx() const { return rte_idx; }
@@ -171,17 +165,13 @@ class ColumnVar : public Expr {
     return l->get_table_id() < r->get_table_id() ||
            (l->get_table_id() == r->get_table_id() && l->get_column_id() < r->get_column_id());
   }
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
     colvar_set.insert(this);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const;
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;
 
@@ -202,8 +192,7 @@ class ColumnVar : public Expr {
 class Var : public ColumnVar {
  public:
   enum WhichRow { kINPUT_OUTER, kINPUT_INNER, kOUTPUT, kGROUPBY };
-  Var(const SQLTypeInfo& ti, int r, int c, int i, WhichRow o, int v)
-      : ColumnVar(ti, r, c, i), which_row(o), varno(v) {}
+  Var(const SQLTypeInfo& ti, int r, int c, int i, WhichRow o, int v) : ColumnVar(ti, r, c, i), which_row(o), varno(v) {}
   Var(const SQLTypeInfo& ti, WhichRow o, int v) : ColumnVar(ti, 0, 0, -1), which_row(o), varno(v) {}
   WhichRow get_which_row() const { return which_row; }
   void set_which_row(WhichRow r) { which_row = r; }
@@ -213,19 +202,15 @@ class Var : public ColumnVar {
   virtual void print() const;
   virtual void check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const;
   virtual void collect_rte_idx(std::set<int>& rte_idx_set) const { rte_idx_set.insert(-1); }
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {}
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {}
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return deep_copy();
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return deep_copy();
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const;
 
  private:
   WhichRow which_row;  // indicate which row this Var should project from.  It can be from the outer
@@ -290,26 +275,18 @@ class UOper : public Expr {
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
                                 std::list<const Expr*>& join_predicates,
                                 std::list<const Expr*>& const_predicates) const;
-  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const {
-    operand->collect_rte_idx(rte_idx_set);
-  }
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {
+  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const { operand->collect_rte_idx(rte_idx_set); }
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
     operand->collect_column_var(colvar_set, include_agg);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<UOper>(
-        type_info, contains_agg, optype, operand->rewrite_with_targetlist(tlist));
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
+    return makeExpr<UOper>(type_info, contains_agg, optype, operand->rewrite_with_targetlist(tlist));
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<UOper>(
-        type_info, contains_agg, optype, operand->rewrite_with_child_targetlist(tlist));
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
+    return makeExpr<UOper>(type_info, contains_agg, optype, operand->rewrite_with_child_targetlist(tlist));
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
     return makeExpr<UOper>(type_info, contains_agg, optype, operand->rewrite_agg_to_var(tlist));
   }
   virtual bool operator==(const Expr& rhs) const;
@@ -337,11 +314,7 @@ class BinOper : public Expr {
           std::shared_ptr<Analyzer::Expr> l,
           std::shared_ptr<Analyzer::Expr> r)
       : Expr(ti, has_agg), optype(o), qualifier(q), left_operand(l), right_operand(r) {}
-  BinOper(SQLTypes t,
-          SQLOps o,
-          SQLQualifier q,
-          std::shared_ptr<Analyzer::Expr> l,
-          std::shared_ptr<Analyzer::Expr> r)
+  BinOper(SQLTypes t, SQLOps o, SQLQualifier q, std::shared_ptr<Analyzer::Expr> l, std::shared_ptr<Analyzer::Expr> r)
       : Expr(t, l->get_type_info().get_notnull() && r->get_type_info().get_notnull()),
         optype(o),
         qualifier(q),
@@ -368,14 +341,12 @@ class BinOper : public Expr {
     left_operand->collect_rte_idx(rte_idx_set);
     right_operand->collect_rte_idx(rte_idx_set);
   }
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
     left_operand->collect_column_var(colvar_set, include_agg);
     right_operand->collect_column_var(colvar_set, include_agg);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return makeExpr<BinOper>(type_info,
                              contains_agg,
                              optype,
@@ -383,8 +354,7 @@ class BinOper : public Expr {
                              left_operand->rewrite_with_targetlist(tlist),
                              right_operand->rewrite_with_targetlist(tlist));
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return makeExpr<BinOper>(type_info,
                              contains_agg,
                              optype,
@@ -392,8 +362,7 @@ class BinOper : public Expr {
                              left_operand->rewrite_with_child_targetlist(tlist),
                              right_operand->rewrite_with_child_targetlist(tlist));
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
     return makeExpr<BinOper>(type_info,
                              contains_agg,
                              optype,
@@ -406,9 +375,8 @@ class BinOper : public Expr {
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
 
  private:
-  SQLOps optype;  // operator type, e.g., kLT, kAND, kPLUS, etc.
-  SQLQualifier
-      qualifier;  // qualifier kANY, kALL or kONE.  Only relevant with right_operand is Subquery
+  SQLOps optype;           // operator type, e.g., kLT, kAND, kPLUS, etc.
+  SQLQualifier qualifier;  // qualifier kANY, kALL or kONE.  Only relevant with right_operand is Subquery
   std::shared_ptr<Analyzer::Expr> left_operand;   // the left operand expression
   std::shared_ptr<Analyzer::Expr> right_operand;  // the right operand expression
 };
@@ -435,21 +403,17 @@ class Subquery : public Expr {
     CHECK(false);
   }
   virtual void collect_rte_idx(std::set<int>& rte_idx_set) const { CHECK(false); }
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
     CHECK(false);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
     CHECK(false);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
     CHECK(false);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
     CHECK(false);
   }
   virtual bool operator==(const Expr& rhs) const {
@@ -457,9 +421,7 @@ class Subquery : public Expr {
     return false;
   }
   virtual void print() const;
-  virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const {
-    CHECK(false);
-  }
+  virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const { CHECK(false); }
 
  private:
   Query* parsetree;  // parse tree of the subquery
@@ -480,20 +442,14 @@ class InValues : public Expr {
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
                                 std::list<const Expr*>& join_predicates,
                                 std::list<const Expr*>& const_predicates) const;
-  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const {
-    arg->collect_rte_idx(rte_idx_set);
-  }
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {
+  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
     arg->collect_column_var(colvar_set, include_agg);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const;
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
@@ -530,32 +486,26 @@ class LikeExpr : public Expr {
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
                                 std::list<const Expr*>& join_predicates,
                                 std::list<const Expr*>& const_predicates) const;
-  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const {
-    arg->collect_rte_idx(rte_idx_set);
-  }
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {
+  virtual void collect_rte_idx(std::set<int>& rte_idx_set) const { arg->collect_rte_idx(rte_idx_set); }
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
     arg->collect_column_var(colvar_set, include_agg);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return makeExpr<LikeExpr>(arg->rewrite_with_targetlist(tlist),
                               like_expr->deep_copy(),
                               escape_expr ? escape_expr->deep_copy() : nullptr,
                               is_ilike,
                               is_simple);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
     return makeExpr<LikeExpr>(arg->rewrite_with_child_targetlist(tlist),
                               like_expr->deep_copy(),
                               escape_expr ? escape_expr->deep_copy() : nullptr,
                               is_ilike,
                               is_simple);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const {
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
     return makeExpr<LikeExpr>(arg->rewrite_agg_to_var(tlist),
                               like_expr->deep_copy(),
                               escape_expr ? escape_expr->deep_copy() : nullptr,
@@ -570,7 +520,7 @@ class LikeExpr : public Expr {
   std::shared_ptr<Analyzer::Expr> arg;          // the argument right of LIKE
   std::shared_ptr<Analyzer::Expr> like_expr;    // expression that evaluates to like string
   std::shared_ptr<Analyzer::Expr> escape_expr;  // expression that evaluates to escape string, can be nullptr
-  bool is_ilike;   // is this ILIKE?
+  bool is_ilike;                                // is this ILIKE?
   bool is_simple;  // is this simple, meaning we can use fast path search (fits '%str%' pattern with
                    // no inner '%','_','[',']'
 };
@@ -599,18 +549,14 @@ class AggExpr : public Expr {
     if (arg)
       arg->collect_rte_idx(rte_idx_set);
   };
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const {
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
     if (include_agg && arg != nullptr)
       arg->collect_column_var(colvar_set, include_agg);
   }
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const;
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
@@ -629,12 +575,11 @@ class CaseExpr : public Expr {
  public:
   CaseExpr(const SQLTypeInfo& ti,
            bool has_agg,
-           const std::list<
-               std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>& w,
+           const std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>& w,
            std::shared_ptr<Analyzer::Expr> e)
       : Expr(ti, has_agg), expr_pair_list(w), else_expr(e) {}
-  const std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>&
-  get_expr_pair_list() const {
+  const std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>& get_expr_pair_list()
+      const {
     return expr_pair_list;
   }
   const Expr* get_else_expr() const { return else_expr.get(); }
@@ -644,15 +589,11 @@ class CaseExpr : public Expr {
                                 std::list<const Expr*>& join_predicates,
                                 std::list<const Expr*>& const_predicates) const;
   virtual void collect_rte_idx(std::set<int>& rte_idx_set) const;
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const;
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const;
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
@@ -661,9 +602,9 @@ class CaseExpr : public Expr {
 
  private:
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
-      expr_pair_list;  // a pair of expressions for each WHEN expr1 THEN expr2.  expr1 must be of
-                       // boolean type.  all expr2's must be of compatible types and will be
-                       // promoted to the common type.
+      expr_pair_list;                         // a pair of expressions for each WHEN expr1 THEN expr2.  expr1 must be of
+                                              // boolean type.  all expr2's must be of compatible types and will be
+                                              // promoted to the common type.
   std::shared_ptr<Analyzer::Expr> else_expr;  // expression for ELSE.  nullptr if omitted.
 };
 
@@ -673,10 +614,7 @@ class CaseExpr : public Expr {
  */
 class ExtractExpr : public Expr {
  public:
-  ExtractExpr(const SQLTypeInfo& ti,
-              bool has_agg,
-              ExtractField f,
-              std::shared_ptr<Analyzer::Expr> e)
+  ExtractExpr(const SQLTypeInfo& ti, bool has_agg, ExtractField f, std::shared_ptr<Analyzer::Expr> e)
       : Expr(ti, has_agg), field(f), from_expr(e) {}
   ExtractField get_field() const { return field; }
   const Expr* get_from_expr() const { return from_expr.get(); }
@@ -686,15 +624,11 @@ class ExtractExpr : public Expr {
                                 std::list<const Expr*>& join_predicates,
                                 std::list<const Expr*>& const_predicates) const;
   virtual void collect_rte_idx(std::set<int>& rte_idx_set) const;
-  virtual void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-      bool include_agg) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
-      const std::vector<TargetEntry*>& tlist) const;
-  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
-      const std::vector<TargetEntry*>& tlist) const;
+  virtual void collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const;
+  virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const;
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;
   virtual void find_expr(bool (*f)(const Expr*), std::list<const Expr*>& expr_list) const;
@@ -710,8 +644,7 @@ class ExtractExpr : public Expr {
  */
 class TargetEntry {
  public:
-  TargetEntry(const std::string& n, std::shared_ptr<Analyzer::Expr> e, bool u)
-      : resname(n), expr(e), unnest(u) {}
+  TargetEntry(const std::string& n, std::shared_ptr<Analyzer::Expr> e, bool u) : resname(n), expr(e), unnest(u) {}
   virtual ~TargetEntry() {}
   const std::string& get_resname() const { return resname; }
   void set_resname(const std::string& name) { resname = name; }
@@ -734,8 +667,7 @@ class TargetEntry {
  */
 class RangeTblEntry {
  public:
-  RangeTblEntry(const std::string& r, const TableDescriptor* t, Query* v)
-      : rangevar(r), table_desc(t), view_query(v) {}
+  RangeTblEntry(const std::string& r, const TableDescriptor* t, Query* v) : rangevar(r), table_desc(t), view_query(v) {}
   virtual ~RangeTblEntry();
   /* @brief get_column_desc tries to find the column in column_descs and returns the column
    * descriptor if found.
@@ -744,8 +676,7 @@ class RangeTblEntry {
    * @param catalog the catalog for the current database
    * @param name name of column to look up
    */
-  const ColumnDescriptor* get_column_desc(const Catalog_Namespace::Catalog& catalog,
-                                          const std::string& name);
+  const ColumnDescriptor* get_column_desc(const Catalog_Namespace::Catalog& catalog, const std::string& name);
   const std::list<const ColumnDescriptor*>& get_column_descs() const { return column_descs; }
   const std::string& get_rangevar() const { return rangevar; }
   int32_t get_table_id() const { return table_desc->tableId; }
@@ -760,9 +691,8 @@ class RangeTblEntry {
  private:
   std::string rangevar;  // range variable name, e.g., FROM emp e, dept d
   const TableDescriptor* table_desc;
-  std::list<const ColumnDescriptor*>
-      column_descs;   // column descriptors for all columns referenced in this query
-  Query* view_query;  // parse tree for the view query
+  std::list<const ColumnDescriptor*> column_descs;  // column descriptors for all columns referenced in this query
+  Query* view_query;                                // parse tree for the view query
 };
 
 /*
@@ -832,11 +762,11 @@ class Query {
   void set_offset(int64_t o) { offset = o; }
 
  private:
-  bool is_distinct;                        // true only if SELECT DISTINCT
-  std::vector<TargetEntry*> targetlist;    // represents the SELECT clause
-  std::vector<RangeTblEntry*> rangetable;  // represents the FROM clause for SELECT.  For INSERT,
-                                           // DELETE, UPDATE the result table is always the first
-                                           // entry in rangetable.
+  bool is_distinct;                                     // true only if SELECT DISTINCT
+  std::vector<TargetEntry*> targetlist;                 // represents the SELECT clause
+  std::vector<RangeTblEntry*> rangetable;               // represents the FROM clause for SELECT.  For INSERT,
+                                                        // DELETE, UPDATE the result table is always the first
+                                                        // entry in rangetable.
   std::shared_ptr<Analyzer::Expr> where_predicate;      // represents the WHERE clause
   std::list<std::shared_ptr<Analyzer::Expr>> group_by;  // represents the GROUP BY clause
   std::shared_ptr<Analyzer::Expr> having_predicate;     // represents the HAVING clause

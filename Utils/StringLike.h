@@ -3,7 +3,7 @@
  * @author	Wei Hong <wei@mapd.com>
  * @brief		Functions to support the LIKE and ILIKE operator in SQL.  Only
  * single-byte character set is supported for now.
- * 
+ *
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
@@ -18,7 +18,7 @@
 
 /*
  * @brief string_like performs the SQL LIKE and ILIKE operation
- * @param str string argument to be matched against pattern.  single-byte 
+ * @param str string argument to be matched against pattern.  single-byte
  * character set only for now. null-termination not required.
  * @param str_len length of str
  * @param pattern pattern string for SQL LIKE
@@ -28,12 +28,8 @@
  * @return true if str matchs pattern, false otherwise.  error condition
  * not handled for now.
  */
-extern "C"
-DEVICE bool
-string_like(const char *str, int str_len, const char *pattern, int pat_len, char escape_char);
+extern "C" DEVICE bool string_like(const char* str, int str_len, const char* pattern, int pat_len, char escape_char);
 
-extern "C"
-DEVICE bool
-string_ilike(const char *str, int str_len, const char *pattern, int pat_len, char escape_char);
+extern "C" DEVICE bool string_ilike(const char* str, int str_len, const char* pattern, int pat_len, char escape_char);
 
-#endif // STRING_LIKE_H
+#endif  // STRING_LIKE_H

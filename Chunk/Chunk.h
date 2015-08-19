@@ -20,43 +20,56 @@ using Data_Namespace::DataMgr;
 using Data_Namespace::MemoryLevel;
 
 namespace Chunk_NS {
-	class Chunk;
+class Chunk;
 };
 
 namespace Chunk_NS {
 
-	class Chunk {
-		public:
-			Chunk() : buffer(nullptr), index_buf(nullptr), column_desc(nullptr) {}
-			explicit Chunk(const ColumnDescriptor *td) : buffer(nullptr), index_buf(nullptr), column_desc(td) {}
-			Chunk(AbstractBuffer *b, AbstractBuffer *ib, const ColumnDescriptor *td) : buffer(b), index_buf(ib), column_desc(td) {};
-      ~Chunk() { unpin_buffer(); }
-			const ColumnDescriptor *get_column_desc() const { return column_desc; }
-			static void translateColumnDescriptorsToChunkVec(const std::list<const ColumnDescriptor*> &colDescs, std::vector<Chunk> &chunkVec) {
-				for (auto cd : colDescs)
-					chunkVec.push_back(Chunk(cd));
-			}
-			ChunkIter begin_iterator(const ChunkMetadata&, int start_idx = 0, int skip = 1) const;
-			ChunkMetadata appendData(DataBlockPtr &srcData, const size_t numAppendElems, const size_t startIdx);
-			void createChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0);
-			void getChunkBuffer(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId = 0, const size_t num_bytes = 0, const size_t num_elems = 0);
-			static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor *cd, DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int deviceId, const size_t num_bytes, const size_t num_elems);
-            bool isChunkOnDevice(DataMgr *data_mgr, const ChunkKey &key, const MemoryLevel mem_level, const int device_id);
+class Chunk {
+ public:
+  Chunk() : buffer(nullptr), index_buf(nullptr), column_desc(nullptr) {}
+  explicit Chunk(const ColumnDescriptor* td) : buffer(nullptr), index_buf(nullptr), column_desc(td) {}
+  Chunk(AbstractBuffer* b, AbstractBuffer* ib, const ColumnDescriptor* td)
+      : buffer(b), index_buf(ib), column_desc(td){};
+  ~Chunk() { unpin_buffer(); }
+  const ColumnDescriptor* get_column_desc() const { return column_desc; }
+  static void translateColumnDescriptorsToChunkVec(const std::list<const ColumnDescriptor*>& colDescs,
+                                                   std::vector<Chunk>& chunkVec) {
+    for (auto cd : colDescs)
+      chunkVec.push_back(Chunk(cd));
+  }
+  ChunkIter begin_iterator(const ChunkMetadata&, int start_idx = 0, int skip = 1) const;
+  ChunkMetadata appendData(DataBlockPtr& srcData, const size_t numAppendElems, const size_t startIdx);
+  void createChunkBuffer(DataMgr* data_mgr, const ChunkKey& key, const MemoryLevel mem_level, const int deviceId = 0);
+  void getChunkBuffer(DataMgr* data_mgr,
+                      const ChunkKey& key,
+                      const MemoryLevel mem_level,
+                      const int deviceId = 0,
+                      const size_t num_bytes = 0,
+                      const size_t num_elems = 0);
+  static std::shared_ptr<Chunk> getChunk(const ColumnDescriptor* cd,
+                                         DataMgr* data_mgr,
+                                         const ChunkKey& key,
+                                         const MemoryLevel mem_level,
+                                         const int deviceId,
+                                         const size_t num_bytes,
+                                         const size_t num_elems);
+  bool isChunkOnDevice(DataMgr* data_mgr, const ChunkKey& key, const MemoryLevel mem_level, const int device_id);
 
-		// protected:
-			AbstractBuffer *get_buffer() const { return buffer; }
-			AbstractBuffer *get_index_buf() const { return index_buf; }
-			void set_buffer(AbstractBuffer *b) { buffer = b; }
-			void set_index_buf(AbstractBuffer *ib) { index_buf = ib; }
-			void init_encoder();
-			void decompress(int8_t *compressed, VarlenDatum *result, Datum *datum) const;
-		private:
-			AbstractBuffer *buffer;
-			AbstractBuffer *index_buf;
-			const ColumnDescriptor *column_desc;
-			void unpin_buffer();
-	};
+  // protected:
+  AbstractBuffer* get_buffer() const { return buffer; }
+  AbstractBuffer* get_index_buf() const { return index_buf; }
+  void set_buffer(AbstractBuffer* b) { buffer = b; }
+  void set_index_buf(AbstractBuffer* ib) { index_buf = ib; }
+  void init_encoder();
+  void decompress(int8_t* compressed, VarlenDatum* result, Datum* datum) const;
 
+ private:
+  AbstractBuffer* buffer;
+  AbstractBuffer* index_buf;
+  const ColumnDescriptor* column_desc;
+  void unpin_buffer();
+};
 }
 
-#endif // _CHUNK_H_
+#endif  // _CHUNK_H_

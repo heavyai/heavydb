@@ -1891,9 +1891,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
                                                                  array_loops);
       auto small_groups_buffer = arg_it;
       if (query_mem_desc.usesGetGroupValueFast()) {
-        std::string get_group_fn_name{outputColumnar() && !query_mem_desc.keyless_hash
-                                          ? "get_columnar_group_value_fast"
-                                          : "get_group_value_fast"};
+        std::string get_group_fn_name{outputColumnar() && !query_mem_desc.keyless_hash ? "get_columnar_group_value_fast"
+                                                                                       : "get_group_value_fast"};
         if (query_mem_desc.keyless_hash) {
           get_group_fn_name += "_keyless";
         }

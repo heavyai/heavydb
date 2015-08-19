@@ -65,10 +65,9 @@ class Expr : public Node {
    * @param catalog The catalog object for the current database
    * @return An Analyzer::Expr object for the expression post semantic analysis
    */
-  virtual std::shared_ptr<Analyzer::Expr> analyze(
-      const Catalog_Namespace::Catalog& catalog,
-      Analyzer::Query& query,
-      TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
   virtual std::string to_string() const = 0;
 };
 
@@ -78,10 +77,9 @@ class Expr : public Node {
  */
 class Literal : public Expr {
  public:
-  virtual std::shared_ptr<Analyzer::Expr> analyze(
-      const Catalog_Namespace::Catalog& catalog,
-      Analyzer::Query& query,
-      TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
   virtual std::string to_string() const = 0;
 };
 
@@ -203,8 +201,7 @@ class UserLiteral : public Literal {
 class OperExpr : public Expr {
  public:
   OperExpr(SQLOps t, Expr* l, Expr* r) : optype(t), opqualifier(kONE), left(l), right(r) {}
-  OperExpr(SQLOps t, SQLQualifier q, Expr* l, Expr* r)
-      : optype(t), opqualifier(q), left(l), right(r) {}
+  OperExpr(SQLOps t, SQLQualifier q, Expr* l, Expr* r) : optype(t), opqualifier(q), left(l), right(r) {}
   SQLOps get_optype() const { return optype; }
   const Expr* get_left() const { return left.get(); }
   const Expr* get_right() const { return right.get(); }
@@ -263,10 +260,9 @@ class InExpr : public Expr {
   InExpr(bool n, Expr* a) : is_not(n), arg(a) {}
   bool get_is_not() const { return is_not; }
   const Expr* get_arg() const { return arg.get(); }
-  virtual std::shared_ptr<Analyzer::Expr> analyze(
-      const Catalog_Namespace::Catalog& catalog,
-      Analyzer::Query& query,
-      TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const = 0;
   virtual std::string to_string() const;
 
  protected:
@@ -432,9 +428,7 @@ class CastExpr : public Expr {
   virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref = TLIST_NONE) const;
-  virtual std::string to_string() const {
-    return "CAST(" + arg->to_string() + " AS " + target_type->to_string() + ")";
-  }
+  virtual std::string to_string() const { return "CAST(" + arg->to_string() + " AS " + target_type->to_string() + ")"; }
 
  private:
   std::unique_ptr<Expr> arg;
@@ -541,10 +535,8 @@ class TableElement : public Node {
  */
 class ColumnConstraintDef : public Node {
  public:
-  ColumnConstraintDef(bool n, bool u, bool p, Literal* d)
-      : notnull(n), unique(u), is_primarykey(p), defaultval(d) {}
-  ColumnConstraintDef(Expr* c)
-      : notnull(false), unique(false), is_primarykey(false), check_condition(c) {}
+  ColumnConstraintDef(bool n, bool u, bool p, Literal* d) : notnull(n), unique(u), is_primarykey(p), defaultval(d) {}
+  ColumnConstraintDef(Expr* c) : notnull(false), unique(false), is_primarykey(false), check_condition(c) {}
   ColumnConstraintDef(std::string* t, std::string* c)
       : notnull(false), unique(false), is_primarykey(false), foreign_table(t), foreign_column(c) {}
   bool get_notnull() const { return notnull; }
@@ -635,8 +627,7 @@ class UniqueDef : public TableConstraintDef {
  */
 class ForeignKeyDef : public TableConstraintDef {
  public:
-  ForeignKeyDef(std::list<std::string*>* cl, std::string* t, std::list<std::string*>* fcl)
-      : foreign_table(t) {
+  ForeignKeyDef(std::list<std::string*>* cl, std::string* t, std::list<std::string*>* fcl) : foreign_table(t) {
     CHECK(cl);
     for (const auto s : *cl) {
       column_list.emplace_back(s);
@@ -651,9 +642,7 @@ class ForeignKeyDef : public TableConstraintDef {
   }
   const std::list<std::unique_ptr<std::string>>& get_column_list() const { return column_list; }
   const std::string* get_foreign_table() const { return foreign_table.get(); }
-  const std::list<std::unique_ptr<std::string>>& get_foreign_column_list() const {
-    return foreign_column_list;
-  }
+  const std::list<std::unique_ptr<std::string>>& get_foreign_column_list() const { return foreign_column_list; }
 
  private:
   std::list<std::unique_ptr<std::string>> column_list;
@@ -695,10 +684,7 @@ class NameValueAssign : public Node {
  */
 class CreateTableStmt : public DDLStmt {
  public:
-  CreateTableStmt(std::string* tab,
-                  std::list<TableElement*>* table_elems,
-                  bool i,
-                  std::list<NameValueAssign*>* s)
+  CreateTableStmt(std::string* tab, std::list<TableElement*>* table_elems, bool i, std::list<NameValueAssign*>* s)
       : table(tab), if_not_exists(i) {
     CHECK(table_elems);
     for (const auto e : *table_elems) {
@@ -713,9 +699,7 @@ class CreateTableStmt : public DDLStmt {
     }
   }
   const std::string* get_table() const { return table.get(); }
-  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
-    return table_element_list;
-  }
+  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const { return table_element_list; }
 
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
 
@@ -741,15 +725,15 @@ class DropTableStmt : public DDLStmt {
   bool if_exists;
 };
 
-class RenameTableStmt: public DDLStmt {
-  public:
-    RenameTableStmt(std::string *tab, std::string *new_tab_name): table(tab), new_table_name(new_tab_name) {}
+class RenameTableStmt : public DDLStmt {
+ public:
+  RenameTableStmt(std::string* tab, std::string* new_tab_name) : table(tab), new_table_name(new_tab_name) {}
   virtual void execute(const Catalog_Namespace::SessionInfo& session);
-  private:
-    std::unique_ptr<std::string> table;
-    std::unique_ptr<std::string> new_table_name;
-};
 
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<std::string> new_table_name;
+};
 
 /*
  * @type CopyTableStmt
@@ -757,8 +741,7 @@ class RenameTableStmt: public DDLStmt {
  */
 class CopyTableStmt : public DDLStmt {
  public:
-  CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o)
-      : table(t), file_path(f) {
+  CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o) : table(t), file_path(f) {
     if (o) {
       for (const auto e : *o) {
         options.emplace_back(e);
@@ -819,12 +802,7 @@ class SelectEntry : public Node {
  */
 class QuerySpec : public QueryExpr {
  public:
-  QuerySpec(bool d,
-            std::list<SelectEntry*>* s,
-            std::list<TableRef*>* f,
-            Expr* w,
-            std::list<Expr*>* g,
-            Expr* h)
+  QuerySpec(bool d, std::list<SelectEntry*>* s, std::list<TableRef*>* f, Expr* w, std::list<Expr*>* g, Expr* h)
       : is_distinct(d), where_clause(w), having_clause(h) {
     if (s) {
       for (const auto e : *s) {
@@ -861,13 +839,10 @@ class QuerySpec : public QueryExpr {
   std::list<std::unique_ptr<Expr>> groupby_clause;
   std::unique_ptr<Expr> having_clause;
   void analyze_from_clause(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const;
-  void analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
-                             Analyzer::Query& query) const;
-  void analyze_where_clause(const Catalog_Namespace::Catalog& catalog,
-                            Analyzer::Query& query) const;
+  void analyze_select_clause(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const;
+  void analyze_where_clause(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const;
   void analyze_group_by(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const;
-  void analyze_having_clause(const Catalog_Namespace::Catalog& catalog,
-                             Analyzer::Query& query) const;
+  void analyze_having_clause(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const;
 };
 
 /*
@@ -876,8 +851,7 @@ class QuerySpec : public QueryExpr {
  */
 class OrderSpec : public Node {
  public:
-  OrderSpec(int n, ColumnRef* c, bool d, bool f)
-      : colno(n), column(c), is_desc(d), nulls_first(f) {}
+  OrderSpec(int n, ColumnRef* c, bool d, bool f) : colno(n), column(c), is_desc(d), nulls_first(f) {}
   int get_colno() const { return colno; }
   const ColumnRef* get_column() const { return column.get(); }
   bool get_is_desc() const { return is_desc; }
@@ -896,8 +870,7 @@ class OrderSpec : public Node {
  */
 class SelectStmt : public DMLStmt {
  public:
-  SelectStmt(QueryExpr* q, std::list<OrderSpec*>* o, int64_t l, int64_t f)
-      : query_expr(q), limit(l), offset(f) {
+  SelectStmt(QueryExpr* q, std::list<OrderSpec*>* o, int64_t l, int64_t f) : query_expr(q), limit(l), offset(f) {
     if (o) {
       for (const auto e : *o) {
         orderby_clause.emplace_back(e);
@@ -936,8 +909,7 @@ class ExplainStmt : public DDLStmt {
  */
 class ExportQueryStmt : public DDLStmt {
  public:
-  ExportQueryStmt(SelectStmt* q, std::string* p, std::list<NameValueAssign*>* o)
-      : select_stmt(q), file_path(p) {
+  ExportQueryStmt(SelectStmt* q, std::string* p, std::list<NameValueAssign*>* o) : select_stmt(q), file_path(p) {
     if (o) {
       for (const auto e : *o) {
         options.emplace_back(e);
@@ -1138,8 +1110,7 @@ class InsertStmt : public DMLStmt {
  */
 class InsertValuesStmt : public InsertStmt {
  public:
-  InsertValuesStmt(std::string* t, std::list<std::string*>* c, std::list<Expr*>* v)
-      : InsertStmt(t, c) {
+  InsertValuesStmt(std::string* t, std::list<std::string*>* c, std::list<Expr*>* v) : InsertStmt(t, c) {
     CHECK(v);
     for (const auto e : *v) {
       value_list.emplace_back(e);
@@ -1159,8 +1130,7 @@ class InsertValuesStmt : public InsertStmt {
  */
 class InsertQueryStmt : public InsertStmt {
  public:
-  InsertQueryStmt(std::string* t, std::list<std::string*>* c, QuerySpec* q)
-      : InsertStmt(t, c), query(q) {}
+  InsertQueryStmt(std::string* t, std::list<std::string*>* c, QuerySpec* q) : InsertStmt(t, c), query(q) {}
   const QuerySpec* get_query() const { return query.get(); }
   virtual void analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const;
 
@@ -1197,9 +1167,7 @@ class UpdateStmt : public DMLStmt {
     delete a;
   }
   const std::string* get_table() const { return table.get(); }
-  const std::list<std::unique_ptr<Assignment>>& get_assignment_list() const {
-    return assignment_list;
-  }
+  const std::list<std::unique_ptr<Assignment>>& get_assignment_list() const { return assignment_list; }
   const Expr* get_where_clause() const { return where_clause.get(); }
   virtual void analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const;
 

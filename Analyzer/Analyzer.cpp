@@ -61,12 +61,8 @@ std::shared_ptr<Analyzer::Expr> UOper::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> BinOper::deep_copy() const {
-  return makeExpr<BinOper>(type_info,
-                           contains_agg,
-                           optype,
-                           qualifier,
-                           left_operand->deep_copy(),
-                           right_operand->deep_copy());
+  return makeExpr<BinOper>(
+      type_info, contains_agg, optype, qualifier, left_operand->deep_copy(), right_operand->deep_copy());
 }
 
 std::shared_ptr<Analyzer::Expr> Subquery::deep_copy() const {
@@ -84,16 +80,12 @@ std::shared_ptr<Analyzer::Expr> InValues::deep_copy() const {
 }
 
 std::shared_ptr<Analyzer::Expr> LikeExpr::deep_copy() const {
-  return makeExpr<LikeExpr>(arg->deep_copy(),
-                            like_expr->deep_copy(),
-                            escape_expr ? escape_expr->deep_copy() : nullptr,
-                            is_ilike,
-                            is_simple);
+  return makeExpr<LikeExpr>(
+      arg->deep_copy(), like_expr->deep_copy(), escape_expr ? escape_expr->deep_copy() : nullptr, is_ilike, is_simple);
 }
 
 std::shared_ptr<Analyzer::Expr> AggExpr::deep_copy() const {
-  return makeExpr<AggExpr>(
-      type_info, aggtype, arg == nullptr ? nullptr : arg->deep_copy(), is_distinct);
+  return makeExpr<AggExpr>(type_info, aggtype, arg == nullptr ? nullptr : arg->deep_copy(), is_distinct);
 }
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::deep_copy() const {
@@ -101,8 +93,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::deep_copy() const {
   for (auto p : expr_pair_list) {
     new_list.push_back(std::make_pair(p.first->deep_copy(), p.second->deep_copy()));
   }
-  return makeExpr<CaseExpr>(
-      type_info, contains_agg, new_list, else_expr == nullptr ? nullptr : else_expr->deep_copy());
+  return makeExpr<CaseExpr>(type_info, contains_agg, new_list, else_expr == nullptr ? nullptr : else_expr->deep_copy());
 }
 
 std::shared_ptr<Analyzer::Expr> ExtractExpr::deep_copy() const {
@@ -142,16 +133,14 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                 *new_right_type = left_type;
                 break;
               case kTIMESTAMP:
-                *new_left_type =
-                    SQLTypeInfo(kTIMESTAMP,
-                                std::max(left_type.get_dimension(), right_type.get_dimension()),
-                                0,
-                                left_type.get_notnull());
-                *new_right_type =
-                    SQLTypeInfo(kTIMESTAMP,
-                                std::max(left_type.get_dimension(), right_type.get_dimension()),
-                                0,
-                                right_type.get_notnull());
+                *new_left_type = SQLTypeInfo(kTIMESTAMP,
+                                             std::max(left_type.get_dimension(), right_type.get_dimension()),
+                                             0,
+                                             left_type.get_notnull());
+                *new_right_type = SQLTypeInfo(kTIMESTAMP,
+                                              std::max(left_type.get_dimension(), right_type.get_dimension()),
+                                              0,
+                                              right_type.get_notnull());
                 break;
               default:
                 CHECK(false);
@@ -166,16 +155,12 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                 throw std::runtime_error("Cannont compare between TIME and DATE.");
                 break;
               case kTIME:
-                *new_left_type =
-                    SQLTypeInfo(kTIME,
-                                std::max(left_type.get_dimension(), right_type.get_dimension()),
-                                0,
-                                left_type.get_notnull());
-                *new_right_type =
-                    SQLTypeInfo(kTIME,
-                                std::max(left_type.get_dimension(), right_type.get_dimension()),
-                                0,
-                                right_type.get_notnull());
+                *new_left_type = SQLTypeInfo(
+                    kTIME, std::max(left_type.get_dimension(), right_type.get_dimension()), 0, left_type.get_notnull());
+                *new_right_type = SQLTypeInfo(kTIME,
+                                              std::max(left_type.get_dimension(), right_type.get_dimension()),
+                                              0,
+                                              right_type.get_notnull());
                 break;
               default:
                 CHECK(false);
@@ -246,26 +231,18 @@ SQLTypeInfo BinOper::common_string_type(const SQLTypeInfo& type1, const SQLTypeI
       comp = kENCODING_DICT;
       comp_param = std::min(type1.get_comp_param(), type2.get_comp_param());
     }
-  } else if (type1.get_compression() == kENCODING_DICT &&
-             type2.get_compression() == kENCODING_NONE) {
+  } else if (type1.get_compression() == kENCODING_DICT && type2.get_compression() == kENCODING_NONE) {
     comp_param = type1.get_comp_param();
-  } else if (type1.get_compression() == kENCODING_NONE &&
-             type2.get_compression() == kENCODING_DICT) {
+  } else if (type1.get_compression() == kENCODING_NONE && type2.get_compression() == kENCODING_DICT) {
     comp_param = type2.get_comp_param();
   } else
-    comp_param = std::max(type1.get_comp_param(),
-                          type2.get_comp_param());  // preserve previous comp_param if set
+    comp_param = std::max(type1.get_comp_param(), type2.get_comp_param());  // preserve previous comp_param if set
   if (type1.get_type() == kTEXT || type2.get_type() == kTEXT) {
     common_type = SQLTypeInfo(kTEXT, 0, 0, false, comp, comp_param, kNULLT);
     return common_type;
   }
-  common_type = SQLTypeInfo(kVARCHAR,
-                            std::max(type1.get_dimension(), type2.get_dimension()),
-                            0,
-                            false,
-                            comp,
-                            comp_param,
-                            kNULLT);
+  common_type =
+      SQLTypeInfo(kVARCHAR, std::max(type1.get_dimension(), type2.get_dimension()), 0, false, comp, comp_param, kNULLT);
   return common_type;
 }
 
@@ -296,10 +273,8 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
           break;
         case kNUMERIC:
         case kDECIMAL:
-          common_type = SQLTypeInfo(kNUMERIC,
-                                    std::max(5 + type2.get_scale(), type2.get_dimension()),
-                                    type2.get_scale(),
-                                    false);
+          common_type =
+              SQLTypeInfo(kNUMERIC, std::max(5 + type2.get_scale(), type2.get_dimension()), type2.get_scale(), false);
           break;
         default:
           CHECK(false);
@@ -321,11 +296,10 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
           break;
         case kNUMERIC:
         case kDECIMAL:
-          common_type =
-              SQLTypeInfo(kNUMERIC,
-                          std::max(std::min(19, 10 + type2.get_scale()), type2.get_dimension()),
-                          type2.get_scale(),
-                          false);
+          common_type = SQLTypeInfo(kNUMERIC,
+                                    std::max(std::min(19, 10 + type2.get_scale()), type2.get_dimension()),
+                                    type2.get_scale(),
+                                    false);
           break;
         default:
           CHECK(false);
@@ -393,17 +367,14 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
     case kDECIMAL:
       switch (type2.get_type()) {
         case kSMALLINT:
-          common_type = SQLTypeInfo(kNUMERIC,
-                                    std::max(5 + type1.get_scale(), type1.get_dimension()),
-                                    type1.get_scale(),
-                                    false);
+          common_type =
+              SQLTypeInfo(kNUMERIC, std::max(5 + type1.get_scale(), type1.get_dimension()), type1.get_scale(), false);
           break;
         case kINT:
-          common_type =
-              SQLTypeInfo(kNUMERIC,
-                          std::max(std::min(19, 10 + type1.get_scale()), type2.get_dimension()),
-                          type1.get_scale(),
-                          false);
+          common_type = SQLTypeInfo(kNUMERIC,
+                                    std::max(std::min(19, 10 + type1.get_scale()), type2.get_dimension()),
+                                    type1.get_scale(),
+                                    false);
           break;
         case kBIGINT:
           common_type = SQLTypeInfo(kNUMERIC, 19, type1.get_scale(), false);
@@ -417,12 +388,12 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1, const SQLType
         case kNUMERIC:
         case kDECIMAL: {
           int common_scale = std::max(type1.get_scale(), type2.get_scale());
-          common_type = SQLTypeInfo(kNUMERIC,
-                                    std::max(type1.get_dimension() - type1.get_scale(),
-                                             type2.get_dimension() - type2.get_scale()) +
-                                        common_scale,
-                                    common_scale,
-                                    false);
+          common_type = SQLTypeInfo(
+              kNUMERIC,
+              std::max(type1.get_dimension() - type1.get_scale(), type2.get_dimension() - type2.get_scale()) +
+                  common_scale,
+              common_scale,
+              false);
         } break;
         default:
           CHECK(false);
@@ -447,20 +418,17 @@ std::shared_ptr<Analyzer::Expr> Expr::decompress() {
 std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info) {
   if (new_type_info == type_info)
     return shared_from_this();
-  if (new_type_info.is_string() && type_info.is_string() &&
-      new_type_info.get_compression() == kENCODING_DICT &&
+  if (new_type_info.is_string() && type_info.is_string() && new_type_info.get_compression() == kENCODING_DICT &&
       type_info.get_compression() == kENCODING_DICT &&
       (new_type_info.get_comp_param() == type_info.get_comp_param() ||
        new_type_info.get_comp_param() == TRANSIENT_DICT(type_info.get_comp_param()))) {
     return shared_from_this();
   }
   if (!type_info.is_castable(new_type_info))
-    throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " +
-                             new_type_info.get_type_name());
+    throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " + new_type_info.get_type_name());
   // @TODO(wei) temporary restriction until executor can support this.
   if (typeid(*this) != typeid(Constant) && new_type_info.is_string() &&
-      new_type_info.get_compression() == kENCODING_DICT &&
-      new_type_info.get_comp_param() <= TRANSIENT_DICT_ID)
+      new_type_info.get_compression() == kENCODING_DICT && new_type_info.get_comp_param() <= TRANSIENT_DICT_ID)
     throw std::runtime_error(
         "Internal error: Cannot apply transient dictionary encoding to non-literal expression "
         "yet.");
@@ -732,8 +700,8 @@ void Constant::cast_to_string(const SQLTypeInfo& str_type_info) {
 void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   if (type_info == new_type_info)
     return;
-  if (new_type_info.is_number() && (type_info.is_number() || type_info.get_type() == kTIMESTAMP ||
-                                    type_info.get_type() == kBOOLEAN)) {
+  if (new_type_info.is_number() &&
+      (type_info.is_number() || type_info.get_type() == kTIMESTAMP || type_info.get_type() == kBOOLEAN)) {
     cast_number(new_type_info);
   } else if (new_type_info.is_string() && type_info.is_string()) {
     cast_string(new_type_info);
@@ -814,8 +782,7 @@ std::shared_ptr<Analyzer::Expr> Constant::add_cast(const SQLTypeInfo& new_type_i
 std::shared_ptr<Analyzer::Expr> UOper::add_cast(const SQLTypeInfo& new_type_info) {
   if (optype != kCAST)
     return Expr::add_cast(new_type_info);
-  if (type_info.is_string() && new_type_info.is_string() &&
-      new_type_info.get_compression() == kENCODING_DICT &&
+  if (type_info.is_string() && new_type_info.is_string() && new_type_info.get_compression() == kENCODING_DICT &&
       type_info.get_compression() == kENCODING_NONE) {
     const SQLTypeInfo oti = operand->get_type_info();
     if (oti.is_string() && oti.get_compression() == kENCODING_DICT &&
@@ -833,8 +800,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::add_cast(const SQLTypeInfo& new_type_i
   SQLTypeInfo ti = new_type_info;
   if (new_type_info.is_string() && new_type_info.get_compression() == kENCODING_DICT &&
       new_type_info.get_comp_param() == TRANSIENT_DICT_ID && type_info.is_string() &&
-      type_info.get_compression() == kENCODING_NONE &&
-      type_info.get_comp_param() > TRANSIENT_DICT_ID)
+      type_info.get_compression() == kENCODING_NONE && type_info.get_comp_param() > TRANSIENT_DICT_ID)
     ti.set_comp_param(TRANSIENT_DICT(type_info.get_comp_param()));
 
   for (auto& p : expr_pair_list) {
@@ -861,8 +827,7 @@ void RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog& 
                                               int rte_idx) {
   column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId, false, true);
   for (auto col_desc : column_descs) {
-    auto cv =
-        makeExpr<ColumnVar>(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
+    auto cv = makeExpr<ColumnVar>(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
     TargetEntry* tle = new TargetEntry(col_desc->columnName, cv, false);
     tlist.push_back(tle);
   }
@@ -929,8 +894,7 @@ std::shared_ptr<Analyzer::Expr> BinOper::normalize_simple_predicate(int& rte_idx
     auto cv = std::dynamic_pointer_cast<ColumnVar>(left_operand);
     rte_idx = cv->get_rte_idx();
     return this->deep_copy();
-  } else if (typeid(*left_operand) == typeid(Constant) &&
-             typeid(*right_operand) == typeid(ColumnVar)) {
+  } else if (typeid(*left_operand) == typeid(Constant) && typeid(*right_operand) == typeid(ColumnVar)) {
     auto cv = std::dynamic_pointer_cast<ColumnVar>(right_operand);
     rte_idx = cv->get_rte_idx();
     return makeExpr<BinOper>(type_info,
@@ -1052,8 +1016,7 @@ void ExtractExpr::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
-std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
     const ColumnVar* colvar = dynamic_cast<const ColumnVar*>(e);
@@ -1065,15 +1028,13 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(
   throw std::runtime_error("Internal error: cannot find ColumnVar in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
     const ColumnVar* colvar = dynamic_cast<const ColumnVar*>(e);
     if (colvar == nullptr)
-      throw std::runtime_error(
-          "Internal Error: targetlist in rewrite_with_child_targetlist is not all columns.");
+      throw std::runtime_error("Internal Error: targetlist in rewrite_with_child_targetlist is not all columns.");
     if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
       return makeExpr<Var>(colvar->get_type_info(),
                            colvar->get_table_id(),
@@ -1086,16 +1047,14 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(
   throw std::runtime_error("Internal error: cannot find ColumnVar in child targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
     if (typeid(*e) != typeid(AggExpr)) {
       const ColumnVar* colvar = dynamic_cast<const ColumnVar*>(e);
       if (colvar == nullptr)
-        throw std::runtime_error(
-            "Internal Error: targetlist in rewrite_agg_to_var is not all columns and aggregates.");
+        throw std::runtime_error("Internal Error: targetlist in rewrite_agg_to_var is not all columns and aggregates.");
       if (table_id == colvar->get_table_id() && column_id == colvar->get_column_id())
         return makeExpr<Var>(colvar->get_type_info(),
                              colvar->get_table_id(),
@@ -1106,12 +1065,10 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(
     }
     varno++;
   }
-  throw std::runtime_error(
-      "Internal error: cannot find ColumnVar from having clause in targetlist.");
+  throw std::runtime_error("Internal error: cannot find ColumnVar from having clause in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> Var::rewrite_agg_to_var(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> Var::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
@@ -1122,8 +1079,7 @@ std::shared_ptr<Analyzer::Expr> Var::rewrite_agg_to_var(
   throw std::runtime_error("Internal error: cannot find Var from having clause in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_value_list;
   for (auto v : value_list) {
     new_value_list.push_back(v->deep_copy());
@@ -1131,8 +1087,7 @@ std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_targetlist(
   return makeExpr<InValues>(arg->rewrite_with_targetlist(tlist), new_value_list);
 }
 
-std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_child_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_value_list;
   for (auto v : value_list) {
     new_value_list.push_back(v->deep_copy());
@@ -1140,16 +1095,14 @@ std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_child_targetlist(
   return makeExpr<InValues>(arg->rewrite_with_child_targetlist(tlist), new_value_list);
 }
 
-std::shared_ptr<Analyzer::Expr> InValues::rewrite_agg_to_var(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> InValues::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_value_list;
   for (auto v : value_list)
     new_value_list.push_back(v->rewrite_agg_to_var(tlist));
   return makeExpr<InValues>(arg->rewrite_agg_to_var(tlist), new_value_list);
 }
 
-std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
     if (typeid(*e) == typeid(AggExpr)) {
@@ -1161,14 +1114,11 @@ std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_targetlist(
   throw std::runtime_error("Internal error: cannot find AggExpr in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_child_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
-  return makeExpr<AggExpr>(
-      type_info, aggtype, arg ? arg->rewrite_with_child_targetlist(tlist) : nullptr, is_distinct);
+std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
+  return makeExpr<AggExpr>(type_info, aggtype, arg ? arg->rewrite_with_child_targetlist(tlist) : nullptr, is_distinct);
 }
 
-std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
@@ -1182,61 +1132,46 @@ std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(
   throw std::runtime_error("Internal error: cannot find AggExpr from having clause in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> epair_list;
   for (auto p : expr_pair_list) {
-    epair_list.push_back(std::make_pair(p.first->rewrite_with_targetlist(tlist),
-                                        p.second->rewrite_with_targetlist(tlist)));
+    epair_list.push_back(
+        std::make_pair(p.first->rewrite_with_targetlist(tlist), p.second->rewrite_with_targetlist(tlist)));
   }
-  return makeExpr<CaseExpr>(type_info,
-                            contains_agg,
-                            epair_list,
-                            else_expr ? else_expr->rewrite_with_targetlist(tlist) : nullptr);
+  return makeExpr<CaseExpr>(
+      type_info, contains_agg, epair_list, else_expr ? else_expr->rewrite_with_targetlist(tlist) : nullptr);
 }
 
-std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
-  return makeExpr<ExtractExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
+std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
+  return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
 }
 
-std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> epair_list;
   for (auto p : expr_pair_list) {
-    epair_list.push_back(std::make_pair(p.first->rewrite_with_child_targetlist(tlist),
-                                        p.second->rewrite_with_child_targetlist(tlist)));
+    epair_list.push_back(
+        std::make_pair(p.first->rewrite_with_child_targetlist(tlist), p.second->rewrite_with_child_targetlist(tlist)));
   }
-  return makeExpr<CaseExpr>(type_info,
-                            contains_agg,
-                            epair_list,
-                            else_expr ? else_expr->rewrite_with_child_targetlist(tlist) : nullptr);
+  return makeExpr<CaseExpr>(
+      type_info, contains_agg, epair_list, else_expr ? else_expr->rewrite_with_child_targetlist(tlist) : nullptr);
 }
 
 std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_child_targetlist(
     const std::vector<TargetEntry*>& tlist) const {
-  return makeExpr<ExtractExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
+  return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
 }
 
-std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(
-    const std::vector<TargetEntry*>& tlist) const {
+std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> epair_list;
   for (auto p : expr_pair_list) {
-    epair_list.push_back(
-        std::make_pair(p.first->rewrite_agg_to_var(tlist), p.second->rewrite_agg_to_var(tlist)));
+    epair_list.push_back(std::make_pair(p.first->rewrite_agg_to_var(tlist), p.second->rewrite_agg_to_var(tlist)));
   }
-  return makeExpr<CaseExpr>(type_info,
-                            contains_agg,
-                            epair_list,
-                            else_expr ? else_expr->rewrite_agg_to_var(tlist) : nullptr);
+  return makeExpr<CaseExpr>(
+      type_info, contains_agg, epair_list, else_expr ? else_expr->rewrite_agg_to_var(tlist) : nullptr);
 }
 
-std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_agg_to_var(
-    const std::vector<TargetEntry*>& tlist) const {
-  return makeExpr<ExtractExpr>(
-      type_info, contains_agg, field, from_expr->rewrite_agg_to_var(tlist));
+std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
+  return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_agg_to_var(tlist));
 }
 
 bool ColumnVar::operator==(const Expr& rhs) const {
@@ -1313,13 +1248,11 @@ bool LikeExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(LikeExpr))
     return false;
   const LikeExpr& rhs_lk = dynamic_cast<const LikeExpr&>(rhs);
-  if (!(*arg == *rhs_lk.get_arg()) || !(*like_expr == *rhs_lk.get_like_expr()) ||
-      is_ilike != rhs_lk.get_is_ilike())
+  if (!(*arg == *rhs_lk.get_arg()) || !(*like_expr == *rhs_lk.get_like_expr()) || is_ilike != rhs_lk.get_is_ilike())
     return false;
   if (escape_expr.get() == rhs_lk.get_escape_expr())
     return true;
-  if (escape_expr != nullptr && rhs_lk.get_escape_expr() != nullptr &&
-      *escape_expr == *rhs_lk.get_escape_expr())
+  if (escape_expr != nullptr && rhs_lk.get_escape_expr() != nullptr && *escape_expr == *rhs_lk.get_escape_expr())
     return true;
   return false;
 }
@@ -1380,8 +1313,7 @@ bool ExtractExpr::operator==(const Expr& rhs) const {
 }
 
 void ColumnVar::print() const {
-  std::cout << "(ColumnVar table: " << table_id << " column: " << column_id << " rte: " << rte_idx
-            << ") ";
+  std::cout << "(ColumnVar table: " << table_id << " column: " << column_id << " rte: " << rte_idx << ") ";
 }
 
 void Var::print() const {
@@ -1413,9 +1345,9 @@ void UOper::print() const {
       op = "EXISTS ";
       break;
     case kCAST:
-      op = "CAST " + type_info.get_type_name() + "(" + std::to_string(type_info.get_precision()) +
-           "," + std::to_string(type_info.get_scale()) + ") " + type_info.get_compression_name() +
-           "(" + std::to_string(type_info.get_comp_param()) + ") ";
+      op = "CAST " + type_info.get_type_name() + "(" + std::to_string(type_info.get_precision()) + "," +
+           std::to_string(type_info.get_scale()) + ") " + type_info.get_compression_name() + "(" +
+           std::to_string(type_info.get_comp_param()) + ") ";
       break;
     case kUNNEST:
       op = "UNNEST ";
@@ -1663,9 +1595,8 @@ void ExtractExpr::collect_rte_idx(std::set<int>& rte_idx_set) const {
   from_expr->collect_rte_idx(rte_idx_set);
 }
 
-void CaseExpr::collect_column_var(
-    std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
-    bool include_agg) const {
+void CaseExpr::collect_column_var(std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>& colvar_set,
+                                  bool include_agg) const {
   for (auto p : expr_pair_list) {
     p.first->collect_column_var(colvar_set, include_agg);
     p.second->collect_column_var(colvar_set, include_agg);

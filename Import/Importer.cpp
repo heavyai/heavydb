@@ -27,18 +27,22 @@ bool debug_timing = false;
 
 static std::mutex insert_mutex;
 
-Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t, const std::string &f, const CopyParams &p) : file_path(f), copy_params(p), loader(c,t), load_failed(false)
-{
+Importer::Importer(const Catalog_Namespace::Catalog& c,
+                   const TableDescriptor* t,
+                   const std::string& f,
+                   const CopyParams& p)
+    : file_path(f), copy_params(p), loader(c, t), load_failed(false) {
   file_size = 0;
   max_threads = 0;
   p_file = nullptr;
   buffer[0] = nullptr;
   buffer[1] = nullptr;
   which_buf = 0;
-  std::unique_ptr<bool> is_array = std::unique_ptr<bool>((bool*)malloc(loader.get_column_descs().size() * sizeof(bool)));
+  std::unique_ptr<bool> is_array =
+      std::unique_ptr<bool>((bool*)malloc(loader.get_column_descs().size() * sizeof(bool)));
   int i = 0;
   bool has_array = false;
-  for (auto &p : loader.get_column_descs()) {
+  for (auto& p : loader.get_column_descs()) {
     if (p->columnType.get_type() == kARRAY) {
       is_array.get()[i] = true;
       has_array = true;
@@ -52,8 +56,7 @@ Importer::Importer(const Catalog_Namespace::Catalog &c, const TableDescriptor *t
     is_array_a = std::unique_ptr<bool>(nullptr);
 }
 
-Importer::~Importer()
-{
+Importer::~Importer() {
   if (p_file != nullptr)
     fclose(p_file);
   if (buffer[0] != nullptr)
@@ -62,30 +65,33 @@ Importer::~Importer()
     free(buffer[1]);
 }
 
-static const std::string trim_space(const char* field,
-                                    const size_t len) {
+static const std::string trim_space(const char* field, const size_t len) {
   size_t i = 0;
   size_t j = len;
   while (i < j && (field[i] == ' ' || field[i] == '\r')) {
     i++;
   }
-  while (i < j && (field[j-1] == ' ' || field[j-1] == '\r')) {
+  while (i < j && (field[j - 1] == ' ' || field[j - 1] == '\r')) {
     j--;
   }
   return std::string(field + i, j - i);
 }
 
-static const char *
-get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const CopyParams &copy_params, bool is_begin, const bool *is_array, std::vector<std::string> &row)
-{
-  const char *field = buf;
-  const char *p;
+static const char* get_row(const char* buf,
+                           const char* buf_end,
+                           const char* entire_buf_end,
+                           const CopyParams& copy_params,
+                           bool is_begin,
+                           const bool* is_array,
+                           std::vector<std::string>& row) {
+  const char* field = buf;
+  const char* p;
   bool in_quote = false;
   bool in_array = false;
   bool has_escape = false;
   bool strip_quotes = false;
   for (p = buf; p < buf_end && *p != copy_params.line_delim; p++) {
-    if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
+    if (*p == copy_params.escape && p < buf_end - 1 && *(p + 1) == copy_params.quote) {
       p++;
       has_escape = true;
     } else if (copy_params.quoted && *p == copy_params.quote) {
@@ -107,11 +113,11 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
           if (strip_quotes)
             i++;
           for (; i < p - field; i++, j++) {
-            if (has_escape && field[i] == copy_params.escape && field[i+1] == copy_params.quote) {
+            if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
               field_buf[j] = copy_params.quote;
               i++;
-          } else
-            field_buf[j] = field[i];
+            } else
+              field_buf[j] = field[i];
           }
           if (strip_quotes)
             field_buf[j - 1] = '\0';
@@ -123,7 +129,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
         field = p + 1;
         has_escape = false;
         strip_quotes = false;
-      } 
+      }
     }
   }
   if (*p == copy_params.line_delim) {
@@ -132,7 +138,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
     return p;
   }
   for (; p < entire_buf_end && (in_quote || *p != copy_params.line_delim); p++) {
-    if (*p == copy_params.escape && p < buf_end - 1 && *(p+1) == copy_params.quote) {
+    if (*p == copy_params.escape && p < buf_end - 1 && *(p + 1) == copy_params.quote) {
       p++;
       has_escape = true;
     } else if (copy_params.quoted && *p == copy_params.quote) {
@@ -154,7 +160,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
           if (strip_quotes)
             i++;
           for (; i < p - field; i++, j++) {
-            if (has_escape && field[i] == copy_params.escape && field[i+1] == copy_params.quote) {
+            if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
               field_buf[j] = copy_params.quote;
               i++;
             } else
@@ -171,7 +177,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
         has_escape = false;
         strip_quotes = false;
       }
-    } 
+    }
   }
   if (*p == copy_params.line_delim) {
     std::string s = trim_space(field, p - field);
@@ -186,9 +192,7 @@ get_row(const char *buf, const char *buf_end, const char *entire_buf_end, const 
   return p;
 }
 
-int8_t *
-appendDatum(int8_t *buf, Datum d, const SQLTypeInfo &ti)
-{
+int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
     case kBOOLEAN:
       *(bool*)buf = d.boolval;
@@ -221,9 +225,7 @@ appendDatum(int8_t *buf, Datum d, const SQLTypeInfo &ti)
   return NULL;
 }
 
-ArrayDatum
-StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &copy_params)
-{
+ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const CopyParams& copy_params) {
   SQLTypeInfo elem_ti = ti.get_elem_type();
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
     LOG(WARNING) << "Malformed array: " << s;
@@ -231,7 +233,8 @@ StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &cop
   }
   std::vector<std::string> elem_strs;
   size_t last = 1;
-  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos; i = s.find(copy_params.array_delim, last)) {
+  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
+       i = s.find(copy_params.array_delim, last)) {
     elem_strs.push_back(s.substr(last, i - last));
     last = i + 1;
   }
@@ -240,9 +243,9 @@ StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &cop
   }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
-    int8_t *buf = (int8_t*)malloc(len);
-    int8_t *p = buf;
-    for (auto &e : elem_strs) {
+    int8_t* buf = (int8_t*)malloc(len);
+    int8_t* p = buf;
+    for (auto& e : elem_strs) {
       Datum d = StringToDatum(e, elem_ti);
       p = appendDatum(p, d, elem_ti);
     }
@@ -253,408 +256,394 @@ StringToArray(const std::string &s, const SQLTypeInfo &ti, const CopyParams &cop
   return ArrayDatum(0, NULL, true);
 }
 
-void
-parseStringArray(const std::string &s, const CopyParams &copy_params, std::vector<std::string> &string_vec)
-{
+void parseStringArray(const std::string& s, const CopyParams& copy_params, std::vector<std::string>& string_vec) {
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
     LOG(WARNING) << "Malformed array: " << s;
     return;
   }
   size_t last = 1;
-  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos; i = s.find(copy_params.array_delim, last)) {
-    if (i > last) // if not empty string - disallow empty strings for now
+  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
+       i = s.find(copy_params.array_delim, last)) {
+    if (i > last)  // if not empty string - disallow empty strings for now
       string_vec.push_back(s.substr(last, i - last));
     last = i + 1;
   }
-  if (s.size()-1 > last)  // if not empty string - disallow empty strings for now 
+  if (s.size() - 1 > last)  // if not empty string - disallow empty strings for now
     string_vec.push_back(s.substr(last, s.size() - 1 - last));
 }
 
-void
-addBinaryStringArray(const TDatum &datum, std::vector<std::string> &string_vec)
-{
+void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
   const auto& arr = datum.val.arr_val;
   for (const auto& elem_datum : arr) {
     string_vec.push_back(elem_datum.val.str_val);
   }
 }
 
-Datum
-TDatumToDatum(const TDatum &datum, SQLTypeInfo &ti)
-{
-	Datum d;
+Datum TDatumToDatum(const TDatum& datum, SQLTypeInfo& ti) {
+  Datum d;
   const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-	switch (type) {
-		case kBOOLEAN:
+  switch (type) {
+    case kBOOLEAN:
       d.boolval = datum.is_null ? NULL_BOOLEAN : datum.val.int_val;
-			break;
-		case kBIGINT:
-			d.bigintval = datum.is_null ? NULL_BIGINT : datum.val.int_val;
-			break;
-		case kINT:
-			d.intval = datum.is_null ? NULL_INT : datum.val.int_val;
-			break;
-		case kSMALLINT:
-			d.smallintval = datum.is_null ? NULL_SMALLINT : datum.val.int_val;
-			break;
-		case kFLOAT:
-			d.floatval = datum.is_null ? NULL_FLOAT : datum.val.real_val;
-			break;
-		case kDOUBLE:
-			d.doubleval = datum.is_null ? NULL_DOUBLE : datum.val.real_val;
-			break;
-		case kTIME:
+      break;
+    case kBIGINT:
+      d.bigintval = datum.is_null ? NULL_BIGINT : datum.val.int_val;
+      break;
+    case kINT:
+      d.intval = datum.is_null ? NULL_INT : datum.val.int_val;
+      break;
+    case kSMALLINT:
+      d.smallintval = datum.is_null ? NULL_SMALLINT : datum.val.int_val;
+      break;
+    case kFLOAT:
+      d.floatval = datum.is_null ? NULL_FLOAT : datum.val.real_val;
+      break;
+    case kDOUBLE:
+      d.doubleval = datum.is_null ? NULL_DOUBLE : datum.val.real_val;
+      break;
+    case kTIME:
     case kTIMESTAMP:
     case kDATE:
       d.timeval = datum.is_null ? (sizeof(time_t) == 8 ? NULL_BIGINT : NULL_INT) : datum.val.int_val;
       break;
-		default:
-			throw std::runtime_error("Internal error: invalid type in StringToDatum.");
-	}
-	return d;
+    default:
+      throw std::runtime_error("Internal error: invalid type in StringToDatum.");
+  }
+  return d;
 }
 
-ArrayDatum
-TDatumToArrayDatum(const TDatum &datum, const SQLTypeInfo &ti)
-{
+ArrayDatum TDatumToArrayDatum(const TDatum& datum, const SQLTypeInfo& ti) {
   SQLTypeInfo elem_ti = ti.get_elem_type();
   CHECK(!elem_ti.is_string());
   size_t len = datum.val.arr_val.size() * elem_ti.get_size();
-  int8_t *buf = (int8_t*)malloc(len);
-  int8_t *p = buf;
-  for (auto &e : datum.val.arr_val) {
+  int8_t* buf = (int8_t*)malloc(len);
+  int8_t* p = buf;
+  for (auto& e : datum.val.arr_val) {
     p = appendDatum(p, TDatumToDatum(e, elem_ti), elem_ti);
   }
   return ArrayDatum(len, buf, len == 0);
 }
 
-static size_t
-find_beginning(const char *buffer, size_t begin, size_t end, const CopyParams &copy_params)
-{
+static size_t find_beginning(const char* buffer, size_t begin, size_t end, const CopyParams& copy_params) {
   // @TODO(wei) line_delim is in quotes note supported
   if (begin == 0 || (begin > 0 && buffer[begin - 1] == copy_params.line_delim))
     return 0;
   size_t i;
-  const char *buf = buffer + begin;
+  const char* buf = buffer + begin;
   for (i = 0; i < end - begin; i++)
     if (buf[i] == copy_params.line_delim)
       return i + 1;
   return i;
 }
 
-void
-TypedImportBuffer::add_value(const ColumnDescriptor *cd, const std::string &val, const bool is_null, const CopyParams &copy_params)
-{
+void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
+                                  const std::string& val,
+                                  const bool is_null,
+                                  const CopyParams& copy_params) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
   switch (type) {
-  case kBOOLEAN: {
-    if (is_null) {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addBoolean(NULL_BOOLEAN);
-    } else {
-      SQLTypeInfo ti = cd->columnType;
-      Datum d = StringToDatum(val, ti);
-      addBoolean((int8_t)d.boolval);
-    }
-    break;
-  }
-  case kSMALLINT: {
-    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addSmallint(cd->columnType.is_decimal()
-        ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
-        : std::atoi(val.c_str()));
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addSmallint(NULL_SMALLINT);
-    }
-    break;
-  }
-  case kINT: {
-    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addInt(cd->columnType.is_decimal()
-        ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
-        : std::atoi(val.c_str()));
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addInt(NULL_INT);
-    }
-    break;
-  }
-  case kBIGINT: {
-    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addBigint(cd->columnType.is_decimal()
-        ? std::strtod(val.c_str(), NULL) * pow(10, cd->columnType.get_scale())
-        : std::atoll(val.c_str()));
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addBigint(NULL_BIGINT);
-    }
-    break;
-  }
-  case kFLOAT:
-    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addFloat((float)std::atof(val.c_str()));
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addFloat(NULL_FLOAT);
-    }
-    break;
-  case kDOUBLE:
-    if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-      addDouble(std::atof(val.c_str()));
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addDouble(NULL_DOUBLE);
-    }
-    break;
-  case kTEXT:
-  case kVARCHAR:
-  case kCHAR: {
-    // @TODO(wei) for now, use empty string for nulls
-    if (is_null) {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addString(std::string());
-    } else
-      addString(val);
-    break;
-  }
-  case kTIME:
-  case kTIMESTAMP:
-  case kDATE:
-    if (!is_null && isdigit(val[0])) {
-      SQLTypeInfo ti = cd->columnType;
-      Datum d = StringToDatum(val, ti);
-      addTime(d.timeval);
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addTime(cd->columnType.get_size() == 4 ? NULL_INT : NULL_BIGINT);
-    }
-    break;
-  case kARRAY:
-    if (!is_null) {
-      if (IS_STRING(cd->columnType.get_subtype())) {
-        std::vector<std::string> &string_vec = addStringArray();
-        parseStringArray(val, copy_params, string_vec);
+    case kBOOLEAN: {
+      if (is_null) {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addBoolean(NULL_BOOLEAN);
       } else {
-        ArrayDatum d = StringToArray(val, cd->columnType, copy_params);
-        addArray(d);
+        SQLTypeInfo ti = cd->columnType;
+        Datum d = StringToDatum(val, ti);
+        addBoolean((int8_t)d.boolval);
       }
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addArray(ArrayDatum(0, NULL, true));
+      break;
     }
-    break;
-  default:
-    CHECK(false);
+    case kSMALLINT: {
+      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+        addSmallint(cd->columnType.is_decimal() ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
+                                                : std::atoi(val.c_str()));
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addSmallint(NULL_SMALLINT);
+      }
+      break;
+    }
+    case kINT: {
+      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+        addInt(cd->columnType.is_decimal() ? std::atof(val.c_str()) * pow(10, cd->columnType.get_scale())
+                                           : std::atoi(val.c_str()));
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addInt(NULL_INT);
+      }
+      break;
+    }
+    case kBIGINT: {
+      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+        addBigint(cd->columnType.is_decimal() ? std::strtod(val.c_str(), NULL) * pow(10, cd->columnType.get_scale())
+                                              : std::atoll(val.c_str()));
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addBigint(NULL_BIGINT);
+      }
+      break;
+    }
+    case kFLOAT:
+      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+        addFloat((float)std::atof(val.c_str()));
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addFloat(NULL_FLOAT);
+      }
+      break;
+    case kDOUBLE:
+      if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
+        addDouble(std::atof(val.c_str()));
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addDouble(NULL_DOUBLE);
+      }
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR: {
+      // @TODO(wei) for now, use empty string for nulls
+      if (is_null) {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addString(std::string());
+      } else
+        addString(val);
+      break;
+    }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      if (!is_null && isdigit(val[0])) {
+        SQLTypeInfo ti = cd->columnType;
+        Datum d = StringToDatum(val, ti);
+        addTime(d.timeval);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addTime(cd->columnType.get_size() == 4 ? NULL_INT : NULL_BIGINT);
+      }
+      break;
+    case kARRAY:
+      if (!is_null) {
+        if (IS_STRING(cd->columnType.get_subtype())) {
+          std::vector<std::string>& string_vec = addStringArray();
+          parseStringArray(val, copy_params, string_vec);
+        } else {
+          ArrayDatum d = StringToArray(val, cd->columnType, copy_params);
+          addArray(d);
+        }
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addArray(ArrayDatum(0, NULL, true));
+      }
+      break;
+    default:
+      CHECK(false);
   }
 }
 
-void
-TypedImportBuffer::add_value(const ColumnDescriptor *cd, const TDatum &datum, const bool is_null)
-{
+void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datum, const bool is_null) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
   switch (type) {
-  case kBOOLEAN: {
-    if (is_null) {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addBoolean(NULL_BOOLEAN);
-    } else {
-      addBoolean((int8_t)datum.val.int_val);
-    }
-    break;
-  }
-  case kSMALLINT:
-    if (!is_null) {
-      addSmallint((int16_t)datum.val.int_val);
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addSmallint(NULL_SMALLINT);
-    }
-    break;
-  case kINT:
-    if (!is_null) {
-      addInt((int32_t)datum.val.int_val);
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addInt(NULL_INT);
-    }
-    break;
-  case kBIGINT:
-    if (!is_null) {
-      addBigint(datum.val.int_val);
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addBigint(NULL_BIGINT);
-    }
-    break;
-  case kFLOAT:
-    if (!is_null) {
-      addFloat((float)datum.val.real_val);
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addFloat(NULL_FLOAT);
-    }
-    break;
-  case kDOUBLE:
-    if (!is_null) {
-      addDouble(datum.val.real_val);
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addDouble(NULL_DOUBLE);
-    }
-    break;
-  case kTEXT:
-  case kVARCHAR:
-  case kCHAR: {
-    // @TODO(wei) for now, use empty string for nulls
-    if (is_null) {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addString(std::string());
-    } else
-      addString(datum.val.str_val);
-    break;
-  }
-  case kTIME:
-  case kTIMESTAMP:
-  case kDATE:
-    if (!is_null) {
-      addTime((time_t)datum.val.int_val);
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
-    }
-    break;
-  case kARRAY:
-    if (!is_null) {
-      if (IS_STRING(cd->columnType.get_subtype())) {
-        std::vector<std::string> &string_vec = addStringArray();
-        addBinaryStringArray(datum, string_vec);
+    case kBOOLEAN: {
+      if (is_null) {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addBoolean(NULL_BOOLEAN);
       } else {
-        addArray(TDatumToArrayDatum(datum, cd->columnType));
+        addBoolean((int8_t)datum.val.int_val);
       }
-    } else {
-      if (cd->columnType.get_notnull())
-        throw std::runtime_error("NULL for column " + cd->columnName);
-      addArray(ArrayDatum(0, NULL, true));
+      break;
     }
-    break;
-  default:
-    CHECK(false);
+    case kSMALLINT:
+      if (!is_null) {
+        addSmallint((int16_t)datum.val.int_val);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addSmallint(NULL_SMALLINT);
+      }
+      break;
+    case kINT:
+      if (!is_null) {
+        addInt((int32_t)datum.val.int_val);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addInt(NULL_INT);
+      }
+      break;
+    case kBIGINT:
+      if (!is_null) {
+        addBigint(datum.val.int_val);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addBigint(NULL_BIGINT);
+      }
+      break;
+    case kFLOAT:
+      if (!is_null) {
+        addFloat((float)datum.val.real_val);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addFloat(NULL_FLOAT);
+      }
+      break;
+    case kDOUBLE:
+      if (!is_null) {
+        addDouble(datum.val.real_val);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addDouble(NULL_DOUBLE);
+      }
+      break;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR: {
+      // @TODO(wei) for now, use empty string for nulls
+      if (is_null) {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addString(std::string());
+      } else
+        addString(datum.val.str_val);
+      break;
+    }
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      if (!is_null) {
+        addTime((time_t)datum.val.int_val);
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addTime(sizeof(time_t) == 4 ? NULL_INT : NULL_BIGINT);
+      }
+      break;
+    case kARRAY:
+      if (!is_null) {
+        if (IS_STRING(cd->columnType.get_subtype())) {
+          std::vector<std::string>& string_vec = addStringArray();
+          addBinaryStringArray(datum, string_vec);
+        } else {
+          addArray(TDatumToArrayDatum(datum, cd->columnType));
+        }
+      } else {
+        if (cd->columnType.get_notnull())
+          throw std::runtime_error("NULL for column " + cd->columnName);
+        addArray(ArrayDatum(0, NULL, true));
+      }
+      break;
+    default:
+      CHECK(false);
   }
 }
 
-static void
-import_thread(int thread_id, Importer *importer, const char *buffer, size_t begin_pos, size_t end_pos, size_t total_size)
-{
+static void import_thread(int thread_id,
+                          Importer* importer,
+                          const char* buffer,
+                          size_t begin_pos,
+                          size_t end_pos,
+                          size_t total_size) {
   size_t row_count = 0;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
   auto load_ms = measure<>::execution([]() {});
   auto ms = measure<>::execution([&]() {
-  const CopyParams &copy_params = importer->get_copy_params();
-  const std::list<const ColumnDescriptor*> &col_descs = importer->get_column_descs();
-  size_t begin = find_beginning(buffer, begin_pos, end_pos, copy_params);
-  const char *thread_buf = buffer + begin_pos + begin;
-  const char *thread_buf_end = buffer + end_pos;
-  const char *buf_end = buffer + total_size;
-  std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers = importer->get_import_buffers(thread_id);
-  auto us = measure<std::chrono::microseconds>::execution([&]() {});
-  for (const auto& p : import_buffers)
-    p->clear();
-  std::vector<std::string> row;
-  for (const char *p = thread_buf; p < thread_buf_end; p++) {
-    {
-      decltype(row) empty;
-      row.swap(empty);
-    }
-    if (debug_timing) {
-      us = measure<std::chrono::microseconds>::execution([&]() {
-        p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
-      });
-      total_get_row_time_us += us;
-    } else 
-      p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
-    /*
-    std::cout << "Row " << row_count << " : ";
-    for (auto p : row)
-      std::cout << p << ", ";
-    std::cout << std::endl;
-    */
-    if (row.size() != col_descs.size()) {
-    LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
-    for (auto p : row)
-        std::cerr << p << ", ";
-    std::cerr << std::endl;
-      continue;
-    }
-    us = measure<std::chrono::microseconds>::execution([&]() {
-    try {
-      int col_idx = 0;
-      for (const auto cd : col_descs) {
-        bool is_null = (row[col_idx] == copy_params.null_str);
-        if (!cd->columnType.is_string() && row[col_idx].empty())
-          is_null = true;
-        import_buffers[col_idx]->add_value(cd, row[col_idx], is_null, copy_params);
-        ++col_idx;
+    const CopyParams& copy_params = importer->get_copy_params();
+    const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
+    size_t begin = find_beginning(buffer, begin_pos, end_pos, copy_params);
+    const char* thread_buf = buffer + begin_pos + begin;
+    const char* thread_buf_end = buffer + end_pos;
+    const char* buf_end = buffer + total_size;
+    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers = importer->get_import_buffers(thread_id);
+    auto us = measure<std::chrono::microseconds>::execution([&]() {});
+    for (const auto& p : import_buffers)
+      p->clear();
+    std::vector<std::string> row;
+    for (const char* p = thread_buf; p < thread_buf_end; p++) {
+      {
+        decltype(row) empty;
+        row.swap(empty);
       }
-      row_count++;
-    } catch (const std::exception &e) {
-      LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
+      if (debug_timing) {
+        us = measure<std::chrono::microseconds>::execution([&]() {
+          p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
+        });
+        total_get_row_time_us += us;
+      } else
+        p = get_row(p, thread_buf_end, buf_end, copy_params, p == thread_buf, importer->get_is_array(), row);
+      /*
+      std::cout << "Row " << row_count << " : ";
+      for (auto p : row)
+        std::cout << p << ", ";
+      std::cout << std::endl;
+      */
+      if (row.size() != col_descs.size()) {
+        LOG(ERROR) << "Incorrect Row (expected " << col_descs.size() << " columns, has " << row.size() << "): ";
+        for (auto p : row)
+          std::cerr << p << ", ";
+        std::cerr << std::endl;
+        continue;
+      }
+      us = measure<std::chrono::microseconds>::execution([&]() {
+        try {
+          int col_idx = 0;
+          for (const auto cd : col_descs) {
+            bool is_null = (row[col_idx] == copy_params.null_str);
+            if (!cd->columnType.is_string() && row[col_idx].empty())
+              is_null = true;
+            import_buffers[col_idx]->add_value(cd, row[col_idx], is_null, copy_params);
+            ++col_idx;
+          }
+          row_count++;
+        } catch (const std::exception& e) {
+          LOG(WARNING) << "Input exception thrown: " << e.what() << ". Row discarded.";
+        }
+      });
+      total_str_to_val_time_us += us;
     }
-    });
-    total_str_to_val_time_us += us;
-  }
-  if (row_count > 0) {
-    load_ms = measure<>::execution([&]() {
-    importer->load(import_buffers, row_count);
-    });
-  }
+    if (row_count > 0) {
+      load_ms = measure<>::execution([&]() { importer->load(import_buffers, row_count); });
+    }
   });
   if (debug_timing && row_count > 0) {
-    LOG(INFO) << "Thread" << std::this_thread::get_id() << ":" << row_count << " rows inserted in " << (double)ms/1000.0 << "sec, Insert Time: " << (double)load_ms/1000.0 << "sec, get_row: " << (double)total_get_row_time_us/1000000.0 << "sec, str_to_val: " << (double)total_str_to_val_time_us/1000000.0 << "sec" << std::endl;
+    LOG(INFO) << "Thread" << std::this_thread::get_id() << ":" << row_count << " rows inserted in "
+              << (double)ms / 1000.0 << "sec, Insert Time: " << (double)load_ms / 1000.0
+              << "sec, get_row: " << (double)total_get_row_time_us / 1000000.0
+              << "sec, str_to_val: " << (double)total_str_to_val_time_us / 1000000.0 << "sec" << std::endl;
   }
 }
 
-static size_t
-find_end(const char *buffer, size_t size, const CopyParams &copy_params)
-{
+static size_t find_end(const char* buffer, size_t size, const CopyParams& copy_params) {
   int i;
   // @TODO(wei) line_delim is in quotes note supported
   for (i = size - 1; i >= 0 && buffer[i] != copy_params.line_delim; i--)
-  ;
+    ;
 
   if (i < 0)
     LOG(ERROR) << "No line delimiter in block.";
   return i + 1;
 }
 
-bool
-Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers, size_t row_count)
-{
+bool Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers, size_t row_count) {
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   bool success = true;
   for (const auto& import_buff : import_buffers) {
     DataBlockPtr p;
-    if (import_buff->getTypeInfo().is_number() ||
-        import_buff->getTypeInfo().is_time() ||
+    if (import_buff->getTypeInfo().is_number() || import_buff->getTypeInfo().is_time() ||
         import_buff->getTypeInfo().get_type() == kBOOLEAN) {
       p.numbersPtr = import_buff->getAsBytes();
     } else if (import_buff->getTypeInfo().is_string()) {
@@ -681,7 +670,7 @@ Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffe
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(insert_mutex));
     try {
       table_desc->fragmenter->insertData(ins_data);
-    } catch (std::exception &e) {
+    } catch (std::exception& e) {
       LOG(ERROR) << "Fragmenter Insert Exception: " << e.what();
       success = false;
     }
@@ -689,9 +678,7 @@ Loader::load(const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffe
   return success;
 }
 
-void
-Loader::init()
-{
+void Loader::init() {
   insert_data.databaseId = catalog.get_currentDB().dbId;
   insert_data.tableId = table_desc->tableId;
   for (auto cd : column_descs) {
@@ -799,7 +786,7 @@ std::vector<SQLTypes> Detector::detect_column_types(const std::vector<std::strin
 }
 
 bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
-  static std::array<int,kSQLTYPE_LAST> typeorder;
+  static std::array<int, kSQLTYPE_LAST> typeorder;
   typeorder[kDATE] = 8;
   typeorder[kTEXT] = 9;
   typeorder[kBIGINT] = 5;
@@ -816,7 +803,7 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
 
 void Detector::find_best_sqltypes_and_headers() {
   best_sqltypes = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end());
-  best_encodings = find_best_encodings(raw_rows.begin() +1, raw_rows.end(), best_sqltypes);
+  best_encodings = find_best_encodings(raw_rows.begin() + 1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
   has_headers = detect_headers(head_types, best_sqltypes);
   copy_params.has_header = has_headers;
@@ -839,10 +826,10 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
   auto end_time = std::chrono::system_clock::now() + timeout;
   size_t num_cols = raw_rows.front().size();
   std::vector<SQLTypes> best_types(num_cols, kCHAR);
-  std::vector<size_t> non_null_col_counts (num_cols,0);
+  std::vector<size_t> non_null_col_counts(num_cols, 0);
   for (auto row = row_begin; row != row_end; row++) {
     for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
-      if (row->at(col_idx) == "") // empty means null so don't count this
+      if (row->at(col_idx) == "")  // empty means null so don't count this
         continue;
       SQLTypes t = detect_sqltype(row->at(col_idx));
       non_null_col_counts[col_idx]++;
@@ -866,7 +853,8 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
 
 std::vector<EncodingType> Detector::find_best_encodings(
     const std::vector<std::vector<std::string>>::const_iterator& row_begin,
-    const std::vector<std::vector<std::string>>::const_iterator& row_end, const std::vector<SQLTypes> &best_types) {
+    const std::vector<std::vector<std::string>>::const_iterator& row_end,
+    const std::vector<SQLTypes>& best_types) {
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
   }
@@ -874,21 +862,19 @@ std::vector<EncodingType> Detector::find_best_encodings(
   size_t num_rows = raw_rows.size();
   std::vector<EncodingType> best_encodes(num_cols, kENCODING_NONE);
   for (size_t col_idx = 0; col_idx < num_cols; col_idx++) {
-    // determine whether dictionary 
+    // determine whether dictionary
     if (IS_STRING(best_types[col_idx])) {
       std::unordered_set<std::string> count_set;
-      for (size_t row_idx=1; row_idx < num_rows; row_idx++)
+      for (size_t row_idx = 1; row_idx < num_rows; row_idx++)
         count_set.insert(raw_rows[row_idx][col_idx]);
-      float uniqueRatio = num_rows / static_cast <float> (count_set.size()) / num_rows;
-      //float uniqueScore = uniqueRatio * (num_row)
-      if (uniqueRatio < 0.75) 
+      float uniqueRatio = num_rows / static_cast<float>(count_set.size()) / num_rows;
+      // float uniqueScore = uniqueRatio * (num_row)
+      if (uniqueRatio < 0.75)
         best_encodes[col_idx] = kENCODING_DICT;
     }
-
   }
   return best_encodes;
 }
-
 
 void Detector::detect_headers() {
   has_headers = detect_headers(raw_rows);
@@ -910,7 +896,7 @@ bool Detector::detect_headers(const std::vector<SQLTypes>& head_types, const std
   if (head_types.size() != tail_types.size()) {
     return false;
   }
-  bool has_headers= false;
+  bool has_headers = false;
   for (size_t col_idx = 0; col_idx < tail_types.size(); col_idx++) {
     if (head_types[col_idx] != kTEXT) {
       return false;
@@ -935,14 +921,12 @@ std::vector<std::string> Detector::get_headers() {
   return headers;
 }
 
-#define IMPORT_FILE_BUFFER_SIZE   100000000
-#define MIN_FILE_BUFFER_SIZE      1000000
+#define IMPORT_FILE_BUFFER_SIZE 100000000
+#define MIN_FILE_BUFFER_SIZE 1000000
 
-void
-Importer::import()
-{
+void Importer::import() {
   p_file = fopen(file_path.c_str(), "rb");
-  (void)fseek(p_file,0,SEEK_END);
+  (void)fseek(p_file, 0, SEEK_END);
   file_size = ftell(p_file);
   if (copy_params.threads == 0)
     max_threads = sysconf(_SC_NPROCESSORS_CONF);
@@ -954,7 +938,8 @@ Importer::import()
   for (int i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
     for (const auto cd : loader.get_column_descs())
-      import_buffers_vec[i].push_back(std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader.get_string_dict(cd))));
+      import_buffers_vec[i].push_back(
+          std::unique_ptr<TypedImportBuffer>(new TypedImportBuffer(cd, loader.get_string_dict(cd))));
   }
   size_t current_pos = 0;
   size_t end_pos;
@@ -965,7 +950,7 @@ Importer::import()
   if (copy_params.has_header) {
     size_t i;
     for (i = 0; i < size && buffer[which_buf][i] != copy_params.line_delim; i++)
-    ;
+      ;
     if (i == size)
       LOG(WARNING) << "No line delimiter in block." << std::endl;
     begin_pos = i + 1;
@@ -976,7 +961,7 @@ Importer::import()
     else
       end_pos = find_end(buffer[which_buf], size, copy_params);
     if (size < IMPORT_FILE_BUFFER_SIZE) {
-      max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos)/MIN_FILE_BUFFER_SIZE));
+      max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos) / MIN_FILE_BUFFER_SIZE));
     }
     if (max_threads == 1) {
       import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
@@ -1003,9 +988,9 @@ Importer::import()
     }
     begin_pos = 0;
   }
-  auto ms = measure<>::execution([&] () {
+  auto ms = measure<>::execution([&]() {
     if (!load_failed) {
-      for (auto &p : import_buffers_vec[0]) {
+      for (auto& p : import_buffers_vec[0]) {
         if (!p->stringDictCheckpoint()) {
           LOG(ERROR) << "Checkpointing Dictionary for Column " << p->getColumnDesc()->columnName << " failed.";
           load_failed = true;
@@ -1017,14 +1002,14 @@ Importer::import()
     }
   });
   if (debug_timing)
-    LOG(INFO) << "Checkpointing took " << (double)ms/1000.0 << " Seconds." << std::endl;
+    LOG(INFO) << "Checkpointing took " << (double)ms / 1000.0 << " Seconds." << std::endl;
 
   free(buffer[0]);
   buffer[0] = nullptr;
   free(buffer[1]);
   buffer[1] = nullptr;
-  fclose(p_file); 
+  fclose(p_file);
   p_file = nullptr;
 }
 
-} // Namespace Importer
+}  // Namespace Importer

@@ -94,8 +94,8 @@ void InsertOrderFragmenter::getChunkMetadata() {
     int deviceId = fragmentInfoVec_.back().deviceIds[static_cast<int>(defaultInsertLevel_)];
     for (auto colIt = columnMap_.begin(); colIt != columnMap_.end(); ++colIt) {
       ChunkKey insertKey = chunkKeyPrefix_;  // database_id and table_id
-      insertKey.push_back(colIt->first);    // column id
-      insertKey.push_back(lastFragmentId);  // fragment id
+      insertKey.push_back(colIt->first);     // column id
+      insertKey.push_back(lastFragmentId);   // fragment id
       colIt->second.getChunkBuffer(dataMgr_, insertKey, defaultInsertLevel_, deviceId);
     }
   }
