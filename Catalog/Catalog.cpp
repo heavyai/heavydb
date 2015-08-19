@@ -564,6 +564,25 @@ void Catalog::dropTable(const TableDescriptor* td) {
   removeTableFromMap(td->tableName, td->tableId);
 }
 
+void Catalog::renameTable(const TableDescriptor *td, const string &newTableName) {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("UPDATE mapd_tables SET name = '" + newTableName + "' WHERE tableid = " + std::to_string(td->tableId));
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+  TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.find(td->tableName);
+  CHECK(tableDescIt != tableDescriptorMap_.end());
+  // Get table descriptor to change it
+  TableDescriptor *changeTd = tableDescIt->second;
+  changeTd->tableName = newTableName;
+  tableDescriptorMap_.erase(tableDescIt); // erase entry under old name
+  tableDescriptorMap_[newTableName] = changeTd;
+}
+
+
 void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {

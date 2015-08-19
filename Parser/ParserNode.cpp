@@ -1352,6 +1352,20 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.dropTable(td);
 }
 
+void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+
+
+  if (td == nullptr) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  if (catalog.getMetadataForTable(*new_table_name) != nullptr) {
+    throw std::runtime_error("Table or View " + *new_table_name + " already exists.");
+  }
+  catalog.renameTable(td,*new_table_name);
+}
+
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);

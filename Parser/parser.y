@@ -75,7 +75,7 @@ using namespace Parser;
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
-%token PUBLIC REAL REFERENCES ROLLBACK SCHEMA SELECT SET
+%token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET
 %token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
 %token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
@@ -100,6 +100,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| refresh_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
   | copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -165,6 +166,7 @@ alter_user_statement:
 			$<nodeval>$ = new AlterUserStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
 		}
 		;
+
 name_eq_value_list:
 		name_eq_value
 		{
@@ -200,6 +202,12 @@ drop_table_statement:
 		DROP TABLE opt_if_exists table
 		{
 			$<nodeval>$ = new DropTableStmt($<stringval>4, $<boolval>3);
+		}
+		;
+rename_table_statement:
+		ALTER TABLE table RENAME TO table  
+		{
+		   $<nodeval>$ = new RenameTableStmt($<stringval>3, $<stringval>6);
 		}
 		;
 

@@ -741,6 +741,16 @@ class DropTableStmt : public DDLStmt {
   bool if_exists;
 };
 
+class RenameTableStmt: public DDLStmt {
+  public:
+    RenameTableStmt(std::string *tab, std::string *new_tab_name): table(tab), new_table_name(new_tab_name) {}
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+  private:
+    std::unique_ptr<std::string> table;
+    std::unique_ptr<std::string> new_table_name;
+};
+
+
 /*
  * @type CopyTableStmt
  * @brief COPY ... FROM ...

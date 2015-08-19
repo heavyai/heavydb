@@ -113,7 +113,7 @@ target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector Da
 # Packaging
 set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
 
-## Frontend
+# Frontend
 option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" ON)
 if(MAPD2_FRONTEND_DOWNLOAD)
   include(ExternalProject)
