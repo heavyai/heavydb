@@ -1335,12 +1335,11 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td == nullptr) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
-  const ColumnDescriptor* cd =
-      catalog.getMetadataForColumn(td->tableId, *column);
+  const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column);
   if (cd == nullptr) {
     throw std::runtime_error("Column " + *column + " does not exist.");
   }
-  if (catalog.getMetadataForColumn(td->tableId, *new_column_name) != nullptr) { 
+  if (catalog.getMetadataForColumn(td->tableId, *new_column_name) != nullptr) {
     throw std::runtime_error("Column " + *new_column_name + " already exists.");
   }
   catalog.renameColumn(td, cd, *new_column_name);

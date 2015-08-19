@@ -564,7 +564,7 @@ void Catalog::dropTable(const TableDescriptor* td) {
   removeTableFromMap(td->tableName, td->tableId);
 }
 
-void Catalog::renameTable(const TableDescriptor* td, const string &newTableName) {
+void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("UPDATE mapd_tables SET name = '" + newTableName + "' WHERE tableid = " +
@@ -583,20 +583,21 @@ void Catalog::renameTable(const TableDescriptor* td, const string &newTableName)
   tableDescriptorMap_[newTableName] = changeTd;
 }
 
-void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor *cd, const string &newColumnName) {
+void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const string& newColumnName) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query("UPDATE mapd_columns SET name = '" + newColumnName + "' WHERE tableid = " + std::to_string(td->tableId) + " AND columnid = " + std::to_string(cd->columnId));
+    sqliteConnector_.query("UPDATE mapd_columns SET name = '" + newColumnName + "' WHERE tableid = " +
+                           std::to_string(td->tableId) + " AND columnid = " + std::to_string(cd->columnId));
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.find(std::make_tuple (td->tableId, cd->columnName));
+  ColumnDescriptorMap::iterator columnDescIt = columnDescriptorMap_.find(std::make_tuple(td->tableId, cd->columnName));
   CHECK(columnDescIt != columnDescriptorMap_.end());
   ColumnDescriptor* changeCd = columnDescIt->second;
   changeCd->columnName = newColumnName;
-  columnDescriptorMap_.erase(columnDescIt); // erase entry under old name
+  columnDescriptorMap_.erase(columnDescIt);  // erase entry under old name
   columnDescriptorMap_[std::make_tuple(td->tableId, newColumnName)] = changeCd;
 }
 
