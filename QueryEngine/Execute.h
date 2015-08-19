@@ -231,6 +231,7 @@ class Executor {
                                const Catalog_Namespace::Catalog&,
                                size_t& max_groups_buffer_entry_guess,
                                int32_t* error_code,
+                               const GpuSortInfo& gpu_sort_info,
                                const bool allow_multifrag,
                                const bool just_explain);
   ResultRows executeSortPlan(const Planner::Sort* sort_plan,
@@ -586,9 +587,11 @@ class Executor {
 
   static const int32_t ERR_DIV_BY_ZERO{1};
   static const int32_t ERR_OUT_OF_GPU_MEM{2};
+  static const int32_t ERR_OUT_OF_SLOTS{3};
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
+  friend class ResultRows;
 };
 
 #endif  // QUERYENGINE_EXECUTE_H

@@ -20,7 +20,10 @@ ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType de
 }
 
 TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type).getRowAt(0, 0, true);
+  auto rows = run_multiple_agg(query_str, device_type);
+  auto crt_row = rows.getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  return crt_row[0];
 }
 
 template <class T>
@@ -65,16 +68,22 @@ class SQLiteComparator {
     const auto mapd_results = run_multiple_agg(query_string, device_type);
     ASSERT_EQ(connector_.getNumRows(), mapd_results.rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
-    if (mapd_results.hasNoRows()) {
+    if (mapd_results.definitelyHasNoRows()) {
       ASSERT_EQ(0, num_rows);
       return;
     }
-    ASSERT_EQ(connector_.getNumCols(), mapd_results.colCount());
+    if (!num_rows) {
+      return;
+    }
+    CHECK_EQ(connector_.getNumCols(), mapd_results.colCount());
     const int num_cols{static_cast<int>(connector_.getNumCols())};
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
+      const auto crt_row = mapd_results.getNextRow(true, true);
+      CHECK(!crt_row.empty());
+      CHECK_EQ(static_cast<size_t>(num_cols), crt_row.size());
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
         const auto ref_col_type = connector_.columnTypes[col_idx];
-        const auto mapd_variant = mapd_results.getRowAt(row_idx, col_idx, true);
+        const auto mapd_variant = crt_row[col_idx];
         const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
         CHECK(scalar_mapd_variant);
         switch (ref_col_type) {
@@ -438,13 +447,19 @@ TEST(Select, ComplexQueries) {
         dt);
     ASSERT_EQ(rows.rowCount(), size_t(2));
     {
-      ASSERT_EQ(v<int64_t>(rows.getRowAt(0, 0, true)), 51);
-      ASSERT_EQ(v<int64_t>(rows.getRowAt(0, 1, true)), -59 * g_num_rows / 2);
+      auto crt_row = rows.getNextRow(true, true);
+      CHECK_EQ(size_t(2), crt_row.size());
+      ASSERT_EQ(v<int64_t>(crt_row[0]), 51);
+      ASSERT_EQ(v<int64_t>(crt_row[1]), -59 * g_num_rows / 2);
     }
     {
-      ASSERT_EQ(v<int64_t>(rows.getRowAt(1, 0, true)), 50);
-      ASSERT_EQ(v<int64_t>(rows.getRowAt(1, 1, true)), -59 * g_num_rows / 2);
+      auto crt_row = rows.getNextRow(true, true);
+      CHECK_EQ(size_t(2), crt_row.size());
+      ASSERT_EQ(v<int64_t>(crt_row[0]), 50);
+      ASSERT_EQ(v<int64_t>(crt_row[1]), -59 * g_num_rows / 2);
     }
+    auto empty_row = rows.getNextRow(true, true);
+    CHECK(empty_row.empty());
   }
 }
 

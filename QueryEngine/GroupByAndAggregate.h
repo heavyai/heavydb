@@ -106,6 +106,7 @@ struct QueryMemoryDescriptor {
   GroupByMemSharing sharing;  // meaningful for GPU only
   CountDistinctDescriptors count_distinct_descriptors_;
   bool sort_on_gpu_;
+  bool is_sort_plan;  // TODO(alex): remove
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const std::vector<int64_t>& init_agg_vals,
@@ -514,6 +515,11 @@ class SpeculativeTopFailed : public std::runtime_error {
   SpeculativeTopFailed() : std::runtime_error("SpeculativeTopFailed") {}
 };
 
+class ReductionRanOutOfSlots : public std::runtime_error {
+ public:
+  ReductionRanOutOfSlots() : std::runtime_error("ReductionRanOutOfSlots") {}
+};
+
 class ResultRows {
  public:
   ResultRows(const std::vector<Analyzer::Expr*>& targets,
@@ -524,6 +530,7 @@ class ResultRows {
              const int64_t min_val = 0,
              const int8_t warp_count = 0)
       : executor_(executor),
+        query_mem_desc_{},
         row_set_mem_owner_(row_set_mem_owner),
         group_by_buffer_(group_by_buffer),
         groups_buffer_entry_count_(groups_buffer_entry_count),
@@ -531,6 +538,16 @@ class ResultRows {
         warp_count_(warp_count),
         sorted_(false),
         truncation_size_(0),
+        output_columnar_(false),
+        in_place_(false),
+        device_type_(ExecutorDeviceType::Hybrid),
+        device_id_(-1),
+        crt_row_idx_(0),
+        crt_row_buff_idx_(0),
+        drop_first_(0),
+        keep_first_(0),
+        fetch_started_(false),
+        in_place_buff_idx_(0),
         just_explain_(false) {
     for (const auto target_expr : targets) {
       const auto agg_info = target_info(target_expr);
@@ -538,12 +555,41 @@ class ResultRows {
     }
   }
 
-  explicit ResultRows(const std::string& explanation) : just_explain_(true), explanation_(explanation) {}
+  ResultRows(const QueryMemoryDescriptor& query_mem_desc,
+             const std::vector<Analyzer::Expr*>& targets,
+             const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+             int64_t* group_by_buffer,
+             const size_t groups_buffer_entry_count,
+             const bool output_columnar,
+             const std::vector<std::vector<const int8_t*>>& col_buffers,
+             const ExecutorDeviceType device_type,
+             const int device_id);
+
+  explicit ResultRows(const std::string& explanation)
+      : query_mem_desc_{},
+        output_columnar_(false),
+        in_place_(false),
+        device_type_(ExecutorDeviceType::Hybrid),
+        device_id_(-1),
+        crt_row_idx_(0),
+        crt_row_buff_idx_(0),
+        drop_first_(0),
+        keep_first_(0),
+        fetch_started_(false),
+        in_place_buff_idx_(0),
+        just_explain_(true),
+        explanation_(explanation) {}
 
   void setTruncationSize(const size_t truncation_size) { truncation_size_ = truncation_size; }
 
   void setSorted(const bool sorted = true) { sorted_ = sorted; }
 
+  void moveToBegin() const {
+    crt_row_idx_ = 0;
+    crt_row_buff_idx_ = 0;
+    in_place_buff_idx_ = 0;
+    fetch_started_ = false;
+  }
   void beginRow() { target_values_.beginRow(row_set_mem_owner_.get(), EMPTY_KEY); }
 
   void beginRow(const int64_t key) {
@@ -579,6 +625,14 @@ class ResultRows {
     simple_keys_.insert(simple_keys_.end(), more_results.simple_keys_.begin(), more_results.simple_keys_.end());
     multi_keys_.insert(multi_keys_.end(), more_results.multi_keys_.begin(), more_results.multi_keys_.end());
     target_values_.append(more_results.target_values_);
+    if (in_place_) {
+      in_place_group_by_buffers_.insert(in_place_group_by_buffers_.end(),
+                                        more_results.in_place_group_by_buffers_.begin(),
+                                        more_results.in_place_group_by_buffers_.end());
+      in_place_groups_by_buffers_entry_count_.insert(in_place_groups_by_buffers_entry_count_.end(),
+                                                     more_results.in_place_groups_by_buffers_entry_count_.begin(),
+                                                     more_results.in_place_groups_by_buffers_entry_count_.end());
+    }
   }
 
   void reduce(const ResultRows& other_results,
@@ -589,6 +643,11 @@ class ResultRows {
   void sort(const Planner::Sort* sort_plan, const int64_t top_n);
 
   void keepFirstN(const size_t n) {
+    CHECK(n);
+    if (in_place_) {
+      keep_first_ = n;
+      return;
+    }
     if (n >= rowCount()) {
       return;
     }
@@ -596,17 +655,41 @@ class ResultRows {
   }
 
   void dropFirstN(const size_t n) {
+    if (in_place_) {
+      drop_first_ = n;
+      return;
+    }
     if (!n) {
       return;
     }
     target_values_.drop(n);
   }
 
-  size_t rowCount() const { return just_explain_ ? 1 : target_values_.size(); }
+  size_t rowCount() const {
+    if (in_place_) {
+      moveToBegin();
+      size_t row_count{0};
+      while (true) {
+        auto crt_row = getNextRow(false, false);
+        if (crt_row.empty()) {
+          break;
+        }
+        ++row_count;
+      }
+      moveToBegin();
+      return row_count;
+    }
+    return just_explain_ ? 1 : target_values_.size();
+  }
 
   size_t colCount() const { return just_explain_ ? 1 : targets_.size(); }
 
-  bool hasNoRows() const { return !rowCount() && !group_by_buffer_ && !just_explain_; }
+  bool definitelyHasNoRows() const {
+    if (in_place_) {
+      return in_place_group_by_buffers_.empty();
+    }
+    return !rowCount() && !group_by_buffer_ && !just_explain_;
+  }
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
@@ -614,6 +697,8 @@ class ResultRows {
                        const size_t col_idx,
                        const bool translate_strings,
                        const bool decimal_to_double = true) const;
+
+  std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
   int64_t getSimpleKey(const size_t row_idx) const;
 
@@ -627,6 +712,13 @@ class ResultRows {
   bool isSorted() const { return sorted_; }
 
  private:
+  bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
+                           const std::vector<std::vector<const int8_t*>>& col_buffers,
+                           const std::vector<Analyzer::Expr*>& targets,
+                           const bool translate_strings,
+                           const bool decimal_to_double,
+                           const bool fetch_lazy) const;
+
   void addValues(const std::vector<int64_t>& vals) {
     target_values_.reserveRow(vals.size());
     for (const auto val : vals) {
@@ -665,6 +757,7 @@ class ResultRows {
   mutable std::map<MultiKey, InternalRow> as_map_;
   mutable std::unordered_map<int64_t, InternalRow> as_unordered_map_;
   const Executor* executor_;
+  QueryMemoryDescriptor query_mem_desc_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
   int64_t* group_by_buffer_;
@@ -673,11 +766,24 @@ class ResultRows {
   int8_t warp_count_;
   bool sorted_;             // true iff this result has been sorted on the GPU
   size_t truncation_size_;  // if not zero, this result only contains first truncation_size_ rows
+  bool output_columnar_;
+  bool in_place_;
+  ExecutorDeviceType device_type_;
+  int device_id_;
+  mutable size_t crt_row_idx_;
+  mutable size_t crt_row_buff_idx_;
+  size_t drop_first_;
+  size_t keep_first_;
+  mutable bool fetch_started_;
+  mutable size_t in_place_buff_idx_;
+  std::vector<int32_t> in_place_groups_by_buffers_entry_count_;
+  std::vector<int64_t*> in_place_group_by_buffers_;
   bool just_explain_;
   std::string explanation_;
   std::unordered_set<int64_t> unkown_top_keys_;
 
   friend class Executor;
+  friend class QueryExecutionContext;
 };
 
 namespace {
@@ -743,6 +849,13 @@ inline std::string row_col_to_string(const ResultRows& rows,
   return datum_to_string(tv, ti, delim);
 }
 
+inline std::string row_col_to_string(const std::vector<TargetValue>& row,
+                                     const size_t i,
+                                     const SQLTypeInfo& ti,
+                                     const std::string& delim = ", ") {
+  return datum_to_string(row[i], ti, delim);
+}
+
 class QueryExecutionContext : boost::noncopyable {
  public:
   // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
@@ -781,6 +894,12 @@ class QueryExecutionContext : boost::noncopyable {
                                       int32_t* error_code) const;
 
  private:
+  void outputBin(ResultRows& results,
+                 const std::vector<Analyzer::Expr*>& targets,
+                 int64_t* group_by_buffer,
+                 const size_t groups_buffer_entry_count,
+                 const size_t bin) const;
+
   void initGroups(int64_t* groups_buffer,
                   const int64_t* init_vals,
                   const int32_t groups_buffer_entry_count,
@@ -811,6 +930,7 @@ class QueryExecutionContext : boost::noncopyable {
   const bool sort_on_gpu_;
 
   friend class Executor;
+  friend class ResultRows;
   friend void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                              const QueryExecutionContext* query_exe_context,
                                              const GpuQueryMemory& gpu_query_mem,
@@ -1024,5 +1144,23 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
   }
   return col_widths;
 }
+
+namespace {
+
+inline size_t key_columnar_off(const size_t group_by_col_count,
+                               const size_t bin,
+                               const size_t agg_col_count,
+                               const bool output_columnar) {
+  return (output_columnar ? 1 : (group_by_col_count + agg_col_count)) * bin;
+}
+
+inline uint32_t agg_columnar_off(const size_t group_by_col_count,
+                                 const size_t out_vec_idx,
+                                 const size_t groups_buffer_entry_count,
+                                 const bool output_columnar) {
+  return (out_vec_idx + group_by_col_count) * (output_columnar ? groups_buffer_entry_count : 1);
+}
+
+}  // namespace
 
 #endif  // QUERYENGINE_GROUPBYANDAGGREGATE_H

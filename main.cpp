@@ -361,14 +361,16 @@ int main(int argc, char* argv[]) {
             } else {
               results = results_cpu;
             }
-            if (!results.hasNoRows()) {
-              for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
-                cout << fixed << setprecision(13) << row_col_to_string(results, row_idx, 0);
-                for (size_t i = 1; i < results.colCount(); ++i) {
-                  cout << "|" << row_col_to_string(results, row_idx, i);
-                }
-                cout << endl;
+            while (true) {
+              const auto crt_row = results.getNextRow(true, true);
+              if (crt_row.empty()) {
+                break;
               }
+              cout << fixed << setprecision(13) << row_col_to_string(crt_row, 0, results.getColType(0));
+              for (size_t i = 1; i < results.colCount(); ++i) {
+                cout << "|" << row_col_to_string(crt_row, i, results.getColType(i));
+              }
+              cout << endl;
             }
           }
         }

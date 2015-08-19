@@ -331,7 +331,9 @@ class MapDHandler : virtual public MapDIf {
               _return.row_set.row_desc.push_back(proj_info);
               TRow trow;
               TDatum explanation;
-              const auto tv = results.getRowAt(0, 0, false);
+              const auto crt_row = results.getNextRow(true, true);
+              const auto tv = crt_row[0];
+              CHECK(results.getNextRow(true, true).empty());
               const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
               CHECK(scalar_tv);
               const auto s_n = boost::get<NullableString>(scalar_tv);
@@ -366,21 +368,31 @@ class MapDHandler : virtual public MapDIf {
             }
             if (column_format) {
               _return.row_set.is_columnar = true;
-              for (size_t i = 0; i < results.colCount(); ++i) {
-                TColumn tcolumn;
-                for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
-                  const auto agg_result = results.getRowAt(row_idx, i, true);
-                  value_to_thrift_column(agg_result, targets[i]->get_expr()->get_type_info(), tcolumn);
+              std::vector<TColumn> tcolumns(results.colCount());
+              while (true) {
+                const auto crt_row = results.getNextRow(true, true);
+                if (crt_row.empty()) {
+                  break;
                 }
-                _return.row_set.columns.push_back(tcolumn);
+                for (size_t i = 0; i < results.colCount(); ++i) {
+                  const auto agg_result = crt_row[i];
+                  value_to_thrift_column(agg_result, targets[i]->get_expr()->get_type_info(), tcolumns[i]);
+                }
+              }
+              for (size_t i = 0; i < results.colCount(); ++i) {
+                _return.row_set.columns.push_back(tcolumns[i]);
               }
             } else {
               _return.row_set.is_columnar = false;
-              for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
+              while (true) {
+                const auto crt_row = results.getNextRow(true, true);
+                if (crt_row.empty()) {
+                  break;
+                }
                 TRow trow;
                 trow.cols.reserve(results.colCount());
                 for (size_t i = 0; i < results.colCount(); ++i) {
-                  const auto agg_result = results.getRowAt(row_idx, i, true);
+                  const auto agg_result = crt_row[i];
                   trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
                 }
                 _return.row_set.rows.push_back(trow);

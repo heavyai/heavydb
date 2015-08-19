@@ -164,6 +164,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                     cat,
                                     max_groups_buffer_entry_guess,
                                     error_code,
+                                    gpu_sort_info,
                                     allow_multifrag,
                                     just_explain);
       rows.dropFirstN(offset);
@@ -180,6 +181,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                              cat,
                              max_groups_buffer_entry_guess,
                              error_code,
+                             gpu_sort_info,
                              allow_multifrag,
                              just_explain);
   }
@@ -1876,9 +1878,14 @@ class ColumnarResults {
             (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_size() == 4));
       column_buffers_[i] = static_cast<const int8_t*>(malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
     }
-    for (size_t row_idx = 0; row_idx < rows.rowCount(); ++row_idx) {
+    size_t row_idx{0};
+    while (true) {
+      const auto crt_row = rows.getNextRow(false, false);
+      if (crt_row.empty()) {
+        break;
+      }
       for (size_t i = 0; i < num_columns; ++i) {
-        const auto col_val = rows.getRowAt(row_idx, i, false, false);
+        const auto col_val = crt_row[i];
         const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
         CHECK(scalar_col_val);
         auto i64_p = boost::get<int64_t>(scalar_col_val);
@@ -1914,6 +1921,7 @@ class ColumnarResults {
           }
         }
       }
+      ++row_idx;
     }
   }
   ~ColumnarResults() {
@@ -2051,11 +2059,11 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        const Catalog_Namespace::Catalog& cat,
                                        size_t& max_groups_buffer_entry_guess,
                                        int32_t* error_code,
+                                       const GpuSortInfo& gpu_sort_info,
                                        const bool allow_multifrag,
                                        const bool just_explain) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
-  GpuSortInfo empty_gpu_sort_info{nullptr, 0};
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   auto result_rows = executeAggScanPlan(agg_plan,
                                         0,
@@ -2067,7 +2075,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         row_set_mem_owner_,
                                         max_groups_buffer_entry_guess,
                                         error_code,
-                                        empty_gpu_sort_info,
+                                        gpu_sort_info,
                                         false,
                                         allow_multifrag,
                                         just_explain);
@@ -2117,7 +2125,8 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        false,
                                        GroupByMemSharing::Shared,
                                        CountDistinctDescriptors{},
-                                       false};
+                                       false,
+                                       true};
   auto query_func = query_group_by_template(
       cgen_state_->module_, is_nested_, hoist_literals, query_mem_desc, ExecutorDeviceType::CPU, false);
   std::tie(row_func, col_heads) = create_row_function(
@@ -2144,7 +2153,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         row_set_mem_owner_,
                                         result_rows.rowCount(),
                                         0,
-                                        empty_gpu_sort_info,
+                                        gpu_sort_info,
                                         false,
                                         just_explain,
                                         llvm_ir);
@@ -2496,7 +2505,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     }
     CHECK(query_exe_context);
     int32_t err{0};
-    ResultRows device_results({}, nullptr, nullptr);
+    ResultRows device_results(
+        compilation_result.query_mem_desc, {}, nullptr, nullptr, 0, false, {}, chosen_device_type, chosen_device_id);
     if (groupby_exprs.empty()) {
       err = executePlanWithoutGroupBy(compilation_result,
                                       hoist_literals,
@@ -2529,7 +2539,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       if (err) {
         *error_code = err;
       }
-      if (!device_results.hasNoRows()) {
+      if (!device_results.definitelyHasNoRows()) {
         all_fragment_results.emplace_back(device_results, frag_ids);
       }
     }
@@ -2589,6 +2599,9 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                      query_contexts,
                                      row_set_mem_owner,
                                      output_columnar);
+    } catch (ReductionRanOutOfSlots&) {
+      *error_code = ERR_OUT_OF_SLOTS;
+      return ResultRows(query_mem_desc, plan_state_->target_exprs_, nullptr, nullptr, 0, false, {}, device_type, -1);
     }
   }
   return results_union(all_fragment_results);
@@ -2623,7 +2636,10 @@ ResultRows Executor::collectAllDeviceResults(
       }
     }
   }
-  if (reduced_results.group_by_buffer_) {
+  CHECK_EQ(reduced_results.in_place_group_by_buffers_.size(),
+           reduced_results.in_place_groups_by_buffers_entry_count_.size());
+  reduced_results.query_mem_desc_ = query_mem_desc;  // TODO(alex): remove
+  if (reduced_results.group_by_buffer_ && !reduced_results.in_place_) {
     reduced_results.addKeylessGroupByBuffer(reduced_results.group_by_buffer_,
                                             reduced_results.groups_buffer_entry_count_,
                                             reduced_results.min_val_,
@@ -2857,7 +2873,6 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const int device_id,
                                          const int64_t scan_limit,
                                          const bool was_auto_device) {
-  CHECK(results.hasNoRows());
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
   // 1. Optimize size (make keys more compact).

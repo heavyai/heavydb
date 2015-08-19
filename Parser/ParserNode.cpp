@@ -1574,11 +1574,15 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     outfile << copy_params.line_delim;
   }
-  for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
+  while (true) {
+    const auto crt_row = results.getNextRow(true, true);
+    if (crt_row.empty()) {
+      break;
+    }
     bool not_first = false;
     for (size_t i = 0; i < results.colCount(); ++i) {
       bool is_null;
-      const auto tv = results.getRowAt(row_idx, i, true);
+      const auto tv = crt_row[i];
       const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
       if (not_first)
         outfile << copy_params.delimiter;
@@ -1586,8 +1590,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         not_first = true;
       if (copy_params.quoted)
         outfile << copy_params.quote;
+      const auto& ti = targets[i]->get_expr()->get_type_info();
       if (!scalar_tv) {
-        outfile << row_col_to_string(results, row_idx, i, " | ");
+        outfile << row_col_to_string(crt_row, i, ti, " | ");
         if (copy_params.quoted) {
           outfile << copy_params.quote;
         }
@@ -1595,7 +1600,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
       if (boost::get<int64_t>(scalar_tv)) {
         auto int_val = *(boost::get<int64_t>(scalar_tv));
-        switch (targets[i]->get_expr()->get_type_info().get_type()) {
+        switch (ti.get_type()) {
           case kBOOLEAN:
             is_null = (int_val == NULL_BOOLEAN);
             break;
@@ -1625,7 +1630,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           outfile << int_val;
       } else if (boost::get<double>(scalar_tv)) {
         auto real_val = *(boost::get<double>(scalar_tv));
-        if (targets[i]->get_expr()->get_type_info().get_type() == kFLOAT) {
+        if (ti.get_type() == kFLOAT) {
           is_null = (real_val == NULL_FLOAT);
         } else {
           is_null = (real_val == NULL_DOUBLE);
