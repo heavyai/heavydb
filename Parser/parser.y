@@ -69,7 +69,7 @@ using namespace Parser;
 	/* literal keyword tokens */
 
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
-%token CASE CAST CHARACTER CHECK CLOSE COMMIT CONTINUE COPY CREATE CURRENT
+%token CASE CAST CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END ESCAPE EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
@@ -101,6 +101,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| refresh_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
   | copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -208,6 +209,13 @@ rename_table_statement:
 		ALTER TABLE table RENAME TO table  
 		{
 		   $<nodeval>$ = new RenameTableStmt($<stringval>3, $<stringval>6);
+		}
+		;
+
+rename_column_statement:
+		ALTER TABLE table RENAME COLUMN column TO column
+		{
+		   $<nodeval>$ = new RenameColumnStmt($<stringval>3, $<stringval>6, $<stringval>8);
 		}
 		;
 

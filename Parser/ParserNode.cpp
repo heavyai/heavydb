@@ -1329,6 +1329,23 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.renameTable(td, *new_table_name);
 }
 
+void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.get_catalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  if (td == nullptr) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  const ColumnDescriptor* cd =
+      catalog.getMetadataForColumn(td->tableId, *column);
+  if (cd == nullptr) {
+    throw std::runtime_error("Column " + *column + " does not exist.");
+  }
+  if (catalog.getMetadataForColumn(td->tableId, *new_column_name) != nullptr) { 
+    throw std::runtime_error("Column " + *new_column_name + " already exists.");
+  }
+  catalog.renameColumn(td, cd, *new_column_name);
+}
+
 void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);

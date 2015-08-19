@@ -138,7 +138,8 @@ class Catalog {
   void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns);
   void createFrontendView(FrontendViewDescriptor& vd);
   void dropTable(const TableDescriptor* td);
-  void renameTable(const TableDescriptor* td, const std::string& newTableName);
+  void renameTable(const TableDescriptor* td, const std::string &newTableName);
+void renameColumn(const TableDescriptor* td, const ColumnDescriptor *cd, const std::string &newColumnName);
 
   /**
    * @brief Returns a pointer to a const TableDescriptor struct matching

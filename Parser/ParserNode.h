@@ -735,6 +735,19 @@ class RenameTableStmt : public DDLStmt {
   std::unique_ptr<std::string> new_table_name;
 };
 
+class RenameColumnStmt : public DDLStmt {
+ public:
+  RenameColumnStmt(std::string* tab, std::string* col, std::string* new_col_name) : table(tab), column(col), new_column_name(new_col_name) {}
+  virtual void execute(const Catalog_Namespace::SessionInfo& session);
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<std::string> column;
+  std::unique_ptr<std::string> new_column_name;
+};
+
+
+
 /*
  * @type CopyTableStmt
  * @brief COPY ... FROM ...
