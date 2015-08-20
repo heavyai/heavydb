@@ -802,7 +802,7 @@ bool Detector::more_restrictive_sqltype(const SQLTypes a, const SQLTypes b) {
 }
 
 void Detector::find_best_sqltypes_and_headers() {
-  best_sqltypes = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end());
+  best_sqltypes = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end(), copy_params);
   best_encodings = find_best_encodings(raw_rows.begin() + 1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
   has_headers = detect_headers(head_types, best_sqltypes);
@@ -810,16 +810,18 @@ void Detector::find_best_sqltypes_and_headers() {
 }
 
 void Detector::find_best_sqltypes() {
-  best_sqltypes = find_best_sqltypes(raw_rows.begin(), raw_rows.end());
+  best_sqltypes = find_best_sqltypes(raw_rows.begin(), raw_rows.end(), copy_params);
 }
 
-std::vector<SQLTypes> Detector::find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows) {
-  return find_best_sqltypes(raw_rows.begin(), raw_rows.end());
+std::vector<SQLTypes> Detector::find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows,
+                                                   const CopyParams& copy_params) {
+  return find_best_sqltypes(raw_rows.begin(), raw_rows.end(), copy_params);
 }
 
 std::vector<SQLTypes> Detector::find_best_sqltypes(
     const std::vector<std::vector<std::string>>::const_iterator& row_begin,
-    const std::vector<std::vector<std::string>>::const_iterator& row_end) {
+    const std::vector<std::vector<std::string>>::const_iterator& row_end,
+    const CopyParams& copy_params) {
   if (raw_rows.size() < 1) {
     throw std::runtime_error("No rows found in: " + boost::filesystem::basename(file_path));
   }
@@ -829,7 +831,8 @@ std::vector<SQLTypes> Detector::find_best_sqltypes(
   std::vector<size_t> non_null_col_counts(num_cols, 0);
   for (auto row = row_begin; row != row_end; row++) {
     for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
-      if (row->at(col_idx) == "")  // empty means null so don't count this
+      // do not count nulls
+      if (row->at(col_idx) == "" || !row->at(col_idx).compare(copy_params.null_str))
         continue;
       SQLTypes t = detect_sqltype(row->at(col_idx));
       non_null_col_counts[col_idx]++;
@@ -885,7 +888,7 @@ bool Detector::detect_headers(const std::vector<std::vector<std::string>>& raw_r
     return false;
   }
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
-  std::vector<SQLTypes> tail_types = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end());
+  std::vector<SQLTypes> tail_types = find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end(), copy_params);
   return detect_headers(head_types, tail_types);
 }
 

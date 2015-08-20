@@ -367,9 +367,11 @@ class Detector {
   std::vector<SQLTypes> detect_column_types(const std::vector<std::string>& row);
   static bool more_restrictive_sqltype(const SQLTypes a, const SQLTypes b);
   void find_best_sqltypes();
-  std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows);
+  std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>& raw_rows,
+                                           const CopyParams& copy_params);
   std::vector<SQLTypes> find_best_sqltypes(const std::vector<std::vector<std::string>>::const_iterator& row_begin,
-                                           const std::vector<std::vector<std::string>>::const_iterator& row_end);
+                                           const std::vector<std::vector<std::string>>::const_iterator& row_end,
+                                           const CopyParams& copy_params);
 
   std::vector<EncodingType> find_best_encodings(const std::vector<std::vector<std::string>>::const_iterator& row_begin,
                                                 const std::vector<std::vector<std::string>>::const_iterator& row_end,
