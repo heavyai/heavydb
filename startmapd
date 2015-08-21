@@ -21,7 +21,7 @@ if ! pgrep mapd_http_server; then
     ./bin/mapd_http_server &
 fi
 
-if [ -d frontend ]; then
+if [ -d frontend -a -e ./bin/mapd_web_server ]; then
     pushd frontend
     if [ ! -e downloads ]; then
         ln -s ../data/mapd_export downloads
@@ -32,20 +32,14 @@ if [ -d frontend ]; then
         #ln -s ../data/mapd_import uploads
         mkdir -p uploads
     fi
-    if [ -e bin/mapd_web_server ]; then
-        server=bin/mapd_web_server
-    elif [ -e upload_server/nodejs/bin/node ]; then
-        pushd upload_server
-        ln -s ../uploads .
-        server="nodejs/bin/node index.js"
-    fi
+
     trap 'kill -TERM $WEBPID' TERM INT
-    PORT=9092 $server &
+    PORT=9092 ./bin/mapd_web_server &
     WEBPID=$!
 
     MAPDFRONTEND="http://localhost:9092"
     if [ ! -z "$MAPDDASH" ]; then
-        MAPDFRONTEND="$MAPDFRONTEND/?style=light-style&platform=mapd&host=localhost&port=9090&db=mapd&$MAPDDASH"
+        MAPDFRONTEND="$MAPDFRONTEND/?style=light-style&platform=mapd&host=localhost&port=9092&db=mapd&$MAPDDASH"
     fi
     if hash open 2>/dev/null; then
         open $MAPDFRONTEND

@@ -133,40 +133,16 @@ endif()
 ## Go server
 find_program(GO_EXECUTABLE NAMES go)
 if(GO_EXECUTABLE)
-  set(MAPD2_NODEJS_SERVER OFF)
   add_custom_target(mapd_web_server ALL
     COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} get github.com/gorilla/handlers github.com/namsral/flag
     COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     SOURCES MapDWebServer.go
     )
-endif()
-
-## Node server
-option(MAPD2_NODEJS_SERVER "Download Node server for uploads and frontend" ON)
-set(MAPD2_NODE_VERSION "0.12.7" CACHE STRING "Version of Node to download")
-string(TOLOWER ${CMAKE_SYSTEM_NAME} MAPD2_NODE_SYSTEM_NAME)
-if(MAPD2_NODEJS_SERVER AND NOT GO_EXECUTABLE)
-  include(ExternalProject)
-  ExternalProject_Add(upload_server
-    URL "http://nodejs.org/dist/v${MAPD2_NODE_VERSION}/node-v${MAPD2_NODE_VERSION}-${MAPD2_NODE_SYSTEM_NAME}-x64.tar.gz" #TODO: architecture
-    PREFIX external
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    UPDATE_COMMAND ""
-    )
-  ExternalProject_Get_Property(upload_server source_dir)
-  install(DIRECTORY ${source_dir}/ DESTINATION upload_server/nodejs USE_SOURCE_PERMISSIONS)
-  add_custom_command(TARGET upload_server COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} upload_server/nodejs)
-  install(FILES ${CMAKE_SOURCE_DIR}/nodeUploadServer/index.js ${CMAKE_SOURCE_DIR}/nodeUploadServer/package.json DESTINATION upload_server)
-  file(COPY ${CMAKE_SOURCE_DIR}/nodeUploadServer/index.js ${CMAKE_SOURCE_DIR}/nodeUploadServer/package.json DESTINATION upload_server)
-  add_custom_command(TARGET upload_server COMMAND ${source_dir}/bin/npm install WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/upload_server)
-  install(DIRECTORY ${CMAKE_BINARY_DIR}/upload_server/node_modules DESTINATION upload_server)
+  install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
 endif()
 
 install(TARGETS initdb mapd mapd_server mapd_http_server DESTINATION bin)
-install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
 install(FILES mapd.thrift DESTINATION ".")
