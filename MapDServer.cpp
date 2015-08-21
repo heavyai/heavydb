@@ -543,6 +543,8 @@ class MapDHandler : virtual public MapDIf {
     copy_params.quoted = cp.quoted;
     if (cp.delimiter.length() > 0)
       copy_params.delimiter = unescape_char(cp.delimiter);
+    else
+      copy_params.delimiter = '\0';
     if (cp.null_str.length() > 0)
       copy_params.null_str = cp.null_str;
     if (cp.quote.length() > 0)
