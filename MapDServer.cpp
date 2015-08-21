@@ -870,6 +870,14 @@ class MapDHandler : virtual public MapDIf {
     std::cout << "Total Import Time: " << (double)ms / 1000.0 << " Seconds." << std::endl;
   }
 
+  void import_table_status(TImportStatus& _return, const TSessionId session, const std::string& import_id) {
+    LOG(INFO) << "import_table_status " << import_id;
+    auto is = Importer_NS::Importer::get_import_status(import_id);
+    _return.elapsed = is.elapsed.count();
+    _return.rows_completed = is.rows_completed;
+    _return.rows_estimated = is.rows_estimated;
+  }
+
  private:
   typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
 

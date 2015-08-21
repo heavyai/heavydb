@@ -14,8 +14,10 @@
 #include <vector>
 #include <unordered_set>
 #include <thread>
+#include <future>
 #include <mutex>
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
 #include <glog/logging.h>
 #include "../Shared/measure.h"
 #include "Importer.h"
@@ -26,12 +28,15 @@ namespace Importer_NS {
 bool debug_timing = false;
 
 static std::mutex insert_mutex;
+static mapd_shared_mutex status_mutex;
+static std::map<std::string, ImportStatus> import_status_map;
 
 Importer::Importer(const Catalog_Namespace::Catalog& c,
                    const TableDescriptor* t,
                    const std::string& f,
                    const CopyParams& p)
     : file_path(f), copy_params(p), loader(c, t), load_failed(false) {
+  import_id = boost::filesystem::path(file_path).filename().string();
   file_size = 0;
   max_threads = 0;
   p_file = nullptr;
@@ -63,6 +68,18 @@ Importer::~Importer() {
     free(buffer[0]);
   if (buffer[1] != nullptr)
     free(buffer[1]);
+}
+
+ImportStatus Importer::get_import_status(const std::string& import_id) {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(status_mutex);
+  return import_status_map.at(import_id);
+}
+
+void Importer::set_import_status(const std::string& import_id, ImportStatus is) {
+  mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+  is.end = std::chrono::steady_clock::now();
+  is.elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(is.end - is.start);
+  import_status_map[import_id] = is;
 }
 
 static const std::string trim_space(const char* field, const size_t len) {
@@ -550,12 +567,12 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
   }
 }
 
-static void import_thread(int thread_id,
-                          Importer* importer,
-                          const char* buffer,
-                          size_t begin_pos,
-                          size_t end_pos,
-                          size_t total_size) {
+static size_t import_thread(int thread_id,
+                            Importer* importer,
+                            const char* buffer,
+                            size_t begin_pos,
+                            size_t end_pos,
+                            size_t total_size) {
   size_t row_count = 0;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
@@ -624,6 +641,7 @@ static void import_thread(int thread_id,
               << "sec, get_row: " << (double)total_get_row_time_us / 1000000.0
               << "sec, str_to_val: " << (double)total_str_to_val_time_us / 1000000.0 << "sec" << std::endl;
   }
+  return row_count;
 }
 
 static size_t find_end(const char* buffer, size_t size, const CopyParams& copy_params) {
@@ -928,6 +946,7 @@ std::vector<std::string> Detector::get_headers() {
 #define MIN_FILE_BUFFER_SIZE 1000000
 
 void Importer::import() {
+  set_import_status(import_id, import_status);
   p_file = fopen(file_path.c_str(), "rb");
   (void)fseek(p_file, 0, SEEK_END);
   file_size = ftell(p_file);
@@ -950,6 +969,7 @@ void Importer::import() {
   size_t size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
   bool eof_reached = false;
   size_t begin_pos = 0;
+  size_t row_count = 0;
   if (copy_params.has_header) {
     size_t i;
     for (i = 0; i < size && buffer[which_buf][i] != copy_params.line_delim; i++)
@@ -974,11 +994,12 @@ void Importer::import() {
       if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
         eof_reached = true;
     } else {
-      std::vector<std::thread> threads;
+      std::vector<std::future<size_t>> threads;
       for (int i = 0; i < max_threads; i++) {
         size_t begin = begin_pos + i * ((end_pos - begin_pos) / max_threads);
         size_t end = (i < max_threads - 1) ? begin_pos + (i + 1) * ((end_pos - begin_pos) / max_threads) : end_pos;
-        threads.push_back(std::thread(import_thread, i, this, buffer[which_buf], begin, end, end_pos));
+        threads.push_back(
+            std::async(std::launch::async, import_thread, i, this, buffer[which_buf], begin, end, end_pos));
       }
       current_pos += end_pos;
       which_buf = (which_buf + 1) % 2;
@@ -987,8 +1008,11 @@ void Importer::import() {
       if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file))
         eof_reached = true;
       for (auto& p : threads)
-        p.join();
+        row_count += p.get();
     }
+    import_status.rows_completed = row_count;
+    import_status.rows_estimated = ((float)file_size / current_pos) * row_count;
+    set_import_status(import_id, import_status);
     begin_pos = 0;
   }
   auto ms = measure<>::execution([&]() {

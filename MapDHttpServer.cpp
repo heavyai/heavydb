@@ -516,6 +516,30 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
+  void import_table_status(TImportStatus& _return, const TSessionId session, const std::string& import_id) {
+    instantiateClient();
+    try {
+      (*client_)->import_table_status(_return, session, import_id);
+    } catch (TMapDException& e) {
+      throw e;
+    } catch (TException& te) {
+      try {
+        client_->reopen();
+        (*client_)->import_table_status(_return, session, import_id);
+      } catch (TException& te1) {
+        std::cerr << "Thrift exception: " << te1.what() << std::endl;
+        ThriftException thrift_exception;
+        thrift_exception.error_msg = te1.what();
+        throw thrift_exception;
+      }
+    } catch (std::exception& e) {
+      std::cerr << "import_table_status caught exception: " << e.what() << std::endl;
+      TMapDException ex;
+      ex.error_msg = e.what();
+      throw ex;
+    }
+  }
+
  private:
   void instantiateClient() {
     if (!client_) {

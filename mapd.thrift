@@ -130,6 +130,12 @@ struct TDetectResult {
   2: TCopyParams copy_params
 }
 
+struct TImportStatus {
+  1: i64 elapsed
+  2: i64 rows_completed
+  3: i64 rows_estimated
+}
+
 typedef map<string, TRenderProperty> TRenderPropertyMap
 typedef map<string, TRenderPropertyMap> TColumnRenderMap
 
@@ -153,4 +159,5 @@ service MapD {
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
   void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
+  TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e 2: ThriftException te)
 }

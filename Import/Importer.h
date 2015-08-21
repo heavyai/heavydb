@@ -387,6 +387,15 @@ class Detector {
   CopyParams copy_params;
 };
 
+struct ImportStatus {
+  std::chrono::steady_clock::time_point start;
+  std::chrono::steady_clock::time_point end;
+  size_t rows_completed;
+  size_t rows_estimated;
+  std::chrono::duration<size_t, std::milli> elapsed;
+  ImportStatus() : start(std::chrono::steady_clock::now()) {}
+};
+
 class Importer {
  public:
   Importer(const Catalog_Namespace::Catalog& c, const TableDescriptor* t, const std::string& f, const CopyParams& p);
@@ -401,9 +410,12 @@ class Importer {
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>>& get_import_buffers_vec() { return import_buffers_vec; }
   std::vector<std::unique_ptr<TypedImportBuffer>>& get_import_buffers(int i) { return import_buffers_vec[i]; }
   const bool* get_is_array() const { return is_array_a.get(); }
+  static ImportStatus get_import_status(const std::string& id);
+  static void set_import_status(const std::string& id, const ImportStatus is);
 
  private:
   const std::string& file_path;
+  std::string import_id;
   const CopyParams& copy_params;
   size_t file_size;
   int max_threads;
@@ -414,6 +426,7 @@ class Importer {
   Loader loader;
   bool load_failed;
   std::unique_ptr<bool> is_array_a;
+  ImportStatus import_status;
 };
 };
 #endif  // _IMPORTER_H_
