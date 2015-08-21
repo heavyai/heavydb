@@ -63,6 +63,10 @@ ADD_SUBDIRECTORY    (Chunk)
 ADD_SUBDIRECTORY    (Shared)
 ADD_SUBDIRECTORY    (Utils)
 ADD_SUBDIRECTORY    (SQLFrontend)
+option(WITH_ODBC "Build ODBC driver" OFF)
+if (WITH_ODBC)
+  ADD_SUBDIRECTORY    (ODBC)
+endif()
 
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
     QueryEngine DataMgr Fragmenter Chunk)
