@@ -18,7 +18,6 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
-#include <boost/bimap.hpp>
 #include <memory>
 #include <string>
 #include <fstream>
