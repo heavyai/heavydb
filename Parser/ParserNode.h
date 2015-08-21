@@ -916,6 +916,20 @@ class ExplainStmt : public DDLStmt {
 };
 
 /*
+ * @type ShowCreateTableStmt
+ * @brief shows create table statement to create table 
+ */
+class ShowCreateTableStmt: public DDLStmt {
+  public:
+    ShowCreateTableStmt(std::string* tab): table(tab) {}
+    std::string get_create_stmt();
+    virtual void execute(const Catalog_Namespace::SessionInfo& session) { CHECK(false); }
+
+  private:
+    std::unique_ptr<std::string> table;
+};
+
+/*
  * @type ExportQueryStmt
  * @brief COPY ( query ) TO file ...
  */

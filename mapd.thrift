@@ -60,6 +60,19 @@ struct TRow {
   1: list<TDatum> cols
 }
 
+union TColumnData {
+  1: list<i64> int_col,
+  2: list<double> real_col,
+  3: list<string> str_col,
+  4: list<TColumn> arr_col
+}
+
+struct TColumn {
+  1: TColumnData data,
+  2: list<bool> nulls
+}
+
+
 struct TStringRow {
   1: list<TStringValue> cols
 }
@@ -71,6 +84,8 @@ typedef i32 TSessionId
 struct TRowSet {
   1: TRowDescriptor row_desc
   2: list<TRow> rows
+  3: list<TColumn> columns
+  4: bool is_columnar
 }
 
 struct TQueryResult {
@@ -121,7 +136,7 @@ typedef map<string, TRenderPropertyMap> TColumnRenderMap
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
-  TQueryResult sql_execute(1: TSessionId session, 2: string query) throws (1: TMapDException e 2: ThriftException te)
+  TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format) throws (1: TMapDException e 2: ThriftException te)
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   string get_frontend_view(1: TSessionId session,  2: string view_name) throws (1: TMapDException e 2: ThriftException te)

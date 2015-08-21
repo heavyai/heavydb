@@ -129,6 +129,71 @@ class MapDHandler : virtual public MapDIf {
     sessions_.erase(session_it);
   }
 
+  void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
+    const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+    if (!scalar_tv) {
+      const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
+      CHECK(list_tv);
+      CHECK(ti.is_array());
+      TColumn tColumn;
+      for (const auto& elem_tv : *list_tv) {
+        value_to_thrift_column(elem_tv, ti.get_elem_type(), tColumn);
+      }
+      column.data.arr_col.push_back(tColumn);
+      column.nulls.push_back(list_tv->size() == 0);
+    } else {
+      if (boost::get<int64_t>(scalar_tv)) {
+        int64_t data = *(boost::get<int64_t>(scalar_tv));
+        column.data.int_col.push_back(data);
+        switch (ti.get_type()) {
+          case kBOOLEAN:
+            column.nulls.push_back(data == NULL_BOOLEAN);
+            break;
+          case kSMALLINT:
+            column.nulls.push_back(data == NULL_SMALLINT);
+            break;
+          case kINT:
+            column.nulls.push_back(data == NULL_INT);
+            break;
+          case kBIGINT:
+            column.nulls.push_back(data == NULL_BIGINT);
+            break;
+          case kTIME:
+          case kTIMESTAMP:
+          case kDATE:
+            if (sizeof(time_t) == 4)
+              column.nulls.push_back(data == NULL_INT);
+            else
+              column.nulls.push_back(data == NULL_BIGINT);
+            break;
+          default:
+            column.nulls.push_back(false);
+        }
+      } else if (boost::get<double>(scalar_tv)) {
+        double data = *(boost::get<double>(scalar_tv));
+        column.data.real_col.push_back(data);
+        if (ti.get_type() == kFLOAT) {
+          column.nulls.push_back(data == NULL_FLOAT);
+        } else {
+          column.nulls.push_back(data == NULL_DOUBLE);
+        }
+      } else if (boost::get<NullableString>(scalar_tv)) {
+        auto s_n = boost::get<NullableString>(scalar_tv);
+        auto s = boost::get<std::string>(s_n);
+        if (s) {
+          column.data.str_col.push_back(*s);
+        } else {
+          column.data.str_col.push_back("");  // null string
+          auto null_p = boost::get<void*>(s_n);
+          CHECK(null_p && !*null_p);
+        }
+        column.nulls.push_back(!s);
+      } else {
+        CHECK(false);
+      }
+    }
+  }
+
   TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) {
     TDatum datum;
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
@@ -192,7 +257,10 @@ class MapDHandler : virtual public MapDIf {
     return datum;
   }
 
-  void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str) {
+  void sql_execute(TQueryResult& _return,
+                   const TSessionId session,
+                   const std::string& query_str,
+                   const bool column_format) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     auto executor_device_type = session_info.get_executor_device_type();
@@ -241,8 +309,8 @@ class MapDHandler : virtual public MapDIf {
             if (explain_stmt != nullptr) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
-            auto executor = Executor::getExecutor(
-                root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
+            auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+                                                  jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
             ResultRows results({}, nullptr, nullptr);
             execute_time += measure<>::execution([&]() {
               results =
@@ -291,13 +359,26 @@ class MapDHandler : virtual public MapDIf {
                 ++i;
               }
             }
-            for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
-              TRow trow;
+            if (column_format) {
+              _return.row_set.is_columnar = true;
               for (size_t i = 0; i < results.colCount(); ++i) {
-                const auto agg_result = results.get(row_idx, i, true);
-                trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
+                TColumn tcolumn;
+                for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+                  const auto agg_result = results.get(row_idx, i, true);
+                  value_to_thrift_column(agg_result, targets[i]->get_expr()->get_type_info(), tcolumn);
+                }
+                _return.row_set.columns.push_back(tcolumn);
               }
-              _return.row_set.rows.push_back(trow);
+            } else {
+              _return.row_set.is_columnar = false;
+              for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+                TRow trow;
+                for (size_t i = 0; i < results.colCount(); ++i) {
+                  const auto agg_result = results.get(row_idx, i, true);
+                  trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
+                }
+                _return.row_set.rows.push_back(trow);
+              }
             }
           }
         } catch (std::exception& e) {
@@ -835,8 +916,8 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("help,h", "Print help messages ")(
-      "path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")(
+  desc.add_options()("help,h", "Print help messages ")("path", po::value<std::string>(&base_path)->required(),
+                                                       "Directory path to Mapd catalogs")(
       "flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(

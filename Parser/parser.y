@@ -75,7 +75,7 @@ using namespace Parser;
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
-%token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET
+%token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHOW
 %token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
 %token UNIQUE UPDATE USER VALUES VIEW WHEN WHENEVER WHERE WITH WORK
 
@@ -96,6 +96,7 @@ sql_list:
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	 create_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_view_statement { $<nodeval>$ = $<nodeval>1; }
+	| show_table_schema { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
 	| refresh_view_statement { $<nodeval>$ = $<nodeval>1; }
@@ -190,10 +191,16 @@ opt_if_not_exists:
 create_table_statement:
 		CREATE TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
 		{
-			$<nodeval>$ = new CreateTableStmt($<stringval>4, reinterpret_cast<std::list<TableElement*>*>($<listval>6), $<boolval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>8));
+		  $<nodeval>$ = new CreateTableStmt($<stringval>4, reinterpret_cast<std::list<TableElement*>*>($<listval>6), $<boolval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>8));
 		}
 	;
 
+show_table_schema:
+		SHOW CREATE TABLE table
+		{
+		  $<nodeval>$ = new ShowCreateTableStmt($<stringval>4);
+		}
+			
 opt_if_exists:
 		IF EXISTS { $<boolval>$ = true; }
 		| /* empty */ { $<boolval>$ = false; }
@@ -202,7 +209,7 @@ opt_if_exists:
 drop_table_statement:
 		DROP TABLE opt_if_exists table
 		{
-			$<nodeval>$ = new DropTableStmt($<stringval>4, $<boolval>3);
+		  $<nodeval>$ = new DropTableStmt($<stringval>4, $<boolval>3);
 		}
 		;
 rename_table_statement:
