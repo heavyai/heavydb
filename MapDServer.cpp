@@ -1,7 +1,9 @@
 #include "MapDServer.h"
 #include "gen-cpp/MapD.h"
 #include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/server/TThreadedServer.h>
+#include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
 
@@ -28,6 +30,7 @@
 #include <map>
 #include <cmath>
 #include <typeinfo>
+#include <thread>
 #include <glog/logging.h>
 #include <signal.h>
 #include <unistd.h>
@@ -913,8 +916,17 @@ class MapDHandler : virtual public MapDIf {
   mapd_shared_mutex rw_mutex_;
 };
 
+void start_server(TThreadedServer& server) {
+  try {
+    server.serve();
+  } catch (std::exception& e) {
+    LOG(ERROR) << "Exception: " << e.what() << std::endl;
+  }
+}
+
 int main(int argc, char** argv) {
   int port = 9091;
+  int http_port = 9090;
   std::string base_path;
   std::string device("gpu");
   bool flush_log = false;
@@ -930,7 +942,8 @@ int main(int argc, char** argv) {
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
       "cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")("hybrid", "Run on both CPU and GPUs")(
-      "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)");
+      "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
+      "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -941,7 +954,7 @@ int main(int argc, char** argv) {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
     if (vm.count("help")) {
       std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
-                   "number>][--flush-log][--version|-v]\n";
+                   "number>][--http-port <http port number>][--flush-log][--version|-v]\n";
       return 0;
     }
     if (vm.count("version")) {
@@ -1027,15 +1040,22 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device, allow_multifrag, jit_debug));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
-  shared_ptr<TServerTransport> serverTransport(new TServerSocket(port));
-  shared_ptr<TTransportFactory> transportFactory(new TBufferedTransportFactory());
-  shared_ptr<TProtocolFactory> protocolFactory(new TBinaryProtocolFactory());
-  TThreadedServer server(processor, serverTransport, transportFactory, protocolFactory);
 
-  try {
-    server.serve();
-  } catch (std::exception& e) {
-    LOG(ERROR) << "Exception: " << e.what() << std::endl;
-  }
+  shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
+  shared_ptr<TTransportFactory> bufTransportFactory(new TBufferedTransportFactory());
+  shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());
+  TThreadedServer bufServer(processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
+
+  shared_ptr<TServerTransport> httpServerTransport(new TServerSocket(http_port));
+  shared_ptr<TTransportFactory> httpTransportFactory(new THttpServerTransportFactory());
+  shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
+  TThreadedServer httpServer(processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
+
+  std::thread bufThread(start_server, std::ref(bufServer));
+  std::thread httpThread(start_server, std::ref(httpServer));
+
+  bufThread.join();
+  httpThread.join();
+
   return 0;
 }
