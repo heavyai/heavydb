@@ -309,8 +309,8 @@ class MapDHandler : virtual public MapDIf {
             if (explain_stmt != nullptr) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
-            auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
-                                                  jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
+            auto executor = Executor::getExecutor(
+                root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
             ResultRows results({}, nullptr, nullptr);
             execute_time += measure<>::execution([&]() {
               results =
@@ -916,8 +916,8 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("help,h", "Print help messages ")("path", po::value<std::string>(&base_path)->required(),
-                                                       "Directory path to Mapd catalogs")(
+  desc.add_options()("help,h", "Print help messages ")(
+      "path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")(
       "flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(

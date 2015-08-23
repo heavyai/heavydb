@@ -83,7 +83,10 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void sql_execute(TQueryResult& _return, const TSessionId session, const std::string& query_str, const bool column_format) {
+  void sql_execute(TQueryResult& _return,
+                   const TSessionId session,
+                   const std::string& query_str,
+                   const bool column_format) {
     instantiateClient();
     try {
       (*client_)->sql_execute(_return, session, query_str, column_format);

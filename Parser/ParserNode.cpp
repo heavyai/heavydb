@@ -219,15 +219,20 @@ std::shared_ptr<Analyzer::Expr> BetweenExpr::analyze(const Catalog_Namespace::Ca
   auto lower_expr = lower->analyze(catalog, query, allow_tlist_ref);
   auto upper_expr = upper->analyze(catalog, query, allow_tlist_ref);
   SQLTypeInfo new_left_type, new_right_type;
-  (void)Analyzer::BinOper::analyze_type_info(kGE, arg_expr->get_type_info(), lower_expr->get_type_info(),
-                                             &new_left_type, &new_right_type);
-  auto lower_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN, kGE, kONE, arg_expr->add_cast(new_left_type)->decompress(),
+  (void)Analyzer::BinOper::analyze_type_info(
+      kGE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
+  auto lower_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN,
+                                                kGE,
+                                                kONE,
+                                                arg_expr->add_cast(new_left_type)->decompress(),
                                                 lower_expr->add_cast(new_right_type)->decompress());
-  (void)Analyzer::BinOper::analyze_type_info(kLE, arg_expr->get_type_info(), lower_expr->get_type_info(),
-                                             &new_left_type, &new_right_type);
-  auto upper_pred =
-      makeExpr<Analyzer::BinOper>(kBOOLEAN, kLE, kONE, arg_expr->deep_copy()->add_cast(new_left_type)->decompress(),
-                                  upper_expr->add_cast(new_right_type)->decompress());
+  (void)Analyzer::BinOper::analyze_type_info(
+      kLE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
+  auto upper_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN,
+                                                kLE,
+                                                kONE,
+                                                arg_expr->deep_copy()->add_cast(new_left_type)->decompress(),
+                                                upper_expr->add_cast(new_right_type)->decompress());
   std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::BinOper>(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
   if (is_not)
     result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
@@ -451,7 +456,9 @@ std::shared_ptr<Analyzer::Expr> CastExpr::analyze(const Catalog_Namespace::Catal
                                                   TlistRefType allow_tlist_ref) const {
   target_type->check_type();
   auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-  SQLTypeInfo ti(target_type->get_type(), target_type->get_param1(), target_type->get_param2(),
+  SQLTypeInfo ti(target_type->get_type(),
+                 target_type->get_param1(),
+                 target_type->get_param2(),
                  arg_expr->get_type_info().get_notnull());
   if (arg_expr->get_type_info().get_type() != target_type->get_type() &&
       arg_expr->get_type_info().get_compression() != kENCODING_NONE)
@@ -787,8 +794,9 @@ void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
     // extend order_by to include all targetlist entries.
     for (int i = 1; i <= static_cast<int>(tlist.size()); i++) {
       bool in_orderby = false;
-      std::for_each(order_by->begin(), order_by->end(),
-                    [&in_orderby, i](const Analyzer::OrderEntry& oe) { in_orderby = in_orderby || (i == oe.tle_no); });
+      std::for_each(order_by->begin(), order_by->end(), [&in_orderby, i](const Analyzer::OrderEntry& oe) {
+        in_orderby = in_orderby || (i == oe.tle_no);
+      });
       if (!in_orderby)
         order_by->push_back(Analyzer::OrderEntry(i, false, false));
     }
