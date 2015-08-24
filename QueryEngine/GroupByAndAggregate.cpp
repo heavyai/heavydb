@@ -139,8 +139,10 @@ void ResultRows::reduce(const ResultRows& other_results,
     return;
   }
 
-  auto reduce_impl = [this](InternalTargetValue* crt_val,
-                            const InternalTargetValue* new_val,
+  auto reduce_impl = [this](int64_t* crt_val_i1,
+                            int64_t* crt_val_i2,
+                            const int64_t new_val_i1,
+                            const int64_t new_val_i2,
                             const TargetInfo& agg_info,
                             const size_t agg_col_idx) {
     CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_decimal() || agg_info.sql_type.is_time() ||
@@ -155,64 +157,62 @@ void ResultRows::reduce(const ResultRows& other_results,
           auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(agg_col_idx);
           CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
           if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
-            auto old_set = reinterpret_cast<int8_t*>(crt_val->i1);
-            auto new_set = reinterpret_cast<int8_t*>(new_val->i1);
+            auto old_set = reinterpret_cast<int8_t*>(*crt_val_i1);
+            auto new_set = reinterpret_cast<int8_t*>(new_val_i1);
             bitmap_set_unify(new_set, old_set, count_distinct_desc_it->second.bitmapSizeBytes());
           } else {
             CHECK(count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::StdSet);
-            auto old_set = reinterpret_cast<std::set<int64_t>*>(crt_val->i1);
-            auto new_set = reinterpret_cast<std::set<int64_t>*>(new_val->i1);
+            auto old_set = reinterpret_cast<std::set<int64_t>*>(*crt_val_i1);
+            auto new_set = reinterpret_cast<std::set<int64_t>*>(new_val_i1);
             old_set->insert(new_set->begin(), new_set->end());
             new_set->insert(old_set->begin(), old_set->end());
           }
           break;
         }
         if (agg_info.agg_kind == kAVG) {
-          CHECK(crt_val->isPair());
-          CHECK(new_val->isPair());
           if (agg_info.sql_type.is_fp()) {
-            agg_sum_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
+            agg_sum_double(crt_val_i1, *reinterpret_cast<const double*>(&new_val_i1));
           } else {
-            agg_sum(&crt_val->i1, new_val->i1);
+            agg_sum(crt_val_i1, new_val_i1);
           }
-          agg_sum(&crt_val->i2, new_val->i2);
+          agg_sum(crt_val_i2, new_val_i2);
           break;
         }
         if (!agg_info.sql_type.is_fp()) {
-          agg_sum(&crt_val->i1, new_val->i1);
+          agg_sum(crt_val_i1, new_val_i1);
         } else {
-          agg_sum_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
+          agg_sum_double(crt_val_i1, *reinterpret_cast<const double*>(&new_val_i1));
         }
         break;
       case kMIN:
         if (!agg_info.sql_type.is_fp()) {
           if (agg_info.skip_null_val) {
-            agg_min_skip_val(&crt_val->i1, new_val->i1, inline_int_null_val(agg_info.sql_type));
+            agg_min_skip_val(crt_val_i1, new_val_i1, inline_int_null_val(agg_info.sql_type));
           } else {
-            agg_min(&crt_val->i1, new_val->i1);
+            agg_min(crt_val_i1, new_val_i1);
           }
         } else {
           if (agg_info.skip_null_val) {
             agg_min_double_skip_val(
-                &crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1), inline_fp_null_val(agg_info.sql_type));
+                crt_val_i1, *reinterpret_cast<const double*>(&new_val_i1), inline_fp_null_val(agg_info.sql_type));
           } else {
-            agg_min_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
+            agg_min_double(crt_val_i1, *reinterpret_cast<const double*>(&new_val_i1));
           }
         }
         break;
       case kMAX:
         if (!agg_info.sql_type.is_fp()) {
           if (agg_info.skip_null_val) {
-            agg_max_skip_val(&crt_val->i1, new_val->i1, inline_int_null_val(agg_info.sql_type));
+            agg_max_skip_val(crt_val_i1, new_val_i1, inline_int_null_val(agg_info.sql_type));
           } else {
-            agg_max(&crt_val->i1, new_val->i1);
+            agg_max(crt_val_i1, new_val_i1);
           }
         } else {
           if (agg_info.skip_null_val) {
             agg_max_double_skip_val(
-                &crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1), inline_fp_null_val(agg_info.sql_type));
+                crt_val_i1, *reinterpret_cast<const double*>(&new_val_i1), inline_fp_null_val(agg_info.sql_type));
           } else {
-            agg_max_double(&crt_val->i1, *reinterpret_cast<const double*>(&new_val->i1));
+            agg_max_double(crt_val_i1, *reinterpret_cast<const double*>(&new_val_i1));
           }
         }
         break;
@@ -229,7 +229,12 @@ void ResultRows::reduce(const ResultRows& other_results,
     const auto& new_results = other_results.target_values_.front();
     for (size_t agg_col_idx = 0; agg_col_idx < colCount(); ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
-      reduce_impl(&crt_results[agg_col_idx], &new_results[agg_col_idx], agg_info, agg_col_idx);
+      reduce_impl(&crt_results[agg_col_idx].i1,
+                  &crt_results[agg_col_idx].i2,
+                  new_results[agg_col_idx].i1,
+                  new_results[agg_col_idx].i2,
+                  agg_info,
+                  agg_col_idx);
     }
     return;
   }
@@ -249,7 +254,13 @@ void ResultRows::reduce(const ResultRows& other_results,
     const size_t agg_col_count = old_agg_results.size();
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
-      reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+      reduce_impl(
+          &old_agg_results[agg_col_idx].i1,
+          &old_agg_results[agg_col_idx].i2,
+          kv.second[agg_col_idx].i1,
+          kv.second[agg_col_idx].i2,
+          agg_info,
+          agg_col_idx);
     }
   }
   const bool track_top_unknowns{query_mem_desc.sortOnGpu() && gpu_sort_info.top_count};
@@ -273,7 +284,12 @@ void ResultRows::reduce(const ResultRows& other_results,
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
       if (agg_info.is_agg) {
-        reduce_impl(&old_agg_results[agg_col_idx], &kv.second[agg_col_idx], agg_info, agg_col_idx);
+        reduce_impl(
+            &old_agg_results[agg_col_idx].i1,
+            &old_agg_results[agg_col_idx].i2,
+            kv.second[agg_col_idx].i1,
+            kv.second[agg_col_idx].i2,
+            agg_info, agg_col_idx);
       } else {
         old_agg_results[agg_col_idx] = kv.second[agg_col_idx];
       }
@@ -289,8 +305,10 @@ void ResultRows::reduce(const ResultRows& other_results,
         for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
           const auto agg_info = targets_[agg_col_idx];
           if (agg_info.is_agg) {
-            reduce_impl(&old_agg_results[agg_col_idx],
-                        &other_results.target_values_.back()[agg_col_idx],
+            reduce_impl(&old_agg_results[agg_col_idx].i1,
+                        &old_agg_results[agg_col_idx].i2,
+                        other_results.target_values_.back()[agg_col_idx].i1,
+                        other_results.target_values_.back()[agg_col_idx].i2,
                         agg_info,
                         agg_col_idx);
           } else {
