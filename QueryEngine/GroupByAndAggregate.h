@@ -202,6 +202,10 @@ class RowSetMemoryOwner : boost::noncopyable {
     count_distinct_sets_.push_back(count_distinct_set);
   }
 
+  const CountDistinctDescriptors& getCountDistinctDescriptors() const {
+    return count_distinct_descriptors_;
+  }
+
   void addGroupByBuffer(int64_t* group_by_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     group_by_buffers_.push_back(group_by_buffer);

@@ -427,67 +427,57 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
 #undef UNLIKELY
 #undef LIKELY
 
-TargetValue ResultRows::get(const size_t row_idx,
-                            const size_t col_idx,
-                            const bool translate_strings,
-                            const bool decimal_to_double /* = true */) const {
-  if (just_explain_) {
-    return explanation_;
-  }
-  CHECK_GE(row_idx, 0);
-  CHECK_LT(row_idx, target_values_.size());
-  CHECK_GE(col_idx, 0);
-  CHECK_LT(col_idx, targets_.size());
-  const auto agg_info = targets_[col_idx];
-  const auto ti = targets_[col_idx].sql_type;
+namespace {
+
+TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
+                                 const size_t col_idx,
+                                 const TargetInfo& agg_info,
+                                 const SQLTypeInfo& ti,
+                                 const bool decimal_to_double,
+                                 const bool translate_strings,
+                                 const Executor* executor,
+                                 const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   if (agg_info.agg_kind == kAVG) {
     CHECK(!ti.is_string());
-    const auto& row_vals = target_values_[row_idx];
-    CHECK_LT(col_idx, row_vals.size());
-    CHECK(row_vals[col_idx].isPair());
-    return pair_to_double({row_vals[col_idx].i1, row_vals[col_idx].i2}, ti);
+    CHECK(col_val.isPair());
+    return pair_to_double({col_val.i1, col_val.i2}, ti);
   }
   if (ti.is_integer() || ti.is_decimal() || ti.is_boolean() || ti.is_time()) {
     if (agg_info.is_distinct) {
-      return TargetValue(bitmap_set_size(
-          target_values_[row_idx][col_idx].i1, col_idx, row_set_mem_owner_->count_distinct_descriptors_));
+      return TargetValue(bitmap_set_size(col_val.i1, col_idx, row_set_mem_owner->getCountDistinctDescriptors()));
     }
-    CHECK_LT(col_idx, target_values_[row_idx].size());
-    const auto v = target_values_[row_idx][col_idx];
-    CHECK(v.isInt());
+    CHECK(col_val.isInt());
     if (ti.is_decimal() && decimal_to_double) {
-      if (v.i1 == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(ti), false))) {
+      if (col_val.i1 == inline_int_null_val(SQLTypeInfo(decimal_to_int_type(ti), false))) {
         return NULL_DOUBLE;
       }
-      return static_cast<double>(v.i1) / exp_to_scale(ti.get_scale());
+      return static_cast<double>(col_val.i1) / exp_to_scale(ti.get_scale());
     }
-    return v.i1;
+    return col_val.i1;
   } else if (ti.is_string()) {
     if (ti.get_compression() == kENCODING_DICT) {
       const int dict_id = ti.get_comp_param();
-      const auto string_id = target_values_[row_idx][col_idx].i1;
+      const auto string_id = col_val.i1;
       if (!translate_strings) {
         return TargetValue(string_id);
       }
       return string_id == NULL_INT
                  ? TargetValue(nullptr)
-                 : TargetValue(executor_->getStringDictionary(dict_id, row_set_mem_owner_)->getString(string_id));
+                 : TargetValue(executor->getStringDictionary(dict_id, row_set_mem_owner)->getString(string_id));
     } else {
-      CHECK_EQ(kENCODING_NONE, targets_[col_idx].sql_type.get_compression());
-      return target_values_[row_idx][col_idx].isNull() ? TargetValue(nullptr)
-                                                       : TargetValue(target_values_[row_idx][col_idx].strVal());
+      CHECK_EQ(kENCODING_NONE, ti.get_compression());
+      return col_val.isNull() ? TargetValue(nullptr) : TargetValue(col_val.strVal());
     }
-  } else if (targets_[col_idx].sql_type.is_array()) {
-    const auto& elem_type = targets_[col_idx].sql_type.get_elem_type();
-    CHECK(target_values_[row_idx][col_idx].ty == InternalTargetValue::ITVType::Arr ||
-          target_values_[row_idx][col_idx].ty == InternalTargetValue::ITVType::Null);
-    if (target_values_[row_idx][col_idx].ty == InternalTargetValue::ITVType::Null) {
+  } else if (ti.is_array()) {
+    const auto& elem_type = ti.get_elem_type();
+    CHECK(col_val.ty == InternalTargetValue::ITVType::Arr || col_val.ty == InternalTargetValue::ITVType::Null);
+    if (col_val.ty == InternalTargetValue::ITVType::Null) {
       return std::vector<ScalarTargetValue>{};
     }
-    CHECK(target_values_[row_idx][col_idx].i1);
+    CHECK(col_val.i1);
     std::vector<ScalarTargetValue> tv_arr;
     if (elem_type.is_integer() || elem_type.is_boolean() || elem_type.is_fp()) {
-      const auto& int_arr = *reinterpret_cast<std::vector<int64_t>*>(target_values_[row_idx][col_idx].i1);
+      const auto& int_arr = *reinterpret_cast<std::vector<int64_t>*>(col_val.i1);
       tv_arr.reserve(int_arr.size());
       if (elem_type.is_integer() || elem_type.is_boolean()) {
         for (const auto x : int_arr) {
@@ -499,24 +489,50 @@ TargetValue ResultRows::get(const size_t row_idx,
         }
       }
     } else if (elem_type.is_string()) {
-      CHECK_EQ(kENCODING_DICT, targets_[col_idx].sql_type.get_compression());
-      const auto& string_ids = *reinterpret_cast<std::vector<int64_t>*>(target_values_[row_idx][col_idx].i1);
-      const int dict_id = targets_[col_idx].sql_type.get_comp_param();
+      CHECK_EQ(kENCODING_DICT, ti.get_compression());
+      const auto& string_ids = *reinterpret_cast<std::vector<int64_t>*>(col_val.i1);
+      const int dict_id = ti.get_comp_param();
       for (const auto string_id : string_ids) {
         tv_arr.emplace_back(
             string_id == NULL_INT
                 ? NullableString(nullptr)
-                : NullableString(executor_->getStringDictionary(dict_id, row_set_mem_owner_)->getString(string_id)));
+                : NullableString(executor->getStringDictionary(dict_id, row_set_mem_owner)->getString(string_id)));
       }
     } else {
       CHECK(false);
     }
     return tv_arr;
   } else {
-    CHECK(targets_[col_idx].sql_type.is_fp());
-    return TargetValue(*reinterpret_cast<const double*>(&target_values_[row_idx][col_idx].i1));
+    CHECK(ti.is_fp());
+    return TargetValue(*reinterpret_cast<const double*>(&col_val.i1));
   }
   CHECK(false);
+}
+
+}  // namespace
+
+TargetValue ResultRows::get(const size_t row_idx,
+                            const size_t col_idx,
+                            const bool translate_strings,
+                            const bool decimal_to_double /* = true */) const {
+  if (just_explain_) {
+    return explanation_;
+  }
+  CHECK_GE(row_idx, 0);
+  CHECK_LT(row_idx, target_values_.size());
+  CHECK_GE(col_idx, 0);
+  CHECK_LT(col_idx, targets_.size());
+  CHECK_LT(col_idx, target_values_[row_idx].size());
+  const auto agg_info = targets_[col_idx];
+  const auto ti = targets_[col_idx].sql_type;
+  return result_rows_get_impl(target_values_[row_idx][col_idx],
+                              col_idx,
+                              agg_info,
+                              ti,
+                              decimal_to_double,
+                              translate_strings,
+                              executor_,
+                              row_set_mem_owner_);
 }
 
 int64_t ResultRows::getSimpleKey(const size_t row_idx) const {
