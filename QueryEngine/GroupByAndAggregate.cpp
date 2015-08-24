@@ -254,13 +254,12 @@ void ResultRows::reduce(const ResultRows& other_results,
     const size_t agg_col_count = old_agg_results.size();
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
-      reduce_impl(
-          &old_agg_results[agg_col_idx].i1,
-          &old_agg_results[agg_col_idx].i2,
-          kv.second[agg_col_idx].i1,
-          kv.second[agg_col_idx].i2,
-          agg_info,
-          agg_col_idx);
+      reduce_impl(&old_agg_results[agg_col_idx].i1,
+                  &old_agg_results[agg_col_idx].i2,
+                  kv.second[agg_col_idx].i1,
+                  kv.second[agg_col_idx].i2,
+                  agg_info,
+                  agg_col_idx);
     }
   }
   const bool track_top_unknowns{query_mem_desc.sortOnGpu() && gpu_sort_info.top_count};
@@ -284,12 +283,12 @@ void ResultRows::reduce(const ResultRows& other_results,
     for (size_t agg_col_idx = 0; agg_col_idx < agg_col_count; ++agg_col_idx) {
       const auto agg_info = targets_[agg_col_idx];
       if (agg_info.is_agg) {
-        reduce_impl(
-            &old_agg_results[agg_col_idx].i1,
-            &old_agg_results[agg_col_idx].i2,
-            kv.second[agg_col_idx].i1,
-            kv.second[agg_col_idx].i2,
-            agg_info, agg_col_idx);
+        reduce_impl(&old_agg_results[agg_col_idx].i1,
+                    &old_agg_results[agg_col_idx].i2,
+                    kv.second[agg_col_idx].i1,
+                    kv.second[agg_col_idx].i2,
+                    agg_info,
+                    agg_col_idx);
       } else {
         old_agg_results[agg_col_idx] = kv.second[agg_col_idx];
       }
