@@ -355,7 +355,7 @@ int main(int argc, char* argv[]) {
               results = results_cpu;
             }
             if (!results.empty()) {
-              for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+              for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
                 cout << fixed << setprecision(13) << row_col_to_string(results, row_idx, 0);
                 for (size_t i = 1; i < results.colCount(); ++i) {
                   cout << "|" << row_col_to_string(results, row_idx, i);

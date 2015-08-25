@@ -202,9 +202,7 @@ class RowSetMemoryOwner : boost::noncopyable {
     count_distinct_sets_.push_back(count_distinct_set);
   }
 
-  const CountDistinctDescriptors& getCountDistinctDescriptors() const {
-    return count_distinct_descriptors_;
-  }
+  const CountDistinctDescriptors& getCountDistinctDescriptors() const { return count_distinct_descriptors_; }
 
   void addGroupByBuffer(int64_t* group_by_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
@@ -591,7 +589,7 @@ class ResultRows {
   void sort(const Planner::Sort* sort_plan, const int64_t top_n);
 
   void keepFirstN(const size_t n) {
-    if (n >= size()) {
+    if (n >= rowCount()) {
       return;
     }
     target_values_.truncate(n);
@@ -604,18 +602,18 @@ class ResultRows {
     target_values_.drop(n);
   }
 
-  size_t size() const { return just_explain_ ? 1 : target_values_.size(); }
+  size_t rowCount() const { return just_explain_ ? 1 : target_values_.size(); }
 
   size_t colCount() const { return just_explain_ ? 1 : targets_.size(); }
 
-  bool empty() const { return !size() && !group_by_buffer_ && !just_explain_; }
+  bool empty() const { return !rowCount() && !group_by_buffer_ && !just_explain_; }
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 
-  TargetValue get(const size_t row_idx,
-                  const size_t col_idx,
-                  const bool translate_strings,
-                  const bool decimal_to_double = true) const;
+  TargetValue getRowAt(const size_t row_idx,
+                       const size_t col_idx,
+                       const bool translate_strings,
+                       const bool decimal_to_double = true) const;
 
   int64_t getSimpleKey(const size_t row_idx) const;
 
@@ -740,7 +738,7 @@ inline std::string row_col_to_string(const ResultRows& rows,
                                      const size_t row_idx,
                                      const size_t i,
                                      const std::string& delim = ", ") {
-  const auto tv = rows.get(row_idx, i, true);
+  const auto tv = rows.getRowAt(row_idx, i, true);
   const auto ti = rows.getColType(i);
   return datum_to_string(tv, ti, delim);
 }

@@ -1802,16 +1802,16 @@ namespace {
 class ColumnarResults {
  public:
   ColumnarResults(const ResultRows& rows, const size_t num_columns, const std::vector<SQLTypeInfo>& target_types)
-      : column_buffers_(num_columns), num_rows_(rows.size()) {
+      : column_buffers_(num_columns), num_rows_(rows.rowCount()) {
     column_buffers_.resize(num_columns);
     for (size_t i = 0; i < num_columns; ++i) {
       CHECK(!target_types[i].is_string() ||
             (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_size() == 4));
       column_buffers_[i] = static_cast<const int8_t*>(malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
     }
-    for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
+    for (size_t row_idx = 0; row_idx < rows.rowCount(); ++row_idx) {
       for (size_t i = 0; i < num_columns; ++i) {
-        const auto col_val = rows.get(row_idx, i, false, false);
+        const auto col_val = rows.getRowAt(row_idx, i, false, false);
         const auto scalar_col_val = boost::get<ScalarTargetValue>(&col_val);
         CHECK(scalar_col_val);
         auto i64_p = boost::get<int64_t>(scalar_col_val);
@@ -2033,7 +2033,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        false,
                                        {sizeof(int64_t)},
                                        get_col_byte_widths(target_exprs),
-                                       result_rows.size(),
+                                       result_rows.rowCount(),
                                        small_groups_buffer_entry_count_,
                                        0,
                                        0,
@@ -2064,7 +2064,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         nullptr,
                                         false,
                                         row_set_mem_owner_,
-                                        result_rows.size(),
+                                        result_rows.rowCount(),
                                         0,
                                         empty_gpu_sort_info,
                                         false,
@@ -2528,7 +2528,7 @@ ResultRows Executor::collectAllDeviceResults(std::vector<ResultRows>& all_fragme
       reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner, gpu_sort_info, query_mem_desc, output_columnar);
   if (query_mem_desc.sortOnGpu() && gpu_sort_info.top_count) {
     reduced_results.sort(gpu_sort_info.sort_plan, gpu_sort_info.top_count);
-    for (size_t row_idx = 0; row_idx < reduced_results.size(); ++row_idx) {
+    for (size_t row_idx = 0; row_idx < reduced_results.rowCount(); ++row_idx) {
       const auto row_key = reduced_results.getSimpleKey(row_idx);
       if (reduced_results.unkown_top_keys_.find(row_key) != reduced_results.unkown_top_keys_.end()) {
         throw SpeculativeTopFailed();
@@ -2608,7 +2608,7 @@ void Executor::dispatchFragments(std::vector<ResultRows>& all_fragment_results,
       }
       if (!agg_plan) {
         dispatch(chosen_device_type, chosen_device_id, {i}, 0);
-        result_rows_count += all_fragment_results.empty() ? 0 : all_fragment_results.back().size();
+        result_rows_count += all_fragment_results.empty() ? 0 : all_fragment_results.back().rowCount();
         if (limit && result_rows_count >= static_cast<size_t>(limit)) {
           break;
         }
@@ -2821,7 +2821,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
     results =
         query_exe_context->getRowSet(target_exprs, gpu_sort_info, query_exe_context->query_mem_desc_, was_auto_device);
   }
-  if (error_code && (!scan_limit || results.size() < static_cast<size_t>(scan_limit))) {
+  if (error_code && (!scan_limit || results.rowCount() < static_cast<size_t>(scan_limit))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
   return 0;

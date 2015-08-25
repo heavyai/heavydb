@@ -18,7 +18,7 @@ ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType de
 }
 
 TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type).get(0, 0, true);
+  return run_multiple_agg(query_str, device_type).getRowAt(0, 0, true);
 }
 
 template <class T>
@@ -61,7 +61,7 @@ class SQLiteComparator {
   void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
     connector_.query(query_string);
     const auto mapd_results = run_multiple_agg(query_string, device_type);
-    ASSERT_EQ(connector_.getNumRows(), mapd_results.size());
+    ASSERT_EQ(connector_.getNumRows(), mapd_results.rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
     if (mapd_results.empty()) {
       ASSERT_EQ(0, num_rows);
@@ -72,7 +72,7 @@ class SQLiteComparator {
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
         const auto ref_col_type = connector_.columnTypes[col_idx];
-        const auto mapd_variant = mapd_results.get(row_idx, col_idx, true);
+        const auto mapd_variant = mapd_results.getRowAt(row_idx, col_idx, true);
         const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
         CHECK(scalar_mapd_variant);
         switch (ref_col_type) {
@@ -267,15 +267,15 @@ TEST(Select, LimitAndOffset) {
     SKIP_NO_GPU();
     {
       const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5;", dt);
-      ASSERT_EQ(size_t(5), rows.size());
+      ASSERT_EQ(size_t(5), rows.rowCount());
     }
     {
       const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 5 OFFSET 3;", dt);
-      ASSERT_EQ(size_t(5), rows.size());
+      ASSERT_EQ(size_t(5), rows.rowCount());
     }
     {
       const auto rows = run_multiple_agg("SELECT * FROM test WHERE x <> 8 LIMIT 3 OFFSET 1;", dt);
-      ASSERT_EQ(size_t(3), rows.size());
+      ASSERT_EQ(size_t(3), rows.rowCount());
     }
   }
 }
@@ -400,13 +400,14 @@ TEST(Select, OrderBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     const auto rows = run_multiple_agg("SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;", dt);
-    CHECK_EQ(rows.size(), std::min(5, static_cast<int>(g_num_rows)));
+    CHECK_EQ(rows.rowCount(), std::min(5, static_cast<int>(g_num_rows)));
     CHECK_EQ(rows.colCount(), 4);
-    for (size_t row_idx = 0; row_idx < rows.size(); ++row_idx) {
-      ASSERT_TRUE(v<int64_t>(rows.get(row_idx, 0, true)) == 8 || v<int64_t>(rows.get(row_idx, 0, true)) == 7);
-      ASSERT_EQ(v<int64_t>(rows.get(row_idx, 1, true)), 43);
-      ASSERT_EQ(v<int64_t>(rows.get(row_idx, 2, true)), 1104);
-      ASSERT_TRUE(v<int64_t>(rows.get(row_idx, 3, true)) == 344 || v<int64_t>(rows.get(row_idx, 3, true)) == 301);
+    for (size_t row_idx = 0; row_idx < rows.rowCount(); ++row_idx) {
+      ASSERT_TRUE(v<int64_t>(rows.getRowAt(row_idx, 0, true)) == 8 || v<int64_t>(rows.getRowAt(row_idx, 0, true)) == 7);
+      ASSERT_EQ(v<int64_t>(rows.getRowAt(row_idx, 1, true)), 43);
+      ASSERT_EQ(v<int64_t>(rows.getRowAt(row_idx, 2, true)), 1104);
+      ASSERT_TRUE(v<int64_t>(rows.getRowAt(row_idx, 3, true)) == 344 ||
+                  v<int64_t>(rows.getRowAt(row_idx, 3, true)) == 301);
     }
     c("SELECT x, COUNT(distinct y) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
   }
@@ -433,14 +434,14 @@ TEST(Select, ComplexQueries) {
         "SELECT x + y AS a, COUNT(*) * MAX(y) - SUM(z) AS b FROM test "
         "WHERE z BETWEEN 100 AND 200 GROUP BY x, y ORDER BY a DESC LIMIT 2;",
         dt);
-    ASSERT_EQ(rows.size(), size_t(2));
+    ASSERT_EQ(rows.rowCount(), size_t(2));
     {
-      ASSERT_EQ(v<int64_t>(rows.get(0, 0, true)), 51);
-      ASSERT_EQ(v<int64_t>(rows.get(0, 1, true)), -59 * g_num_rows / 2);
+      ASSERT_EQ(v<int64_t>(rows.getRowAt(0, 0, true)), 51);
+      ASSERT_EQ(v<int64_t>(rows.getRowAt(0, 1, true)), -59 * g_num_rows / 2);
     }
     {
-      ASSERT_EQ(v<int64_t>(rows.get(1, 0, true)), 50);
-      ASSERT_EQ(v<int64_t>(rows.get(1, 1, true)), -59 * g_num_rows / 2);
+      ASSERT_EQ(v<int64_t>(rows.getRowAt(1, 0, true)), 50);
+      ASSERT_EQ(v<int64_t>(rows.getRowAt(1, 1, true)), -59 * g_num_rows / 2);
     }
   }
 }
@@ -751,35 +752,35 @@ TEST(Select, ArrayUnnest) {
       auto result_rows = run_multiple_agg("SELECT COUNT(*), UNNEST(arr_i" + std::to_string(int_width) +
                                               ") AS a FROM array_test GROUP BY a ORDER BY a DESC;",
                                           dt);
-      ASSERT_EQ(g_array_test_row_count + 2, result_rows.size());
-      ASSERT_EQ(int64_t(g_array_test_row_count + 2) * power10, v<int64_t>(result_rows.get(0, 1, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
-      ASSERT_EQ(power10, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 1, true)));
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows.rowCount());
+      ASSERT_EQ(int64_t(g_array_test_row_count + 2) * power10, v<int64_t>(result_rows.getRowAt(0, 1, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 0, true)));
+      ASSERT_EQ(power10, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 1, true)));
       power10 *= 10;
     }
     for (const std::string float_type : {"float", "double"}) {
       auto result_rows = run_multiple_agg(
           "SELECT COUNT(*), UNNEST(arr_" + float_type + ") AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(g_array_test_row_count + 2, result_rows.size());
-      ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows.rowCount());
+      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 0, true)));
     }
     {
       auto result_rows =
           run_multiple_agg("SELECT COUNT(*), UNNEST(arr_str) AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(g_array_test_row_count + 2, result_rows.size());
-      ASSERT_EQ(1, v<int64_t>(result_rows.get(g_array_test_row_count + 1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 0, true)));
+      ASSERT_EQ(g_array_test_row_count + 2, result_rows.rowCount());
+      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(g_array_test_row_count + 1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 0, true)));
     }
     {
       auto result_rows =
           run_multiple_agg("SELECT COUNT(*), UNNEST(arr_bool) AS a FROM array_test GROUP BY a ORDER BY a DESC;", dt);
-      ASSERT_EQ(size_t(2), result_rows.size());
-      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.get(0, 0, true)));
-      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.get(1, 0, true)));
-      ASSERT_EQ(1, v<int64_t>(result_rows.get(0, 1, true)));
-      ASSERT_EQ(0, v<int64_t>(result_rows.get(1, 1, true)));
+      ASSERT_EQ(size_t(2), result_rows.rowCount());
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.getRowAt(0, 0, true)));
+      ASSERT_EQ(int64_t(g_array_test_row_count * 3), v<int64_t>(result_rows.getRowAt(1, 0, true)));
+      ASSERT_EQ(1, v<int64_t>(result_rows.getRowAt(0, 1, true)));
+      ASSERT_EQ(0, v<int64_t>(result_rows.getRowAt(1, 1, true)));
     }
   }
 }
@@ -826,9 +827,9 @@ TEST(Select, ArrayCountDistinct) {
                     "SELECT COUNT(distinct arr_i" + std::to_string(int_width) + ") FROM array_test;", dt)));
       auto result_rows = run_multiple_agg(
           "SELECT COUNT(distinct arr_i" + std::to_string(int_width) + ") FROM array_test GROUP BY x;", dt);
-      ASSERT_EQ(g_array_test_row_count, result_rows.size());
+      ASSERT_EQ(g_array_test_row_count, result_rows.rowCount());
       for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
-        ASSERT_EQ(3, v<int64_t>(result_rows.get(row_idx, 0, true)));
+        ASSERT_EQ(3, v<int64_t>(result_rows.getRowAt(row_idx, 0, true)));
       }
     }
     for (const std::string float_type : {"float", "double"}) {

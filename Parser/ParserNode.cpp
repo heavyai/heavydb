@@ -1556,11 +1556,11 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     outfile << copy_params.line_delim;
   }
-  for (size_t row_idx = 0; row_idx < results.size(); ++row_idx) {
+  for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
     bool not_first = false;
     for (size_t i = 0; i < results.colCount(); ++i) {
       bool is_null;
-      const auto tv = results.get(row_idx, i, true);
+      const auto tv = results.getRowAt(row_idx, i, true);
       const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
       if (not_first)
         outfile << copy_params.delimiter;

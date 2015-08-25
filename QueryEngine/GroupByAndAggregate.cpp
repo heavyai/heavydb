@@ -223,8 +223,8 @@ void ResultRows::reduce(const ResultRows& other_results,
 
   if (simple_keys_.empty() && multi_keys_.empty()) {
     CHECK(!query_mem_desc.sortOnGpu());
-    CHECK_EQ(1, size());
-    CHECK_EQ(1, other_results.size());
+    CHECK_EQ(1, rowCount());
+    CHECK_EQ(1, other_results.rowCount());
     auto& crt_results = target_values_.front();
     const auto& new_results = other_results.target_values_.front();
     for (size_t agg_col_idx = 0; agg_col_idx < colCount(); ++agg_col_idx) {
@@ -511,10 +511,10 @@ TargetValue result_rows_get_impl(const InternalTargetValue& col_val,
 
 }  // namespace
 
-TargetValue ResultRows::get(const size_t row_idx,
-                            const size_t col_idx,
-                            const bool translate_strings,
-                            const bool decimal_to_double /* = true */) const {
+TargetValue ResultRows::getRowAt(const size_t row_idx,
+                                 const size_t col_idx,
+                                 const bool translate_strings,
+                                 const bool decimal_to_double /* = true */) const {
   if (just_explain_) {
     return explanation_;
   }
@@ -868,7 +868,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
     }
     ResultRows results(targets, executor_, row_set_mem_owner_);
     for (size_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
-      if (truncate_count && results.size() >= truncate_count) {
+      if (truncate_count && results.rowCount() >= truncate_count) {
         break;
       }
       const size_t key_off = (output_columnar_ ? 1 : (group_by_col_count + agg_col_count)) * bin;
