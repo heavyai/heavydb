@@ -606,7 +606,7 @@ class ResultRows {
 
   size_t colCount() const { return just_explain_ ? 1 : targets_.size(); }
 
-  bool empty() const { return !rowCount() && !group_by_buffer_ && !just_explain_; }
+  bool hasNoRows() const { return !rowCount() && !group_by_buffer_ && !just_explain_; }
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
 

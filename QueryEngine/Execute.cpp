@@ -2444,7 +2444,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       if (err) {
         *error_code = err;
       }
-      if (!device_results.empty()) {
+      if (!device_results.hasNoRows()) {
         all_fragment_results.push_back(device_results);
       }
     }
@@ -2778,7 +2778,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const int device_id,
                                          const int64_t scan_limit,
                                          const bool was_auto_device) {
-  CHECK(results.empty());
+  CHECK(results.hasNoRows());
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
   // 1. Optimize size (make keys more compact).

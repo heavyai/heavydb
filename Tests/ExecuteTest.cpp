@@ -63,7 +63,7 @@ class SQLiteComparator {
     const auto mapd_results = run_multiple_agg(query_string, device_type);
     ASSERT_EQ(connector_.getNumRows(), mapd_results.rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
-    if (mapd_results.empty()) {
+    if (mapd_results.hasNoRows()) {
       ASSERT_EQ(0, num_rows);
       return;
     }

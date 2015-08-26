@@ -354,7 +354,7 @@ int main(int argc, char* argv[]) {
             } else {
               results = results_cpu;
             }
-            if (!results.empty()) {
+            if (!results.hasNoRows()) {
               for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
                 cout << fixed << setprecision(13) << row_col_to_string(results, row_idx, 0);
                 for (size_t i = 1; i < results.colCount(); ++i) {

@@ -78,10 +78,10 @@ void ResultRows::reduce(const ResultRows& other_results,
                         const GpuSortInfo& gpu_sort_info,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const bool output_columnar) {
-  if (other_results.empty()) {
+  if (other_results.hasNoRows()) {
     return;
   }
-  if (empty()) {
+  if (hasNoRows()) {
     *this = other_results;
     return;
   }
