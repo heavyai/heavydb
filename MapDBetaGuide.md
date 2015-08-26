@@ -27,22 +27,26 @@ This command starts the MapD Server process. `<MapD directory>` must match that 
 
 * `[--cpu|--gpu|--hybrid]`: Execute queries on CPU, GPU or both. The default is GPU.
 * `[{-p|--port} <port number>]`: Specify the port number mapd_server listens on. The default is port 9091.
+* `[{--http-port} <port number>]`: Specify the port the HTTP server listens on. The default is port 9090.
 * `[--flush-log]`: Flush log files to disk. Useful for `tail -f` on log files.
 * `[--version|-v]`: Prints version number.
 
 `mapd_server` automatically re-spawns itself in case of unexpected termination.  To force termination of `mapd_server` kill -9 **all** `mapd_server` processes.
-###mapd_http_server
+
+###mapd_web_server
 
 ```
-mapd_http_server [{-p|--port} <port number>]
-                 [{-s|--server} <port number>]
-                 [--version|-v]
+mapd_web_server [{--port} <port number>]
+                [{--proxy-backend} <bool>]
+                [{--backend-url} <backend URL>]
+                [{--frontend} <path/to/frontend>]
 ```
-This command starts the MapD HTTP proxy server.  It must be started on the same computer after `mapd_server` is started.  MapD's visualization frontend communicates to the MapD Server via the MapD HTTP proxy server. The options are:
+This command starts the MapD web server.  This server provides access to MapD's visualization frontend and allows the frontend to communicate with the MapD Server. The options are:
 
-* `[{-p|--port} <port number>]`: Specify the port the HTTP proxy server listens on. The default is port 9090.
-* `[{-s|--server} <port number>]`: Specify the port number that mapd_server listens on. The default is port 9091.
-* `[--version|-v]`: Prints version number.
+* `[{--port} <port number>]`: Specify the port the web server listens on. The default is port 9092.
+* `[{--proxy-backend} <bool>]`: Specify whether to act as a proxy to the backend. The default is `true`.
+* `[{--backend-url} <backend URL>]`: Specify the URL to the backend HTTP server. The default is `http://localhost:9090`.
+* `[{--frontend} <path/to/frontend>]`: Specify the path to the frontend directory. The default is `frontend`.
 
 ###mapdql
 

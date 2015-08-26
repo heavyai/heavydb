@@ -17,10 +17,6 @@ if ! pgrep mapd_server; then
     ./bin/mapd_server data --cpu &
 fi
 
-if ! pgrep mapd_http_server; then
-    ./bin/mapd_http_server &
-fi
-
 if [ -d frontend -a -e ./bin/mapd_web_server ]; then
     pushd frontend
     if [ ! -e downloads ]; then
