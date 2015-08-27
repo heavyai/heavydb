@@ -393,7 +393,7 @@ struct ImportStatus {
   size_t rows_completed;
   size_t rows_estimated;
   std::chrono::duration<size_t, std::milli> elapsed;
-  ImportStatus() : start(std::chrono::steady_clock::now()) {}
+  ImportStatus() : start(std::chrono::steady_clock::now()), rows_completed(0), rows_estimated(0), elapsed(0) {}
 };
 
 class Importer {
