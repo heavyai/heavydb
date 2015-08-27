@@ -1,9 +1,0 @@
-#!/bin/bash
-
-if [ ! -f $1 ]
-then
-  git log -1 --pretty=format:%h > $1
-elif [ `git log -1 --pretty=format:%h` != `cat $1` ]
-then
-  git log -1 --pretty=format:%h > $1
-fi

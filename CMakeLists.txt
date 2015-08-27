@@ -91,16 +91,18 @@ add_custom_command(
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
-execute_process(COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/Shared/release.h ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt
-    OUTPUT ${CMAKE_BINARY_DIR}/MapDRelease.h
-    COMMAND sed -e \"s/MAPD_GIT_HASH/`${GIT_EXECUTABLE} log -1 --pretty=format:%h`/\" ${CMAKE_SOURCE_DIR}/Shared/release.h > ${CMAKE_BINARY_DIR}/MapDRelease.h)
-add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt
-  COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt
-  DEPENDS githash)
-add_custom_target(githash ALL
-  COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)
+execute_process(
+  COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE MAPD_GIT_HASH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+file(WRITE ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt "${MAPD_GIT_HASH}\n")
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/Shared/release.h"
+  "${CMAKE_BINARY_DIR}/MapDRelease.h"
+  @ONLY
+  )
 
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
