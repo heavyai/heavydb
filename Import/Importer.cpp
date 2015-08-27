@@ -140,7 +140,7 @@ static const char* get_row(const char* buf,
             field_buf[j - 1] = '\0';
           else
             field_buf[j] = '\0';
-          std::string s = trim_space(field_buf, j);
+          std::string s = trim_space(field_buf, strip_quotes ? j - 1 : j);
           row.push_back(s);
         }
         field = p + 1;
