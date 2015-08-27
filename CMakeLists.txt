@@ -42,6 +42,7 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
 include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/")
 
 # Google Test and Google Mock
@@ -107,8 +108,8 @@ set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
-target_link_libraries (mapd ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lz -lncurses")
-target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${Thrift_LIBRARIES} ${CMAKE_DL_LIBS} "${LLVM_LINKER_FLAGS} -lnvvm -lcuda -lcudart -lz -lncurses")
+target_link_libraries (mapd ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${LLVM_LINKER_FLAGS} "-lnvvm -lcuda -lcudart -lz -lncurses")
+target_link_libraries (mapd_server ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${Thrift_LIBRARIES} ${CMAKE_DL_LIBS} ${LLVM_LINKER_FLAGS} "-lnvvm -lcuda -lcudart -lz -lncurses")
 target_link_libraries (initdb Shared Catalog Fragmenter Chunk SqliteConnector DataMgr StringDictionary ${Boost_LIBRARIES} ${CMAKE_DL_LIBS})
 
 # Packaging
