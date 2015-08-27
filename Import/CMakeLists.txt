@@ -11,5 +11,5 @@ target_link_libraries(CsvImport Shared Catalog Chunk DataMgr StringDictionary ${
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
-    COMMAND thrift
+    COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)

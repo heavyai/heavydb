@@ -88,7 +88,7 @@ add_executable(mapd_server ${mapd_server_source_files})
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
-    COMMAND thrift
+    COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
 execute_process(COMMAND ${CMAKE_SOURCE_DIR}/get_git_hash ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)

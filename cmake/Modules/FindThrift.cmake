@@ -20,6 +20,7 @@
 #
 #   Thrift_FOUND            - Set to TRUE if Thrift was found.
 #   Thrift_LIBRARIES        - Path to the Thrift libraries.
+#   Thrift_EXECUTABLE       - Path to the Thrift executable.
 #   Thrift_LIBRARY_DIRS     - compile time link directories
 #
 #
@@ -32,7 +33,7 @@
 #      target_link_libraries(<YourTarget> ${Thrift_LIBRARIES})
 #    endif()
 #
-# TODO(andrewseidl): Find thrift command and add macro for running thrift --gen.
+# TODO(andrewseidl): Add macro for running thrift --gen.
 
 if(Thrift_USE_STATIC_LIBS)
   set(_CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
@@ -51,11 +52,23 @@ find_library(Thrift_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
+get_filename_component(Thrift_LIBRARY_DIR ${Thrift_LIBRARY} DIRECTORY)
+
+find_program(Thrift_EXECUTABLE
+  NAMES thrift
+  HINTS
+  ENV PATH
+  ${Thrift_LIBRARY_DIR}/../bin
+  PATHS
+  /usr/bin
+  /usr/local/bin
+  /usr/local/homebrew/bin
+  /opt/local/bin)
+
 if(Thrift_USE_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ${_CMAKE_FIND_LIBRARY_SUFFIXES})
 endif()
 
-get_filename_component(Thrift_LIBRARY_DIR ${Thrift_LIBRARY} DIRECTORY)
 # Set standard CMake FindPackage variables if found.
 set(Thrift_LIBRARIES ${Thrift_LIBRARY})
 set(Thrift_LIBRARY_DIRS ${Thrift_LIBRARY_DIR})
