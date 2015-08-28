@@ -809,6 +809,7 @@ class MapDHandler : virtual public MapDIf {
     td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
     td.maxFragRows = DEFAULT_FRAGMENT_SIZE;
     td.fragPageSize = DEFAULT_PAGE_SIZE;
+    td.maxRows = DEFAULT_MAX_ROWS;
 
     std::list<ColumnDescriptor> cds;
     for (auto col : rd) {
