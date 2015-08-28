@@ -43,8 +43,8 @@ Importer::Importer(const Catalog_Namespace::Catalog& c,
   buffer[0] = nullptr;
   buffer[1] = nullptr;
   which_buf = 0;
-  std::unique_ptr<bool> is_array =
-      std::unique_ptr<bool>((bool*)malloc(loader.get_column_descs().size() * sizeof(bool)));
+  auto is_array =
+      std::unique_ptr<bool[]>(new bool[loader.get_column_descs().size()]);
   int i = 0;
   bool has_array = false;
   for (auto& p : loader.get_column_descs()) {
@@ -56,9 +56,9 @@ Importer::Importer(const Catalog_Namespace::Catalog& c,
     ++i;
   }
   if (has_array)
-    is_array_a = std::unique_ptr<bool>(is_array.release());
+    is_array_a = std::unique_ptr<bool[]>(is_array.release());
   else
-    is_array_a = std::unique_ptr<bool>(nullptr);
+    is_array_a = std::unique_ptr<bool[]>(nullptr);
 }
 
 Importer::~Importer() {

@@ -425,7 +425,7 @@ class Importer {
   std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> import_buffers_vec;
   Loader loader;
   bool load_failed;
-  std::unique_ptr<bool> is_array_a;
+  std::unique_ptr<bool[]> is_array_a;
   ImportStatus import_status;
 };
 };
