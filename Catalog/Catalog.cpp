@@ -170,6 +170,7 @@ Catalog::Catalog(const string& basePath, const DBMetadata& curDB, std::shared_pt
 }
 
 Catalog::~Catalog() {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
   // must clean up heap-allocated TableDescriptor and ColumnDescriptor structs
   for (TableDescriptorMap::iterator tableDescIt = tableDescriptorMap_.begin(); tableDescIt != tableDescriptorMap_.end();
        ++tableDescIt) {
@@ -363,30 +364,26 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(const string& tableName) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
   auto tableDescIt = tableDescriptorMap_.find(tableName);
   if (tableDescIt == tableDescriptorMap_.end()) {  // check to make sure table exists
     return nullptr;
   }
   TableDescriptor* td = tableDescIt->second;
-  {
-    std::lock_guard<std::mutex> lock(cat_mutex_);
-    if (td->fragmenter == nullptr)
-      instantiateFragmenter(td);
-  }
+  if (td->fragmenter == nullptr)
+    instantiateFragmenter(td);
   return td;  // returns pointer to table descriptor
 }
 
 const TableDescriptor* Catalog::getMetadataForTable(int tableId) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
   auto tableDescIt = tableDescriptorMapById_.find(tableId);
   if (tableDescIt == tableDescriptorMapById_.end()) {  // check to make sure table exists
     return nullptr;
   }
   TableDescriptor* td = tableDescIt->second;
-  {
-    std::lock_guard<std::mutex> lock(cat_mutex_);
-    if (td->fragmenter == nullptr)
-      instantiateFragmenter(td);
-  }
+  if (td->fragmenter == nullptr)
+    instantiateFragmenter(td);
   return td;  // returns pointer to table descriptor
 }
 
@@ -565,6 +562,7 @@ void Catalog::dropTable(const TableDescriptor* td) {
 }
 
 void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("UPDATE mapd_tables SET name = '" + newTableName + "' WHERE tableid = " +
