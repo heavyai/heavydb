@@ -219,23 +219,28 @@ std::shared_ptr<Analyzer::Expr> BetweenExpr::analyze(const Catalog_Namespace::Ca
   auto lower_expr = lower->analyze(catalog, query, allow_tlist_ref);
   auto upper_expr = upper->analyze(catalog, query, allow_tlist_ref);
   SQLTypeInfo new_left_type, new_right_type;
-  (void)Analyzer::BinOper::analyze_type_info(
-      kGE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-  auto lower_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN,
-                                                kGE,
-                                                kONE,
-                                                arg_expr->add_cast(new_left_type)->decompress(),
+  (void)Analyzer::BinOper::analyze_type_info(kGE, arg_expr->get_type_info(), lower_expr->get_type_info(),
+                                             &new_left_type, &new_right_type);
+  auto lower_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN, kGE, kONE, arg_expr->add_cast(new_left_type)->decompress(),
                                                 lower_expr->add_cast(new_right_type)->decompress());
-  (void)Analyzer::BinOper::analyze_type_info(
-      kLE, arg_expr->get_type_info(), lower_expr->get_type_info(), &new_left_type, &new_right_type);
-  auto upper_pred = makeExpr<Analyzer::BinOper>(kBOOLEAN,
-                                                kLE,
-                                                kONE,
-                                                arg_expr->deep_copy()->add_cast(new_left_type)->decompress(),
-                                                upper_expr->add_cast(new_right_type)->decompress());
+  (void)Analyzer::BinOper::analyze_type_info(kLE, arg_expr->get_type_info(), lower_expr->get_type_info(),
+                                             &new_left_type, &new_right_type);
+  auto upper_pred =
+      makeExpr<Analyzer::BinOper>(kBOOLEAN, kLE, kONE, arg_expr->deep_copy()->add_cast(new_left_type)->decompress(),
+                                  upper_expr->add_cast(new_right_type)->decompress());
   std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::BinOper>(kBOOLEAN, kAND, kONE, lower_pred, upper_pred);
   if (is_not)
     result = makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, result);
+  return result;
+}
+
+std::shared_ptr<Analyzer::Expr> CharLengthExpr::analyze(const Catalog_Namespace::Catalog& catalog,
+                                                        Analyzer::Query& query,
+                                                        TlistRefType allow_tlist_ref) const {
+  auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
+  if (!arg_expr->get_type_info().is_string())
+    throw std::runtime_error("expression in char_length clause must be of a string type.");
+  std::shared_ptr<Analyzer::Expr> result = makeExpr<Analyzer::CharLengthExpr>(arg_expr->decompress(), calc_encoded_length);
   return result;
 }
 
@@ -308,8 +313,6 @@ std::shared_ptr<Analyzer::Expr> LikeExpr::analyze(const Catalog_Namespace::Catal
       std::transform(pattern.begin(), pattern.end(), pattern.begin(), ::tolower);
     check_like_expr(pattern, escape_char);
     is_simple = test_is_simple_expr(pattern, escape_char);
-    // if (likeCount++ % 2 == 1)
-    //    is_simple = false;
     if (is_simple) {
       erase_cntl_chars(pattern, escape_char);
     }
@@ -456,9 +459,7 @@ std::shared_ptr<Analyzer::Expr> CastExpr::analyze(const Catalog_Namespace::Catal
                                                   TlistRefType allow_tlist_ref) const {
   target_type->check_type();
   auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
-  SQLTypeInfo ti(target_type->get_type(),
-                 target_type->get_param1(),
-                 target_type->get_param2(),
+  SQLTypeInfo ti(target_type->get_type(), target_type->get_param1(), target_type->get_param2(),
                  arg_expr->get_type_info().get_notnull());
   if (arg_expr->get_type_info().get_type() != target_type->get_type() &&
       arg_expr->get_type_info().get_compression() != kENCODING_NONE)
@@ -794,9 +795,8 @@ void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
     // extend order_by to include all targetlist entries.
     for (int i = 1; i <= static_cast<int>(tlist.size()); i++) {
       bool in_orderby = false;
-      std::for_each(order_by->begin(), order_by->end(), [&in_orderby, i](const Analyzer::OrderEntry& oe) {
-        in_orderby = in_orderby || (i == oe.tle_no);
-      });
+      std::for_each(order_by->begin(), order_by->end(),
+                    [&in_orderby, i](const Analyzer::OrderEntry& oe) { in_orderby = in_orderby || (i == oe.tle_no); });
       if (!in_orderby)
         order_by->push_back(Analyzer::OrderEntry(i, false, false));
     }
@@ -966,6 +966,15 @@ std::string BetweenExpr::to_string() const {
   else
     str += " BETWEEN ";
   str += lower->to_string() + " AND " + upper->to_string();
+  return str;
+}
+
+std::string CharLengthExpr::to_string() const {
+  std::string str;
+  if (calc_encoded_length) 
+    str = "CHAR_LENGTH (" + arg->to_string() + ")";
+  else
+    str = "LENGTH (" + arg->to_string() + ")";
   return str;
 }
 

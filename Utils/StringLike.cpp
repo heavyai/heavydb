@@ -23,6 +23,43 @@ DEVICE static int inline lowercase(char c) {
   return c;
 }
 
+extern "C" DEVICE int32_t char_length(const char* str, const int32_t str_len) {
+  return str_len;
+}
+
+extern "C" DEVICE int32_t char_length_nullable(const char* str, const int32_t str_len, const int32_t int_null) {
+  if (!str)
+    return int_null;
+  return str_len;
+}
+extern "C" DEVICE int32_t char_length_encoded(const char* str, const int32_t str_len) { // assumes utf8
+  return str_len;
+  /*
+  int32_t i = 0, char_count = 0;
+  while (i < str_len) {
+    if ((str[i] & 0xc0) != 0x80)
+      char_count++;
+    i++;
+  }
+  return char_count;
+  */
+}
+
+extern "C" DEVICE int32_t char_length_encoded_nullable(const char* str, const int32_t str_len, const int32_t int_null) { // assumes utf8
+  if (!str)
+    return int_null;
+  return str_len;
+  /*
+  int32_t i = 0, char_count = 0;
+  while (i < str_len) {
+    if ((str[i] & 0xc0) != 0x80)
+      char_count++;
+    i++;
+  }
+  return char_count;
+  */
+}
+
 extern "C" DEVICE bool string_like_simple(const char* str,
                                           const int32_t str_len,
                                           const char* pattern,
@@ -55,13 +92,13 @@ extern "C" DEVICE bool string_ilike_simple(const char* str,
   return false;
 }
 
-#define STR_LIKE_SIMPLE_NULLABLE(base_func)                                                                     \
-  extern "C" DEVICE int8_t base_func##_nullable(                                                                \
-      const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len, const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                                                         \
-      return bool_null;                                                                                         \
-    }                                                                                                           \
-    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                                       \
+#define STR_LIKE_SIMPLE_NULLABLE(base_func)                                                              \
+  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs, const int32_t lhs_len, const char* rhs, \
+                                                const int32_t rhs_len, const int8_t bool_null) {         \
+    if (!lhs || !rhs) {                                                                                  \
+      return bool_null;                                                                                  \
+    }                                                                                                    \
+    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                                \
   }
 
 STR_LIKE_SIMPLE_NULLABLE(string_like_simple)
@@ -242,17 +279,14 @@ extern "C" DEVICE int32_t StringCompare(const char* s1, const int32_t s1_len, co
   return c1 - c2;
 }
 
-#define STR_LIKE_NULLABLE(base_func)                                      \
-  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs,          \
-                                                const int32_t lhs_len,    \
-                                                const char* rhs,          \
-                                                const int32_t rhs_len,    \
-                                                const char escape_char,   \
-                                                const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                   \
-      return bool_null;                                                   \
-    }                                                                     \
-    return base_func(lhs, lhs_len, rhs, rhs_len, escape_char) ? 1 : 0;    \
+#define STR_LIKE_NULLABLE(base_func)                                                                     \
+  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs, const int32_t lhs_len, const char* rhs, \
+                                                const int32_t rhs_len, const char escape_char,           \
+                                                const int8_t bool_null) {                                \
+    if (!lhs || !rhs) {                                                                                  \
+      return bool_null;                                                                                  \
+    }                                                                                                    \
+    return base_func(lhs, lhs_len, rhs, rhs_len, escape_char) ? 1 : 0;                                   \
   }
 
 STR_LIKE_NULLABLE(string_like)
@@ -284,13 +318,13 @@ extern "C" DEVICE bool string_ne(const char* lhs, const int32_t lhs_len, const c
   return StringCompare(lhs, lhs_len, rhs, rhs_len) != 0;
 }
 
-#define STR_CMP_NULLABLE(base_func)                                                                             \
-  extern "C" DEVICE int8_t base_func##_nullable(                                                                \
-      const char* lhs, const int32_t lhs_len, const char* rhs, const int32_t rhs_len, const int8_t bool_null) { \
-    if (!lhs || !rhs) {                                                                                         \
-      return bool_null;                                                                                         \
-    }                                                                                                           \
-    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                                       \
+#define STR_CMP_NULLABLE(base_func)                                                                      \
+  extern "C" DEVICE int8_t base_func##_nullable(const char* lhs, const int32_t lhs_len, const char* rhs, \
+                                                const int32_t rhs_len, const int8_t bool_null) {         \
+    if (!lhs || !rhs) {                                                                                  \
+      return bool_null;                                                                                  \
+    }                                                                                                    \
+    return base_func(lhs, lhs_len, rhs, rhs_len) ? 1 : 0;                                                \
   }
 
 STR_CMP_NULLABLE(string_lt)

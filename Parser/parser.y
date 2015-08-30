@@ -69,11 +69,11 @@ using namespace Parser;
 	/* literal keyword tokens */
 
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
-%token CASE CAST CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
+%token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END ESCAPE EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
-%token IS LANGUAGE LAST LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
+%token IS LANGUAGE LAST LENGTH LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHOW
 %token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
@@ -848,7 +848,13 @@ extract_exp: EXTRACT '(' NAME FROM scalar_exp ')'
   }
   ;
 
-/* should be scaler_exp '[' scalar_exp ']' but it cause conflicts.  need to debug */
+ charlength_exp: 
+	      CHAR_LENGTH '(' scalar_exp ')' { $<nodeval>$ = new CharLengthExpr(dynamic_cast<Expr*>($<nodeval>3),true); }
+	    | LENGTH '(' scalar_exp ')'	{ $<nodeval>$ = new CharLengthExpr(dynamic_cast<Expr*>($<nodeval>3),false); }
+	    ;
+
+
+/* should be scaler_exp '[' scalar_exp ']' but it causes conflicts.  need to debug */
 array_at_exp : column_ref '[' scalar_exp ']'
   {
     $<nodeval>$ = new OperExpr(kARRAY_AT, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3));
@@ -872,6 +878,7 @@ scalar_exp:
 	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
 	| case_exp { $<nodeval>$ = $<nodeval>1; }
   | extract_exp { $<nodeval>$ = $<nodeval>1; }
+  | charlength_exp { $<nodeval>$ = $<nodeval>1; }
   | array_at_exp { $<nodeval>$ = $<nodeval>1; }
 	;
 

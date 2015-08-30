@@ -334,6 +334,26 @@ class BetweenExpr : public Expr {
 };
 
 /*
+ * @type CharLengthExpr
+ * @brief expression to get length of string
+ */
+
+class CharLengthExpr : public Expr {
+ public:
+  CharLengthExpr(Expr* a, bool e) : arg(a), calc_encoded_length(e) {}
+  const Expr* get_arg() const { return arg.get(); }
+  bool get_calc_encoded_length() const { return calc_encoded_length; }
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  virtual std::string to_string() const;
+
+ private:
+  std::unique_ptr<Expr> arg;
+  bool calc_encoded_length;
+};
+
+/*
  * @type LikeExpr
  * @brief expression for the LIKE predicate
  */

@@ -129,6 +129,7 @@ class Executor {
                                     const bool hoist_literals);
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
+  llvm::Value* codegen(const Analyzer::CharLengthExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::InValues*, const bool hoist_literals);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);

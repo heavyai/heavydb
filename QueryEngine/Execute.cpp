@@ -432,10 +432,17 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (extract_expr) {
     return {codegen(extract_expr, hoist_literals)};
   }
+  auto charlength_expr = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
+  if (charlength_expr) {
+    return {codegen(charlength_expr, hoist_literals)};
+  }
+
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
     return {codegen(like_expr, hoist_literals)};
   }
+
+
   auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
   if (in_expr) {
     return {codegen(in_expr, hoist_literals)};
@@ -470,6 +477,27 @@ extern "C" int32_t string_compress(const int64_t ptr_and_len, const int64_t stri
   auto string_dict = reinterpret_cast<const StringDictionary*>(string_dict_handle);
   return string_dict->get(raw_str);
 }
+
+llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const bool hoist_literals) {
+  auto str_lv = codegen(expr->get_arg(), true, hoist_literals);
+  if (str_lv.size() != 3) {
+    CHECK_EQ(1, str_lv.size());
+    str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
+    str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
+    cgen_state_->must_run_on_cpu_ = true;
+  }
+  std::vector<llvm::Value*> charlength_args{str_lv[1], str_lv[2]};
+  std::string fn_name ("char_length");
+  if (expr->get_calc_encoded_length())
+    fn_name += "_encoded";
+  const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
+  if (is_nullable) {
+    fn_name += "_nullable";
+    charlength_args.push_back(inlineIntNull(expr->get_type_info()));
+  }
+  return cgen_state_->emitCall(fn_name, charlength_args);
+}
+
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
   char escape_char{'\\'};
@@ -3601,6 +3629,10 @@ declare i32 @array_at_int32_t_checked(i8*, i64, i64, i32);
 declare i64 @array_at_int64_t_checked(i8*, i64, i64, i64);
 declare float @array_at_float_checked(i8*, i64, i64, float);
 declare double @array_at_double_checked(i8*, i64, i64, double);
+declare i8 @char_length(i8*, i32);
+declare i8 @char_length_nullable(i8*, i32, i32);
+declare i8 @char_length_encoded(i8*, i32);
+declare i8 @char_length_encoded_nullable(i8*, i32, i32);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
