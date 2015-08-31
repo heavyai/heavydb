@@ -347,16 +347,27 @@ class BinOper : public Expr {
     right_operand->collect_column_var(colvar_set, include_agg);
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<BinOper>(type_info, contains_agg, optype, qualifier, left_operand->rewrite_with_targetlist(tlist),
+    return makeExpr<BinOper>(type_info,
+                             contains_agg,
+                             optype,
+                             qualifier,
+                             left_operand->rewrite_with_targetlist(tlist),
                              right_operand->rewrite_with_targetlist(tlist));
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<BinOper>(type_info, contains_agg, optype, qualifier,
+    return makeExpr<BinOper>(type_info,
+                             contains_agg,
+                             optype,
+                             qualifier,
                              left_operand->rewrite_with_child_targetlist(tlist),
                              right_operand->rewrite_with_child_targetlist(tlist));
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<BinOper>(type_info, contains_agg, optype, qualifier, left_operand->rewrite_agg_to_var(tlist),
+    return makeExpr<BinOper>(type_info,
+                             contains_agg,
+                             optype,
+                             qualifier,
+                             left_operand->rewrite_agg_to_var(tlist),
                              right_operand->rewrite_agg_to_var(tlist));
   }
   virtual bool operator==(const Expr& rhs) const;
@@ -455,7 +466,8 @@ class InValues : public Expr {
  */
 class CharLengthExpr : public Expr {
  public:
-  CharLengthExpr(std::shared_ptr<Analyzer::Expr> a, bool e) : Expr(kINT, a->get_type_info().get_notnull()), arg(a), calc_encoded_length(e) {}
+  CharLengthExpr(std::shared_ptr<Analyzer::Expr> a, bool e)
+      : Expr(kINT, a->get_type_info().get_notnull()), arg(a), calc_encoded_length(e) {}
   const Expr* get_arg() const { return arg.get(); }
   bool get_calc_encoded_length() const { return calc_encoded_length; }
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
@@ -518,16 +530,25 @@ class LikeExpr : public Expr {
     arg->collect_column_var(colvar_set, include_agg);
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<LikeExpr>(arg->rewrite_with_targetlist(tlist), like_expr->deep_copy(),
-                              escape_expr ? escape_expr->deep_copy() : nullptr, is_ilike, is_simple);
+    return makeExpr<LikeExpr>(arg->rewrite_with_targetlist(tlist),
+                              like_expr->deep_copy(),
+                              escape_expr ? escape_expr->deep_copy() : nullptr,
+                              is_ilike,
+                              is_simple);
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<LikeExpr>(arg->rewrite_with_child_targetlist(tlist), like_expr->deep_copy(),
-                              escape_expr ? escape_expr->deep_copy() : nullptr, is_ilike, is_simple);
+    return makeExpr<LikeExpr>(arg->rewrite_with_child_targetlist(tlist),
+                              like_expr->deep_copy(),
+                              escape_expr ? escape_expr->deep_copy() : nullptr,
+                              is_ilike,
+                              is_simple);
   }
   virtual std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
-    return makeExpr<LikeExpr>(arg->rewrite_agg_to_var(tlist), like_expr->deep_copy(),
-                              escape_expr ? escape_expr->deep_copy() : nullptr, is_ilike, is_simple);
+    return makeExpr<LikeExpr>(arg->rewrite_agg_to_var(tlist),
+                              like_expr->deep_copy(),
+                              escape_expr ? escape_expr->deep_copy() : nullptr,
+                              is_ilike,
+                              is_simple);
   }
   virtual bool operator==(const Expr& rhs) const;
   virtual void print() const;

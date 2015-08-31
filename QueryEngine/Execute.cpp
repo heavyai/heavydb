@@ -442,7 +442,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
     return {codegen(like_expr, hoist_literals)};
   }
 
-
   auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
   if (in_expr) {
     return {codegen(in_expr, hoist_literals)};
@@ -487,7 +486,7 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const bool 
     cgen_state_->must_run_on_cpu_ = true;
   }
   std::vector<llvm::Value*> charlength_args{str_lv[1], str_lv[2]};
-  std::string fn_name ("char_length");
+  std::string fn_name("char_length");
   if (expr->get_calc_encoded_length())
     fn_name += "_encoded";
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
@@ -497,7 +496,6 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const bool 
   }
   return cgen_state_->emitCall(fn_name, charlength_args);
 }
-
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
   char escape_char{'\\'};
