@@ -10,11 +10,7 @@
 #ifndef STRING_LIKE_H
 #define STRING_LIKE_H
 
-#ifdef __CUDACC__
-#define DEVICE __device__
-#else
-#define DEVICE
-#endif
+#include "../Shared/funcannotations.h"
 
 /*
  * @brief string_like performs the SQL LIKE and ILIKE operation

@@ -522,6 +522,8 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str = 'foo' OR str = 'bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE str = real_str;", dt);
     c("SELECT COUNT(*) FROM test WHERE str <> str;", dt);
+    c("SELECT COUNT(*) FROM test WHERE LENGTH(str) = 3;", dt);
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;", dt)));
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
   }
 }
@@ -553,6 +555,9 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE real_str = real_str;", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str <> real_str;", dt);
     ASSERT_EQ(g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE real_str ILIKE 'rEaL_f%%';", dt)));
+    c("SELECT COUNT(*) FROM test WHERE LENGTH(real_str) = 8;", dt);
+    ASSERT_EQ(2 * g_num_rows,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(real_str) = 8;", dt)));
   }
 }
 

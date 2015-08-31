@@ -295,6 +295,7 @@ extern "C" __device__ void agg_max_double_skip_val_shared(int64_t* agg, const do
 #include "../Utils/ChunkIter.cpp"
 #define EXECUTE_INCLUDE
 #include "ArrayOps.cpp"
+#include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 #include "../Utils/StringLike.cpp"
 

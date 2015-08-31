@@ -473,6 +473,18 @@ extern "C" __attribute__((always_inline)) uint64_t string_pack(const int8_t* ptr
 #include "../Utils/StringLike.cpp"
 #endif
 
+extern "C" ALWAYS_INLINE DEVICE int32_t char_length(const char* str, const int32_t str_len) {
+  return str_len;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int32_t
+    char_length_nullable(const char* str, const int32_t str_len, const int32_t int_null) {
+  if (!str) {
+    return int_null;
+  }
+  return str_len;
+}
+
 extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(const int8_t** col_buffers,
                                                                       const int8_t* literals,
                                                                       const int64_t* num_rows,

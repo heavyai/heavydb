@@ -494,7 +494,9 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const bool 
     fn_name += "_nullable";
     charlength_args.push_back(inlineIntNull(expr->get_type_info()));
   }
-  return cgen_state_->emitCall(fn_name, charlength_args);
+  return expr->get_calc_encoded_length()
+             ? cgen_state_->emitExternalCall(fn_name, get_int_type(32, cgen_state_->context_), charlength_args)
+             : cgen_state_->emitCall(fn_name, charlength_args);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_literals) {
@@ -3627,10 +3629,10 @@ declare i32 @array_at_int32_t_checked(i8*, i64, i64, i32);
 declare i64 @array_at_int64_t_checked(i8*, i64, i64, i64);
 declare float @array_at_float_checked(i8*, i64, i64, float);
 declare double @array_at_double_checked(i8*, i64, i64, double);
-declare i8 @char_length(i8*, i32);
-declare i8 @char_length_nullable(i8*, i32, i32);
-declare i8 @char_length_encoded(i8*, i32);
-declare i8 @char_length_encoded_nullable(i8*, i32, i32);
+declare i32 @char_length(i8*, i32);
+declare i32 @char_length_nullable(i8*, i32, i32);
+declare i32 @char_length_encoded(i8*, i32);
+declare i32 @char_length_encoded_nullable(i8*, i32, i32);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);
@@ -3819,6 +3821,7 @@ llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
 
 #define EXECUTE_INCLUDE
 #include "ArrayOps.cpp"
+#include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 
 llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
