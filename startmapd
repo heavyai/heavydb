@@ -1,5 +1,19 @@
 #!/bin/bash
 
+while (( $# )); do
+    case "$1" in
+        --gpu)
+            DEVICE="--gpu" ;;
+        --cpu)
+            DEVICE="--cpu" ;;
+        --auto)
+            DEVICE="" ;;
+        *)
+            break ;;
+    esac
+    shift
+done
+
 if [ ! -d data ]; then
     mkdir data
     ./bin/initdb -f --path data
@@ -14,7 +28,7 @@ if [ ! -d data ]; then
 fi
 
 if ! pgrep mapd_server; then
-    ./bin/mapd_server data --cpu &
+    ./bin/mapd_server data $DEVICE &
 fi
 
 if [ -d frontend -a -e ./bin/mapd_web_server ]; then
