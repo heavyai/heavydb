@@ -1805,19 +1805,20 @@ int64_t reduce_results(const SQLAgg agg, const SQLTypeInfo& ti, const int64_t* o
 
 }  // namespace
 
-ResultRows Executor::reduceMultiDeviceResults(const std::vector<ResultRows>& results_per_device,
-                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                              const GpuSortInfo& gpu_sort_info,
-                                              const QueryMemoryDescriptor& query_mem_desc,
-                                              const bool output_columnar) const {
+ResultRows Executor::reduceMultiDeviceResults(
+    std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const GpuSortInfo& gpu_sort_info,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool output_columnar) const {
   if (results_per_device.empty()) {
     return ResultRows({}, nullptr, nullptr);
   }
 
-  auto reduced_results = results_per_device.front();
+  auto reduced_results = results_per_device.front().first;
 
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results.reduce(results_per_device[i], gpu_sort_info, query_mem_desc, output_columnar);
+    reduced_results.reduce(results_per_device[i].first, gpu_sort_info, query_mem_desc, output_columnar);
   }
 
   row_set_mem_owner->addLiteralStringDict(lit_str_dict_);
@@ -1983,13 +1984,21 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
   return result;
 }
 
-ResultRows results_union(const std::vector<ResultRows>& results_per_device) {
+ResultRows results_union(std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device) {
   if (results_per_device.empty()) {
     return ResultRows({}, nullptr, nullptr);
   }
-  auto all_results = results_per_device.front();
+  typedef std::pair<ResultRows, std::vector<size_t>> IndexedResultRows;
+  std::sort(results_per_device.begin(),
+            results_per_device.end(),
+            [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {
+    CHECK_EQ(size_t(1), lhs.second.size());
+    CHECK_EQ(size_t(1), rhs.second.size());
+    return lhs.second < rhs.second;
+  });
+  auto all_results = results_per_device.front().first;
   for (size_t dev_idx = 1; dev_idx < results_per_device.size(); ++dev_idx) {
-    all_results.append(results_per_device[dev_idx]);
+    all_results.append(results_per_device[dev_idx].first);
   }
   return all_results;
 }
@@ -2333,7 +2342,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   }
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_plan->get_col_list();
-  std::vector<ResultRows> all_fragment_results;
+  std::vector<std::pair<ResultRows, std::vector<size_t>>> all_fragment_results;
   all_fragment_results.reserve(fragments.size());
 
   // could use std::thread::hardware_concurrency(), but some
@@ -2473,7 +2482,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
         *error_code = err;
       }
       if (!device_results.hasNoRows()) {
-        all_fragment_results.push_back(device_results);
+        all_fragment_results.emplace_back(device_results, frag_ids);
       }
     }
     if (device_type == ExecutorDeviceType::Hybrid) {
@@ -2537,20 +2546,23 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   return results_union(all_fragment_results);
 }
 
-ResultRows Executor::collectAllDeviceResults(std::vector<ResultRows>& all_fragment_results,
-                                             const Planner::Plan* plan,
-                                             const QueryMemoryDescriptor& query_mem_desc,
-                                             const GpuSortInfo& gpu_sort_info,
-                                             const ExecutorDeviceType device_type,
-                                             const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
-                                             std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                             const bool output_columnar) {
+ResultRows Executor::collectAllDeviceResults(
+    std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
+    const Planner::Plan* plan,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const GpuSortInfo& gpu_sort_info,
+    const ExecutorDeviceType device_type,
+    const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const bool output_columnar) {
   for (const auto& query_exe_context : query_contexts) {
     if (!query_exe_context) {
       continue;
     }
-    all_fragment_results.push_back(query_exe_context->getRowSet(
-        get_agg_target_exprs(plan), gpu_sort_info, query_mem_desc, device_type == ExecutorDeviceType::Hybrid));
+    all_fragment_results.emplace_back(
+        query_exe_context->getRowSet(
+            get_agg_target_exprs(plan), gpu_sort_info, query_mem_desc, device_type == ExecutorDeviceType::Hybrid),
+        std::vector<size_t>{});
   }
   auto reduced_results =
       reduceMultiDeviceResults(all_fragment_results, row_set_mem_owner, gpu_sort_info, query_mem_desc, output_columnar);
@@ -2574,7 +2586,7 @@ ResultRows Executor::collectAllDeviceResults(std::vector<ResultRows>& all_fragme
   return reduced_results;
 }
 
-void Executor::dispatchFragments(std::vector<ResultRows>& all_fragment_results,
+void Executor::dispatchFragments(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                  const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                           int chosen_device_id,
                                                           const std::vector<size_t>& frag_ids,
@@ -2590,7 +2602,6 @@ void Executor::dispatchFragments(std::vector<ResultRows>& all_fragment_results,
                                  std::mutex& scheduler_mutex,
                                  std::unordered_set<int>& available_gpus,
                                  int& available_cpus) {
-  size_t result_rows_count{0};
   size_t frag_list_idx{0};
   std::vector<std::thread> query_threads;
 
@@ -2634,17 +2645,9 @@ void Executor::dispatchFragments(std::vector<ResultRows>& all_fragment_results,
           --available_cpus;
         }
       }
-      if (!agg_plan) {
-        dispatch(chosen_device_type, chosen_device_id, {i}, 0);
-        result_rows_count += all_fragment_results.empty() ? 0 : all_fragment_results.back().rowCount();
-        if (limit && result_rows_count >= static_cast<size_t>(limit)) {
-          break;
-        }
-      } else {
-        query_threads.push_back(std::thread(
-            dispatch, chosen_device_type, chosen_device_id, std::vector<size_t>{i}, frag_list_idx % context_count));
-        ++frag_list_idx;
-      }
+      query_threads.push_back(std::thread(
+          dispatch, chosen_device_type, chosen_device_id, std::vector<size_t>{i}, frag_list_idx % context_count));
+      ++frag_list_idx;
     }
   }
   for (auto& child : query_threads) {

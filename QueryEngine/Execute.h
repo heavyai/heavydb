@@ -181,7 +181,7 @@ class Executor {
                                 const bool output_columnar_hint,
                                 const bool allow_multifrag,
                                 const bool just_explain);
-  ResultRows collectAllDeviceResults(std::vector<ResultRows>& all_fragment_results,
+  ResultRows collectAllDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                      const Planner::Plan* plan,
                                      const QueryMemoryDescriptor& query_mem_desc,
                                      const GpuSortInfo& gpu_sort_info,
@@ -189,7 +189,7 @@ class Executor {
                                      const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const bool output_columnar);
-  void dispatchFragments(std::vector<ResultRows>& all_fragment_results,
+  void dispatchFragments(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                          const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
                                                   const std::vector<size_t>& frag_ids,
@@ -266,7 +266,7 @@ class Executor {
                                     const std::vector<int64_t>& num_rows,
                                     Data_Namespace::DataMgr* data_mgr,
                                     const int device_id);
-  ResultRows reduceMultiDeviceResults(const std::vector<ResultRows>&,
+  ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,
                                       const GpuSortInfo&,
                                       const QueryMemoryDescriptor&,

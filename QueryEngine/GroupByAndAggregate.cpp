@@ -769,7 +769,7 @@ ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& 
                                             const GpuSortInfo& gpu_sort_info,
                                             const QueryMemoryDescriptor& query_mem_desc,
                                             const bool was_auto_device) const noexcept {
-  std::vector<ResultRows> results_per_sm;
+  std::vector<std::pair<ResultRows, std::vector<size_t>>> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(1, num_buffers_);
@@ -778,7 +778,8 @@ ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& 
   size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
   for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
     results_per_sm.emplace_back(
-        groupBufferToResults(i, targets, query_mem_desc.sortOnGpu() ? gpu_sort_info.topFudged() : 0, was_auto_device));
+        groupBufferToResults(i, targets, query_mem_desc.sortOnGpu() ? gpu_sort_info.topFudged() : 0, was_auto_device),
+        std::vector<size_t>{});
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(
