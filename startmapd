@@ -1,11 +1,28 @@
 #!/bin/bash
 
+have_gpu() {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        system_profiler SPDisplaysDataType | grep -q -i nvidia
+        return $?
+    elif [[ "$(uname -s)" == "Linux" ]]; then
+        if [ -f /proc/bus/pci/devices ] ; then
+            grep -q -i nvidia /proc/bus/pci/devices
+        elif hash lspci ; then
+            lspci | grep -q -i nvidia
+        fi
+        return $?
+    fi
+    return 1
+}
+
 while (( $# )); do
     case "$1" in
         --gpu)
             DEVICE="--gpu" ;;
         --cpu)
             DEVICE="--cpu" ;;
+        --hybrid)
+            DEVICE="--hybrid" ;;
         --auto)
             DEVICE="" ;;
         *)
@@ -13,6 +30,13 @@ while (( $# )); do
     esac
     shift
 done
+
+if ! have_gpu ; then
+    if [[ "$DEVICE" != "--cpu" ]]; then
+        echo "WARNING: no GPUs detected; forcing CPU"
+    fi
+    DEVICE="--cpu"
+fi
 
 if [ ! -d data ]; then
     mkdir data
@@ -23,7 +47,7 @@ if [ ! -d data ]; then
     case $choice in
         [yY]* )
             DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-            . $DIR/insert_sample_data ;;
+            . "$DIR/insert_sample_data" ;;
     esac
 fi
 
@@ -52,9 +76,9 @@ if [ -d frontend -a -e ./bin/mapd_web_server ]; then
         MAPDFRONTEND="$MAPDFRONTEND/?style=light-style&platform=mapd&host=localhost&port=9092&db=mapd&$MAPDDASH"
     fi
     if hash open 2>/dev/null; then
-        open $MAPDFRONTEND
+        open "$MAPDFRONTEND"
     elif hash xdg-open 2>/dev/null; then
-        xdg-open $MAPDFRONTEND
+        xdg-open "$MAPDFRONTEND"
     else
         echo "Navigate to: $MAPDFRONTEND"
     fi
