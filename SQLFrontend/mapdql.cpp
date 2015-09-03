@@ -372,13 +372,6 @@ int main(int argc, char** argv) {
   std::string db_name;
   std::string user_name;
   std::string passwd;
-  shared_ptr<TTransport> socket(new TSocket(server_host, port));
-  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-  MapDClient c(protocol);
-  ClientContext context(*transport, c);
-
-  context.session = INVALID_SESSION_ID;
 
   namespace po = boost::program_options;
 
@@ -386,9 +379,9 @@ int main(int argc, char** argv) {
   desc.add_options()("help,h", "Print help messages ")("version,v", "Print mapdql version number")(
       "no-header,n", "Do not print query result header")("timing,t", "Print timing information")(
       "delimiter,d", po::value<std::string>(&delimiter), "Field delimiter in row output (default is |)")(
-      "db", po::value<std::string>(&context.db_name), "Database name")(
-      "user,u", po::value<std::string>(&context.user_name), "User name")(
-      "passwd,p", po::value<std::string>(&context.passwd), "Password")(
+      "db", po::value<std::string>(&db_name), "Database name")(
+      "user,u", po::value<std::string>(&user_name), "User name")(
+      "passwd,p", po::value<std::string>(&passwd), "Password")(
       "server,s", po::value<std::string>(&server_host), "MapD Server Hostname (default localhost)")(
       "port", po::value<int>(&port), "Port number (default 9091)");
 
@@ -412,7 +405,7 @@ int main(int argc, char** argv) {
     if (vm.count("timing"))
       print_timing = true;
     if (vm.count("db") && (!vm.count("user") || !vm.count("passwd"))) {
-      std::cerr << "Must specify a user name and password to access database " << context.db_name << std::endl;
+      std::cerr << "Must specify a user name and password to access database " << db_name << std::endl;
       return 1;
     }
 
@@ -421,6 +414,18 @@ int main(int argc, char** argv) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
   }
+
+  shared_ptr<TTransport> socket(new TSocket(server_host, port));
+  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  MapDClient c(protocol);
+  ClientContext context(*transport, c);
+
+  context.db_name = db_name;
+  context.user_name = user_name;
+  context.passwd = passwd;
+
+  context.session = INVALID_SESSION_ID;
 
   transport->open();
 
