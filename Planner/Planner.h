@@ -152,6 +152,9 @@ class AggPlan : public Plan {
           const std::list<std::shared_ptr<Analyzer::Expr>>& gl)
       : Plan(t, c, p), groupby_list(gl) {}
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_groupby_list() const { return groupby_list; }
+  void set_groupby_list(const std::list<std::shared_ptr<Analyzer::Expr>>& new_groupby_list) {
+    groupby_list = new_groupby_list;
+  }
   virtual void print() const;
 
  private:

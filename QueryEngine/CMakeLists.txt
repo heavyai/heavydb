@@ -12,6 +12,7 @@ set(query_engine_source_files
     GroupByAndAggregate.cpp
     DeviceSideLaunch.cpp
     NvidiaKernel.cpp
+    QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     RuntimeFunctions.cpp
     RuntimeFunctionsCodegenWithIncludes.cpp

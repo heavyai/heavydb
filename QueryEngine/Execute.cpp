@@ -8,6 +8,7 @@
 #include "Shared/mapdpath.h"
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
+#include "QueryRewrite.h"
 
 #include <boost/range/adaptor/reversed.hpp>
 #ifdef __x86_64__
@@ -3229,6 +3230,8 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const bool output_columnar_hint,
                                                   const bool serialize_llvm_ir,
                                                   std::string& llvm_ir) {
+  QueryRewriter query_rewriter(plan, query_info, this);
+  query_rewriter.rewrite();
   nukeOldState(allow_lazy_fetch);
 
   GroupByAndAggregate group_by_and_aggregate(this,
