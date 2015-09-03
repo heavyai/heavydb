@@ -106,6 +106,7 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
   // b/c depends on insertLock around numTuples_
 
   if (numTuples_ > maxRows) {
+    size_t preNumTuples = numTuples_;
     vector<int> dropFragIds;
     size_t targetRows = maxRows * DROP_FRAGMENT_FACTOR;
     while (numTuples_ > targetRows) {
@@ -117,6 +118,8 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
       numTuples_ -= numFragTuples;
     }
     deleteFragments(dropFragIds);
+    LOG(INFO) << "dropFragmentsToSize, numTuples pre: " << preNumTuples << " post: " << numTuples_
+              << " maxRows: " << maxRows;
   }
 }
 
