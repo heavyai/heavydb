@@ -39,13 +39,19 @@ void QueryRewriter::rewriteConstrainedByIn() {
   auto in_val_arg = in_vals->get_arg()->deep_copy();
   for (const auto in_val : in_vals->get_value_list()) {
     auto case_cond = makeExpr<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, true), false, kEQ, kONE, in_val_arg, in_val);
-    case_expr_list.emplace_back(case_cond, in_val);
+    auto in_val_copy = in_val->deep_copy();
+    auto ti = in_val_copy->get_type_info();
+    if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+      ti.set_comp_param(0);
+    }
+    in_val_copy->set_type_info(ti);
+    case_expr_list.emplace_back(case_cond, in_val_copy);
   }
   // TODO(alex): refine the expression range for case with empty else expression;
   //             for now, add a dummy else which should never be taken
-  auto else_expr = in_vals->get_value_list().front();
+  auto else_expr = case_expr_list.front().second;
   auto case_expr = makeExpr<Analyzer::CaseExpr>(
-      in_vals->get_value_list().front()->get_type_info(), false, case_expr_list, else_expr);
+      case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
   std::list<std::shared_ptr<Analyzer::Expr>> new_groupby_list;
   bool rewrite{false};
   size_t groupby_idx{0};
