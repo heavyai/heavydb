@@ -545,7 +545,7 @@ class Executor {
 
   bool is_nested_;
 
-  static const int max_gpu_count{8};
+  static const int max_gpu_count{16};
   std::mutex gpu_exec_mutex_[max_gpu_count];
 
   mutable std::shared_ptr<StringDictionary> lit_str_dict_;
