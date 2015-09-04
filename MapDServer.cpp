@@ -376,6 +376,7 @@ class MapDHandler : virtual public MapDIf {
               _return.row_set.is_columnar = false;
               for (size_t row_idx = 0; row_idx < results.rowCount(); ++row_idx) {
                 TRow trow;
+                trow.cols.reserve(results.colCount());
                 for (size_t i = 0; i < results.colCount(); ++i) {
                   const auto agg_result = results.getRowAt(row_idx, i, true);
                   trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
