@@ -1588,6 +1588,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         outfile << copy_params.quote;
       if (!scalar_tv) {
         outfile << row_col_to_string(results, row_idx, i, " | ");
+        if (copy_params.quoted) {
+          outfile << copy_params.quote;
+        }
         continue;
       }
       if (boost::get<int64_t>(scalar_tv)) {
@@ -1656,8 +1659,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           }
         }
       }
-      if (copy_params.quoted)
+      if (copy_params.quoted) {
         outfile << copy_params.quote;
+      }
     }
     outfile << copy_params.line_delim;
   }
