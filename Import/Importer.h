@@ -173,21 +173,19 @@ class TypedImportBuffer : boost::noncopyable {
 
   void addTime(const time_t v) { time_buffer_->push_back(v); }
 
-  void addDictEncodedString(const std::vector<std::string>& stringVec) {
+  void addDictEncodedString(const std::vector<std::string>& string_vec) {
     CHECK(string_dict_);
-    string_dict_->addBulk(stringVec, *string_dict_buffer_);
+    string_dict_buffer_->reserve(string_vec.size());
+    string_dict_->getOrAddBulk(string_vec, string_dict_buffer_->data());
   }
 
-  void addDictEncodedStringArray(const std::vector<std::vector<std::string>>& stringArrayVec) {
+  void addDictEncodedStringArray(const std::vector<std::vector<std::string>>& string_array_vec) {
     CHECK(string_dict_);
-    for (auto& p : stringArrayVec) {
+    for (auto& p : string_array_vec) {
       size_t len = p.size() * sizeof(int32_t);
-      int32_t* a = (int32_t*)malloc(len);
-      int i = 0;
-      for (auto& s : p) {
-        a[i++] = string_dict_->getOrAdd(s);
-      }
-      string_array_dict_buffer_->push_back(ArrayDatum(len, (int8_t*)a, len == 0));
+      auto a = static_cast<int32_t*>(malloc(len));
+      string_dict_->getOrAddBulk(p, a);
+      string_array_dict_buffer_->push_back(ArrayDatum(len, reinterpret_cast<int8_t*>(a), len == 0));
     }
   }
 

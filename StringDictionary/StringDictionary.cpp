@@ -93,11 +93,11 @@ int32_t StringDictionary::getOrAdd(const std::string& str) {
   return getOrAddImpl(str, false);
 }
 
-void StringDictionary::addBulk(const std::vector<std::string>& stringVec, std::vector<int32_t>& encodedVec) {
-  encodedVec.reserve(stringVec.size());
+void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-  for (const auto& str : stringVec) {
-    encodedVec.push_back(getOrAddImpl(str, false));
+  size_t out_idx{0};
+  for (const auto& str : string_vec) {
+    encoded_vec[out_idx++] = getOrAddImpl(str, false);
   }
 }
 

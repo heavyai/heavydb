@@ -19,7 +19,7 @@ class StringDictionary {
   ~StringDictionary();
 
   int32_t getOrAdd(const std::string& str);
-  void addBulk(const std::vector<std::string>& stringVec, std::vector<int32_t>& encodedVec);
+  void getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec);
   int32_t getOrAddTransient(const std::string& str);
   int32_t get(const std::string& str) const;
   std::string getString(int32_t string_id) const;
