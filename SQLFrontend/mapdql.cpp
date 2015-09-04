@@ -74,7 +74,9 @@ enum ThriftService {
   kGET_ROW_DESC
 };
 
-static bool thrift_with_retry(ThriftService which_service, ClientContext& context, char* arg) {
+namespace {
+
+bool thrift_with_retry(ThriftService which_service, ClientContext& context, char* arg) {
   try {
     switch (which_service) {
       case kCONNECT:
@@ -84,7 +86,7 @@ static bool thrift_with_retry(ThriftService which_service, ClientContext& contex
         context.client.disconnect(context.session);
         break;
       case kSQL:
-        context.client.sql_execute(context.query_return, context.session, arg, false);  // false is for columnar results
+        context.client.sql_execute(context.query_return, context.session, arg, true);
         break;
       case kGET_COLUMNS:
         context.client.get_table_descriptor(context.columns_return, context.session, arg);
@@ -130,7 +132,7 @@ static bool thrift_with_retry(ThriftService which_service, ClientContext& contex
 }
 
 #define LOAD_PATCH_SIZE 10000
-static void copy_table(char* filepath, char* table, ClientContext& context) {
+void copy_table(char* filepath, char* table, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
     return;
@@ -201,7 +203,7 @@ static void copy_table(char* filepath, char* table, ClientContext& context) {
   }
 }
 
-static void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& context) {
+void detect_table(char* file_name, TCopyParams& copy_params, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
     return;
@@ -218,7 +220,7 @@ static void detect_table(char* file_name, TCopyParams& copy_params, ClientContex
   }
 }
 
-static void process_backslash_commands(char* command, ClientContext& context) {
+void process_backslash_commands(char* command, ClientContext& context) {
   switch (command[1]) {
     case 'h':
       std::cout << "\\u List all users.\n";
@@ -361,6 +363,61 @@ std::string datum_to_string(const TDatum& datum, const TTypeInfo& type_info) {
   return scalar_datum_to_string(datum, type_info);
 }
 
+size_t get_row_count(const TQueryResult& query_result) {
+  CHECK(!query_result.row_set.row_desc.empty());
+  if (query_result.row_set.columns.empty()) {
+    return 0;
+  }
+  CHECK_EQ(query_result.row_set.columns.size(), query_result.row_set.row_desc.size());
+  return query_result.row_set.columns.front().nulls.size();
+}
+
+TDatum columnar_val_to_datum(const TColumn& col, const size_t row_idx, const TTypeInfo& col_type) {
+  TDatum datum;
+  if (col_type.is_array) {
+    auto elem_type = col_type;
+    elem_type.is_array = false;
+    datum.is_null = false;
+    CHECK_LT(row_idx, col.data.arr_col.size());
+    const auto& arr_col = col.data.arr_col[row_idx];
+    for (size_t elem_idx = 0; elem_idx < arr_col.nulls.size(); ++elem_idx) {
+      TColumn elem_col;
+      elem_col.data = arr_col.data;
+      elem_col.nulls = arr_col.nulls;
+      datum.val.arr_val.push_back(columnar_val_to_datum(elem_col, elem_idx, elem_type));
+    }
+    return datum;
+  }
+  datum.is_null = col.nulls[row_idx];
+  switch (col_type.type) {
+    case TDatumType::SMALLINT:
+    case TDatumType::INT:
+    case TDatumType::BIGINT:
+    case TDatumType::TIME:
+    case TDatumType::TIMESTAMP:
+    case TDatumType::DATE:
+    case TDatumType::BOOL: {
+      datum.val.int_val = col.data.int_col[row_idx];
+      break;
+    }
+    case TDatumType::DECIMAL:
+    case TDatumType::FLOAT:
+    case TDatumType::DOUBLE: {
+      datum.val.real_val = col.data.real_col[row_idx];
+      break;
+    }
+    case TDatumType::STR: {
+      datum.val.str_val = col.data.str_col[row_idx];
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return datum;
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
   std::string server_host("localhost");
   int port = 9091;
@@ -469,8 +526,13 @@ int main(int argc, char** argv) {
         continue;
       }
       if (thrift_with_retry(kSQL, context, line)) {
-        if (context.query_return.row_set.row_desc.empty() || context.query_return.row_set.rows.empty())
+        if (context.query_return.row_set.row_desc.empty()) {
           continue;
+        }
+        const size_t row_count{get_row_count(context.query_return)};
+        if (!row_count) {
+          continue;
+        }
         bool not_first = false;
         if (print_header) {
           for (auto p : context.query_return.row_set.row_desc) {
@@ -482,16 +544,15 @@ int main(int argc, char** argv) {
           }
           std::cout << std::endl;
         }
-        for (auto row : context.query_return.row_set.rows) {
-          not_first = false;
-          int i = 0;
-          for (auto datum : row.cols) {
-            if (not_first)
+        for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+          const auto& col_desc = context.query_return.row_set.row_desc;
+          for (size_t col_idx = 0; col_idx < col_desc.size(); ++col_idx) {
+            if (col_idx) {
               std::cout << delimiter;
-            else
-              not_first = true;
-            std::cout << datum_to_string(datum, context.query_return.row_set.row_desc[i].col_type);
-            i++;
+            }
+            const auto& col_type = col_desc[col_idx].col_type;
+            std::cout << datum_to_string(
+                columnar_val_to_datum(context.query_return.row_set.columns[col_idx], row_idx, col_type), col_type);
           }
           std::cout << std::endl;
         }
