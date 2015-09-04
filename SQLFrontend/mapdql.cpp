@@ -557,7 +557,7 @@ int main(int argc, char** argv) {
           std::cout << std::endl;
         }
         if (print_timing) {
-          std::cout << context.query_return.row_set.rows.size() << " rows returned." << std::endl;
+          std::cout << row_count << " rows returned." << std::endl;
           std::cout << "Execution time: " << context.query_return.execution_time_ms << " miliseconds" << std::endl;
         }
       }
