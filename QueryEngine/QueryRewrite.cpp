@@ -50,8 +50,8 @@ void QueryRewriter::rewriteConstrainedByIn() {
   // TODO(alex): refine the expression range for case with empty else expression;
   //             for now, add a dummy else which should never be taken
   auto else_expr = case_expr_list.front().second;
-  auto case_expr = makeExpr<Analyzer::CaseExpr>(
-      case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
+  auto case_expr =
+      makeExpr<Analyzer::CaseExpr>(case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
   std::list<std::shared_ptr<Analyzer::Expr>> new_groupby_list;
   bool rewrite{false};
   size_t groupby_idx{0};
