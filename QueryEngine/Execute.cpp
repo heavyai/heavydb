@@ -3204,6 +3204,18 @@ std::string serialize_llvm_object(const T* llvm_obj) {
   return ss.str();
 }
 
+bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
+  if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
+    return true;
+  }
+  if (!std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
+    return false;
+  }
+  const auto bin_expr = std::static_pointer_cast<Analyzer::BinOper>(expr);
+  const auto rhs = bin_expr->get_right_operand();
+  return rhs->get_type_info().is_array();
+}
+
 }  // namespace
 
 void Executor::nukeOldState(const bool allow_lazy_fetch) {
@@ -3292,7 +3304,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   std::vector<Analyzer::Expr*> deferred_quals;
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
   for (auto expr : simple_quals) {
-    if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
+    if (should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());
       continue;
     }
@@ -3300,7 +3312,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
         cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, hoist_literals).front()));
   }
   for (auto expr : quals) {
-    if (std::dynamic_pointer_cast<Analyzer::LikeExpr>(expr)) {
+    if (should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());
       continue;
     }
