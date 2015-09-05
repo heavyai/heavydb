@@ -15,18 +15,18 @@
 
 class StringDictionary {
  public:
-  StringDictionary(const std::string& folder, const bool recover = true, size_t initial_capacity = 256);
-  ~StringDictionary();
+  StringDictionary(const std::string& folder, const bool recover = true, size_t initial_capacity = 256) noexcept;
+  ~StringDictionary() noexcept;
 
-  int32_t getOrAdd(const std::string& str);
-  void getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec);
-  int32_t getOrAddTransient(const std::string& str);
-  int32_t get(const std::string& str) const;
-  std::string getString(int32_t string_id) const;
-  std::pair<char*, size_t> getStringBytes(int32_t string_id) const;
+  int32_t getOrAdd(const std::string& str) noexcept;
+  void getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept;
+  int32_t getOrAddTransient(const std::string& str) noexcept;
+  int32_t get(const std::string& str) const noexcept;
+  std::string getString(int32_t string_id) const noexcept;
+  std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
 
-  void clearTransient();
-  bool checkpoint();
+  void clearTransient() noexcept;
+  bool checkpoint() noexcept;
 
  private:
   struct StringIdxEntry {
@@ -34,18 +34,18 @@ class StringDictionary {
     uint64_t size : 16;
   };
 
-  bool fillRateIsHigh() const;
-  void increaseCapacity();
-  int32_t getOrAddImpl(const std::string& str, bool recover);
-  int32_t getUnlocked(const std::string& str) const;
-  std::string getStringChecked(const int string_id) const;
-  std::pair<char*, size_t> getStringBytesChecked(const int string_id) const;
-  int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data) const;
-  void appendToStorage(const std::string& str);
-  std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const;
-  void addPayloadCapacity();
-  void addOffsetCapacity();
-  size_t addStorageCapacity(int fd);
+  bool fillRateIsHigh() const noexcept;
+  void increaseCapacity() noexcept;
+  int32_t getOrAddImpl(const std::string& str, bool recover) noexcept;
+  int32_t getUnlocked(const std::string& str) const noexcept;
+  std::string getStringChecked(const int string_id) const noexcept;
+  std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
+  int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data) const noexcept;
+  void appendToStorage(const std::string& str) noexcept;
+  std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const noexcept;
+  void addPayloadCapacity() noexcept;
+  void addOffsetCapacity() noexcept;
+  size_t addStorageCapacity(int fd) noexcept;
 
   size_t str_count_;
   std::vector<int32_t> str_ids_;

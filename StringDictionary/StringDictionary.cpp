@@ -30,7 +30,7 @@ void* checked_mmap(const int fd, const size_t sz) {
 }
 }  // namespace
 
-StringDictionary::StringDictionary(const std::string& folder, const bool recover, size_t initial_capacity)
+StringDictionary::StringDictionary(const std::string& folder, const bool recover, size_t initial_capacity) noexcept
     : str_count_(0),
       str_ids_(initial_capacity, INVALID_STR_ID),
       payload_fd_(-1),
@@ -79,7 +79,7 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
   }
 }
 
-StringDictionary::~StringDictionary() {
+StringDictionary::~StringDictionary() noexcept {
   CHECK(payload_map_);
   CHECK(offset_map_);
   munmap(payload_map_, payload_file_size_);
@@ -88,12 +88,12 @@ StringDictionary::~StringDictionary() {
   close(offset_fd_);
 }
 
-int32_t StringDictionary::getOrAdd(const std::string& str) {
+int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   return getOrAddImpl(str, false);
 }
 
-void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) {
+void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, int32_t* encoded_vec) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   size_t out_idx{0};
   for (const auto& str : string_vec) {
@@ -101,7 +101,7 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec, 
   }
 }
 
-int32_t StringDictionary::getOrAddTransient(const std::string& str) {
+int32_t StringDictionary::getOrAddTransient(const std::string& str) noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   auto transient_id = getUnlocked(str);
   if (transient_id != INVALID_STR_ID) {
@@ -123,12 +123,12 @@ int32_t StringDictionary::getOrAddTransient(const std::string& str) {
   return transient_id;
 }
 
-int32_t StringDictionary::get(const std::string& str) const {
+int32_t StringDictionary::get(const std::string& str) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   return getUnlocked(str);
 }
 
-int32_t StringDictionary::getUnlocked(const std::string& str) const {
+int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
   auto str_id = str_ids_[computeBucket(str, str_ids_)];
   if (str_id != INVALID_STR_ID || transient_str_to_int_.empty()) {
     return str_id;
@@ -137,7 +137,7 @@ int32_t StringDictionary::getUnlocked(const std::string& str) const {
   return it != transient_str_to_int_.end() ? it->second : INVALID_STR_ID;
 }
 
-std::string StringDictionary::getString(int32_t string_id) const {
+std::string StringDictionary::getString(int32_t string_id) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (string_id >= 0) {
     CHECK_LT(string_id, static_cast<int32_t>(str_count_));
@@ -149,24 +149,24 @@ std::string StringDictionary::getString(int32_t string_id) const {
   return it->second;
 }
 
-std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const {
+std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringBytesChecked(string_id);
 }
 
-void StringDictionary::clearTransient() {
+void StringDictionary::clearTransient() noexcept {
   mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
   decltype(transient_int_to_str_)().swap(transient_int_to_str_);
   decltype(transient_str_to_int_)().swap(transient_str_to_int_);
 }
 
-bool StringDictionary::fillRateIsHigh() const {
+bool StringDictionary::fillRateIsHigh() const noexcept {
   return str_ids_.size() <= str_count_ * 2;
 }
 
-void StringDictionary::increaseCapacity() {
+void StringDictionary::increaseCapacity() noexcept {
   const size_t MAX_STRCOUNT = 1 << 30;
   CHECK(str_count_ < MAX_STRCOUNT);
   std::vector<int32_t> new_str_ids(str_ids_.size() * 2, INVALID_STR_ID);
@@ -178,7 +178,7 @@ void StringDictionary::increaseCapacity() {
   str_ids_.swap(new_str_ids);
 }
 
-int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) {
+int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) noexcept {
   // @TODO(wei) treat empty string as NULL for now
   if (str.size() == 0)
     return NULL_INT;
@@ -201,13 +201,13 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) {
   return str_ids_[bucket];
 }
 
-std::string StringDictionary::getStringChecked(const int string_id) const {
+std::string StringDictionary::getStringChecked(const int string_id) const noexcept {
   const auto str_canary = getStringFromStorage(string_id);
   CHECK(!std::get<2>(str_canary));
   return std::string(std::get<0>(str_canary), std::get<1>(str_canary));
 }
 
-std::pair<char*, size_t> StringDictionary::getStringBytesChecked(const int string_id) const {
+std::pair<char*, size_t> StringDictionary::getStringBytesChecked(const int string_id) const noexcept {
   const auto str_canary = getStringFromStorage(string_id);
   CHECK(!std::get<2>(str_canary));
   return std::make_pair(std::get<0>(str_canary), std::get<1>(str_canary));
@@ -225,7 +225,7 @@ size_t rk_hash(const std::string& str) {
 
 }  // namespace
 
-int32_t StringDictionary::computeBucket(const std::string& str, const std::vector<int32_t>& data) const {
+int32_t StringDictionary::computeBucket(const std::string& str, const std::vector<int32_t>& data) const noexcept {
   auto bucket = rk_hash(str) & (data.size() - 1);
   while (true) {
     if (data[bucket] == INVALID_STR_ID) {
@@ -244,7 +244,7 @@ int32_t StringDictionary::computeBucket(const std::string& str, const std::vecto
   return bucket;
 }
 
-void StringDictionary::appendToStorage(const std::string& str) {
+void StringDictionary::appendToStorage(const std::string& str) noexcept {
   CHECK_GE(payload_fd_, 0);
   CHECK_GE(offset_fd_, 0);
   // write the payload
@@ -268,7 +268,7 @@ void StringDictionary::appendToStorage(const std::string& str) {
   memcpy(offset_map_ + str_count_, &str_meta, sizeof(str_meta));
 }
 
-std::tuple<char*, size_t, bool> StringDictionary::getStringFromStorage(const int string_id) const {
+std::tuple<char*, size_t, bool> StringDictionary::getStringFromStorage(const int string_id) const noexcept {
   CHECK_GE(payload_fd_, 0);
   CHECK_GE(offset_fd_, 0);
   CHECK_GE(string_id, 0);
@@ -280,15 +280,15 @@ std::tuple<char*, size_t, bool> StringDictionary::getStringFromStorage(const int
   return std::make_tuple(payload_map_ + str_meta->off, str_meta->size, false);
 }
 
-void StringDictionary::addPayloadCapacity() {
+void StringDictionary::addPayloadCapacity() noexcept {
   payload_file_size_ += addStorageCapacity(payload_fd_);
 }
 
-void StringDictionary::addOffsetCapacity() {
+void StringDictionary::addOffsetCapacity() noexcept {
   offset_file_size_ += addStorageCapacity(offset_fd_);
 }
 
-size_t StringDictionary::addStorageCapacity(int fd) {
+size_t StringDictionary::addStorageCapacity(int fd) noexcept {
   static const ssize_t CANARY_BUFF_SIZE = 1024 * PAGE_SIZE;
   if (!CANARY_BUFFER) {
     CANARY_BUFFER = static_cast<char*>(malloc(CANARY_BUFF_SIZE));
@@ -301,7 +301,7 @@ size_t StringDictionary::addStorageCapacity(int fd) {
 
 char* StringDictionary::CANARY_BUFFER{nullptr};
 
-bool StringDictionary::checkpoint() {
+bool StringDictionary::checkpoint() noexcept {
   bool ret = true;
   ret = ret && (msync((void*)offset_map_, offset_file_size_, MS_SYNC) == 0);
   ret = ret && (msync((void*)payload_map_, payload_file_size_, MS_SYNC) == 0);
