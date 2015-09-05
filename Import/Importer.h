@@ -175,7 +175,7 @@ class TypedImportBuffer : boost::noncopyable {
 
   void addDictEncodedString(const std::vector<std::string>& string_vec) {
     CHECK(string_dict_);
-    string_dict_buffer_->reserve(string_vec.size());
+    string_dict_buffer_->resize(string_vec.size());
     string_dict_->getOrAddBulk(string_vec, string_dict_buffer_->data());
   }
 
