@@ -1664,6 +1664,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
     multifrag_col_buffers.push_back(&col_buffer[0]);
   }
   const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
+  int64_t** small_group_by_buffers_ptr{small_group_by_buffers.empty() ? nullptr : &small_group_by_buffers[0]};
   const uint32_t num_fragments{1};
 
   if (hoist_literals) {
@@ -1695,7 +1696,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &scan_limit,
                                               &init_agg_vals[0],
                                               &group_by_buffers[0],
-                                              &small_group_by_buffers[0],
+                                              small_group_by_buffers_ptr,
                                               error_code);
     }
   } else {
@@ -1725,7 +1726,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &scan_limit,
                                               &init_agg_vals[0],
                                               &group_by_buffers[0],
-                                              &small_group_by_buffers[0],
+                                              small_group_by_buffers_ptr,
                                               error_code);
     }
   }

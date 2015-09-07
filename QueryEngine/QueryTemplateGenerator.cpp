@@ -564,9 +564,12 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   GetElementPtrInst* ptr_154 = GetElementPtrInst::Create(ptr_group_by_buffers, int64_153, "", label_146);
   LoadInst* ptr_155 = new LoadInst(ptr_154, "", false, label_146);
   ptr_155->setAlignment(8);
-  auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, int64_153, "", label_146);
-  auto small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
-  small_ptr_155->setAlignment(8);
+  LoadInst* small_ptr_155{nullptr};
+  if (query_mem_desc.getSmallBufferSizeBytes()) {
+    auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, int64_153, "", label_146);
+    small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
+    small_ptr_155->setAlignment(8);
+  }
   CallInst::Create(
       func_init_group_by_buffer,
       std::vector<llvm::Value*>{
@@ -597,7 +600,11 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
 
   std::vector<Value*> void_162_params;
   void_162_params.push_back(ptr_156);
-  void_162_params.push_back(small_ptr_155);
+  if (query_mem_desc.getSmallBufferSizeBytes()) {
+    void_162_params.push_back(small_ptr_155);
+  } else {
+    void_162_params.push_back(Constant::getNullValue(PointerTy_6));
+  }
   void_162_params.push_back(crt_matched_ptr);
   void_162_params.push_back(ptr_agg_init_val_145);
   void_162_params.push_back(int64_pos_01_160);
