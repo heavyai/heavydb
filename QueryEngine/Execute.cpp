@@ -1052,6 +1052,21 @@ std::string string_cmp_func(const SQLOps optype) {
   }
 }
 
+std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti, const SQLTypeInfo& rhs_ti) {
+  if (lhs_ti.get_notnull() && rhs_ti.get_notnull()) {
+    return "";
+  }
+  std::string null_check_suffix{"_nullable"};
+  if (lhs_ti.get_notnull()) {
+    CHECK(!rhs_ti.get_notnull());
+    null_check_suffix += "_rhs";
+  } else if (rhs_ti.get_notnull()) {
+    CHECK(!lhs_ti.get_notnull());
+    null_check_suffix += "_lhs";
+  }
+  return null_check_suffix;
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
@@ -1125,7 +1140,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   auto rhs_lvs = codegen(rhs, true, hoist_literals);
   CHECK_EQ(kONE, qualifier);
   CHECK((lhs_ti.get_type() == rhs_ti.get_type()) || (lhs_ti.is_string() && rhs_ti.is_string()));
-  const bool not_null{lhs_ti.get_notnull() && rhs_ti.get_notnull()};
+  const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
   if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() || lhs_ti.is_boolean() || lhs_ti.is_string()) {
     if (lhs_ti.is_string()) {
       CHECK(rhs_ti.is_string());
@@ -1143,30 +1158,33 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
           rhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", {rhs_lvs.front()}));
         }
         std::vector<llvm::Value*> str_cmp_args{lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2]};
-        if (!not_null) {
-          str_cmp_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN, not_null)));
+        if (!null_check_suffix.empty()) {
+          str_cmp_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN, false)));
         }
-        return cgen_state_->emitCall(string_cmp_func(optype) + (not_null ? "" : "_nullable"), str_cmp_args);
+        return cgen_state_->emitCall(string_cmp_func(optype) + (null_check_suffix.empty() ? "" : "_nullable"),
+                                     str_cmp_args);
       } else {
         CHECK(optype == kEQ || optype == kNE);
       }
     }
     const std::string int_typename{"int" + std::to_string(get_bit_width(lhs_ti)) + "_t"};
-    return not_null ? cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
-                    : cgen_state_->emitCall(icmp_name(optype) + "_" + int_typename + "_nullable",
-                                            {lhs_lvs.front(),
-                                             rhs_lvs.front(),
-                                             ll_int(inline_int_null_val(lhs_ti)),
-                                             inlineIntNull(SQLTypeInfo(kBOOLEAN, not_null))});
+    return null_check_suffix.empty()
+               ? cgen_state_->ir_builder_.CreateICmp(llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
+               : cgen_state_->emitCall(icmp_name(optype) + "_" + int_typename + null_check_suffix,
+                                       {lhs_lvs.front(),
+                                        rhs_lvs.front(),
+                                        ll_int(inline_int_null_val(lhs_ti)),
+                                        inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
     const std::string fp_typename{lhs_ti.get_type() == kFLOAT ? "float" : "double"};
-    return not_null ? cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
-                    : cgen_state_->emitCall(icmp_name(optype) + "_" + fp_typename + "_nullable",
-                                            {lhs_lvs.front(),
-                                             rhs_lvs.front(),
-                                             lhs_ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE),
-                                             inlineIntNull(SQLTypeInfo(kBOOLEAN, not_null))});
+    return null_check_suffix.empty()
+               ? cgen_state_->ir_builder_.CreateFCmp(llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
+               : cgen_state_->emitCall(icmp_name(optype) + "_" + fp_typename + null_check_suffix,
+                                       {lhs_lvs.front(),
+                                        rhs_lvs.front(),
+                                        lhs_ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE),
+                                        inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   CHECK(false);
   return nullptr;
@@ -1272,7 +1290,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
         const std::string int_typename{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
         const auto scale_lv = llvm::ConstantInt::get(static_cast<llvm::IntegerType*>(operand_lv->getType()),
                                                      exp_to_scale(operand_ti.get_scale()));
-        operand_lv = cgen_state_->emitCall("div_" + int_typename + "_nullable",
+        operand_lv = cgen_state_->emitCall("div_" + int_typename + "_nullable_lhs",
                                            {operand_lv, scale_lv, ll_int(inline_int_null_val(operand_ti))});
       }
       const auto operand_width = static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
@@ -1505,22 +1523,22 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
   if (lhs_type.is_decimal()) {
     CHECK_EQ(lhs_type.get_scale(), rhs_type.get_scale());
   }
-  const bool not_null{lhs_type.get_notnull() && rhs_type.get_notnull()};
+  const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
   if (lhs_type.is_integer() || lhs_type.is_decimal()) {
     const std::string int_typename{"int" + std::to_string(get_bit_width(lhs_type)) + "_t"};
     switch (optype) {
       case kMINUS:
-        if (not_null) {
+        if (null_check_suffix.empty()) {
           return cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv);
         } else {
-          return cgen_state_->emitCall("sub_" + int_typename + "_nullable",
+          return cgen_state_->emitCall("sub_" + int_typename + null_check_suffix,
                                        {lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type))});
         }
       case kPLUS:
-        if (not_null) {
+        if (null_check_suffix.empty()) {
           return cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv);
         } else {
-          return cgen_state_->emitCall("add_" + int_typename + "_nullable",
+          return cgen_state_->emitCall("add_" + int_typename + null_check_suffix,
                                        {lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type))});
         }
       case kMULTIPLY: {
@@ -1530,16 +1548,16 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
               {lhs_lv, rhs_lv, ll_int(exp_to_scale(lhs_type.get_scale())), ll_int(inline_int_null_val(lhs_type))});
         }
         llvm::Value* result{nullptr};
-        if (not_null) {
+        if (null_check_suffix.empty()) {
           result = cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv);
         } else {
-          result = cgen_state_->emitCall("mul_" + int_typename + "_nullable",
+          result = cgen_state_->emitCall("mul_" + int_typename + null_check_suffix,
                                          {lhs_lv, rhs_lv, ll_int(inline_int_null_val(lhs_type))});
         }
         return result;
       }
       case kDIVIDE:
-        return codegenDiv(lhs_lv, rhs_lv, not_null ? "" : int_typename, lhs_type);
+        return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
 
       default:
         CHECK(false);
@@ -1550,16 +1568,19 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
     llvm::ConstantFP* fp_null{lhs_type.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE)};
     switch (optype) {
       case kMINUS:
-        return not_null ? cgen_state_->ir_builder_.CreateFSub(lhs_lv, rhs_lv)
-                        : cgen_state_->emitCall("sub_" + fp_typename + "_nullable", {lhs_lv, rhs_lv, fp_null});
+        return null_check_suffix.empty()
+                   ? cgen_state_->ir_builder_.CreateFSub(lhs_lv, rhs_lv)
+                   : cgen_state_->emitCall("sub_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
       case kPLUS:
-        return not_null ? cgen_state_->ir_builder_.CreateFAdd(lhs_lv, rhs_lv)
-                        : cgen_state_->emitCall("add_" + fp_typename + "_nullable", {lhs_lv, rhs_lv, fp_null});
+        return null_check_suffix.empty()
+                   ? cgen_state_->ir_builder_.CreateFAdd(lhs_lv, rhs_lv)
+                   : cgen_state_->emitCall("add_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
       case kMULTIPLY:
-        return not_null ? cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv)
-                        : cgen_state_->emitCall("mul_" + fp_typename + "_nullable", {lhs_lv, rhs_lv, fp_null});
+        return null_check_suffix.empty()
+                   ? cgen_state_->ir_builder_.CreateFMul(lhs_lv, rhs_lv)
+                   : cgen_state_->emitCall("mul_" + fp_typename + null_check_suffix, {lhs_lv, rhs_lv, fp_null});
       case kDIVIDE:
-        return codegenDiv(lhs_lv, rhs_lv, not_null ? "" : fp_typename, lhs_type);
+        return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : fp_typename, null_check_suffix, lhs_type);
       default:
         CHECK(false);
     }
@@ -1570,6 +1591,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
 llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                                   llvm::Value* rhs_lv,
                                   const std::string& null_typename,
+                                  const std::string& null_check_suffix,
                                   const SQLTypeInfo& ti) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   if (ti.is_decimal()) {
@@ -1577,7 +1599,7 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
     const std::string int_typename{"int" + std::to_string(get_bit_width(ti)) + "_t"};
     const auto scale_lv = llvm::ConstantInt::get(lhs_lv->getType(), exp_to_scale(ti.get_scale()));
     lhs_lv = null_typename.empty() ? cgen_state_->ir_builder_.CreateMul(lhs_lv, scale_lv)
-                                   : cgen_state_->emitCall("mul_" + int_typename + "_nullable",
+                                   : cgen_state_->emitCall("mul_" + int_typename + null_check_suffix,
                                                            {lhs_lv, scale_lv, ll_int(inline_int_null_val(ti))});
   }
   cgen_state_->uses_div_ = true;
@@ -1594,12 +1616,12 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
   cgen_state_->ir_builder_.SetInsertPoint(div_ok);
   auto ret = zero_const->getType()->isIntegerTy()
                  ? (null_typename.empty() ? cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv)
-                                          : cgen_state_->emitCall("div_" + null_typename + "_nullable",
+                                          : cgen_state_->emitCall("div_" + null_typename + null_check_suffix,
                                                                   {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))}))
                  : (null_typename.empty()
                         ? cgen_state_->ir_builder_.CreateFDiv(lhs_lv, rhs_lv)
                         : cgen_state_->emitCall(
-                              "div_" + null_typename + "_nullable",
+                              "div_" + null_typename + null_check_suffix,
                               {lhs_lv, rhs_lv, ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE)}));
   cgen_state_->ir_builder_.SetInsertPoint(div_zero);
   cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));

@@ -65,10 +65,46 @@ extern "C" double fixed_width_double_decode_noinline(const int8_t* byte_stream, 
     return null_val;                                                                              \
   }
 
+#define DEF_ARITH_NULLABLE_LHS(type, null_type, opname, opsym)                                        \
+  extern "C" __attribute__((always_inline))                                                           \
+      type opname##_##type##_nullable_lhs(const type lhs, const type rhs, const null_type null_val) { \
+    if (lhs != null_val) {                                                                            \
+      return lhs opsym rhs;                                                                           \
+    }                                                                                                 \
+    return null_val;                                                                                  \
+  }
+
+#define DEF_ARITH_NULLABLE_RHS(type, null_type, opname, opsym)                                        \
+  extern "C" __attribute__((always_inline))                                                           \
+      type opname##_##type##_nullable_rhs(const type lhs, const type rhs, const null_type null_val) { \
+    if (rhs != null_val) {                                                                            \
+      return lhs opsym rhs;                                                                           \
+    }                                                                                                 \
+    return null_val;                                                                                  \
+  }
+
 #define DEF_CMP_NULLABLE(type, null_type, opname, opsym)                                      \
   extern "C" __attribute__((always_inline)) int8_t opname##_##type##_nullable(                \
       const type lhs, const type rhs, const null_type null_val, const int8_t null_bool_val) { \
     if (lhs != null_val && rhs != null_val) {                                                 \
+      return lhs opsym rhs;                                                                   \
+    }                                                                                         \
+    return null_bool_val;                                                                     \
+  }
+
+#define DEF_CMP_NULLABLE_LHS(type, null_type, opname, opsym)                                  \
+  extern "C" __attribute__((always_inline)) int8_t opname##_##type##_nullable_lhs(            \
+      const type lhs, const type rhs, const null_type null_val, const int8_t null_bool_val) { \
+    if (lhs != null_val) {                                                                    \
+      return lhs opsym rhs;                                                                   \
+    }                                                                                         \
+    return null_bool_val;                                                                     \
+  }
+
+#define DEF_CMP_NULLABLE_RHS(type, null_type, opname, opsym)                                  \
+  extern "C" __attribute__((always_inline)) int8_t opname##_##type##_nullable_rhs(            \
+      const type lhs, const type rhs, const null_type null_val, const int8_t null_bool_val) { \
+    if (rhs != null_val) {                                                                    \
       return lhs opsym rhs;                                                                   \
     }                                                                                         \
     return null_bool_val;                                                                     \
@@ -79,12 +115,32 @@ extern "C" double fixed_width_double_decode_noinline(const int8_t* byte_stream, 
   DEF_ARITH_NULLABLE(type, null_type, sub, -)        \
   DEF_ARITH_NULLABLE(type, null_type, mul, *)        \
   DEF_ARITH_NULLABLE(type, null_type, div, / )       \
+  DEF_ARITH_NULLABLE_LHS(type, null_type, add, +)    \
+  DEF_ARITH_NULLABLE_LHS(type, null_type, sub, -)    \
+  DEF_ARITH_NULLABLE_LHS(type, null_type, mul, *)    \
+  DEF_ARITH_NULLABLE_LHS(type, null_type, div, / )   \
+  DEF_ARITH_NULLABLE_RHS(type, null_type, add, +)    \
+  DEF_ARITH_NULLABLE_RHS(type, null_type, sub, -)    \
+  DEF_ARITH_NULLABLE_RHS(type, null_type, mul, *)    \
+  DEF_ARITH_NULLABLE_RHS(type, null_type, div, / )   \
   DEF_CMP_NULLABLE(type, null_type, eq, == )         \
   DEF_CMP_NULLABLE(type, null_type, ne, != )         \
   DEF_CMP_NULLABLE(type, null_type, lt, < )          \
   DEF_CMP_NULLABLE(type, null_type, gt, > )          \
   DEF_CMP_NULLABLE(type, null_type, le, <= )         \
-  DEF_CMP_NULLABLE(type, null_type, ge, >= )
+  DEF_CMP_NULLABLE(type, null_type, ge, >= )         \
+  DEF_CMP_NULLABLE_LHS(type, null_type, eq, == )     \
+  DEF_CMP_NULLABLE_LHS(type, null_type, ne, != )     \
+  DEF_CMP_NULLABLE_LHS(type, null_type, lt, < )      \
+  DEF_CMP_NULLABLE_LHS(type, null_type, gt, > )      \
+  DEF_CMP_NULLABLE_LHS(type, null_type, le, <= )     \
+  DEF_CMP_NULLABLE_LHS(type, null_type, ge, >= )     \
+  DEF_CMP_NULLABLE_RHS(type, null_type, eq, == )     \
+  DEF_CMP_NULLABLE_RHS(type, null_type, ne, != )     \
+  DEF_CMP_NULLABLE_RHS(type, null_type, lt, < )      \
+  DEF_CMP_NULLABLE_RHS(type, null_type, gt, > )      \
+  DEF_CMP_NULLABLE_RHS(type, null_type, le, <= )     \
+  DEF_CMP_NULLABLE_RHS(type, null_type, ge, >= )
 
 DEF_BINARY_NULLABLE_ALL_OPS(int16_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(int32_t, int64_t)
@@ -93,9 +149,17 @@ DEF_BINARY_NULLABLE_ALL_OPS(float, float)
 DEF_BINARY_NULLABLE_ALL_OPS(double, double)
 DEF_CMP_NULLABLE(int8_t, int64_t, eq, == )
 DEF_CMP_NULLABLE(int8_t, int64_t, ne, != )
+DEF_CMP_NULLABLE_LHS(int8_t, int64_t, eq, == )
+DEF_CMP_NULLABLE_LHS(int8_t, int64_t, ne, != )
+DEF_CMP_NULLABLE_RHS(int8_t, int64_t, eq, == )
+DEF_CMP_NULLABLE_RHS(int8_t, int64_t, ne, != )
 
 #undef DEF_BINARY_NULLABLE_ALL_OPS
+#undef DEF_CMP_NULLABLE_RHS
+#undef DEF_CMP_NULLABLE_LHS
 #undef DEF_CMP_NULLABLE
+#undef DEF_ARITH_NULLABLE_RHS
+#undef DEF_ARITH_NULLABLE_LHS
 #undef DEF_ARITH_NULLABLE
 
 #define DEF_MUL_DECIMAL(type)                                                                                \
