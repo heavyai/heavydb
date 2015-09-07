@@ -1098,7 +1098,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
   uint32_t num_fragments = col_buffers.size();
-  CUdeviceptr multifrag_col_buffers_dev_ptr;
+  CUdeviceptr multifrag_col_buffers_dev_ptr{0};
   const size_t col_count{num_fragments > 0 ? col_buffers.front().size() : 0};
   if (col_count) {
     std::vector<CUdeviceptr> multifrag_col_dev_buffers;

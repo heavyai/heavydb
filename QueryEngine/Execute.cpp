@@ -1586,6 +1586,7 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
     }
   }
   CHECK(false);
+  return nullptr;
 }
 
 llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
@@ -1662,6 +1663,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
   for (auto& col_buffer : col_buffers) {
     multifrag_col_buffers.push_back(&col_buffer[0]);
   }
+  const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
   const uint32_t num_fragments{1};
 
   if (hoist_literals) {
@@ -1676,7 +1678,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               int32_t* resume_row_index);
     *error_code = 0;
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &literal_buff[0],
                                               &num_rows[0],
@@ -1686,7 +1688,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               nullptr,
                                               error_code);
     } else {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &literal_buff[0],
                                               &num_rows[0],
@@ -1707,7 +1709,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               int32_t* resume_row_index);
     *error_code = 0;
     if (group_by_buffers.empty()) {
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &num_rows[0],
                                               &scan_limit,
@@ -1717,7 +1719,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               error_code);
     } else {
       *error_code = 0;
-      reinterpret_cast<agg_query>(fn_ptrs[0])(&multifrag_col_buffers[0],
+      reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &num_rows[0],
                                               &scan_limit,
@@ -3905,9 +3907,9 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                          ? "array_at_" + std::string(elem_ti.get_type() == kDOUBLE ? "double" : "float")
                                          : "array_at_int" + std::to_string(elem_ti.get_size() * 8) + "_t"};
     const auto ar_ret_ty = elem_ti.is_fp()
-                            ? (elem_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
-                                                             : llvm::Type::getFloatTy(cgen_state_->context_))
-                            : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
+                               ? (elem_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
+                                                                : llvm::Type::getFloatTy(cgen_state_->context_))
+                               : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
     group_key = cgen_state_->emitExternalCall(array_at_fname, ar_ret_ty, {group_key, posArg(), array_idx});
     CHECK(array_loop_head);
     array_loops.push(array_loop_head);
