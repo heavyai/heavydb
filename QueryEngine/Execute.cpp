@@ -3793,7 +3793,11 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>> cached_functions;
 
   auto ptx = generatePTX(cuda_llir.c_str(), cuda_llir.size(), nullptr);
-  CHECK(ptx);
+  if (!ptx) {
+    LOG(ERROR) << "NVVM compilation failed; will run on CPU";
+    cgen_state_->must_run_on_cpu_ = true;
+    return {};
+  }
 
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
     boost::filesystem::path gpu_rt_path{mapd_root_abs_path()};

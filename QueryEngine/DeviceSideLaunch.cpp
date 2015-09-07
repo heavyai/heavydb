@@ -169,7 +169,7 @@ char* generatePTX(const char* ll, size_t size, const char* filename) {
     nvvmGetProgramLog(program, Msg);
     fprintf(stderr, "%s\n", Msg);
     free(Msg);
-    exit(-1);
+    return nullptr;
   }
 
   result = nvvmGetCompiledResultSize(program, &PTXSize);
