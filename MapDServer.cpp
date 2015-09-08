@@ -48,9 +48,11 @@ class MapDHandler : virtual public MapDIf {
  public:
   MapDHandler(const std::string& base_data_path,
               const std::string& executor_device,
+              const NVVMBackend nvvm_backend,
               const bool allow_multifrag,
               const bool jit_debug)
       : base_data_path_(base_data_path),
+        nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
         session_id_dist_(0, INT32_MAX),
         jit_debug_(jit_debug),
@@ -316,8 +318,8 @@ class MapDHandler : virtual public MapDIf {
                 root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
             ResultRows results({}, nullptr, nullptr);
             execute_time += measure<>::execution([&]() {
-              results =
-                  executor->execute(root_plan, true, executor_device_type, ExecutorOptLevel::Default, allow_multifrag_);
+              results = executor->execute(
+                  root_plan, true, executor_device_type, nvvm_backend_, ExecutorOptLevel::Default, allow_multifrag_);
             });
             if (explain_stmt) {
               CHECK_EQ(size_t(1), results.rowCount());
@@ -910,6 +912,7 @@ class MapDHandler : virtual public MapDIf {
 
   const std::string base_data_path_;
   ExecutorDeviceType executor_device_type_;
+  const NVVMBackend nvvm_backend_;
   std::default_random_engine random_gen_;
   std::uniform_int_distribution<int64_t> session_id_dist_;
   const bool jit_debug_;
@@ -933,6 +936,7 @@ int main(int argc, char** argv) {
   std::string device("gpu");
   bool flush_log = false;
   bool jit_debug = false;
+  bool use_nvptx = false;
   bool allow_multifrag = true;
 
   namespace po = boost::program_options;
@@ -942,6 +946,7 @@ int main(int argc, char** argv) {
       "path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")(
       "flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
+      "use-nvptx", "Use NVPTX instead of NVVM")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
       "cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")("hybrid", "Run on both CPU and GPUs")(
       "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
@@ -973,6 +978,8 @@ int main(int argc, char** argv) {
       flush_log = true;
     if (vm.count("jit-debug"))
       jit_debug = true;
+    if (vm.count("use-nvptx"))
+      use_nvptx = true;
     if (vm.count("disable-multifrag"))
       allow_multifrag = false;
 
@@ -1040,7 +1047,8 @@ int main(int argc, char** argv) {
     FLAGS_logbuflevel = -1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
-  shared_ptr<MapDHandler> handler(new MapDHandler(base_path, device, allow_multifrag, jit_debug));
+  shared_ptr<MapDHandler> handler(new MapDHandler(
+      base_path, device, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA, allow_multifrag, jit_debug));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));

@@ -8,7 +8,7 @@ char* generatePTX(const char* ll, size_t size, const char* filename);
 
 class GpuCompilationContext {
  public:
-  GpuCompilationContext(char* ptx,
+  GpuCompilationContext(const char* ptx,
                         const std::string& func_name,
                         const std::string& lib_path,
                         const int device_id,

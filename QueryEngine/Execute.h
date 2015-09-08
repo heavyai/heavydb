@@ -27,6 +27,8 @@
 #include <deque>
 #include "../Shared/measure.h"
 
+enum class NVVMBackend { CUDA, NVPTX };
+
 enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 
 class Executor;
@@ -95,6 +97,7 @@ class Executor {
   ResultRows execute(const Planner::RootPlan* root_plan,
                      const bool hoist_literals,
                      const ExecutorDeviceType device_type,
+                     const NVVMBackend nvvm_backend,
                      const ExecutorOptLevel,
                      const bool allow_multifrag);
 
@@ -165,6 +168,7 @@ class Executor {
                                const int64_t offset,
                                const bool hoist_literals,
                                const ExecutorDeviceType device_type,
+                               const NVVMBackend,
                                const ExecutorOptLevel,
                                const Catalog_Namespace::Catalog&,
                                size_t& max_groups_buffer_entry_guess,
@@ -176,6 +180,7 @@ class Executor {
                                 const int64_t limit,
                                 const bool hoist_literals,
                                 const ExecutorDeviceType device_type,
+                                const NVVMBackend,
                                 const ExecutorOptLevel,
                                 const Catalog_Namespace::Catalog&,
                                 std::shared_ptr<RowSetMemoryOwner>,
@@ -221,6 +226,7 @@ class Executor {
   ResultRows executeResultPlan(const Planner::Result* result_plan,
                                const bool hoist_literals,
                                const ExecutorDeviceType device_type,
+                               const NVVMBackend,
                                const ExecutorOptLevel,
                                const Catalog_Namespace::Catalog&,
                                size_t& max_groups_buffer_entry_guess,
@@ -232,6 +238,7 @@ class Executor {
                              const int64_t offset,
                              const bool hoist_literals,
                              const ExecutorDeviceType device_type,
+                             const NVVMBackend nvvm_backend,
                              const ExecutorOptLevel,
                              const Catalog_Namespace::Catalog&,
                              size_t& max_groups_buffer_entry_guess,
@@ -286,6 +293,7 @@ class Executor {
                                 const bool hoist_literals,
                                 const bool allow_multifrag,
                                 const ExecutorDeviceType device_type,
+                                const NVVMBackend nvvm_backend,
                                 const ExecutorOptLevel,
                                 const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                 const bool allow_lazy_fetch,
@@ -306,10 +314,13 @@ class Executor {
   std::vector<void*> optimizeAndCodegenGPU(llvm::Function*,
                                            llvm::Function*,
                                            const bool hoist_literals,
+                                           const NVVMBackend,
                                            const ExecutorOptLevel,
                                            llvm::Module*,
                                            const bool no_inline,
                                            const CudaMgr_Namespace::CudaMgr* cuda_mgr);
+  std::string generatePTX(const std::string&) const;
+  void initializeNVPTXBackend() const;
 
   int8_t warpSize() const;
   unsigned gridSize() const;
@@ -554,6 +565,8 @@ class Executor {
 
   mutable std::shared_ptr<StringDictionary> lit_str_dict_;
   mutable std::mutex str_dict_mutex_;
+
+  mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
   std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> cpu_code_cache_;
   std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> gpu_code_cache_;

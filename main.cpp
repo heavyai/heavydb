@@ -197,6 +197,7 @@ int main(int argc, char* argv[]) {
   bool execute = false;
   bool timer = false;
   bool jit_debug = false;
+  bool use_nvptx = false;
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -206,6 +207,7 @@ int main(int argc, char* argv[]) {
       "user,u", po::value<string>(&user_name)->required(), "User name")(
       "passwd,p", po::value<string>(&passwd)->required(), "Password")("debug,d", "Verbose debug mode")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
+      "use-nvptx", "Use NVPTX instead of NVVM")("execute,e", "Execute queries")("version,v", "Print MapD Version")(
       "execute,e", "Execute queries")("version,v", "Print MapD Version")("timer,t", "Show query time information");
 
   po::positional_options_description positionalOptions;
@@ -232,6 +234,8 @@ int main(int argc, char* argv[]) {
       timer = true;
     if (vm.count("jit-debug"))
       jit_debug = true;
+    if (vm.count("use-nvptx"))
+      use_nvptx = true;
 
     po::notify(vm);
   } catch (boost::program_options::error& e) {
@@ -332,9 +336,11 @@ int main(int argc, char* argv[]) {
                 plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
             ResultRows results({}, nullptr, nullptr);
             ResultRows results_cpu({}, nullptr, nullptr);
+            const NVVMBackend nvvm_backend{use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA};
             {
               auto ms = measure<>::execution([&]() {
-                results_cpu = executor->execute(plan, true, ExecutorDeviceType::CPU, ExecutorOptLevel::Default, true);
+                results_cpu = executor->execute(
+                    plan, true, ExecutorDeviceType::CPU, nvvm_backend, ExecutorOptLevel::Default, true);
               });
               if (timer) {
                 cout << "Query took " << ms << " ms to execute." << endl;
@@ -344,7 +350,8 @@ int main(int argc, char* argv[]) {
               ResultRows results_gpu({}, nullptr, nullptr);
               {
                 auto ms = measure<>::execution([&]() {
-                  results_gpu = executor->execute(plan, true, ExecutorDeviceType::GPU, ExecutorOptLevel::Default, true);
+                  results_gpu = executor->execute(
+                      plan, true, ExecutorDeviceType::GPU, nvvm_backend, ExecutorOptLevel::Default, true);
                 });
                 if (timer) {
                   cout << "Query took " << ms << " ms to execute." << endl;

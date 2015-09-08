@@ -48,5 +48,5 @@ ResultRows run_multiple_agg(const std::string& query_str,
   Planner::RootPlan* plan = optimizer.optimize();
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
   auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId);
-  return executor->execute(plan, true, device_type, ExecutorOptLevel::LoopStrengthReduction, true);
+  return executor->execute(plan, true, device_type, NVVMBackend::CUDA, ExecutorOptLevel::LoopStrengthReduction, true);
 }

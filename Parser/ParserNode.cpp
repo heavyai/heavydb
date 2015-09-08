@@ -1543,7 +1543,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);
   auto executor = Executor::getExecutor(catalog.get_currentDB().dbId);
   ResultRows results({}, nullptr, nullptr);
-  results = executor->execute(root_plan, true, device_type, ExecutorOptLevel::Default, true);
+  results = executor->execute(root_plan, true, device_type, NVVMBackend::CUDA, ExecutorOptLevel::Default, true);
   const auto& targets = root_plan->get_plan()->get_targetlist();
   std::ofstream outfile;
   if (file_path->empty()) {

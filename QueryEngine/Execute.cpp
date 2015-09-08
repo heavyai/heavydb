@@ -23,7 +23,10 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
+#include <llvm/Support/TargetRegistry.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/IPO.h>
@@ -101,6 +104,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                        const int64_t offset,
                                        const bool hoist_literals,
                                        const ExecutorDeviceType device_type,
+                                       const NVVMBackend nvvm_backend,
                                        const ExecutorOptLevel opt_level,
                                        const Catalog_Namespace::Catalog& cat,
                                        size_t& max_groups_buffer_entry_guess,
@@ -117,6 +121,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                      scan_limit ? scan_limit + offset : 0,
                                      hoist_literals,
                                      device_type,
+                                     nvvm_backend,
                                      opt_level,
                                      cat,
                                      row_set_mem_owner_,
@@ -137,6 +142,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                               limit,
                               hoist_literals,
                               device_type,
+                              nvvm_backend,
                               opt_level,
                               cat,
                               row_set_mem_owner_,
@@ -153,6 +159,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
       auto rows = executeResultPlan(result_plan,
                                     hoist_literals,
                                     device_type,
+                                    nvvm_backend,
                                     opt_level,
                                     cat,
                                     max_groups_buffer_entry_guess,
@@ -168,6 +175,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     return executeResultPlan(result_plan,
                              hoist_literals,
                              device_type,
+                             nvvm_backend,
                              opt_level,
                              cat,
                              max_groups_buffer_entry_guess,
@@ -182,6 +190,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                            offset,
                            hoist_literals,
                            device_type,
+                           nvvm_backend,
                            opt_level,
                            cat,
                            max_groups_buffer_entry_guess,
@@ -203,6 +212,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
 ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                              const bool hoist_literals,
                              const ExecutorDeviceType device_type,
+                             const NVVMBackend nvvm_backend,
                              const ExecutorOptLevel opt_level,
                              const bool allow_multifrag) {
   catalog_ = &root_plan->get_catalog();
@@ -219,6 +229,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     root_plan->get_offset(),
                                     hoist_literals,
                                     device_type,
+                                    nvvm_backend,
                                     opt_level,
                                     root_plan->get_catalog(),
                                     max_groups_buffer_entry_guess,
@@ -235,6 +246,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                  root_plan->get_offset(),
                                  hoist_literals,
                                  device_type,
+                                 nvvm_backend,
                                  opt_level,
                                  root_plan->get_catalog(),
                                  max_groups_buffer_entry_guess,
@@ -251,6 +263,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                    root_plan->get_offset(),
                                    hoist_literals,
                                    ExecutorDeviceType::CPU,
+                                   nvvm_backend,
                                    opt_level,
                                    root_plan->get_catalog(),
                                    max_groups_buffer_entry_guess,
@@ -2033,6 +2046,7 @@ ResultRows results_union(std::vector<std::pair<ResultRows, std::vector<size_t>>>
 ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        const bool hoist_literals,
                                        const ExecutorDeviceType device_type,
+                                       const NVVMBackend nvvm_backend,
                                        const ExecutorOptLevel opt_level,
                                        const Catalog_Namespace::Catalog& cat,
                                        size_t& max_groups_buffer_entry_guess,
@@ -2047,6 +2061,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         0,
                                         hoist_literals,
                                         device_type,
+                                        nvvm_backend,
                                         opt_level,
                                         cat,
                                         row_set_mem_owner_,
@@ -2122,6 +2137,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         hoist_literals,
                                         allow_multifrag,
                                         ExecutorDeviceType::CPU,
+                                        NVVMBackend::CUDA,
                                         opt_level,
                                         nullptr,
                                         false,
@@ -2158,6 +2174,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                      const int64_t offset,
                                      const bool hoist_literals,
                                      const ExecutorDeviceType device_type,
+                                     const NVVMBackend nvvm_backend,
                                      const ExecutorOptLevel opt_level,
                                      const Catalog_Namespace::Catalog& cat,
                                      size_t& max_groups_buffer_entry_guess,
@@ -2170,6 +2187,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         0,
                                         hoist_literals,
                                         device_type,
+                                        nvvm_backend,
                                         opt_level,
                                         cat,
                                         max_groups_buffer_entry_guess,
@@ -2196,6 +2214,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                         const int64_t limit,
                                         const bool hoist_literals,
                                         const ExecutorDeviceType device_type_in,
+                                        const NVVMBackend nvvm_backend,
                                         const ExecutorOptLevel opt_level,
                                         const Catalog_Namespace::Catalog& cat,
                                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -2259,6 +2278,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::CPU,
+                                           nvvm_backend,
                                            opt_level,
                                            cat.get_dataMgr().cudaMgr_,
                                            true,
@@ -2279,6 +2299,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::CPU,
+                                           nvvm_backend,
                                            opt_level,
                                            cat.get_dataMgr().cudaMgr_,
                                            false,
@@ -2310,6 +2331,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::GPU,
+                                           nvvm_backend,
                                            opt_level,
                                            cat.get_dataMgr().cudaMgr_,
                                            true,
@@ -2330,6 +2352,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::GPU,
+                                           nvvm_backend,
                                            opt_level,
                                            cat.get_dataMgr().cudaMgr_,
                                            false,
@@ -3257,6 +3280,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const bool hoist_literals,
                                                   const bool allow_multifrag,
                                                   const ExecutorDeviceType device_type,
+                                                  const NVVMBackend nvvm_backend,
                                                   const ExecutorOptLevel opt_level,
                                                   const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                                   const bool allow_lazy_fetch,
@@ -3457,6 +3481,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
           : optimizeAndCodegenGPU(query_func,
                                   multifrag_query_func,
                                   hoist_literals,
+                                  nvvm_backend,
                                   opt_level,
                                   cgen_state_->module_,
                                   is_group_by,
@@ -3705,6 +3730,7 @@ declare i32 @merge_error_code(i32, i32*);
 std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                                                    llvm::Function* multifrag_query_func,
                                                    const bool hoist_literals,
+                                                   const NVVMBackend nvvm_backend,
                                                    const ExecutorOptLevel opt_level,
                                                    llvm::Module* module,
                                                    const bool no_inline,
@@ -3796,13 +3822,19 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   std::vector<void*> native_functions;
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>> cached_functions;
 
-  auto ptx = generatePTX(cuda_llir.c_str(), cuda_llir.size(), nullptr);
-  if (!ptx) {
-    LOG(ERROR) << "NVVM compilation failed; will run on CPU";
-    cgen_state_->must_run_on_cpu_ = true;
-    return {};
+  std::string ptx_nvptx;
+  char* ptx_cuda{nullptr};
+  if (nvvm_backend == NVVMBackend::NVPTX) {
+    ptx_nvptx = generatePTX(cuda_llir);
+  } else {
+    ptx_cuda = ::generatePTX(cuda_llir.c_str(), cuda_llir.size(), nullptr);
+    if (!ptx_cuda) {
+      LOG(ERROR) << "NVVM compilation failed; will run on CPU";
+      cgen_state_->must_run_on_cpu_ = true;
+      return {};
+    }
   }
-
+  CHECK_EQ(!!ptx_cuda, ptx_nvptx.empty());
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
     boost::filesystem::path gpu_rt_path{mapd_root_abs_path()};
     gpu_rt_path /= "QueryEngine";
@@ -3810,19 +3842,60 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
     if (!boost::filesystem::exists(gpu_rt_path)) {
       throw std::runtime_error("MapD GPU runtime library not found at " + gpu_rt_path.string());
     }
-    auto gpu_context =
-        new GpuCompilationContext(ptx, func_name, gpu_rt_path.string(), device_id, cuda_mgr, blockSize());
+    auto gpu_context = new GpuCompilationContext(
+        ptx_cuda ? ptx_cuda : ptx_nvptx.c_str(), func_name, gpu_rt_path.string(), device_id, cuda_mgr, blockSize());
     auto native_code = gpu_context->kernel();
     CHECK(native_code);
     native_functions.push_back(native_code);
     cached_functions.emplace_back(native_code, nullptr, gpu_context);
   }
-
-  free(ptx);
-
+  if (ptx_cuda) {
+    free(ptx_cuda);
+  }
   addCodeToCache(key, cached_functions, module, gpu_code_cache_);
 
   return native_functions;
+}
+
+std::string Executor::generatePTX(const std::string& cuda_llir) const {
+  initializeNVPTXBackend();
+  auto mem_buff = llvm::MemoryBuffer::getMemBuffer(cuda_llir, "", false);
+  llvm::SMDiagnostic err;
+  auto module = llvm::ParseIR(mem_buff, err, cgen_state_->context_);
+  if (!module) {
+    LOG(FATAL) << err.getMessage().str();
+  }
+  llvm::legacy::PassManager ptxgen_pm;
+  std::stringstream ss;
+  llvm::raw_os_ostream raw_os(ss);
+  llvm::formatted_raw_ostream formatted_os(raw_os);
+  ptxgen_pm.add(new llvm::DataLayoutPass(module));
+  CHECK(nvptx_target_machine_);
+  nvptx_target_machine_->addPassesToEmitFile(ptxgen_pm, formatted_os, llvm::TargetMachine::CGFT_AssemblyFile);
+  ptxgen_pm.run(*module);
+  formatted_os.flush();
+  return ss.str();
+}
+
+void Executor::initializeNVPTXBackend() const {
+  if (nvptx_target_machine_) {
+    return;
+  }
+  llvm::InitializeAllTargets();
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeAllAsmPrinters();
+  std::string err;
+  auto target = llvm::TargetRegistry::lookupTarget("nvptx64", err);
+  if (!target) {
+    LOG(FATAL) << err;
+  }
+  nvptx_target_machine_.reset(target->createTargetMachine("nvptx64-nvidia-cuda",
+                                                          "sm_30",
+                                                          "",
+                                                          llvm::TargetOptions(),
+                                                          llvm::Reloc::Default,
+                                                          llvm::CodeModel::Default,
+                                                          llvm::CodeGenOpt::Aggressive));
 }
 
 int8_t Executor::warpSize() const {

@@ -17,7 +17,7 @@ void fill_options(std::vector<CUjit_option>& option_keys,
 
 }  // namespace
 
-GpuCompilationContext::GpuCompilationContext(char* ptx,
+GpuCompilationContext::GpuCompilationContext(const char* ptx,
                                              const std::string& func_name,
                                              const std::string& lib_path,
                                              const int device_id,
@@ -41,7 +41,7 @@ GpuCompilationContext::GpuCompilationContext(char* ptx,
   }
   checkCudaErrors(cuLinkAddData(link_state_,
                                 CU_JIT_INPUT_PTX,
-                                static_cast<void*>(ptx),
+                                static_cast<void*>(const_cast<char*>(ptx)),
                                 strlen(ptx) + 1,
                                 0,
                                 num_options,
