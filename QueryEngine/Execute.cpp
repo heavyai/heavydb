@@ -23,7 +23,6 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/Instrumentation.h>
@@ -3226,6 +3225,7 @@ std::string serialize_llvm_object(const T* llvm_obj) {
   std::stringstream ss;
   llvm::raw_os_ostream os(ss);
   llvm_obj->print(os);
+  os.flush();
   return ss.str();
 }
 
@@ -3758,6 +3758,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
 
   query_func->print(os);
   multifrag_query_func->print(os);
+  os.flush();
 
   char nvvm_annotations[1024];
   auto func_name = multifrag_query_func->getName().str();
