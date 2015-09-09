@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
       "user,u", po::value<string>(&user_name)->required(), "User name")(
       "passwd,p", po::value<string>(&passwd)->required(), "Password")("debug,d", "Verbose debug mode")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
-      "use-nvptx", "Use NVPTX instead of NVVM")("execute,e", "Execute queries")("version,v", "Print MapD Version")(
+      "use-nvptx", "Use NVPTX instead of NVVM")(
       "execute,e", "Execute queries")("version,v", "Print MapD Version")("timer,t", "Show query time information");
 
   po::positional_options_description positionalOptions;
