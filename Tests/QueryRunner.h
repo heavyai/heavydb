@@ -11,6 +11,7 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path);
 
 ResultRows run_multiple_agg(const std::string& query_str,
                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
-                            const ExecutorDeviceType device_type);
+                            const ExecutorDeviceType device_type,
+                            const NVVMBackend nvvm_backend);
 
 #endif  // QUERY_RUNNER_H

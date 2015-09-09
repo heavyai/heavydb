@@ -30,7 +30,8 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
 
 ResultRows run_multiple_agg(const std::string& query_str,
                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
-                            const ExecutorDeviceType device_type) {
+                            const ExecutorDeviceType device_type,
+                            const NVVMBackend nvvm_backend) {
   SQLParser parser;
   std::list<Parser::Stmt*> parse_trees;
   std::string last_parsed;
@@ -48,5 +49,5 @@ ResultRows run_multiple_agg(const std::string& query_str,
   Planner::RootPlan* plan = optimizer.optimize();
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
   auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId);
-  return executor->execute(plan, true, device_type, NVVMBackend::CUDA, ExecutorOptLevel::LoopStrengthReduction, true);
+  return executor->execute(plan, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, true);
 }

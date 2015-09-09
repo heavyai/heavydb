@@ -5,6 +5,7 @@
 #include "../Import/Importer.h"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
 #include <gtest/gtest.h>
 
 using namespace std;
@@ -12,9 +13,10 @@ using namespace std;
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session(get_session("/tmp"));
+NVVMBackend g_nvvm_backend{NVVMBackend::CUDA};
 
 ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, g_session, device_type);
+  return run_multiple_agg(query_str, g_session, device_type, g_nvvm_backend);
 }
 
 TargetValue run_simple_agg(const string& query_str, const ExecutorDeviceType device_type) {
@@ -898,6 +900,16 @@ TEST(Select, ArrayAnyAndAll) {
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+  desc.add_options()("use-nvptx", "Use NVPTX instead of NVVM");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  if (vm.count("use-nvptx"))
+    g_nvvm_backend = NVVMBackend::NVPTX;
+
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
     run_ddl_statement(drop_old_test);

@@ -6,6 +6,7 @@ int main(int argc, char** argv) {
   std::string db_path;
   std::string query;
   size_t iter;
+  bool use_nvptx = false;
 
   ExecutorDeviceType device_type{ExecutorDeviceType::GPU};
 
@@ -14,7 +15,7 @@ int main(int argc, char** argv) {
       "path", boost::program_options::value<std::string>(&db_path)->required(), "Directory path to Mapd catalogs")(
       "query", boost::program_options::value<std::string>(&query)->required(), "Query")(
       "iter", boost::program_options::value<size_t>(&iter), "Number of iterations")(
-      "cpu", "Run on CPU (run on GPU by default)");
+      "use-nvptx", "Use NVPTX instead of NVVM")("cpu", "Run on CPU (run on GPU by default)");
 
   boost::program_options::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -39,9 +40,13 @@ int main(int argc, char** argv) {
     device_type = ExecutorDeviceType::CPU;
   }
 
+  if (vm.count("use-nvptx")) {
+    use_nvptx = true;
+  }
+
   std::unique_ptr<Catalog_Namespace::SessionInfo> session(get_session(db_path.c_str()));
   for (size_t i = 0; i < iter; ++i) {
-    run_multiple_agg(query, session, device_type);
+    run_multiple_agg(query, session, device_type, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA);
   }
   return 0;
 }
