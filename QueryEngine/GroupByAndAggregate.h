@@ -78,19 +78,6 @@ typedef std::unordered_map<size_t, CountDistinctDescriptor> CountDistinctDescrip
 
 class RowSetMemoryOwner;
 
-struct GpuSortInfo {
-  const Planner::Sort* sort_plan;
-  const int64_t top_count;
-
-  int64_t topFudged() const {
-    // We'll ask for more top rows than the query requires so that we have a very
-    // high chance to reconstitute the full top out of the fragments; since we
-    // don't have any data about what'd be a good value, we might need to tweak it.
-    const int64_t top_fudge_factor{16};
-    return top_count * top_fudge_factor;
-  }
-};
-
 struct QueryMemoryDescriptor {
   const Executor* executor_;
   GroupByColRangeType hash_type;
@@ -395,8 +382,7 @@ struct InternalTargetValue {
 
 class InternalRow {
  public:
-  InternalRow(RowSetMemoryOwner* row_set_mem_owner, const int64_t simple_key)
-      : row_set_mem_owner_(row_set_mem_owner), simple_key_(simple_key){};
+  InternalRow(RowSetMemoryOwner* row_set_mem_owner) : row_set_mem_owner_(row_set_mem_owner){};
 
   bool operator==(const InternalRow& other) const { return row_ == other.row_; }
 
@@ -405,10 +391,6 @@ class InternalRow {
   InternalTargetValue& operator[](const size_t i) { return row_[i]; }
 
   const InternalTargetValue& operator[](const size_t i) const { return row_[i]; }
-
-  int64_t getSimpleKey() const { return simple_key_; }
-
-  void setSimpleKey(const int64_t simple_key) { simple_key_ = simple_key; }
 
   size_t size() const { return row_.size(); }
 
@@ -428,7 +410,6 @@ class InternalRow {
 
   std::vector<InternalTargetValue> row_;
   RowSetMemoryOwner* row_set_mem_owner_;
-  int64_t simple_key_;
 
   friend class RowStorage;
 };
@@ -441,9 +422,7 @@ class RowStorage {
 
   void reserve(const size_t n) { rows_.reserve(n); }
 
-  void beginRow(RowSetMemoryOwner* row_set_mem_owner, const int64_t simple_key) {
-    rows_.emplace_back(row_set_mem_owner, simple_key);
-  }
+  void beginRow(RowSetMemoryOwner* row_set_mem_owner) { rows_.emplace_back(row_set_mem_owner); }
 
   void reserveRow(const size_t n) { rows_.back().reserve(n); }
 
@@ -510,11 +489,6 @@ class RowStorage {
   friend class ResultRows;
 };
 
-class SpeculativeTopFailed : public std::runtime_error {
- public:
-  SpeculativeTopFailed() : std::runtime_error("SpeculativeTopFailed") {}
-};
-
 class ReductionRanOutOfSlots : public std::runtime_error {
  public:
   ReductionRanOutOfSlots() : std::runtime_error("ReductionRanOutOfSlots") {}
@@ -536,8 +510,6 @@ class ResultRows {
         groups_buffer_entry_count_(groups_buffer_entry_count),
         min_val_(min_val),
         warp_count_(warp_count),
-        sorted_(false),
-        truncation_size_(0),
         output_columnar_(false),
         in_place_(false),
         device_type_(ExecutorDeviceType::Hybrid),
@@ -580,28 +552,24 @@ class ResultRows {
         just_explain_(true),
         explanation_(explanation) {}
 
-  void setTruncationSize(const size_t truncation_size) { truncation_size_ = truncation_size; }
-
-  void setSorted(const bool sorted = true) { sorted_ = sorted; }
-
   void moveToBegin() const {
     crt_row_idx_ = 0;
     crt_row_buff_idx_ = 0;
     in_place_buff_idx_ = 0;
     fetch_started_ = false;
   }
-  void beginRow() { target_values_.beginRow(row_set_mem_owner_.get(), EMPTY_KEY); }
+  void beginRow() { target_values_.beginRow(row_set_mem_owner_.get()); }
 
   void beginRow(const int64_t key) {
     CHECK(multi_keys_.empty());
     simple_keys_.push_back(key);
-    target_values_.beginRow(row_set_mem_owner_.get(), key);
+    target_values_.beginRow(row_set_mem_owner_.get());
   }
 
   void beginRow(const std::vector<int64_t>& key) {
     CHECK(simple_keys_.empty());
     multi_keys_.push_back(key);
-    target_values_.beginRow(row_set_mem_owner_.get(), EMPTY_KEY);
+    target_values_.beginRow(row_set_mem_owner_.get());
   }
 
   void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
@@ -635,10 +603,7 @@ class ResultRows {
     }
   }
 
-  void reduce(const ResultRows& other_results,
-              const GpuSortInfo& gpu_sort_info,
-              const QueryMemoryDescriptor& query_mem_desc,
-              const bool output_columnar);
+  void reduce(const ResultRows& other_results, const QueryMemoryDescriptor& query_mem_desc, const bool output_columnar);
 
   void sort(const Planner::Sort* sort_plan, const int64_t top_n);
 
@@ -700,16 +665,12 @@ class ResultRows {
 
   std::vector<TargetValue> getNextRow(const bool translate_strings, const bool decimal_to_double) const;
 
-  int64_t getSimpleKey(const size_t row_idx) const;
-
   SQLTypeInfo getColType(const size_t col_idx) const {
     if (just_explain_) {
       return SQLTypeInfo(kTEXT, false);
     }
     return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
   }
-
-  bool isSorted() const { return sorted_; }
 
  private:
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
@@ -764,8 +725,6 @@ class ResultRows {
   int32_t groups_buffer_entry_count_;
   int64_t min_val_;
   int8_t warp_count_;
-  bool sorted_;             // true iff this result has been sorted on the GPU
-  size_t truncation_size_;  // if not zero, this result only contains first truncation_size_ rows
   bool output_columnar_;
   bool in_place_;
   ExecutorDeviceType device_type_;
@@ -838,6 +797,18 @@ inline std::string datum_to_string(const TargetValue& tv, const SQLTypeInfo& ti,
   return nullable_str_to_string(*sptr);
 }
 
+class ScopedScratchBuffer {
+ public:
+  ScopedScratchBuffer(const size_t num_bytes, Data_Namespace::DataMgr* data_mgr, const int device_id)
+      : data_mgr_(data_mgr), ab_(alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id)) {}
+  ~ScopedScratchBuffer() { free_gpu_abstract_buffer(data_mgr_, ab_); }
+  CUdeviceptr getPtr() const { return reinterpret_cast<CUdeviceptr>(ab_->getMemoryPtr()); }
+
+ private:
+  Data_Namespace::DataMgr* data_mgr_;
+  Data_Namespace::AbstractBuffer* ab_;
+};
+
 }  // namespace
 
 inline std::string row_col_to_string(const ResultRows& rows,
@@ -871,12 +842,10 @@ class QueryExecutionContext : boost::noncopyable {
 
   // TOOD(alex): get rid of targets parameter
   ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets,
-                       const GpuSortInfo& gpu_sort_info,
                        const QueryMemoryDescriptor& query_mem_desc,
                        const bool was_auto_device) const noexcept;
   ResultRows groupBufferToResults(const size_t i,
                                   const std::vector<Analyzer::Expr*>& targets,
-                                  const size_t truncate_count,
                                   const bool was_auto_device) const;
 
   std::vector<int64_t*> launchGpuCode(const std::vector<void*>& cu_functions,
@@ -887,7 +856,6 @@ class QueryExecutionContext : boost::noncopyable {
                                       const int64_t scan_limit,
                                       const std::vector<int64_t>& init_agg_vals,
                                       Data_Namespace::DataMgr* data_mgr,
-                                      const GpuSortInfo& gpu_sort_info,
                                       const unsigned block_size_x,
                                       const unsigned grid_size_x,
                                       const int device_id,
@@ -950,14 +918,14 @@ class GroupByAndAggregate {
                       const size_t max_groups_buffer_entry_count,
                       const int64_t scan_limit,
                       const bool allow_multifrag,
-                      const GpuSortInfo& gpu_sort_info,
+                      const Planner::Sort* sort_plan,
                       const bool output_columnar_hint);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor() const;
 
   bool outputColumnar() const;
 
-  bool gpuCanHandleOrderEntries(const GpuSortInfo& gpu_sort_info);
+  bool gpuCanHandleOrderEntries(const Planner::Sort* sort_plan);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now

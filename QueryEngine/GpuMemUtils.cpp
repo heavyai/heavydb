@@ -139,8 +139,6 @@ void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
       static_cast<int8_t*>(dst), reinterpret_cast<const int8_t*>(src), num_bytes, device_id);
 }
 
-namespace {
-
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const std::vector<int64_t*>& group_by_buffers,
                                     const size_t groups_buffer_size,
@@ -168,8 +166,6 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
     }
   }
 }
-
-}  // namespace
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const QueryExecutionContext* query_exe_context,

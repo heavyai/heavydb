@@ -173,7 +173,7 @@ class Executor {
                                const Catalog_Namespace::Catalog&,
                                size_t& max_groups_buffer_entry_guess,
                                int32_t* error_code,
-                               const GpuSortInfo& gpu_sort_info,
+                               const Planner::Sort* sort_plan,
                                const bool allow_multifrag,
                                const bool just_explain);
   ResultRows executeAggScanPlan(const Planner::Plan* plan,
@@ -186,14 +186,13 @@ class Executor {
                                 std::shared_ptr<RowSetMemoryOwner>,
                                 size_t& max_groups_buffer_entry_guess,
                                 int32_t* error_code,
-                                const GpuSortInfo& gpu_sort_info,
+                                const Planner::Sort* sort_plan,
                                 const bool output_columnar_hint,
                                 const bool allow_multifrag,
                                 const bool just_explain);
   ResultRows collectAllDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                      const Planner::Plan* plan,
                                      const QueryMemoryDescriptor& query_mem_desc,
-                                     const GpuSortInfo& gpu_sort_info,
                                      const ExecutorDeviceType device_type,
                                      const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -231,7 +230,7 @@ class Executor {
                                const Catalog_Namespace::Catalog&,
                                size_t& max_groups_buffer_entry_guess,
                                int32_t* error_code,
-                               const GpuSortInfo& gpu_sort_info,
+                               const Planner::Sort* sort_plan,
                                const bool allow_multifrag,
                                const bool just_explain);
   ResultRows executeSortPlan(const Planner::Sort* sort_plan,
@@ -264,7 +263,7 @@ class Executor {
                                  const QueryExecutionContext*,
                                  const std::vector<int64_t>& num_rows,
                                  Data_Namespace::DataMgr*,
-                                 const GpuSortInfo& gpu_sort_info,
+                                 const Planner::Sort* sort_plan,
                                  const int device_id,
                                  const int64_t limit,
                                  const bool was_auto_device);
@@ -280,7 +279,6 @@ class Executor {
                                     const int device_id);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,
-                                      const GpuSortInfo&,
                                       const QueryMemoryDescriptor&,
                                       const bool output_columnar) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
@@ -301,7 +299,7 @@ class Executor {
                                 std::shared_ptr<RowSetMemoryOwner>,
                                 const size_t max_groups_buffer_entry_count,
                                 const int64_t scan_limit,
-                                const GpuSortInfo& gpu_sort_info,
+                                const Planner::Sort* sort_plan,
                                 const bool output_columnar_hint,
                                 const bool serialize_llvm_ir,
                                 std::string& llvm_ir);
