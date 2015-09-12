@@ -764,7 +764,14 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
   CHECK_GE(col_idx, 0);
   const auto& agg_info = targets_[col_idx];
   if (in_place_) {
-    CHECK(false);
+    moveToBegin();
+    for (size_t i = 0; i < row_idx; ++i) {
+      auto crt_row = getNextRow(translate_strings, decimal_to_double);
+      CHECK(!crt_row.empty());
+    }
+    auto crt_row = getNextRow(translate_strings, decimal_to_double);
+    CHECK(!crt_row.empty());
+    return crt_row[col_idx];
   }
   CHECK_LT(row_idx, target_values_.size());
   CHECK_LT(col_idx, targets_.size());
