@@ -370,17 +370,18 @@ void ResultRows::reduce(const ResultRows& other_results,
         size_t col_idx = 0;
         size_t val_idx = 0;
         for (const auto& agg_info : targets) {
-          const auto agg_off =
+          const auto other_agg_off =
               agg_columnar_off(group_by_col_count, val_idx, other_groups_buffer_entry_count, output_columnar);
+          const auto agg_off = output_columnar ? other_agg_off : val_idx;
           if (agg_info.is_agg) {
-            reduce_impl(&group_val_buff[val_idx],
-                        agg_info.agg_kind == kAVG ? &group_val_buff[val_idx + 1] : nullptr,
-                        other_group_by_buffer[other_key_off + agg_off],
-                        agg_info.agg_kind == kAVG ? other_group_by_buffer[other_key_off + agg_off + 1] : 0,
+            reduce_impl(&group_val_buff[agg_off],
+                        agg_info.agg_kind == kAVG ? &group_val_buff[agg_off + 1] : nullptr,
+                        other_group_by_buffer[other_key_off + other_agg_off],
+                        agg_info.agg_kind == kAVG ? other_group_by_buffer[other_key_off + other_agg_off + 1] : 0,
                         agg_info,
                         col_idx);
           } else {
-            group_val_buff[val_idx] = other_group_by_buffer[other_key_off + agg_off];
+            group_val_buff[agg_off] = other_group_by_buffer[other_key_off + other_agg_off];
           }
           val_idx += (agg_info.agg_kind == kAVG ? 2 : 1);
           ++col_idx;
