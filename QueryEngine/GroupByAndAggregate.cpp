@@ -1791,7 +1791,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
           has_nulls = true;
         }
       }
-      if (cardinality > 10000000) {  // more than 10M groups is a lot
+      if (cardinality > 10000) {  // more than 100K groups is a lot
         return {GroupByColRangeType::MultiCol, 0, 0, false};
       }
       return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), has_nulls};
@@ -2065,8 +2065,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          agg_col_widths,
                          static_cast<size_t>(col_range_info.max),
                          0,
-                         0,
-                         0,
+                         col_range_info.min,
+                         col_range_info.max,
                          col_range_info.has_nulls,
                          GroupByMemSharing::Shared,
                          count_distinct_descriptors,
