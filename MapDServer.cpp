@@ -329,8 +329,6 @@ class MapDHandler : virtual public MapDIf {
               proj_info.col_type.nullable = false;
               proj_info.col_type.is_array = false;
               _return.row_set.row_desc.push_back(proj_info);
-              TRow trow;
-              TDatum explanation;
               const auto crt_row = results.getNextRow(true, true);
               const auto tv = crt_row[0];
               CHECK(results.getNextRow(true, true).empty());
@@ -340,10 +338,22 @@ class MapDHandler : virtual public MapDIf {
               CHECK(s_n);
               const auto s = boost::get<std::string>(s_n);
               CHECK(s);
-              explanation.val.str_val = *s;
-              explanation.is_null = false;
-              trow.cols.push_back(explanation);
-              _return.row_set.rows.push_back(trow);
+              if (column_format) {
+                TColumn tcol;
+                LOG(ERROR) << *s;
+                tcol.data.str_col.push_back(*s);
+                tcol.nulls.push_back(false);
+                _return.row_set.is_columnar = true;
+                _return.row_set.columns.push_back(tcol);
+              } else {
+                TDatum explanation;
+                explanation.val.str_val = *s;
+                explanation.is_null = false;
+                TRow trow;
+                trow.cols.push_back(explanation);
+                _return.row_set.is_columnar = false;
+                _return.row_set.rows.push_back(trow);
+              }
               return;
             }
             const auto plan = root_plan->get_plan();
