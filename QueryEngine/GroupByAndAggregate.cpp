@@ -1791,7 +1791,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
           has_nulls = true;
         }
       }
-      if (cardinality > 10000) {  // more than 100K groups is a lot
+      if (cardinality > 10000000) {  // more than 10M groups is a lot
         return {GroupByColRangeType::MultiCol, 0, 0, false};
       }
       return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), has_nulls};
@@ -1844,7 +1844,7 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
 }
 
 bool many_entries(const int64_t max_val, const int64_t min_val) {
-  return max_val - min_val > 1000000;
+  return max_val - min_val > 10000;
 }
 
 }  // namespace
