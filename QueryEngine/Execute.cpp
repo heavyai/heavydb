@@ -10,6 +10,7 @@
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 #include "QueryRewrite.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 
 #include <boost/range/adaptor/reversed.hpp>
 #ifdef __x86_64__
@@ -2534,8 +2535,15 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     if (chosen_device_type == ExecutorDeviceType::GPU) {
       gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
     }
-    auto col_buffers = fetchChunks(
-        table_id, col_global_ids, chosen_device_id, memory_level, fragments, frag_ids, cat, chunk_iterators, chunks);
+    std::vector<std::vector<const int8_t*>> col_buffers;
+    try {
+      col_buffers = fetchChunks(
+          table_id, col_global_ids, chosen_device_id, memory_level, fragments, frag_ids, cat, chunk_iterators, chunks);
+    } catch (const OutOfGpuMemory&) {
+      std::lock_guard<std::mutex> lock(reduce_mutex);
+      *error_code = ERR_OUT_OF_GPU_MEM;
+      return;
+    }
     CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
     const CompilationResult& compilation_result =
         chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
@@ -2857,7 +2865,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  gridSize(),
                                                  device_id,
                                                  &error_code);
-    } catch (const std::runtime_error&) {
+    } catch (const OutOfGpuMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
   }
@@ -2938,7 +2946,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        gridSize(),
                                        device_id,
                                        &error_code);
-    } catch (const std::runtime_error&) {
+    } catch (const OutOfGpuMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
   }

@@ -311,7 +311,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
     }
   }
   if (bestEvictionStart == slabSegments_[0].end()) {
-    throw std::runtime_error("Couldn't evict chunks to get free space");
+    throw OutOfGpuMemory();
   }
   bestEvictionStart = evict(bestEvictionStart, numPagesRequested, bestEvictionStartSlab);
   return bestEvictionStart;

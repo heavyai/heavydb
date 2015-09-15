@@ -17,6 +17,11 @@
 #include "BufferSeg.h"
 #include <mutex>
 
+class OutOfGpuMemory : public std::runtime_error {
+ public:
+  OutOfGpuMemory() : std::runtime_error("OutOfGpuMemory") {}
+};
+
 using namespace Data_Namespace;
 
 namespace Buffer_Namespace {
