@@ -177,6 +177,13 @@ DEF_MUL_DECIMAL(int64_t)
 
 #undef DEF_MUL_DECIMAL
 
+extern "C" __attribute__((always_inline)) int64_t scale_decimal(const int64_t operand,
+                                                                const uint64_t scale,
+                                                                const int64_t operand_null_val,
+                                                                const int64_t result_null_val) {
+  return operand != operand_null_val ? operand * scale : result_null_val;
+}
+
 #define DEF_UMINUS_NULLABLE(type, null_type)                                        \
   extern "C" __attribute__((always_inline))                                         \
       type uminus_##type##_nullable(const type operand, const null_type null_val) { \

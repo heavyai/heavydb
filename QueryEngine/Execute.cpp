@@ -1296,10 +1296,18 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
       if (ti.is_decimal()) {
         CHECK(!operand_ti.is_decimal() || operand_ti.get_scale() <= ti.get_scale());
-        operand_lv = cgen_state_->ir_builder_.CreateMul(
-            cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_)),
-            llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
-                                   exp_to_scale(ti.get_scale() - operand_ti.get_scale())));
+        operand_lv = cgen_state_->ir_builder_.CreateSExt(operand_lv, get_int_type(64, cgen_state_->context_));
+        const auto scale_lv = llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_),
+                                                     exp_to_scale(ti.get_scale() - operand_ti.get_scale()));
+        if (operand_ti.get_notnull()) {
+          operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
+        } else {
+          operand_lv = cgen_state_->emitCall("scale_decimal",
+                                             {operand_lv,
+                                              scale_lv,
+                                              ll_int(inline_int_null_val(operand_ti)),
+                                              inlineIntNull(SQLTypeInfo(kBIGINT, false))});
+        }
       } else if (operand_ti.is_decimal()) {
         const std::string int_typename{"int" + std::to_string(get_bit_width(operand_ti)) + "_t"};
         const auto scale_lv = llvm::ConstantInt::get(static_cast<llvm::IntegerType*>(operand_lv->getType()),
