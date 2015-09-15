@@ -178,6 +178,14 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
       result.fp_max = v;
       return result;
     }
+    case kNUMERIC:
+    case kDECIMAL: {
+      ExpressionRange result;
+      result.type = ExpressionRangeType::FloatingPoint;
+      result.has_nulls = false;
+      result.fp_min = result.fp_max = static_cast<double>(datum.intval) / exp_to_scale(constant_expr->get_type_info().get_scale());
+      return result;
+    }
     default:
       break;
   }
@@ -349,6 +357,14 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
     case ExpressionRangeType::Integer: {
       if (ti.is_integer() || ti.is_time()) {
         return arg_range;
+      }
+      if (ti.is_decimal()) {
+        ExpressionRange result;
+        result.type = ExpressionRangeType::FloatingPoint;
+        result.has_nulls = arg_range.has_nulls;
+        result.fp_min = arg_range.int_min;
+        result.fp_max = arg_range.int_max;
+        return result;
       }
       if (ti.get_type() == kDOUBLE) {
         ExpressionRange result;
