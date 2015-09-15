@@ -3358,7 +3358,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   if (device_type == ExecutorDeviceType::GPU && query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
     const size_t required_memory{(gridSize() * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
     CHECK(catalog_->get_dataMgr().cudaMgr_);
-    const size_t max_memory{catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 10};
+    const size_t max_memory{catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 5};
     cgen_state_->must_run_on_cpu_ = required_memory > max_memory;
   }
 
