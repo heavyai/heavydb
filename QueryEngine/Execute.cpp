@@ -2539,7 +2539,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     try {
       col_buffers = fetchChunks(
           table_id, col_global_ids, chosen_device_id, memory_level, fragments, frag_ids, cat, chunk_iterators, chunks);
-    } catch (const OutOfGpuMemory&) {
+    } catch (const OutOfMemory&) {
       std::lock_guard<std::mutex> lock(reduce_mutex);
       *error_code = ERR_OUT_OF_GPU_MEM;
       return;
@@ -2865,7 +2865,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  gridSize(),
                                                  device_id,
                                                  &error_code);
-    } catch (const OutOfGpuMemory&) {
+    } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
   }
@@ -2946,7 +2946,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        gridSize(),
                                        device_id,
                                        &error_code);
-    } catch (const OutOfGpuMemory&) {
+    } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
   }

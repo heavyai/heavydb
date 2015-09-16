@@ -78,7 +78,16 @@ AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunkKey,
   // following should be safe outside the lock b/c first thing Buffer
   // constructor does is pin (and its still in unsized segs at this point
   // so can't be evicted)
-  allocateBuffer(chunkIndex_[chunkKey], actualChunkPageSize, initialSize);
+  try {
+    allocateBuffer(chunkIndex_[chunkKey], actualChunkPageSize, initialSize);
+  } catch (const OutOfMemory&) {
+    auto bufferIt = chunkIndex_.find(chunkKey);
+    CHECK(bufferIt != chunkIndex_.end());
+    bufferIt->second->buffer = 0;  // constructor failed for the buffer object so make sure to mark it zero so
+                                   // deleteBuffer doesn't try to delete it
+    deleteBuffer(chunkKey);
+    throw;
+  }
   assert(chunkIndex_[chunkKey]->buffer->getMemoryPtr());
   // chunkIndex_[chunkKey]->buffer->pin();
   std::lock_guard<std::mutex> lock(chunkIndexMutex_);
@@ -94,7 +103,6 @@ BufferList::iterator BufferMgr::evict(BufferList::iterator& evictStart,
   auto evictIt = evictStart;
   size_t numPages = 0;
   size_t startPage = evictStart->startPage;
-  // cout << "Evicting from slab " << slabNum << " at start page " << startPage << endl;
   while (numPages < numPagesRequested) {
     if (evictIt->memStatus == USED) {
       assert(evictIt->buffer->getPinCount() < 1);
@@ -130,10 +138,8 @@ BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator& segIt,
 
   // doesn't resize to be smaller - like std::reserve
   size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
-  // cout << "Reserve actual number bytes: " << numPagesRequested * pageSize_ << endl;
   size_t numPagesExtraNeeded = numPagesRequested - segIt->numPages;
 
-  // cout << "Num extra pages needed: " << numPagesExtraNeeded << endl;
   if (numPagesRequested < segIt->numPages) {  // We already have enough pages in existing segment
     return segIt;
   }
@@ -157,6 +163,7 @@ BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator& segIt,
    */
 
   auto newSegIt = findFreeBuffer(numBytes);
+
   /* Below should be in copy constructor for BufferSeg?*/
   newSegIt->buffer = segIt->buffer;
   // newSegIt->buffer->segIt_ = newSegIt;
@@ -169,19 +176,9 @@ BufferList::iterator BufferMgr::reserveBuffer(BufferList::iterator& segIt,
   // unallocated buffer
   if (segIt->startPage >= 0 && segIt->buffer->mem_ != 0) {
     newSegIt->buffer->writeData(oldMem, newSegIt->buffer->size(), 0, newSegIt->buffer->getType(), deviceId_);
-    // memcpy(newSegIt->buffer->mem_, segIt->buffer->mem_, newSegIt->buffer->size());
   }
   // Deincrement pin count to reverse effect above
   removeSegment(segIt);
-  /*
-  if (segIt->slabNum < 0) {
-      unsizedSegs_.erase(segIt);
-  }
-  else {
-      slabSegments_[segIt->slabNum].erase(segIt);
-      //@todo - need to delete chunks around it
-  }
-  */
   // sizedSegsLock.unlock();
   {
     std::lock_guard<std::mutex> lock(chunkIndexMutex_);
@@ -207,8 +204,6 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slabNum, const
         tempIt++;
         slabSegments_[slabNum].insert(tempIt, freeSeg);
       }
-      // std::cout << "Find free bufferIt: " << std::endl;
-      // printSeg(bufferIt);
       return bufferIt;
     }
   }
@@ -221,8 +216,6 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slabNum, const
 BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
   size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
   if (numPagesRequested > numPagesPerSlab_) {
-    std::cout << "Pages requested: " << numPagesRequested << std::endl;
-    std::cout << "Pages per slab: " << numPagesPerSlab_ << std::endl;
     throw std::runtime_error("Requested memory allocation larger than slab size.");
   }
 
@@ -311,7 +304,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
     }
   }
   if (bestEvictionStart == slabSegments_[0].end()) {
-    throw OutOfGpuMemory();
+    throw OutOfMemory();
   }
   bestEvictionStart = evict(bestEvictionStart, numPagesRequested, bestEvictionStartSlab);
   return bestEvictionStart;
@@ -381,16 +374,15 @@ void BufferMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   // lookup the buffer for the Chunk in chunkIndex_
   auto bufferIt = chunkIndex_.find(key);
   // Buffer *buffer = bufferIt->second->buffer;
-
-  if (chunkIndex_.find(key) == chunkIndex_.end()) {
-    throw std::runtime_error("Chunk does not exist");
-  }
+  CHECK(bufferIt != chunkIndex_.end());
   auto segIt = bufferIt->second;
   chunkIndex_.erase(bufferIt);
   chunkIndexLock.unlock();
   std::lock_guard<std::mutex> sizedSegsLock(sizedSegsMutex_);
-  delete segIt->buffer;  // Delete Buffer for segment
-  segIt->buffer = 0;
+  if (segIt->buffer) {
+    delete segIt->buffer;  // Delete Buffer for segment
+    segIt->buffer = 0;
+  }
   removeSegment(segIt);
 }
 
@@ -413,8 +405,10 @@ void BufferMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool pu
              bufferIt->first.begin() + keyPrefix.size()) {
     // cout << "Before getting segIt" << endl;
     auto segIt = bufferIt->second;
-    delete segIt->buffer;  // Delete Buffer for segment
-    segIt->buffer = 0;
+    if (segIt->buffer) {
+      delete segIt->buffer;  // Delete Buffer for segment
+      segIt->buffer = 0;
+    }
     removeSegment(segIt);
     chunkIndex_.erase(bufferIt++);
   }
