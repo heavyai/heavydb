@@ -19,6 +19,7 @@ var (
 	proxyBackend bool
 	backendUrl   string
 	frontend     string
+	images       string
 )
 
 func init() {
@@ -26,6 +27,7 @@ func init() {
 	flag.BoolVar(&proxyBackend, "proxy-backend", true, "proxy mapd_http_server")
 	flag.StringVar(&backendUrl, "backend-url", "http://localhost:9090", "url to mapd_http_server")
 	flag.StringVar(&frontend, "frontend", "frontend", "path to frontend directory")
+	flag.StringVar(&images, "images", "images", "path to images directory")
 	flag.Parse()
 }
 
@@ -47,8 +49,15 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionId := r.Header.Get("sessionid")
-	uploadDir := "uploads/" + sessionId + "/"
+	uploadDir := "uploads/"
+	switch r.FormValue("uploadtype") {
+	case "image":
+		uploadDir = images + "/"
+	default:
+		sessionId := r.Header.Get("sessionid")
+		uploadDir = "uploads/" + sessionId + "/"
+	}
+
 	for _, fhs := range r.MultipartForm.File {
 		for _, fh := range fhs {
 			infile, err := fh.Open()
@@ -92,9 +101,19 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
+func imagesHandler(rw http.ResponseWriter, r *http.Request) {
+	if r.RequestURI == "/images/" {
+		rw.Write([]byte(""))
+		return
+	}
+	h := http.StripPrefix("/images/", http.FileServer(http.Dir(images)))
+	h.ServeHTTP(rw, r)
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/upload", uploadHandler)
+	mux.HandleFunc("/images/", imagesHandler)
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
