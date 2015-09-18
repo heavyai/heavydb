@@ -83,7 +83,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
       "refresh int)");
   dbConn.query(
       "CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references "
-      "mapd_users, view_state text)");
+      "mapd_users, view_state text, image_hash text, update_time timestamp)");
   dbConn.query(
       "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean)");
 }
@@ -189,6 +189,27 @@ Catalog::~Catalog() {
   // ColumnDescriptorMapById points to the same descriptors.  No need to delete
 }
 
+void Catalog::updateFrontendViewSchema() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_frontend_views)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("image_hash")) == cols.end()) {
+      sqliteConnector_.query("ALTER TABLE mapd_frontend_views ADD image_hash text");
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("update_time")) == cols.end()) {
+      sqliteConnector_.query("ALTER TABLE mapd_frontend_views ADD update_time timestamp");
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void Catalog::buildMaps() {
   string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
@@ -272,7 +293,8 @@ void Catalog::buildMaps() {
     td->fragmenter = nullptr;
   }
 
-  string frontendViewQuery("SELECT viewid, view_state, name FROM mapd_frontend_views");
+  updateFrontendViewSchema();
+  string frontendViewQuery("SELECT viewid, view_state, name, image_hash, update_time FROM mapd_frontend_views");
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -280,6 +302,8 @@ void Catalog::buildMaps() {
     vd->viewId = sqliteConnector_.getData<int>(r, 0);
     vd->viewState = sqliteConnector_.getData<string>(r, 1);
     vd->viewName = sqliteConnector_.getData<string>(r, 2);
+    vd->imageHash = sqliteConnector_.getData<string>(r, 3);
+    vd->updateTime = sqliteConnector_.getData<string>(r, 4);
     frontendViewDescriptorMap_[vd->viewName] = vd;
     frontendViewDescriptorMapById_[vd->viewId] = vd;
   }
@@ -605,15 +629,16 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
     // TODO(andrew): this should be an upsert
     sqliteConnector_.query("SELECT viewid FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
     if (sqliteConnector_.getNumRows() > 0) {
-      sqliteConnector_.query("UPDATE mapd_frontend_views SET view_state = '" + vd.viewState + "' where name = '" +
-                             vd.viewName + "'");
+      sqliteConnector_.query("UPDATE mapd_frontend_views SET view_state = '" + vd.viewState + "', image_hash = '" +
+                             vd.imageHash + "', update_time = datetime('now') where name = '" + vd.viewName + "'");
     } else {
-      sqliteConnector_.query("INSERT INTO mapd_frontend_views (name, view_state) VALUES ('" + vd.viewName + "', '" +
-                             vd.viewState + "')");
+      sqliteConnector_.query("INSERT INTO mapd_frontend_views (name, view_state, image_hash, update_time) VALUES ('" +
+                             vd.viewName + "', '" + vd.viewState + "', '" + vd.imageHash + "', datetime('now'))");
     }
     // now get the auto generated viewid
-    sqliteConnector_.query("SELECT viewid FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
+    sqliteConnector_.query("SELECT viewid, update_time FROM mapd_frontend_views WHERE name = '" + vd.viewName + "'");
     vd.viewId = sqliteConnector_.getData<int>(0, 0);
+    vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;

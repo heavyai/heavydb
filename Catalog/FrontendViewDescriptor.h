@@ -15,6 +15,8 @@ struct FrontendViewDescriptor {
   int32_t viewId;       /**< viewId starts at 0 for valid views. */
   std::string viewName; /**< viewName is the name of the view view -must be unique */
   std::string viewState;
+  std::string imageHash;
+  std::string updateTime;
   int32_t userId;
 };
 

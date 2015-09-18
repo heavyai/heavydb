@@ -180,6 +180,7 @@ class Catalog {
   const DictDescriptor* getMetadataForDict(int dictId) const;
 
  protected:
+  void updateFrontendViewSchema();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,

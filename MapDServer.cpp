@@ -464,7 +464,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_frontend_view(std::string& _return, const TSessionId session, const std::string& view_name) {
+  void get_frontend_view(TFrontendView& _return, const TSessionId session, const std::string& view_name) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     auto vd = cat.getMetadataForFrontendView(view_name);
@@ -474,7 +474,9 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    _return.append(vd->viewState);
+    _return.view_state = vd->viewState;
+    _return.image_hash = vd->imageHash;
+    _return.update_time = vd->updateTime;
   }
 
   void get_tables(std::vector<std::string>& table_names, const TSessionId session) {
@@ -511,12 +513,16 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void get_frontend_views(std::vector<std::string>& view_names, const TSessionId session) {
+  void get_frontend_views(std::vector<TFrontendView>& view_names, const TSessionId session) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     const auto views = cat.getAllFrontendViewMetadata();
     for (const auto vd : views) {
-      view_names.push_back(vd->viewName);
+      TFrontendView fv;
+      fv.view_name = vd->viewName;
+      fv.image_hash = vd->imageHash;
+      fv.update_time = vd->updateTime;
+      view_names.push_back(fv);
     }
   }
 
@@ -811,12 +817,16 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void create_frontend_view(const TSessionId session, const std::string& view_name, const std::string& view_state) {
+  void create_frontend_view(const TSessionId session,
+                            const std::string& view_name,
+                            const std::string& view_state,
+                            const std::string& image_hash) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     FrontendViewDescriptor vd;
     vd.viewName = view_name;
     vd.viewState = view_state;
+    vd.imageHash = image_hash;
 
     cat.createFrontendView(vd);
   }
