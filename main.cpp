@@ -334,8 +334,8 @@ int main(int argc, char* argv[]) {
             }
             auto executor = Executor::getExecutor(
                 plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
-            ResultRows results({}, nullptr, nullptr);
-            ResultRows results_cpu({}, nullptr, nullptr);
+            ResultRows results({}, nullptr, nullptr, ExecutorDeviceType::CPU);
+            ResultRows results_cpu({}, nullptr, nullptr, ExecutorDeviceType::CPU);
             const NVVMBackend nvvm_backend{use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA};
             {
               auto ms = measure<>::execution([&]() {
@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
               }
             }
             if (cat->get_dataMgr().gpusPresent() && plan->get_stmt_type() == kSELECT) {
-              ResultRows results_gpu({}, nullptr, nullptr);
+              ResultRows results_gpu({}, nullptr, nullptr, ExecutorDeviceType::GPU);
               {
                 auto ms = measure<>::execution([&]() {
                   results_gpu = executor->execute(

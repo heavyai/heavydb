@@ -27,6 +27,7 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
       row_set_mem_owner_(row_set_mem_owner),
       group_by_buffer_(nullptr),
       groups_buffer_entry_count_(groups_buffer_entry_count),
+      group_by_buffer_idx_(0),
       min_val_(0),
       warp_count_(0),
       output_columnar_(output_columnar),
@@ -728,7 +729,7 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
   CHECK_GE(row_idx, 0);
   CHECK_GE(col_idx, 0);
   const auto& agg_info = targets_[col_idx];
-  if (in_place_) {
+  if (in_place_ || group_by_buffer_) {
     moveToBegin();
     for (size_t i = 0; i < row_idx; ++i) {
       auto crt_row = getNextRow(translate_strings, decimal_to_double);
@@ -758,10 +759,10 @@ std::vector<TargetValue> ResultRows::getNextRow(const bool translate_strings, co
     crt_row_buff_idx_ = 1;
     return {explanation_};
   }
-  if (in_place_) {
-    std::vector<TargetValue> row;
+  if (in_place_ || group_by_buffer_) {
     if (!fetch_started_) {
       for (size_t i = 0; i < drop_first_; ++i) {
+        std::vector<TargetValue> row;
         if (!fetchLazyOrBuildRow(row, {}, {}, translate_strings, decimal_to_double, false)) {
           return {};
         }
@@ -771,6 +772,7 @@ std::vector<TargetValue> ResultRows::getNextRow(const bool translate_strings, co
     if (keep_first_ && crt_row_idx_ >= drop_first_ + keep_first_) {
       return {};
     }
+    std::vector<TargetValue> row;
     fetchLazyOrBuildRow(row, {}, {}, translate_strings, decimal_to_double, false);
     return row;
   } else {
@@ -793,6 +795,79 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                                      const bool translate_strings,
                                      const bool decimal_to_double,
                                      const bool fetch_lazy) const {
+  if (group_by_buffer_) {
+    while (group_by_buffer_idx_ < static_cast<size_t>(groups_buffer_entry_count_)) {
+      const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
+      CHECK(!output_columnar_ || warp_count == 1);
+      const size_t agg_col_count{targets_.size()};
+      std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
+      std::vector<int64_t> agg_vals(agg_col_count, 0);
+      memset(&partial_agg_vals[0], 0, agg_col_count * sizeof(partial_agg_vals[0]));
+      memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
+      bool discard_row = true;
+      size_t group_by_buffer_base_idx{output_columnar_ ? group_by_buffer_idx_
+                                                       : warp_count * group_by_buffer_idx_ * agg_col_count};
+      for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
+        bool discard_partial_result = true;
+        for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
+          const auto& agg_info = targets_[target_idx];
+          CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
+          auto partial_bin_val = partial_agg_vals[target_idx] =
+              group_by_buffer_[output_columnar_ ? group_by_buffer_base_idx + target_idx * groups_buffer_entry_count_
+                                                : group_by_buffer_base_idx + target_idx];
+          if (agg_info.is_distinct) {
+            CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
+            partial_bin_val = partial_agg_vals[target_idx] =
+                bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
+          }
+          if (agg_info.is_agg && partial_bin_val) {
+            discard_partial_result = false;
+          }
+        }
+        group_by_buffer_base_idx += agg_col_count;
+        if (discard_partial_result) {
+          continue;
+        }
+        discard_row = false;
+        for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
+          const auto& agg_info = targets_[target_idx];
+          auto partial_bin_val = partial_agg_vals[target_idx];
+          if (agg_info.is_agg) {
+            CHECK_EQ(kCOUNT, agg_info.agg_kind);
+            agg_vals[target_idx] += partial_bin_val;
+          } else {
+            if (agg_vals[target_idx]) {
+              CHECK_EQ(agg_vals[target_idx], partial_bin_val);
+            } else {
+              agg_vals[target_idx] = partial_bin_val;
+            }
+          }
+        }
+      }
+      if (discard_row) {
+        ++group_by_buffer_idx_;
+        continue;
+      }
+      for (size_t i = 0; i < agg_vals.size(); ++i) {
+        const auto& agg_info = targets_[i];
+        if (agg_info.is_distinct) {
+          row.emplace_back(agg_vals[i]);
+        } else {
+          row.push_back(result_rows_get_impl(InternalTargetValue(agg_vals[i]),
+                                             i,
+                                             targets_[i],
+                                             decimal_to_double,
+                                             translate_strings,
+                                             executor_,
+                                             row_set_mem_owner_));
+        }
+      }
+      ++crt_row_idx_;
+      ++group_by_buffer_idx_;
+      return true;
+    }
+    return false;
+  }
   while (in_place_buff_idx_ < in_place_group_by_buffers_.size()) {
     auto group_by_buffer = in_place_group_by_buffers_[in_place_buff_idx_];
     const auto group_entry_count = in_place_groups_by_buffers_entry_count_[in_place_buff_idx_];
@@ -1440,13 +1515,14 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
         return ResultRows(targets,
                           executor_,
                           row_set_mem_owner_,
+                          device_type_,
                           group_by_buffer,
                           groups_buffer_entry_count,
                           query_mem_desc_.min_val,
                           warp_count);
       }
       // Can't do the fast reduction in auto mode for interleaved bins, warp count isn't the same
-      ResultRows results(targets, executor_, row_set_mem_owner_);
+      ResultRows results(targets, executor_, row_set_mem_owner_, ExecutorDeviceType::CPU);
       results.addKeylessGroupByBuffer(
           group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count, output_columnar_);
       return results;

@@ -291,13 +291,13 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
         return ResultRows("No explanation available.");
       }
       executeSimpleInsert(root_plan);
-      return ResultRows({}, nullptr, nullptr);
+      return ResultRows({}, nullptr, nullptr, ExecutorDeviceType::CPU);
     }
     default:
       CHECK(false);
   }
   CHECK(false);
-  return ResultRows({}, nullptr, {});
+  return ResultRows({}, nullptr, {}, ExecutorDeviceType::CPU);
 }
 
 StringDictionary* Executor::getStringDictionary(const int dict_id_in,
@@ -1860,7 +1860,7 @@ ResultRows Executor::reduceMultiDeviceResults(
     const QueryMemoryDescriptor& query_mem_desc,
     const bool output_columnar) const {
   if (results_per_device.empty()) {
-    return ResultRows({}, nullptr, nullptr);
+    return ResultRows({}, nullptr, nullptr, ExecutorDeviceType::CPU);
   }
 
   auto reduced_results = results_per_device.front().first;
@@ -2040,7 +2040,7 @@ std::vector<Executor::AggInfo> get_agg_name_and_exprs(const Planner::Plan* plan)
 
 ResultRows results_union(std::vector<std::pair<ResultRows, std::vector<size_t>>>& results_per_device) {
   if (results_per_device.empty()) {
-    return ResultRows({}, nullptr, nullptr);
+    return ResultRows({}, nullptr, nullptr, ExecutorDeviceType::CPU);
   }
   typedef std::pair<ResultRows, std::vector<size_t>> IndexedResultRows;
   std::sort(results_per_device.begin(),
@@ -2091,7 +2091,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
     return result_rows;
   }
   if (*error_code) {
-    return ResultRows({}, nullptr, nullptr);
+    return ResultRows({}, nullptr, nullptr, ExecutorDeviceType::CPU);
   }
   const auto& targets = result_plan->get_targetlist();
   CHECK(!targets.empty());
@@ -2214,6 +2214,15 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         just_explain);
   if (just_explain) {
     return rows_to_sort;
+  }
+  if (rows_to_sort.query_mem_desc_.keyless_hash) {
+    rows_to_sort.addKeylessGroupByBuffer(rows_to_sort.group_by_buffer_,
+                                         rows_to_sort.groups_buffer_entry_count_,
+                                         rows_to_sort.min_val_,
+                                         rows_to_sort.warp_count_,
+                                         rows_to_sort.output_columnar_);
+    rows_to_sort.in_place_ = false;
+    rows_to_sort.group_by_buffer_ = nullptr;
   }
   if (rows_to_sort.query_mem_desc_.sortOnGpu()) {
     const int device_id{0};
@@ -2683,13 +2692,6 @@ ResultRows Executor::collectAllDeviceResults(
   CHECK_EQ(reduced_results.in_place_group_by_buffers_.size(),
            reduced_results.in_place_groups_by_buffers_entry_count_.size());
   reduced_results.query_mem_desc_ = query_mem_desc;  // TODO(alex): remove
-  if (reduced_results.group_by_buffer_ && !reduced_results.in_place_) {
-    reduced_results.addKeylessGroupByBuffer(reduced_results.group_by_buffer_,
-                                            reduced_results.groups_buffer_entry_count_,
-                                            reduced_results.min_val_,
-                                            reduced_results.warp_count_,
-                                            output_columnar);
-  }
   return reduced_results;
 }
 
@@ -2869,7 +2871,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
       return ERR_OUT_OF_GPU_MEM;
     }
   }
-  results = ResultRows(target_exprs, this, query_exe_context->row_set_mem_owner_);
+  results = ResultRows(target_exprs, this, query_exe_context->row_set_mem_owner_, device_type);
   results.beginRow();
   size_t out_vec_idx = 0;
   for (const auto target_expr : target_exprs) {

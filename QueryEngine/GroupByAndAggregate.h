@@ -499,6 +499,7 @@ class ResultRows {
   ResultRows(const std::vector<Analyzer::Expr*>& targets,
              const Executor* executor,
              const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+             const ExecutorDeviceType device_type,
              int64_t* group_by_buffer = nullptr,
              const int32_t groups_buffer_entry_count = 0,
              const int64_t min_val = 0,
@@ -508,11 +509,12 @@ class ResultRows {
         row_set_mem_owner_(row_set_mem_owner),
         group_by_buffer_(group_by_buffer),
         groups_buffer_entry_count_(groups_buffer_entry_count),
+        group_by_buffer_idx_(0),
         min_val_(min_val),
         warp_count_(warp_count),
         output_columnar_(false),
         in_place_(false),
-        device_type_(ExecutorDeviceType::Hybrid),
+        device_type_(device_type),
         device_id_(-1),
         crt_row_idx_(0),
         crt_row_buff_idx_(0),
@@ -539,6 +541,7 @@ class ResultRows {
 
   explicit ResultRows(const std::string& explanation)
       : query_mem_desc_{},
+        group_by_buffer_idx_(0),
         output_columnar_(false),
         in_place_(false),
         device_type_(ExecutorDeviceType::Hybrid),
@@ -556,6 +559,7 @@ class ResultRows {
     crt_row_idx_ = 0;
     crt_row_buff_idx_ = 0;
     in_place_buff_idx_ = 0;
+    group_by_buffer_idx_ = 0;
     fetch_started_ = false;
   }
   void beginRow() { target_values_.beginRow(row_set_mem_owner_.get()); }
@@ -609,7 +613,7 @@ class ResultRows {
 
   void keepFirstN(const size_t n) {
     CHECK(n);
-    if (in_place_) {
+    if (in_place_ || group_by_buffer_) {
       keep_first_ = n;
       return;
     }
@@ -620,7 +624,7 @@ class ResultRows {
   }
 
   void dropFirstN(const size_t n) {
-    if (in_place_) {
+    if (in_place_ || group_by_buffer_) {
       drop_first_ = n;
       return;
     }
@@ -631,7 +635,7 @@ class ResultRows {
   }
 
   size_t rowCount() const {
-    if (in_place_) {
+    if (in_place_ || group_by_buffer_) {
       moveToBegin();
       size_t row_count{0};
       while (true) {
@@ -653,7 +657,7 @@ class ResultRows {
     if (in_place_) {
       return in_place_group_by_buffers_.empty();
     }
-    return !rowCount() && !group_by_buffer_ && !just_explain_;
+    return !group_by_buffer_ && !just_explain_ && !rowCount();
   }
 
   static bool isNull(const SQLTypeInfo& ti, const InternalTargetValue& val);
@@ -723,6 +727,7 @@ class ResultRows {
 
   int64_t* group_by_buffer_;
   int32_t groups_buffer_entry_count_;
+  mutable size_t group_by_buffer_idx_;
   int64_t min_val_;
   int8_t warp_count_;
   bool output_columnar_;
