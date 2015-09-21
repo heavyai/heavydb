@@ -461,11 +461,22 @@ extern "C" __attribute__((noinline)) void write_back(int64_t* dest, int64_t* src
   write_back_nop(dest, src, sz);
 }
 
+extern "C" __attribute__((noinline)) void init_group_by_buffer_gpu(int64_t* groups_buffer,
+                                                                   const int64_t* init_vals,
+                                                                   const int32_t groups_buffer_entry_count,
+                                                                   const int32_t key_qw_count,
+                                                                   const int32_t agg_col_count) {
+  // the body is not really needed, just make sure the call is not optimized away
+  assert(groups_buffer);
+}
+
 extern "C" __attribute__((noinline)) void init_group_by_buffer_impl(int64_t* groups_buffer,
                                                                     const int64_t* init_vals,
-                                                                    const int32_t groups_buffer_entry_count,
-                                                                    const int32_t key_qw_count,
-                                                                    const int32_t agg_col_count) {
+                                                                    const uint32_t groups_buffer_entry_count,
+                                                                    const uint32_t key_qw_count,
+                                                                    const uint32_t agg_col_count,
+                                                                    const bool keyless,
+                                                                    const int8_t warp_size) {
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
 }
