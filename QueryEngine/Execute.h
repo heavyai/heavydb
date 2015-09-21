@@ -24,6 +24,7 @@
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include <deque>
 #include "../Shared/measure.h"
 
@@ -340,7 +341,7 @@ class Executor {
   bool skipFragment(const Fragmenter_Namespace::FragmentInfo& frag_info,
                     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals);
 
-  typedef std::pair<std::string, std::string> CodeCacheKey;
+  typedef std::vector<std::string> CodeCacheKey;
   typedef std::vector<std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuCompilationContext>>>
       CodeCacheVal;
   std::vector<void*> getCodeFromCache(const CodeCacheKey&,
@@ -484,6 +485,7 @@ class Executor {
 
     llvm::Module* module_;
     llvm::Function* row_func_;
+    std::vector<llvm::Function*> helper_functions_;
     llvm::LLVMContext& context_;
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;

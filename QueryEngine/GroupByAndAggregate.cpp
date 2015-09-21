@@ -2473,6 +2473,7 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
       false);
   auto key_hash_func =
       llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "perfect_key_hash", executor_->cgen_state_->module_);
+  executor_->cgen_state_->helper_functions_.push_back(key_hash_func);
   key_hash_func->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::AlwaysInline);
   auto& key_buff_arg = key_hash_func->getArgumentList().front();
   llvm::Value* key_buff_lv = &key_buff_arg;

@@ -878,6 +878,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
   case_arg_types.push_back(case_llvm_type);
   auto ft = llvm::FunctionType::get(case_llvm_type, case_arg_types, false);
   auto case_func = llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "case_func", cgen_state_->module_);
+  cgen_state_->helper_functions_.push_back(case_func);
   const auto end_case = llvm::BasicBlock::Create(cgen_state_->context_, "end_case", case_func);
   size_t expr_idx = 0;
   auto& case_branch_exprs = case_func->getArgumentList();
@@ -3618,7 +3619,10 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
                                                    const bool hoist_literals,
                                                    const ExecutorOptLevel opt_level,
                                                    llvm::Module* module) {
-  const CodeCacheKey key{serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_)};
+  CodeCacheKey key{serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_)};
+  for (const auto helper : cgen_state_->helper_functions_) {
+    key.push_back(serialize_llvm_object(helper));
+  }
   auto cached_code = getCodeFromCache(key, cpu_code_cache_);
   if (!cached_code.empty()) {
     return cached_code;
@@ -3792,7 +3796,10 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                                                    const bool no_inline,
                                                    const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
   CHECK(cuda_mgr);
-  const CodeCacheKey key{serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_)};
+  CodeCacheKey key{serialize_llvm_object(query_func), serialize_llvm_object(cgen_state_->row_func_)};
+  for (const auto helper : cgen_state_->helper_functions_) {
+    key.push_back(serialize_llvm_object(helper));
+  }
   auto cached_code = getCodeFromCache(key, gpu_code_cache_);
   if (!cached_code.empty()) {
     return cached_code;
