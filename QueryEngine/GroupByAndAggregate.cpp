@@ -2436,7 +2436,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
       auto perfect_hash_func =
           query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash ? codegenPerfectHashFunction() : nullptr;
       if (perfect_hash_func) {
-        auto hash_lv = LL_BUILDER.CreateCall(perfect_hash_func, std::vector<llvm::Value*>{group_key, key_size_lv});
+        auto hash_lv = LL_BUILDER.CreateCall(perfect_hash_func, std::vector<llvm::Value*>{group_key});
         return emitCall("get_matching_group_value_perfect_hash",
                         {groups_buffer,
                          hash_lv,
@@ -2469,7 +2469,7 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   CHECK_GT(groupby_exprs.size(), 1);
   auto ft = llvm::FunctionType::get(
       get_int_type(32, LL_CONTEXT),
-      std::vector<llvm::Type*>{llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0), get_int_type(32, LL_CONTEXT)},
+      std::vector<llvm::Type*>{llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)},
       false);
   auto key_hash_func =
       llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "perfect_key_hash", executor_->cgen_state_->module_);
