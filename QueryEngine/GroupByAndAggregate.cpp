@@ -2467,10 +2467,9 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   CHECK(agg_plan);
   const auto& groupby_exprs = agg_plan->get_groupby_list();
   CHECK_GT(groupby_exprs.size(), 1);
-  auto ft = llvm::FunctionType::get(
-      get_int_type(32, LL_CONTEXT),
-      std::vector<llvm::Type*>{llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)},
-      false);
+  auto ft = llvm::FunctionType::get(get_int_type(32, LL_CONTEXT),
+                                    std::vector<llvm::Type*>{llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)},
+                                    false);
   auto key_hash_func =
       llvm::Function::Create(ft, llvm::Function::ExternalLinkage, "perfect_key_hash", executor_->cgen_state_->module_);
   executor_->cgen_state_->helper_functions_.push_back(key_hash_func);
