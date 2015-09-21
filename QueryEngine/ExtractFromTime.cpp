@@ -38,10 +38,71 @@
 #define DAYS_IN_FEBRUARY 28
 
 extern "C" __attribute__((noinline))
+
 #ifdef __CUDACC__
 __device__
 #endif
-    tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
+  int extract_hour(const time_t* tim_p) {
+    long days, rem;
+    const time_t lcltime = *tim_p;
+    days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+    rem = ((long)lcltime) % SECSPERDAY;
+    if (rem < 0) {
+      rem += SECSPERDAY;
+      --days;
+    }
+    return (int)(rem / SECSPERHOUR);
+  }
+
+#ifdef __CUDACC__
+  __device__
+#endif
+  int extract_minute(const time_t* tim_p) {
+    long days, rem;
+    const time_t lcltime = *tim_p;
+    days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+    rem = ((long)lcltime) % SECSPERDAY;
+    if (rem < 0) {
+      rem += SECSPERDAY;
+      --days;
+    }
+    rem %= SECSPERHOUR;
+    return (int)(rem / SECSPERMIN);
+  }
+
+#ifdef __CUDACC__
+  __device__
+#endif
+  int extract_second(const time_t* tim_p) {
+    const time_t lcltime = *tim_p;
+    return (int) ((long)lcltime % SECSPERMIN);
+  }
+
+#ifdef __CUDACC__
+  __device__
+#endif
+  int extract_dow(const time_t* tim_p) {
+    long days, rem;
+    int weekday;
+    const time_t lcltime = *tim_p;
+    days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+    rem = ((long)lcltime) % SECSPERDAY;
+    if (rem < 0) {
+      rem += SECSPERDAY;
+      --days;
+    }
+
+    if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
+      weekday += DAYSPERWEEK;
+    return weekday;
+  }
+
+
+
+#ifdef __CUDACC__
+__device__
+#endif
+  tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
   const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
                                              {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   long days, rem;
@@ -137,9 +198,22 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-    int64_t ExtractFromTime(ExtractField field, time_t timeval) {
-  if (field == kEPOCH)
-    return timeval;
+int64_t ExtractFromTime(ExtractField field, time_t timeval) {
+
+  // We have fast paths for the 5 fields below - do not need to do full gmtime
+  switch (field) {
+    case kEPOCH:
+      return timeval;
+    case kHOUR:
+      return extract_hour(&timeval);
+    case kMINUTE:
+      return extract_minute(&timeval);
+    case kSECOND:
+      return extract_second(&timeval);
+    case kDOW:
+      return extract_dow(&timeval);
+  }
+
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
   switch (field) {
@@ -149,14 +223,6 @@ __device__
       return tm_struct.tm_mon + 1;
     case kDAY:
       return tm_struct.tm_mday;
-    case kHOUR:
-      return tm_struct.tm_hour;
-    case kMINUTE:
-      return tm_struct.tm_min;
-    case kSECOND:
-      return tm_struct.tm_sec;
-    case kDOW:
-      return tm_struct.tm_wday;
     case kDOY:
       return tm_struct.tm_yday + 1;
     default:
