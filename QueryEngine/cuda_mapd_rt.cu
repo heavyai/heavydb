@@ -39,20 +39,6 @@ extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t
 
 #define EMPTY_KEY 9223372036854775807L
 
-extern "C" __device__ void init_group_by_buffer_impl(int64_t* groups_buffer,
-                                                     const int64_t* init_vals,
-                                                     const uint32_t groups_buffer_entry_count,
-                                                     const uint32_t key_qw_count,
-                                                     const uint32_t agg_col_count) {
-  const int32_t start = threadIdx.x;
-  const int32_t step = blockDim.x;
-  uint32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
-  for (uint32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
-    groups_buffer[i] = EMPTY_KEY;
-  }
-  __syncthreads();
-}
-
 extern "C" __device__ void init_group_by_buffer_gpu(int64_t* groups_buffer,
                                                     const int64_t* init_vals,
                                                     const uint32_t groups_buffer_entry_count,
@@ -85,14 +71,12 @@ extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
                                                         const uint32_t h,
                                                         const int64_t* key,
                                                         const uint32_t key_qw_count,
-                                                        const uint32_t agg_col_count,
-                                                        const int64_t* init_vals) {
+                                                        const uint32_t agg_col_count) {
   uint32_t off = h * (key_qw_count + agg_col_count);
   {
     const uint64_t old = atomicCAS(reinterpret_cast<unsigned long long*>(groups_buffer + off), EMPTY_KEY, *key);
     if (EMPTY_KEY == old) {
       memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
-      memcpy(groups_buffer + off + key_qw_count, init_vals, agg_col_count * sizeof(*init_vals));
     }
   }
   __syncthreads();

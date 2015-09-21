@@ -1,5 +1,5 @@
 /*
- * @file    MapDServer.h
+ * @file    GpuSortImpl.h
  * @author  Alex Suhan <alex@mapd.com>
  *
  * Copyright (c) 2015 MapD Technologies, Inc.  All rights reserved.

@@ -32,8 +32,7 @@ extern "C" int64_t* get_group_value(int64_t* groups_buffer,
                                     const uint32_t groups_buffer_entry_count,
                                     const int64_t* key,
                                     const uint32_t key_qw_count,
-                                    const uint32_t agg_col_count,
-                                    const int64_t* init_val = nullptr);
+                                    const uint32_t agg_col_count);
 
 extern "C" int64_t* get_group_value_fast(int64_t* groups_buffer,
                                          const int64_t key,
@@ -54,8 +53,7 @@ extern "C" int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                             const uint32_t small_groups_buffer_qw_count,
                                             const int64_t key,
                                             const int64_t min_key,
-                                            const uint32_t agg_col_count,
-                                            const int64_t* init_vals);
+                                            const uint32_t agg_col_count);
 
 // Regular fixed_width_*_decode are only available from the JIT,
 // we need to call them for lazy fetch columns -- create wrappers.

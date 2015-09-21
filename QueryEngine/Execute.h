@@ -305,6 +305,10 @@ class Executor {
                                 const bool serialize_llvm_ir,
                                 std::string& llvm_ir);
 
+  void bindInitGroupByBuffer(llvm::Function* query_func,
+                             const QueryMemoryDescriptor& query_mem_desc,
+                             const ExecutorDeviceType device_type);
+
   void nukeOldState(const bool allow_lazy_fetch);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,

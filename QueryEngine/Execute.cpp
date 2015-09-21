@@ -3145,32 +3145,6 @@ void bind_pos_placeholders(const std::string& pos_fn_name,
   }
 }
 
-void bind_init_group_by_buffer(llvm::Function* query_func,
-                               const QueryMemoryDescriptor& query_mem_desc,
-                               const ExecutorDeviceType device_type) {
-  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
-    if (!llvm::isa<llvm::CallInst>(*it)) {
-      continue;
-    }
-    auto& init_group_by_buffer_call = llvm::cast<llvm::CallInst>(*it);
-    std::vector<llvm::Value*> args;
-    for (size_t i = 0; i < init_group_by_buffer_call.getNumArgOperands(); ++i) {
-      args.push_back(init_group_by_buffer_call.getArgOperand(i));
-    }
-    if (std::string(init_group_by_buffer_call.getCalledFunction()->getName()) == "init_group_by_buffer") {
-      if (query_mem_desc.lazyInitGroups(device_type)) {
-        llvm::ReplaceInstWithInst(
-            &init_group_by_buffer_call,
-            llvm::CallInst::Create(query_func->getParent()->getFunction("init_group_by_buffer_impl"), args));
-      } else {
-        // init_group_by_buffer is meaningless if groups are initialized on host
-        init_group_by_buffer_call.eraseFromParent();
-      }
-      return;
-    }
-  }
-}
-
 std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
                                                      llvm::Function* query_func,
                                                      llvm::LLVMContext& context) {
@@ -3386,7 +3360,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
   if (is_group_by) {
-    bind_init_group_by_buffer(query_func, query_mem_desc, device_type);
+    bindInitGroupByBuffer(query_func, query_mem_desc, device_type);
   }
 
   std::vector<llvm::Value*> col_heads;
@@ -3546,6 +3520,36 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
       cgen_state_->getLiterals(),
       query_mem_desc,
       output_columnar};
+}
+
+void Executor::bindInitGroupByBuffer(llvm::Function* query_func,
+                                     const QueryMemoryDescriptor& query_mem_desc,
+                                     const ExecutorDeviceType device_type) {
+  for (auto it = llvm::inst_begin(query_func), e = llvm::inst_end(query_func); it != e; ++it) {
+    if (!llvm::isa<llvm::CallInst>(*it)) {
+      continue;
+    }
+    auto& init_group_by_buffer_call = llvm::cast<llvm::CallInst>(*it);
+    std::vector<llvm::Value*> args;
+    for (size_t i = 0; i < init_group_by_buffer_call.getNumArgOperands(); ++i) {
+      args.push_back(init_group_by_buffer_call.getArgOperand(i));
+    }
+    auto keyless_lv = llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), query_mem_desc.keyless_hash);
+    args.push_back(keyless_lv);
+    const int8_t warp_count = query_mem_desc.interleavedBins(device_type) ? warpSize() : 1;
+    args.push_back(ll_int<int8_t>(warp_count));
+    if (std::string(init_group_by_buffer_call.getCalledFunction()->getName()) == "init_group_by_buffer") {
+      if (query_mem_desc.lazyInitGroups(device_type)) {
+        llvm::ReplaceInstWithInst(
+            &init_group_by_buffer_call,
+            llvm::CallInst::Create(query_func->getParent()->getFunction("init_group_by_buffer_gpu"), args));
+      } else {
+        // init_group_by_buffer is meaningless if groups are initialized on host
+        init_group_by_buffer_call.eraseFromParent();
+      }
+      return;
+    }
+  }
 }
 
 namespace {
@@ -3716,11 +3720,11 @@ declare i64* @init_shared_mem(i64*, i32);
 declare i64* @init_shared_mem_nop(i64*, i32);
 declare void @write_back(i64*, i64*, i32);
 declare void @write_back_nop(i64*, i64*, i32);
-declare void @init_group_by_buffer_impl(i64*, i64*, i32, i32, i32);
-declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i64*);
+declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
+declare i64* @get_group_value(i64*, i32, i64*, i32, i32);
 declare i64* @get_group_value_fast(i64*, i64, i64, i32);
 declare i64* @get_columnar_group_value_fast(i64*, i64, i64);
-declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32, i64*);
+declare i64* @get_group_value_one_key(i64*, i32, i64*, i32, i64, i64, i32);
 declare void @agg_count_shared(i64*, i64);
 declare void @agg_count_skip_val_shared(i64*, i64, i64);
 declare void @agg_count_double_shared(i64*, double);
