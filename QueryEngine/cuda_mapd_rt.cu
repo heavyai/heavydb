@@ -37,35 +37,11 @@ extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t
   }
 }
 
-#define EMPTY_KEY 9223372036854775807L
+#define init_group_by_buffer_gpu_impl init_group_by_buffer_gpu
 
-extern "C" __device__ void init_group_by_buffer_gpu(int64_t* groups_buffer,
-                                                    const int64_t* init_vals,
-                                                    const uint32_t groups_buffer_entry_count,
-                                                    const uint32_t key_qw_count,
-                                                    const uint32_t agg_col_count,
-                                                    const bool keyless,
-                                                    const int8_t warp_size) {
-  const int32_t start = threadIdx.x;
-  const int32_t step = blockDim.x;
-  if (keyless) {
-    for (int32_t i = start; i < groups_buffer_entry_count * agg_col_count * static_cast<int32_t>(warp_size);
-         i += step) {
-      groups_buffer[i] = init_vals[i % agg_col_count];
-    }
-    __syncthreads();
-    return;
-  }
-  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + agg_col_count);
-  for (int32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
-    if (i % (key_qw_count + agg_col_count) < key_qw_count) {
-      groups_buffer[i] = EMPTY_KEY;
-    } else {
-      groups_buffer[i] = init_vals[(i - key_qw_count) % (key_qw_count + agg_col_count)];
-    }
-  }
-  __syncthreads();
-}
+#include "GpuInitGroups.cu"
+
+#undef init_group_by_buffer_gpu_impl
 
 extern "C" __device__ int64_t* get_matching_group_value(int64_t* groups_buffer,
                                                         const uint32_t h,

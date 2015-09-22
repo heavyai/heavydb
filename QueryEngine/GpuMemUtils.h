@@ -44,7 +44,8 @@ GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
                                            const unsigned block_size_x,
                                            const unsigned grid_size_x,
                                            const int device_id,
-                                           const bool prepend_index_buffer);
+                                           const bool prepend_index_buffer,
+                                           const bool always_init_group_by_on_host);
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const std::vector<int64_t*>& group_by_buffers,

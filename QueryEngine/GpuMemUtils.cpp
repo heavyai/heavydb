@@ -49,7 +49,8 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
                                                                 const unsigned grid_size_x,
                                                                 const int device_id,
                                                                 const bool small_buffers,
-                                                                const bool prepend_index_buffer) {
+                                                                const bool prepend_index_buffer,
+                                                                const bool always_init_group_by_on_host) {
   if (group_by_buffers.empty()) {
     return std::make_pair(0, 0);
   }
@@ -71,7 +72,7 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
 
   const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
 
-  if (!query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU)) {
+  if (always_init_group_by_on_host || !query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU)) {
     std::vector<int8_t> buff_to_gpu(mem_size);
     auto buff_to_gpu_ptr = &buff_to_gpu[0];
 
@@ -112,9 +113,17 @@ GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
                                            const unsigned block_size_x,
                                            const unsigned grid_size_x,
                                            const int device_id,
-                                           const bool prepend_index_buffer) {
-  auto dev_group_by_buffers = create_dev_group_by_buffers(
-      data_mgr, group_by_buffers, query_mem_desc, block_size_x, grid_size_x, device_id, false, prepend_index_buffer);
+                                           const bool prepend_index_buffer,
+                                           const bool always_init_group_by_on_host) {
+  auto dev_group_by_buffers = create_dev_group_by_buffers(data_mgr,
+                                                          group_by_buffers,
+                                                          query_mem_desc,
+                                                          block_size_x,
+                                                          grid_size_x,
+                                                          device_id,
+                                                          false,
+                                                          prepend_index_buffer,
+                                                          always_init_group_by_on_host);
   if (query_mem_desc.getSmallBufferSizeBytes()) {
     auto small_dev_group_by_buffers = create_dev_group_by_buffers(data_mgr,
                                                                   small_group_by_buffers,
@@ -123,7 +132,8 @@ GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
                                                                   grid_size_x,
                                                                   device_id,
                                                                   true,
-                                                                  prepend_index_buffer);
+                                                                  prepend_index_buffer,
+                                                                  always_init_group_by_on_host);
     return {dev_group_by_buffers, small_dev_group_by_buffers};
   }
   return GpuQueryMemory{dev_group_by_buffers};

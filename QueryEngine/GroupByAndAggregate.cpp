@@ -2,6 +2,7 @@
 
 #include "ExpressionRange.h"
 #include "GpuSort.h"
+#include "GpuInitGroups.h"
 
 #include "Execute.h"
 #include "QueryTemplateGenerator.h"
@@ -1648,7 +1649,38 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                        block_size_x,
                                                        grid_size_x,
                                                        device_id,
-                                                       can_sort_on_gpu);
+                                                       can_sort_on_gpu,
+                                                       false);
+      if (query_mem_desc_.lazyInitGroups(ExecutorDeviceType::GPU) &&
+          query_mem_desc_.hash_type != GroupByColRangeType::MultiCol) {
+        const size_t step{query_mem_desc_.threadsShareMemory() ? block_size_x : 1};
+        size_t groups_buffer_size{query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU)};
+        auto group_by_dev_buffer = gpu_query_mem.group_by_buffers.second;
+        const int8_t warp_count = query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU) ? executor_->warpSize() : 1;
+        for (size_t i = 0; i < group_by_buffers_.size(); i += step) {
+          if (output_columnar_) {
+            init_columnar_group_by_buffer_on_device(reinterpret_cast<int64_t*>(group_by_dev_buffer),
+                                                    reinterpret_cast<int64_t*>(init_agg_vals_dev_ptr),
+                                                    query_mem_desc_.entry_count,
+                                                    query_mem_desc_.group_col_widths.size(),
+                                                    query_mem_desc_.agg_col_widths.size(),
+                                                    query_mem_desc_.keyless_hash,
+                                                    block_size_x,
+                                                    grid_size_x);
+          } else {
+            init_group_by_buffer_on_device(reinterpret_cast<int64_t*>(group_by_dev_buffer),
+                                           reinterpret_cast<int64_t*>(init_agg_vals_dev_ptr),
+                                           query_mem_desc_.entry_count,
+                                           query_mem_desc_.group_col_widths.size(),
+                                           query_mem_desc_.agg_col_widths.size(),
+                                           query_mem_desc_.keyless_hash,
+                                           warp_count,
+                                           block_size_x,
+                                           grid_size_x);
+          }
+          group_by_dev_buffer += groups_buffer_size;
+        }
+      }
       if (hoist_literals) {
         void* kernel_params[] = {&multifrag_col_buffers_dev_ptr,
                                  &num_fragments_dev_ptr,
@@ -1957,6 +1989,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
       sort_on_gpu_hint && query_mem_desc_.canOutputColumnar() && !query_mem_desc_.keyless_hash;
   query_mem_desc_.is_sort_plan = sort_plan && !query_mem_desc_.sort_on_gpu_;
   output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) || query_mem_desc_.sortOnGpu();
+  query_mem_desc_.output_columnar = output_columnar_;
 }
 
 void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count,
@@ -2043,6 +2076,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                        false,
                        GroupByMemSharing::Private,
                        count_distinct_descriptors,
+                       false,
                        false};
     return;
   }
@@ -2070,6 +2104,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            col_range_info.has_nulls,
                            GroupByMemSharing::Shared,
                            count_distinct_descriptors,
+                           false,
                            false};
         return;
       } else {
@@ -2111,6 +2146,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            col_range_info.has_nulls,
                            GroupByMemSharing::Shared,
                            count_distinct_descriptors,
+                           false,
                            false};
         return;
       }
@@ -2129,6 +2165,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          false,
                          GroupByMemSharing::Shared,
                          count_distinct_descriptors,
+                         false,
                          false};
       return;
     }
@@ -2146,6 +2183,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          col_range_info.has_nulls,
                          GroupByMemSharing::Shared,
                          count_distinct_descriptors,
+                         false,
                          false};
       return;
     }
@@ -2219,7 +2257,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
-  return device_type == ExecutorDeviceType::GPU && hash_type == GroupByColRangeType::MultiCol;
+  return device_type == ExecutorDeviceType::GPU && !getSmallBufferSizeQuad();
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {

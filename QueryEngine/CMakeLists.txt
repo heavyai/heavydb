@@ -57,7 +57,7 @@ add_custom_command(
 
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
-add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o)
+add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o)
 target_link_libraries(QueryEngine CsvImport StringDictionary Utils)
 
 add_custom_command(
@@ -67,7 +67,7 @@ add_custom_command(
     ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu GroupByRuntime.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp
+    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
@@ -77,6 +77,12 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o
     COMMAND nvcc
     ARGS -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
+
+add_custom_command(
+    DEPENDS GpuInitGroups.cu
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
+    COMMAND nvcc
+    ARGS -DEXECUTOR_RT -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES})

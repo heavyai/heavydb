@@ -2238,6 +2238,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                                      rows_to_sort.executor_->blockSize(),
                                                      rows_to_sort.executor_->gridSize(),
                                                      device_id,
+                                                     true,
                                                      true);
     ScopedScratchBuffer scratch_buff(
         rows_to_sort.query_mem_desc_.entry_count * sizeof(int64_t), &cat.get_dataMgr(), device_id);
@@ -3536,10 +3537,13 @@ void Executor::bindInitGroupByBuffer(llvm::Function* query_func,
     }
     auto keyless_lv = llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), query_mem_desc.keyless_hash);
     args.push_back(keyless_lv);
-    const int8_t warp_count = query_mem_desc.interleavedBins(device_type) ? warpSize() : 1;
-    args.push_back(ll_int<int8_t>(warp_count));
+    if (!query_mem_desc.output_columnar) {
+      const int8_t warp_count = query_mem_desc.interleavedBins(device_type) ? warpSize() : 1;
+      args.push_back(ll_int<int8_t>(warp_count));
+    }
     if (std::string(init_group_by_buffer_call.getCalledFunction()->getName()) == "init_group_by_buffer") {
-      if (query_mem_desc.lazyInitGroups(device_type)) {
+      if (query_mem_desc.lazyInitGroups(device_type) && query_mem_desc.hash_type == GroupByColRangeType::MultiCol) {
+        CHECK(!query_mem_desc.output_columnar);
         llvm::ReplaceInstWithInst(
             &init_group_by_buffer_call,
             llvm::CallInst::Create(query_func->getParent()->getFunction("init_group_by_buffer_gpu"), args));
