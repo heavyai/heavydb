@@ -87,14 +87,6 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
 
 namespace {
 
-const ColumnDescriptor* get_column_descriptor(const int col_id,
-                                              const int table_id,
-                                              const Catalog_Namespace::Catalog& cat) {
-  const auto col_desc = cat.getMetadataForColumn(table_id, col_id);
-  CHECK(col_desc);
-  return col_desc;
-}
-
 int64_t get_scan_limit(const Planner::Plan* plan, const int64_t limit) {
   return dynamic_cast<const Planner::Scan*>(plan) && limit ? limit : 0;
 }
@@ -653,6 +645,13 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   // only generate the decoding code once; if a column has been previously
   // fetch in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
+  if (col_var->get_table_id() > 0) {
+    auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
+    if (cd->isVirtualCol) {
+      CHECK(cd->columnName == "rowid");
+      return {cgen_state_->ir_builder_.CreateAdd(posArg(), fragRowOff())};
+    }
+  }
   if (col_var->get_rte_idx() >= 0 && !is_nested_) {
     CHECK_GT(col_id, 0);
   } else {
@@ -732,10 +731,10 @@ std::pair<llvm::Value*, llvm::Value*> Executor::colByteStream(const int col_id,
   llvm::Value* pos_arg{nullptr};
   const int local_col_id = getLocalColumnId(col_id, fetch_column);
   for (auto& arg : in_arg_list) {
-    if (arg.getType()->isIntegerTy()) {
+    if (arg.getType()->isIntegerTy() && !pos_arg) {
       pos_arg = &arg;
       pos_idx = arg_idx;
-    } else if (pos_arg && arg_idx == pos_idx + 1 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
+    } else if (pos_arg && arg_idx == pos_idx + 2 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
       return std::make_pair(&arg, pos_arg);
     }
     ++arg_idx;
@@ -753,12 +752,23 @@ llvm::Value* Executor::posArg() const {
   CHECK(false);
 }
 
+llvm::Value* Executor::fragRowOff() const {
+  for (auto arg_it = cgen_state_->row_func_->arg_begin(); arg_it != cgen_state_->row_func_->arg_end(); ++arg_it) {
+    if (arg_it->getType()->isIntegerTy()) {
+      ++arg_it;
+      return arg_it;
+    }
+  }
+  CHECK(false);
+}
+
 namespace {
 
 llvm::Value* getLiteralBuffArg(llvm::Function* row_func) {
   auto arg_it = row_func->arg_begin();
   while (arg_it != row_func->arg_end()) {
     if (arg_it->getType()->isIntegerTy()) {
+      ++arg_it;
       ++arg_it;
       break;
     }
@@ -1669,6 +1679,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                             const std::vector<int8_t>& literal_buff,
                                             std::vector<std::vector<const int8_t*>> col_buffers,
                                             const std::vector<int64_t>& num_rows,
+                                            const std::vector<uint64_t>& frag_row_offsets,
                                             const int64_t scan_limit,
                                             const std::vector<int64_t>& init_agg_vals,
                                             std::vector<int64_t*> group_by_buffers,
@@ -1696,6 +1707,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               const uint32_t* num_fragments,
                               const int8_t* literals,
                               const int64_t* num_rows,
+                              const uint64_t* frag_row_offsets,
                               const int64_t* max_matched,
                               const int64_t* init_agg_value,
                               int64_t** out,
@@ -1707,6 +1719,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &num_fragments,
                                               &literal_buff[0],
                                               &num_rows[0],
+                                              &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
                                               &out_vec[0],
@@ -1717,6 +1730,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &num_fragments,
                                               &literal_buff[0],
                                               &num_rows[0],
+                                              &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
                                               &group_by_buffers[0],
@@ -1727,6 +1741,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
     typedef void (*agg_query)(const int8_t*** col_buffers,
                               const uint32_t* num_fragments,
                               const int64_t* num_rows,
+                              const uint64_t* frag_row_offsets,
                               const int64_t* max_matched,
                               const int64_t* init_agg_value,
                               int64_t** out,
@@ -1737,6 +1752,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &num_rows[0],
+                                              &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
                                               &out_vec[0],
@@ -1747,6 +1763,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &num_rows[0],
+                                              &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
                                               &group_by_buffers[0],
@@ -2178,6 +2195,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                         hoist_buf,
                         multi_frag_col_buffers,
                         {static_cast<int64_t>(result_columns.size())},
+                        {0},
                         0,
                         init_agg_vals,
                         query_exe_context->group_by_buffers_,
@@ -2353,12 +2371,21 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
 
   CompilationResult compilation_result_cpu;
   std::string llvm_ir_cpu;
+  std::list<int> scan_cols;
+  for (const int scan_col_id : scan_plan->get_col_list()) {
+    auto cd = get_column_descriptor(scan_col_id, scan_plan->get_table_id(), cat);
+    if (cd->isVirtualCol) {
+      CHECK_EQ("rowid", cd->columnName);
+    } else {
+      scan_cols.push_back(scan_col_id);
+    }
+  }
   auto compile_on_cpu = [&]() {
     try {
       compilation_result_cpu = compilePlan(plan,
                                            query_info,
                                            agg_infos,
-                                           scan_plan->get_col_list(),
+                                           scan_cols,
                                            simple_quals,
                                            scan_plan->get_quals(),
                                            hoist_literals,
@@ -2379,7 +2406,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       compilation_result_cpu = compilePlan(plan,
                                            query_info,
                                            agg_infos,
-                                           scan_plan->get_col_list(),
+                                           scan_cols,
                                            simple_quals,
                                            scan_plan->get_quals(),
                                            hoist_literals,
@@ -2411,7 +2438,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       compilation_result_gpu = compilePlan(plan,
                                            query_info,
                                            agg_infos,
-                                           scan_plan->get_col_list(),
+                                           scan_cols,
                                            simple_quals,
                                            scan_plan->get_quals(),
                                            hoist_literals,
@@ -2432,7 +2459,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       compilation_result_gpu = compilePlan(plan,
                                            query_info,
                                            agg_infos,
-                                           scan_plan->get_col_list(),
+                                           scan_cols,
                                            simple_quals,
                                            scan_plan->get_quals(),
                                            hoist_literals,
@@ -2475,7 +2502,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     plan_state_->target_exprs_.push_back(target_expr);
   }
   const auto current_dbid = cat.get_currentDB().dbId;
-  const auto& col_global_ids = scan_plan->get_col_list();
+  const auto& col_global_ids = scan_cols;
   std::vector<std::pair<ResultRows, std::vector<size_t>>> all_fragment_results;
   all_fragment_results.reserve(fragments.size());
 
@@ -2500,6 +2527,10 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                        : static_cast<size_t>(available_cpus)};
   std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts(context_count);
   std::vector<std::mutex> query_context_mutexes(context_count);
+  std::vector<uint64_t> all_frag_row_offsets(fragments.size());
+  for (size_t i = 1; i < fragments.size(); ++i) {
+    all_frag_row_offsets[i] = all_frag_row_offsets[i - 1] + fragments[i - 1].numTuples;
+  }
   auto dispatch = [this,
                    plan,
                    sort_plan,
@@ -2518,6 +2549,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                    &cat,
                    &col_global_ids,
                    &fragments,
+                   &all_frag_row_offsets,
                    &groupby_exprs,
                    &query_context_mutexes,
                    &query_contexts,
@@ -2530,12 +2562,14 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     const auto memory_level =
         chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
     std::vector<int64_t> num_rows;
+    std::vector<uint64_t> dev_frag_row_offsets;
     for (const auto frag_id : frag_ids) {
       const auto& fragment = fragments[frag_id];
       if (device_type != ExecutorDeviceType::Hybrid) {
         chosen_device_id = fragment.deviceIds[static_cast<int>(memory_level)];
       }
       num_rows.push_back(fragment.numTuples);
+      dev_frag_row_offsets.push_back(all_frag_row_offsets[frag_id]);
     }
     CHECK_GE(chosen_device_id, 0);
     CHECK_LT(chosen_device_id, max_gpu_count);
@@ -2600,6 +2634,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                       col_buffers,
                                       query_exe_context,
                                       num_rows,
+                                      dev_frag_row_offsets,
                                       &cat.get_dataMgr(),
                                       chosen_device_id);
     } else {
@@ -2612,6 +2647,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                    col_buffers,
                                    query_exe_context,
                                    num_rows,
+                                   dev_frag_row_offsets,
                                    &cat.get_dataMgr(),
                                    chosen_device_id,
                                    scan_limit,
@@ -2783,13 +2819,16 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const int col_id : col_global_ids) {
       const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id);
-      CHECK(!cd->isVirtualCol);
-      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
-      CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-      ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id, fragment.fragmentId};
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
       CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+      if (cd->isVirtualCol) {
+        CHECK_EQ("rowid", cd->columnName);
+        continue;
+      }
+      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+      CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+      ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id, fragment.fragmentId};
       auto memory_level_for_column = memory_level;
       if (plan_state_->columns_to_fetch_.find(col_id) == plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
@@ -2838,6 +2877,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             std::vector<std::vector<const int8_t*>>& col_buffers,
                                             const QueryExecutionContext* query_exe_context,
                                             const std::vector<int64_t>& num_rows,
+                                            const std::vector<uint64_t>& dev_frag_row_offsets,
                                             Data_Namespace::DataMgr* data_mgr,
                                             const int device_id) {
   int32_t error_code{0};
@@ -2849,6 +2889,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                     hoist_buf,
                                     col_buffers,
                                     num_rows,
+                                    dev_frag_row_offsets,
                                     0,
                                     query_exe_context->init_agg_vals_,
                                     {},
@@ -2861,6 +2902,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  hoist_buf,
                                                  col_buffers,
                                                  num_rows,
+                                                 dev_frag_row_offsets,
                                                  0,
                                                  query_exe_context->init_agg_vals_,
                                                  data_mgr,
@@ -2912,6 +2954,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          std::vector<std::vector<const int8_t*>>& col_buffers,
                                          const QueryExecutionContext* query_exe_context,
                                          const std::vector<int64_t>& num_rows,
+                                         const std::vector<uint64_t>& dev_frag_row_offsets,
                                          Data_Namespace::DataMgr* data_mgr,
                                          const int device_id,
                                          const int64_t scan_limit,
@@ -2929,6 +2972,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                           hoist_buf,
                           col_buffers,
                           num_rows,
+                          dev_frag_row_offsets,
                           scan_limit,
                           query_exe_context->init_agg_vals_,
                           query_exe_context->group_by_buffers_,
@@ -2941,6 +2985,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        hoist_buf,
                                        col_buffers,
                                        num_rows,
+                                       dev_frag_row_offsets,
                                        scan_limit,
                                        query_exe_context->init_agg_vals_,
                                        data_mgr,
@@ -3188,6 +3233,9 @@ void set_row_func_argnames(llvm::Function* row_func,
   arg_it->setName("pos");
   ++arg_it;
 
+  arg_it->setName("frag_row_off");
+  ++arg_it;
+
   if (hoist_literals) {
     arg_it->setName("literals");
     ++arg_it;
@@ -3225,6 +3273,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
   // position argument
+  row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+
+  // fragment row offset argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
 
   // literals buffer argument
@@ -3298,7 +3349,7 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
 
 void Executor::nukeOldState(const bool allow_lazy_fetch) {
   cgen_state_.reset(new CgenState());
-  plan_state_.reset(new PlanState(allow_lazy_fetch));
+  plan_state_.reset(new PlanState(allow_lazy_fetch, this));
 }
 
 Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
@@ -3868,6 +3919,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                       i64*,
                       i64*,
                       i64*,
+                      i64*,
                       i64**,
                       i64**,
                       i32*)* @%s, metadata !"kernel", i32 1}
@@ -3877,6 +3929,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
 !nvvm.annotations = !{!0}
 !0 = metadata !{void (i8***,
                       i32*,
+                      i64*,
                       i64*,
                       i64*,
                       i64*,

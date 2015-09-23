@@ -70,6 +70,18 @@ inline uint32_t log2_bytes(const uint32_t bytes) {
   }
 }
 
+namespace {
+
+const ColumnDescriptor* get_column_descriptor(const int col_id,
+                                              const int table_id,
+                                              const Catalog_Namespace::Catalog& cat) {
+  const auto col_desc = cat.getMetadataForColumn(table_id, col_id);
+  CHECK(col_desc);
+  return col_desc;
+}
+
+}  // namespace
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -161,6 +173,7 @@ class Executor {
                                                       const bool fetch_column,
                                                       const bool hoist_literals);
   llvm::Value* posArg() const;
+  llvm::Value* fragRowOff() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
 
@@ -263,6 +276,7 @@ class Executor {
                                  std::vector<std::vector<const int8_t*>>& col_buffers,
                                  const QueryExecutionContext*,
                                  const std::vector<int64_t>& num_rows,
+                                 const std::vector<uint64_t>& dev_frag_row_offsets,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
                                  const int64_t limit,
@@ -275,6 +289,7 @@ class Executor {
                                     std::vector<std::vector<const int8_t*>>& col_buffers,
                                     const QueryExecutionContext* query_exe_context,
                                     const std::vector<int64_t>& num_rows,
+                                    const std::vector<uint64_t>& dev_frag_row_offsets,
                                     Data_Namespace::DataMgr* data_mgr,
                                     const int device_id);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
@@ -521,7 +536,8 @@ class Executor {
   std::unique_ptr<CgenState> cgen_state_;
 
   struct PlanState {
-    PlanState(const bool allow_lazy_fetch) : allow_lazy_fetch_(allow_lazy_fetch) {}
+    PlanState(const bool allow_lazy_fetch, const Executor* executor)
+        : allow_lazy_fetch_(allow_lazy_fetch), executor_(executor) {}
 
     std::vector<int64_t> init_agg_vals_;
     std::vector<Analyzer::Expr*> target_exprs_;
@@ -530,6 +546,7 @@ class Executor {
     std::unordered_set<int> columns_to_fetch_;
     std::unordered_set<int> columns_to_not_fetch_;
     bool allow_lazy_fetch_;
+    const Executor* executor_;
 
     bool isLazyFetchColumn(const Analyzer::Expr* target_expr) {
       if (!allow_lazy_fetch_) {
@@ -537,6 +554,11 @@ class Executor {
       }
       const auto do_not_fetch_column = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
       if (!do_not_fetch_column || dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
+        return false;
+      }
+      auto cd = get_column_descriptor(
+          do_not_fetch_column->get_column_id(), do_not_fetch_column->get_table_id(), *executor_->catalog_);
+      if (cd->isVirtualCol) {
         return false;
       }
       std::unordered_set<int> intersect;

@@ -1573,6 +1573,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                            const std::vector<int8_t>& literal_buff,
                                                            std::vector<std::vector<const int8_t*>> col_buffers,
                                                            const std::vector<int64_t>& num_rows,
+                                                           const std::vector<uint64_t>& frag_row_offsets,
                                                            const int64_t scan_limit,
                                                            const std::vector<int64_t>& init_agg_vals,
                                                            Data_Namespace::DataMgr* data_mgr,
@@ -1614,6 +1615,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   {
     num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t) * num_rows.size(), device_id);
     copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows[0], sizeof(int64_t) * num_rows.size(), device_id);
+  }
+  CUdeviceptr frag_row_offsets_dev_ptr{0};
+  {
+    frag_row_offsets_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t) * frag_row_offsets.size(), device_id);
+    copy_to_gpu(
+        data_mgr, frag_row_offsets_dev_ptr, &frag_row_offsets[0], sizeof(int64_t) * frag_row_offsets.size(), device_id);
   }
   CUdeviceptr num_fragments_dev_ptr{0};
   {
@@ -1686,6 +1693,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &num_fragments_dev_ptr,
                                  &literals_dev_ptr,
                                  &num_rows_dev_ptr,
+                                 &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &gpu_query_mem.group_by_buffers.first,
@@ -1706,6 +1714,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
         void* kernel_params[] = {&multifrag_col_buffers_dev_ptr,
                                  &num_fragments_dev_ptr,
                                  &num_rows_dev_ptr,
+                                 &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &gpu_query_mem.group_by_buffers.first,
@@ -1754,6 +1763,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &num_fragments_dev_ptr,
                                  &literals_dev_ptr,
                                  &num_rows_dev_ptr,
+                                 &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &out_vec_dev_ptr,
@@ -1774,6 +1784,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
         void* kernel_params[] = {&multifrag_col_buffers_dev_ptr,
                                  &num_fragments_dev_ptr,
                                  &num_rows_dev_ptr,
+                                 &frag_row_offsets_dev_ptr,
                                  &max_matched_dev_ptr,
                                  &init_agg_vals_dev_ptr,
                                  &out_vec_dev_ptr,

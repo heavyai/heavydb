@@ -141,6 +141,7 @@ llvm::Function* row_process(llvm::Module* mod,
   FuncTy_5_args.push_back(PointerTy_6);  // aggregate init values
 
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
+  FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
   if (hoist_literals) {
     FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
   }
@@ -202,6 +203,7 @@ llvm::Function* query_template(llvm::Module* mod,
   if (hoist_literals) {
     FuncTy_8_args.push_back(PointerTy_1);
   }
+  FuncTy_8_args.push_back(PointerTy_6);
   FuncTy_8_args.push_back(PointerTy_6);
   FuncTy_8_args.push_back(PointerTy_6);
 
@@ -275,6 +277,8 @@ llvm::Function* query_template(llvm::Module* mod,
   }
   Value* ptr_row_count_ptr = args++;
   ptr_row_count_ptr->setName("row_count_ptr");
+  Value* frag_row_off_ptr = args++;
+  frag_row_off_ptr->setName("frag_row_off_ptr");
   Value* ptr_max_matched_ptr = args++;
   ptr_max_matched_ptr->setName("max_matched_ptr");
   Value* ptr_agg_init_val = args++;
@@ -304,6 +308,8 @@ llvm::Function* query_template(llvm::Module* mod,
 
   LoadInst* int64_123 = new LoadInst(ptr_row_count_ptr, "", false, label_120);
   int64_123->setAlignment(8);
+  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "", false, label_120);
+  frag_row_off->setAlignment(8);
 
   std::vector<Value*> int64_124_vec;
   for (size_t i = 0; i < aggr_col_count; ++i) {
@@ -346,6 +352,7 @@ llvm::Function* query_template(llvm::Module* mod,
   void_134_params.insert(void_134_params.end(), ptr_result_vec.begin(), ptr_result_vec.end());
   void_134_params.push_back(ptr_agg_init_val);
   void_134_params.push_back(int64_pos_01);
+  void_134_params.push_back(frag_row_off);
   if (hoist_literals) {
     CHECK(literals);
     void_134_params.push_back(literals);
@@ -438,6 +445,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   FuncTy_12_args.push_back(PointerTy_6);
   FuncTy_12_args.push_back(PointerTy_6);
   FuncTy_12_args.push_back(PointerTy_6);
+  FuncTy_12_args.push_back(PointerTy_6);
   PointerType* PointerTy_13 = PointerType::get(PointerTy_6, 0);
 
   FuncTy_12_args.push_back(PointerTy_13);
@@ -520,6 +528,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   }
   Value* ptr_row_count_ptr_144 = args++;
   ptr_row_count_ptr_144->setName("row_count_ptr");
+  Value* frag_row_off_ptr = args++;
+  frag_row_off_ptr->setName("frag_row_off_ptr");
   Value* ptr_max_matched_ptr = args++;
   ptr_max_matched_ptr->setName("max_matched_ptr");
   Value* ptr_agg_init_val_145 = args++;
@@ -544,6 +554,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   // Block  (label_146)
   LoadInst* int64_150 = new LoadInst(ptr_row_count_ptr_144, "", false, label_146);
   int64_150->setAlignment(8);
+  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "", false, label_146);
+  frag_row_off->setAlignment(8);
   LoadInst* max_matched = new LoadInst(ptr_max_matched_ptr, "", false, label_146);
   int64_150->setAlignment(8);
   auto crt_matched_ptr = new AllocaInst(IntegerType::get(mod->getContext(), 64), "crt_matched", label_146);
@@ -608,6 +620,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   void_162_params.push_back(crt_matched_ptr);
   void_162_params.push_back(ptr_agg_init_val_145);
   void_162_params.push_back(int64_pos_01_160);
+  void_162_params.push_back(frag_row_off);
   if (hoist_literals) {
     CHECK(literals);
     void_162_params.push_back(literals);

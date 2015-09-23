@@ -586,20 +586,22 @@ extern "C" ALWAYS_INLINE DEVICE int32_t
 extern "C" __attribute__((noinline)) void query_stub_hoisted_literals(const int8_t** col_buffers,
                                                                       const int8_t* literals,
                                                                       const int64_t* num_rows,
+                                                                      const uint64_t* frag_row_offsets,
                                                                       const int64_t* max_matched,
                                                                       const int64_t* init_agg_value,
                                                                       int64_t** out,
                                                                       int64_t** out2,
                                                                       uint32_t frag_idx,
                                                                       int32_t* resume_row_index) {
-  assert(col_buffers || literals || num_rows || max_matched || init_agg_value || out || out2 || frag_idx ||
-         resume_row_index);
+  assert(col_buffers || literals || num_rows || frag_row_offsets || max_matched || init_agg_value || out || out2 ||
+         frag_idx || resume_row_index);
 }
 
 extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                                  const uint32_t* num_fragments,
                                                  const int8_t* literals,
                                                  const int64_t* num_rows,
+                                                 const uint64_t* frag_row_offsets,
                                                  const int64_t* max_matched,
                                                  const int64_t* init_agg_value,
                                                  int64_t** out,
@@ -609,6 +611,7 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
     query_stub_hoisted_literals(col_buffers ? col_buffers[i] : nullptr,
                                 literals,
                                 &num_rows[i],
+                                &frag_row_offsets[i],
                                 max_matched,
                                 init_agg_value,
                                 out,
@@ -620,18 +623,21 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
 
 extern "C" __attribute__((noinline)) void query_stub(const int8_t** col_buffers,
                                                      const int64_t* num_rows,
+                                                     const uint64_t* frag_row_offsets,
                                                      const int64_t* max_matched,
                                                      const int64_t* init_agg_value,
                                                      int64_t** out,
                                                      int64_t** out2,
                                                      uint32_t frag_idx,
                                                      int32_t* resume_row_index) {
-  assert(col_buffers || num_rows || max_matched || init_agg_value || out || out2 || frag_idx || resume_row_index);
+  assert(col_buffers || num_rows || frag_row_offsets || max_matched || init_agg_value || out || out2 || frag_idx ||
+         resume_row_index);
 }
 
 extern "C" void multifrag_query(const int8_t*** col_buffers,
                                 const uint32_t* num_fragments,
                                 const int64_t* num_rows,
+                                const uint64_t* frag_row_offsets,
                                 const int64_t* max_matched,
                                 const int64_t* init_agg_value,
                                 int64_t** out,
@@ -640,6 +646,7 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
   for (uint32_t i = 0; i < *num_fragments; ++i) {
     query_stub(col_buffers ? col_buffers[i] : nullptr,
                &num_rows[i],
+               &frag_row_offsets[i],
                max_matched,
                init_agg_value,
                out,

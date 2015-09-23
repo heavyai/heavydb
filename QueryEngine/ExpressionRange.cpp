@@ -200,7 +200,9 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
                                [&has_nulls, col_id, col_ti](const Fragmenter_Namespace::FragmentInfo& lhs,   \
                                                             const Fragmenter_Namespace::FragmentInfo& rhs) { \
     auto lhs_meta_it = lhs.chunkMetadataMap.find(col_id);                                                    \
-    CHECK(lhs_meta_it != lhs.chunkMetadataMap.end());                                                        \
+    if (lhs_meta_it == lhs.chunkMetadataMap.end()) {                                                         \
+      return false;                                                                                          \
+    }                                                                                                        \
     auto rhs_meta_it = rhs.chunkMetadataMap.find(col_id);                                                    \
     CHECK(rhs_meta_it != rhs.chunkMetadataMap.end());                                                        \
     if (lhs_meta_it->second.chunkStats.has_nulls || rhs_meta_it->second.chunkStats.has_nulls) {              \
@@ -257,7 +259,9 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       FIND_STAT_FRAG(min);
       FIND_STAT_FRAG(max);
       const auto min_it = min_frag->chunkMetadataMap.find(col_id);
-      CHECK(min_it != min_frag->chunkMetadataMap.end());
+      if (min_it == min_frag->chunkMetadataMap.end()) {
+        return {ExpressionRangeType::Invalid, false, {0}, {0}};
+      }
       const auto max_it = max_frag->chunkMetadataMap.find(col_id);
       CHECK(max_it != max_frag->chunkMetadataMap.end());
       if (col_ti.is_fp()) {
