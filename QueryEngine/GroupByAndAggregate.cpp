@@ -2448,7 +2448,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
                          LL_INT(static_cast<int32_t>(query_mem_desc.entry_count_small)),
                          group_expr_lv,
                          LL_INT(query_mem_desc.min_val),
-                         LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))});
+                         LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())),
+                         ++arg_it});
       }
       break;
     }
@@ -2486,7 +2487,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
                        LL_INT(static_cast<int32_t>(query_mem_desc.entry_count)),
                        group_key,
                        key_size_lv,
-                       LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size()))});
+                       LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())),
+                       ++arg_it});
       break;
     }
     default:

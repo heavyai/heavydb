@@ -501,7 +501,8 @@ extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value(int6
                                                                             const uint32_t h,
                                                                             const int64_t* key,
                                                                             const uint32_t key_qw_count,
-                                                                            const uint32_t agg_col_count) {
+                                                                            const uint32_t agg_col_count,
+                                                                            const int64_t* init_vals) {
   auto off = h * (key_qw_count + agg_col_count);
   if (groups_buffer[off] == EMPTY_KEY) {
     memcpy(groups_buffer + off, key, key_qw_count * sizeof(*key));
