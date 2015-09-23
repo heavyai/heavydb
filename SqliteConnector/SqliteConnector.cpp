@@ -131,6 +131,8 @@ void SqliteConnector::query(const std::string& queryString) {
       if (col_text) {
         results_[c].push_back(
             col_text);  // b/c sqlite returns unsigned char* which can't be used in constructor of string
+      } else {
+        results_[c].push_back(""); // interpret nulls as empty string
       }
     }
   } while (1 == 1);  // Loop control in break statement above
