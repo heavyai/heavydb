@@ -2613,7 +2613,6 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                    query_exe_context,
                                    num_rows,
                                    &cat.get_dataMgr(),
-                                   sort_plan,
                                    chosen_device_id,
                                    scan_limit,
                                    device_type == ExecutorDeviceType::Hybrid);
@@ -2914,7 +2913,6 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const QueryExecutionContext* query_exe_context,
                                          const std::vector<int64_t>& num_rows,
                                          Data_Namespace::DataMgr* data_mgr,
-                                         const Planner::Sort* sort_plan,
                                          const int device_id,
                                          const int64_t scan_limit,
                                          const bool was_auto_device) {

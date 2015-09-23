@@ -264,7 +264,6 @@ class Executor {
                                  const QueryExecutionContext*,
                                  const std::vector<int64_t>& num_rows,
                                  Data_Namespace::DataMgr*,
-                                 const Planner::Sort* sort_plan,
                                  const int device_id,
                                  const int64_t limit,
                                  const bool was_auto_device);
