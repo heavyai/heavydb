@@ -2703,8 +2703,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   const QueryMemoryDescriptor& query_mem_desc = compilation_result_cpu.native_functions.empty()
                                                     ? compilation_result_gpu.query_mem_desc
                                                     : compilation_result_cpu.query_mem_desc;
-  dispatchFragments(all_fragment_results,
-                    dispatch,
+  dispatchFragments(dispatch,
                     device_type,
                     allow_multifrag && (groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
                     agg_plan,
@@ -2755,8 +2754,7 @@ ResultRows Executor::collectAllDeviceResults(
   return reduced_results;
 }
 
-void Executor::dispatchFragments(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
-                                 const std::function<void(const ExecutorDeviceType chosen_device_type,
+void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                           int chosen_device_id,
                                                           const std::vector<size_t>& frag_ids,
                                                           const size_t ctx_idx)> dispatch,

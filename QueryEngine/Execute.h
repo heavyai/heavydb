@@ -216,8 +216,7 @@ class Executor {
                                      const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const bool output_columnar);
-  void dispatchFragments(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
-                         const std::function<void(const ExecutorDeviceType chosen_device_type,
+  void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
                                                   const std::vector<size_t>& frag_ids,
                                                   const size_t ctx_idx)> dispatch,
