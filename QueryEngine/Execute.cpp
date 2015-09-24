@@ -1592,7 +1592,8 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper, const boo
       }
       case kDIVIDE:
         return codegenDiv(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
-
+      case kMODULO:
+        return codegenMod(lhs_lv, rhs_lv, null_check_suffix.empty() ? "" : int_typename, null_check_suffix, lhs_type);
       default:
         CHECK(false);
     }
@@ -1661,6 +1662,29 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
   cgen_state_->ir_builder_.SetInsertPoint(div_zero);
   cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));
   cgen_state_->ir_builder_.SetInsertPoint(div_ok);
+  return ret;
+}
+
+llvm::Value* Executor::codegenMod(llvm::Value* lhs_lv,
+                                  llvm::Value* rhs_lv,
+                                  const std::string& null_typename,
+                                  const std::string& null_check_suffix,
+                                  const SQLTypeInfo& ti) {
+  CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
+  CHECK(ti.is_integer());
+  cgen_state_->uses_div_ = true;
+  auto mod_ok = llvm::BasicBlock::Create(cgen_state_->context_, "mod_ok", cgen_state_->row_func_);
+  auto mod_zero = llvm::BasicBlock::Create(cgen_state_->context_, "mod_zero", cgen_state_->row_func_);
+  auto zero_const = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
+  cgen_state_->ir_builder_.CreateCondBr(
+      cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_NE, rhs_lv, zero_const), mod_ok, mod_zero);
+  cgen_state_->ir_builder_.SetInsertPoint(mod_ok);
+  auto ret = null_typename.empty() ? cgen_state_->ir_builder_.CreateSRem(lhs_lv, rhs_lv)
+                                   : cgen_state_->emitCall("mod_" + null_typename + null_check_suffix,
+                                                           {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+  cgen_state_->ir_builder_.SetInsertPoint(mod_zero);
+  cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.SetInsertPoint(mod_ok);
   return ret;
 }
 

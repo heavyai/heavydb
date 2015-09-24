@@ -263,6 +263,10 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test where dec > CAST(333.0 AS decimal(10, 2));", dt);
     c("SELECT MIN(dec * dec) FROM test;", dt);
     c("SELECT MAX(dec * dec) FROM test;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x % 7 = 0;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x % 7 = 7;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x % 7 <> 0;", dt);
+    c("SELECT COUNT(*) FROM test WHERE x % 7 <> 7;", dt);
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE x <> 7 AND x <> 8;", dt)),
               numeric_limits<int64_t>::max());
     ASSERT_EQ(v<int64_t>(run_simple_agg("SELECT MIN(x) FROM test WHERE z <> 101 AND z <> 102;", dt)),
@@ -631,6 +635,7 @@ TEST(Select, DivByZero) {
     EXPECT_THROW(run_multiple_agg("SELECT f / (f - f) FROM test;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY y / (x - x);", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY z, y / (x - x);", dt), std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY y % (x - x);", dt), std::runtime_error);
   }
 }
 

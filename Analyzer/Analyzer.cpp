@@ -209,6 +209,8 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
   } else if (IS_ARITHMETIC(op)) {
     if (!left_type.is_number() || !right_type.is_number())
       throw std::runtime_error("non-numeric operands in arithmetic operations.");
+    if (op == kMODULO && (!left_type.is_integer() || !right_type.is_integer()))
+      throw std::runtime_error("non-integer operands in modulo operation.");
     common_type = common_numeric_type(left_type, right_type);
     *new_left_type = common_type;
     new_left_type->set_notnull(left_type.get_notnull());
@@ -1424,6 +1426,9 @@ void BinOper::print() const {
       break;
     case kDIVIDE:
       op = "/ ";
+      break;
+    case kMODULO:
+      op = "% ";
       break;
     case kARRAY_AT:
       op = "[] ";
