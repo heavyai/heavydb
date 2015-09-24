@@ -224,7 +224,6 @@ class Executor {
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
                          const Planner::AggPlan* agg_plan,
-                         const int64_t limit,
                          const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                          const size_t context_count,
