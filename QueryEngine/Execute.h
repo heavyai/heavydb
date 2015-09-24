@@ -219,7 +219,8 @@ class Executor {
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
                                                   const std::vector<size_t>& frag_ids,
-                                                  const size_t ctx_idx)> dispatch,
+                                                  const size_t ctx_idx,
+                                                  const int64_t rowid_lookup_key)> dispatch,
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
                          const Planner::AggPlan* agg_plan,
@@ -285,7 +286,8 @@ class Executor {
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
                                  const int64_t limit,
-                                 const bool was_auto_device);
+                                 const bool was_auto_device,
+                                 const uint32_t start_rowid);
   int32_t executePlanWithoutGroupBy(const CompilationResult&,
                                     const bool hoist_literals,
                                     ResultRows& results,
@@ -296,7 +298,8 @@ class Executor {
                                     const std::vector<int64_t>& num_rows,
                                     const std::vector<uint64_t>& dev_frag_row_offsets,
                                     Data_Namespace::DataMgr* data_mgr,
-                                    const int device_id);
+                                    const int device_id,
+                                    const uint32_t start_rowid);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,
                                       const QueryMemoryDescriptor&,
@@ -361,11 +364,11 @@ class Executor {
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id, const bool fetch_column) const;
 
-  bool skipFragment(const int table_id,
-                    const Fragmenter_Namespace::FragmentInfo& frag_info,
-                    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                    const std::vector<uint64_t>& all_frag_row_offsets,
-                    const size_t frag_idx);
+  std::pair<bool, int64_t> skipFragment(const int table_id,
+                                        const Fragmenter_Namespace::FragmentInfo& frag_info,
+                                        const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+                                        const std::vector<uint64_t>& all_frag_row_offsets,
+                                        const size_t frag_idx);
 
   typedef std::vector<std::string> CodeCacheKey;
   typedef std::vector<std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuCompilationContext>>>

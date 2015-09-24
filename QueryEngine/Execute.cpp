@@ -1726,6 +1726,9 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
   int64_t** small_group_by_buffers_ptr{small_group_by_buffers.empty() ? nullptr : &small_group_by_buffers[0]};
   const uint32_t num_fragments{1};
 
+  int64_t rowid_lookup_num_rows{*error_code ? *error_code + 1 : 0};
+  auto num_rows_ptr = rowid_lookup_num_rows ? &rowid_lookup_num_rows : &num_rows[0];
+
   if (hoist_literals) {
     typedef void (*agg_query)(const int8_t*** col_buffers,
                               const uint32_t* num_fragments,
@@ -1737,12 +1740,11 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               int64_t** out,
                               int64_t** out2,
                               int32_t* resume_row_index);
-    *error_code = 0;
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &literal_buff[0],
-                                              &num_rows[0],
+                                              num_rows_ptr,
                                               &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
@@ -1753,7 +1755,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
                                               &literal_buff[0],
-                                              &num_rows[0],
+                                              num_rows_ptr,
                                               &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
@@ -1771,11 +1773,10 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               int64_t** out,
                               int64_t** out2,
                               int32_t* resume_row_index);
-    *error_code = 0;
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
-                                              &num_rows[0],
+                                              num_rows_ptr,
                                               &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
@@ -1783,10 +1784,9 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               nullptr,
                                               error_code);
     } else {
-      *error_code = 0;
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
-                                              &num_rows[0],
+                                              num_rows_ptr,
                                               &frag_row_offsets[0],
                                               &scan_limit,
                                               &init_agg_vals[0],
@@ -1795,6 +1795,11 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               error_code);
     }
   }
+
+  if (rowid_lookup_num_rows) {
+    *error_code = 0;
+  }
+
   return out_vec;
 }
 
@@ -2581,7 +2586,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                    error_code](const ExecutorDeviceType chosen_device_type,
                                int chosen_device_id,
                                const std::vector<size_t>& frag_ids,
-                               const size_t ctx_idx) {
+                               const size_t ctx_idx,
+                               const int64_t rowid_lookup_key) {
     static std::mutex reduce_mutex;
     const auto memory_level =
         chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
@@ -2649,6 +2655,13 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     int32_t err{0};
     ResultRows device_results(
         compilation_result.query_mem_desc, {}, nullptr, nullptr, 0, false, {}, chosen_device_type, chosen_device_id);
+    uint32_t start_rowid{0};
+    if (rowid_lookup_key >= 0) {
+      CHECK_LE(frag_ids.size(), size_t(1));
+      if (!frag_ids.empty()) {
+        start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_ids.front()];
+      }
+    }
     if (groupby_exprs.empty()) {
       err = executePlanWithoutGroupBy(compilation_result,
                                       hoist_literals,
@@ -2660,7 +2673,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                       num_rows,
                                       dev_frag_row_offsets,
                                       &cat.get_dataMgr(),
-                                      chosen_device_id);
+                                      chosen_device_id,
+                                      start_rowid);
     } else {
       err = executePlanWithGroupBy(compilation_result,
                                    hoist_literals,
@@ -2675,7 +2689,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                    &cat.get_dataMgr(),
                                    chosen_device_id,
                                    scan_limit,
-                                   device_type == ExecutorDeviceType::Hybrid);
+                                   device_type == ExecutorDeviceType::Hybrid,
+                                   start_rowid);
     }
     {
       std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -2759,7 +2774,8 @@ ResultRows Executor::collectAllDeviceResults(
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                           int chosen_device_id,
                                                           const std::vector<size_t>& frag_ids,
-                                                          const size_t ctx_idx)> dispatch,
+                                                          const size_t ctx_idx,
+                                                          const int64_t rowid_lookup_key)> dispatch,
                                  const ExecutorDeviceType device_type,
                                  const bool allow_multifrag,
                                  const Planner::AggPlan* agg_plan,
@@ -2774,6 +2790,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                  int& available_cpus) {
   size_t frag_list_idx{0};
   std::vector<std::thread> query_threads;
+  int64_t rowid_lookup_key{-1};
 
   if (device_type == ExecutorDeviceType::GPU && allow_multifrag && agg_plan) {
     // NB: We should never be on this path when the query is retried because of
@@ -2782,21 +2799,25 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     std::unordered_map<int, std::vector<size_t>> fragments_per_device;
     for (size_t frag_id = 0; frag_id < fragments.size(); ++frag_id) {
       const auto& fragment = fragments[frag_id];
-      if (skipFragment(table_id, fragment, simple_quals, all_frag_row_offsets, frag_id)) {
+      const auto skip_frag = skipFragment(table_id, fragment, simple_quals, all_frag_row_offsets, frag_id);
+      if (skip_frag.first) {
         continue;
       }
       const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
       fragments_per_device[device_id].push_back(frag_id);
+      rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
     }
     for (const auto& kv : fragments_per_device) {
-      query_threads.push_back(
-          std::thread(dispatch, ExecutorDeviceType::GPU, kv.first, kv.second, kv.first % context_count));
+      query_threads.push_back(std::thread(
+          dispatch, ExecutorDeviceType::GPU, kv.first, kv.second, kv.first % context_count, rowid_lookup_key));
     }
   } else {
     for (size_t i = 0; i < fragments.size(); ++i) {
-      if (skipFragment(table_id, fragments[i], simple_quals, all_frag_row_offsets, i)) {
+      const auto skip_frag = skipFragment(table_id, fragments[i], simple_quals, all_frag_row_offsets, i);
+      if (skip_frag.first) {
         continue;
       }
+      rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
       auto chosen_device_type = device_type;
       int chosen_device_id = 0;
       if (device_type == ExecutorDeviceType::Hybrid) {
@@ -2815,8 +2836,12 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           --available_cpus;
         }
       }
-      query_threads.push_back(std::thread(
-          dispatch, chosen_device_type, chosen_device_id, std::vector<size_t>{i}, frag_list_idx % context_count));
+      query_threads.push_back(std::thread(dispatch,
+                                          chosen_device_type,
+                                          chosen_device_id,
+                                          std::vector<size_t>{i},
+                                          frag_list_idx % context_count,
+                                          rowid_lookup_key));
       ++frag_list_idx;
     }
   }
@@ -2903,8 +2928,9 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             const std::vector<int64_t>& num_rows,
                                             const std::vector<uint64_t>& dev_frag_row_offsets,
                                             Data_Namespace::DataMgr* data_mgr,
-                                            const int device_id) {
-  int32_t error_code{0};
+                                            const int device_id,
+                                            const uint32_t start_rowid) {
+  int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   if (device_type == ExecutorDeviceType::CPU) {
@@ -2982,14 +3008,15 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          Data_Namespace::DataMgr* data_mgr,
                                          const int device_id,
                                          const int64_t scan_limit,
-                                         const bool was_auto_device) {
+                                         const bool was_auto_device,
+                                         const uint32_t start_rowid) {
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
   // 1. Optimize size (make keys more compact).
   // 2. Resize on overflow.
   // 3. Optimize runtime.
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
-  int32_t error_code{0};
+  int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(compilation_result.native_functions,
                           hoist_literals,
@@ -4172,44 +4199,46 @@ int Executor::getLocalColumnId(const int global_col_id, const bool fetch_column)
   return it->second;
 }
 
-bool Executor::skipFragment(const int table_id,
-                            const Fragmenter_Namespace::FragmentInfo& fragment,
-                            const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                            const std::vector<uint64_t>& all_frag_row_offsets,
-                            const size_t frag_idx) {
+std::pair<bool, int64_t> Executor::skipFragment(const int table_id,
+                                                const Fragmenter_Namespace::FragmentInfo& fragment,
+                                                const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+                                                const std::vector<uint64_t>& all_frag_row_offsets,
+                                                const size_t frag_idx) {
   for (const auto simple_qual : simple_quals) {
     const auto comp_expr = std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
     if (!comp_expr) {
       // is this possible?
-      return false;
+      return {false, -1};
     }
     const auto lhs = comp_expr->get_left_operand();
     const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
     if (!lhs_col || !lhs_col->get_table_id() || lhs_col->get_rte_idx()) {
-      return false;
+      return {false, -1};
     }
     const auto rhs = comp_expr->get_right_operand();
     const auto rhs_const = dynamic_cast<const Analyzer::Constant*>(rhs);
     if (!rhs_const) {
       // is this possible?
-      return false;
+      return {false, -1};
     }
     if (lhs->get_type_info() != rhs->get_type_info()) {
       // is this possible?
-      return false;
+      return {false, -1};
     }
     if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
-      return false;
+      return {false, -1};
     }
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
     int64_t chunk_min{0};
     int64_t chunk_max{0};
+    bool is_rowid{false};
     if (chunk_meta_it == fragment.chunkMetadataMap.end()) {
       auto cd = get_column_descriptor(col_id, table_id, *catalog_);
       CHECK(cd->isVirtualCol && cd->columnName == "rowid");
       chunk_min = all_frag_row_offsets[frag_idx];
       chunk_max = all_frag_row_offsets[frag_idx + 1];
+      is_rowid = true;
     } else {
       const auto& chunk_type = lhs->get_type_info();
       chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
@@ -4219,34 +4248,36 @@ bool Executor::skipFragment(const int table_id,
     switch (comp_expr->get_optype()) {
       case kGE:
         if (chunk_max < rhs_val) {
-          return true;
+          return {true, -1};
         }
         break;
       case kGT:
         if (chunk_max <= rhs_val) {
-          return true;
+          return {true, -1};
         }
         break;
       case kLE:
         if (chunk_min > rhs_val) {
-          return true;
+          return {true, -1};
         }
         break;
       case kLT:
         if (chunk_min >= rhs_val) {
-          return true;
+          return {true, -1};
         }
         break;
       case kEQ:
         if (chunk_min > rhs_val || chunk_max < rhs_val) {
-          return true;
+          return {true, -1};
+        } else if (is_rowid) {
+          return {false, rhs_val};
         }
         break;
       default:
         break;
     }
   }
-  return false;
+  return {false, -1};
 }
 
 std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> Executor::executors_;
