@@ -4198,7 +4198,9 @@ bool Executor::skipFragment(const Fragmenter_Namespace::FragmentInfo& fragment,
     }
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
-    CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
+    if (chunk_meta_it == fragment.chunkMetadataMap.end()) {
+      return false;
+    }
     const auto& chunk_type = lhs->get_type_info();
     const auto chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
     const auto chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
