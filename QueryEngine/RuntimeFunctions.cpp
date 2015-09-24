@@ -437,6 +437,10 @@ extern "C" __attribute__((noinline)) int32_t pos_start_impl(const int32_t* row_i
   return row_index_resume ? row_index_resume[0] : 0;
 }
 
+extern "C" __attribute__((noinline)) int32_t group_buff_idx_impl() {
+  return pos_start_impl(nullptr);
+}
+
 extern "C" __attribute__((noinline)) int32_t pos_step_impl() {
   return 1;
 }

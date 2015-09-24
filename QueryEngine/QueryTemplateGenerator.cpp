@@ -11,7 +11,7 @@
 
 namespace {
 
-llvm::Function* pos_start(llvm::Module* mod) {
+llvm::Function* pos_start_helper(llvm::Module* mod, const std::string& name) {
   using namespace llvm;
 
   std::vector<Type*> FuncTy_7_args;
@@ -20,12 +20,12 @@ llvm::Function* pos_start(llvm::Module* mod) {
       /*Params=*/FuncTy_7_args,
       /*isVarArg=*/false);
 
-  auto func_pos_start = mod->getFunction("pos_start");
+  auto func_pos_start = mod->getFunction(name);
   if (!func_pos_start) {
     func_pos_start = Function::Create(
         /*Type=*/FuncTy_7,
         /*Linkage=*/GlobalValue::ExternalLinkage,
-        /*Name=*/"pos_start",
+        /*Name=*/name,
         mod);  // (external, no body)
     func_pos_start->setCallingConv(CallingConv::C);
   }
@@ -45,6 +45,14 @@ llvm::Function* pos_start(llvm::Module* mod) {
   func_pos_start->setAttributes(func_pos_start_PAL);
 
   return func_pos_start;
+}
+
+llvm::Function* pos_start(llvm::Module* mod) {
+  return pos_start_helper(mod, "pos_start");
+}
+
+llvm::Function* group_buff_idx(llvm::Module* mod) {
+  return pos_start_helper(mod, "group_buff_idx");
 }
 
 llvm::Function* pos_step(llvm::Module* mod) {
@@ -423,6 +431,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
+  auto func_group_buff_idx = group_buff_idx(mod);
+  CHECK(func_group_buff_idx);
   auto func_init_group_by_buffer = init_group_by_buffer(mod);
   auto func_row_process = row_process(mod, 0, is_nested, hoist_literals);
   CHECK(func_row_process);
@@ -572,13 +582,19 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   AttributeSet int32_152_PAL;
   int32_152->setAttributes(int32_152_PAL);
 
+  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "", label_146);
+  group_buff_idx->setCallingConv(CallingConv::C);
+  group_buff_idx->setTailCall(true);
+  AttributeSet group_buff_idx_PAL;
+  group_buff_idx->setAttributes(group_buff_idx_PAL);
+
   CastInst* int64_153 = new SExtInst(int32_151, IntegerType::get(mod->getContext(), 64), "", label_146);
-  GetElementPtrInst* ptr_154 = GetElementPtrInst::Create(ptr_group_by_buffers, int64_153, "", label_146);
+  GetElementPtrInst* ptr_154 = GetElementPtrInst::Create(ptr_group_by_buffers, group_buff_idx, "", label_146);
   LoadInst* ptr_155 = new LoadInst(ptr_154, "", false, label_146);
   ptr_155->setAlignment(8);
   LoadInst* small_ptr_155{nullptr};
   if (query_mem_desc.getSmallBufferSizeBytes()) {
-    auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, int64_153, "", label_146);
+    auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, group_buff_idx, "", label_146);
     small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
     small_ptr_155->setAlignment(8);
   }

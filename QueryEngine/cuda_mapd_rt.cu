@@ -5,6 +5,10 @@ extern "C" __device__ int32_t pos_start_impl(const int32_t* row_index_resume) {
   return blockIdx.x * blockDim.x + threadIdx.x + (row_index_resume ? row_index_resume[blockIdx.x] : 0);
 }
 
+extern "C" __device__ int32_t group_buff_idx_impl() {
+  return pos_start_impl(NULL);
+}
+
 extern "C" __device__ int32_t pos_step_impl() {
   return blockDim.x * gridDim.x;
 }

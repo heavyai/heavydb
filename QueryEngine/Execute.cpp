@@ -3432,6 +3432,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                               cgen_state_->module_, is_nested_, hoist_literals, query_mem_desc, device_type, scan_limit)
                         : query_template(cgen_state_->module_, agg_infos.size(), is_nested_, hoist_literals);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
+  bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
   if (is_group_by) {
     bindInitGroupByBuffer(query_func, query_mem_desc, device_type);
@@ -3791,6 +3792,7 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 target triple = "nvptx64-nvidia-cuda"
 
 declare i32 @pos_start_impl(i32*);
+declare i32 @group_buff_idx_impl();
 declare i32 @pos_step_impl();
 declare i8 @thread_warp_idx(i8);
 declare i64* @init_shared_mem(i64*, i32);
