@@ -2551,8 +2551,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                        : static_cast<size_t>(available_cpus)};
   std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts(context_count);
   std::vector<std::mutex> query_context_mutexes(context_count);
-  std::vector<uint64_t> all_frag_row_offsets(fragments.size());
-  for (size_t i = 1; i < fragments.size(); ++i) {
+  std::vector<uint64_t> all_frag_row_offsets(fragments.size() + 1);
+  for (size_t i = 1; i <= fragments.size(); ++i) {
     all_frag_row_offsets[i] = all_frag_row_offsets[i - 1] + fragments[i - 1].numTuples;
   }
   auto dispatch = [this,
@@ -2707,8 +2707,10 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                     device_type,
                     allow_multifrag && (groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
                     agg_plan,
+                    table_id,
                     fragments,
                     simple_quals,
+                    all_frag_row_offsets,
                     context_count,
                     scheduler_cv,
                     scheduler_mutex,
@@ -2761,8 +2763,10 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                  const ExecutorDeviceType device_type,
                                  const bool allow_multifrag,
                                  const Planner::AggPlan* agg_plan,
+                                 const int table_id,
                                  const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
                                  const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+                                 const std::vector<uint64_t>& all_frag_row_offsets,
                                  const size_t context_count,
                                  std::condition_variable& scheduler_cv,
                                  std::mutex& scheduler_mutex,
@@ -2778,7 +2782,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     std::unordered_map<int, std::vector<size_t>> fragments_per_device;
     for (size_t frag_id = 0; frag_id < fragments.size(); ++frag_id) {
       const auto& fragment = fragments[frag_id];
-      if (skipFragment(fragment, simple_quals)) {
+      if (skipFragment(table_id, fragment, simple_quals, all_frag_row_offsets, frag_id)) {
         continue;
       }
       const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
@@ -2790,7 +2794,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
     }
   } else {
     for (size_t i = 0; i < fragments.size(); ++i) {
-      if (skipFragment(fragments[i], simple_quals)) {
+      if (skipFragment(table_id, fragments[i], simple_quals, all_frag_row_offsets, i)) {
         continue;
       }
       auto chosen_device_type = device_type;
@@ -4166,8 +4170,11 @@ int Executor::getLocalColumnId(const int global_col_id, const bool fetch_column)
   return it->second;
 }
 
-bool Executor::skipFragment(const Fragmenter_Namespace::FragmentInfo& fragment,
-                            const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals) {
+bool Executor::skipFragment(const int table_id,
+                            const Fragmenter_Namespace::FragmentInfo& fragment,
+                            const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+                            const std::vector<uint64_t>& all_frag_row_offsets,
+                            const size_t frag_idx) {
   for (const auto simple_qual : simple_quals) {
     const auto comp_expr = std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
     if (!comp_expr) {
@@ -4194,12 +4201,18 @@ bool Executor::skipFragment(const Fragmenter_Namespace::FragmentInfo& fragment,
     }
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+    int64_t chunk_min{0};
+    int64_t chunk_max{0};
     if (chunk_meta_it == fragment.chunkMetadataMap.end()) {
-      return false;
+      auto cd = get_column_descriptor(col_id, table_id, *catalog_);
+      CHECK(cd->isVirtualCol && cd->columnName == "rowid");
+      chunk_min = all_frag_row_offsets[frag_idx];
+      chunk_max = all_frag_row_offsets[frag_idx + 1];
+    } else {
+      const auto& chunk_type = lhs->get_type_info();
+      chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
+      chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
     }
-    const auto& chunk_type = lhs->get_type_info();
-    const auto chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
-    const auto chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
     const auto rhs_val = codegenIntConst(rhs_const)->getSExtValue();
     switch (comp_expr->get_optype()) {
       case kGE:
@@ -4219,6 +4232,11 @@ bool Executor::skipFragment(const Fragmenter_Namespace::FragmentInfo& fragment,
         break;
       case kLT:
         if (chunk_min >= rhs_val) {
+          return true;
+        }
+        break;
+      case kEQ:
+        if (chunk_min > rhs_val || chunk_max < rhs_val) {
           return true;
         }
         break;

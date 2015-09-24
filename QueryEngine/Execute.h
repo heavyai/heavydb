@@ -223,8 +223,10 @@ class Executor {
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
                          const Planner::AggPlan* agg_plan,
+                         const int table_id,
                          const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+                         const std::vector<uint64_t>& all_frag_row_offsets,
                          const size_t context_count,
                          std::condition_variable& scheduler_cv,
                          std::mutex& scheduler_mutex,
@@ -359,8 +361,11 @@ class Executor {
   void allocateLocalColumnIds(const std::list<int>& global_col_ids);
   int getLocalColumnId(const int global_col_id, const bool fetch_column) const;
 
-  bool skipFragment(const Fragmenter_Namespace::FragmentInfo& frag_info,
-                    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals);
+  bool skipFragment(const int table_id,
+                    const Fragmenter_Namespace::FragmentInfo& frag_info,
+                    const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+                    const std::vector<uint64_t>& all_frag_row_offsets,
+                    const size_t frag_idx);
 
   typedef std::vector<std::string> CodeCacheKey;
   typedef std::vector<std::tuple<void*, std::unique_ptr<llvm::ExecutionEngine>, std::unique_ptr<GpuCompilationContext>>>
