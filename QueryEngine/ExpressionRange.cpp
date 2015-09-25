@@ -184,7 +184,7 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
       result.type = ExpressionRangeType::FloatingPoint;
       result.has_nulls = false;
       result.fp_min = result.fp_max =
-          static_cast<double>(datum.intval) / exp_to_scale(constant_expr->get_type_info().get_scale());
+          static_cast<double>(datum.bigintval) / exp_to_scale(constant_expr->get_type_info().get_scale());
       return result;
     }
     default:
