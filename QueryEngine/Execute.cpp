@@ -2362,6 +2362,9 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   // TODO(alex): heuristic for group by buffer size
   const auto scan_plan =
       agg_plan ? dynamic_cast<const Planner::Scan*>(plan->get_child_plan()) : dynamic_cast<const Planner::Scan*>(plan);
+  if (!scan_plan && dynamic_cast<const Planner::Join*>(plan->get_child_plan())) {
+    throw std::runtime_error("Join plans not supported yet");
+  }
   CHECK(scan_plan);
   auto agg_infos = get_agg_name_and_exprs(plan);
   auto device_type = device_type_in;

@@ -294,7 +294,8 @@ class RootPlan {
  */
 class Optimizer {
  public:
-  Optimizer(const Analyzer::Query& q, const Catalog_Namespace::Catalog& c) : cur_query(nullptr), query(q), catalog(c) {}
+  Optimizer(const Analyzer::Query& q, const Catalog_Namespace::Catalog& c)
+      : cur_query(nullptr), cur_plan(nullptr), query(q), catalog(c) {}
   ~Optimizer() {}
   /*
    * @brief optimize optimize an entire SQL DML statement
@@ -313,7 +314,6 @@ class Optimizer {
    */
   void optimize_current_query();
   void optimize_scans();
-  void optimize_joins();
   void optimize_aggs();
   void optimize_orderby();
   void process_targetlist();

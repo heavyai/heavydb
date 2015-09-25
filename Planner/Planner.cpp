@@ -79,15 +79,36 @@ Plan* Optimizer::optimize_query() {
   if (query.get_next_query() != nullptr)
     throw std::runtime_error("UNION queries are not supported yet.");
   cur_query = &query;
-  optimize_current_query();
+  optimize_scans();
+  cur_plan = nullptr;
+  if (base_scans.size() > 2)
+    throw std::runtime_error("More than two tables in a join not supported yet.");
+  for (auto base_scan : base_scans) {
+    if (cur_plan) {
+      std::list<std::shared_ptr<Analyzer::Expr>> shared_join_predicates;
+      for (auto join_pred : join_predicates) {
+        shared_join_predicates.emplace_back(join_pred->deep_copy());
+      }
+      std::vector<Analyzer::TargetEntry*> join_targetlist;
+      for (const auto tle : cur_plan->get_targetlist()) {
+        join_targetlist.push_back(
+            new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->deep_copy(), tle->get_unnest()));
+      }
+      cur_plan = new Join(join_targetlist, shared_join_predicates, 0, cur_plan, base_scan);
+    } else {
+      cur_plan = base_scan;
+    }
+    optimize_current_query();
+  }
+  if (base_scans.empty()) {
+    optimize_current_query();
+  }
   if (query.get_order_by() != nullptr)
     optimize_orderby();
   return cur_plan;
 }
 
 void Optimizer::optimize_current_query() {
-  optimize_scans();
-  optimize_joins();
   if (cur_query->get_num_aggs() > 0 || cur_query->get_having_predicate() != nullptr ||
       !cur_query->get_group_by().empty())
     optimize_aggs();
@@ -156,15 +177,6 @@ void Optimizer::optimize_scans() {
     Analyzer::TargetEntry* tle = new Analyzer::TargetEntry("", colvar->deep_copy(), false);
     base_scans[colvar->get_rte_idx()]->add_tle(tle);
   };
-}
-
-void Optimizer::optimize_joins() {
-  if (base_scans.size() == 0)
-    cur_plan = nullptr;
-  else if (base_scans.size() == 1)
-    cur_plan = base_scans[0];
-  else
-    throw std::runtime_error("joins are not supported yet.");
 }
 
 void Optimizer::optimize_aggs() {
