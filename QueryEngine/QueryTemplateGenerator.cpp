@@ -199,6 +199,8 @@ llvm::Function* query_template(llvm::Module* mod,
   CHECK(func_pos_start);
   auto func_pos_step = pos_step(mod);
   CHECK(func_pos_step);
+  auto func_group_buff_idx = group_buff_idx(mod);
+  CHECK(func_group_buff_idx);
   auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
 
@@ -342,6 +344,12 @@ llvm::Function* query_template(llvm::Module* mod,
   AttributeSet int32_127_PAL;
   int32_127->setAttributes(int32_127_PAL);
 
+  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "", label_120);
+  group_buff_idx->setCallingConv(CallingConv::C);
+  group_buff_idx->setTailCall(true);
+  AttributeSet group_buff_idx_PAL;
+  group_buff_idx->setAttributes(group_buff_idx_PAL);
+
   CastInst* int64_128 = new SExtInst(int32_126, IntegerType::get(mod->getContext(), 64), "", label_120);
   ICmpInst* int1_129 = new ICmpInst(*label_120, ICmpInst::ICMP_SLT, int64_128, int64_123, "");
   BranchInst::Create(label__lr_ph, label_122, int1_129, label_120);
@@ -400,7 +408,7 @@ llvm::Function* query_template(llvm::Module* mod,
     auto ptr_140 = new LoadInst(out_gep, "", false, label_122);
     ptr_140->setAlignment(8);
     auto slot_idx = BinaryOperator::CreateAdd(
-        int32_126, BinaryOperator::CreateMul(frag_idx, int32_127, "", label_122), "", label_122);
+        group_buff_idx, BinaryOperator::CreateMul(frag_idx, int32_127, "", label_122), "", label_122);
     auto ptr_141 = GetElementPtrInst::CreateInBounds(ptr_140, slot_idx, "", label_122);
     StoreInst* void_142 = new StoreInst(int64_139_vec[i], ptr_141, false, label_122);
     void_142->setAlignment(8);
