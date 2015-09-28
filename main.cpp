@@ -197,7 +197,7 @@ int main(int argc, char* argv[]) {
   bool execute = false;
   bool timer = false;
   bool jit_debug = false;
-  bool use_nvptx = false;
+  bool use_nvptx = true;
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
       "user,u", po::value<string>(&user_name)->required(), "User name")(
       "passwd,p", po::value<string>(&passwd)->required(), "Password")("debug,d", "Verbose debug mode")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
-      "use-nvptx", "Use NVPTX instead of NVVM")("execute,e", "Execute queries")("version,v", "Print MapD Version")(
+      "use-nvvm", "Use NVVM instead of NVPTX")("execute,e", "Execute queries")("version,v", "Print MapD Version")(
       "timer,t", "Show query time information");
 
   po::positional_options_description positionalOptions;
@@ -234,8 +234,8 @@ int main(int argc, char* argv[]) {
       timer = true;
     if (vm.count("jit-debug"))
       jit_debug = true;
-    if (vm.count("use-nvptx"))
-      use_nvptx = true;
+    if (vm.count("use-nvvm"))
+      use_nvptx = false;
 
     po::notify(vm);
   } catch (boost::program_options::error& e) {

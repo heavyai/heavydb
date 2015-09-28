@@ -13,7 +13,7 @@ using namespace std;
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session(get_session("/tmp"));
-NVVMBackend g_nvvm_backend{NVVMBackend::CUDA};
+NVVMBackend g_nvvm_backend{NVVMBackend::NVPTX};
 
 ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
   return run_multiple_agg(query_str, g_session, device_type, g_nvvm_backend);
@@ -924,11 +924,12 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("use-nvptx", "Use NVPTX instead of NVVM");
+  desc.add_options()("use-nvvm", "Use NVVM instead of NVPTX");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
-  if (vm.count("use-nvptx"))
-    g_nvvm_backend = NVVMBackend::NVPTX;
+  if (vm.count("use-nvvm"))
+    g_nvvm_backend = NVVMBackend::CUDA;
 
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};

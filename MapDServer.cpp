@@ -968,7 +968,7 @@ int main(int argc, char** argv) {
   std::string device("gpu");
   bool flush_log = false;
   bool jit_debug = false;
-  bool use_nvptx = false;
+  bool use_nvptx = true;
   bool allow_multifrag = true;
 
   namespace po = boost::program_options;
@@ -978,7 +978,7 @@ int main(int argc, char** argv) {
       "path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")(
       "flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
-      "use-nvptx", "Use NVPTX instead of NVVM")(
+      "use-nvvm", "Use NVVM instead of NVPTX")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
       "cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")("hybrid", "Run on both CPU and GPUs")(
       "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
@@ -1010,8 +1010,8 @@ int main(int argc, char** argv) {
       flush_log = true;
     if (vm.count("jit-debug"))
       jit_debug = true;
-    if (vm.count("use-nvptx"))
-      use_nvptx = true;
+    if (vm.count("use-nvvm"))
+      use_nvptx = false;
     if (vm.count("disable-multifrag"))
       allow_multifrag = false;
 
