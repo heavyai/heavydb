@@ -98,11 +98,8 @@ Plan* Optimizer::optimize_query() {
     } else {
       cur_plan = base_scan;
     }
-    optimize_current_query();
   }
-  if (base_scans.empty()) {
-    optimize_current_query();
-  }
+  optimize_current_query();
   if (query.get_order_by() != nullptr)
     optimize_orderby();
   return cur_plan;
@@ -179,6 +176,27 @@ void Optimizer::optimize_scans() {
   };
 }
 
+namespace {
+
+const Planner::Scan* get_scan_child(const Planner::Plan* plan) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+  return agg_plan ? dynamic_cast<const Planner::Scan*>(plan->get_child_plan())
+                  : dynamic_cast<const Planner::Scan*>(plan);
+}
+
+std::vector<Analyzer::TargetEntry*> get_join_target_list(const Planner::Join* join_plan) {
+  const auto outer_plan = get_scan_child(join_plan->get_outerplan());
+  CHECK(outer_plan);
+  auto join_target_list = outer_plan->get_targetlist();
+  const auto inner_plan = get_scan_child(join_plan->get_innerplan());
+  CHECK(inner_plan);
+  const auto inner_target_list = inner_plan->get_targetlist();
+  join_target_list.insert(join_target_list.end(), inner_target_list.begin(), inner_target_list.end());
+  return join_target_list;
+}
+
+}  // namespace
+
 void Optimizer::optimize_aggs() {
   std::vector<Analyzer::TargetEntry*> agg_tlist;
   const Analyzer::Expr* having_pred = cur_query->get_having_predicate();
@@ -205,8 +223,12 @@ void Optimizer::optimize_aggs() {
 
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_list;
   if (!cur_query->get_group_by().empty()) {
+    auto target_list = cur_plan->get_targetlist();
+    if (dynamic_cast<const Planner::Join*>(cur_plan)) {
+      target_list = get_join_target_list(static_cast<const Planner::Join*>(cur_plan));
+    }
     for (auto e : cur_query->get_group_by()) {
-      groupby_list.push_back(e->rewrite_with_child_targetlist(cur_plan->get_targetlist()));
+      groupby_list.push_back(e->rewrite_with_child_targetlist(target_list));
     }
   }
 
@@ -278,9 +300,14 @@ void Optimizer::process_targetlist() {
     Analyzer::TargetEntry* new_tle;
     if (cur_plan == nullptr)
       new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->deep_copy(), tle->get_unnest());
-    else
+    else {
+      auto target_list = cur_plan->get_targetlist();
+      if (dynamic_cast<const Planner::Join*>(cur_plan)) {
+        target_list = get_join_target_list(static_cast<const Planner::Join*>(cur_plan));
+      }
       new_tle = new Analyzer::TargetEntry(
-          tle->get_resname(), tle->get_expr()->rewrite_with_targetlist(cur_plan->get_targetlist()), tle->get_unnest());
+          tle->get_resname(), tle->get_expr()->rewrite_with_targetlist(target_list), tle->get_unnest());
+    }
     final_tlist.push_back(new_tle);
   }
   if (cur_plan == nullptr)

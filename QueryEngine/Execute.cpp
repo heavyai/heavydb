@@ -1,5 +1,6 @@
 #include "Execute.h"
 
+#include "CartesianProduct.h"
 #include "Codec.h"
 #include "GpuMemUtils.h"
 #include "GpuSort.h"
@@ -106,7 +107,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                        const Planner::Sort* sort_plan_in,
                                        const bool allow_multifrag,
                                        const bool just_explain) {
-  if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan)) {
+  if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
+      dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
     if (limit || offset) {
       const size_t scan_limit = get_scan_limit(plan, limit);
@@ -665,17 +667,20 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
       return {cgen_state_->group_by_expr_cache_[col_id - 1]};
     }
   }
-  const int local_col_id = getLocalColumnId(col_id, fetch_column);
+  const int local_col_id = getLocalColumnId(is_nested_ ? 0 : col_var->get_table_id(), col_id, fetch_column);
   auto it = cgen_state_->fetch_cache_.find(local_col_id);
   if (it != cgen_state_->fetch_cache_.end()) {
     return {it->second};
   }
   llvm::Value* col_byte_stream;
   llvm::Value* pos_arg;
-  std::tie(col_byte_stream, pos_arg) = colByteStream(col_id, fetch_column, hoist_literals);
+  std::tie(col_byte_stream, pos_arg) =
+      colByteStream(is_nested_ ? 0 : col_var->get_table_id(), col_id, fetch_column, hoist_literals);
+  const auto inner_it = cgen_state_->inner_table_to_iterator_.find(col_var->get_table_id());
+  llvm::Value* inner_it_lv{inner_it != cgen_state_->inner_table_to_iterator_.end() ? inner_it->second.first : nullptr};
   if (plan_state_->isLazyFetchColumn(col_var)) {
     plan_state_->columns_to_not_fetch_.insert(col_id);
-    return {pos_arg};
+    return {inner_it_lv ? inner_it_lv : pos_arg};
   }
   if (col_var->get_type_info().is_string() && col_var->get_type_info().get_compression() == kENCODING_NONE) {
     // real (not dictionary-encoded) strings; store the pointer to the payload
@@ -693,7 +698,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     return {col_byte_stream};
   }
   const auto decoder = get_col_decoder(col_var);
-  auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
+  llvm::Value* col_pos{inner_it_lv ? inner_it_lv : pos_arg};
+  auto dec_val = decoder->codegenDecode(col_byte_stream, col_pos, cgen_state_->module_);
   cgen_state_->ir_builder_.Insert(dec_val);
   auto dec_type = dec_val->getType();
   llvm::Value* dec_val_cast{nullptr};
@@ -721,7 +727,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
 }
 
 // returns the byte stream argument and the position for the given column
-std::pair<llvm::Value*, llvm::Value*> Executor::colByteStream(const int col_id,
+std::pair<llvm::Value*, llvm::Value*> Executor::colByteStream(const int table_id,
+                                                              const int col_id,
                                                               const bool fetch_column,
                                                               const bool hoist_literals) {
   auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
@@ -729,12 +736,13 @@ std::pair<llvm::Value*, llvm::Value*> Executor::colByteStream(const int col_id,
   size_t arg_idx = 0;
   size_t pos_idx = 0;
   llvm::Value* pos_arg{nullptr};
-  const int local_col_id = getLocalColumnId(col_id, fetch_column);
+  CHECK_GE(table_id, 0);
+  const int local_col_id = getLocalColumnId(table_id, col_id, fetch_column);
   for (auto& arg : in_arg_list) {
     if (arg.getType()->isIntegerTy() && !pos_arg) {
       pos_arg = &arg;
       pos_idx = arg_idx;
-    } else if (pos_arg && arg_idx == pos_idx + 2 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
+    } else if (pos_arg && arg_idx == pos_idx + 3 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
       return std::make_pair(&arg, pos_arg);
     }
     ++arg_idx;
@@ -762,12 +770,24 @@ llvm::Value* Executor::fragRowOff() const {
   CHECK(false);
 }
 
+llvm::Value* Executor::rowsPerScan() const {
+  for (auto arg_it = cgen_state_->row_func_->arg_begin(); arg_it != cgen_state_->row_func_->arg_end(); ++arg_it) {
+    if (arg_it->getType()->isIntegerTy()) {
+      ++arg_it;
+      ++arg_it;
+      return arg_it;
+    }
+  }
+  CHECK(false);
+}
+
 namespace {
 
 llvm::Value* getLiteralBuffArg(llvm::Function* row_func) {
   auto arg_it = row_func->arg_begin();
   while (arg_it != row_func->arg_end()) {
     if (arg_it->getType()->isIntegerTy()) {
+      ++arg_it;
       ++arg_it;
       ++arg_it;
       break;
@@ -1708,7 +1728,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                             const std::vector<int64_t>& init_agg_vals,
                                             std::vector<int64_t*> group_by_buffers,
                                             std::vector<int64_t*> small_group_by_buffers,
-                                            int32_t* error_code) {
+                                            int32_t* error_code,
+                                            const uint32_t num_tables) {
   const size_t agg_col_count = init_agg_vals.size();
   std::vector<int64_t*> out_vec;
   if (group_by_buffers.empty()) {
@@ -1739,7 +1760,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               const int64_t* init_agg_value,
                               int64_t** out,
                               int64_t** out2,
-                              int32_t* resume_row_index);
+                              int32_t* resume_row_index,
+                              const uint32_t* num_tables);
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1750,7 +1772,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &init_agg_vals[0],
                                               &out_vec[0],
                                               nullptr,
-                                              error_code);
+                                              error_code,
+                                              &num_tables);
     } else {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1761,7 +1784,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &init_agg_vals[0],
                                               &group_by_buffers[0],
                                               small_group_by_buffers_ptr,
-                                              error_code);
+                                              error_code,
+                                              &num_tables);
     }
   } else {
     typedef void (*agg_query)(const int8_t*** col_buffers,
@@ -1772,7 +1796,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               const int64_t* init_agg_value,
                               int64_t** out,
                               int64_t** out2,
-                              int32_t* resume_row_index);
+                              int32_t* resume_row_index,
+                              const uint32_t* num_tables);
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1782,7 +1807,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &init_agg_vals[0],
                                               &out_vec[0],
                                               nullptr,
-                                              error_code);
+                                              error_code,
+                                              &num_tables);
     } else {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1792,7 +1818,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &init_agg_vals[0],
                                               &group_by_buffers[0],
                                               small_group_by_buffers_ptr,
-                                              error_code);
+                                              error_code,
+                                              &num_tables);
     }
   }
 
@@ -2187,14 +2214,15 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   std::tie(row_func, col_heads) = create_row_function(
       in_col_count, in_agg_count, hoist_literals, query_func, cgen_state_->module_, cgen_state_->context_);
   CHECK(row_func);
-  std::list<int> pseudo_scan_cols;
+  std::list<std::pair<int, const TableDescriptor*>> pseudo_scan_cols;
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
-    pseudo_scan_cols.push_back(pseudo_col);
+    pseudo_scan_cols.emplace_back(pseudo_col, nullptr);
   }
   std::string llvm_ir;
   auto compilation_result = compilePlan(result_plan,
                                         {},
                                         agg_infos,
+                                        {},
                                         pseudo_scan_cols,
                                         result_plan->get_constquals(),
                                         result_plan->get_quals(),
@@ -2229,7 +2257,8 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                         init_agg_vals,
                         query_exe_context->group_by_buffers_,
                         query_exe_context->small_group_by_buffers_,
-                        error_code);
+                        error_code,
+                        1);
   CHECK(!*error_code);
   return query_exe_context->groupBufferToResults(0, target_exprs, false);
 }
@@ -2343,6 +2372,49 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
   return rows_to_sort;
 }
 
+namespace {
+
+const Planner::Scan* get_scan_child(const Planner::Plan* plan) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+  return agg_plan ? dynamic_cast<const Planner::Scan*>(plan->get_child_plan())
+                  : dynamic_cast<const Planner::Scan*>(plan);
+}
+
+const Planner::Join* get_join_child(const Planner::Plan* plan) {
+  const auto join_plan = dynamic_cast<const Planner::Join*>(plan);
+  return join_plan ? join_plan : dynamic_cast<const Planner::Join*>(plan->get_child_plan());
+}
+
+void collect_scan_cols(std::list<std::pair<int, const TableDescriptor*>>& scan_cols,
+                       const Planner::Scan* scan_plan,
+                       const Catalog_Namespace::Catalog& cat) {
+  CHECK(scan_plan);
+  const int table_id = scan_plan->get_table_id();
+  const auto table_descriptor = cat.getMetadataForTable(table_id);
+  for (const int scan_col_id : scan_plan->get_col_list()) {
+    auto cd = get_column_descriptor(scan_col_id, table_id, cat);
+    if (cd->isVirtualCol) {
+      CHECK_EQ("rowid", cd->columnName);
+    } else {
+      scan_cols.emplace_back(scan_col_id, table_descriptor);
+    }
+  }
+}
+
+void collect_simple_quals(std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals, const Planner::Scan* scan_plan) {
+  CHECK(scan_plan);
+  const auto& more_simple_quals = scan_plan->get_simple_quals();
+  simple_quals.insert(simple_quals.end(), more_simple_quals.begin(), more_simple_quals.end());
+}
+
+void collect_quals(std::list<std::shared_ptr<Analyzer::Expr>>& quals, const Planner::Scan* scan_plan) {
+  CHECK(scan_plan);
+  const auto& more_quals = scan_plan->get_quals();
+  quals.insert(quals.end(), more_quals.begin(), more_quals.end());
+}
+
+}  // namespace
+
 ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                         const int64_t limit,
                                         const bool hoist_literals,
@@ -2360,12 +2432,29 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   *error_code = 0;
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // TODO(alex): heuristic for group by buffer size
-  const auto scan_plan =
-      agg_plan ? dynamic_cast<const Planner::Scan*>(plan->get_child_plan()) : dynamic_cast<const Planner::Scan*>(plan);
-  if (!scan_plan && dynamic_cast<const Planner::Join*>(plan->get_child_plan())) {
-    throw std::runtime_error("Join plans not supported yet");
+  const auto scan_plan = get_scan_child(plan);
+  const auto join_plan = get_join_child(plan);
+  std::vector<int> table_ids;
+  std::list<std::pair<int, const TableDescriptor*>> scan_cols;
+  const Planner::Scan* outer_plan{nullptr};
+  const Planner::Scan* inner_plan{nullptr};
+  if (join_plan) {
+    outer_plan = get_scan_child(join_plan->get_outerplan());
+    CHECK(outer_plan);
+    inner_plan = get_scan_child(join_plan->get_innerplan());
+    CHECK(inner_plan);
+    table_ids.push_back(outer_plan->get_table_id());
+    table_ids.push_back(inner_plan->get_table_id());
+    collect_scan_cols(scan_cols, outer_plan, cat);
+    collect_scan_cols(scan_cols, inner_plan, cat);
+  } else {
+    CHECK(scan_plan);
+    table_ids.push_back(scan_plan->get_table_id());
+    collect_scan_cols(scan_cols, scan_plan, cat);
   }
-  CHECK(scan_plan);
+
+  auto groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<std::shared_ptr<Analyzer::Expr>>{nullptr};
+
   auto agg_infos = get_agg_name_and_exprs(plan);
   auto device_type = device_type_in;
   for (const auto& agg_info : agg_infos) {
@@ -2375,14 +2464,18 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       break;
     }
   }
-  auto groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<std::shared_ptr<Analyzer::Expr>>{nullptr};
-  const int table_id = scan_plan->get_table_id();
-  const auto table_descriptor = cat.getMetadataForTable(table_id);
-  const auto fragmenter = table_descriptor->fragmenter;
-  CHECK(fragmenter);
-  Fragmenter_Namespace::QueryInfo query_info = fragmenter->getFragmentsForQuery();
 
-  const auto& fragments = query_info.fragments;
+  std::vector<Fragmenter_Namespace::QueryInfo> query_infos;
+  {
+    for (const int table_id : table_ids) {
+      const auto table_descriptor = cat.getMetadataForTable(table_id);
+      CHECK(table_descriptor);
+      const auto fragmenter = table_descriptor->fragmenter;
+      CHECK(fragmenter);
+      query_infos.push_back(fragmenter->getFragmentsForQuery());
+    }
+  }
+  CHECK(!query_infos.empty());
 
   if (!max_groups_buffer_entry_guess) {
     // The query has failed the first execution attempt because of running out
@@ -2390,36 +2483,45 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     // slots and run on the CPU.
     CHECK(device_type == ExecutorDeviceType::CPU);
     using Fragmenter_Namespace::FragmentInfo;
-    CHECK(!fragments.empty());
-    auto it = std::max_element(fragments.begin(), fragments.end(), [](const FragmentInfo& f1, const FragmentInfo& f2) {
-      return f1.numTuples < f2.numTuples;
-    });
-    max_groups_buffer_entry_guess = it->numTuples;  // not a guess anymore
+    max_groups_buffer_entry_guess = 1;
+    for (const auto& query_info : query_infos) {
+      CHECK(!query_info.fragments.empty());
+      auto it =
+          std::max_element(query_info.fragments.begin(),
+                           query_info.fragments.end(),
+                           [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.numTuples < f2.numTuples; });
+      max_groups_buffer_entry_guess *= it->numTuples;
+    }
   }
 
-  const auto& simple_quals = scan_plan->get_simple_quals();
+  CHECK(static_cast<bool>(scan_plan) != static_cast<bool>(join_plan));
+
+  auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
+  if (join_plan) {
+    collect_simple_quals(simple_quals, outer_plan);
+    collect_simple_quals(simple_quals, inner_plan);
+  }
+
+  auto quals = scan_plan ? scan_plan->get_quals() : join_plan->get_quals();
+  if (join_plan) {
+    collect_quals(quals, outer_plan);
+    collect_quals(quals, inner_plan);
+  }
 
   const int64_t scan_limit{get_scan_limit(plan, limit)};
 
   CompilationResult compilation_result_cpu;
   std::string llvm_ir_cpu;
-  std::list<int> scan_cols;
-  for (const int scan_col_id : scan_plan->get_col_list()) {
-    auto cd = get_column_descriptor(scan_col_id, scan_plan->get_table_id(), cat);
-    if (cd->isVirtualCol) {
-      CHECK_EQ("rowid", cd->columnName);
-    } else {
-      scan_cols.push_back(scan_col_id);
-    }
-  }
+
   auto compile_on_cpu = [&]() {
     try {
       compilation_result_cpu = compilePlan(plan,
-                                           query_info,
+                                           query_infos,
                                            agg_infos,
+                                           table_ids,
                                            scan_cols,
                                            simple_quals,
-                                           scan_plan->get_quals(),
+                                           quals,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::CPU,
@@ -2436,11 +2538,12 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            llvm_ir_cpu);
     } catch (...) {
       compilation_result_cpu = compilePlan(plan,
-                                           query_info,
+                                           query_infos,
                                            agg_infos,
+                                           table_ids,
                                            scan_cols,
                                            simple_quals,
-                                           scan_plan->get_quals(),
+                                           quals,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::CPU,
@@ -2468,11 +2571,12 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       (device_type == ExecutorDeviceType::Hybrid && cat.get_dataMgr().gpusPresent())) {
     try {
       compilation_result_gpu = compilePlan(plan,
-                                           query_info,
+                                           query_infos,
                                            agg_infos,
+                                           table_ids,
                                            scan_cols,
                                            simple_quals,
-                                           scan_plan->get_quals(),
+                                           quals,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::GPU,
@@ -2489,11 +2593,12 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            llvm_ir_gpu);
     } catch (...) {
       compilation_result_gpu = compilePlan(plan,
-                                           query_info,
+                                           query_infos,
                                            agg_infos,
+                                           table_ids,
                                            scan_cols,
                                            simple_quals,
-                                           scan_plan->get_quals(),
+                                           quals,
                                            hoist_literals,
                                            allow_multifrag,
                                            ExecutorDeviceType::GPU,
@@ -2536,7 +2641,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   const auto current_dbid = cat.get_currentDB().dbId;
   const auto& col_global_ids = scan_cols;
   std::vector<std::pair<ResultRows, std::vector<size_t>>> all_fragment_results;
-  all_fragment_results.reserve(fragments.size());
+  all_fragment_results.reserve(query_infos.front().fragments.size());
 
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
@@ -2559,9 +2664,9 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                        : static_cast<size_t>(available_cpus)};
   std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts(context_count);
   std::vector<std::mutex> query_context_mutexes(context_count);
-  std::vector<uint64_t> all_frag_row_offsets(fragments.size() + 1);
-  for (size_t i = 1; i <= fragments.size(); ++i) {
-    all_frag_row_offsets[i] = all_frag_row_offsets[i - 1] + fragments[i - 1].numTuples;
+  std::vector<uint64_t> all_frag_row_offsets(query_infos.front().fragments.size() + 1);
+  for (size_t i = 1; i <= query_infos.front().fragments.size(); ++i) {
+    all_frag_row_offsets[i] = all_frag_row_offsets[i - 1] + query_infos.front().fragments[i - 1].numTuples;
   }
   auto dispatch = [this,
                    plan,
@@ -2569,7 +2674,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                    scan_limit,
                    current_dbid,
                    device_type,
-                   table_id,
+                   table_ids,
                    &available_cpus,
                    &available_gpus,
                    &scheduler_cv,
@@ -2580,7 +2685,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                    &all_fragment_results,
                    &cat,
                    &col_global_ids,
-                   &fragments,
+                   &query_infos,
                    &all_frag_row_offsets,
                    &groupby_exprs,
                    &query_context_mutexes,
@@ -2588,7 +2693,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                    row_set_mem_owner,
                    error_code](const ExecutorDeviceType chosen_device_type,
                                int chosen_device_id,
-                               const std::vector<size_t>& frag_ids,
+                               const std::map<int, std::vector<size_t>>& frag_ids,
                                const size_t ctx_idx,
                                const int64_t rowid_lookup_key) {
     static std::mutex reduce_mutex;
@@ -2596,12 +2701,29 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
         chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
     std::vector<int64_t> num_rows;
     std::vector<uint64_t> dev_frag_row_offsets;
-    for (const auto frag_id : frag_ids) {
-      const auto& fragment = fragments[frag_id];
+    const int outer_table_id = table_ids.front();
+    const auto outer_it = frag_ids.find(outer_table_id);
+    CHECK(outer_it != frag_ids.end());
+    for (const auto frag_id : outer_it->second) {
+      const auto& outer_fragment = query_infos.front().fragments[frag_id];
       if (device_type != ExecutorDeviceType::Hybrid) {
-        chosen_device_id = fragment.deviceIds[static_cast<int>(memory_level)];
+        chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
       }
-      num_rows.push_back(fragment.numTuples);
+      num_rows.push_back(outer_fragment.numTuples);
+      if (table_ids.size() > 1) {
+        for (size_t table_idx = 1; table_idx < table_ids.size(); ++table_idx) {
+          const int inner_table_id = table_ids[table_idx];
+          const auto inner_it = frag_ids.find(inner_table_id);
+          CHECK(inner_it != frag_ids.end());
+          if (inner_it->second.empty()) {  // TODO(alex): fix
+            num_rows.push_back(0);
+          }
+          for (const auto inner_frag_id : inner_it->second) {
+            const auto& inner_fragment = query_infos[table_idx].fragments[inner_frag_id];
+            num_rows.push_back(inner_fragment.numTuples);
+          }
+        }
+      }
       dev_frag_row_offsets.push_back(all_frag_row_offsets[frag_id]);
     }
     CHECK_GE(chosen_device_id, 0);
@@ -2615,8 +2737,22 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     }
     std::vector<std::vector<const int8_t*>> col_buffers;
     try {
-      col_buffers = fetchChunks(
-          table_id, col_global_ids, chosen_device_id, memory_level, fragments, frag_ids, cat, chunk_iterators, chunks);
+      std::map<int, const TableFragments*> all_tables_fragments;
+      for (size_t table_idx = 0; table_idx < table_ids.size(); ++table_idx) {
+        int table_id = table_ids[table_idx];
+        const auto& fragments = query_infos[table_idx].fragments;
+        auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
+        CHECK(it_ok.second);
+      }
+      col_buffers = fetchChunks(col_global_ids,
+                                chosen_device_id,
+                                memory_level,
+                                table_ids,
+                                all_tables_fragments,
+                                frag_ids,
+                                cat,
+                                chunk_iterators,
+                                chunks);
     } catch (const OutOfMemory&) {
       std::lock_guard<std::mutex> lock(reduce_mutex);
       *error_code = ERR_OUT_OF_GPU_MEM;
@@ -2662,7 +2798,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     if (rowid_lookup_key >= 0) {
       CHECK_LE(frag_ids.size(), size_t(1));
       if (!frag_ids.empty()) {
-        start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_ids.front()];
+        start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_ids.begin()->second.front()];
       }
     }
     if (groupby_exprs.empty()) {
@@ -2677,7 +2813,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                       dev_frag_row_offsets,
                                       &cat.get_dataMgr(),
                                       chosen_device_id,
-                                      start_rowid);
+                                      start_rowid,
+                                      table_ids.size());
     } else {
       err = executePlanWithGroupBy(compilation_result,
                                    hoist_literals,
@@ -2693,7 +2830,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                    chosen_device_id,
                                    scan_limit,
                                    device_type == ExecutorDeviceType::Hybrid,
-                                   start_rowid);
+                                   start_rowid,
+                                   table_ids.size());
     }
     {
       std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -2701,7 +2839,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
         *error_code = err;
       }
       if (!device_results.definitelyHasNoRows()) {
-        all_fragment_results.emplace_back(device_results, frag_ids);
+        all_fragment_results.emplace_back(device_results, frag_ids.begin()->second);
       }
     }
     if (device_type == ExecutorDeviceType::Hybrid) {
@@ -2721,12 +2859,18 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   const QueryMemoryDescriptor& query_mem_desc = compilation_result_cpu.native_functions.empty()
                                                     ? compilation_result_gpu.query_mem_desc
                                                     : compilation_result_cpu.query_mem_desc;
+
+  std::map<int, const TableFragments*> all_tables_fragments;
+  CHECK_EQ(query_infos.size(), table_ids.size());
+  for (size_t table_idx = 0; table_idx < table_ids.size(); ++table_idx) {
+    all_tables_fragments[table_ids[table_idx]] = &query_infos[table_idx].fragments;
+  }
   dispatchFragments(dispatch,
                     device_type,
                     allow_multifrag && (groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
                     agg_plan,
-                    table_id,
-                    fragments,
+                    table_ids,
+                    all_tables_fragments,
                     simple_quals,
                     all_frag_row_offsets,
                     context_count,
@@ -2776,14 +2920,14 @@ ResultRows Executor::collectAllDeviceResults(
 
 void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                           int chosen_device_id,
-                                                          const std::vector<size_t>& frag_ids,
+                                                          const std::map<int, std::vector<size_t>>& frag_ids,
                                                           const size_t ctx_idx,
                                                           const int64_t rowid_lookup_key)> dispatch,
                                  const ExecutorDeviceType device_type,
                                  const bool allow_multifrag,
                                  const Planner::AggPlan* agg_plan,
-                                 const int table_id,
-                                 const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+                                 const std::vector<int>& table_ids,
+                                 const std::map<int, const TableFragments*>& all_tables_fragments,
                                  const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                  const std::vector<uint64_t>& all_frag_row_offsets,
                                  const size_t context_count,
@@ -2794,20 +2938,33 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   size_t frag_list_idx{0};
   std::vector<std::thread> query_threads;
   int64_t rowid_lookup_key{-1};
+  CHECK(!table_ids.empty());
+  const int outer_table_id = table_ids.front();
+  auto it = all_tables_fragments.find(outer_table_id);
+  CHECK(it != all_tables_fragments.end());
+  const auto fragments = it->second;
 
   if (device_type == ExecutorDeviceType::GPU && allow_multifrag && agg_plan) {
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
-    std::unordered_map<int, std::vector<size_t>> fragments_per_device;
-    for (size_t frag_id = 0; frag_id < fragments.size(); ++frag_id) {
-      const auto& fragment = fragments[frag_id];
-      const auto skip_frag = skipFragment(table_id, fragment, simple_quals, all_frag_row_offsets, frag_id);
+    std::unordered_map<int, std::map<int, std::vector<size_t>>> fragments_per_device;
+    for (size_t frag_id = 0; frag_id < fragments->size(); ++frag_id) {
+      const auto& fragment = (*fragments)[frag_id];
+      const auto skip_frag = skipFragment(outer_table_id, fragment, simple_quals, all_frag_row_offsets, frag_id);
       if (skip_frag.first) {
         continue;
       }
       const int device_id = fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)];
-      fragments_per_device[device_id].push_back(frag_id);
+      for (const auto& inner_frags : all_tables_fragments) {
+        if (inner_frags.first == outer_table_id) {
+          fragments_per_device[device_id][inner_frags.first].push_back(frag_id);
+        } else {
+          std::vector<size_t> all_frag_ids(inner_frags.second->size());
+          std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
+          fragments_per_device[device_id][inner_frags.first] = all_frag_ids;
+        }
+      }
       rowid_lookup_key = std::max(rowid_lookup_key, skip_frag.second);
     }
     for (const auto& kv : fragments_per_device) {
@@ -2815,8 +2972,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           dispatch, ExecutorDeviceType::GPU, kv.first, kv.second, kv.first % context_count, rowid_lookup_key));
     }
   } else {
-    for (size_t i = 0; i < fragments.size(); ++i) {
-      const auto skip_frag = skipFragment(table_id, fragments[i], simple_quals, all_frag_row_offsets, i);
+    for (size_t i = 0; i < fragments->size(); ++i) {
+      const auto skip_frag = skipFragment(outer_table_id, (*fragments)[i], simple_quals, all_frag_row_offsets, i);
       if (skip_frag.first) {
         continue;
       }
@@ -2839,10 +2996,20 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           --available_cpus;
         }
       }
+      std::map<int, std::vector<size_t>> frag_ids_for_table;
+      for (const auto& inner_frags : all_tables_fragments) {
+        if (inner_frags.first == outer_table_id) {
+          frag_ids_for_table[inner_frags.first] = {i};
+        } else {
+          std::vector<size_t> all_frag_ids(inner_frags.second->size());
+          std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
+          frag_ids_for_table[inner_frags.first] = all_frag_ids;
+        }
+      }
       query_threads.push_back(std::thread(dispatch,
                                           chosen_device_type,
                                           chosen_device_id,
-                                          std::vector<size_t>{i},
+                                          frag_ids_for_table,
                                           frag_list_idx % context_count,
                                           rowid_lookup_key));
       ++frag_list_idx;
@@ -2854,35 +3021,51 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
 }
 
 std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
-    const int table_id,
-    const std::list<int>& col_global_ids,
+    const std::list<std::pair<int, const TableDescriptor*>>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const std::vector<size_t>& selected_fragments,
+    const std::vector<int>& table_ids,
+    const std::map<int, const TableFragments*>& all_tables_fragments,
+    const std::map<int, std::vector<size_t>>& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
   static std::mutex str_dec_mutex;  // TODO(alex): remove
 
-  std::vector<std::vector<const int8_t*>> col_buffers;
-  for (const auto frag_id : selected_fragments) {
-    const auto& fragment = fragments[frag_id];
+  CHECK_EQ(all_tables_fragments.size(), selected_fragments.size());
+
+  std::vector<std::vector<size_t>> selected_fragments_crossjoin;
+  std::vector<size_t> local_col_to_frag_pos;
+  buildSelectedFragsMapping(
+      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, table_ids);
+
+  CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
+
+  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
+
+  for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
-    for (const int col_id : col_global_ids) {
-      const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id);
-      auto it = plan_state_->global_to_local_col_ids_.find(col_id);
-      CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+    for (const auto& col_id : col_global_ids) {
+      const int table_id = col_id.second->tableId;
+      const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id.first);
       if (cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
         continue;
       }
-      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id);
+      const auto fragments_it = all_tables_fragments.find(table_id);
+      CHECK(fragments_it != all_tables_fragments.end());
+      const auto fragments = fragments_it->second;
+      auto it = plan_state_->global_to_local_col_ids_.find(std::make_pair(col_id.second ? table_id : 0, col_id.first));
+      CHECK(it != plan_state_->global_to_local_col_ids_.end());
+      CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+      const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
+      CHECK_LT(frag_id, fragments->size());
+      const auto& fragment = (*fragments)[frag_id];
+      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id.first);
       CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-      ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id, fragment.fragmentId};
+      ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id.first, fragment.fragmentId};
       auto memory_level_for_column = memory_level;
-      if (plan_state_->columns_to_fetch_.find(col_id) == plan_state_->columns_to_fetch_.end()) {
+      if (plan_state_->columns_to_fetch_.find(col_id.first) == plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
       std::shared_ptr<Chunk_NS::Chunk> chunk;
@@ -2916,9 +3099,43 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
         frag_col_buffers[it->second] = ab->getMemoryPtr();  // @TODO(alex) change to use ChunkIter
       }
     }
-    col_buffers.push_back(frag_col_buffers);
+    all_frag_col_buffers.push_back(frag_col_buffers);
   }
-  return col_buffers;
+  return all_frag_col_buffers;
+}
+
+void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
+                                         std::vector<size_t>& local_col_to_frag_pos,
+                                         const std::list<std::pair<int, const TableDescriptor*>>& col_global_ids,
+                                         const std::map<int, std::vector<size_t>>& selected_fragments,
+                                         const std::vector<int>& table_ids) {
+  local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
+  std::unordered_map<int, size_t> table_id_to_frag_pos;
+  size_t frag_pos{0};
+  if (col_global_ids.empty()) {
+    for (const int table_id : table_ids) {
+      const auto selected_fragments_it = selected_fragments.find(table_id);
+      selected_fragments_crossjoin.push_back(selected_fragments_it->second);
+    }
+    return;
+  }
+  for (const auto& col_id : col_global_ids) {
+    const int table_id = col_id.second->tableId;
+    const auto selected_fragments_it = selected_fragments.find(table_id);
+    CHECK(selected_fragments_it != selected_fragments.end());
+    auto it = plan_state_->global_to_local_col_ids_.find(std::make_pair(col_id.second ? table_id : 0, col_id.first));
+    CHECK(it != plan_state_->global_to_local_col_ids_.end());
+    CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+    auto table_id_to_frag_pos_it = table_id_to_frag_pos.find(table_id);
+    if (table_id_to_frag_pos_it != table_id_to_frag_pos.end()) {
+      local_col_to_frag_pos[it->second] = table_id_to_frag_pos_it->second;
+      continue;
+    }
+    selected_fragments_crossjoin.push_back(selected_fragments_it->second);
+    const auto it_ok = table_id_to_frag_pos.emplace(table_id, frag_pos++);
+    CHECK(it_ok.second);
+    local_col_to_frag_pos[it->second] = it_ok.first->second;
+  }
 }
 
 int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation_result,
@@ -2932,7 +3149,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             const std::vector<uint64_t>& dev_frag_row_offsets,
                                             Data_Namespace::DataMgr* data_mgr,
                                             const int device_id,
-                                            const uint32_t start_rowid) {
+                                            const uint32_t start_rowid,
+                                            const uint32_t num_tables) {
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
@@ -2947,7 +3165,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                     query_exe_context->init_agg_vals_,
                                     {},
                                     {},
-                                    &error_code);
+                                    &error_code,
+                                    num_tables);
   } else {
     try {
       out_vec = query_exe_context->launchGpuCode(compilation_result.native_functions,
@@ -2962,7 +3181,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  blockSize(),
                                                  gridSize(),
                                                  device_id,
-                                                 &error_code);
+                                                 &error_code,
+                                                 num_tables);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -3012,7 +3232,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const int device_id,
                                          const int64_t scan_limit,
                                          const bool was_auto_device,
-                                         const uint32_t start_rowid) {
+                                         const uint32_t start_rowid,
+                                         const uint32_t num_tables) {
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
   // 1. Optimize size (make keys more compact).
@@ -3031,7 +3252,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                           query_exe_context->init_agg_vals_,
                           query_exe_context->group_by_buffers_,
                           query_exe_context->small_group_by_buffers_,
-                          &error_code);
+                          &error_code,
+                          num_tables);
   } else {
     try {
       query_exe_context->launchGpuCode(compilation_result.native_functions,
@@ -3046,7 +3268,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        blockSize(),
                                        gridSize(),
                                        device_id,
-                                       &error_code);
+                                       &error_code,
+                                       num_tables);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -3290,6 +3513,9 @@ void set_row_func_argnames(llvm::Function* row_func,
   arg_it->setName("frag_row_off");
   ++arg_it;
 
+  arg_it->setName("num_rows_per_scan");
+  ++arg_it;
+
   if (hoist_literals) {
     arg_it->setName("literals");
     ++arg_it;
@@ -3331,6 +3557,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
 
   // fragment row offset argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+
+  // number of rows for each scan
+  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
 
   // literals buffer argument
   if (hoist_literals) {
@@ -3407,9 +3636,10 @@ void Executor::nukeOldState(const bool allow_lazy_fetch) {
 }
 
 Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
-                                                  const Fragmenter_Namespace::QueryInfo& query_info,
+                                                  const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                                   const std::vector<Executor::AggInfo>& agg_infos,
-                                                  const std::list<int>& scan_cols,
+                                                  const std::vector<int>& table_ids,
+                                                  const std::list<std::pair<int, const TableDescriptor*>>& scan_cols,
                                                   const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                                   const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                                   const bool hoist_literals,
@@ -3426,14 +3656,16 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const bool output_columnar_hint,
                                                   const bool serialize_llvm_ir,
                                                   std::string& llvm_ir) {
-  QueryRewriter query_rewriter(plan, query_info, this);
-  query_rewriter.rewrite();
+  if (query_infos.size() == 1) {
+    QueryRewriter query_rewriter(plan, query_infos.front(), this);
+    query_rewriter.rewrite();
+  }
   nukeOldState(allow_lazy_fetch);
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              device_type,
                                              plan,
-                                             query_info,
+                                             query_infos.front(),
                                              row_set_mem_owner,
                                              max_groups_buffer_entry_guess,
                                              scan_limit,
@@ -3483,6 +3715,8 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
+  allocateInnerScansIterators(table_ids);
+
   // generate the code for the filter
   allocateLocalColumnIds(scan_cols);
 
@@ -3510,7 +3744,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
     auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
-    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+    codegenInnerScanNextRow();
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
   }
 
@@ -3627,6 +3861,60 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
       cgen_state_->getLiterals(),
       query_mem_desc,
       output_columnar};
+}
+
+void Executor::codegenInnerScanNextRow() {
+  if (cgen_state_->inner_scan_labels_.empty()) {
+    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+  } else {
+    CHECK_EQ(size_t(1), cgen_state_->inner_table_to_iterator_.size());
+    auto inner_it_val_and_ptr = cgen_state_->inner_table_to_iterator_.begin()->second;
+    auto inner_it_inc = cgen_state_->ir_builder_.CreateAdd(inner_it_val_and_ptr.first, ll_int(int64_t(1)));
+    cgen_state_->ir_builder_.CreateStore(inner_it_inc, inner_it_val_and_ptr.second);
+    CHECK_EQ(size_t(1), cgen_state_->inner_scan_labels_.size());
+    cgen_state_->ir_builder_.CreateBr(cgen_state_->inner_scan_labels_.front());
+  }
+}
+
+void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids) {
+  if (table_ids.size() <= 1) {
+    return;
+  }
+  throw std::runtime_error("Join plans not supported yet");
+  auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
+  for (auto it = table_ids.begin() + 1; it != table_ids.end(); ++it) {
+    const int inner_scan_idx = it - table_ids.begin();
+    auto inner_scan_pos_ptr = cgen_state_->ir_builder_.CreateAlloca(
+        get_int_type(64, cgen_state_->context_), nullptr, "inner_scan_" + std::to_string(inner_scan_idx));
+    {
+      const auto it_ok = cgen_state_->table_to_inner_scan_idx_.insert(std::make_pair(*it, inner_scan_idx));
+      CHECK(it_ok.second);
+    }
+    cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
+    auto scan_loop_head = llvm::BasicBlock::Create(
+        cgen_state_->context_, "scan_loop_head", cgen_state_->row_func_, preheader->getNextNode());
+    cgen_state_->inner_scan_labels_.push_back(scan_loop_head);
+    cgen_state_->ir_builder_.CreateBr(scan_loop_head);
+    cgen_state_->ir_builder_.SetInsertPoint(scan_loop_head);
+    auto inner_scan_pos = cgen_state_->ir_builder_.CreateLoad(inner_scan_pos_ptr, "load_inner_it");
+    {
+      const auto it_ok = cgen_state_->inner_table_to_iterator_.insert(
+          std::make_pair(*it, std::make_pair(inner_scan_pos, inner_scan_pos_ptr)));
+      CHECK(it_ok.second);
+    }
+    {
+      auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(rowsPerScan(), {ll_int(int32_t(inner_scan_idx))});
+      auto rows_per_scan = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr, "rows_per_scan");
+      auto have_more_inner_rows =
+          cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_ULT, inner_scan_pos, rows_per_scan);
+      auto inner_scan_ret = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_ret", cgen_state_->row_func_);
+      auto inner_scan_cont = llvm::BasicBlock::Create(cgen_state_->context_, "inner_scan_cont", cgen_state_->row_func_);
+      cgen_state_->ir_builder_.CreateCondBr(have_more_inner_rows, inner_scan_cont, inner_scan_ret);
+      cgen_state_->ir_builder_.SetInsertPoint(inner_scan_ret);
+      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+      cgen_state_->ir_builder_.SetInsertPoint(inner_scan_cont);
+    }
+  }
 }
 
 void Executor::bindInitGroupByBuffer(llvm::Function* query_func,
@@ -3980,6 +4268,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                       i64*,
                       i64**,
                       i64**,
+                      i32*,
                       i32*)* @%s, metadata !"kernel", i32 1}
 )"
                           :
@@ -3993,6 +4282,7 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                       i64*,
                       i64**,
                       i64**,
+                      i32*,
                       i32*)* @%s, metadata !"kernel", i32 1}
 )",
            func_name.c_str());
@@ -4185,19 +4475,22 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
   return group_key;
 }
 
-void Executor::allocateLocalColumnIds(const std::list<int>& global_col_ids) {
-  for (const int col_id : global_col_ids) {
+void Executor::allocateLocalColumnIds(const std::list<std::pair<int, const TableDescriptor*>>& global_col_ids) {
+  for (const auto& col_id : global_col_ids) {
     const auto local_col_id = plan_state_->global_to_local_col_ids_.size();
-    const auto it_ok = plan_state_->global_to_local_col_ids_.insert(std::make_pair(col_id, local_col_id));
-    plan_state_->local_to_global_col_ids_.push_back(col_id);
+    const auto it_ok = plan_state_->global_to_local_col_ids_.insert(
+        std::make_pair(std::make_pair(col_id.second ? col_id.second->tableId : 0, col_id.first), local_col_id));
+    plan_state_->local_to_global_col_ids_.push_back(col_id.first);
     // enforce uniqueness of the column ids in the scan plan
     CHECK(it_ok.second);
   }
 }
 
-int Executor::getLocalColumnId(const int global_col_id, const bool fetch_column) const {
-  const auto it = plan_state_->global_to_local_col_ids_.find(global_col_id);
-  CHECK(it != plan_state_->global_to_local_col_ids_.end());
+int Executor::getLocalColumnId(const int table_id, const int global_col_id, const bool fetch_column) const {
+  const auto it = plan_state_->global_to_local_col_ids_.find(std::make_pair(table_id, global_col_id));
+  if (it == plan_state_->global_to_local_col_ids_.end()) {
+    CHECK(false);
+  }
   if (fetch_column) {
     plan_state_->columns_to_fetch_.insert(global_col_id);
   }

@@ -174,11 +174,13 @@ class Executor {
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
-  std::pair<llvm::Value*, llvm::Value*> colByteStream(const int col_id,
+  std::pair<llvm::Value*, llvm::Value*> colByteStream(const int table_id,
+                                                      const int col_id,
                                                       const bool fetch_column,
                                                       const bool hoist_literals);
   llvm::Value* posArg() const;
   llvm::Value* fragRowOff() const;
+  llvm::Value* rowsPerScan() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
 
@@ -216,16 +218,19 @@ class Executor {
                                      const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const bool output_columnar);
+
+  typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
+
   void dispatchFragments(const std::function<void(const ExecutorDeviceType chosen_device_type,
                                                   int chosen_device_id,
-                                                  const std::vector<size_t>& frag_ids,
+                                                  const std::map<int, std::vector<size_t>>& frag_ids,
                                                   const size_t ctx_idx,
                                                   const int64_t rowid_lookup_key)> dispatch,
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
                          const Planner::AggPlan* agg_plan,
-                         const int table_id,
-                         const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+                         const std::vector<int>& table_ids,
+                         const std::map<int, const TableFragments*>& all_tables_fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                          const std::vector<uint64_t>& all_frag_row_offsets,
                          const size_t context_count,
@@ -233,15 +238,23 @@ class Executor {
                          std::mutex& scheduler_mutex,
                          std::unordered_set<int>& available_gpus,
                          int& available_cpus);
-  std::vector<std::vector<const int8_t*>> fetchChunks(const int table_id,
-                                                      const std::list<int>&,
+
+  std::vector<std::vector<const int8_t*>> fetchChunks(const std::list<std::pair<int, const TableDescriptor*>>&,
                                                       const int device_id,
                                                       const Data_Namespace::MemoryLevel,
-                                                      const std::deque<Fragmenter_Namespace::FragmentInfo>&,
-                                                      const std::vector<size_t>& selected_fragments,
+                                                      const std::vector<int>& table_ids,
+                                                      const std::map<int, const TableFragments*>&,
+                                                      const std::map<int, std::vector<size_t>>& selected_fragments,
                                                       const Catalog_Namespace::Catalog&,
                                                       std::list<ChunkIter>&,
                                                       std::list<std::shared_ptr<Chunk_NS::Chunk>>&);
+
+  void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
+                                 std::vector<size_t>& local_col_to_frag_pos,
+                                 const std::list<std::pair<int, const TableDescriptor*>>& col_global_ids,
+                                 const std::map<int, std::vector<size_t>>& selected_fragments,
+                                 const std::vector<int>& table_ids);
+
   ResultRows executeResultPlan(const Planner::Result* result_plan,
                                const bool hoist_literals,
                                const ExecutorDeviceType device_type,
@@ -287,7 +300,8 @@ class Executor {
                                  const int device_id,
                                  const int64_t limit,
                                  const bool was_auto_device,
-                                 const uint32_t start_rowid);
+                                 const uint32_t start_rowid,
+                                 const uint32_t num_tables);
   int32_t executePlanWithoutGroupBy(const CompilationResult&,
                                     const bool hoist_literals,
                                     ResultRows& results,
@@ -299,7 +313,8 @@ class Executor {
                                     const std::vector<uint64_t>& dev_frag_row_offsets,
                                     Data_Namespace::DataMgr* data_mgr,
                                     const int device_id,
-                                    const uint32_t start_rowid);
+                                    const uint32_t start_rowid,
+                                    const uint32_t num_tables);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,
                                       const QueryMemoryDescriptor&,
@@ -307,9 +322,10 @@ class Executor {
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compilePlan(const Planner::Plan* plan,
-                                const Fragmenter_Namespace::QueryInfo& query_info,
+                                const std::vector<Fragmenter_Namespace::QueryInfo>& query_info,
                                 const std::vector<Executor::AggInfo>& agg_infos,
-                                const std::list<int>& scan_cols,
+                                const std::vector<int>& table_ids,
+                                const std::list<std::pair<int, const TableDescriptor*>>& scan_cols,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                 const bool hoist_literals,
@@ -326,6 +342,10 @@ class Executor {
                                 const bool output_columnar_hint,
                                 const bool serialize_llvm_ir,
                                 std::string& llvm_ir);
+
+  void codegenInnerScanNextRow();
+
+  void allocateInnerScansIterators(const std::vector<int>& table_ids);
 
   void bindInitGroupByBuffer(llvm::Function* query_func,
                              const QueryMemoryDescriptor& query_mem_desc,
@@ -361,8 +381,8 @@ class Executor {
 
   llvm::Value* toDoublePrecision(llvm::Value* val);
 
-  void allocateLocalColumnIds(const std::list<int>& global_col_ids);
-  int getLocalColumnId(const int global_col_id, const bool fetch_column) const;
+  void allocateLocalColumnIds(const std::list<std::pair<int, const TableDescriptor*>>& global_col_ids);
+  int getLocalColumnId(const int table_id, const int global_col_id, const bool fetch_column) const;
 
   std::pair<bool, int64_t> skipFragment(const int table_id,
                                         const Fragmenter_Namespace::FragmentInfo& frag_info,
@@ -520,6 +540,9 @@ class Executor {
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
+    std::unordered_map<int, std::pair<llvm::Value*, llvm::Value*>> inner_table_to_iterator_;
+    std::unordered_map<int, int> table_to_inner_scan_idx_;
+    std::vector<llvm::BasicBlock*> inner_scan_labels_;
     bool must_run_on_cpu_;
     bool uses_div_;
 
@@ -552,7 +575,7 @@ class Executor {
 
     std::vector<int64_t> init_agg_vals_;
     std::vector<Analyzer::Expr*> target_exprs_;
-    std::unordered_map<int, int> global_to_local_col_ids_;
+    std::map<std::pair<int, int>, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
     std::unordered_set<int> columns_to_fetch_;
     std::unordered_set<int> columns_to_not_fetch_;

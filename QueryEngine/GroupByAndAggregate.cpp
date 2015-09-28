@@ -914,11 +914,9 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
             const auto target_expr = targets[col_idx];
             // TODO(alex): we could avoid checking isLazyFetchColumn on every iteration
             if (executor_->plan_state_->isLazyFetchColumn(target_expr)) {
-              const int global_col_id{dynamic_cast<Analyzer::ColumnVar*>(target_expr)
-                                          ? static_cast<Analyzer::ColumnVar*>(target_expr)->get_column_id()
-                                          : -1};
-              CHECK_GE(global_col_id, 0);
-              auto col_id = executor_->getLocalColumnId(global_col_id, false);
+              const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(target_expr);
+              CHECK(col_var);
+              auto col_id = executor_->getLocalColumnId(col_var->get_table_id(), col_var->get_column_id(), false);
               CHECK_EQ(1, col_buffers.size());
               auto& frag_col_buffers = col_buffers.front();
               bool is_end{false};
@@ -1357,9 +1355,8 @@ void QueryExecutionContext::outputBin(ResultRows& results,
                            target_expr->get_type_info().get_compression() == kENCODING_NONE);
     bool is_array = target_expr && target_expr->get_type_info().is_array();
     CHECK(!is_real_string || !is_array);
-    const int global_col_id{dynamic_cast<Analyzer::ColumnVar*>(target_expr)
-                                ? static_cast<Analyzer::ColumnVar*>(target_expr)->get_column_id()
-                                : -1};
+    const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(target_expr);
+    const int global_col_id{col_var ? col_var->get_column_id() : -1};
     const auto agg_info = target_info(target_expr);
     if (is_real_string || is_array) {
       int64_t str_len =
@@ -1374,7 +1371,8 @@ void QueryExecutionContext::outputBin(ResultRows& results,
         CHECK_EQ(str_ptr, str_len);  // both are the row index in this cases
         bool is_end;
         CHECK_GE(global_col_id, 0);
-        auto col_id = query_mem_desc_.executor_->getLocalColumnId(global_col_id, false);
+        CHECK(col_var);
+        auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var->get_table_id(), global_col_id, false);
         CHECK_EQ(1, col_buffers_.size());
         auto& frag_col_buffers = col_buffers_.front();
         if (is_real_string) {
@@ -1491,7 +1489,8 @@ void QueryExecutionContext::outputBin(ResultRows& results,
                                         group_by_col_count, out_vec_idx, groups_buffer_entry_count, output_columnar_)];
       if (query_mem_desc_.executor_->plan_state_->isLazyFetchColumn(target_expr)) {
         CHECK_GE(global_col_id, 0);
-        auto col_id = query_mem_desc_.executor_->getLocalColumnId(global_col_id, false);
+        CHECK(col_var);
+        auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var->get_table_id(), global_col_id, false);
         CHECK_EQ(1, col_buffers_.size());
         auto& frag_col_buffers = col_buffers_.front();
         val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), frag_col_buffers[col_id], val1);
@@ -1594,7 +1593,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                            const unsigned block_size_x,
                                                            const unsigned grid_size_x,
                                                            const int device_id,
-                                                           int32_t* error_code) const {
+                                                           int32_t* error_code,
+                                                           const uint32_t num_tables) const {
   data_mgr->cudaMgr_->setContext(device_id);
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
@@ -1651,6 +1651,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   {
     init_agg_vals_dev_ptr = alloc_gpu_mem(data_mgr, init_agg_vals.size() * sizeof(int64_t), device_id);
     copy_to_gpu(data_mgr, init_agg_vals_dev_ptr, &init_agg_vals[0], init_agg_vals.size() * sizeof(int64_t), device_id);
+  }
+  CUdeviceptr num_tables_dev_ptr{0};
+  {
+    num_tables_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id);
+    copy_to_gpu(data_mgr, num_tables_dev_ptr, &num_tables, sizeof(uint32_t), device_id);
   }
   std::vector<int32_t> error_codes(block_size_x);
   auto error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id);
@@ -1712,7 +1717,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &init_agg_vals_dev_ptr,
                                  &gpu_query_mem.group_by_buffers.first,
                                  &gpu_query_mem.small_group_by_buffers.first,
-                                 &error_code_dev_ptr};
+                                 &error_code_dev_ptr,
+                                 &num_tables_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,
@@ -1733,7 +1739,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &init_agg_vals_dev_ptr,
                                  &gpu_query_mem.group_by_buffers.first,
                                  &gpu_query_mem.small_group_by_buffers.first,
-                                 &error_code_dev_ptr};
+                                 &error_code_dev_ptr,
+                                 &num_tables_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,
@@ -1782,7 +1789,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &init_agg_vals_dev_ptr,
                                  &out_vec_dev_ptr,
                                  &unused_dev_ptr,
-                                 &error_code_dev_ptr};
+                                 &error_code_dev_ptr,
+                                 &num_tables_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,
@@ -1803,7 +1811,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &init_agg_vals_dev_ptr,
                                  &out_vec_dev_ptr,
                                  &unused_dev_ptr,
-                                 &error_code_dev_ptr};
+                                 &error_code_dev_ptr,
+                                 &num_tables_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,
@@ -2404,7 +2413,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
     }
   }
 
-  LL_BUILDER.CreateRet(LL_INT(0));
+  executor_->codegenInnerScanNextRow();
 
   return can_return_error;
 }

@@ -150,6 +150,7 @@ llvm::Function* row_process(llvm::Module* mod,
 
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
   FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
+  FuncTy_5_args.push_back(PointerTy_6);
   if (hoist_literals) {
     FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
   }
@@ -369,6 +370,7 @@ llvm::Function* query_template(llvm::Module* mod,
   void_134_params.push_back(ptr_agg_init_val);
   void_134_params.push_back(int64_pos_01);
   void_134_params.push_back(frag_row_off);
+  void_134_params.push_back(ptr_row_count_ptr);
   if (hoist_literals) {
     CHECK(literals);
     void_134_params.push_back(literals);
@@ -645,6 +647,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   void_162_params.push_back(ptr_agg_init_val_145);
   void_162_params.push_back(int64_pos_01_160);
   void_162_params.push_back(frag_row_off);
+  void_162_params.push_back(ptr_row_count_ptr_144);
   if (hoist_literals) {
     CHECK(literals);
     void_162_params.push_back(literals);
