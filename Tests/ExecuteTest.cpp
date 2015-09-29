@@ -923,7 +923,6 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("use-nvptx", "Use NVPTX instead of NVVM");
   desc.add_options()("use-nvvm", "Use NVVM instead of NVPTX");
 
   po::variables_map vm;
