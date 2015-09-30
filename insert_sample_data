@@ -25,7 +25,7 @@ download_and_extract_file() {
 start_server() {
   if [ -z "$PID" ]; then
     if ! pgrep mapd_server; then
-      ./bin/mapd_server data $DEVICE &
+      ./bin/mapd_server data $DEVICE $RO &
       PID=$!
     fi
     echo "- mapd_server started"

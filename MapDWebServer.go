@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -21,6 +22,7 @@ var (
 	backendUrl   string
 	frontend     string
 	images       string
+	readOnly     bool
 )
 
 func init() {
@@ -29,6 +31,7 @@ func init() {
 	flag.StringVar(&backendUrl, "backend-url", "http://localhost:9090", "url to mapd_http_server")
 	flag.StringVar(&frontend, "frontend", "frontend", "path to frontend directory")
 	flag.StringVar(&images, "images", "images", "path to images directory")
+	flag.BoolVar(&readOnly, "read-only", false, "enable read-only mode")
 	flag.Parse()
 }
 
@@ -47,6 +50,12 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 	err = r.ParseMultipartForm(32 << 20)
 	if err != nil {
 		status = http.StatusInternalServerError
+		return
+	}
+
+	if readOnly {
+		status = http.StatusUnauthorized
+		err = errors.New("Uploads disabled: server running in read-only mode.")
 		return
 	}
 
