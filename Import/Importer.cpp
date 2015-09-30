@@ -986,7 +986,7 @@ void Importer::import() {
       max_threads = std::min(max_threads, (int)std::ceil((double)(end_pos - begin_pos) / MIN_FILE_BUFFER_SIZE));
     }
     if (max_threads == 1) {
-      import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
+      row_count += import_thread(0, this, buffer[which_buf], begin_pos, end_pos, end_pos);
       current_pos += end_pos;
       (void)fseek(p_file, current_pos, SEEK_SET);
       size = fread((void*)buffer[which_buf], 1, IMPORT_FILE_BUFFER_SIZE, p_file);
