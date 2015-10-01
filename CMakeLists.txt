@@ -125,13 +125,15 @@ if(MAPD2_FRONTEND_DOWNLOAD)
     GIT_REPOSITORY git@github.com:map-d/mapd2-frontend.git
     PREFIX external
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND npm install && webpack
+    BUILD_COMMAND cd main && npm install && gulp fullbuild && cd ../demo && npm install && gulp fullbuild
     BUILD_IN_SOURCE TRUE
     INSTALL_COMMAND ""
     )
   ExternalProject_Get_Property(frontend source_dir)
-  install(DIRECTORY ${source_dir} DESTINATION "." PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
-  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
+  install(DIRECTORY ${source_dir}/main/public/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
+  install(DIRECTORY ${source_dir}/demo/public/ DESTINATION "frontend/demo/public/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
+  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir}/main/public frontend)
+  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir}/demo/public frontend/demo/public)
 endif()
 
 ## Go server
