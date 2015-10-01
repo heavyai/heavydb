@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/namsral/flag"
+	"github.com/rs/cors"
 )
 
 var (
@@ -117,8 +118,9 @@ func main() {
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
-	loggedMux := handlers.LoggingHandler(os.Stdout, mux)
-	err := http.ListenAndServe(":"+strconv.Itoa(port), loggedMux)
+	lmux := handlers.LoggingHandler(os.Stdout, mux)
+	cmux := cors.Default().Handler(lmux)
+	err := http.ListenAndServe(":"+strconv.Itoa(port), cmux)
 	if err != nil {
 		log.Fatal("Error listening: ", err)
 	}

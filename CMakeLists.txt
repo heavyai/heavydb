@@ -140,7 +140,7 @@ endif()
 find_program(GO_EXECUTABLE NAMES go)
 if(GO_EXECUTABLE)
   add_custom_target(mapd_web_server ALL
-    COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} get github.com/gorilla/handlers github.com/namsral/flag
+    COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} get github.com/gorilla/handlers github.com/namsral/flag github.com/rs/cors
     COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     SOURCES MapDWebServer.go
