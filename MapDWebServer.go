@@ -97,6 +97,7 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	if proxyBackend && r.Method == "POST" {
 		u, _ := url.Parse(backendUrl)
 		h = httputil.NewSingleHostReverseProxy(u)
+		rw.Header().Del("Access-Control-Allow-Origin")
 	}
 
 	h.ServeHTTP(rw, r)
