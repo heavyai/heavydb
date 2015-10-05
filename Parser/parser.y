@@ -699,6 +699,7 @@ general_exp:
 	{ $<nodeval>$ = new OperExpr(kNOT, dynamic_cast<Expr*>($<nodeval>2), nullptr); }
 	|	'(' general_exp ')' { $<nodeval>$ = $<nodeval>2; }
 	|	predicate { $<nodeval>$ = $<nodeval>1; }
+	| { throw std::runtime_error("Invalid expression"); }
 	;
 
 predicate:
