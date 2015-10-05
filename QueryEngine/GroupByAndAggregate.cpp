@@ -523,16 +523,12 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
   const auto& target_list = sort_plan->get_targetlist();
   const auto& order_entries = sort_plan->get_order_entries();
   const bool use_heap{order_entries.size() == 1 && !sort_plan->get_remove_duplicates() && top_n};
-  // TODO(alex): check the semantics for order by multiple columns
-  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
-    CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(order_entry.tle_no, target_list.size());
-    auto compare = [this, &order_entry, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
-      // The compare function must define a strict weak ordering, which means
-      // we can't use the overloaded less than operator for boost::variant since
-      // there's not greater than counterpart. If we naively use "not less than"
-      // as the compare function for descending order, std::sort will trigger
-      // a segmentation fault (or corrupt memory).
+  auto compare = [this, &order_entries, &target_list, use_heap](const InternalRow& lhs, const InternalRow& rhs) {
+    // NB: The compare function must define a strict weak ordering, otherwise
+    // std::sort will trigger a segmentation fault (or corrupt memory).
+    for (const auto order_entry : order_entries) {
+      CHECK_GE(order_entry.tle_no, 1);
+      CHECK_LE(order_entry.tle_no, target_list.size());
       const auto& entry_ti = targets_[order_entry.tle_no - 1].sql_type;
       const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
       const auto& lhs_v = lhs[order_entry.tle_no - 1];
@@ -554,6 +550,9 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
           auto string_dict = executor_->getStringDictionary(entry_ti.get_comp_param(), row_set_mem_owner_);
           auto lhs_str = string_dict->getString(lhs_v.i1);
           auto rhs_str = string_dict->getString(rhs_v.i1);
+          if (lhs_str == rhs_str) {
+            continue;
+          }
           return use_desc_cmp ? lhs_str > rhs_str : lhs_str < rhs_str;
         }
         if (UNLIKELY(targets_[order_entry.tle_no - 1].is_distinct)) {
@@ -561,27 +560,42 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
               bitmap_set_size(lhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
           const auto rhs_sz =
               bitmap_set_size(rhs_v.i1, order_entry.tle_no - 1, row_set_mem_owner_->count_distinct_descriptors_);
+          if (lhs_sz == rhs_sz) {
+            continue;
+          }
           return use_desc_cmp ? lhs_sz > rhs_sz : lhs_sz < rhs_sz;
+        }
+        if (lhs_v.i1 == rhs_v.i1) {
+          continue;
         }
         return use_desc_cmp ? lhs_v.i1 > rhs_v.i1 : lhs_v.i1 < rhs_v.i1;
       } else {
         if (lhs_v.isPair()) {
           CHECK(rhs_v.isPair());
-          return use_desc_cmp
-                     ? pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti) > pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti)
-                     : pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti) < pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti);
+          const auto lhs = pair_to_double({lhs_v.i1, lhs_v.i2}, entry_ti);
+          const auto rhs = pair_to_double({rhs_v.i1, rhs_v.i2}, entry_ti);
+          if (lhs == rhs) {
+            continue;
+          }
+          return use_desc_cmp ? lhs > rhs : lhs < rhs;
         } else {
           CHECK(lhs_v.isStr() && rhs_v.isStr());
-          return use_desc_cmp ? lhs_v.strVal() > rhs_v.strVal() : lhs_v.strVal() < rhs_v.strVal();
+          const auto lhs = lhs_v.strVal();
+          const auto rhs = rhs_v.strVal();
+          if (lhs == rhs) {
+            continue;
+          }
+          return use_desc_cmp ? lhs > rhs : lhs < rhs;
         }
       }
-    };
-    if (use_heap) {
-      target_values_.top(top_n, compare);
-      return;
     }
-    target_values_.sort(compare);
+    return false;
+  };
+  if (use_heap) {
+    target_values_.top(top_n, compare);
+    return;
   }
+  target_values_.sort(compare);
   if (sort_plan->get_remove_duplicates()) {
     target_values_.removeDuplicates();
   }
@@ -2219,7 +2233,7 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(const Planner::Sort* sort_pla
   if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
     return false;
   }
-  for (const auto order_entry : boost::adaptors::reverse(order_entries)) {
+  for (const auto order_entry : order_entries) {
     CHECK_GE(order_entry.tle_no, 1);
     CHECK_LE(order_entry.tle_no, target_list.size());
     const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
