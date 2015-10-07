@@ -567,7 +567,9 @@ class MapDHandler : virtual public MapDIf {
       throw ex;
     }
     Importer_NS::Loader loader(cat, td);
-    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
+    // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
+    //               Subtracting 1 (rowid) until TableDescriptor is updated.
+    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
       TMapDException ex;
       ex.error_msg = "Wrong number of columns to load into Table " + table_name;
       LOG(ERROR) << ex.error_msg;
@@ -606,10 +608,12 @@ class MapDHandler : virtual public MapDIf {
     }
     Importer_NS::Loader loader(cat, td);
     Importer_NS::CopyParams copy_params;
-    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns)) {
+    // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
+    //               Subtracting 1 (rowid) until TableDescriptor is updated.
+    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - 1) {
       TMapDException ex;
-      ex.error_msg = "Wrong number of columns to load into Table " + table_name + " (" + std::to_string(rows.size()) +
-                     " vs " + std::to_string(td->nColumns) + ")";
+      ex.error_msg = "Wrong number of columns to load into Table " + table_name + " (" +
+                     std::to_string(rows.front().cols.size()) + " vs " + std::to_string(td->nColumns - 1) + ")";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
