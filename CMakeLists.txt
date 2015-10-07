@@ -125,7 +125,7 @@ if(MAPD2_FRONTEND_DOWNLOAD)
     GIT_REPOSITORY git@github.com:map-d/mapd2-frontend.git
     PREFIX external
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND cd main && npm install && node_modules/gulp/bin/gulp.js fullbuild --production && cd ../demo && npm install && node_modules/gulp/bin/gulp.js fullbuild
+    BUILD_COMMAND cd main && npm install --force && node_modules/gulp/bin/gulp.js fullbuild --production && cd ../demo && npm install --force && node_modules/gulp/bin/gulp.js fullbuild
     BUILD_IN_SOURCE TRUE
     INSTALL_COMMAND ""
     )
