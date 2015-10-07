@@ -884,13 +884,16 @@ scalar_exp:
   | array_at_exp { $<nodeval>$ = $<nodeval>1; }
 	;
 
-select_entry: general_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }
+select_entry:
+		{ throw std::runtime_error("Empty select entry"); }
+	| general_exp { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), nullptr); }
 	| general_exp NAME { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), $<stringval>2); }
 	| general_exp AS NAME { $<nodeval>$ = new SelectEntry(dynamic_cast<Expr*>($<nodeval>1), $<stringval>3); }
 	;
 
 select_entry_commalist:
-		select_entry { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+		{ throw std::runtime_error("Empty select entry list"); }
+	|	select_entry { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
 	|	select_entry_commalist ',' select_entry
 	{
 		$<listval>$ = $<listval>1;
