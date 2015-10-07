@@ -3505,12 +3505,14 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
         cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, hoist_literals).front()));
   }
 
-  auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
-  auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
-  cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
-  cgen_state_->ir_builder_.SetInsertPoint(sc_false);
-  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-  cgen_state_->ir_builder_.SetInsertPoint(sc_true);
+  if (!deferred_quals.empty()) {
+    auto sc_true = llvm::BasicBlock::Create(cgen_state_->context_, "sc_true", cgen_state_->row_func_);
+    auto sc_false = llvm::BasicBlock::Create(cgen_state_->context_, "sc_false", cgen_state_->row_func_);
+    cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
+    cgen_state_->ir_builder_.SetInsertPoint(sc_false);
+    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+    cgen_state_->ir_builder_.SetInsertPoint(sc_true);
+  }
 
   for (auto expr : deferred_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr, true, hoist_literals).front()));
