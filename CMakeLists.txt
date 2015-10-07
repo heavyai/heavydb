@@ -122,18 +122,16 @@ option(MAPD2_FRONTEND_DOWNLOAD "Download mapd2-frontend for packaging" OFF)
 if(MAPD2_FRONTEND_DOWNLOAD)
   include(ExternalProject)
   ExternalProject_Add(frontend
-    GIT_REPOSITORY git@github.com:map-d/mapd2-frontend.git
+    URL http://builds.mapd.com/frontend/mapd2-frontend-latest.zip
     PREFIX external
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND cd main && npm install --force && node_modules/gulp/bin/gulp.js fullbuild --production && cd ../demo && npm install --force && node_modules/gulp/bin/gulp.js fullbuild
-    BUILD_IN_SOURCE TRUE
+    UPDATE_COMMAND ""
+    BUILD_COMMAND ""
     INSTALL_COMMAND ""
     )
   ExternalProject_Get_Property(frontend source_dir)
-  install(DIRECTORY ${source_dir}/main/public/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
-  install(DIRECTORY ${source_dir}/demo/public/ DESTINATION "frontend/demo/public/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
-  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir}/main/public frontend)
-  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir}/demo/public frontend/demo/public)
+  install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
+  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
 endif()
 
 ## Go server
