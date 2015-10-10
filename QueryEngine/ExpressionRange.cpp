@@ -395,10 +395,11 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
   const int32_t extract_field{extract_expr->get_field()};
   ExpressionRange result;
   result.type = ExpressionRangeType::Integer;
-  result.has_nulls = false;
+  const auto arg_range = getExpressionRange(extract_expr->get_from_expr(), fragments, executor);
+  result.has_nulls = arg_range.type == ExpressionRangeType::Invalid || arg_range.has_nulls;
   switch (extract_field) {
     case kYEAR: {
-      auto year_range = getExpressionRange(extract_expr->get_from_expr(), fragments, executor);
+      auto year_range = arg_range;
       if (year_range.type == ExpressionRangeType::Invalid) {
         return {ExpressionRangeType::Invalid, false, {0}, {0}};
       }
@@ -408,7 +409,7 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
       return year_range;
     }
     case kEPOCH:
-      return getExpressionRange(extract_expr->get_from_expr(), fragments, executor);
+      return arg_range;
     case kMONTH:
       result.int_min = 1;
       result.int_max = 12;
