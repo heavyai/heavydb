@@ -5,13 +5,15 @@
 
 class QueryRewriter {
  public:
-  QueryRewriter(const Planner::Plan* plan, const Fragmenter_Namespace::QueryInfo& query_info, const Executor* executor)
-      : plan_(plan), query_info_(query_info), executor_(executor){};
+  QueryRewriter(const Planner::Plan* plan,
+                const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                const Executor* executor)
+      : plan_(plan), query_infos_(query_infos), executor_(executor){};
   void rewrite();
 
  private:
   void rewriteConstrainedByIn();
   const Planner::Plan* plan_;
-  const Fragmenter_Namespace::QueryInfo& query_info_;
+  const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
   const Executor* executor_;
 };

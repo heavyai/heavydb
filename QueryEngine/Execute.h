@@ -327,7 +327,7 @@ class Executor {
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   CompilationResult compilePlan(const Planner::Plan* plan,
-                                const std::vector<Fragmenter_Namespace::QueryInfo>& query_info,
+                                const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const std::vector<Executor::AggInfo>& agg_infos,
                                 const std::vector<int>& table_ids,
                                 const std::list<std::pair<int, const TableDescriptor*>>& scan_cols,

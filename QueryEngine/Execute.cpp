@@ -3678,7 +3678,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   std::string& llvm_ir,
                                                   const bool allow_joins) {
   if (query_infos.size() == 1) {
-    QueryRewriter query_rewriter(plan, query_infos.front(), this);
+    QueryRewriter query_rewriter(plan, query_infos, this);
     query_rewriter.rewrite();
   }
   nukeOldState(allow_lazy_fetch);
@@ -3686,7 +3686,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   GroupByAndAggregate group_by_and_aggregate(this,
                                              device_type,
                                              plan,
-                                             query_infos.front(),
+                                             query_infos,
                                              row_set_mem_owner,
                                              max_groups_buffer_entry_guess,
                                              scan_limit,

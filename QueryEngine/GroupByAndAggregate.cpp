@@ -1913,8 +1913,7 @@ int32_t get_agg_count(const Planner::Plan* plan) {
 
 }  // namespace
 
-GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments) {
+GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
   if (!agg_plan) {
@@ -1926,7 +1925,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
       checked_int64_t cardinality{1};
       bool has_nulls{false};
       for (const auto groupby_expr : groupby_exprs) {
-        auto col_range_info = getExprRangeInfo(groupby_expr.get(), fragments);
+        auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_infos_);
         if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
           return {GroupByColRangeType::MultiCol, 0, 0, false};
         }
@@ -1945,15 +1944,15 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo(
       return {GroupByColRangeType::MultiCol, 0, 0, false};
     }
   }
-  return getExprRangeInfo(groupby_exprs.front().get(), fragments);
+  return getExprRangeInfo(groupby_exprs.front().get(), query_infos_);
 }
 
 GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
     const Analyzer::Expr* expr,
-    const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments) {
+    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos) {
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
 
-  const auto expr_range = getExpressionRange(expr, fragments, executor_);
+  const auto expr_range = getExpressionRange(expr, query_infos_, executor_);
   switch (expr_range.type) {
     case ExpressionRangeType::Integer:
       return {GroupByColRangeType::OneColKnownRange, expr_range.int_min, expr_range.int_max, expr_range.has_nulls};
@@ -1998,7 +1997,7 @@ bool many_entries(const int64_t max_val, const int64_t min_val) {
 GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const ExecutorDeviceType device_type,
                                          const Planner::Plan* plan,
-                                         const Fragmenter_Namespace::QueryInfo& query_info,
+                                         const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                          const size_t max_groups_buffer_entry_count,
                                          const int64_t scan_limit,
@@ -2007,7 +2006,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const bool output_columnar_hint)
     : executor_(executor),
       plan_(plan),
-      query_info_(query_info),
+      query_infos_(query_infos),
       row_set_mem_owner_(row_set_mem_owner),
       scan_limit_(scan_limit) {
   CHECK(plan_);
@@ -2075,7 +2074,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
       if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
         throw std::runtime_error("Count distinct not supported for none-encoding strings");
       }
-      auto arg_range_info = getExprRangeInfo(agg_expr->get_arg(), query_info_.fragments);
+      auto arg_range_info = getExprRangeInfo(agg_expr->get_arg(), query_infos_);
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};
       int64_t bitmap_sz_bits{0};
       if (arg_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange &&
@@ -2119,7 +2118,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
     return;
   }
 
-  const auto col_range_info = getColRangeInfo(query_info_.fragments);
+  const auto col_range_info = getColRangeInfo();
 
   switch (col_range_info.hash_type_) {
     case GroupByColRangeType::OneColKnownRange:
@@ -2260,7 +2259,7 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(const Planner::Sort* sort_pla
       return false;
     }
     if (agg_expr->get_arg()) {
-      auto expr_range_info = getExprRangeInfo(agg_expr->get_arg(), query_info_.fragments);
+      auto expr_range_info = getExprRangeInfo(agg_expr->get_arg(), query_infos_);
       if ((expr_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange || expr_range_info.has_nulls) &&
           order_entry.is_desc == order_entry.nulls_first) {
         return false;
@@ -2498,7 +2497,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
       auto group_key = LL_BUILDER.CreateAlloca(llvm::Type::getInt64Ty(LL_CONTEXT), key_size_lv);
       int32_t subkey_idx = 0;
       for (const auto group_expr : groupby_list) {
-        auto col_range_info = getExprRangeInfo(group_expr.get(), query_info_.fragments);
+        auto col_range_info = getExprRangeInfo(group_expr.get(), query_infos_);
         const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr.get(),
                                                                    hoist_literals,
                                                                    col_range_info.has_nulls,
@@ -2557,14 +2556,14 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   llvm::Value* hash_lv{llvm::ConstantInt::get(get_int_type(64, LL_CONTEXT), 0)};
   std::vector<int64_t> cardinalities;
   for (const auto groupby_expr : groupby_exprs) {
-    auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_info_.fragments);
+    auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_infos_);
     CHECK(col_range_info.hash_type_ == GroupByColRangeType::OneColKnownRange);
     cardinalities.push_back(col_range_info.max - col_range_info.min + 1);
   }
   size_t dim_idx = 0;
   for (const auto groupby_expr : groupby_exprs) {
     auto key_comp_lv = key_hash_func_builder.CreateLoad(key_hash_func_builder.CreateGEP(key_buff_lv, LL_INT(dim_idx)));
-    auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_info_.fragments);
+    auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_infos_);
     auto crt_term_lv = key_hash_func_builder.CreateSub(key_comp_lv, LL_INT(col_range_info.min));
     for (size_t prev_dim_idx = 0; prev_dim_idx < dim_idx; ++prev_dim_idx) {
       crt_term_lv = key_hash_func_builder.CreateMul(crt_term_lv, LL_INT(cardinalities[prev_dim_idx]));

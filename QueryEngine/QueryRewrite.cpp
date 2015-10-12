@@ -58,7 +58,7 @@ void QueryRewriter::rewriteConstrainedByIn() {
   for (const auto group_expr : groupby_list) {
     ++groupby_idx;
     if (*group_expr == *in_vals->get_arg()) {
-      const auto expr_range = getExpressionRange(group_expr.get(), query_info_.fragments, executor_);
+      const auto expr_range = getExpressionRange(group_expr.get(), query_infos_, executor_);
       if (expr_range.type != ExpressionRangeType::Integer) {
         continue;
       }

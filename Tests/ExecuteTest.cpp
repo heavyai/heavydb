@@ -931,6 +931,9 @@ TEST(Select, Joins) {
       "ORDER BY n;",
       dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str;", dt);
+    c("SELECT test.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test.str;", dt);
+    c("SELECT test_inner.str, COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str GROUP BY test_inner.str;",
+      dt);
   }
 }
 

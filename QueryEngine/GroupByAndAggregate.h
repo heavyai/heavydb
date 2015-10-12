@@ -921,7 +921,7 @@ class GroupByAndAggregate {
   GroupByAndAggregate(Executor* executor,
                       const ExecutorDeviceType device_type,
                       const Planner::Plan* plan,
-                      const Fragmenter_Namespace::QueryInfo& query_info,
+                      const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
                       const int64_t scan_limit,
@@ -974,10 +974,10 @@ class GroupByAndAggregate {
 
   llvm::Function* codegenPerfectHashFunction();
 
-  GroupByAndAggregate::ColRangeInfo getColRangeInfo(const std::deque<Fragmenter_Namespace::FragmentInfo>&);
+  GroupByAndAggregate::ColRangeInfo getColRangeInfo();
 
   GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr,
-                                                     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments);
+                                                     const std::vector<Fragmenter_Namespace::QueryInfo>&);
 
   void codegenAggCalls(llvm::Value* agg_out_start_ptr,
                        const std::vector<llvm::Value*>& agg_out_vec,
@@ -1000,7 +1000,7 @@ class GroupByAndAggregate {
   QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;
   const Planner::Plan* plan_;
-  const Fragmenter_Namespace::QueryInfo& query_info_;
+  const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const int64_t scan_limit_;
   bool output_columnar_;
