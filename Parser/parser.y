@@ -71,7 +71,7 @@ using namespace Parser;
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
-%token ELSE END ESCAPE EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
+%token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
@@ -743,7 +743,15 @@ like_predicate:
 
 opt_escape:
 		/* empty */ { $<nodeval>$ = nullptr; }
-	|	ESCAPE atom { $<nodeval>$ = $<nodeval>2; }
+	|	NAME atom
+    {
+      std::string escape_tok = *$<stringval>1;
+      std::transform(escape_tok.begin(), escape_tok.end(), escape_tok.begin(), ::tolower);
+      if (escape_tok != "escape") {
+        throw std::runtime_error("Syntax error: wrong escape specifier");
+      }
+      $<nodeval>$ = $<nodeval>2;
+    }
 	;
 
 test_for_null:
