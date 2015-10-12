@@ -149,7 +149,12 @@ static const char* get_row(const char* buf,
     }
   }
   if (*p == copy_params.line_delim) {
-    std::string s = trim_space(field, p - field);
+    size_t back_offset = 0;
+    if (copy_params.quoted && *field == copy_params.quote) {
+      field++;
+      back_offset += 2;
+    }
+    std::string s = trim_space(field, p - field - back_offset);
     row.push_back(s);
     return p;
   }
@@ -196,7 +201,12 @@ static const char* get_row(const char* buf,
     }
   }
   if (*p == copy_params.line_delim) {
-    std::string s = trim_space(field, p - field);
+    size_t back_offset = 0;
+    if (copy_params.quoted && *field == copy_params.quote) {
+      field++;
+      back_offset += 2;
+    }
+    std::string s = trim_space(field, p - field - back_offset);
     row.push_back(s);
     return p;
   }
