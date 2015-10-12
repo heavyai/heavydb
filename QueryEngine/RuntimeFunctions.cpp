@@ -483,9 +483,7 @@ extern "C" __attribute__((noinline)) void init_group_by_buffer_gpu(int64_t* grou
                                                                    const uint32_t key_qw_count,
                                                                    const uint32_t agg_col_count,
                                                                    const bool keyless,
-                                                                   const int8_t warp_size,
-                                                                   const bool blocks_share_memory,
-                                                                   const int32_t frag_idx) {
+                                                                   const int8_t warp_size) {
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
 }
