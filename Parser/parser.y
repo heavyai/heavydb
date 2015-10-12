@@ -749,6 +749,7 @@ opt_escape:
       if (escape_tok != "escape") {
         throw std::runtime_error("Syntax error: wrong escape specifier");
       }
+      delete $<stringval>1;
       $<nodeval>$ = $<nodeval>2;
     }
 	;
