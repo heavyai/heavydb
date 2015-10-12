@@ -921,7 +921,12 @@ TEST(Select, ArrayAnyAndAll) {
 TEST(Select, Joins) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT COUNT(*) from test, test2 where test.x = test2.xx;", dt);
+    c("SELECT COUNT(*) from test, test_inner WHERE test.x = test_inner.x;", dt);
+    c("SELECT COUNT(*) from test, test_inner WHERE test.x < test_inner.x + 1;", dt);
+    c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = test_inner.x GROUP BY test_inner.x "
+      "ORDER BY n;",
+      dt);
+    c("SELECT COUNT(*) FROM test, test_inner WHERE test.str = test_inner.str;", dt);
   }
 }
 
@@ -988,6 +993,21 @@ int main(int argc, char** argv) {
     return -EEXIST;
   }
   import_array_test("array_test");
+  try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    const std::string create_test{
+        "CREATE TABLE test_inner(x int not null, str text encoding dict) WITH (fragment_size=2);"};
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query("CREATE TABLE test_inner(x int not null, str text);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
+    return -EEXIST;
+  }
+  const std::string insert_query{"INSERT INTO test_inner VALUES(7, 'foo');"};
+  run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(insert_query);
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -998,6 +1018,9 @@ int main(int argc, char** argv) {
   const std::string drop_test{"DROP TABLE test;"};
   run_ddl_statement(drop_test);
   g_sqlite_comparator.query(drop_test);
+  const std::string drop_test_inner{"DROP TABLE test_inner;"};
+  run_ddl_statement(drop_test_inner);
+  g_sqlite_comparator.query(drop_test_inner);
   const std::string drop_array_test{"DROP TABLE array_test;"};
   run_ddl_statement(drop_array_test);
   g_session.reset(nullptr);
