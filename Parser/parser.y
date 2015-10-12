@@ -699,7 +699,6 @@ general_exp:
 	{ $<nodeval>$ = new OperExpr(kNOT, dynamic_cast<Expr*>($<nodeval>2), nullptr); }
 	|	'(' general_exp ')' { $<nodeval>$ = $<nodeval>2; }
 	|	predicate { $<nodeval>$ = $<nodeval>1; }
-	| { throw std::runtime_error("Invalid expression"); }
 	;
 
 predicate:
@@ -877,7 +876,7 @@ scalar_exp:
 	|	scalar_exp '-' scalar_exp { $<nodeval>$ = new OperExpr(kMINUS, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	scalar_exp '*' scalar_exp { $<nodeval>$ = new OperExpr(kMULTIPLY, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	scalar_exp '/' scalar_exp { $<nodeval>$ = new OperExpr(kDIVIDE, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
-|	|	scalar_exp '%' scalar_exp { $<nodeval>$ = new OperExpr(kMODULO, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
+	|	scalar_exp '%' scalar_exp { $<nodeval>$ = new OperExpr(kMODULO, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	'+' scalar_exp %prec UMINUS { $<nodeval>$ = $<nodeval>2; }
 	|	'-' scalar_exp %prec UMINUS { $<nodeval>$ = new OperExpr(kUMINUS, dynamic_cast<Expr*>($<nodeval>2), nullptr); }
 	|	atom { $<nodeval>$ = $<nodeval>1; }
