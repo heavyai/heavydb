@@ -112,7 +112,8 @@ class Executor {
                      const ExecutorDeviceType device_type,
                      const NVVMBackend nvvm_backend,
                      const ExecutorOptLevel,
-                     const bool allow_multifrag);
+                     const bool allow_multifrag,
+                     const bool allow_joins);
 
   StringDictionary* getStringDictionary(const int dictId,
                                         const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
@@ -196,7 +197,8 @@ class Executor {
                                int32_t* error_code,
                                const Planner::Sort* sort_plan,
                                const bool allow_multifrag,
-                               const bool just_explain);
+                               const bool just_explain,
+                               const bool allow_joins);
   ResultRows executeAggScanPlan(const Planner::Plan* plan,
                                 const int64_t limit,
                                 const bool hoist_literals,
@@ -210,7 +212,8 @@ class Executor {
                                 const Planner::Sort* sort_plan,
                                 const bool output_columnar_hint,
                                 const bool allow_multifrag,
-                                const bool just_explain);
+                                const bool just_explain,
+                                const bool allow_joins);
   ResultRows collectAllDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                      const Planner::Plan* plan,
                                      const QueryMemoryDescriptor& query_mem_desc,
@@ -265,7 +268,8 @@ class Executor {
                                int32_t* error_code,
                                const Planner::Sort* sort_plan,
                                const bool allow_multifrag,
-                               const bool just_explain);
+                               const bool just_explain,
+                               const bool allow_joins);
   ResultRows executeSortPlan(const Planner::Sort* sort_plan,
                              const int64_t limit,
                              const int64_t offset,
@@ -277,7 +281,8 @@ class Executor {
                              size_t& max_groups_buffer_entry_guess,
                              int32_t* error_code,
                              const bool allow_multifrag,
-                             const bool just_explain);
+                             const bool just_explain,
+                             const bool allow_joins);
 
   struct CompilationResult {
     std::vector<void*> native_functions;
@@ -341,11 +346,12 @@ class Executor {
                                 const Planner::Sort* sort_plan,
                                 const bool output_columnar_hint,
                                 const bool serialize_llvm_ir,
-                                std::string& llvm_ir);
+                                std::string& llvm_ir,
+                                const bool allow_joins);
 
   void codegenInnerScanNextRow();
 
-  void allocateInnerScansIterators(const std::vector<int>& table_ids);
+  void allocateInnerScansIterators(const std::vector<int>& table_ids, const bool allow_joins);
 
   void bindInitGroupByBuffer(llvm::Function* query_func,
                              const QueryMemoryDescriptor& query_mem_desc,

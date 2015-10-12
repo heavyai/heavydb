@@ -340,7 +340,7 @@ int main(int argc, char* argv[]) {
             {
               auto ms = measure<>::execution([&]() {
                 results_cpu = executor->execute(
-                    plan, true, ExecutorDeviceType::CPU, nvvm_backend, ExecutorOptLevel::Default, true);
+                    plan, true, ExecutorDeviceType::CPU, nvvm_backend, ExecutorOptLevel::Default, true, false);
               });
               if (timer) {
                 cout << "Query took " << ms << " ms to execute." << endl;
@@ -351,7 +351,7 @@ int main(int argc, char* argv[]) {
               {
                 auto ms = measure<>::execution([&]() {
                   results_gpu = executor->execute(
-                      plan, true, ExecutorDeviceType::GPU, nvvm_backend, ExecutorOptLevel::Default, true);
+                      plan, true, ExecutorDeviceType::GPU, nvvm_backend, ExecutorOptLevel::Default, true, false);
                 });
                 if (timer) {
                   cout << "Query took " << ms << " ms to execute." << endl;

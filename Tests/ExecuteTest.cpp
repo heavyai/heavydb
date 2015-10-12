@@ -918,6 +918,13 @@ TEST(Select, ArrayAnyAndAll) {
   }
 }
 
+TEST(Select, Joins) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT COUNT(*) from test, test2 where test.x = test2.xx;", dt);
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;

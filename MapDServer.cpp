@@ -318,8 +318,13 @@ class MapDHandler : virtual public MapDIf {
                 root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
             ResultRows results({}, nullptr, nullptr, executor_device_type);
             execute_time += measure<>::execution([&]() {
-              results = executor->execute(
-                  root_plan, true, executor_device_type, nvvm_backend_, ExecutorOptLevel::Default, allow_multifrag_);
+              results = executor->execute(root_plan,
+                                          true,
+                                          executor_device_type,
+                                          nvvm_backend_,
+                                          ExecutorOptLevel::Default,
+                                          allow_multifrag_,
+                                          false);
             });
             if (explain_stmt) {
               CHECK_EQ(size_t(1), results.rowCount());
