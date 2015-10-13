@@ -2405,7 +2405,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         can_return_error = true;
         LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
             // TODO(alex): remove the trunc once pos is converted to 32 bits
-            executor_->cgen_state_->getCurrentRowIndex(),
+            executor_->posArg(),
             get_int_type(32, LL_CONTEXT))));
       }
     } else {

@@ -492,20 +492,6 @@ class Executor {
 
     const LiteralValues& getLiterals() const { return literals_; }
 
-    llvm::Value* getCurrentRowIndex() const {
-      llvm::Value* pos_arg{nullptr};
-      auto& in_arg_list = row_func_->getArgumentList();
-      for (auto& arg : in_arg_list) {
-        if (arg.getType()->isIntegerTy()) {
-          pos_arg = &arg;
-          break;
-        }
-      }
-      CHECK(pos_arg);
-      CHECK(pos_arg->getType()->isIntegerTy(64));
-      return pos_arg;
-    }
-
     llvm::Value* addStringConstant(const std::string& str) {
       auto str_lv = ir_builder_.CreateGlobalString(str, "str_const_" + std::to_string(std::hash<std::string>()(str)));
       auto i8_ptr = llvm::PointerType::get(get_int_type(8, context_), 0);

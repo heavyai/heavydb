@@ -420,7 +420,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
                                             const bool fetch_columns,
                                             const bool hoist_literals) {
   if (!expr) {
-    return {cgen_state_->getCurrentRowIndex()};
+    return {posArg()};
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
@@ -764,6 +764,7 @@ llvm::Value* Executor::posArg() const {
   auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
   for (auto& arg : in_arg_list) {
     if (arg.getType()->isIntegerTy()) {
+      CHECK(arg.getType()->isIntegerTy(64));
       return &arg;
     }
   }
