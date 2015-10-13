@@ -143,12 +143,18 @@ struct TFrontendView {
   4: string update_time
 }
 
+struct TServerStatus {
+  1: bool read_only
+  2: string version
+}
+
 typedef map<string, TRenderProperty> TRenderPropertyMap
 typedef map<string, TRenderPropertyMap> TColumnRenderMap
 
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
+  TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format) throws (1: TMapDException e 2: ThriftException te)
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)

@@ -50,13 +50,15 @@ class MapDHandler : virtual public MapDIf {
               const std::string& executor_device,
               const NVVMBackend nvvm_backend,
               const bool allow_multifrag,
-              const bool jit_debug)
+              const bool jit_debug,
+              const bool read_only)
       : base_data_path_(base_data_path),
         nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
         session_id_dist_(0, INT32_MAX),
         jit_debug_(jit_debug),
-        allow_multifrag_(allow_multifrag) {
+        allow_multifrag_(allow_multifrag),
+        read_only_(read_only) {
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
       executor_device_type_ = ExecutorDeviceType::GPU;
@@ -76,6 +78,15 @@ class MapDHandler : virtual public MapDIf {
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
   }
   ~MapDHandler() { LOG(INFO) << "mapd_server exits." << std::endl; }
+
+  void check_read_only(const std::string& str) {
+    if (read_only_) {
+      TMapDException ex;
+      ex.error_msg = str + " disabled: server running in read-only mode.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+  }
 
   TSessionId connect(const std::string& user, const std::string& passwd, const std::string& dbname) {
     mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
@@ -132,6 +143,11 @@ class MapDHandler : virtual public MapDIf {
     LOG(INFO) << "User " << session_it->second->get_currentUser().userName << " disconnected from database " << dbname
               << std::endl;
     sessions_.erase(session_it);
+  }
+
+  void get_server_status(TServerStatus& _return, const TSessionId session) {
+    _return.read_only = read_only_;
+    _return.version = MapDRelease;
   }
 
   void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
@@ -293,6 +309,10 @@ class MapDHandler : virtual public MapDIf {
       execute_time = 0;
       for (auto stmt : parse_trees) {
         try {
+          auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt);
+          if (!select_stmt) {
+            check_read_only("Non-SELECT statements");
+          }
           std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
           Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
           Parser::ExplainStmt* explain_stmt = nullptr;
@@ -562,6 +582,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void load_table_binary(const TSessionId session, const std::string& table_name, const std::vector<TRow>& rows) {
+    check_read_only("load_table_binary");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     const TableDescriptor* td = cat.getMetadataForTable(table_name);
@@ -602,6 +623,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void load_table(const TSessionId session, const std::string& table_name, const std::vector<TStringRow>& rows) {
+    check_read_only("load_table");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     const TableDescriptor* td = cat.getMetadataForTable(table_name);
@@ -707,6 +729,7 @@ class MapDHandler : virtual public MapDIf {
                            const TSessionId session,
                            const std::string& file_name,
                            const TCopyParams& cp) {
+    check_read_only("detect_column_types");
     get_session(session);
 
     boost::filesystem::path file_path = file_name;  // FIXME
@@ -830,6 +853,7 @@ class MapDHandler : virtual public MapDIf {
                             const std::string& view_name,
                             const std::string& view_state,
                             const std::string& image_hash) {
+    check_read_only("create_frontend_view");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     FrontendViewDescriptor vd;
@@ -841,6 +865,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) {
+    check_read_only("create_table");
     // TODO(alex): de-couple CreateTableStmt from the parser and reuse it here
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -882,6 +907,7 @@ class MapDHandler : virtual public MapDIf {
                     const std::string& table_name,
                     const std::string& file_name,
                     const TCopyParams& cp) {
+    check_read_only("import_table");
     LOG(INFO) << "import_table " << table_name << " from " << file_name;
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -958,6 +984,7 @@ class MapDHandler : virtual public MapDIf {
   std::uniform_int_distribution<int64_t> session_id_dist_;
   const bool jit_debug_;
   const bool allow_multifrag_;
+  const bool read_only_;
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
 };
@@ -979,6 +1006,7 @@ int main(int argc, char** argv) {
   bool jit_debug = false;
   bool use_nvptx = true;
   bool allow_multifrag = true;
+  bool read_only = false;
 
   namespace po = boost::program_options;
 
@@ -989,8 +1017,9 @@ int main(int argc, char** argv) {
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
       "use-nvvm", "Use NVVM instead of NVPTX")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
-      "cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")("hybrid", "Run on both CPU and GPUs")(
-      "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
+      "read-only", "Enable read-only mode")("cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")(
+      "hybrid", "Run on both CPU and GPUs")("version,v", "Print Release Version Number")(
+      "port,p", po::value<int>(&port), "Port number (default 9091)")(
       "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)");
 
   po::positional_options_description positionalOptions;
@@ -1023,6 +1052,8 @@ int main(int argc, char** argv) {
       use_nvptx = false;
     if (vm.count("disable-multifrag"))
       allow_multifrag = false;
+    if (vm.count("read-only"))
+      read_only = true;
 
     po::notify(vm);
   } catch (boost::program_options::error& e) {
@@ -1089,7 +1120,7 @@ int main(int argc, char** argv) {
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
   shared_ptr<MapDHandler> handler(new MapDHandler(
-      base_path, device, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA, allow_multifrag, jit_debug));
+      base_path, device, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA, allow_multifrag, jit_debug, read_only));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
