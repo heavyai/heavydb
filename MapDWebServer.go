@@ -21,7 +21,7 @@ var (
 	proxyBackend bool
 	backendUrl   string
 	frontend     string
-	images       string
+	dataDir      string
 	readOnly     bool
 )
 
@@ -30,7 +30,7 @@ func init() {
 	flag.BoolVar(&proxyBackend, "proxy-backend", true, "proxy mapd_http_server")
 	flag.StringVar(&backendUrl, "backend-url", "http://localhost:9090", "url to mapd_http_server")
 	flag.StringVar(&frontend, "frontend", "frontend", "path to frontend directory")
-	flag.StringVar(&images, "images", "images", "path to images directory")
+	flag.StringVar(&dataDir, "data", "data", "path to MapD data directory")
 	flag.BoolVar(&readOnly, "read-only", false, "enable read-only mode")
 	flag.Parse()
 }
@@ -59,13 +59,13 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	uploadDir := "uploads/"
+	uploadDir := dataDir + "/mapd_import/"
 	switch r.FormValue("uploadtype") {
 	case "image":
-		uploadDir = images + "/"
+		uploadDir = dataDir + "/mapd_images/"
 	default:
 		sessionId := r.Header.Get("sessionid")
-		uploadDir = "uploads/" + sessionId + "/"
+		uploadDir = dataDir + "/mapd_import/" + sessionId + "/"
 	}
 
 	for _, fhs := range r.MultipartForm.File {
@@ -90,7 +90,7 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 				status = http.StatusInternalServerError
 				return
 			}
-			fp, _ := filepath.Abs(outfile.Name())
+			fp := filepath.Base(outfile.Name())
 			rw.Write([]byte(fp))
 		}
 	}
@@ -117,7 +117,16 @@ func imagesHandler(rw http.ResponseWriter, r *http.Request) {
 		rw.Write([]byte(""))
 		return
 	}
-	h := http.StripPrefix("/images/", http.FileServer(http.Dir(images)))
+	h := http.StripPrefix("/images/", http.FileServer(http.Dir(dataDir+"/mapd_images/")))
+	h.ServeHTTP(rw, r)
+}
+
+func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
+	if r.RequestURI == "/downloads/" {
+		rw.Write([]byte(""))
+		return
+	}
+	h := http.StripPrefix("/downloads/", http.FileServer(http.Dir(dataDir+"/mapd_export/")))
 	h.ServeHTTP(rw, r)
 }
 
@@ -125,6 +134,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/upload", uploadHandler)
 	mux.HandleFunc("/images/", imagesHandler)
+	mux.HandleFunc("/downloads/", downloadsHandler)
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 

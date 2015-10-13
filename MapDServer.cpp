@@ -76,6 +76,7 @@ class MapDHandler : virtual public MapDIf {
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_));
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
+    import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
   ~MapDHandler() { LOG(INFO) << "mapd_server exits." << std::endl; }
 
@@ -732,7 +733,7 @@ class MapDHandler : virtual public MapDIf {
     check_read_only("detect_column_types");
     get_session(session);
 
-    boost::filesystem::path file_path = file_name;  // FIXME
+    auto file_path = import_path_ / std::to_string(session) / boost::filesystem::path(file_name).filename();
     if (!boost::filesystem::exists(file_path)) {
       TMapDException ex;
       ex.error_msg = "File does not exist.";
@@ -920,8 +921,7 @@ class MapDHandler : virtual public MapDIf {
       throw ex;
     }
 
-    // FIXME(andrew): file_path should be built from the session info
-    boost::filesystem::path file_path = file_name;
+    auto file_path = import_path_ / std::to_string(session) / boost::filesystem::path(file_name).filename();
     if (!boost::filesystem::exists(file_path)) {
       TMapDException ex;
       ex.error_msg = "File does not exist.";
@@ -978,6 +978,7 @@ class MapDHandler : virtual public MapDIf {
   std::map<std::string, std::shared_ptr<Catalog_Namespace::Catalog>> cat_map_;
 
   const std::string base_data_path_;
+  boost::filesystem::path import_path_;
   ExecutorDeviceType executor_device_type_;
   const NVVMBackend nvvm_backend_;
   std::default_random_engine random_gen_;

@@ -58,17 +58,6 @@ if ! pgrep mapd_server; then
 fi
 
 if [ -d frontend -a -e ./bin/mapd_web_server ]; then
-    pushd frontend
-    if [ ! -e downloads ]; then
-        ln -s ../data/mapd_export downloads
-    fi
-    popd
-
-    if [ ! -e uploads ]; then
-        #ln -s ../data/mapd_import uploads
-        mkdir -p uploads
-    fi
-
     trap 'kill -TERM $WEBPID' TERM INT
     PORT=9092 ./bin/mapd_web_server $RO &
     WEBPID=$!
