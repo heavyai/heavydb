@@ -2402,7 +2402,8 @@ const Planner::Join* get_join_child(const Planner::Plan* plan) {
 
 void collect_scan_cols(std::list<std::pair<int, const TableDescriptor*>>& scan_cols,
                        const Planner::Scan* scan_plan,
-                       const Catalog_Namespace::Catalog& cat) {
+                       const Catalog_Namespace::Catalog& cat,
+                       const bool is_join) {
   CHECK(scan_plan);
   const int table_id = scan_plan->get_table_id();
   const auto table_descriptor = cat.getMetadataForTable(table_id);
@@ -2410,6 +2411,9 @@ void collect_scan_cols(std::list<std::pair<int, const TableDescriptor*>>& scan_c
     auto cd = get_column_descriptor(scan_col_id, table_id, cat);
     if (cd->isVirtualCol) {
       CHECK_EQ("rowid", cd->columnName);
+      if (is_join) {
+        throw std::runtime_error("rowid not supported for join plans yet");
+      }
     } else {
       scan_cols.emplace_back(scan_col_id, table_descriptor);
     }
@@ -2461,12 +2465,12 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     CHECK(inner_plan);
     table_ids.push_back(outer_plan->get_table_id());
     table_ids.push_back(inner_plan->get_table_id());
-    collect_scan_cols(scan_cols, outer_plan, cat);
-    collect_scan_cols(scan_cols, inner_plan, cat);
+    collect_scan_cols(scan_cols, outer_plan, cat, true);
+    collect_scan_cols(scan_cols, inner_plan, cat, true);
   } else {
     CHECK(scan_plan);
     table_ids.push_back(scan_plan->get_table_id());
-    collect_scan_cols(scan_cols, scan_plan, cat);
+    collect_scan_cols(scan_cols, scan_plan, cat, false);
   }
 
   auto groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<std::shared_ptr<Analyzer::Expr>>{nullptr};
