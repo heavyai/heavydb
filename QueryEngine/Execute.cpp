@@ -420,7 +420,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
                                             const bool fetch_columns,
                                             const bool hoist_literals) {
   if (!expr) {
-    return {posArg()};
+    return {posArg(expr)};
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
@@ -661,7 +661,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
-      return {cgen_state_->ir_builder_.CreateAdd(posArg(), fragRowOff())};
+      return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), fragRowOff())};
     }
   }
   if (col_var->get_rte_idx() >= 0 && !is_nested_) {
@@ -682,15 +682,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   if (it != cgen_state_->fetch_cache_.end()) {
     return {it->second};
   }
-  llvm::Value* col_byte_stream;
-  llvm::Value* pos_arg;
-  std::tie(col_byte_stream, pos_arg) =
-      colByteStream(is_nested_ ? 0 : col_var->get_table_id(), col_id, fetch_column, hoist_literals);
-  const auto inner_it = cgen_state_->inner_table_to_iterator_.find(col_var->get_table_id());
-  llvm::Value* inner_it_lv{inner_it != cgen_state_->inner_table_to_iterator_.end() ? inner_it->second.first : nullptr};
+  auto pos_arg = posArg(col_var);
+  auto col_byte_stream = colByteStream(is_nested_ ? 0 : col_var->get_table_id(), col_id, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
     plan_state_->columns_to_not_fetch_.insert(col_id);
-    return {inner_it_lv ? inner_it_lv : pos_arg};
+    return {pos_arg};
   }
   if (col_var->get_type_info().is_string() && col_var->get_type_info().get_compression() == kENCODING_NONE) {
     // real (not dictionary-encoded) strings; store the pointer to the payload
@@ -708,8 +704,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     return {col_byte_stream};
   }
   const auto decoder = get_col_decoder(col_var);
-  llvm::Value* col_pos{inner_it_lv ? inner_it_lv : pos_arg};
-  auto dec_val = decoder->codegenDecode(col_byte_stream, col_pos, cgen_state_->module_);
+  auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
   cgen_state_->ir_builder_.Insert(dec_val);
   auto dec_type = dec_val->getType();
   llvm::Value* dec_val_cast{nullptr};
@@ -737,10 +732,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
 }
 
 // returns the byte stream argument and the position for the given column
-std::pair<llvm::Value*, llvm::Value*> Executor::colByteStream(const int table_id,
-                                                              const int col_id,
-                                                              const bool fetch_column,
-                                                              const bool hoist_literals) {
+llvm::Value* Executor::colByteStream(const int table_id,
+                                     const int col_id,
+                                     const bool fetch_column,
+                                     const bool hoist_literals) {
   auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
   CHECK_GE(in_arg_list.size(), 3);
   size_t arg_idx = 0;
@@ -753,14 +748,23 @@ std::pair<llvm::Value*, llvm::Value*> Executor::colByteStream(const int table_id
       pos_arg = &arg;
       pos_idx = arg_idx;
     } else if (pos_arg && arg_idx == pos_idx + 3 + static_cast<size_t>(local_col_id) + (hoist_literals ? 1 : 0)) {
-      return std::make_pair(&arg, pos_arg);
+      return &arg;
     }
     ++arg_idx;
   }
   CHECK(false);
 }
 
-llvm::Value* Executor::posArg() const {
+llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
+  if (dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
+    const auto col_var = static_cast<const Analyzer::ColumnVar*>(expr);
+    const auto inner_it = cgen_state_->inner_table_to_iterator_.find(col_var->get_table_id());
+    if (inner_it != cgen_state_->inner_table_to_iterator_.end()) {
+      CHECK(inner_it->second.first);
+      CHECK(inner_it->second.first->getType()->isIntegerTy(64));
+      return inner_it->second.first;
+    }
+  }
   auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
   for (auto& arg : in_arg_list) {
     if (arg.getType()->isIntegerTy()) {
@@ -1174,7 +1178,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
           fname,
           get_int_type(1, cgen_state_->context_),
           {rhs_lvs.front(),
-           posArg(),
+           posArg(arr_expr),
            lhs_lvs[1],
            lhs_lvs[2],
            ll_int(int64_t(getStringDictionary(elem_ti.get_comp_param(), row_set_mem_owner_))),
@@ -1189,7 +1193,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
     return cgen_state_->emitExternalCall(fname,
                                          get_int_type(1, cgen_state_->context_),
                                          {rhs_lvs.front(),
-                                          posArg(),
+                                          posArg(arr_expr),
                                           lhs_lvs.front(),
                                           elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
                                                           : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
@@ -1467,7 +1471,7 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper, const bool ho
   }
   if (ti.is_array()) {
     return cgen_state_->emitExternalCall(
-        "array_is_null", get_int_type(1, cgen_state_->context_), {operand_lv, posArg()});
+        "array_is_null", get_int_type(1, cgen_state_->context_), {operand_lv, posArg(operand)});
   }
   return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_EQ, operand_lv, inlineIntNull(ti));
 }
@@ -1502,7 +1506,7 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at, const b
   return cgen_state_->emitExternalCall(array_at_fname,
                                        ret_ty,
                                        {arr_lvs.front(),
-                                        posArg(),
+                                        posArg(arr_expr),
                                         idx_lv,
                                         elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
                                                         : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
@@ -4464,11 +4468,12 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
     auto array_idx_ptr = cgen_state_->ir_builder_.CreateAlloca(ret_ty);
     CHECK(array_idx_ptr);
     cgen_state_->ir_builder_.CreateStore(ll_int(int32_t(0)), array_idx_ptr);
-    const auto& array_ti = static_cast<Analyzer::UOper*>(group_by_col)->get_operand()->get_type_info();
+    const auto arr_expr = static_cast<Analyzer::UOper*>(group_by_col)->get_operand();
+    const auto& array_ti = arr_expr->get_type_info();
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
     auto array_len = cgen_state_->emitExternalCall(
-        "array_size", ret_ty, {group_key, posArg(), ll_int(log2_bytes(elem_ti.get_size()))});
+        "array_size", ret_ty, {group_key, posArg(arr_expr), ll_int(log2_bytes(elem_ti.get_size()))});
     cgen_state_->ir_builder_.CreateBr(array_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
     CHECK(array_len);
@@ -4487,7 +4492,7 @@ llvm::Value* Executor::groupByColumnCodegen(Analyzer::Expr* group_by_col,
                                ? (elem_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
                                                                 : llvm::Type::getFloatTy(cgen_state_->context_))
                                : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
-    group_key = cgen_state_->emitExternalCall(array_at_fname, ar_ret_ty, {group_key, posArg(), array_idx});
+    group_key = cgen_state_->emitExternalCall(array_at_fname, ar_ret_ty, {group_key, posArg(arr_expr), array_idx});
     CHECK(array_loop_head);
     array_loops.push(array_loop_head);
   }

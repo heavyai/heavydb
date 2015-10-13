@@ -2405,7 +2405,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         can_return_error = true;
         LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
             // TODO(alex): remove the trunc once pos is converted to 32 bits
-            executor_->posArg(),
+            executor_->posArg(nullptr),
             get_int_type(32, LL_CONTEXT))));
       }
     } else {
@@ -2676,11 +2676,10 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
     }
     size_t target_lv_idx = 0;
     for (const auto& agg_base_name : agg_fn_names) {
-      if (agg_info.is_distinct &&
-          static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info().is_array()) {
+      auto arg_expr = agg_arg(target_expr);
+      if (agg_info.is_distinct && arg_expr->get_type_info().is_array()) {
         CHECK(agg_info.is_distinct);
-        const auto& elem_ti =
-            static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info().get_elem_type();
+        const auto& elem_ti = arg_expr->get_type_info().get_elem_type();
         executor_->cgen_state_->emitExternalCall(
             elem_ti.is_fp()
                 ? "agg_count_distinct_array_" + std::string(elem_ti.get_type() == kDOUBLE ? "double" : "float")
@@ -2689,7 +2688,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
             {is_group_by ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(aggColumnarOff(agg_out_off, query_mem_desc)))
                          : agg_out_vec[agg_out_off],
              target_lvs[target_lv_idx],
-             executor_->posArg(),
+             executor_->posArg(arg_expr),
              elem_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
                              : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))});
         ++agg_out_off;
@@ -2697,7 +2696,6 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
         continue;
       }
       auto target_lv = executor_->toDoublePrecision(target_lvs[target_lv_idx]);
-      auto arg_expr = agg_arg(target_expr);
       std::vector<llvm::Value*> agg_args{
           is_group_by ? LL_BUILDER.CreateGEP(agg_out_start_ptr, LL_INT(aggColumnarOff(agg_out_off, query_mem_desc)))
                       : agg_out_vec[agg_out_off],
@@ -2790,11 +2788,13 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Exp
       const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
       const auto i8p_ty = llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
       const auto& elem_ti = target_ti.get_elem_type();
-      return {executor_->cgen_state_->emitExternalCall("array_buff", i8p_ty, {target_lvs.front(), executor_->posArg()}),
-              executor_->cgen_state_->emitExternalCall(
-                  "array_size",
-                  i32_ty,
-                  {target_lvs.front(), executor_->posArg(), executor_->ll_int(log2_bytes(elem_ti.get_size()))})};
+      return {
+          executor_->cgen_state_->emitExternalCall(
+              "array_buff", i8p_ty, {target_lvs.front(), executor_->posArg(target_expr)}),
+          executor_->cgen_state_->emitExternalCall(
+              "array_size",
+              i32_ty,
+              {target_lvs.front(), executor_->posArg(target_expr), executor_->ll_int(log2_bytes(elem_ti.get_size()))})};
     }
   }
   return agg_expr ? executor_->codegen(agg_expr->get_arg(), true, hoist_literals)

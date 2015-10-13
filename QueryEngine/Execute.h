@@ -175,11 +175,8 @@ class Executor {
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
-  std::pair<llvm::Value*, llvm::Value*> colByteStream(const int table_id,
-                                                      const int col_id,
-                                                      const bool fetch_column,
-                                                      const bool hoist_literals);
-  llvm::Value* posArg() const;
+  llvm::Value* colByteStream(const int table_id, const int col_id, const bool fetch_column, const bool hoist_literals);
+  llvm::Value* posArg(const Analyzer::Expr*) const;
   llvm::Value* fragRowOff() const;
   llvm::Value* rowsPerScan() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
