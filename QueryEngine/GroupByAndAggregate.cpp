@@ -1774,7 +1774,9 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
       const size_t agg_col_count{init_agg_vals.size()};
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer =
-            alloc_gpu_mem(data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id);
+            num_fragments
+                ? alloc_gpu_mem(data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id)
+                : 0;
         out_vec_dev_buffers.push_back(out_vec_dev_buffer);
       }
       auto out_vec_dev_ptr = alloc_gpu_mem(data_mgr, agg_col_count * sizeof(CUdeviceptr), device_id);

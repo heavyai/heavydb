@@ -2735,9 +2735,6 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
           const int inner_table_id = table_ids[table_idx];
           const auto inner_it = frag_ids.find(inner_table_id);
           CHECK(inner_it != frag_ids.end());
-          if (inner_it->second.empty()) {  // TODO(alex): fix
-            num_rows.push_back(0);
-          }
           for (const auto inner_frag_id : inner_it->second) {
             const auto& inner_fragment = query_infos[table_idx].fragments[inner_frag_id];
             num_rows.push_back(inner_fragment.numTuples);
