@@ -4562,7 +4562,7 @@ std::pair<bool, int64_t> Executor::skipFragment(const int table_id,
       auto cd = get_column_descriptor(col_id, table_id, *catalog_);
       CHECK(cd->isVirtualCol && cd->columnName == "rowid");
       chunk_min = all_frag_row_offsets[frag_idx];
-      chunk_max = all_frag_row_offsets[frag_idx + 1];
+      chunk_max = all_frag_row_offsets[frag_idx + 1] - 1;
       is_rowid = true;
     } else {
       const auto& chunk_type = lhs->get_type_info();
