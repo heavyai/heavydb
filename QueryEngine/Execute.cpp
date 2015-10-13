@@ -1755,7 +1755,7 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
   }
   const int8_t*** multifrag_cols_ptr{multifrag_col_buffers.empty() ? nullptr : &multifrag_col_buffers[0]};
   int64_t** small_group_by_buffers_ptr{small_group_by_buffers.empty() ? nullptr : &small_group_by_buffers[0]};
-  const uint32_t num_fragments{1};
+  const uint32_t num_fragments = multifrag_cols_ptr ? 1 : 0;
 
   int64_t rowid_lookup_num_rows{*error_code ? *error_code + 1 : 0};
   auto num_rows_ptr = rowid_lookup_num_rows ? &rowid_lookup_num_rows : &num_rows[0];
