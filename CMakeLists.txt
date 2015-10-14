@@ -250,6 +250,7 @@ if(GO_EXECUTABLE)
     SOURCES MapDWebServer.go
     )
   install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
+  add_subdirectory(ThirdParty/generate_cert)
 endif()
 
 # Docs

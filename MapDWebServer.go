@@ -27,15 +27,18 @@ import (
 )
 
 var (
-	port       int
-	backendUrl string
-	frontend   string
-	dataDir    string
-	readOnly   bool
-	quiet      bool
-	roundRobin bool
-	profile    bool
-	compress   bool
+	port        int
+	backendUrl  string
+	frontend    string
+	dataDir     string
+	certFile    string
+	keyFile     string
+	readOnly    bool
+	quiet       bool
+	roundRobin  bool
+	enableHttps bool
+	profile     bool
+	compress    bool
 )
 
 var (
@@ -72,6 +75,9 @@ func init() {
 	pflag.StringP("config", "c", "", "path to MapD configuration file")
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
 	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
+	pflag.BoolP("enable-https", "", false, "enable HTTPS support")
+	pflag.StringP("cert", "", "cert.pem", "certificate file for HTTPS")
+	pflag.StringP("key", "", "key.pem", "key file for HTTPS")
 	pflag.Bool("round-robin", false, "round-robin between backend urls")
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
 	pflag.Bool("compress", false, "enable gzip compression")
@@ -85,6 +91,9 @@ func init() {
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
 	viper.BindPFlag("web.round-robin", pflag.CommandLine.Lookup("round-robin"))
+	viper.BindPFlag("web.enable-https", pflag.CommandLine.Lookup("enable-https"))
+	viper.BindPFlag("web.cert", pflag.CommandLine.Lookup("cert"))
+	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
 	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
 
@@ -131,6 +140,10 @@ func init() {
 	backendUrls = strings.Split(backendUrl, ",")
 	backendUserMap = make(map[string]string)
 	sessionCounter = 0
+
+	enableHttps = viper.GetBool("web.enable-https")
+	certFile = viper.GetString("web.cert")
+	keyFile = viper.GetString("web.key")
 }
 
 func uploadHandler(rw http.ResponseWriter, r *http.Request) {
@@ -356,7 +369,19 @@ func main() {
 	if compress {
 		cmux = handlers.CompressHandler(cmux)
 	}
-	err = http.ListenAndServe(":"+strconv.Itoa(port), cmux)
+
+	if enableHttps {
+		if _, err := os.Stat(certFile); err != nil {
+			log.Fatalln("Error opening certificate:", err)
+		}
+		if _, err := os.Stat(keyFile); err != nil {
+			log.Fatalln("Error opening keyfile:", err)
+		}
+		err = http.ListenAndServeTLS(":"+strconv.Itoa(port), certFile, keyFile, cmux)
+	} else {
+		err = http.ListenAndServe(":"+strconv.Itoa(port), cmux)
+	}
+
 	if err != nil {
 		log.Fatal("Error starting http server: ", err)
 	}

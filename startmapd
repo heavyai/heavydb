@@ -47,6 +47,14 @@ while (( $# )); do
             shift
             MAPD_DATA=$1
             ;;
+        --enable-https)
+            HTTPS="--enable-https" ;;
+        --cert)
+            shift
+            HTTPS_CERT="--cert $1" ;;
+        --key)
+            shift
+            HTTPS_KEY="--key $1" ;;
         *)
             break ;;
     esac
@@ -89,9 +97,13 @@ if [ "$INSERT_SAMPLE_DATA" = true ]; then
 fi
 
 if [ -d frontend -a -e ./bin/mapd_web_server ]; then
-    ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA &
+    ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY &
 
-    MAPDFRONTEND="http://localhost:${MAPD_WEB_PORT}"
+    if [ ! -z "$HTTPS" ] ; then
+        MAPDFRONTEND="https://localhost:${MAPD_WEB_PORT}"
+    else
+        MAPDFRONTEND="http://localhost:${MAPD_WEB_PORT}"
+    fi
     if [ ! -z "$MAPDDASH" ]; then
         MAPDFRONTEND="${MAPDFRONTEND}/?style=light-style&platform=mapd&host=localhost&port=${MAPD_WEB_PORT}&db=mapd&${MAPDDASH}"
     fi
