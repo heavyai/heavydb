@@ -952,6 +952,11 @@ TEST(Select, JoinsAndArrays) {
     ASSERT_EQ(int64_t(g_array_test_row_count),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test, array_test_inner WHERE 7 = array_test_inner.arr_i16[1];", dt)));
+    auto result_rows = run_multiple_agg(
+        "SELECT UNNEST(array_test.arr_i16) AS a, test_inner.x, COUNT(*) FROM array_test, test_inner WHERE test_inner.x "
+        "= array_test.arr_i16[1] GROUP BY a, test_inner.x;",
+        dt);
+    ASSERT_EQ(size_t(3), result_rows.rowCount());
   }
 }
 
