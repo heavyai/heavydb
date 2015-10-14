@@ -937,6 +937,26 @@ TEST(Select, Joins) {
   }
 }
 
+TEST(Select, JoinsAndArrays) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(int64_t(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x = ALL array_test_inner.arr_i16;", dt)));
+    ASSERT_EQ(int64_t(60),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x = ANY array_test_inner.arr_i16;", dt)));
+    ASSERT_EQ(int64_t(2 * g_array_test_row_count * g_num_rows - 60),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x <> ALL array_test_inner.arr_i16;", dt)));
+  }
+  for (auto dt : {ExecutorDeviceType::CPU}) {  // TODO(alex): figure out what's going on on GPU
+    ASSERT_EQ(int64_t(g_array_test_row_count),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM test, array_test_inner WHERE 7 = array_test_inner.arr_i16[1];", dt)));
+  }
+}
+
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;
@@ -1015,6 +1035,20 @@ int main(int argc, char** argv) {
   const std::string insert_query{"INSERT INTO test_inner VALUES(7, 'foo');"};
   run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
   g_sqlite_comparator.query(insert_query);
+  try {
+    const std::string drop_old_array_test{"DROP TABLE IF EXISTS array_test_inner;"};
+    run_ddl_statement(drop_old_array_test);
+    const std::string create_array_test{
+        "CREATE TABLE array_test_inner(x int, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str text[] "
+        "encoding "
+        "dict, "
+        "arr_float float[], arr_double double[], arr_bool boolean[], real_str text) WITH (fragment_size=4000000);"};
+    run_ddl_statement(create_array_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
+    return -EEXIST;
+  }
+  import_array_test("array_test_inner");
   int err{0};
   try {
     err = RUN_ALL_TESTS();
@@ -1030,6 +1064,8 @@ int main(int argc, char** argv) {
   g_sqlite_comparator.query(drop_test_inner);
   const std::string drop_array_test{"DROP TABLE array_test;"};
   run_ddl_statement(drop_array_test);
+  const std::string drop_array_test_inner{"DROP TABLE array_test_inner;"};
+  run_ddl_statement(drop_array_test_inner);
   g_session.reset(nullptr);
   return err;
 }
