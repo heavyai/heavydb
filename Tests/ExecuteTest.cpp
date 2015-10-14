@@ -949,8 +949,6 @@ TEST(Select, JoinsAndArrays) {
     ASSERT_EQ(int64_t(2 * g_array_test_row_count * g_num_rows - 60),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test, array_test_inner WHERE test.x <> ALL array_test_inner.arr_i16;", dt)));
-  }
-  for (auto dt : {ExecutorDeviceType::CPU}) {  // TODO(alex): figure out what's going on on GPU
     ASSERT_EQ(int64_t(g_array_test_row_count),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test, array_test_inner WHERE 7 = array_test_inner.arr_i16[1];", dt)));

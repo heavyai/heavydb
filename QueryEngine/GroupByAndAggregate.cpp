@@ -916,7 +916,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
             if (executor_->plan_state_->isLazyFetchColumn(target_expr)) {
               const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(target_expr);
               CHECK(col_var);
-              auto col_id = executor_->getLocalColumnId(col_var->get_table_id(), col_var->get_column_id(), false);
+              auto col_id = executor_->getLocalColumnId(col_var, false);
               CHECK_EQ(1, col_buffers.size());
               auto& frag_col_buffers = col_buffers.front();
               bool is_end{false};
@@ -1372,7 +1372,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
         bool is_end;
         CHECK_GE(global_col_id, 0);
         CHECK(col_var);
-        auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var->get_table_id(), global_col_id, false);
+        auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var, false);
         CHECK_EQ(1, col_buffers_.size());
         auto& frag_col_buffers = col_buffers_.front();
         if (is_real_string) {
@@ -1490,7 +1490,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
       if (query_mem_desc_.executor_->plan_state_->isLazyFetchColumn(target_expr)) {
         CHECK_GE(global_col_id, 0);
         CHECK(col_var);
-        auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var->get_table_id(), global_col_id, false);
+        auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var, false);
         CHECK_EQ(1, col_buffers_.size());
         auto& frag_col_buffers = col_buffers_.front();
         val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), frag_col_buffers[col_id], val1);

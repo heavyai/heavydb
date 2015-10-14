@@ -82,6 +82,30 @@ const ColumnDescriptor* get_column_descriptor(const int col_id,
 
 }  // namespace
 
+struct ScanColDescriptor {
+  ScanColDescriptor(const int col_id, const TableDescriptor* td, const int scan_idx)
+      : col_id_(col_id), td_(td), scan_idx_(scan_idx) {}
+
+  bool operator==(const ScanColDescriptor& that) const {
+    return col_id_ == that.col_id_ && !!td_ == !!that.td_ && (!td_ || td_->tableId == that.td_->tableId) &&
+           scan_idx_ == that.scan_idx_;
+  }
+
+  const int col_id_;
+  const TableDescriptor* td_;
+  const int scan_idx_;
+};
+
+namespace std {
+template <>
+struct hash<ScanColDescriptor> {
+  size_t operator()(const ScanColDescriptor& scan_col_desc) const {
+    return static_cast<size_t>(scan_col_desc.col_id_) ^ reinterpret_cast<size_t>(scan_col_desc.td_) ^
+           scan_col_desc.scan_idx_;
+  }
+};
+}
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -175,7 +199,7 @@ class Executor {
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const bool hoist_literals);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
-  llvm::Value* colByteStream(const int table_id, const int col_id, const bool fetch_column, const bool hoist_literals);
+  llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
   llvm::Value* fragRowOff() const;
   llvm::Value* rowsPerScan() const;
@@ -239,7 +263,7 @@ class Executor {
                          std::unordered_set<int>& available_gpus,
                          int& available_cpus);
 
-  std::vector<std::vector<const int8_t*>> fetchChunks(const std::list<std::pair<int, const TableDescriptor*>>&,
+  std::vector<std::vector<const int8_t*>> fetchChunks(const std::list<ScanColDescriptor>&,
                                                       const int device_id,
                                                       const Data_Namespace::MemoryLevel,
                                                       const std::vector<int>& table_ids,
@@ -251,7 +275,7 @@ class Executor {
 
   void buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
                                  std::vector<size_t>& local_col_to_frag_pos,
-                                 const std::list<std::pair<int, const TableDescriptor*>>& col_global_ids,
+                                 const std::list<ScanColDescriptor>& col_global_ids,
                                  const std::map<int, std::vector<size_t>>& selected_fragments,
                                  const std::vector<int>& table_ids);
 
@@ -327,7 +351,7 @@ class Executor {
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const std::vector<Executor::AggInfo>& agg_infos,
                                 const std::vector<int>& table_ids,
-                                const std::list<std::pair<int, const TableDescriptor*>>& scan_cols,
+                                const std::list<ScanColDescriptor>& scan_cols,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                 const bool hoist_literals,
@@ -384,8 +408,8 @@ class Executor {
 
   llvm::Value* toDoublePrecision(llvm::Value* val);
 
-  void allocateLocalColumnIds(const std::list<std::pair<int, const TableDescriptor*>>& global_col_ids);
-  int getLocalColumnId(const int table_id, const int global_col_id, const bool fetch_column) const;
+  void allocateLocalColumnIds(const std::list<ScanColDescriptor>& global_col_ids);
+  int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column) const;
 
   std::pair<bool, int64_t> skipFragment(const int table_id,
                                         const Fragmenter_Namespace::FragmentInfo& frag_info,
@@ -564,7 +588,7 @@ class Executor {
 
     std::vector<int64_t> init_agg_vals_;
     std::vector<Analyzer::Expr*> target_exprs_;
-    std::map<std::pair<int, int>, int> global_to_local_col_ids_;
+    std::unordered_map<ScanColDescriptor, int> global_to_local_col_ids_;
     std::vector<int> local_to_global_col_ids_;
     std::unordered_set<int> columns_to_fetch_;
     std::unordered_set<int> columns_to_not_fetch_;
