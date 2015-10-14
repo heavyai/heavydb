@@ -3,14 +3,16 @@ package main
 import (
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
+	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/handlers"
 	"github.com/namsral/flag"
 	"github.com/rs/cors"
@@ -24,6 +26,17 @@ var (
 	dataDir      string
 	readOnly     bool
 )
+
+func getLogName(lvl string) string {
+	n := filepath.Base(os.Args[0])
+	h, _ := os.Hostname()
+	us, _ := user.Current()
+	u := us.Username
+	t := time.Now().Format("20060102-150405")
+	p := strconv.Itoa(os.Getpid())
+
+	return n + "." + h + "." + u + ".log." + lvl + "." + t + "." + p
+}
 
 func init() {
 	flag.IntVar(&port, "port", 9092, "frontend server port")
@@ -131,6 +144,19 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	lf, err := os.OpenFile(dataDir+"/mapd_log/"+getLogName("ALL"), os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		log.Fatal("Error opening log file: ", err)
+	}
+	defer lf.Close()
+	log.SetOutput(io.MultiWriter(os.Stdout, lf))
+
+	alf, err := os.OpenFile(dataDir+"/mapd_log/"+getLogName("ACCESS"), os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		log.Fatal("Error opening log file: ", err)
+	}
+	defer alf.Close()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/upload", uploadHandler)
 	mux.HandleFunc("/images/", imagesHandler)
@@ -138,9 +164,9 @@ func main() {
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
-	lmux := handlers.LoggingHandler(os.Stdout, mux)
+	lmux := handlers.LoggingHandler(io.MultiWriter(os.Stdout, alf), mux)
 	cmux := cors.Default().Handler(lmux)
-	err := http.ListenAndServe(":"+strconv.Itoa(port), cmux)
+	err = http.ListenAndServe(":"+strconv.Itoa(port), cmux)
 	if err != nil {
 		log.Fatal("Error listening: ", err)
 	}
