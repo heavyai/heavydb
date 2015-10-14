@@ -245,6 +245,9 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       if (error_code == ERR_DIV_BY_ZERO) {
         throw std::runtime_error("Division by zero");
       }
+      if (error_code == ERR_UNSUPPORTED_SELF_JOIN) {
+        throw std::runtime_error("Self joins not supported yet");
+      }
       if (error_code == ERR_OUT_OF_GPU_MEM) {
         rows = executeSelectPlan(root_plan->get_plan(),
                                  root_plan->get_limit(),
@@ -2771,7 +2774,11 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
         int table_id = table_ids[table_idx];
         const auto& fragments = query_infos[table_idx].fragments;
         auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
-        CHECK(it_ok.second);
+        if (!it_ok.second) {
+          std::lock_guard<std::mutex> lock(reduce_mutex);
+          *error_code = ERR_UNSUPPORTED_SELF_JOIN;
+          return;
+        }
       }
       col_buffers = fetchChunks(col_global_ids,
                                 chosen_device_id,
