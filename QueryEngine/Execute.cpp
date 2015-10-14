@@ -2990,6 +2990,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           fragments_per_device[device_id][inner_frags.first].push_back(frag_id);
         } else {
           std::vector<size_t> all_frag_ids(inner_frags.second->size());
+          if (all_frag_ids.size() > 1) {
+            throw std::runtime_error("Multi-fragment inner table not supported yet");
+          }
           std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
           fragments_per_device[device_id][inner_frags.first] = all_frag_ids;
         }
@@ -3031,6 +3034,9 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
           frag_ids_for_table[inner_frags.first] = {i};
         } else {
           std::vector<size_t> all_frag_ids(inner_frags.second->size());
+          if (all_frag_ids.size() > 1) {
+            throw std::runtime_error("Multi-fragment inner table not supported yet");
+          }
           std::iota(all_frag_ids.begin(), all_frag_ids.end(), 0);
           frag_ids_for_table[inner_frags.first] = all_frag_ids;
         }
