@@ -1129,6 +1129,11 @@ std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti, const SQLTypeInfo& 
   return null_check_suffix;
 }
 
+bool is_unnest(const Analyzer::Expr* expr) {
+  return dynamic_cast<const Analyzer::UOper*>(expr) &&
+         static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
+}
+
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
@@ -1136,6 +1141,9 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
+  if (is_unnest(lhs) || is_unnest(rhs)) {
+    throw std::runtime_error("Unnest not supported in comparisons");
+  }
   return codegenCmp(optype, qualifier, lhs, rhs, hoist_literals);
 }
 
