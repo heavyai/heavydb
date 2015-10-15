@@ -671,3 +671,7 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                resume_row_index);
   }
 }
+
+extern "C" __attribute__((noinline)) int64_t hash_join_idx(const int64_t) {
+  return -1;
+}

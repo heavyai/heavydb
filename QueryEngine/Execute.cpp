@@ -684,6 +684,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   if (it != cgen_state_->fetch_cache_.end()) {
     return {it->second};
   }
+  const auto hash_join_lhs = hashJoinLhs(col_var);
+  if (hash_join_lhs) {
+    CHECK(false);
+    return codegen(hash_join_lhs, fetch_column, hoist_literals);
+  }
   auto pos_arg = posArg(col_var);
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
   if (plan_state_->isLazyFetchColumn(col_var)) {
@@ -773,6 +778,18 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
     }
   }
   CHECK(false);
+}
+
+const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs) const {
+  for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
+    CHECK(tautological_eq->get_optype() == kEQ);
+    if (tautological_eq->get_right_operand() == rhs) {
+      auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(tautological_eq->get_left_operand());
+      CHECK(lhs_col);
+      return lhs_col;
+    }
+  }
+  return nullptr;
 }
 
 llvm::Value* Executor::fragRowOff() const {
@@ -1136,6 +1153,24 @@ bool is_unnest(const Analyzer::Expr* expr) {
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
+  if (plan_state_->join_info_.equi_join_tautologies_.find(bin_oper) !=
+      plan_state_->join_info_.equi_join_tautologies_.end()) {
+    CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne);
+    auto key_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
+    CHECK(key_col);
+    auto val_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
+    CHECK(val_col);
+    if (key_col->get_rte_idx() != 0) {
+      std::swap(key_col, val_col);
+    }
+    const auto key_lvs = codegen(key_col, true, hoist_literals);
+    CHECK_EQ(size_t(1), key_lvs.size());
+    const auto slot_lv = cgen_state_->emitExternalCall(
+        "hash_join_idx", get_int_type(64, cgen_state_->context_), {toDoublePrecision(key_lvs.front())});
+    const auto slot_valid_lv =
+        cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, ll_int(int64_t(0)));
+    return slot_valid_lv;
+  }
   const auto optype = bin_oper->get_optype();
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
@@ -2265,7 +2300,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         false,
                                         just_explain,
                                         llvm_ir,
-                                        JoinImplType::Invalid,
+                                        JoinInfo(JoinImplType::Invalid, std::unordered_set<const Analyzer::BinOper*>{}),
                                         allow_joins);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
@@ -2474,7 +2509,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   std::list<ScanColDescriptor> scan_cols;
   const Planner::Scan* outer_plan{nullptr};
   const Planner::Scan* inner_plan{nullptr};
-  JoinImplType join_impl_type{JoinImplType::Invalid};
+  JoinInfo join_info(JoinImplType::Invalid, std::unordered_set<const Analyzer::BinOper*>{});
   if (join_plan) {
     outer_plan = get_scan_child(join_plan->get_outerplan());
     CHECK(outer_plan);
@@ -2484,7 +2519,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     scan_ids.emplace_back(inner_plan->get_table_id(), 1);
     collect_scan_cols(scan_cols, outer_plan, cat, true, 0);
     collect_scan_cols(scan_cols, inner_plan, cat, true, 1);
-    join_impl_type = chooseJoinType(join_plan);
+    join_info = chooseJoinType(join_plan);
   } else {
     CHECK(scan_plan);
     scan_ids.emplace_back(scan_plan->get_table_id(), 0);
@@ -2574,7 +2609,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_cpu,
-                                           join_impl_type,
+                                           join_info,
                                            allow_joins);
     } catch (...) {
       compilation_result_cpu = compilePlan(plan,
@@ -2598,7 +2633,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_cpu,
-                                           join_impl_type,
+                                           join_info,
                                            allow_joins);
     }
   };
@@ -2633,7 +2668,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_gpu,
-                                           join_impl_type,
+                                           join_info,
                                            allow_joins);
     } catch (...) {
       compilation_result_gpu = compilePlan(plan,
@@ -2657,7 +2692,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_gpu,
-                                           join_impl_type,
+                                           join_info,
                                            allow_joins);
     }
   }
@@ -3677,9 +3712,9 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
 
 }  // namespace
 
-void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinImplType join_impl_type) {
+void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_info) {
   cgen_state_.reset(new CgenState());
-  plan_state_.reset(new PlanState(allow_lazy_fetch, join_impl_type, this));
+  plan_state_.reset(new PlanState(allow_lazy_fetch, join_info, this));
 }
 
 Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
@@ -3703,13 +3738,13 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const bool output_columnar_hint,
                                                   const bool serialize_llvm_ir,
                                                   std::string& llvm_ir,
-                                                  const Executor::JoinImplType join_impl_type,
+                                                  const JoinInfo& join_info,
                                                   const bool allow_joins) {
   if (query_infos.size() == 1) {
     QueryRewriter query_rewriter(plan, query_infos, this);
     query_rewriter.rewrite();
   }
-  nukeOldState(allow_lazy_fetch, join_impl_type);
+  nukeOldState(allow_lazy_fetch, join_info);
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              device_type,
@@ -3929,10 +3964,11 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, 
   if (scan_ids.size() <= 1) {
     return;
   }
-  if (plan_state_->join_impl_type_ == JoinImplType::HashOneToOne) {
+  if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
     CHECK(false);
+    return;
   }
-  CHECK(plan_state_->join_impl_type_ == JoinImplType::Loop);
+  CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
   if (!allow_joins) {
     throw std::runtime_error("Join plans not supported yet");
   }
@@ -3968,8 +4004,32 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, 
   }
 }
 
-Executor::JoinImplType Executor::chooseJoinType(const Planner::Join*) {
-  return JoinImplType::Loop;
+Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan) {
+  CHECK(join_plan);
+  for (const auto qual : join_plan->get_quals()) {
+    const auto qual_bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual);
+    CHECK(qual_bin_oper);
+    if (qual_bin_oper->get_optype() == kEQ) {
+      const auto lhs = qual_bin_oper->get_left_operand();
+      const auto rhs = qual_bin_oper->get_right_operand();
+      const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+      const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+      if (!lhs_col || !rhs_col) {
+        continue;
+      }
+      if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
+        return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
+                                  std::unordered_set<const Analyzer::BinOper*>{/* qual_bin_oper.get() */
+                                  });
+      }
+      if (lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0) {
+        return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
+                                  std::unordered_set<const Analyzer::BinOper*>{/* qual_bin_oper.get() */
+                                  });
+      }
+    }
+  }
+  return Executor::JoinInfo(JoinImplType::Loop, std::unordered_set<const Analyzer::BinOper*>{});
 }
 
 void Executor::bindInitGroupByBuffer(llvm::Function* query_func,
@@ -4240,6 +4300,7 @@ declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i32 @merge_error_code(i32, i32*);
+declare i64 @hash_join_idx(i64);
 )" +
     gen_array_any_all_sigs();
 

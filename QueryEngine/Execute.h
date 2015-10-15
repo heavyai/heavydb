@@ -218,6 +218,7 @@ class Executor {
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
+  const Analyzer::ColumnVar* hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
   llvm::Value* fragRowOff() const;
   llvm::Value* rowsPerScan() const;
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
@@ -366,6 +367,17 @@ class Executor {
 
   enum class JoinImplType { Invalid, Loop, HashOneToOne };
 
+  struct JoinInfo {
+    JoinInfo(const JoinImplType join_impl_type,
+             const std::unordered_set<const Analyzer::BinOper*>& equi_join_tautologies)
+        : join_impl_type_(join_impl_type), equi_join_tautologies_(equi_join_tautologies) {}
+
+    JoinImplType join_impl_type_;
+    std::unordered_set<const Analyzer::BinOper*> equi_join_tautologies_;  // expressions we equi-join on are true by
+                                                                          // definition when using a hash join; we'll
+                                                                          // fold them to true during code generation
+  };
+
   CompilationResult compilePlan(const Planner::Plan* plan,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const std::vector<Executor::AggInfo>& agg_infos,
@@ -387,20 +399,20 @@ class Executor {
                                 const bool output_columnar_hint,
                                 const bool serialize_llvm_ir,
                                 std::string& llvm_ir,
-                                const JoinImplType join_impl_type,
+                                const JoinInfo& join_info,
                                 const bool allow_joins);
 
   void codegenInnerScanNextRow();
 
   void allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_joins);
 
-  JoinImplType chooseJoinType(const Planner::Join*);
+  JoinInfo chooseJoinType(const Planner::Join*);
 
   void bindInitGroupByBuffer(llvm::Function* query_func,
                              const QueryMemoryDescriptor& query_mem_desc,
                              const ExecutorDeviceType device_type);
 
-  void nukeOldState(const bool allow_lazy_fetch, const JoinImplType join_impl_type);
+  void nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_info);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,
                                            const bool hoist_literals,
@@ -604,8 +616,8 @@ class Executor {
   std::unique_ptr<CgenState> cgen_state_;
 
   struct PlanState {
-    PlanState(const bool allow_lazy_fetch, const JoinImplType join_impl_type, const Executor* executor)
-        : allow_lazy_fetch_(allow_lazy_fetch), join_impl_type_(join_impl_type), executor_(executor) {}
+    PlanState(const bool allow_lazy_fetch, const JoinInfo& join_info, const Executor* executor)
+        : allow_lazy_fetch_(allow_lazy_fetch), join_info_(join_info), executor_(executor) {}
 
     std::vector<int64_t> init_agg_vals_;
     std::vector<Analyzer::Expr*> target_exprs_;
@@ -614,7 +626,7 @@ class Executor {
     std::unordered_set<int> columns_to_fetch_;
     std::unordered_set<int> columns_to_not_fetch_;
     bool allow_lazy_fetch_;
-    JoinImplType join_impl_type_;
+    JoinInfo join_info_;
     const Executor* executor_;
 
     bool isLazyFetchColumn(const Analyzer::Expr* target_expr) {
