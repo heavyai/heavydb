@@ -106,6 +106,22 @@ struct hash<ScanColDescriptor> {
 };
 }
 
+struct ScanId {
+  ScanId(const int table_id, const int scan_idx) : table_id_(table_id), scan_idx_(scan_idx) {}
+
+  bool operator==(const ScanId& that) const { return table_id_ == that.table_id_ && scan_idx_ == that.scan_idx_; }
+
+  const int table_id_;
+  const int scan_idx_;
+};
+
+namespace std {
+template <>
+struct hash<ScanId> {
+  size_t operator()(const ScanId& scan_id) const { return scan_id.table_id_ ^ scan_id.scan_idx_; }
+};
+}
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -253,7 +269,7 @@ class Executor {
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
                          const Planner::AggPlan* agg_plan,
-                         const std::vector<int>& table_ids,
+                         const std::vector<ScanId>& scan_ids,
                          const std::map<int, const TableFragments*>& all_tables_fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                          const std::vector<uint64_t>& all_frag_row_offsets,
@@ -266,7 +282,7 @@ class Executor {
   std::vector<std::vector<const int8_t*>> fetchChunks(const std::list<ScanColDescriptor>&,
                                                       const int device_id,
                                                       const Data_Namespace::MemoryLevel,
-                                                      const std::vector<int>& table_ids,
+                                                      const std::vector<ScanId>& scan_ids,
                                                       const std::map<int, const TableFragments*>&,
                                                       const std::map<int, std::vector<size_t>>& selected_fragments,
                                                       const Catalog_Namespace::Catalog&,
@@ -277,7 +293,7 @@ class Executor {
                                  std::vector<size_t>& local_col_to_frag_pos,
                                  const std::list<ScanColDescriptor>& col_global_ids,
                                  const std::map<int, std::vector<size_t>>& selected_fragments,
-                                 const std::vector<int>& table_ids);
+                                 const std::vector<ScanId>& scan_ids);
 
   ResultRows executeResultPlan(const Planner::Result* result_plan,
                                const bool hoist_literals,
@@ -352,7 +368,7 @@ class Executor {
   CompilationResult compilePlan(const Planner::Plan* plan,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const std::vector<Executor::AggInfo>& agg_infos,
-                                const std::vector<int>& table_ids,
+                                const std::vector<ScanId>& scan_ids,
                                 const std::list<ScanColDescriptor>& scan_cols,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
@@ -375,7 +391,7 @@ class Executor {
 
   void codegenInnerScanNextRow();
 
-  void allocateInnerScansIterators(const std::vector<int>& table_ids, const bool allow_joins);
+  void allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_joins);
 
   JoinImplType chooseJoinType(const Planner::Join*);
 
@@ -558,7 +574,7 @@ class Executor {
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
-    std::unordered_map<int, std::pair<llvm::Value*, llvm::Value*>> inner_table_to_iterator_;
+    std::unordered_map<ScanId, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     bool must_run_on_cpu_;
     bool uses_div_;

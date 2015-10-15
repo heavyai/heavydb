@@ -759,8 +759,8 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
 llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
   if (dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
     const auto col_var = static_cast<const Analyzer::ColumnVar*>(expr);
-    const auto inner_it = cgen_state_->inner_table_to_iterator_.find(col_var->get_table_id());
-    if (inner_it != cgen_state_->inner_table_to_iterator_.end()) {
+    const auto inner_it = cgen_state_->scan_to_iterator_.find(ScanId(col_var->get_table_id(), col_var->get_rte_idx()));
+    if (inner_it != cgen_state_->scan_to_iterator_.end()) {
       CHECK(inner_it->second.first);
       CHECK(inner_it->second.first->getType()->isIntegerTy(64));
       return inner_it->second.first;
@@ -2471,7 +2471,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   // TODO(alex): heuristic for group by buffer size
   const auto scan_plan = get_scan_child(plan);
   const auto join_plan = get_join_child(plan);
-  std::vector<int> table_ids;
+  std::vector<ScanId> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
   const Planner::Scan* outer_plan{nullptr};
   const Planner::Scan* inner_plan{nullptr};
@@ -2481,14 +2481,14 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     CHECK(outer_plan);
     inner_plan = get_scan_child(join_plan->get_innerplan());
     CHECK(inner_plan);
-    table_ids.push_back(outer_plan->get_table_id());
-    table_ids.push_back(inner_plan->get_table_id());
+    scan_ids.emplace_back(outer_plan->get_table_id(), 0);
+    scan_ids.emplace_back(inner_plan->get_table_id(), 1);
     collect_scan_cols(scan_cols, outer_plan, cat, true, 0);
     collect_scan_cols(scan_cols, inner_plan, cat, true, 1);
     join_impl_type = chooseJoinType(join_plan);
   } else {
     CHECK(scan_plan);
-    table_ids.push_back(scan_plan->get_table_id());
+    scan_ids.emplace_back(scan_plan->get_table_id(), 0);
     collect_scan_cols(scan_cols, scan_plan, cat, false, 0);
   }
 
@@ -2506,8 +2506,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
 
   std::vector<Fragmenter_Namespace::QueryInfo> query_infos;
   {
-    for (const int table_id : table_ids) {
-      const auto table_descriptor = cat.getMetadataForTable(table_id);
+    for (const auto& scan_id : scan_ids) {
+      const auto table_descriptor = cat.getMetadataForTable(scan_id.table_id_);
       CHECK(table_descriptor);
       const auto fragmenter = table_descriptor->fragmenter;
       CHECK(fragmenter);
@@ -2557,7 +2557,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       compilation_result_cpu = compilePlan(plan,
                                            query_infos,
                                            agg_infos,
-                                           table_ids,
+                                           scan_ids,
                                            scan_cols,
                                            simple_quals,
                                            quals,
@@ -2581,7 +2581,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       compilation_result_cpu = compilePlan(plan,
                                            query_infos,
                                            agg_infos,
-                                           table_ids,
+                                           scan_ids,
                                            scan_cols,
                                            simple_quals,
                                            quals,
@@ -2616,7 +2616,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       compilation_result_gpu = compilePlan(plan,
                                            query_infos,
                                            agg_infos,
-                                           table_ids,
+                                           scan_ids,
                                            scan_cols,
                                            simple_quals,
                                            quals,
@@ -2640,7 +2640,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       compilation_result_gpu = compilePlan(plan,
                                            query_infos,
                                            agg_infos,
-                                           table_ids,
+                                           scan_ids,
                                            scan_cols,
                                            simple_quals,
                                            quals,
@@ -2721,7 +2721,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                    scan_limit,
                    current_dbid,
                    device_type,
-                   table_ids,
+                   scan_ids,
                    &available_cpus,
                    &available_gpus,
                    &scheduler_cv,
@@ -2748,7 +2748,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
         chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
     std::vector<int64_t> num_rows;
     std::vector<uint64_t> dev_frag_row_offsets;
-    const int outer_table_id = table_ids.front();
+    const int outer_table_id = scan_ids.front().table_id_;
     const auto outer_it = frag_ids.find(outer_table_id);
     CHECK(outer_it != frag_ids.end());
     for (const auto frag_id : outer_it->second) {
@@ -2757,9 +2757,9 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
         chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
       }
       num_rows.push_back(outer_fragment.numTuples);
-      if (table_ids.size() > 1) {
-        for (size_t table_idx = 1; table_idx < table_ids.size(); ++table_idx) {
-          const int inner_table_id = table_ids[table_idx];
+      if (scan_ids.size() > 1) {
+        for (size_t table_idx = 1; table_idx < scan_ids.size(); ++table_idx) {
+          const int inner_table_id = scan_ids[table_idx].table_id_;
           const auto inner_it = frag_ids.find(inner_table_id);
           if (inner_it->second.empty()) {
             num_rows.push_back(0);
@@ -2785,8 +2785,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     std::vector<std::vector<const int8_t*>> col_buffers;
     try {
       std::map<int, const TableFragments*> all_tables_fragments;
-      for (size_t table_idx = 0; table_idx < table_ids.size(); ++table_idx) {
-        int table_id = table_ids[table_idx];
+      for (size_t table_idx = 0; table_idx < scan_ids.size(); ++table_idx) {
+        int table_id = scan_ids[table_idx].table_id_;
         const auto& fragments = query_infos[table_idx].fragments;
         auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
         if (!it_ok.second) {
@@ -2798,7 +2798,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
       col_buffers = fetchChunks(col_global_ids,
                                 chosen_device_id,
                                 memory_level,
-                                table_ids,
+                                scan_ids,
                                 all_tables_fragments,
                                 frag_ids,
                                 cat,
@@ -2865,7 +2865,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                       &cat.get_dataMgr(),
                                       chosen_device_id,
                                       start_rowid,
-                                      table_ids.size());
+                                      scan_ids.size());
     } else {
       err = executePlanWithGroupBy(compilation_result,
                                    hoist_literals,
@@ -2882,7 +2882,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                    scan_limit,
                                    device_type == ExecutorDeviceType::Hybrid,
                                    start_rowid,
-                                   table_ids.size());
+                                   scan_ids.size());
     }
     {
       std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -2912,15 +2912,15 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                                     : compilation_result_cpu.query_mem_desc;
 
   std::map<int, const TableFragments*> all_tables_fragments;
-  CHECK_EQ(query_infos.size(), table_ids.size());
-  for (size_t table_idx = 0; table_idx < table_ids.size(); ++table_idx) {
-    all_tables_fragments[table_ids[table_idx]] = &query_infos[table_idx].fragments;
+  CHECK_EQ(query_infos.size(), scan_ids.size());
+  for (size_t table_idx = 0; table_idx < scan_ids.size(); ++table_idx) {
+    all_tables_fragments[scan_ids[table_idx].table_id_] = &query_infos[table_idx].fragments;
   }
   dispatchFragments(dispatch,
                     device_type,
                     allow_multifrag && (groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
                     agg_plan,
-                    table_ids,
+                    scan_ids,
                     all_tables_fragments,
                     simple_quals,
                     all_frag_row_offsets,
@@ -2977,7 +2977,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                  const ExecutorDeviceType device_type,
                                  const bool allow_multifrag,
                                  const Planner::AggPlan* agg_plan,
-                                 const std::vector<int>& table_ids,
+                                 const std::vector<ScanId>& scan_ids,
                                  const std::map<int, const TableFragments*>& all_tables_fragments,
                                  const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                  const std::vector<uint64_t>& all_frag_row_offsets,
@@ -2989,8 +2989,8 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   size_t frag_list_idx{0};
   std::vector<std::thread> query_threads;
   int64_t rowid_lookup_key{-1};
-  CHECK(!table_ids.empty());
-  const int outer_table_id = table_ids.front();
+  CHECK(!scan_ids.empty());
+  const int outer_table_id = scan_ids.front().table_id_;
   auto it = all_tables_fragments.find(outer_table_id);
   CHECK(it != all_tables_fragments.end());
   const auto fragments = it->second;
@@ -3081,7 +3081,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const std::list<ScanColDescriptor>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::vector<int>& table_ids,
+    const std::vector<ScanId>& scan_ids,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const std::map<int, std::vector<size_t>>& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
@@ -3094,7 +3094,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
   std::vector<size_t> local_col_to_frag_pos;
   buildSelectedFragsMapping(
-      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, table_ids);
+      selected_fragments_crossjoin, local_col_to_frag_pos, col_global_ids, selected_fragments, scan_ids);
 
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(selected_fragments_crossjoin);
 
@@ -3165,11 +3165,11 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
                                          std::vector<size_t>& local_col_to_frag_pos,
                                          const std::list<ScanColDescriptor>& col_global_ids,
                                          const std::map<int, std::vector<size_t>>& selected_fragments,
-                                         const std::vector<int>& table_ids) {
+                                         const std::vector<ScanId>& scan_ids) {
   local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
   size_t frag_pos{0};
-  for (size_t scan_idx = 0; scan_idx < table_ids.size(); ++scan_idx) {
-    const int table_id = table_ids[scan_idx];
+  for (size_t scan_idx = 0; scan_idx < scan_ids.size(); ++scan_idx) {
+    const int table_id = scan_ids[scan_idx].table_id_;
     const auto selected_fragments_it = selected_fragments.find(table_id);
     CHECK(selected_fragments_it != selected_fragments.end());
     selected_fragments_crossjoin.push_back(selected_fragments_it->second);
@@ -3686,7 +3686,7 @@ void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinImplType join
 Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                                   const std::vector<Executor::AggInfo>& agg_infos,
-                                                  const std::vector<int>& table_ids,
+                                                  const std::vector<ScanId>& scan_ids,
                                                   const std::list<ScanColDescriptor>& scan_cols,
                                                   const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                                   const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
@@ -3765,7 +3765,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
-  allocateInnerScansIterators(table_ids, allow_joins);
+  allocateInnerScansIterators(scan_ids, allow_joins);
 
   // generate the code for the filter
   allocateLocalColumnIds(scan_cols);
@@ -3917,8 +3917,8 @@ void Executor::codegenInnerScanNextRow() {
   if (cgen_state_->inner_scan_labels_.empty()) {
     cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
   } else {
-    CHECK_EQ(size_t(1), cgen_state_->inner_table_to_iterator_.size());
-    auto inner_it_val_and_ptr = cgen_state_->inner_table_to_iterator_.begin()->second;
+    CHECK_EQ(size_t(1), cgen_state_->scan_to_iterator_.size());
+    auto inner_it_val_and_ptr = cgen_state_->scan_to_iterator_.begin()->second;
     auto inner_it_inc = cgen_state_->ir_builder_.CreateAdd(inner_it_val_and_ptr.first, ll_int(int64_t(1)));
     cgen_state_->ir_builder_.CreateStore(inner_it_inc, inner_it_val_and_ptr.second);
     CHECK_EQ(size_t(1), cgen_state_->inner_scan_labels_.size());
@@ -3926,8 +3926,8 @@ void Executor::codegenInnerScanNextRow() {
   }
 }
 
-void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids, const bool allow_joins) {
-  if (table_ids.size() <= 1) {
+void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_joins) {
+  if (scan_ids.size() <= 1) {
     return;
   }
   if (plan_state_->join_impl_type_ == JoinImplType::HashOneToOne) {
@@ -3938,8 +3938,8 @@ void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids, co
     throw std::runtime_error("Join plans not supported yet");
   }
   auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
-  for (auto it = table_ids.begin() + 1; it != table_ids.end(); ++it) {
-    const int inner_scan_idx = it - table_ids.begin();
+  for (auto it = scan_ids.begin() + 1; it != scan_ids.end(); ++it) {
+    const int inner_scan_idx = it - scan_ids.begin();
     auto inner_scan_pos_ptr = cgen_state_->ir_builder_.CreateAlloca(
         get_int_type(64, cgen_state_->context_), nullptr, "inner_scan_" + std::to_string(inner_scan_idx));
     cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
@@ -3950,7 +3950,7 @@ void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids, co
     cgen_state_->ir_builder_.SetInsertPoint(scan_loop_head);
     auto inner_scan_pos = cgen_state_->ir_builder_.CreateLoad(inner_scan_pos_ptr, "load_inner_it");
     {
-      const auto it_ok = cgen_state_->inner_table_to_iterator_.insert(
+      const auto it_ok = cgen_state_->scan_to_iterator_.insert(
           std::make_pair(*it, std::make_pair(inner_scan_pos, inner_scan_pos_ptr)));
       CHECK(it_ok.second);
     }
