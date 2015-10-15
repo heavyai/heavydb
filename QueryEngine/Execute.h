@@ -559,7 +559,6 @@ class Executor {
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
     std::unordered_map<int, std::pair<llvm::Value*, llvm::Value*>> inner_table_to_iterator_;
-    std::unordered_map<int, int> table_to_inner_scan_idx_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     bool must_run_on_cpu_;
     bool uses_div_;

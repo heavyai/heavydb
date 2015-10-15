@@ -3942,10 +3942,6 @@ void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids, co
     const int inner_scan_idx = it - table_ids.begin();
     auto inner_scan_pos_ptr = cgen_state_->ir_builder_.CreateAlloca(
         get_int_type(64, cgen_state_->context_), nullptr, "inner_scan_" + std::to_string(inner_scan_idx));
-    {
-      const auto it_ok = cgen_state_->table_to_inner_scan_idx_.insert(std::make_pair(*it, inner_scan_idx));
-      CHECK(it_ok.second);
-    }
     cgen_state_->ir_builder_.CreateStore(ll_int(int64_t(0)), inner_scan_pos_ptr);
     auto scan_loop_head = llvm::BasicBlock::Create(
         cgen_state_->context_, "scan_loop_head", cgen_state_->row_func_, preheader->getNextNode());
