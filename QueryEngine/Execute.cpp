@@ -2266,6 +2266,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         false,
                                         just_explain,
                                         llvm_ir,
+                                        JoinImplType::Invalid,
                                         allow_joins);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
@@ -2474,6 +2475,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   std::list<ScanColDescriptor> scan_cols;
   const Planner::Scan* outer_plan{nullptr};
   const Planner::Scan* inner_plan{nullptr};
+  JoinImplType join_impl_type{JoinImplType::Invalid};
   if (join_plan) {
     outer_plan = get_scan_child(join_plan->get_outerplan());
     CHECK(outer_plan);
@@ -2483,6 +2485,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     table_ids.push_back(inner_plan->get_table_id());
     collect_scan_cols(scan_cols, outer_plan, cat, true, 0);
     collect_scan_cols(scan_cols, inner_plan, cat, true, 1);
+    join_impl_type = chooseJoinType(join_plan);
   } else {
     CHECK(scan_plan);
     table_ids.push_back(scan_plan->get_table_id());
@@ -2572,6 +2575,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_cpu,
+                                           join_impl_type,
                                            allow_joins);
     } catch (...) {
       compilation_result_cpu = compilePlan(plan,
@@ -2595,6 +2599,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_cpu,
+                                           join_impl_type,
                                            allow_joins);
     }
   };
@@ -2629,6 +2634,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_gpu,
+                                           join_impl_type,
                                            allow_joins);
     } catch (...) {
       compilation_result_gpu = compilePlan(plan,
@@ -2652,6 +2658,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            output_columnar_hint,
                                            just_explain,
                                            llvm_ir_gpu,
+                                           join_impl_type,
                                            allow_joins);
     }
   }
@@ -3671,9 +3678,9 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
 
 }  // namespace
 
-void Executor::nukeOldState(const bool allow_lazy_fetch) {
+void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinImplType join_impl_type) {
   cgen_state_.reset(new CgenState());
-  plan_state_.reset(new PlanState(allow_lazy_fetch, this));
+  plan_state_.reset(new PlanState(allow_lazy_fetch, join_impl_type, this));
 }
 
 Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
@@ -3697,12 +3704,13 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const bool output_columnar_hint,
                                                   const bool serialize_llvm_ir,
                                                   std::string& llvm_ir,
+                                                  const Executor::JoinImplType join_impl_type,
                                                   const bool allow_joins) {
   if (query_infos.size() == 1) {
     QueryRewriter query_rewriter(plan, query_infos, this);
     query_rewriter.rewrite();
   }
-  nukeOldState(allow_lazy_fetch);
+  nukeOldState(allow_lazy_fetch, join_impl_type);
 
   GroupByAndAggregate group_by_and_aggregate(this,
                                              device_type,
@@ -3922,6 +3930,10 @@ void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids, co
   if (table_ids.size() <= 1) {
     return;
   }
+  if (plan_state_->join_impl_type_ == JoinImplType::HashOneToOne) {
+    CHECK(false);
+  }
+  CHECK(plan_state_->join_impl_type_ == JoinImplType::Loop);
   if (!allow_joins) {
     throw std::runtime_error("Join plans not supported yet");
   }
@@ -3959,6 +3971,10 @@ void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids, co
       cgen_state_->ir_builder_.SetInsertPoint(inner_scan_cont);
     }
   }
+}
+
+Executor::JoinImplType Executor::chooseJoinType(const Planner::Join*) {
+  return JoinImplType::Loop;
 }
 
 void Executor::bindInitGroupByBuffer(llvm::Function* query_func,

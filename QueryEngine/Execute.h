@@ -347,6 +347,8 @@ class Executor {
                                       const bool output_columnar) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
+  enum class JoinImplType { Invalid, Loop, HashOneToOne };
+
   CompilationResult compilePlan(const Planner::Plan* plan,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const std::vector<Executor::AggInfo>& agg_infos,
@@ -368,17 +370,20 @@ class Executor {
                                 const bool output_columnar_hint,
                                 const bool serialize_llvm_ir,
                                 std::string& llvm_ir,
+                                const JoinImplType join_impl_type,
                                 const bool allow_joins);
 
   void codegenInnerScanNextRow();
 
   void allocateInnerScansIterators(const std::vector<int>& table_ids, const bool allow_joins);
 
+  JoinImplType chooseJoinType(const Planner::Join*);
+
   void bindInitGroupByBuffer(llvm::Function* query_func,
                              const QueryMemoryDescriptor& query_mem_desc,
                              const ExecutorDeviceType device_type);
 
-  void nukeOldState(const bool allow_lazy_fetch);
+  void nukeOldState(const bool allow_lazy_fetch, const JoinImplType join_impl_type);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,
                                            const bool hoist_literals,
@@ -583,8 +588,8 @@ class Executor {
   std::unique_ptr<CgenState> cgen_state_;
 
   struct PlanState {
-    PlanState(const bool allow_lazy_fetch, const Executor* executor)
-        : allow_lazy_fetch_(allow_lazy_fetch), executor_(executor) {}
+    PlanState(const bool allow_lazy_fetch, const JoinImplType join_impl_type, const Executor* executor)
+        : allow_lazy_fetch_(allow_lazy_fetch), join_impl_type_(join_impl_type), executor_(executor) {}
 
     std::vector<int64_t> init_agg_vals_;
     std::vector<Analyzer::Expr*> target_exprs_;
@@ -593,6 +598,7 @@ class Executor {
     std::unordered_set<int> columns_to_fetch_;
     std::unordered_set<int> columns_to_not_fetch_;
     bool allow_lazy_fetch_;
+    JoinImplType join_impl_type_;
     const Executor* executor_;
 
     bool isLazyFetchColumn(const Analyzer::Expr* target_expr) {
