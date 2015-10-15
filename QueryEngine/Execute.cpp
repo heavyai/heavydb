@@ -3973,28 +3973,7 @@ void Executor::allocateInnerScansIterators(const std::vector<int>& table_ids, co
   }
 }
 
-Executor::JoinImplType Executor::chooseJoinType(const Planner::Join* join_plan) {
-  CHECK(join_plan);
-  for (const auto qual : join_plan->get_quals()) {
-    const auto qual_bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual);
-    if (qual_bin_oper->get_optype() == kEQ) {
-      const auto lhs = qual_bin_oper->get_left_operand();
-      const auto rhs = qual_bin_oper->get_right_operand();
-      const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-      const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
-      if (!lhs_col || !rhs_col) {
-        continue;
-      }
-      if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
-        plan_state_->equi_join_tautologies_.insert(qual_bin_oper.get());
-        return /* JoinImplType::HashOneToOne */ JoinImplType::Loop;
-      }
-      if (lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0) {
-        plan_state_->equi_join_tautologies_.insert(qual_bin_oper.get());
-        return /* JoinImplType::HashOneToOne */ JoinImplType::Loop;
-      }
-    }
-  }
+Executor::JoinImplType Executor::chooseJoinType(const Planner::Join*) {
   return JoinImplType::Loop;
 }
 

@@ -600,9 +600,6 @@ class Executor {
     bool allow_lazy_fetch_;
     JoinImplType join_impl_type_;
     const Executor* executor_;
-    std::unordered_set<const Analyzer::BinOper*> equi_join_tautologies_;  // expressions we equi-join on are true by
-                                                                          // definition when using a hash join; we'll
-                                                                          // fold them to true during code generation
 
     bool isLazyFetchColumn(const Analyzer::Expr* target_expr) {
       if (!allow_lazy_fetch_) {
