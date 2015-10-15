@@ -12,11 +12,19 @@ if(PREFER_STATIC_LIBS)
   if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
   endif()
+
+  set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
 endif()
 
+# CUDA required for build, even when CUDA support is disabled
+find_package(CUDA REQUIRED)
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
-  set(CUDA_LIBRARIES cuda cudart nvvm)
+  find_library(CUDA_NVVM_LIBRARY
+    NAMES nvvm
+    PATHS "${CUDA_TOOLKIT_TARGET_DIR}/nvvm" "${CUDA_TOOLKIT_ROOT_DIR}/nvvm"
+    PATH_SUFFIXES "lib64" "lib")
+  list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY} ${CUDA_NVVM_LIBRARY})
   add_definitions("-DHAVE_CUDA")
 else()
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-nocuda")
@@ -40,7 +48,7 @@ else()
     list(INSERT Boost_LIBRARIES 0 pthread)
   endif()
 endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -L/usr/local/cuda/lib -L/usr/local/cuda/lib64 -L/usr/local/cuda/nvvm/lib -L/usr/local/cuda/nvvm/lib64")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
 set(llvm_config_cmd "llvm-config")
 set(llvm_config_inc_arg "--includedir")
 set(llvm_config_ld_arg "--ldflags")
