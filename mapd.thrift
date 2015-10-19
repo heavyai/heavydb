@@ -173,4 +173,6 @@ service MapD {
   void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e 2: ThriftException te)
+  TFrontendView get_link_view(1: TSessionId session, 2: string link) throws (1: TMapDException e 2: ThriftException te)
+  string create_link(1: TSessionId session, 2: string view_state) throws (1: TMapDException e 2: ThriftException te)
 }

@@ -505,6 +505,22 @@ class MapDHandler : virtual public MapDIf {
     _return.update_time = vd->updateTime;
   }
 
+  void get_link_view(TFrontendView& _return, const TSessionId session, const std::string& link) {
+    const auto session_info = get_session(session);
+    auto& cat = session_info.get_catalog();
+    auto ld = cat.getMetadataForLink(link);
+    // TODO(andrew): add authorization check. Potential data leak without it.
+    if (!ld) {
+      TMapDException ex;
+      ex.error_msg = "Link " + link + " is not valid.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    _return.view_state = ld->viewState;
+    _return.view_name = ld->link;
+    _return.update_time = ld->updateTime;
+  }
+
   void get_tables(std::vector<std::string>& table_names, const TSessionId session) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
@@ -863,6 +879,19 @@ class MapDHandler : virtual public MapDIf {
     vd.imageHash = image_hash;
 
     cat.createFrontendView(vd);
+  }
+
+  void create_link(std::string& _return, const TSessionId session, const std::string& view_state) {
+    check_read_only("create_link");
+    const auto session_info = get_session(session);
+    auto& cat = session_info.get_catalog();
+
+    LinkDescriptor ld;
+    ld.dbId = cat.get_currentDB().dbId;
+    ld.userId = session_info.get_currentUser().userId;
+    ld.viewState = view_state;
+
+    _return = cat.createLink(ld, 6);
   }
 
   void create_table(const TSessionId session, const std::string& table_name, const TRowDescriptor& rd) {

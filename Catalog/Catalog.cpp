@@ -10,6 +10,7 @@
 #include <exception>
 #include <cassert>
 #include <memory>
+#include <random>
 #include "boost/filesystem.hpp"
 #include "Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
@@ -33,6 +34,9 @@ void SysCatalog::initDB() {
                          "', '" + MAPD_ROOT_PASSWD_DEFAULT + "', 1)");
   sqliteConnector_.query(
       "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
+  sqliteConnector_.query(
+      "CREATE TABLE mapd_links (linkid integer primary key, dbid integer references mapd_databases, "
+      "userid integer references mapd_users, link text unique, view_state text, update_time timestamp)");
   createDatabase("mapd", MAPD_ROOT_USER_ID);
 };
 
@@ -210,6 +214,19 @@ void Catalog::updateFrontendViewSchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::updateLinkSchema() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query(
+        "CREATE TABLE IF NOT EXISTS mapd_links (linkid integer primary key, dbid integer references mapd_databases, "
+        "userid integer references mapd_users, link text unique, view_state text, update_time timestamp)");
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void Catalog::buildMaps() {
   string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
@@ -307,6 +324,22 @@ void Catalog::buildMaps() {
     frontendViewDescriptorMap_[vd->viewName] = vd;
     frontendViewDescriptorMapById_[vd->viewId] = vd;
   }
+
+  updateLinkSchema();
+  string linkQuery("SELECT linkid, dbid, userid, link, view_state, update_time FROM mapd_links");
+  sqliteConnector_.query(linkQuery);
+  numRows = sqliteConnector_.getNumRows();
+  for (size_t r = 0; r < numRows; ++r) {
+    LinkDescriptor* ld = new LinkDescriptor();
+    ld->linkId = sqliteConnector_.getData<int>(r, 0);
+    ld->dbId = sqliteConnector_.getData<int>(r, 1);
+    ld->userId = sqliteConnector_.getData<int>(r, 2);
+    ld->link = sqliteConnector_.getData<string>(r, 3);
+    ld->viewState = sqliteConnector_.getData<string>(r, 4);
+    ld->updateTime = sqliteConnector_.getData<string>(r, 5);
+    linkDescriptorMap_[ld->link] = ld;
+    linkDescriptorMapById_[ld->linkId] = ld;
+  }
 }
 
 void Catalog::addTableToMap(TableDescriptor& td,
@@ -372,6 +405,14 @@ void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
   *new_vd = vd;
   frontendViewDescriptorMap_[vd.viewName] = new_vd;
   frontendViewDescriptorMapById_[vd.viewId] = new_vd;
+}
+
+void Catalog::addLinkToMap(LinkDescriptor& ld) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  LinkDescriptor* new_ld = new LinkDescriptor();
+  *new_ld = ld;
+  linkDescriptorMap_[ld.link] = new_ld;
+  linkDescriptorMapById_[ld.linkId] = new_ld;
 }
 
 void Catalog::instantiateFragmenter(TableDescriptor* td) const {
@@ -459,6 +500,24 @@ const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(int viewId) co
     return nullptr;
   }
   return frontendViewDescIt->second;
+}
+
+const LinkDescriptor* Catalog::getMetadataForLink(const string& link) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto linkDescIt = linkDescriptorMap_.find(link);
+  if (linkDescIt == linkDescriptorMap_.end()) {  // check to make sure view exists
+    return nullptr;
+  }
+  return linkDescIt->second;  // returns pointer to view descriptor
+}
+
+const LinkDescriptor* Catalog::getMetadataForLink(int linkId) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto linkDescIt = linkDescriptorMapById_.find(linkId);
+  if (linkDescIt == linkDescriptorMapById_.end()) {  // check to make sure view exists
+    return nullptr;
+  }
+  return linkDescIt->second;
 }
 
 void Catalog::getAllColumnMetadataForTable(const TableDescriptor* td,
@@ -645,6 +704,57 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   }
   sqliteConnector_.query("END TRANSACTION");
   addFrontendViewToMap(vd);
+}
+
+std::string generateRandomString(const size_t length) {
+  const std::string charset =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz";
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<> dist(0, charset.length() - 1);
+  std::string str(length, 'a');
+  std::generate(str.begin(), str.end(), [&charset, &dist, &gen]() { return charset[dist(gen)]; });
+  return str;
+}
+
+std::string Catalog::generateLink(size_t min_length) {
+  size_t tries = 0;
+  std::string link;
+  try {
+    while (true) {
+      link = generateRandomString(min_length);
+      if (getMetadataForLink(link)) {
+        if (++tries % 3 != 0)
+          min_length++;
+      } else {
+        break;
+      }
+    }
+  } catch (const std::exception& e) {
+    throw;
+  }
+  return link;
+}
+
+std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    ld.link = generateLink(min_length);
+    sqliteConnector_.query("INSERT INTO mapd_links (dbid, userid, link, view_state, update_time) VALUES (" +
+                           std::to_string(ld.dbId) + "," + std::to_string(ld.userId) + ",'" + ld.link + "','" +
+                           ld.viewState + "', datetime('now'))");
+    // now get the auto generated viewid
+    sqliteConnector_.query("SELECT linkid, update_time FROM mapd_links WHERE link = '" + ld.link + "'");
+    ld.linkId = sqliteConnector_.getData<int>(0, 0);
+    ld.updateTime = sqliteConnector_.getData<std::string>(0, 1);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+  addLinkToMap(ld);
+  return ld.link;
 }
 
 }  // Catalog_Namespace

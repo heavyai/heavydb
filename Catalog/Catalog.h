@@ -28,6 +28,7 @@
 #include "ColumnDescriptor.h"
 #include "DictDescriptor.h"
 #include "FrontendViewDescriptor.h"
+#include "LinkDescriptor.h"
 #include "../DataMgr/DataMgr.h"
 
 namespace Catalog_Namespace {
@@ -70,6 +71,15 @@ typedef std::map<int, DictDescriptor*> DictDescriptorMapById;
 typedef std::map<std::string, FrontendViewDescriptor*> FrontendViewDescriptorMap;
 
 typedef std::map<int, FrontendViewDescriptor*> FrontendViewDescriptorMapById;
+
+/**
+ * @type LinkDescriptorMap
+ * @brief Maps links to pointers to link descriptors allocated on the heap
+ */
+
+typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
+
+typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
 
 /*
  * @type UserMetadata
@@ -137,6 +147,7 @@ class Catalog {
 
   void createTable(TableDescriptor& td, const std::list<ColumnDescriptor>& columns);
   void createFrontendView(FrontendViewDescriptor& vd);
+  std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
   void renameTable(const TableDescriptor* td, const std::string& newTableName);
   void renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const std::string& newColumnName);
@@ -156,6 +167,9 @@ class Catalog {
 
   const FrontendViewDescriptor* getMetadataForFrontendView(const std::string& viewName) const;
   const FrontendViewDescriptor* getMetadataForFrontendView(int viewId) const;
+
+  const LinkDescriptor* getMetadataForLink(const std::string& link) const;
+  const LinkDescriptor* getMetadataForLink(int linkId) const;
 
   /**
    * @brief Returns a list of pointers to constant ColumnDescriptor structs for all the columns from a particular table
@@ -181,17 +195,20 @@ class Catalog {
 
  protected:
   void updateFrontendViewSchema();
+  void updateLinkSchema();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
   void addFrontendViewToMap(FrontendViewDescriptor& vd);
+  void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);
   void instantiateFragmenter(TableDescriptor* td) const;
   void getAllColumnMetadataForTable(const TableDescriptor* td,
                                     std::list<const ColumnDescriptor*>& colDescs,
                                     const bool fetchSystemColumns,
                                     const bool fetchVirtualColumns) const;
+  std::string generateLink(size_t min_length);
 
   std::string basePath_; /**< The OS file system path containing the catalog files. */
   TableDescriptorMap tableDescriptorMap_;
@@ -201,6 +218,8 @@ class Catalog {
   DictDescriptorMapById dictDescriptorMapById_;
   FrontendViewDescriptorMap frontendViewDescriptorMap_;
   FrontendViewDescriptorMapById frontendViewDescriptorMapById_;
+  LinkDescriptorMap linkDescriptorMap_;
+  LinkDescriptorMapById linkDescriptorMapById_;
   SqliteConnector sqliteConnector_;
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
