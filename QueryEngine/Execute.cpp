@@ -657,7 +657,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
                                             const bool hoist_literals) {
   // only generate the decoding code once; if a column has been previously
-  // fetch in the generated IR, we'll reuse it
+  // fetched in the generated IR, we'll reuse it
   auto col_id = col_var->get_column_id();
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
@@ -685,7 +685,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     return {it->second};
   }
   const auto hash_join_lhs = hashJoinLhs(col_var);
-  if (hash_join_lhs) {
+  if (hash_join_lhs && hash_join_lhs->get_rte_idx() == 0) {
     CHECK(false);
     return codegen(hash_join_lhs, fetch_column, hoist_literals);
   }
@@ -763,6 +763,10 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
 llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
   if (dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
     const auto col_var = static_cast<const Analyzer::ColumnVar*>(expr);
+    const auto hash_pos_it = cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
+    if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
+      return hash_pos_it->second;
+    }
     const auto inner_it = cgen_state_->scan_to_iterator_.find(ScanId(col_var->get_table_id(), col_var->get_rte_idx()));
     if (inner_it != cgen_state_->scan_to_iterator_.end()) {
       CHECK(inner_it->second.first);
@@ -783,7 +787,7 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
 const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs) const {
   for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(tautological_eq->get_optype() == kEQ);
-    if (tautological_eq->get_right_operand() == rhs) {
+    if (*tautological_eq->get_right_operand() == *rhs) {
       auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(tautological_eq->get_left_operand());
       CHECK(lhs_col);
       return lhs_col;
@@ -1153,23 +1157,26 @@ bool is_unnest(const Analyzer::Expr* expr) {
 }  // namespace
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
-  if (plan_state_->join_info_.equi_join_tautologies_.find(bin_oper) !=
-      plan_state_->join_info_.equi_join_tautologies_.end()) {
-    CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne);
-    auto key_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
-    CHECK(key_col);
-    auto val_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
-    CHECK(val_col);
-    if (key_col->get_rte_idx() != 0) {
-      std::swap(key_col, val_col);
+  for (const auto equi_join_tautology : plan_state_->join_info_.equi_join_tautologies_) {
+    if (*equi_join_tautology == *bin_oper) {
+      CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne);
+      auto key_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
+      CHECK(key_col);
+      auto val_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
+      CHECK(val_col);
+      if (key_col->get_rte_idx() != 0) {
+        std::swap(key_col, val_col);
+      }
+      const auto key_lvs = codegen(key_col, true, hoist_literals);
+      CHECK_EQ(size_t(1), key_lvs.size());
+      const auto slot_lv = cgen_state_->emitExternalCall(
+          "hash_join_idx", get_int_type(64, cgen_state_->context_), {toDoublePrecision(key_lvs.front())});
+      const auto it_ok = cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
+      CHECK(it_ok.second);
+      const auto slot_valid_lv =
+          cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, ll_int(int64_t(0)));
+      return slot_valid_lv;
     }
-    const auto key_lvs = codegen(key_col, true, hoist_literals);
-    CHECK_EQ(size_t(1), key_lvs.size());
-    const auto slot_lv = cgen_state_->emitExternalCall(
-        "hash_join_idx", get_int_type(64, cgen_state_->context_), {toDoublePrecision(key_lvs.front())});
-    const auto slot_valid_lv =
-        cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, ll_int(int64_t(0)));
-    return slot_valid_lv;
   }
   const auto optype = bin_oper->get_optype();
   const auto qualifier = bin_oper->get_qualifier();
@@ -2279,29 +2286,30 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
     pseudo_scan_cols.emplace_back(pseudo_col, nullptr, -1);
   }
   std::string llvm_ir;
-  auto compilation_result = compilePlan(result_plan,
-                                        {},
-                                        agg_infos,
-                                        {},
-                                        pseudo_scan_cols,
-                                        result_plan->get_constquals(),
-                                        result_plan->get_quals(),
-                                        hoist_literals,
-                                        allow_multifrag,
-                                        ExecutorDeviceType::CPU,
-                                        NVVMBackend::CUDA,
-                                        opt_level,
-                                        nullptr,
-                                        false,
-                                        row_set_mem_owner_,
-                                        result_rows.rowCount(),
-                                        0,
-                                        sort_plan,
-                                        false,
-                                        just_explain,
-                                        llvm_ir,
-                                        JoinInfo(JoinImplType::Invalid, std::unordered_set<const Analyzer::BinOper*>{}),
-                                        allow_joins);
+  auto compilation_result =
+      compilePlan(result_plan,
+                  {},
+                  agg_infos,
+                  {},
+                  pseudo_scan_cols,
+                  result_plan->get_constquals(),
+                  result_plan->get_quals(),
+                  hoist_literals,
+                  allow_multifrag,
+                  ExecutorDeviceType::CPU,
+                  NVVMBackend::CUDA,
+                  opt_level,
+                  nullptr,
+                  false,
+                  row_set_mem_owner_,
+                  result_rows.rowCount(),
+                  0,
+                  sort_plan,
+                  false,
+                  just_explain,
+                  llvm_ir,
+                  JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}),
+                  allow_joins);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
@@ -2509,7 +2517,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   std::list<ScanColDescriptor> scan_cols;
   const Planner::Scan* outer_plan{nullptr};
   const Planner::Scan* inner_plan{nullptr};
-  JoinInfo join_info(JoinImplType::Invalid, std::unordered_set<const Analyzer::BinOper*>{});
+  JoinInfo join_info(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{});
   if (join_plan) {
     outer_plan = get_scan_child(join_plan->get_outerplan());
     CHECK(outer_plan);
@@ -4006,8 +4014,8 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, 
 
 Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan) {
   CHECK(join_plan);
-  for (const auto qual : join_plan->get_quals()) {
-    const auto qual_bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual);
+  for (auto qual : join_plan->get_quals()) {
+    auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     CHECK(qual_bin_oper);
     if (qual_bin_oper->get_optype() == kEQ) {
       const auto lhs = qual_bin_oper->get_left_operand();
@@ -4019,17 +4027,17 @@ Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan) {
       }
       if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
         return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
-                                  std::unordered_set<const Analyzer::BinOper*>{/* qual_bin_oper.get() */
+                                  std::vector<std::shared_ptr<Analyzer::BinOper>>{/* qual_bin_oper */
                                   });
       }
       if (lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0) {
         return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
-                                  std::unordered_set<const Analyzer::BinOper*>{/* qual_bin_oper.get() */
+                                  std::vector<std::shared_ptr<Analyzer::BinOper>>{/* qual_bin_oper */
                                   });
       }
     }
   }
-  return Executor::JoinInfo(JoinImplType::Loop, std::unordered_set<const Analyzer::BinOper*>{});
+  return Executor::JoinInfo(JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{});
 }
 
 void Executor::bindInitGroupByBuffer(llvm::Function* query_func,

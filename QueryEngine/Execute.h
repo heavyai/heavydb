@@ -369,13 +369,13 @@ class Executor {
 
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
-             const std::unordered_set<const Analyzer::BinOper*>& equi_join_tautologies)
+             const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies)
         : join_impl_type_(join_impl_type), equi_join_tautologies_(equi_join_tautologies) {}
 
     JoinImplType join_impl_type_;
-    std::unordered_set<const Analyzer::BinOper*> equi_join_tautologies_;  // expressions we equi-join on are true by
-                                                                          // definition when using a hash join; we'll
-                                                                          // fold them to true during code generation
+    std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
+                                                                             // definition when using a hash join; we'll
+                                                                             // fold them to true during code generation
   };
 
   CompilationResult compilePlan(const Planner::Plan* plan,
@@ -589,6 +589,7 @@ class Executor {
     std::vector<llvm::Value*> str_constants_;
     std::unordered_map<ScanId, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
+    std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     bool must_run_on_cpu_;
     bool uses_div_;
 
