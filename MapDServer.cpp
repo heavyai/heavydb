@@ -882,7 +882,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void create_link(std::string& _return, const TSessionId session, const std::string& view_state) {
-    check_read_only("create_link");
+    //check_read_only("create_link");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
 
