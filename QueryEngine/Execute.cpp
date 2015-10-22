@@ -1169,8 +1169,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
       }
       const auto key_lvs = codegen(key_col, true, hoist_literals);
       CHECK_EQ(size_t(1), key_lvs.size());
-      const auto slot_lv = cgen_state_->emitExternalCall(
-          "hash_join_idx", get_int_type(64, cgen_state_->context_), {toDoublePrecision(key_lvs.front())});
+      CHECK(plan_state_->join_info_.join_hash_table_);
+      const auto slot_lv = plan_state_->join_info_.join_hash_table_->reify(toDoublePrecision(key_lvs.front()), this);
       const auto it_ok = cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
       CHECK(it_ok.second);
       const auto slot_valid_lv =
@@ -2308,7 +2308,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                   false,
                   just_explain,
                   llvm_ir,
-                  JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}),
+                  JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr),
                   allow_joins);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
@@ -2517,7 +2517,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   std::list<ScanColDescriptor> scan_cols;
   const Planner::Scan* outer_plan{nullptr};
   const Planner::Scan* inner_plan{nullptr};
-  JoinInfo join_info(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{});
+  JoinInfo join_info(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr);
   if (join_plan) {
     outer_plan = get_scan_child(join_plan->get_outerplan());
     CHECK(outer_plan);
@@ -2527,7 +2527,6 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     scan_ids.emplace_back(inner_plan->get_table_id(), 1);
     collect_scan_cols(scan_cols, outer_plan, cat, true, 0);
     collect_scan_cols(scan_cols, inner_plan, cat, true, 1);
-    join_info = chooseJoinType(join_plan);
   } else {
     CHECK(scan_plan);
     scan_ids.emplace_back(scan_plan->get_table_id(), 0);
@@ -2557,6 +2556,10 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     }
   }
   CHECK(!query_infos.empty());
+
+  if (join_plan) {
+    join_info = chooseJoinType(join_plan, query_infos, device_type);
+  }
 
   if (!max_groups_buffer_entry_guess) {
     // The query has failed the first execution attempt because of running out
@@ -4012,8 +4015,13 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, 
   }
 }
 
-Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan) {
+Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan,
+                                            const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                            const ExecutorDeviceType device_type) {
   CHECK(join_plan);
+  CHECK(device_type != ExecutorDeviceType::Hybrid);
+  const MemoryLevel memory_level{device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
+                                                                        : MemoryLevel::CPU_LEVEL};
   for (auto qual : join_plan->get_quals()) {
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     CHECK(qual_bin_oper);
@@ -4026,18 +4034,22 @@ Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan) {
         continue;
       }
       if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
+        const auto join_hash_table = std::make_shared<JoinHashTable>(rhs_col, *catalog_, query_infos, memory_level);
         return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
                                   std::vector<std::shared_ptr<Analyzer::BinOper>>{/* qual_bin_oper */
-                                  });
+                                  },
+                                  join_hash_table);
       }
       if (lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0) {
+        const auto join_hash_table = std::make_shared<JoinHashTable>(lhs_col, *catalog_, query_infos, memory_level);
         return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
                                   std::vector<std::shared_ptr<Analyzer::BinOper>>{/* qual_bin_oper */
-                                  });
+                                  },
+                                  join_hash_table);
       }
     }
   }
-  return Executor::JoinInfo(JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{});
+  return Executor::JoinInfo(JoinImplType::Loop, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr);
 }
 
 void Executor::bindInitGroupByBuffer(llvm::Function* query_func,
@@ -4308,7 +4320,7 @@ declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i32 @merge_error_code(i32, i32*);
-declare i64 @hash_join_idx(i64);
+declare i64 @hash_join_idx(i64, i64, i64, i64);
 )" +
     gen_array_any_all_sigs();
 

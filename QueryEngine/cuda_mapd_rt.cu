@@ -315,6 +315,11 @@ extern "C" __device__ int32_t merge_error_code(const int32_t err_code, int32_t* 
   return *merged_err_code;
 }
 
-extern "C" __device__ int64_t hash_join_idx(const int64_t) {
+extern "C" __device__ int64_t hash_join_idx(int64_t,
+                                            const int64_t,
+                                            const int64_t,
+                                            const int64_t) {
+  // TODO(alex)
+  // Should be the same as the CPU implementation.
   return -1;
 }

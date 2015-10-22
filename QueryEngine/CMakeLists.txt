@@ -17,6 +17,7 @@ set(query_engine_source_files
     RuntimeFunctions.cpp
     RuntimeFunctionsCodegenWithIncludes.cpp
     StringFunctions.cpp
+    JoinHashTable.cpp
     Codec.h
     Execute.h
     RuntimeFunctions.h

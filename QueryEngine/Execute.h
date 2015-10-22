@@ -2,6 +2,7 @@
 #define QUERYENGINE_EXECUTE_H
 
 #include "GroupByAndAggregate.h"
+#include "JoinHashTable.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/Fragmenter.h"
@@ -167,14 +168,14 @@ class Executor {
 
  private:
   template <class T>
-  llvm::ConstantInt* ll_int(const T v) {
+  llvm::ConstantInt* ll_int(const T v) const {
     return static_cast<llvm::ConstantInt*>(
         llvm::ConstantInt::get(get_int_type(sizeof(v) * 8, cgen_state_->context_), v));
   }
-  llvm::ConstantFP* ll_fp(const float v) {
+  llvm::ConstantFP* ll_fp(const float v) const {
     return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), v));
   }
-  llvm::ConstantFP* ll_fp(const double v) {
+  llvm::ConstantFP* ll_fp(const double v) const {
     return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), v));
   }
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const bool hoist_literals);
@@ -369,13 +370,17 @@ class Executor {
 
   struct JoinInfo {
     JoinInfo(const JoinImplType join_impl_type,
-             const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies)
-        : join_impl_type_(join_impl_type), equi_join_tautologies_(equi_join_tautologies) {}
+             const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
+             std::shared_ptr<JoinHashTable> join_hash_table)
+        : join_impl_type_(join_impl_type),
+          equi_join_tautologies_(equi_join_tautologies),
+          join_hash_table_(join_hash_table) {}
 
     JoinImplType join_impl_type_;
     std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
                                                                              // definition when using a hash join; we'll
                                                                              // fold them to true during code generation
+    std::shared_ptr<JoinHashTable> join_hash_table_;
   };
 
   CompilationResult compilePlan(const Planner::Plan* plan,
@@ -406,7 +411,9 @@ class Executor {
 
   void allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_joins);
 
-  JoinInfo chooseJoinType(const Planner::Join*);
+  JoinInfo chooseJoinType(const Planner::Join*,
+                          const std::vector<Fragmenter_Namespace::QueryInfo>&,
+                          const ExecutorDeviceType device_type);
 
   void bindInitGroupByBuffer(llvm::Function* query_func,
                              const QueryMemoryDescriptor& query_mem_desc,
@@ -700,6 +707,7 @@ class Executor {
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
   friend class ResultRows;
+  friend class JoinHashTable;
 };
 
 #endif  // QUERYENGINE_EXECUTE_H
