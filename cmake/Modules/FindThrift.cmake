@@ -22,6 +22,7 @@
 #   Thrift_LIBRARIES        - Path to the Thrift libraries.
 #   Thrift_EXECUTABLE       - Path to the Thrift executable.
 #   Thrift_LIBRARY_DIRS     - compile time link directories
+#   Thrift_INCLUDE_DIRS     - compile time include directories
 #
 #
 # Sample usage:
@@ -72,6 +73,7 @@ endif()
 # Set standard CMake FindPackage variables if found.
 set(Thrift_LIBRARIES ${Thrift_LIBRARY})
 set(Thrift_LIBRARY_DIRS ${Thrift_LIBRARY_DIR})
+set(Thrift_INCLUDE_DIRS ${Thrift_LIBRARY_DIR}/../include)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Thrift REQUIRED_VARS Thrift_LIBRARY)

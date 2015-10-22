@@ -33,6 +33,7 @@ endif()
 find_package(Git)
 find_package(Glog REQUIRED)
 find_package(Thrift REQUIRED)
+include_directories(${Thrift_INCLUDE_DIRS})
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux" AND (("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
