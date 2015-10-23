@@ -37,6 +37,10 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_l
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/")
 
+if(ENABLE_CUDA)
+    set(MAPD_DEFINITIONS "-DHAVE_CUDA")
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp
@@ -53,7 +57,7 @@ add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     COMMAND clang++
-    ARGS -std=c++11 -O3 -c -S -emit-llvm ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
+    ARGS -std=c++11 -O3 -c -S -emit-llvm ${MAPD_DEFINITIONS} ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
@@ -64,25 +68,25 @@ add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
     COMMAND nvcc
-    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
+    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} -arch sm_30 -lib ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o -o ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a)
 
 add_custom_command(
     DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
-    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
+    ARGS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS ${MAPD_DEFINITIONS} --device-link -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/cuda_mapd_rt.cu)
 
 add_custom_command(
     DEPENDS GpuSortImpl.cu
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o
     COMMAND nvcc
-    ARGS -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
+    ARGS -O3 ${MAPD_DEFINITIONS} -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuSortImpl.cu)
 
 add_custom_command(
     DEPENDS GpuInitGroups.cu
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
     COMMAND nvcc
-    ARGS -DEXECUTOR_RT -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu)
+    ARGS -DEXECUTOR_RT ${MAPD_DEFINITIONS} -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES})
