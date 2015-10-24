@@ -61,7 +61,11 @@ add_custom_command(
 
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
-add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o)
+if(ENABLE_CUDA)
+  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o)
+else()
+  add_library(QueryEngine ${query_engine_source_files})
+endif()
 target_link_libraries(QueryEngine CsvImport StringDictionary Utils)
 
 add_custom_command(
