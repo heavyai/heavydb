@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <time.h>
 
-enum ExtractField { kYEAR, kMONTH, kDAY, kHOUR, kMINUTE, kSECOND, kDOW, kDOY, kEPOCH };
+enum ExtractField { kYEAR, kMONTH, kDAY, kHOUR, kMINUTE, kSECOND, kDOW, kISODOW, kDOY, kEPOCH };
 
 extern "C" __attribute__((noinline))
 #ifdef __CUDACC__

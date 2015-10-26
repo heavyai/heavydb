@@ -563,6 +563,8 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Ca
     fieldno = kSECOND;
   else if (boost::iequals(*field, "dow"))
     fieldno = kDOW;
+  else if (boost::iequals(*field, "isodow"))
+    fieldno = kISODOW;
   else if (boost::iequals(*field, "doy"))
     fieldno = kDOY;
   else if (boost::iequals(*field, "epoch"))

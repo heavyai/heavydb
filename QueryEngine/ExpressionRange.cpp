@@ -435,6 +435,10 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
       result.int_min = 0;
       result.int_max = 6;
       break;
+    case kISODOW:
+      result.int_min = 1;
+      result.int_max = 7;
+      break;
     case kDOY:
       result.int_min = 1;
       result.int_max = 366;
