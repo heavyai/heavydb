@@ -17,6 +17,7 @@
 #include <llvm/IR/Value.h>
 #include <cuda.h>
 
+#include <algorithm>
 #include <condition_variable>
 #include <functional>
 #include <map>
@@ -630,11 +631,11 @@ class Executor {
         return false;
       }
       std::unordered_set<int> intersect;
-      set_intersection(columns_to_fetch_.begin(),
-                       columns_to_fetch_.end(),
-                       columns_to_not_fetch_.begin(),
-                       columns_to_not_fetch_.end(),
-                       std::inserter(intersect, intersect.begin()));
+      std::set_intersection(columns_to_fetch_.begin(),
+                            columns_to_fetch_.end(),
+                            columns_to_not_fetch_.begin(),
+                            columns_to_not_fetch_.end(),
+                            std::inserter(intersect, intersect.begin()));
       if (!intersect.empty()) {
         throw std::exception();
       }
