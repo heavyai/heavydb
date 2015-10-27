@@ -212,8 +212,10 @@ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
       return extract_second(&timeval);
     case kDOW:
       return extract_dow(&timeval);
-    case kISODOW:
-      return extract_dow(&timeval) + 1;
+    case kISODOW: {
+      int64_t dow = extract_dow(&timeval);
+      return (dow == 0 ? 7 : dow);
+    }
     default:
       break;
   }
