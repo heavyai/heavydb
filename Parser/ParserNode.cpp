@@ -2038,6 +2038,7 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.get_catalog();
   const std::string* passwd = nullptr;
+  const std::string* insertaccessDB = nullptr;
   bool is_super = false;
   bool* is_superp = nullptr;
   for (auto& p : name_value_list) {
@@ -2045,6 +2046,10 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value()))
         throw std::runtime_error("Password must be a string literal.");
       passwd = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+    } else if (boost::iequals(*p->get_name(), "insertaccess")) {
+      if (!dynamic_cast<const StringLiteral*>(p->get_value()))
+        throw std::runtime_error("INSERTACCESS must be a string literal.");
+      insertaccessDB = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "is_super")) {
       if (!dynamic_cast<const StringLiteral*>(p->get_value()))
         throw std::runtime_error("IS_SUPER option must be a string literal.");
@@ -2058,15 +2063,28 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       } else
         throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
     } else
-      throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() + ".  Should be PASSWORD or IS_SUPER.");
+      throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
+                               ".  Should be PASSWORD, INSERTACCESS or IS_SUPER.");
   }
   Catalog_Namespace::SysCatalog& syscat = static_cast<Catalog_Namespace::SysCatalog&>(catalog);
   Catalog_Namespace::UserMetadata user;
   if (!syscat.getMetadataForUser(*user_name, user))
     throw std::runtime_error("User " + *user_name + " does not exist.");
   if (!session.get_currentUser().isSuper && session.get_currentUser().userId != user.userId)
-    throw std::runtime_error("Only user super can change another user's password.");
-  syscat.alterUser(user.userId, passwd, is_superp);
+    throw std::runtime_error("Only user super can change another user's attributes.");
+  if (insertaccessDB) {
+    LOG(INFO) << " InsertAccess being given to user " << user.userId << " for db " << *insertaccessDB;
+    Catalog_Namespace::DBMetadata db;
+    if (!syscat.getMetadataForDB(*insertaccessDB, db))
+      throw std::runtime_error("Database " + *insertaccessDB + " does not exist.");
+    Privileges privs;
+    privs.insert_ = true;
+    privs.select_ = true;
+    syscat.grantPrivileges(user.userId, db.dbId, privs);
+  }
+  if (passwd || is_superp) {
+    syscat.alterUser(user.userId, passwd, is_superp);
+  }
 }
 
 void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {

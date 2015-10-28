@@ -163,7 +163,11 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    if (!user_meta.isSuper && user_meta.userId != db_meta.dbOwner) {
+    // insert privilege is being treated as access allowed for now
+    Privileges privs;
+    privs.insert_ = true;
+    privs.select_ = false;
+    if (!sys_cat_->checkPrivileges(user_meta, db_meta, privs)) {
       TMapDException ex;
       ex.error_msg = std::string("User ") + user + " is not authorized to access database " + dbname;
       LOG(ERROR) << ex.error_msg;

@@ -31,6 +31,12 @@
 #include "LinkDescriptor.h"
 #include "../DataMgr/DataMgr.h"
 
+struct Privileges {
+  bool super_;
+  bool select_;
+  bool insert_;
+};
+
 namespace Catalog_Namespace {
 
 /**
@@ -236,12 +242,19 @@ class Catalog {
 class SysCatalog : public Catalog {
  public:
   SysCatalog(const std::string& basePath, std::shared_ptr<Data_Namespace::DataMgr> dataMgr, bool is_initdb = false)
-      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {}
+      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {
+    if (!is_initdb) {
+      migrateSysCatalogSchema();
+    }
+  }
   virtual ~SysCatalog(){};
   void initDB();
+  void migrateSysCatalogSchema();
   void createUser(const std::string& name, const std::string& passwd, bool issuper);
   void dropUser(const std::string& name);
   void alterUser(const int32_t userid, const std::string* passwd, bool* is_superp);
+  void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
+  bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
   void dropDatabase(const int32_t dbid, const std::string& name);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);

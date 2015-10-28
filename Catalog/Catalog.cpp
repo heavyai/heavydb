@@ -6,6 +6,7 @@
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
 
+#include "Catalog.h"
 #include <list>
 #include <exception>
 #include <cassert>
@@ -13,7 +14,6 @@
 #include <random>
 #include <boost/filesystem.hpp>
 #include <boost/uuid/sha1.hpp>
-#include "Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 
@@ -36,8 +36,24 @@ void SysCatalog::initDB() {
       std::vector<std::string>{MAPD_ROOT_USER_ID_STR, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT});
   sqliteConnector_.query(
       "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
+  sqliteConnector_.query(
+      "CREATE TABLE mapd_privileges (userid integer references mapd_users, dbid integer references mapd_databases, "
+      "select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
   createDatabase("mapd", MAPD_ROOT_USER_ID);
 };
+
+void SysCatalog::migrateSysCatalogSchema() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query(
+        "CREATE TABLE IF NOT EXISTS mapd_privileges (userid integer references mapd_users, dbid integer references "
+        "mapd_databases, select_priv boolean, insert_priv boolean, UNIQUE(userid, dbid))");
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
 
 void SysCatalog::createUser(const string& name, const string& passwd, bool issuper) {
   UserMetadata user;
@@ -52,6 +68,7 @@ void SysCatalog::dropUser(const string& name) {
   if (!getMetadataForUser(name, user))
     throw runtime_error("User " + name + " does not exist.");
   sqliteConnector_.query("DELETE FROM mapd_users WHERE userid = " + std::to_string(user.userId));
+  sqliteConnector_.query("DELETE FROM mapd_privileges WHERE userid = " + std::to_string(user.userId));
 }
 
 void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* is_superp) {
@@ -66,6 +83,46 @@ void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* is_
     sqliteConnector_.query_with_text_params(
         "UPDATE mapd_users SET issuper = ? WHERE userid = ?",
         std::vector<std::string>{std::to_string(*is_superp), std::to_string(userid)});
+}
+
+void SysCatalog::grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs) {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params(
+        "INSERT OR REPLACE INTO mapd_privileges (userid, dbid, select_priv, insert_priv) VALUES (?1, ?2, ?3, ?4)",
+        std::vector<std::string>{std::to_string(userid),
+                                 std::to_string(dbid),
+                                 std::to_string(privs.select_),
+                                 std::to_string(privs.insert_)});
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+bool SysCatalog::checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs) {
+  if (user.isSuper || user.userId == db.dbOwner) {
+    return true;
+  }
+  sqliteConnector_.query_with_text_params(
+      "SELECT select_priv, insert_priv FROM mapd_privileges "
+      "WHERE userid = ?1 AND dbid = ?2;",
+      std::vector<std::string>{std::to_string(user.userId), std::to_string(db.dbId)});
+  int numRows = sqliteConnector_.getNumRows();
+  if (numRows == 0) {
+    return false;
+  }
+  Privileges has_privs;
+  has_privs.select_ = sqliteConnector_.getData<bool>(0, 0);
+  has_privs.insert_ = sqliteConnector_.getData<bool>(0, 1);
+
+  if (wants_privs.select_ && wants_privs.select_ != has_privs.select_)
+    return false;
+  if (wants_privs.insert_ && wants_privs.insert_ != has_privs.insert_)
+    return false;
+
+  return true;
 }
 
 void SysCatalog::createDatabase(const string& name, int owner) {
@@ -782,7 +839,7 @@ std::string Catalog::calculateSHA1(const std::string& data) {
 std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    ld.link = calculateSHA1(ld.viewState + std::to_string(ld.userId)).substr(0,8);
+    ld.link = calculateSHA1(ld.viewState + std::to_string(ld.userId)).substr(0, 8);
     sqliteConnector_.query_with_text_params("SELECT linkid FROM mapd_links WHERE link = ? and userid = ?",
                                             std::vector<std::string>{ld.link, std::to_string(ld.userId)});
     if (sqliteConnector_.getNumRows() > 0) {
