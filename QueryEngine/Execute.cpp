@@ -13,7 +13,6 @@
 #include "QueryRewrite.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
-#include <boost/range/adaptor/reversed.hpp>
 #ifdef __x86_64__
 #include <llvm/ExecutionEngine/JIT.h>
 #else
