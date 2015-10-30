@@ -149,7 +149,7 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
   // once the join hash table has been built on the CPU.
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     auto& data_mgr = cat_.get_dataMgr();
-    gpu_hash_table_buff_[device_id] = alloc_gpu_mem(&data_mgr, hash_entry_count * sizeof(int32_t), device_id);
+    gpu_hash_table_buff_[device_id] = alloc_gpu_mem(&data_mgr, hash_entry_count * sizeof(int32_t), device_id, nullptr);
   }
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
@@ -234,7 +234,7 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
 #ifdef HAVE_CUDA
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     auto& data_mgr = cat_.get_dataMgr();
-    auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id);
+    auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id, nullptr);
     copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
     init_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
                                   hash_entry_count,

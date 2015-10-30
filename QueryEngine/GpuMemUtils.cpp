@@ -5,7 +5,13 @@
 
 #include <glog/logging.h>
 
-CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr, const size_t num_bytes, const int device_id) {
+CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
+                          const size_t num_bytes,
+                          const int device_id,
+                          RenderAllocator* render_allocator) {
+  if (render_allocator) {
+    return render_allocator->alloc(num_bytes);
+  }
   auto ab = alloc_gpu_abstract_buffer(data_mgr, num_bytes, device_id);
   return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
 }
@@ -50,8 +56,9 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
                                                                 const int device_id,
                                                                 const bool small_buffers,
                                                                 const bool prepend_index_buffer,
-                                                                const bool always_init_group_by_on_host) {
-  if (group_by_buffers.empty()) {
+                                                                const bool always_init_group_by_on_host,
+                                                                RenderAllocator* render_allocator) {
+  if (group_by_buffers.empty() && !render_allocator) {
     return std::make_pair(0, 0);
   }
 
@@ -68,11 +75,11 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
   const size_t prepended_buff_size{prepend_index_buffer ? query_mem_desc.entry_count * sizeof(int64_t) : 0};
 
   CUdeviceptr group_by_dev_buffers_mem =
-      alloc_gpu_mem(data_mgr, mem_size + prepended_buff_size, device_id) + prepended_buff_size;
+      alloc_gpu_mem(data_mgr, mem_size + prepended_buff_size, device_id, render_allocator) + prepended_buff_size;
 
   const size_t step{query_mem_desc.threadsShareMemory() ? block_size_x : 1};
 
-  if (always_init_group_by_on_host || !query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU)) {
+  if (!render_allocator && (always_init_group_by_on_host || !query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU))) {
     std::vector<int8_t> buff_to_gpu(mem_size);
     auto buff_to_gpu_ptr = &buff_to_gpu[0];
 
@@ -98,7 +105,7 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
     }
   }
 
-  auto group_by_dev_ptr = alloc_gpu_mem(data_mgr, num_ptrs * sizeof(CUdeviceptr), device_id);
+  auto group_by_dev_ptr = alloc_gpu_mem(data_mgr, num_ptrs * sizeof(CUdeviceptr), device_id, nullptr);
   copy_to_gpu(data_mgr, group_by_dev_ptr, &group_by_dev_buffers[0], num_ptrs * sizeof(CUdeviceptr), device_id);
 
   return std::make_pair(group_by_dev_ptr, group_by_dev_buffers_mem);
@@ -114,7 +121,8 @@ GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
                                            const unsigned grid_size_x,
                                            const int device_id,
                                            const bool prepend_index_buffer,
-                                           const bool always_init_group_by_on_host) {
+                                           const bool always_init_group_by_on_host,
+                                           RenderAllocator* render_allocator) {
   auto dev_group_by_buffers = create_dev_group_by_buffers(data_mgr,
                                                           group_by_buffers,
                                                           query_mem_desc,
@@ -123,7 +131,8 @@ GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
                                                           device_id,
                                                           false,
                                                           prepend_index_buffer,
-                                                          always_init_group_by_on_host);
+                                                          always_init_group_by_on_host,
+                                                          render_allocator);
   if (query_mem_desc.getSmallBufferSizeBytes()) {
     auto small_dev_group_by_buffers = create_dev_group_by_buffers(data_mgr,
                                                                   small_group_by_buffers,
@@ -133,7 +142,8 @@ GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
                                                                   device_id,
                                                                   true,
                                                                   prepend_index_buffer,
-                                                                  always_init_group_by_on_host);
+                                                                  always_init_group_by_on_host,
+                                                                  render_allocator);
     return {dev_group_by_buffers, small_dev_group_by_buffers};
   }
   return GpuQueryMemory{dev_group_by_buffers};

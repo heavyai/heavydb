@@ -104,7 +104,8 @@ struct QueryMemoryDescriptor {
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       std::shared_ptr<RowSetMemoryOwner>,
       const bool output_columnar,
-      const bool sort_on_gpu) const;
+      const bool sort_on_gpu,
+      RenderAllocator*) const;
 
   size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
   size_t getSmallBufferSizeQuad() const;
@@ -844,7 +845,8 @@ class QueryExecutionContext : boost::noncopyable {
                         const std::vector<std::vector<const int8_t*>>& col_buffers,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const bool output_columnar,
-                        const bool sort_on_gpu);
+                        const bool sort_on_gpu,
+                        RenderAllocator*);
 
   // TOOD(alex): get rid of targets parameter
   ResultRows getRowSet(const std::vector<Analyzer::Expr*>& targets,
@@ -868,7 +870,8 @@ class QueryExecutionContext : boost::noncopyable {
                                       const int device_id,
                                       int32_t* error_code,
                                       const uint32_t num_tables,
-                                      const int64_t join_hash_table) const;
+                                      const int64_t join_hash_table,
+                                      RenderAllocator* render_allocator) const;
 
  private:
   void outputBin(ResultRows& results,

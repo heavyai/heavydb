@@ -49,7 +49,8 @@ Executor::Executor(const int db_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
                    const std::string& debug_dir,
-                   const std::string& debug_file)
+                   const std::string& debug_file,
+                   GLFWwindow* prntWindow)
     : cgen_state_(new CgenState()),
       is_nested_(false),
       block_size_x_(block_size_x),
@@ -64,7 +65,8 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const std::string& debug_dir,
                                                 const std::string& debug_file,
                                                 const size_t block_size_x,
-                                                const size_t grid_size_x) {
+                                                const size_t grid_size_x,
+                                                GLFWwindow* prntWindow) {
   {
     mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
     auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
@@ -78,7 +80,7 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
     if (it != executors_.end()) {
       return it->second;
     }
-    auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file);
+    auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file, prntWindow);
     auto it_ok = executors_.insert(std::make_pair(std::make_tuple(db_id, block_size_x, grid_size_x), executor));
     CHECK(it_ok.second);
     return executor;
@@ -106,7 +108,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                        const Planner::Sort* sort_plan_in,
                                        const bool allow_multifrag,
                                        const bool just_explain,
-                                       const bool allow_loop_joins) {
+                                       const bool allow_loop_joins,
+                                       RenderAllocator* render_allocator) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
@@ -127,7 +130,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                      false,
                                      allow_multifrag,
                                      just_explain,
-                                     allow_loop_joins);
+                                     allow_loop_joins,
+                                     render_allocator);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       rows.dropFirstN(offset);
       if (limit) {
@@ -149,7 +153,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                               false,
                               allow_multifrag,
                               just_explain,
-                              allow_loop_joins);
+                              allow_loop_joins,
+                              render_allocator);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -227,6 +232,10 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
     case kSELECT: {
       int32_t error_code{0};
       size_t max_groups_buffer_entry_guess{2048};
+      std::unique_ptr<RenderAllocator> render_allocator;
+      if (root_plan->get_plan_dest() == Planner::RootPlan::kRENDER) {
+        throw std::runtime_error("This build doesn't support backend rendering");
+      }
       auto rows = executeSelectPlan(root_plan->get_plan(),
                                     root_plan->get_limit(),
                                     root_plan->get_offset(),
@@ -240,7 +249,11 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     nullptr,
                                     allow_multifrag,
                                     root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
-                                    allow_loop_joins);
+                                    allow_loop_joins,
+                                    render_allocator.get());
+      if (render_allocator) {
+        throw std::runtime_error("This build doesn't support backend rendering");
+      }
       if (error_code == ERR_DIV_BY_ZERO) {
         throw std::runtime_error("Division by zero");
       }
@@ -261,7 +274,8 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                  nullptr,
                                  false,
                                  false,
-                                 allow_loop_joins);
+                                 allow_loop_joins,
+                                 nullptr);
       }
       if (error_code) {
         max_groups_buffer_entry_guess = 0;
@@ -279,7 +293,8 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                    nullptr,
                                    false,
                                    false,
-                                   allow_loop_joins);
+                                   allow_loop_joins,
+                                   nullptr);
           if (!error_code) {
             return rows;
           }
@@ -304,6 +319,21 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
   }
   CHECK(false);
   return ResultRows({}, nullptr, {}, ExecutorDeviceType::CPU);
+}
+
+
+int32_t Executor::getStringId(const std::string& table_name,
+                              const std::string& col_name,
+                              const std::string& col_val) const {
+  const auto td = catalog_->getMetadataForTable(table_name);
+  CHECK(td);
+  const auto cd = catalog_->getMetadataForColumn(td->tableId, col_name);
+  CHECK(cd);
+  CHECK(cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_DICT);
+  const int dict_id = cd->columnType.get_comp_param();
+  const auto sd = getStringDictionary(dict_id, row_set_mem_owner_);
+  CHECK(sd);
+  return sd->get(col_val);
 }
 
 StringDictionary* Executor::getStringDictionary(const int dict_id_in,
@@ -2217,7 +2247,8 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         false,
                                         allow_multifrag,
                                         just_explain,
-                                        allow_loop_joins);
+                                        allow_loop_joins,
+                                        nullptr);
   if (just_explain) {
     return result_rows;
   }
@@ -2303,7 +2334,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
-      init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_, false, false);
+      init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_, false, false, nullptr);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   *error_code = 0;
   std::vector<std::vector<const int8_t*>> multi_frag_col_buffers{column_buffers};
@@ -2351,7 +2382,8 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         sort_plan,
                                         allow_multifrag,
                                         just_explain,
-                                        allow_loop_joins);
+                                        allow_loop_joins,
+                                        nullptr);
   if (just_explain) {
     return rows_to_sort;
   }
@@ -2378,7 +2410,8 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                                      rows_to_sort.executor_->gridSize(),
                                                      device_id,
                                                      true,
-                                                     true);
+                                                     true,
+                                                     nullptr);
     ScopedScratchBuffer scratch_buff(
         rows_to_sort.query_mem_desc_.entry_count * sizeof(int64_t), &cat.get_dataMgr(), device_id);
     auto tmp_buff = reinterpret_cast<int64_t*>(scratch_buff.getPtr());
@@ -2498,7 +2531,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                         const bool output_columnar_hint,
                                         const bool allow_multifrag,
                                         const bool just_explain,
-                                        const bool allow_loop_joins) {
+                                        const bool allow_loop_joins,
+                                        RenderAllocator* render_allocator) {
   *error_code = 0;
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // TODO(alex): heuristic for group by buffer size
@@ -2662,7 +2696,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            nvvm_backend,
                                            opt_level,
                                            cat.get_dataMgr().cudaMgr_,
-                                           true,
+                                           render_allocator ? false : true,
                                            row_set_mem_owner,
                                            max_groups_buffer_entry_guess,
                                            scan_limit,
@@ -2774,11 +2808,12 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                    &query_context_mutexes,
                    &query_contexts,
                    row_set_mem_owner,
-                   error_code](const ExecutorDeviceType chosen_device_type,
-                               int chosen_device_id,
-                               const std::map<int, std::vector<size_t>>& frag_ids,
-                               const size_t ctx_idx,
-                               const int64_t rowid_lookup_key) {
+                   error_code,
+                   render_allocator](const ExecutorDeviceType chosen_device_type,
+                                     int chosen_device_id,
+                                     const std::map<int, std::vector<size_t>>& frag_ids,
+                                     const size_t ctx_idx,
+                                     const int64_t rowid_lookup_key) {
     static std::mutex reduce_mutex;
     const auto memory_level =
         chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
@@ -2859,7 +2894,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                                                          col_buffers,
                                                                          row_set_mem_owner,
                                                                          compilation_result.output_columnar,
-                                                                         compilation_result.query_mem_desc.sortOnGpu());
+                                                                         compilation_result.query_mem_desc.sortOnGpu(),
+                                                                         render_allocator);
     QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
     std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
     if (compilation_result.query_mem_desc.usesCachedContext()) {
@@ -2873,7 +2909,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                                                        col_buffers,
                                                                        row_set_mem_owner,
                                                                        compilation_result.output_columnar,
-                                                                       compilation_result.query_mem_desc.sortOnGpu());
+                                                                       compilation_result.query_mem_desc.sortOnGpu(),
+                                                                       render_allocator);
       }
       query_exe_context = query_contexts[ctx_idx].get();
     }
@@ -2901,7 +2938,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                       &cat.get_dataMgr(),
                                       chosen_device_id,
                                       start_rowid,
-                                      scan_ids.size());
+                                      scan_ids.size(),
+                                      render_allocator);
     } else {
       err = executePlanWithGroupBy(compilation_result,
                                    hoist_literals,
@@ -2918,7 +2956,8 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                    scan_limit,
                                    device_type == ExecutorDeviceType::Hybrid,
                                    start_rowid,
-                                   scan_ids.size());
+                                   scan_ids.size(),
+                                   render_allocator);
     }
     {
       std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -3182,7 +3221,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
         } else {
           CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_for_column);
           auto& data_mgr = cat.get_dataMgr();
-          auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id);
+          auto chunk_iter_gpu = alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
           copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
           frag_col_buffers[it->second] = reinterpret_cast<int8_t*>(chunk_iter_gpu);
         }
@@ -3234,7 +3273,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             Data_Namespace::DataMgr* data_mgr,
                                             const int device_id,
                                             const uint32_t start_rowid,
-                                            const uint32_t num_tables) {
+                                            const uint32_t num_tables,
+                                            RenderAllocator* render_allocator) {
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
@@ -3269,7 +3309,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  device_id,
                                                  &error_code,
                                                  num_tables,
-                                                 join_hash_table_ptr);
+                                                 join_hash_table_ptr,
+                                                 render_allocator);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -3320,7 +3361,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const int64_t scan_limit,
                                          const bool was_auto_device,
                                          const uint32_t start_rowid,
-                                         const uint32_t num_tables) {
+                                         const uint32_t num_tables,
+                                         RenderAllocator* render_allocator) {
   CHECK_GT(group_by_col_count, 0);
   // TODO(alex):
   // 1. Optimize size (make keys more compact).
@@ -3359,12 +3401,13 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        device_id,
                                        &error_code,
                                        num_tables,
-                                       join_hash_table_ptr);
+                                       join_hash_table_ptr,
+                                       render_allocator);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
   }
-  if (!query_exe_context->query_mem_desc_.usesCachedContext()) {
+  if (!query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getRowSet(target_exprs, query_exe_context->query_mem_desc_, was_auto_device);
   }

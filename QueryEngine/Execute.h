@@ -1,12 +1,15 @@
 #ifndef QUERYENGINE_EXECUTE_H
 #define QUERYENGINE_EXECUTE_H
 
+typedef void GLFWwindow;
+
 #include "GroupByAndAggregate.h"
 #include "JoinHashTable.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
+#include "../Shared/measure.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "NvidiaKernel.h"
 
@@ -29,7 +32,6 @@
 #include <vector>
 #include <deque>
 #include <unistd.h>
-#include "../Shared/measure.h"
 
 enum class NVVMBackend { CUDA, NVPTX };
 
@@ -141,13 +143,15 @@ class Executor {
            const size_t block_size_x,
            const size_t grid_size_x,
            const std::string& debug_dir,
-           const std::string& debug_file);
+           const std::string& debug_file,
+           GLFWwindow* prntWindow = nullptr);
 
   static std::shared_ptr<Executor> getExecutor(const int db_id,
                                                const std::string& debug_dir = "",
                                                const std::string& debug_file = "",
                                                const size_t block_size_x = 0,
-                                               const size_t grid_size_x = 0);
+                                               const size_t grid_size_x = 0,
+                                               GLFWwindow* prntWindow = nullptr);
 
   static void nukeCacheOfExecutors() {
     std::lock_guard<std::mutex> flush_lock(execute_mutex_);  // don't want native code to vanish while executing
@@ -164,6 +168,10 @@ class Executor {
                      const ExecutorOptLevel,
                      const bool allow_multifrag,
                      const bool allow_loop_joins);
+
+  int64_t getRowidForPixel(const int64_t x, const int64_t y);
+
+  int32_t getStringId(const std::string& table_name, const std::string& col_name, const std::string& col_val) const;
 
   StringDictionary* getStringDictionary(const int dictId,
                                         const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const;
@@ -246,7 +254,8 @@ class Executor {
                                const Planner::Sort* sort_plan,
                                const bool allow_multifrag,
                                const bool just_explain,
-                               const bool allow_loop_joins);
+                               const bool allow_loop_joins,
+                               RenderAllocator* render_allocator);
   ResultRows executeAggScanPlan(const Planner::Plan* plan,
                                 const int64_t limit,
                                 const bool hoist_literals,
@@ -261,7 +270,8 @@ class Executor {
                                 const bool output_columnar_hint,
                                 const bool allow_multifrag,
                                 const bool just_explain,
-                                const bool allow_loop_joins);
+                                const bool allow_loop_joins,
+                                RenderAllocator* render_allocator);
   ResultRows collectAllDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                      const Planner::Plan* plan,
                                      const QueryMemoryDescriptor& query_mem_desc,
@@ -269,6 +279,10 @@ class Executor {
                                      const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const bool output_columnar);
+
+  std::string renderRows(const std::vector<Analyzer::TargetEntry*>& targets,
+                         const std::string& config_json,
+                         const size_t used_bytes);
 
   typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
 
@@ -354,7 +368,8 @@ class Executor {
                                  const int64_t limit,
                                  const bool was_auto_device,
                                  const uint32_t start_rowid,
-                                 const uint32_t num_tables);
+                                 const uint32_t num_tables,
+                                 RenderAllocator* render_allocator);
   int32_t executePlanWithoutGroupBy(const CompilationResult&,
                                     const bool hoist_literals,
                                     ResultRows& results,
@@ -367,7 +382,8 @@ class Executor {
                                     Data_Namespace::DataMgr* data_mgr,
                                     const int device_id,
                                     const uint32_t start_rowid,
-                                    const uint32_t num_tables);
+                                    const uint32_t num_tables,
+                                    RenderAllocator* render_allocator);
   int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,

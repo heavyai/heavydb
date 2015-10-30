@@ -10,7 +10,32 @@
 #include <utility>
 #include <vector>
 
-CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr, const size_t num_bytes, const int device_id);
+class RenderAllocator {
+ public:
+  RenderAllocator(int8_t* preallocated_ptr, const size_t preallocated_size)
+      : preallocated_ptr_(preallocated_ptr), preallocated_size_(preallocated_size), crt_allocated_bytes_(0) {}
+
+  CUdeviceptr alloc(const size_t bytes) {
+    auto ptr = preallocated_ptr_ + crt_allocated_bytes_;
+    crt_allocated_bytes_ += bytes;
+    CHECK(crt_allocated_bytes_ <= preallocated_size_);  // TODO(alex): return null instead
+    return reinterpret_cast<CUdeviceptr>(ptr);
+  }
+
+  size_t getAllocatedSize() const { return crt_allocated_bytes_; }
+
+  int8_t* getBasePtr() const { return preallocated_ptr_; }
+
+ private:
+  int8_t* preallocated_ptr_;
+  const size_t preallocated_size_;
+  size_t crt_allocated_bytes_;
+};
+
+CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
+                          const size_t num_bytes,
+                          const int device_id,
+                          RenderAllocator* render_allocator);
 
 Data_Namespace::AbstractBuffer* alloc_gpu_abstract_buffer(Data_Namespace::DataMgr* data_mgr,
                                                           const size_t num_bytes,
@@ -45,7 +70,8 @@ GpuQueryMemory create_dev_group_by_buffers(Data_Namespace::DataMgr* data_mgr,
                                            const unsigned grid_size_x,
                                            const int device_id,
                                            const bool prepend_index_buffer,
-                                           const bool always_init_group_by_on_host);
+                                           const bool always_init_group_by_on_host,
+                                           RenderAllocator* render_allocator);
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const std::vector<int64_t*>& group_by_buffers,

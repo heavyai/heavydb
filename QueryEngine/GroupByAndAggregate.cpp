@@ -1107,7 +1107,8 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
                                              const std::vector<std::vector<const int8_t*>>& col_buffers,
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const bool output_columnar,
-                                             const bool sort_on_gpu)
+                                             const bool sort_on_gpu,
+                                             RenderAllocator* render_allocator)
     : query_mem_desc_(query_mem_desc),
       init_agg_vals_(executor->plan_state_->init_agg_vals_),
       executor_(executor),
@@ -1121,7 +1122,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
       output_columnar_(output_columnar),
       sort_on_gpu_(sort_on_gpu) {
   CHECK(!sort_on_gpu_ || output_columnar);
-  if (query_mem_desc_.group_col_widths.empty()) {
+  if (render_allocator || query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
     return;
   }
@@ -1595,7 +1596,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                            const int device_id,
                                                            int32_t* error_code,
                                                            const uint32_t num_tables,
-                                                           const int64_t join_hash_table) const {
+                                                           const int64_t join_hash_table,
+                                                           RenderAllocator* render_allocator) const {
 #ifdef HAVE_CUDA
   data_mgr->cudaMgr_->setContext(device_id);
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
@@ -1610,11 +1612,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
       for (auto col_buffer : frag_col_buffers) {
         col_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(col_buffer));
       }
-      auto col_buffers_dev_ptr = alloc_gpu_mem(data_mgr, col_count * sizeof(CUdeviceptr), device_id);
+      auto col_buffers_dev_ptr = alloc_gpu_mem(data_mgr, col_count * sizeof(CUdeviceptr), device_id, nullptr);
       copy_to_gpu(data_mgr, col_buffers_dev_ptr, &col_dev_buffers[0], col_count * sizeof(CUdeviceptr), device_id);
       multifrag_col_dev_buffers.push_back(col_buffers_dev_ptr);
     }
-    multifrag_col_buffers_dev_ptr = alloc_gpu_mem(data_mgr, num_fragments * sizeof(CUdeviceptr), device_id);
+    multifrag_col_buffers_dev_ptr = alloc_gpu_mem(data_mgr, num_fragments * sizeof(CUdeviceptr), device_id, nullptr);
     copy_to_gpu(data_mgr,
                 multifrag_col_buffers_dev_ptr,
                 &multifrag_col_dev_buffers[0],
@@ -1624,48 +1626,48 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
   CUdeviceptr literals_dev_ptr{0};
   if (!literal_buff.empty()) {
     CHECK(hoist_literals);
-    literals_dev_ptr = alloc_gpu_mem(data_mgr, literal_buff.size(), device_id);
+    literals_dev_ptr = alloc_gpu_mem(data_mgr, literal_buff.size(), device_id, nullptr);
     copy_to_gpu(data_mgr, literals_dev_ptr, &literal_buff[0], literal_buff.size(), device_id);
   }
   CUdeviceptr num_rows_dev_ptr{0};
   {
-    num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t) * num_rows.size(), device_id);
+    num_rows_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t) * num_rows.size(), device_id, nullptr);
     copy_to_gpu(data_mgr, num_rows_dev_ptr, &num_rows[0], sizeof(int64_t) * num_rows.size(), device_id);
   }
   CUdeviceptr frag_row_offsets_dev_ptr{0};
   {
-    frag_row_offsets_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t) * frag_row_offsets.size(), device_id);
+    frag_row_offsets_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t) * frag_row_offsets.size(), device_id, nullptr);
     copy_to_gpu(
         data_mgr, frag_row_offsets_dev_ptr, &frag_row_offsets[0], sizeof(int64_t) * frag_row_offsets.size(), device_id);
   }
   CUdeviceptr num_fragments_dev_ptr{0};
   {
-    num_fragments_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id);
+    num_fragments_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id, nullptr);
     copy_to_gpu(data_mgr, num_fragments_dev_ptr, &num_fragments, sizeof(uint32_t), device_id);
   }
   CUdeviceptr max_matched_dev_ptr{0};
   {
     int64_t max_matched{scan_limit};
-    max_matched_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
+    max_matched_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id, nullptr);
     copy_to_gpu(data_mgr, max_matched_dev_ptr, &max_matched, sizeof(int64_t), device_id);
   }
   CUdeviceptr init_agg_vals_dev_ptr;
   {
-    init_agg_vals_dev_ptr = alloc_gpu_mem(data_mgr, init_agg_vals.size() * sizeof(int64_t), device_id);
+    init_agg_vals_dev_ptr = alloc_gpu_mem(data_mgr, init_agg_vals.size() * sizeof(int64_t), device_id, nullptr);
     copy_to_gpu(data_mgr, init_agg_vals_dev_ptr, &init_agg_vals[0], init_agg_vals.size() * sizeof(int64_t), device_id);
   }
   CUdeviceptr num_tables_dev_ptr{0};
   {
-    num_tables_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id);
+    num_tables_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id, nullptr);
     copy_to_gpu(data_mgr, num_tables_dev_ptr, &num_tables, sizeof(uint32_t), device_id);
   }
   CUdeviceptr join_hash_table_dev_ptr{0};
   {
-    join_hash_table_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
+    join_hash_table_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id, nullptr);
     copy_to_gpu(data_mgr, join_hash_table_dev_ptr, &join_hash_table, sizeof(int64_t), device_id);
   }
   std::vector<int32_t> error_codes(block_size_x);
-  auto error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id);
+  auto error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id, nullptr);
   copy_to_gpu(data_mgr, error_code_dev_ptr, &error_codes[0], grid_size_x * sizeof(error_codes[0]), device_id);
   {
     const unsigned block_size_y = 1;
@@ -1673,7 +1675,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
     const unsigned grid_size_y = 1;
     const unsigned grid_size_z = 1;
     if (query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU) > 0) {  // group by path
-      CHECK(!group_by_buffers_.empty());
+      CHECK(!group_by_buffers_.empty() || render_allocator);
       bool can_sort_on_gpu = query_mem_desc_.sortOnGpu();
       auto gpu_query_mem = create_dev_group_by_buffers(data_mgr,
                                                        group_by_buffers_,
@@ -1683,9 +1685,17 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                        grid_size_x,
                                                        device_id,
                                                        can_sort_on_gpu,
-                                                       false);
+                                                       false,
+                                                       render_allocator);
+      if (render_allocator) {
+        CHECK_EQ(size_t(0), render_allocator->getAllocatedSize() % 8);
+        const size_t qw_count{render_allocator->getAllocatedSize() / 8};
+        init_render_buffer_on_device(
+            reinterpret_cast<int64_t*>(render_allocator->getBasePtr()), qw_count, block_size_x, grid_size_x);
+      }
       if (query_mem_desc_.lazyInitGroups(ExecutorDeviceType::GPU) &&
           query_mem_desc_.hash_type != GroupByColRangeType::MultiCol) {
+        CHECK(!render_allocator);
         const size_t step{query_mem_desc_.threadsShareMemory() ? block_size_x : 1};
         size_t groups_buffer_size{query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU)};
         auto group_by_dev_buffer = gpu_query_mem.group_by_buffers.second;
@@ -1762,13 +1772,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                        kernel_params,
                                        nullptr));
       }
-      copy_group_by_buffers_from_gpu(data_mgr,
-                                     this,
-                                     gpu_query_mem,
-                                     block_size_x,
-                                     grid_size_x,
-                                     device_id,
-                                     can_sort_on_gpu && query_mem_desc_.keyless_hash);
+      if (!render_allocator) {
+        copy_group_by_buffers_from_gpu(data_mgr,
+                                       this,
+                                       gpu_query_mem,
+                                       block_size_x,
+                                       grid_size_x,
+                                       device_id,
+                                       can_sort_on_gpu && query_mem_desc_.keyless_hash);
+      }
       copy_from_gpu(data_mgr, &error_codes[0], error_code_dev_ptr, grid_size_x * sizeof(error_codes[0]), device_id);
       *error_code = 0;
       for (const auto err : error_codes) {
@@ -1783,11 +1795,12 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer =
             num_fragments
-                ? alloc_gpu_mem(data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id)
+                ? alloc_gpu_mem(
+                      data_mgr, block_size_x * grid_size_x * sizeof(int64_t) * num_fragments, device_id, nullptr)
                 : 0;
         out_vec_dev_buffers.push_back(out_vec_dev_buffer);
       }
-      auto out_vec_dev_ptr = alloc_gpu_mem(data_mgr, agg_col_count * sizeof(CUdeviceptr), device_id);
+      auto out_vec_dev_ptr = alloc_gpu_mem(data_mgr, agg_col_count * sizeof(CUdeviceptr), device_id, nullptr);
       copy_to_gpu(data_mgr, out_vec_dev_ptr, &out_vec_dev_buffers[0], agg_col_count * sizeof(CUdeviceptr), device_id);
       CUdeviceptr unused_dev_ptr{0};
       if (hoist_literals) {
@@ -1863,7 +1876,8 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
-    const bool sort_on_gpu) const {
+    const bool sort_on_gpu,
+    RenderAllocator* render_allocator) const {
   return std::unique_ptr<QueryExecutionContext>(new QueryExecutionContext(*this,
                                                                           init_agg_vals,
                                                                           executor,
@@ -1872,7 +1886,8 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                                                           col_buffers,
                                                                           row_set_mem_owner,
                                                                           output_columnar,
-                                                                          sort_on_gpu));
+                                                                          sort_on_gpu,
+                                                                          render_allocator));
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {

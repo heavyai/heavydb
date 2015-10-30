@@ -35,6 +35,7 @@
 #include <signal.h>
 #include <unistd.h>
 
+
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
@@ -43,6 +44,13 @@ using namespace ::apache::thrift::server;
 using boost::shared_ptr;
 
 #define INVALID_SESSION_ID -1
+
+void mainGLFWErrorCallback(int error, const char* errstr) {
+  // TODO(croot): should we throw an exception?
+  // NOTE: There are cases when an error is caught here, but
+  // is not fatal -- i.e. putting GLFW in headless mode.
+  LOG(ERROR) << "GLFW error: 0x" << std::hex << error << ": " << errstr << std::endl;
+}
 
 class MapDHandler : virtual public MapDIf {
  public:
@@ -60,12 +68,18 @@ class MapDHandler : virtual public MapDIf {
         jit_debug_(jit_debug),
         allow_multifrag_(allow_multifrag),
         read_only_(read_only),
-        allow_loop_joins_(allow_loop_joins) {
+        allow_loop_joins_(allow_loop_joins),
+        _windowPtr(nullptr) {
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
       executor_device_type_ = ExecutorDeviceType::GPU;
       LOG(INFO) << "Started in GPU Mode" << std::endl;
       cpu_mode_only_ = false;
+
+      // init glfw for rendering queries
+      // TODO(croot): can do this for cpu queries
+      // probably too
+      initGLFW();
     } else if (executor_device == "hybrid") {
       executor_device_type_ = ExecutorDeviceType::Hybrid;
       LOG(INFO) << "Started in Hybrid Mode" << std::endl;
@@ -80,7 +94,9 @@ class MapDHandler : virtual public MapDIf {
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
     import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
-  ~MapDHandler() { LOG(INFO) << "mapd_server exits." << std::endl; }
+  ~MapDHandler() {
+    LOG(INFO) << "mapd_server exits." << std::endl;
+  }
 
   void check_read_only(const std::string& str) {
     if (read_only_) {
@@ -337,8 +353,12 @@ class MapDHandler : virtual public MapDIf {
             if (explain_stmt != nullptr) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
-            auto executor = Executor::getExecutor(
-                root_plan->get_catalog().get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "");
+            auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+                                                  jit_debug_ ? "/tmp" : "",
+                                                  jit_debug_ ? "mapdquery" : "",
+                                                  0,
+                                                  0,
+                                                  _windowPtr);
             ResultRows results({}, nullptr, nullptr, executor_device_type);
             execute_time += measure<>::execution([&]() {
               results = executor->execute(root_plan,
@@ -447,6 +467,16 @@ class MapDHandler : virtual public MapDIf {
     });
     _return.execution_time_ms = execute_time;
     LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << execute_time << " (ms)";
+  }
+
+  void get_rows_for_pixels(std::vector<TPixelRows>& _return,
+                           const TSessionId session,
+                           const int64_t widget_id,
+                           const std::vector<TPixel>& pixels,
+                           const std::string& table_name,
+                           const std::vector<std::string>& col_names,
+                           const bool column_format) {
+    CHECK(false);
   }
 
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
@@ -858,7 +888,28 @@ class MapDHandler : virtual public MapDIf {
         root_plan->set_render_properties(&render_properties);
         root_plan->set_column_render_properties(&col_render_properties);
         root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
-        // @TODO(alex) execute query, render and fill _return
+        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+                                              jit_debug_ ? "/tmp" : "",
+                                              jit_debug_ ? "mapdquery" : "",
+                                              0,
+                                              0,
+                                              _windowPtr);
+        const auto results = executor->execute(root_plan,
+                                               true,
+                                               ExecutorDeviceType::GPU,
+                                               nvvm_backend_,
+                                               ExecutorOptLevel::Default,
+                                               allow_multifrag_,
+                                               false);
+        const auto img_row = results.getNextRow(false, false);
+        CHECK_EQ(size_t(1), img_row.size());
+        const auto& img_tv = img_row.front();
+        const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
+        const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+        CHECK(nullable_sptr);
+        auto sptr = boost::get<std::string>(nullable_sptr);
+        CHECK(sptr);
+        _return = *sptr;
       }
     } catch (std::exception& e) {
       TMapDException ex;
@@ -986,6 +1037,9 @@ class MapDHandler : virtual public MapDIf {
  private:
   typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
 
+  void initGLFW() {
+  }
+
   SessionMap::iterator get_session_it(const TSessionId session) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
@@ -1020,6 +1074,8 @@ class MapDHandler : virtual public MapDIf {
   const bool allow_loop_joins_;
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
+
+  GLFWwindow* _windowPtr;
 };
 
 void start_server(TThreadedServer& server) {

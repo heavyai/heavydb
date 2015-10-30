@@ -1059,7 +1059,7 @@ int main(int argc, char** argv) {
   int err{0};
   try {
     err = RUN_ALL_TESTS();
-  } catch (const exception& e) {
+  } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
   Executor::nukeCacheOfExecutors();

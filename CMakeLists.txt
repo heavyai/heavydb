@@ -69,8 +69,6 @@ include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_SOURCE_DIR
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
-# RapidJSON
-include_directories(ThirdParty/rapidjson)
 
 ADD_SUBDIRECTORY    (SqliteConnector)
 ADD_SUBDIRECTORY    (Catalog)
@@ -87,12 +85,10 @@ ADD_SUBDIRECTORY    (Chunk)
 ADD_SUBDIRECTORY    (Shared)
 ADD_SUBDIRECTORY    (Utils)
 ADD_SUBDIRECTORY    (SQLFrontend)
-if (ENABLE_RENDERING)
-  ADD_SUBDIRECTORY    (QueryRenderer)
-endif()
+
 option(ENABLE_ODBC "Build ODBC driver" OFF)
-if (ENABLE_ODBC)
-  ADD_SUBDIRECTORY    (ODBC)
+if(ENABLE_ODBC)
+    ADD_SUBDIRECTORY    (ODBC)
 endif()
 
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner

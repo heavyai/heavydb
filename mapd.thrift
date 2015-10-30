@@ -151,6 +151,16 @@ struct TServerStatus {
 typedef map<string, TRenderProperty> TRenderPropertyMap
 typedef map<string, TRenderPropertyMap> TColumnRenderMap
 
+struct TPixel {
+  1: i64 x
+  2: i64 y
+}
+
+struct TPixelRows {
+  1: TPixel pixel
+  2: TRowSet row_set
+}
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
@@ -175,4 +185,5 @@ service MapD {
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e 2: ThriftException te)
   TFrontendView get_link_view(1: TSessionId session, 2: string link) throws (1: TMapDException e 2: ThriftException te)
   string create_link(1: TSessionId session, 2: string view_state) throws (1: TMapDException e 2: ThriftException te)
+  list<TPixelRows> get_rows_for_pixels(1: TSessionId session, 2: i64 widget_id, 3: list<TPixel> pixels, 4: string table_name, 5: list<string> col_names, 6: bool column_format) throws (1: TMapDException e 2: ThriftException te)
 }
