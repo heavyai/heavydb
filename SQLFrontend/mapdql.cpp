@@ -21,7 +21,9 @@
 #include "MapDServer.h"
 #include <thrift/transport/TSocket.h>
 #include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/THttpClient.h>
 
 #include "linenoise.h"
 
@@ -424,6 +426,7 @@ int main(int argc, char** argv) {
   std::string delimiter("|");
   bool print_header = true;
   bool print_timing = false;
+  bool http = false;
   char* line;
   TQueryResult _return;
   std::string db_name;
@@ -440,7 +443,7 @@ int main(int argc, char** argv) {
       "user,u", po::value<std::string>(&user_name), "User name")(
       "passwd,p", po::value<std::string>(&passwd), "Password")(
       "server,s", po::value<std::string>(&server_host), "MapD Server Hostname (default localhost)")(
-      "port", po::value<int>(&port), "Port number (default 9091)");
+      "port", po::value<int>(&port), "Port number (default 9091)")("http", "Use HTTP transport");
 
   po::variables_map vm;
   po::positional_options_description positionalOptions;
@@ -450,7 +453,7 @@ int main(int argc, char** argv) {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
     if (vm.count("help")) {
       std::cout << "Usage: mapdql [<database>][{--user|-u} <user>][{--passwd|-p} <password>][--port <port number>] "
-                   "[{-s|--server} <server host>] [{--no-header|-n}] [{--delimiter|-d}]\n";
+                   "[{-s|--server} <server host>][--http] [{--no-header|-n}] [{--delimiter|-d}]\n";
       return 0;
     }
     if (vm.count("version")) {
@@ -461,6 +464,8 @@ int main(int argc, char** argv) {
       print_header = false;
     if (vm.count("timing"))
       print_timing = true;
+    if (vm.count("http"))
+      http = true;
     if (vm.count("db") && (!vm.count("user") || !vm.count("passwd"))) {
       std::cerr << "Must specify a user name and password to access database " << db_name << std::endl;
       return 1;
@@ -472,9 +477,17 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  shared_ptr<TTransport> socket(new TSocket(server_host, port));
-  shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-  shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
+  shared_ptr<TTransport> transport;
+  shared_ptr<TProtocol> protocol;
+  shared_ptr<TTransport> socket;
+  if (http) {
+    transport = shared_ptr<TTransport>(new THttpClient(server_host, port, "/"));
+    protocol = shared_ptr<TProtocol>(new TJSONProtocol(transport));
+  } else {
+    socket = shared_ptr<TTransport>(new TSocket(server_host, port));
+    transport = shared_ptr<TTransport>(new TBufferedTransport(socket));
+    protocol = shared_ptr<TProtocol>(new TBinaryProtocol(transport));
+  }
   MapDClient c(protocol);
   ClientContext context(*transport, c);
 
