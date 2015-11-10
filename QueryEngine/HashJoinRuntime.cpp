@@ -1,12 +1,17 @@
 #include "HashJoinRuntime.h"
+#ifdef __CUDACC__
+#include "GpuRtConstants.h"
+#include "DecodersImpl.h"
+#include "GroupByFastImpl.h"
+#else
 #include "RuntimeFunctions.h"
+#endif
+#include "../Shared/funcannotations.h"
 
-namespace {
-
-void init_groups(int64_t* groups_buffer,
-                 const int32_t groups_buffer_entry_count,
-                 const int32_t key_qw_count,
-                 const int64_t* init_vals) {
+DEVICE void SUFFIX(init_groups)(int64_t* groups_buffer,
+                                const int32_t groups_buffer_entry_count,
+                                const int32_t key_qw_count,
+                                const int64_t* init_vals) {
   int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * (key_qw_count + 1);
   for (int32_t i = 0; i < groups_buffer_entry_qw_count; ++i) {
     groups_buffer[i] =
@@ -14,28 +19,42 @@ void init_groups(int64_t* groups_buffer,
   }
 }
 
-}  // namespace
-
-void init_hash_join_buff(int64_t* buff,
-                         const int32_t groups_buffer_entry_count,
-                         const int8_t* col_buff,
-                         const size_t num_elems,
-                         const size_t elem_sz,
-                         const int64_t min_val) {
+DEVICE void SUFFIX(init_hash_join_buff)(int64_t* buff,
+                                        const int32_t groups_buffer_entry_count,
+                                        const int8_t* col_buff,
+                                        const size_t num_elems,
+                                        const size_t elem_sz,
+                                        const int64_t min_val) {
   int64_t init_val = -1;
-  init_groups(buff, groups_buffer_entry_count, 1, &init_val);
+  SUFFIX(init_groups)(buff, groups_buffer_entry_count, 1, &init_val);
   for (size_t i = 0; i < num_elems; ++i) {
-    int64_t* entry_ptr = get_group_value_fast(buff, fixed_width_int_decode_noinline(col_buff, elem_sz, i), min_val, 1);
+    int64_t* entry_ptr =
+        SUFFIX(get_group_value_fast)(buff, SUFFIX(fixed_width_int_decode_noinline)(col_buff, elem_sz, i), min_val, 1);
     // TODO; must check if it's one to one
     *entry_ptr = i;
   }
 }
 
-extern "C" __attribute__((noinline)) int64_t
-    hash_join_idx(int64_t hash_buff, const int64_t key, const int64_t min_key, const int64_t max_key) {
-  if (key >= min_key && key <= max_key) {
-    // TODO(alex): don't use get_group_value_fast, it's not read-only
-    return *get_group_value_fast(reinterpret_cast<int64_t*>(hash_buff), key, min_key, 1);
-  }
-  return -1;
+#ifdef __CUDACC__
+__global__ void init_hash_join_buff_wrapper(int64_t* buff,
+                                            const int32_t groups_buffer_entry_count,
+                                            const int8_t* col_buff,
+                                            const size_t num_elems,
+                                            const size_t elem_sz,
+                                            const int64_t min_val) {
+  SUFFIX(init_hash_join_buff)(buff, groups_buffer_entry_count, col_buff, num_elems, elem_sz, min_val);
 }
+
+void init_hash_join_buff_on_device(int64_t* buff,
+                                   const int32_t groups_buffer_entry_count,
+                                   const int8_t* col_buff,
+                                   const size_t num_elems,
+                                   const size_t elem_sz,
+                                   const int64_t min_val,
+                                   const size_t block_size_x,
+                                   const size_t grid_size_x) {
+  init_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>
+      (buff, groups_buffer_entry_count, col_buff, num_elems, elem_sz, min_val);
+}
+#else
+#endif

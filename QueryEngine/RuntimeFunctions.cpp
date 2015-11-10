@@ -7,52 +7,7 @@
 
 // decoder implementations
 
-extern "C" __attribute__((always_inline)) int64_t
-    fixed_width_int_decode(const int8_t* byte_stream, const int32_t byte_width, const int64_t pos) {
-  switch (byte_width) {
-    case 1:
-      return static_cast<int64_t>(byte_stream[pos * byte_width]);
-    case 2:
-      return *(reinterpret_cast<const int16_t*>(&byte_stream[pos * byte_width]));
-    case 4:
-      return *(reinterpret_cast<const int32_t*>(&byte_stream[pos * byte_width]));
-    case 8:
-      return *(reinterpret_cast<const int64_t*>(&byte_stream[pos * byte_width]));
-    default:
-      // TODO(alex)
-      return std::numeric_limits<int64_t>::min() + 1;
-  }
-}
-
-extern "C" int64_t fixed_width_int_decode_noinline(const int8_t* byte_stream,
-                                                   const int32_t byte_width,
-                                                   const int64_t pos) {
-  return fixed_width_int_decode(byte_stream, byte_width, pos);
-}
-
-extern "C" __attribute__((always_inline)) int64_t diff_fixed_width_int_decode(const int8_t* byte_stream,
-                                                                              const int32_t byte_width,
-                                                                              const int64_t baseline,
-                                                                              const int64_t pos) {
-  return fixed_width_int_decode(byte_stream, byte_width, pos) + baseline;
-}
-
-extern "C" __attribute__((always_inline)) float fixed_width_float_decode(const int8_t* byte_stream, const int64_t pos) {
-  return *(reinterpret_cast<const float*>(&byte_stream[pos * sizeof(float)]));
-}
-
-extern "C" float fixed_width_float_decode_noinline(const int8_t* byte_stream, const int64_t pos) {
-  return fixed_width_float_decode(byte_stream, pos);
-}
-
-extern "C"
-    __attribute__((always_inline)) double fixed_width_double_decode(const int8_t* byte_stream, const int64_t pos) {
-  return *(reinterpret_cast<const double*>(&byte_stream[pos * sizeof(double)]));
-}
-
-extern "C" double fixed_width_double_decode_noinline(const int8_t* byte_stream, const int64_t pos) {
-  return fixed_width_double_decode(byte_stream, pos);
-}
+#include "DecodersImpl.h"
 
 // arithmetic operator implementations
 
@@ -670,4 +625,13 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                i,
                resume_row_index);
   }
+}
+
+extern "C" __attribute__((always_inline)) int64_t
+    hash_join_idx(int64_t hash_buff, const int64_t key, const int64_t min_key, const int64_t max_key) {
+  if (key >= min_key && key <= max_key) {
+    // TODO(alex): don't use get_group_value_fast, it's not read-only
+    return *get_group_value_fast(reinterpret_cast<int64_t*>(hash_buff), key, min_key, 1);
+  }
+  return -1;
 }

@@ -1,6 +1,5 @@
 #include "GpuInitGroups.h"
-
-#define EMPTY_KEY 9223372036854775807L
+#include "GpuRtConstants.h"
 
 extern "C" __device__ void init_group_by_buffer_gpu_impl(int64_t* groups_buffer,
                                                          const int64_t* init_vals,

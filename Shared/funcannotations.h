@@ -15,3 +15,9 @@
 #else
 #define NEVER_INLINE __attribute__((noinline))
 #endif
+
+#ifdef __CUDACC__
+#define SUFFIX(name) name##_gpu
+#else
+#define SUFFIX(name) name
+#endif

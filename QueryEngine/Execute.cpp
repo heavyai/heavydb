@@ -4320,7 +4320,6 @@ declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i32 @merge_error_code(i32, i32*);
-declare i64 @hash_join_idx(i64, i64, i64, i64);
 )" +
     gen_array_any_all_sigs();
 

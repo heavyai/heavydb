@@ -43,14 +43,34 @@ llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor
                         col_var_->get_type_info().get_size(),
                         col_range.int_min);
   } else {
-    CHECK(false);  // TODO
+#ifdef HAVE_CUDA
+    CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_);
+    auto& data_mgr = cat_.get_dataMgr();
+    gpu_hash_table_buff_ = alloc_gpu_mem(&data_mgr, 2 * groups_buffer_entry_count * sizeof(int64_t), device_id);
+    init_hash_join_buff_on_device(reinterpret_cast<int64_t*>(gpu_hash_table_buff_),
+                                  groups_buffer_entry_count,
+                                  col_buff,
+                                  chunk_meta_it->second.numElements,
+                                  col_var_->get_type_info().get_size(),
+                                  col_range.int_min,
+                                  executor->blockSize(),
+                                  executor->gridSize());
+#else
+    CHECK(false);
+#endif
   }
+#ifdef HAVE_CUDA
+  const int64_t join_hash_buff_ptr = memory_level_ == Data_Namespace::CPU_LEVEL
+                                         ? reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0])
+                                         : gpu_hash_table_buff_;
+#else
+  CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
+  const int64_t join_hash_buff_ptr = reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0]);
+#endif
   const auto i64_ty = get_int_type(64, executor->cgen_state_->context_);
-  const auto hash_ptr = llvm::ConstantInt::get(i64_ty, reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0]));
+  const auto hash_ptr = llvm::ConstantInt::get(i64_ty, join_hash_buff_ptr);
   // TODO(alex): maybe make the join hash table buffer a parameter (or a hoisted literal?),
   //             otoh once we fully set up the join hash table caching it won't change often
-  return executor->cgen_state_->emitExternalCall(
-      "hash_join_idx",
-      get_int_type(64, executor->cgen_state_->context_),
-      {hash_ptr, key_val, executor->ll_int(col_range.int_min), executor->ll_int(col_range.int_max)});
+  return executor->cgen_state_->emitCall(
+      "hash_join_idx", {hash_ptr, key_val, executor->ll_int(col_range.int_min), executor->ll_int(col_range.int_max)});
 }

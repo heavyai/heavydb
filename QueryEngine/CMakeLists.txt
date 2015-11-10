@@ -64,7 +64,7 @@ add_custom_command(
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 
 if(ENABLE_CUDA)
-  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o)
+  add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
 else()
   add_library(QueryEngine ${query_engine_source_files})
 endif()
@@ -93,6 +93,12 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
     COMMAND nvcc
     ARGS -DEXECUTOR_RT ${MAPD_DEFINITIONS} -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/GpuInitGroups.cu)
+
+add_custom_command(
+    DEPENDS HashJoinRuntimeGpu.cu HashJoinRuntime.cpp
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
+    COMMAND nvcc
+    ARGS ${MAPD_DEFINITIONS} -O3 -arch sm_30 -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu)
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
 target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES})
