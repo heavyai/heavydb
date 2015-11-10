@@ -671,14 +671,3 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                resume_row_index);
   }
 }
-
-extern "C" __attribute__((noinline)) int64_t hash_join_idx(int64_t hash_buff,
-                                                           const int64_t key,
-                                                           const int64_t min_key,
-                                                           const int64_t max_key) {
-  if (key >= min_key && key <= max_key) {
-    // TODO(alex): don't use get_group_value_fast, it's not read-only
-    return *get_group_value_fast(reinterpret_cast<int64_t*>(hash_buff), key, min_key, 1);
-  }
-  return -1;
-}
