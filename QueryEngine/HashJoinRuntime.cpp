@@ -56,5 +56,4 @@ void init_hash_join_buff_on_device(int64_t* buff,
   init_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>
       (buff, groups_buffer_entry_count, col_buff, num_elems, elem_sz, min_val);
 }
-#else
 #endif
