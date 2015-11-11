@@ -8,6 +8,17 @@
 
 #include <glog/logging.h>
 
+std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
+    const Analyzer::ColumnVar* col_var,
+    const Catalog_Namespace::Catalog& cat,
+    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+    const Data_Namespace::MemoryLevel memory_level) {
+  if (!col_var->get_type_info().is_integer()) {
+    return nullptr;
+  }
+  return std::shared_ptr<JoinHashTable>(new JoinHashTable(col_var, cat, query_infos, memory_level));
+}
+
 llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor) {
   const auto& query_info = query_infos_[col_var_->get_rte_idx()];
   CHECK_EQ(size_t(1), query_info.fragments.size());  // we don't support multiple fragment inner tables yet
@@ -30,8 +41,8 @@ llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor
   auto ab = chunk->get_buffer();
   CHECK(ab->getMemoryPtr());
   const auto col_range = getExpressionRange(col_var_, query_infos_, nullptr);
-  CHECK(col_range.type == ExpressionRangeType::Integer);  // TODO
-  CHECK(!col_range.has_nulls);                            // TODO
+  CHECK(col_range.type == ExpressionRangeType::Integer);
+  CHECK(!col_range.has_nulls);  // TODO
   const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   const int32_t groups_buffer_entry_count = col_range.int_max - col_range.int_min + 1;
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {

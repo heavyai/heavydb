@@ -15,11 +15,18 @@
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #endif
+#include <memory>
 
 class Executor;
 
 class JoinHashTable {
  public:
+  static std::shared_ptr<JoinHashTable> getInstance(const Analyzer::ColumnVar* col_var,
+                                                    const Catalog_Namespace::Catalog& cat,
+                                                    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                                    const Data_Namespace::MemoryLevel memory_level);
+
+ private:
   JoinHashTable(const Analyzer::ColumnVar* col_var,
                 const Catalog_Namespace::Catalog& cat,
                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
@@ -30,7 +37,6 @@ class JoinHashTable {
 #endif
   }
 
- private:
   llvm::Value* reify(llvm::Value*, const Executor*);
 
   const Analyzer::ColumnVar* col_var_;
