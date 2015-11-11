@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 2.8)
 
 PROJECT(mapd2)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
