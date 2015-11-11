@@ -60,7 +60,8 @@ class MapDHandler : virtual public MapDIf {
               const bool allow_multifrag,
               const bool jit_debug,
               const bool read_only,
-              const bool allow_loop_joins)
+              const bool allow_loop_joins,
+              const bool enable_rendering)
       : base_data_path_(base_data_path),
         nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
@@ -69,6 +70,7 @@ class MapDHandler : virtual public MapDIf {
         allow_multifrag_(allow_multifrag),
         read_only_(read_only),
         allow_loop_joins_(allow_loop_joins),
+        enable_rendering_(enable_rendering),
         _windowPtr(nullptr) {
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
@@ -79,7 +81,14 @@ class MapDHandler : virtual public MapDIf {
       // init glfw for rendering queries
       // TODO(croot): can do this for cpu queries
       // probably too
-      initGLFW();
+      if (enable_rendering_) {
+        try {
+          initGLFW();
+        } catch (const std::exception& e) {
+          enable_rendering_ = false;
+          LOG(ERROR) << "Backend rendering disabled due to GLFW failure.";
+        }
+      }
     } else if (executor_device == "hybrid") {
       executor_device_type_ = ExecutorDeviceType::Hybrid;
       LOG(INFO) << "Started in Hybrid Mode" << std::endl;
@@ -167,6 +176,7 @@ class MapDHandler : virtual public MapDIf {
   void get_server_status(TServerStatus& _return, const TSessionId session) {
     _return.read_only = read_only_;
     _return.version = MapDRelease;
+    _return.rendering_enabled = enable_rendering_;
   }
 
   void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
@@ -835,6 +845,12 @@ class MapDHandler : virtual public MapDIf {
               const std::string& render_type,
               const TRenderPropertyMap& render_properties,
               const TColumnRenderMap& col_render_properties) {
+    if (!enable_rendering_) {
+      TMapDException ex;
+      ex.error_msg = "Backend rendering is disabled.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     LOG(INFO) << "Render: " << query;
@@ -1072,6 +1088,7 @@ class MapDHandler : virtual public MapDIf {
   const bool allow_multifrag_;
   const bool read_only_;
   const bool allow_loop_joins_;
+  bool enable_rendering_;
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
 
@@ -1097,6 +1114,7 @@ int main(int argc, char** argv) {
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
+  bool enable_rendering = true;
 
   namespace po = boost::program_options;
 
@@ -1107,8 +1125,8 @@ int main(int argc, char** argv) {
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
       "use-nvvm", "Use NVVM instead of NVPTX")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
-      "read-only", "Enable read-only mode")("cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")(
-      "allow-loop-joins", "Enable loop joins")("hybrid", "Run on both CPU and GPUs")(
+      "read-only", "Enable read-only mode")("disable-rendering", "Disable backend rendering")("cpu", "Run on CPU only")(
+      "gpu", "Run on GPUs (Default)")("allow-loop-joins", "Enable loop joins")("hybrid", "Run on both CPU and GPUs")(
       "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
       "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)");
 
@@ -1146,6 +1164,9 @@ int main(int argc, char** argv) {
       read_only = true;
     if (vm.count("allow-loop-joins"))
       allow_loop_joins = true;
+    if (vm.count("disable-rendering") || device == "cpu") {
+      enable_rendering = false;
+    }
 
     po::notify(vm);
   } catch (boost::program_options::error& e) {
@@ -1217,7 +1238,8 @@ int main(int argc, char** argv) {
                                                   allow_multifrag,
                                                   jit_debug,
                                                   read_only,
-                                                  allow_loop_joins));
+                                                  allow_loop_joins,
+                                                  enable_rendering));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
