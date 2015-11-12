@@ -7,16 +7,21 @@
 #include <thrift/transport/TServerSocket.h>
 #include <thrift/transport/TBufferTransports.h>
 
+#include "MapDRelease.h"
+
+#ifdef HAVE_CALCITE
+#include "Calcite/Calcite.h"
+#endif  // HAVE_CALCITE
+
 #include "Catalog/Catalog.h"
-#include "QueryEngine/Execute.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Import/Importer.h"
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
+#include "QueryEngine/Execute.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
-#include "Import/Importer.h"
-#include "MapDRelease.h"
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -64,7 +69,12 @@ class MapDHandler : virtual public MapDIf {
               const bool allow_loop_joins,
               const bool enable_rendering,
               const size_t render_mem_bytes,
-              const int num_gpus)
+              const int num_gpus,
+#ifdef HAVE_CALCITE
+              const int calcite_port)
+#else
+              const int /* calcite_port */)
+#endif  // HAVE_CALCITE
       : base_data_path_(base_data_path),
         nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
@@ -75,7 +85,12 @@ class MapDHandler : virtual public MapDIf {
         allow_loop_joins_(allow_loop_joins),
         enable_rendering_(enable_rendering),
         window_ptr_(nullptr),
+#ifdef HAVE_CALCITE
+        render_mem_bytes_(render_mem_bytes),
+        calcite_(calcite_port) {
+#else
         render_mem_bytes_(render_mem_bytes) {
+#endif  // HAVE_CALCITE
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
       executor_device_type_ = ExecutorDeviceType::GPU;
@@ -317,7 +332,7 @@ class MapDHandler : virtual public MapDIf {
                    const bool column_format,
                    const std::string& nonce) {
     const auto session_info = get_session(session);
-    sql_execute_impl(_return, session_info, query_str, column_format, nonce);
+    sql_execute_impl(_return, session_info, query_str, column_format, nonce, true);
   }
 
   void get_rows_for_pixels(TPixelResult& _return,
@@ -934,11 +949,48 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
+  void rel_algebra_execute(TQueryResult& _return,
+                           const TSessionId session,
+                           const std::string& rel_algebra,
+                           const bool column_format) {
+    // TODO MAT
+    // This is a dumby entry point to send caclite
+    // relational algebra across to the MapD server
+    // it is probably not the way we will integrate in the longer
+    // term but it gives us a simple mechanism to start some testing
+    //
+    // we will need these later so will leave this here
+    // const auto session_info = get_session(session);
+    // auto& cat = session_info.get_catalog();
+    // auto executor_device_type = session_info.get_executor_device_type();
+    LOG(INFO) << rel_algebra;
+    TMapDException ex;
+    ex.error_msg = "Not supported yet";
+    LOG(ERROR) << ex.error_msg;
+    throw ex;
+  }
+
+  virtual int64_t get_row_count(const TSessionId session, const std::string& table_name) {
+#ifdef HAVE_CALCITE
+    const auto session_info = get_session(session);
+    TQueryResult ret;
+    sql_execute_impl(ret, session_info, "SELECT COUNT(*) FROM " + table_name + ";", true, "", false);
+    return ret.row_set.columns[0].data.int_col[0];
+#else
+    throw std::runtime_error("Not implemented yet");
+#endif  // HAVE_CALCITE
+  }
+
   void sql_execute_impl(TQueryResult& _return,
                         const Catalog_Namespace::SessionInfo& session_info,
                         const std::string& query_str,
                         const bool column_format,
-                        const std::string& nonce) {
+                        const std::string& nonce,
+#ifdef HAVE_CALCITE
+                        const bool with_calcite) {
+#else
+                        const bool /* with_calcite */) {
+#endif  // HAVE_CALCITE
     _return.nonce = nonce;
     auto& cat = session_info.get_catalog();
     auto executor_device_type = session_info.get_executor_device_type();
@@ -949,6 +1001,23 @@ class MapDHandler : virtual public MapDIf {
       std::list<Parser::Stmt*> parse_trees;
       std::string last_parsed;
       int num_parse_errors = 0;
+#ifdef HAVE_CALCITE
+      if (with_calcite) {
+        try {
+          // pass sql to calcite server to let it parse for testing purposes
+          calcite_.process(session_info.get_currentUser().userName,
+                           session_info.get_currentUser().passwd,
+                           session_info.get_catalog().get_currentDB().dbName,
+                           query_str);
+        } catch (InvalidParseRequest& e) {
+          TMapDException ex;
+          ex.error_msg = std::string("Exception: ") + e.whyUp;
+          LOG(ERROR) << "Calcite had an issue parsing this sql" << ex.error_msg << "sql was " << query_str;
+          // TODO MAT don't actually throw exception yet as normal parse is still to be done
+          // throw ex;
+        }
+      }
+#endif  // HAVE_CALCITE
       try {
         num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
       } catch (std::exception& e) {
@@ -1128,9 +1197,11 @@ class MapDHandler : virtual public MapDIf {
   bool enable_rendering_;
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
-
   GLFWwindow* window_ptr_;
   const size_t render_mem_bytes_;
+#ifdef HAVE_CALCITE
+  Calcite calcite_;
+#endif  // HAVE_CALCITE
 };
 
 void start_server(TThreadedServer& server) {
@@ -1144,6 +1215,7 @@ void start_server(TThreadedServer& server) {
 int main(int argc, char** argv) {
   int port = 9091;
   int http_port = 9090;
+  int calcite_port = 9092;
   std::string base_path;
   std::string device("gpu");
   bool flush_log = false;
@@ -1171,6 +1243,9 @@ int main(int argc, char** argv) {
       "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)")(
       "render-mem-bytes", po::value<size_t>(&render_mem_bytes), "Size of memory reserved for rendering (in bytes)")(
       "num-gpus", po::value<int>(&num_gpus), "Number of gpus to use");
+#ifdef HAVE_CALCITE
+  desc.add_options()("calcite-port", po::value<int>(&calcite_port), "Calcite port number (default 9092)");
+#endif  // HAVE_CALCITE
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -1181,7 +1256,11 @@ int main(int argc, char** argv) {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
     if (vm.count("help")) {
       std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
-                   "number>][--http-port <http port number>][--flush-log][--version|-v]\n";
+                   "number>][--http-port <http port number>][--flush-log][--version|-v]";
+#ifdef HAVE_CALCITE
+      std::cout << "[--calcite-port <calcite port number>]";
+#endif  // HAVE_CALCITE
+      std::cout << "\n";
       return 0;
     }
     if (vm.count("version")) {
@@ -1286,7 +1365,8 @@ int main(int argc, char** argv) {
                                                   allow_loop_joins,
                                                   enable_rendering,
                                                   render_mem_bytes,
-                                                  num_gpus));
+                                                  num_gpus,
+                                                  calcite_port));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));

@@ -36,3 +36,4 @@ Debug/
 # Thrift-generated files
 java/src/gen/
 gen-js/
+java/target/

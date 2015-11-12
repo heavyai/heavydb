@@ -69,8 +69,14 @@ include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_SOURCE_DIR
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
+# RapidJSON
 include_directories(ThirdParty/rapidjson)
 
+
+option(ENABLE_CALCITE "Build Calcite adapter" OFF)
+if(ENABLE_CALCITE)
+    add_definitions("-DHAVE_CALCITE")
+endif()
 
 ADD_SUBDIRECTORY    (SqliteConnector)
 ADD_SUBDIRECTORY    (Catalog)
@@ -93,8 +99,16 @@ if(ENABLE_ODBC)
     ADD_SUBDIRECTORY    (ODBC)
 endif()
 
+if(ENABLE_CALCITE)
+    ADD_SUBDIRECTORY    (Calcite)
+endif()
+
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
     QueryEngine DataMgr Fragmenter Chunk)
+
+if(ENABLE_CALCITE)
+    list(APPEND MAPD_LIBRARIES Calcite)
+endif()
 
 enable_testing()
 ADD_SUBDIRECTORY    (Tests)
@@ -108,6 +122,10 @@ add_executable(initdb ${initdb_source_files})
 
 set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
+if(ENABLE_CALCITE)
+    list(APPEND mapd_server_source_files ${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp)
+endif()
+
 add_executable(mapd_server ${mapd_server_source_files})
 
 add_custom_command(
@@ -115,6 +133,24 @@ add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
+
+if(ENABLE_CALCITE)
+  add_custom_command(
+      DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+      OUTPUT ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/TRow.java
+      COMMAND mkdir
+      ARGS -p ${CMAKE_SOURCE_DIR}/java/src/gen
+      COMMAND ${Thrift_EXECUTABLE}
+      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
+
+  add_custom_command(
+      DEPENDS ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift
+      OUTPUT ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+      COMMAND mkdir
+      ARGS -p ${CMAKE_SOURCE_DIR}/java/src/gen
+      COMMAND ${Thrift_EXECUTABLE}
+      ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/src/gen/ ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift)
+endif()
 
 execute_process(
   COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
@@ -132,6 +168,12 @@ configure_file(
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp GENERATED)
+
+if(ENABLE_CALCITE)
+    set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp GENERATED)
+    set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constants.cpp GENERATED)
+    set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp GENERATED)
+endif()
 
 MESSAGE( STATUS "Boost_LIBRARIES: " ${Boost_LIBRARIES} )
 
@@ -180,6 +222,20 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
     SOURCES MapDBetaGuide.md
     )
   install(FILES ${CMAKE_BINARY_DIR}/MapDBetaGuide.pdf DESTINATION docs)
+endif()
+
+if(ENABLE_CALCITE)
+  ## mvn process for java code
+  find_program(MVN_EXECUTABLE NAMES mvn)
+  if(MVN_EXECUTABLE)
+    add_custom_target(mapd_java_components ALL
+      COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
+      DEPENDS ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
+      SOURCES ${CMAKE_SOURCE_DIR}/java/pom.xml ${CMAKE_SOURCE_DIR}/mapd.thrift
+      )
+    ##install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
+  endif()
 endif()
 
 install(TARGETS initdb mapd mapd_server DESTINATION bin)
