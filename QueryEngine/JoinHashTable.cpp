@@ -1,6 +1,5 @@
 #include "JoinHashTable.h"
 #include "Execute.h"
-#include "ExpressionRange.h"
 #include "HashJoinRuntime.h"
 #include "RuntimeFunctions.h"
 
@@ -13,10 +12,15 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const Catalog_Namespace::Catalog& cat,
     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level) {
+  return nullptr;
   if (!col_var->get_type_info().is_integer()) {
     return nullptr;
   }
-  return std::shared_ptr<JoinHashTable>(new JoinHashTable(col_var, cat, query_infos, memory_level));
+  const auto col_range = getExpressionRange(col_var, query_infos, nullptr);
+  if (col_range.has_nulls) {  // TODO(alex): lift this constraint
+    return nullptr;
+  }
+  return std::shared_ptr<JoinHashTable>(new JoinHashTable(col_var, cat, query_infos, memory_level, col_range));
 }
 
 llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor) {
@@ -40,11 +44,8 @@ llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor
   CHECK(chunk);
   auto ab = chunk->get_buffer();
   CHECK(ab->getMemoryPtr());
-  const auto col_range = getExpressionRange(col_var_, query_infos_, nullptr);
-  CHECK(col_range.type == ExpressionRangeType::Integer);
-  CHECK(!col_range.has_nulls);  // TODO
   const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-  const int32_t groups_buffer_entry_count = col_range.int_max - col_range.int_min + 1;
+  const int32_t groups_buffer_entry_count = col_range_.int_max - col_range_.int_min + 1;
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
     cpu_hash_table_buff_.resize(2 * groups_buffer_entry_count);
     init_hash_join_buff(&cpu_hash_table_buff_[0],
@@ -52,7 +53,7 @@ llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor
                         col_buff,
                         chunk_meta_it->second.numElements,
                         col_var_->get_type_info().get_size(),
-                        col_range.int_min);
+                        col_range_.int_min);
   } else {
 #ifdef HAVE_CUDA
     CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_);
@@ -63,7 +64,7 @@ llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor
                                   col_buff,
                                   chunk_meta_it->second.numElements,
                                   col_var_->get_type_info().get_size(),
-                                  col_range.int_min,
+                                  col_range_.int_min,
                                   executor->blockSize(),
                                   executor->gridSize());
 #else
@@ -83,5 +84,5 @@ llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor
   // TODO(alex): maybe make the join hash table buffer a parameter (or a hoisted literal?),
   //             otoh once we fully set up the join hash table caching it won't change often
   return executor->cgen_state_->emitCall(
-      "hash_join_idx", {hash_ptr, key_val, executor->ll_int(col_range.int_min), executor->ll_int(col_range.int_max)});
+      "hash_join_idx", {hash_ptr, key_val, executor->ll_int(col_range_.int_min), executor->ll_int(col_range_.int_max)});
 }

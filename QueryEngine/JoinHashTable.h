@@ -8,6 +8,7 @@
 #ifndef QUERYENGINE_JOINHASHTABLE_H
 #define QUERYENGINE_JOINHASHTABLE_H
 
+#include "ExpressionRange.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Fragmenter/Fragmenter.h"
 
@@ -30,8 +31,10 @@ class JoinHashTable {
   JoinHashTable(const Analyzer::ColumnVar* col_var,
                 const Catalog_Namespace::Catalog& cat,
                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
-                const Data_Namespace::MemoryLevel memory_level)
-      : col_var_(col_var), cat_(cat), query_infos_(query_infos), memory_level_(memory_level) {
+                const Data_Namespace::MemoryLevel memory_level,
+                const ExpressionRange& col_range)
+      : col_var_(col_var), cat_(cat), query_infos_(query_infos), memory_level_(memory_level), col_range_(col_range) {
+    CHECK(col_range.type == ExpressionRangeType::Integer);
 #ifdef HAVE_CUDA
     gpu_hash_table_buff_ = 0;
 #endif
@@ -47,6 +50,7 @@ class JoinHashTable {
 #ifdef HAVE_CUDA
   CUdeviceptr gpu_hash_table_buff_;
 #endif
+  ExpressionRange col_range_;
 
   friend class Executor;
 };
