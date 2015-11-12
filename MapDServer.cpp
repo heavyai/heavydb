@@ -310,7 +310,9 @@ class MapDHandler : virtual public MapDIf {
   void sql_execute(TQueryResult& _return,
                    const TSessionId session,
                    const std::string& query_str,
-                   const bool column_format) {
+                   const bool column_format,
+                   const std::string& nonce) {
+    _return.nonce = nonce;
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
     auto executor_device_type = session_info.get_executor_device_type();
@@ -479,14 +481,21 @@ class MapDHandler : virtual public MapDIf {
     LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << execute_time << " (ms)";
   }
 
-  void get_rows_for_pixels(std::vector<TPixelRows>& _return,
+  void get_rows_for_pixels(TPixelResult& _return,
                            const TSessionId session,
                            const int64_t widget_id,
                            const std::vector<TPixel>& pixels,
                            const std::string& table_name,
                            const std::vector<std::string>& col_names,
-                           const bool column_format) {
-    CHECK(false);
+                           const bool column_format,
+                           const std::string& nonce) {
+    _return.nonce = nonce;
+    if (!enable_rendering_) {
+      TMapDException ex;
+      ex.error_msg = "Backend rendering is disabled.";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
   }
 
   void get_table_descriptor(TTableDescriptor& _return, const TSessionId session, const std::string& table_name) {
@@ -839,12 +848,14 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void render(std::string& _return,
+  void render(TRenderResult& _return,
               const TSessionId session,
               const std::string& query,
               const std::string& render_type,
               const TRenderPropertyMap& render_properties,
-              const TColumnRenderMap& col_render_properties) {
+              const TColumnRenderMap& col_render_properties,
+              const std::string& nonce) {
+    _return.nonce = nonce;
     if (!enable_rendering_) {
       TMapDException ex;
       ex.error_msg = "Backend rendering is disabled.";
@@ -925,7 +936,7 @@ class MapDHandler : virtual public MapDIf {
         CHECK(nullable_sptr);
         auto sptr = boost::get<std::string>(nullable_sptr);
         CHECK(sptr);
-        _return = *sptr;
+        _return.image = *sptr;
       }
     } catch (std::exception& e) {
       TMapDException ex;

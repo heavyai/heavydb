@@ -91,6 +91,7 @@ struct TRowSet {
 struct TQueryResult {
   1: TRowSet row_set
   2: i64 execution_time_ms
+  3: string nonce
 }
 
 struct TDBInfo {
@@ -162,11 +163,21 @@ struct TPixelRows {
   2: TRowSet row_set
 }
 
+struct TPixelResult {
+  1: list<TPixelRows> pixel_rows
+  2: string nonce
+}
+
+struct TRenderResult {
+  1: binary image
+  2: string nonce
+}
+
 service MapD {
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e 2: ThriftException te)
   void disconnect(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
-  TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format) throws (1: TMapDException e 2: ThriftException te)
+  TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce) throws (1: TMapDException e 2: ThriftException te)
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TFrontendView get_frontend_view(1: TSessionId session, 2: string view_name) throws (1: TMapDException e 2: ThriftException te)
@@ -178,7 +189,7 @@ service MapD {
   string get_version() throws (1: ThriftException te)
   void load_table_binary(1: TSessionId session, 2: string table_name, 3: list<TRow> rows) throws (1: TMapDException e 2: ThriftException te)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e 2: ThriftException te)
-  binary render(1: TSessionId session, 2: string query, 3: string render_type, 4: TRenderPropertyMap render_properties, 5: TColumnRenderMap col_render_properties) throws (1: TMapDException e 2: ThriftException te)
+  TRenderResult render(1: TSessionId session, 2: string query, 3: string render_type, 4: TRenderPropertyMap render_properties, 5: TColumnRenderMap col_render_properties, 6: string nonce) throws (1: TMapDException e 2: ThriftException te)
   void create_frontend_view(1: TSessionId session, 2: string view_name, 3: string view_state, 4: string image_hash) throws (1: TMapDException e 2: ThriftException te)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TMapDException e 2: ThriftException te)
   void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc) throws (1: TMapDException e 2: ThriftException te)
@@ -186,5 +197,5 @@ service MapD {
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e 2: ThriftException te)
   TFrontendView get_link_view(1: TSessionId session, 2: string link) throws (1: TMapDException e 2: ThriftException te)
   string create_link(1: TSessionId session, 2: string view_state) throws (1: TMapDException e 2: ThriftException te)
-  list<TPixelRows> get_rows_for_pixels(1: TSessionId session, 2: i64 widget_id, 3: list<TPixel> pixels, 4: string table_name, 5: list<string> col_names, 6: bool column_format) throws (1: TMapDException e 2: ThriftException te)
+  TPixelResult get_rows_for_pixels(1: TSessionId session, 2: i64 widget_id, 3: list<TPixel> pixels, 4: string table_name, 5: list<string> col_names, 6: bool column_format, 7: string nonce) throws (1: TMapDException e 2: ThriftException te)
 }
