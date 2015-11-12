@@ -25,22 +25,30 @@ class JoinHashTable {
   static std::shared_ptr<JoinHashTable> getInstance(const Analyzer::ColumnVar* col_var,
                                                     const Catalog_Namespace::Catalog& cat,
                                                     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
-                                                    const Data_Namespace::MemoryLevel memory_level);
+                                                    const Data_Namespace::MemoryLevel memory_level,
+                                                    const Executor* executor);
 
  private:
   JoinHashTable(const Analyzer::ColumnVar* col_var,
                 const Catalog_Namespace::Catalog& cat,
                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                 const Data_Namespace::MemoryLevel memory_level,
-                const ExpressionRange& col_range)
-      : col_var_(col_var), cat_(cat), query_infos_(query_infos), memory_level_(memory_level), col_range_(col_range) {
+                const ExpressionRange& col_range,
+                const Executor* executor)
+      : col_var_(col_var),
+        cat_(cat),
+        query_infos_(query_infos),
+        memory_level_(memory_level),
+        col_range_(col_range),
+        executor_(executor) {
     CHECK(col_range.type == ExpressionRangeType::Integer);
 #ifdef HAVE_CUDA
     gpu_hash_table_buff_ = 0;
 #endif
   }
 
-  llvm::Value* reify(llvm::Value*, const Executor*);
+  int reify();
+  llvm::Value* codegenSlot(llvm::Value*, const Executor*);
 
   const Analyzer::ColumnVar* col_var_;
   const Catalog_Namespace::Catalog& cat_;
@@ -51,6 +59,7 @@ class JoinHashTable {
   CUdeviceptr gpu_hash_table_buff_;
 #endif
   ExpressionRange col_range_;
+  const Executor* executor_;
 
   friend class Executor;
 };

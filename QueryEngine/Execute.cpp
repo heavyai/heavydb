@@ -686,7 +686,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   }
   const auto hash_join_lhs = hashJoinLhs(col_var);
   if (hash_join_lhs && hash_join_lhs->get_rte_idx() == 0) {
-    CHECK(false);
     return codegen(hash_join_lhs, fetch_column, hoist_literals);
   }
   auto pos_arg = posArg(col_var);
@@ -1170,7 +1169,8 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
       const auto key_lvs = codegen(key_col, true, hoist_literals);
       CHECK_EQ(size_t(1), key_lvs.size());
       CHECK(plan_state_->join_info_.join_hash_table_);
-      const auto slot_lv = plan_state_->join_info_.join_hash_table_->reify(toDoublePrecision(key_lvs.front()), this);
+      const auto slot_lv =
+          plan_state_->join_info_.join_hash_table_->codegenSlot(toDoublePrecision(key_lvs.front()), this);
       const auto it_ok = cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
       CHECK(it_ok.second);
       const auto slot_valid_lv =
@@ -3976,7 +3976,6 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, 
     return;
   }
   if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
-    CHECK(false);
     return;
   }
   CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
@@ -4037,20 +4036,18 @@ Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan,
         continue;
       }
       if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
-        const auto join_hash_table = JoinHashTable::getInstance(rhs_col, *catalog_, query_infos, memory_level);
+        const auto join_hash_table = JoinHashTable::getInstance(rhs_col, *catalog_, query_infos, memory_level, this);
         if (join_hash_table) {
-          return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
-                                    std::vector<std::shared_ptr<Analyzer::BinOper>>{/* qual_bin_oper */
-                                    },
+          return Executor::JoinInfo(JoinImplType::HashOneToOne,
+                                    std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
                                     join_hash_table);
         }
       }
       if (lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0) {
-        const auto join_hash_table = JoinHashTable::getInstance(lhs_col, *catalog_, query_infos, memory_level);
+        const auto join_hash_table = JoinHashTable::getInstance(lhs_col, *catalog_, query_infos, memory_level, this);
         if (join_hash_table) {
-          return Executor::JoinInfo(/* JoinImplType::HashOneToOne */ JoinImplType::Loop,
-                                    std::vector<std::shared_ptr<Analyzer::BinOper>>{/* qual_bin_oper */
-                                    },
+          return Executor::JoinInfo(JoinImplType::HashOneToOne,
+                                    std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
                                     join_hash_table);
         }
       }

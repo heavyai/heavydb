@@ -11,7 +11,8 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const Analyzer::ColumnVar* col_var,
     const Catalog_Namespace::Catalog& cat,
     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
-    const Data_Namespace::MemoryLevel memory_level) {
+    const Data_Namespace::MemoryLevel memory_level,
+    const Executor* executor) {
   return nullptr;
   if (!col_var->get_type_info().is_integer()) {
     return nullptr;
@@ -20,12 +21,21 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   if (col_range.has_nulls) {  // TODO(alex): lift this constraint
     return nullptr;
   }
-  return std::shared_ptr<JoinHashTable>(new JoinHashTable(col_var, cat, query_infos, memory_level, col_range));
+  auto join_hash_table =
+      std::shared_ptr<JoinHashTable>(new JoinHashTable(col_var, cat, query_infos, memory_level, col_range, executor));
+  const int err = join_hash_table->reify();
+  if (err) {
+    return nullptr;
+  }
+  return join_hash_table;
 }
 
-llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor) {
+int JoinHashTable::reify() {
+  int err = 0;
   const auto& query_info = query_infos_[col_var_->get_rte_idx()];
-  CHECK_EQ(size_t(1), query_info.fragments.size());  // we don't support multiple fragment inner tables yet
+  if (query_info.fragments.size() != 1) {  // we don't support multiple fragment inner tables (yet)
+    return -1;
+  }
   const auto& fragment = query_info.fragments.front();
   auto chunk_meta_it = fragment.chunkMetadataMap.find(col_var_->get_column_id());
   CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
@@ -48,29 +58,37 @@ llvm::Value* JoinHashTable::reify(llvm::Value* key_val, const Executor* executor
   const int32_t groups_buffer_entry_count = col_range_.int_max - col_range_.int_min + 1;
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
     cpu_hash_table_buff_.resize(2 * groups_buffer_entry_count);
-    init_hash_join_buff(&cpu_hash_table_buff_[0],
-                        groups_buffer_entry_count,
-                        col_buff,
-                        chunk_meta_it->second.numElements,
-                        col_var_->get_type_info().get_size(),
-                        col_range_.int_min);
+    err = init_hash_join_buff(&cpu_hash_table_buff_[0],
+                              groups_buffer_entry_count,
+                              col_buff,
+                              chunk_meta_it->second.numElements,
+                              col_var_->get_type_info().get_size(),
+                              col_range_.int_min);
   } else {
 #ifdef HAVE_CUDA
     CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level_);
     auto& data_mgr = cat_.get_dataMgr();
     gpu_hash_table_buff_ = alloc_gpu_mem(&data_mgr, 2 * groups_buffer_entry_count * sizeof(int64_t), device_id);
+    auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id);
+    copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
     init_hash_join_buff_on_device(reinterpret_cast<int64_t*>(gpu_hash_table_buff_),
+                                  reinterpret_cast<int*>(dev_err_buff),
                                   groups_buffer_entry_count,
                                   col_buff,
                                   chunk_meta_it->second.numElements,
                                   col_var_->get_type_info().get_size(),
                                   col_range_.int_min,
-                                  executor->blockSize(),
-                                  executor->gridSize());
+                                  executor_->blockSize(),
+                                  executor_->gridSize());
+    copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
 #else
     CHECK(false);
 #endif
   }
+  return err;
+}
+
+llvm::Value* JoinHashTable::codegenSlot(llvm::Value* key_val, const Executor* executor) {
 #ifdef HAVE_CUDA
   const int64_t join_hash_buff_ptr = memory_level_ == Data_Namespace::CPU_LEVEL
                                          ? reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0])
