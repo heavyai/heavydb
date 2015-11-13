@@ -4025,31 +4025,12 @@ Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan,
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     CHECK(qual_bin_oper);
     if (qual_bin_oper->get_optype() == kEQ) {
-      const auto lhs = qual_bin_oper->get_left_operand();
-      const auto rhs = qual_bin_oper->get_right_operand();
-      if (lhs->get_type_info() != rhs->get_type_info()) {
-        continue;
-      }
-      const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
-      const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
-      if (!lhs_col || !rhs_col) {
-        continue;
-      }
-      if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
-        const auto join_hash_table = JoinHashTable::getInstance(rhs_col, *catalog_, query_infos, memory_level, this);
-        if (join_hash_table) {
-          return Executor::JoinInfo(JoinImplType::HashOneToOne,
-                                    std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
-                                    join_hash_table);
-        }
-      }
-      if (lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0) {
-        const auto join_hash_table = JoinHashTable::getInstance(lhs_col, *catalog_, query_infos, memory_level, this);
-        if (join_hash_table) {
-          return Executor::JoinInfo(JoinImplType::HashOneToOne,
-                                    std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
-                                    join_hash_table);
-        }
+      const auto join_hash_table =
+          JoinHashTable::getInstance(qual_bin_oper, *catalog_, query_infos, memory_level, this);
+      if (join_hash_table) {
+        return Executor::JoinInfo(JoinImplType::HashOneToOne,
+                                  std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
+                                  join_hash_table);
       }
     }
   }

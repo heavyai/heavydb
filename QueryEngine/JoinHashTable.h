@@ -22,7 +22,7 @@ class Executor;
 
 class JoinHashTable {
  public:
-  static std::shared_ptr<JoinHashTable> getInstance(const Analyzer::ColumnVar* col_var,
+  static std::shared_ptr<JoinHashTable> getInstance(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                                                     const Catalog_Namespace::Catalog& cat,
                                                     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                                     const Data_Namespace::MemoryLevel memory_level,

@@ -8,21 +8,39 @@
 #include <glog/logging.h>
 
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
-    const Analyzer::ColumnVar* col_var,
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const Catalog_Namespace::Catalog& cat,
     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const Executor* executor) {
   return nullptr;
-  if (!col_var->get_type_info().is_integer()) {
+  CHECK_EQ(kEQ, qual_bin_oper->get_optype());
+  const auto lhs = qual_bin_oper->get_left_operand();
+  const auto rhs = qual_bin_oper->get_right_operand();
+  if (lhs->get_type_info() != rhs->get_type_info()) {
     return nullptr;
   }
-  const auto col_range = getExpressionRange(col_var, query_infos, nullptr);
+  const auto lhs_col = dynamic_cast<const Analyzer::ColumnVar*>(lhs);
+  const auto rhs_col = dynamic_cast<const Analyzer::ColumnVar*>(rhs);
+  if (!lhs_col || !rhs_col) {
+    return nullptr;
+  }
+  const Analyzer::ColumnVar* inner_col_var{nullptr};
+  if (lhs_col->get_rte_idx() == 0 && rhs_col->get_rte_idx() == 1) {
+    inner_col_var = rhs_col;
+  }
+  if (lhs_col->get_rte_idx() == 1 && rhs_col->get_rte_idx() == 0) {
+    inner_col_var = lhs_col;
+  }
+  if (!inner_col_var->get_type_info().is_integer()) {
+    return nullptr;
+  }
+  const auto col_range = getExpressionRange(inner_col_var, query_infos, nullptr);
   if (col_range.has_nulls) {  // TODO(alex): lift this constraint
     return nullptr;
   }
   auto join_hash_table =
-      std::shared_ptr<JoinHashTable>(new JoinHashTable(col_var, cat, query_infos, memory_level, col_range, executor));
+      std::shared_ptr<JoinHashTable>(new JoinHashTable(inner_col_var, cat, query_infos, memory_level, col_range, executor));
   const int err = join_hash_table->reify();
   if (err) {
     return nullptr;
