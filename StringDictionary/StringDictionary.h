@@ -28,6 +28,8 @@ class StringDictionary {
   void clearTransient() noexcept;
   bool checkpoint() noexcept;
 
+  static const int32_t INVALID_STR_ID;
+
  private:
   struct StringIdxEntry {
     uint64_t off : 48;

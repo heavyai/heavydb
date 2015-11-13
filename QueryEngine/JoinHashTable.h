@@ -29,13 +29,14 @@ class JoinHashTable {
                                                     const Executor* executor);
 
  private:
-  JoinHashTable(const Analyzer::ColumnVar* col_var,
+  JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+                const Analyzer::ColumnVar* col_var,
                 const Catalog_Namespace::Catalog& cat,
                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                 const Data_Namespace::MemoryLevel memory_level,
                 const ExpressionRange& col_range,
                 const Executor* executor)
-      : col_var_(col_var),
+      : qual_bin_oper_(qual_bin_oper),
         cat_(cat),
         query_infos_(query_infos),
         memory_level_(memory_level),
@@ -48,9 +49,9 @@ class JoinHashTable {
   }
 
   int reify();
-  llvm::Value* codegenSlot(llvm::Value*, const Executor*);
+  llvm::Value* codegenSlot(Executor*, const bool hoist_literals);
 
-  const Analyzer::ColumnVar* col_var_;
+  std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   const Catalog_Namespace::Catalog& cat_;
   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;

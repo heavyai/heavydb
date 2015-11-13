@@ -9,7 +9,6 @@
 namespace {
 const int PAGE_SIZE = getpagesize();
 const size_t MAX_STRLEN = (2 << 16) - 1;
-const int32_t INVALID_STR_ID = -1;
 
 size_t file_size(const int fd) {
   struct stat buf;
@@ -29,6 +28,8 @@ void* checked_mmap(const int fd, const size_t sz) {
   return ptr;
 }
 }  // namespace
+
+const int32_t StringDictionary::INVALID_STR_ID{-1};
 
 StringDictionary::StringDictionary(const std::string& folder, const bool recover, size_t initial_capacity) noexcept
     : str_count_(0),

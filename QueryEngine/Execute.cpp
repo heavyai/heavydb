@@ -1158,24 +1158,7 @@ bool is_unnest(const Analyzer::Expr* expr) {
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool hoist_literals) {
   for (const auto equi_join_tautology : plan_state_->join_info_.equi_join_tautologies_) {
     if (*equi_join_tautology == *bin_oper) {
-      CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne);
-      auto key_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
-      CHECK(key_col);
-      auto val_col = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_right_operand());
-      CHECK(val_col);
-      if (key_col->get_rte_idx() != 0) {
-        std::swap(key_col, val_col);
-      }
-      const auto key_lvs = codegen(key_col, true, hoist_literals);
-      CHECK_EQ(size_t(1), key_lvs.size());
-      CHECK(plan_state_->join_info_.join_hash_table_);
-      const auto slot_lv =
-          plan_state_->join_info_.join_hash_table_->codegenSlot(toDoublePrecision(key_lvs.front()), this);
-      const auto it_ok = cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
-      CHECK(it_ok.second);
-      const auto slot_valid_lv =
-          cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGE, slot_lv, ll_int(int64_t(0)));
-      return slot_valid_lv;
+      return plan_state_->join_info_.join_hash_table_->codegenSlot(this, hoist_literals);
     }
   }
   const auto optype = bin_oper->get_optype();
