@@ -1,9 +1,14 @@
 #!/bin/bash
 
+cd build
+mkdir -p Tests/tmp
+bin/initdb -f Tests/tmp
+cd -
+
 result="success"
-for test in Tests/PlanTest Tests/ExecuteTest Tests/StorageTest
+for test in PlanTest ExecuteTest StorageTest
 do
-	cd build && eval $test --gtest_output=xml:$(basename $test).xml
+	cd build/Tests && eval ./$test --gtest_output=xml:../
 	if [ $? != 0 ]
 	then
 		result="fail"

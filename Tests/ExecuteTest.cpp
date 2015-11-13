@@ -8,11 +8,15 @@
 #include <boost/program_options.hpp>
 #include <gtest/gtest.h>
 
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
+
 using namespace std;
 
 namespace {
 
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session(get_session("/tmp"));
+std::unique_ptr<Catalog_Namespace::SessionInfo> g_session(get_session(BASE_PATH));
 NVVMBackend g_nvvm_backend{NVVMBackend::NVPTX};
 
 ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {

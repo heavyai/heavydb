@@ -20,7 +20,9 @@ using namespace Catalog_Namespace;
 using namespace Analyzer;
 using namespace Planner;
 
-#define BASE_PATH "/tmp"
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
 
 namespace {
 std::unique_ptr<SessionInfo> gsession;

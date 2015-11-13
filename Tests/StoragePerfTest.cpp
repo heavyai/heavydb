@@ -23,7 +23,9 @@ using namespace Catalog_Namespace;
 using namespace Analyzer;
 using namespace Fragmenter_Namespace;
 
-#define BASE_PATH "/tmp"
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
 
 namespace {
 std::unique_ptr<SessionInfo> gsession;
