@@ -1777,7 +1777,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                             std::vector<int64_t*> group_by_buffers,
                                             std::vector<int64_t*> small_group_by_buffers,
                                             int32_t* error_code,
-                                            const uint32_t num_tables) {
+                                            const uint32_t num_tables,
+                                            const int64_t join_hash_table) {
   const size_t agg_col_count = init_agg_vals.size();
   std::vector<int64_t*> out_vec;
   if (group_by_buffers.empty()) {
@@ -1809,7 +1810,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               int64_t** out,
                               int64_t** out2,
                               int32_t* resume_row_index,
-                              const uint32_t* num_tables);
+                              const uint32_t* num_tables,
+                              const int64_t* join_hash_table_ptr);
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1821,7 +1823,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &out_vec[0],
                                               nullptr,
                                               error_code,
-                                              &num_tables);
+                                              &num_tables,
+                                              &join_hash_table);
     } else {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1833,7 +1836,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &group_by_buffers[0],
                                               small_group_by_buffers_ptr,
                                               error_code,
-                                              &num_tables);
+                                              &num_tables,
+                                              &join_hash_table);
     }
   } else {
     typedef void (*agg_query)(const int8_t*** col_buffers,
@@ -1845,7 +1849,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                               int64_t** out,
                               int64_t** out2,
                               int32_t* resume_row_index,
-                              const uint32_t* num_tables);
+                              const uint32_t* num_tables,
+                              const int64_t* join_hash_table_ptr);
     if (group_by_buffers.empty()) {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1856,7 +1861,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &out_vec[0],
                                               nullptr,
                                               error_code,
-                                              &num_tables);
+                                              &num_tables,
+                                              &join_hash_table);
     } else {
       reinterpret_cast<agg_query>(fn_ptrs[0])(multifrag_cols_ptr,
                                               &num_fragments,
@@ -1867,7 +1873,8 @@ std::vector<int64_t*> launch_query_cpu_code(const std::vector<void*>& fn_ptrs,
                                               &group_by_buffers[0],
                                               small_group_by_buffers_ptr,
                                               error_code,
-                                              &num_tables);
+                                              &num_tables,
+                                              &join_hash_table);
     }
   }
 
@@ -2311,7 +2318,8 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                         query_exe_context->group_by_buffers_,
                         query_exe_context->small_group_by_buffers_,
                         error_code,
-                        1);
+                        1,
+                        0);
   CHECK(!*error_code);
   return query_exe_context->groupBufferToResults(0, target_exprs, false);
 }
@@ -3230,6 +3238,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(compilation_result.native_functions,
                                     hoist_literals,
@@ -3242,7 +3251,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                     {},
                                     {},
                                     &error_code,
-                                    num_tables);
+                                    num_tables,
+                                    join_hash_table_ptr);
   } else {
     try {
       out_vec = query_exe_context->launchGpuCode(compilation_result.native_functions,
@@ -3258,7 +3268,8 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  gridSize(),
                                                  device_id,
                                                  &error_code,
-                                                 num_tables);
+                                                 num_tables,
+                                                 join_hash_table_ptr);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -3317,6 +3328,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
   // 3. Optimize runtime.
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
+  const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   if (device_type == ExecutorDeviceType::CPU) {
     launch_query_cpu_code(compilation_result.native_functions,
                           hoist_literals,
@@ -3329,7 +3341,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                           query_exe_context->group_by_buffers_,
                           query_exe_context->small_group_by_buffers_,
                           &error_code,
-                          num_tables);
+                          num_tables,
+                          join_hash_table_ptr);
   } else {
     try {
       query_exe_context->launchGpuCode(compilation_result.native_functions,
@@ -3345,7 +3358,8 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        gridSize(),
                                        device_id,
                                        &error_code,
-                                       num_tables);
+                                       num_tables,
+                                       join_hash_table_ptr);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -3358,6 +3372,14 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
   return 0;
+}
+
+int64_t Executor::getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id) {
+  const auto join_hash_table = plan_state_->join_info_.join_hash_table_;
+  if (!join_hash_table) {
+    return 0;
+  }
+  return join_hash_table->getJoinHashBuffer(device_type, device_type == ExecutorDeviceType::GPU ? device_id : 0);
 }
 
 void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
@@ -3601,6 +3623,8 @@ void set_row_func_argnames(llvm::Function* row_func,
     arg_it->setName("col_buf");
     ++arg_it;
   }
+
+  arg_it->setName("join_hash_table");
 }
 
 std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const size_t in_col_count,
@@ -3652,6 +3676,9 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(const 
     row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
   }
 
+  // join hash table argument
+  row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+
   // generate the function
   auto ft = llvm::FunctionType::get(get_int_type(32, context), row_process_arg_types, false);
 
@@ -3702,6 +3729,17 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   const auto bin_expr = std::static_pointer_cast<Analyzer::BinOper>(expr);
   const auto rhs = bin_expr->get_right_operand();
   return rhs->get_type_info().is_array();
+}
+
+llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
+  auto& arg_list = func->getArgumentList();
+  for (auto& arg : arg_list) {
+    if (arg.getName() == name) {
+      return &arg;
+    }
+  }
+  CHECK(false);
+  return nullptr;
 }
 
 }  // namespace
@@ -3899,6 +3937,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
         args.push_back(filter_call.getArgOperand(i));
       }
       args.insert(args.end(), col_heads.begin(), col_heads.end());
+      args.push_back(get_arg_by_name(query_func, "join_hash_table"));
       llvm::ReplaceInstWithInst(&filter_call, llvm::CallInst::Create(cgen_state_->row_func_, args, ""));
       break;
     }
@@ -4008,8 +4047,11 @@ Executor::JoinInfo Executor::chooseJoinType(const Planner::Join* join_plan,
     auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     CHECK(qual_bin_oper);
     if (qual_bin_oper->get_optype() == kEQ) {
+      const int device_count =
+          device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
+      CHECK_GT(device_count, 0);
       const auto join_hash_table =
-          JoinHashTable::getInstance(qual_bin_oper, *catalog_, query_infos, memory_level, this);
+          JoinHashTable::getInstance(qual_bin_oper, *catalog_, query_infos, memory_level, device_count, this);
       if (join_hash_table) {
         return Executor::JoinInfo(JoinImplType::HashOneToOne,
                                   std::vector<std::shared_ptr<Analyzer::BinOper>>{qual_bin_oper},
@@ -4381,7 +4423,8 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                       i64**,
                       i64**,
                       i32*,
-                      i32*)* @%s, metadata !"kernel", i32 1}
+                      i32*,
+                      i64*)* @%s, metadata !"kernel", i32 1}
 )"
                           :
                           R"(
@@ -4395,7 +4438,8 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
                       i64**,
                       i64**,
                       i32*,
-                      i32*)* @%s, metadata !"kernel", i32 1}
+                      i32*,
+                      i64*)* @%s, metadata !"kernel", i32 1}
 )",
            func_name.c_str());
 

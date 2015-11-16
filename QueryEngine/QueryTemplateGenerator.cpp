@@ -223,6 +223,7 @@ llvm::Function* query_template(llvm::Module* mod,
   FuncTy_8_args.push_back(PointerTy_10);
   FuncTy_8_args.push_back(PointerTy_10);
   FuncTy_8_args.push_back(IntegerType::get(mod->getContext(), 32));
+  FuncTy_8_args.push_back(IntegerType::get(mod->getContext(), 64));
   FuncTy_8_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
 
   FunctionType* FuncTy_8 = FunctionType::get(
@@ -300,6 +301,8 @@ llvm::Function* query_template(llvm::Module* mod,
   ptr_unused->setName("unused");
   Value* frag_idx = args++;
   frag_idx->setName("frag_idx");
+  Value* ptr_join_hash_table = args++;
+  ptr_join_hash_table->setName("join_hash_table");
   Value* ptr_error_code = args++;
   ptr_error_code->setName("error_code");
 
@@ -471,6 +474,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   FuncTy_12_args.push_back(PointerTy_13);
   FuncTy_12_args.push_back(PointerTy_13);
   FuncTy_12_args.push_back(IntegerType::get(mod->getContext(), 32));
+  FuncTy_12_args.push_back(IntegerType::get(mod->getContext(), 64));
   FuncTy_12_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
 
   FunctionType* FuncTy_12 = FunctionType::get(
@@ -560,6 +564,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   ptr_small_groups_buffer->setName("small_groups_buffer");
   Value* frag_idx = args++;
   frag_idx->setName("frag_idx");
+  Value* ptr_join_hash_table = args++;
+  ptr_join_hash_table->setName("join_hash_table");
   Value* ptr_error_code = args++;
   ptr_error_code->setName("error_code");
 

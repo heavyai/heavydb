@@ -360,6 +360,7 @@ class Executor {
                                     const int device_id,
                                     const uint32_t start_rowid,
                                     const uint32_t num_tables);
+  int64_t getJoinHashTablePtr(const ExecutorDeviceType device_type, const int device_id);
   ResultRows reduceMultiDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                       std::shared_ptr<RowSetMemoryOwner>,
                                       const QueryMemoryDescriptor&,

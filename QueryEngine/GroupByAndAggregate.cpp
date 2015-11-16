@@ -1594,7 +1594,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                            const unsigned grid_size_x,
                                                            const int device_id,
                                                            int32_t* error_code,
-                                                           const uint32_t num_tables) const {
+                                                           const uint32_t num_tables,
+                                                           const int64_t join_hash_table) const {
 #ifdef HAVE_CUDA
   data_mgr->cudaMgr_->setContext(device_id);
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
@@ -1658,6 +1659,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
     num_tables_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(uint32_t), device_id);
     copy_to_gpu(data_mgr, num_tables_dev_ptr, &num_tables, sizeof(uint32_t), device_id);
   }
+  CUdeviceptr join_hash_table_dev_ptr{0};
+  {
+    join_hash_table_dev_ptr = alloc_gpu_mem(data_mgr, sizeof(int64_t), device_id);
+    copy_to_gpu(data_mgr, join_hash_table_dev_ptr, &join_hash_table, sizeof(int64_t), device_id);
+  }
   std::vector<int32_t> error_codes(block_size_x);
   auto error_code_dev_ptr = alloc_gpu_mem(data_mgr, grid_size_x * sizeof(error_codes[0]), device_id);
   copy_to_gpu(data_mgr, error_code_dev_ptr, &error_codes[0], grid_size_x * sizeof(error_codes[0]), device_id);
@@ -1719,7 +1725,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &gpu_query_mem.group_by_buffers.first,
                                  &gpu_query_mem.small_group_by_buffers.first,
                                  &error_code_dev_ptr,
-                                 &num_tables_dev_ptr};
+                                 &num_tables_dev_ptr,
+                                 &join_hash_table_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,
@@ -1741,7 +1748,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &gpu_query_mem.group_by_buffers.first,
                                  &gpu_query_mem.small_group_by_buffers.first,
                                  &error_code_dev_ptr,
-                                 &num_tables_dev_ptr};
+                                 &num_tables_dev_ptr,
+                                 &join_hash_table_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,
@@ -1793,7 +1801,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &out_vec_dev_ptr,
                                  &unused_dev_ptr,
                                  &error_code_dev_ptr,
-                                 &num_tables_dev_ptr};
+                                 &num_tables_dev_ptr,
+                                 &join_hash_table_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,
@@ -1815,7 +1824,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                  &out_vec_dev_ptr,
                                  &unused_dev_ptr,
                                  &error_code_dev_ptr,
-                                 &num_tables_dev_ptr};
+                                 &num_tables_dev_ptr,
+                                 &join_hash_table_dev_ptr};
         checkCudaErrors(cuLaunchKernel(cu_func,
                                        grid_size_x,
                                        grid_size_y,

@@ -26,7 +26,18 @@ class JoinHashTable {
                                                     const Catalog_Namespace::Catalog& cat,
                                                     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                                     const Data_Namespace::MemoryLevel memory_level,
+                                                    const int device_count,
                                                     const Executor* executor);
+
+  int64_t getJoinHashBuffer(const ExecutorDeviceType device_type, const int device_id) {
+#ifdef HAVE_CUDA
+    return device_type == ExecutorDeviceType::CPU ? reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0])
+                                                  : gpu_hash_table_buff_[device_id];
+#else
+    CHECK(device_type == ExecutorDeviceType::CPU);
+    return reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0]);
+#endif
+  }
 
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -43,12 +54,9 @@ class JoinHashTable {
         col_range_(col_range),
         executor_(executor) {
     CHECK(col_range.type == ExpressionRangeType::Integer);
-#ifdef HAVE_CUDA
-    gpu_hash_table_buff_ = 0;
-#endif
   }
 
-  int reify();
+  int reify(const int device_count);
   llvm::Value* codegenSlot(Executor*, const bool hoist_literals);
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
@@ -57,7 +65,7 @@ class JoinHashTable {
   const Data_Namespace::MemoryLevel memory_level_;
   std::vector<int64_t> cpu_hash_table_buff_;
 #ifdef HAVE_CUDA
-  CUdeviceptr gpu_hash_table_buff_;
+  std::vector<CUdeviceptr> gpu_hash_table_buff_;
 #endif
   ExpressionRange col_range_;
   const Executor* executor_;

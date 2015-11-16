@@ -53,6 +53,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const Catalog_Namespace::Catalog& cat,
     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
+    const int device_count,
     const Executor* executor) {
   return nullptr;
   CHECK_EQ(kEQ, qual_bin_oper->get_optype());
@@ -71,14 +72,14 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
-  const int err = join_hash_table->reify();
+  const int err = join_hash_table->reify(device_count);
   if (err) {
     return nullptr;
   }
   return join_hash_table;
 }
 
-int JoinHashTable::reify() {
+int JoinHashTable::reify(const int device_count) {
   const auto cols = get_cols(qual_bin_oper_);
   const auto inner_col = cols.first;
   CHECK(inner_col);
@@ -98,88 +99,90 @@ int JoinHashTable::reify() {
   // Since we don't have the string dictionary payloads on the GPU, we'll build
   // the join hash table on the CPU and transfer it to the GPU.
   const auto effective_memory_level = ti.is_string() ? Data_Namespace::CPU_LEVEL : memory_level_;
-  const int device_id = fragment.deviceIds[static_cast<int>(effective_memory_level)];
-  const auto chunk = Chunk_NS::Chunk::getChunk(cd,
-                                               &cat_.get_dataMgr(),
-                                               chunk_key,
-                                               effective_memory_level,
-                                               effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
-                                               chunk_meta_it->second.numBytes,
-                                               chunk_meta_it->second.numElements);
-  CHECK(chunk);
-  auto ab = chunk->get_buffer();
-  CHECK(ab->getMemoryPtr());
-  const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-  const int32_t groups_buffer_entry_count =
-      col_range_.int_max - col_range_.int_min + 1 + (col_range_.has_nulls ? 1 : 0);
+  for (int device_id = 0; device_id < device_count; ++device_id) {
+    const auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                                 &cat_.get_dataMgr(),
+                                                 chunk_key,
+                                                 effective_memory_level,
+                                                 effective_memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
+                                                 chunk_meta_it->second.numBytes,
+                                                 chunk_meta_it->second.numElements);
+    CHECK(chunk);
+    auto ab = chunk->get_buffer();
+    CHECK(ab->getMemoryPtr());
+    const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
+    const int32_t groups_buffer_entry_count =
+        col_range_.int_max - col_range_.int_min + 1 + (col_range_.has_nulls ? 1 : 0);
 #ifdef HAVE_CUDA
-  // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
-  // once the join hash table has been built on the CPU.
-  if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    auto& data_mgr = cat_.get_dataMgr();
-    gpu_hash_table_buff_ = alloc_gpu_mem(&data_mgr, 2 * groups_buffer_entry_count * sizeof(int64_t), device_id);
-  }
-#else
-  CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
-#endif
-  if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
-    cpu_hash_table_buff_.resize(2 * groups_buffer_entry_count);
-    const StringDictionary* sd_inner{nullptr};
-    const StringDictionary* sd_outer{nullptr};
-    if (ti.is_string()) {
-      CHECK_EQ(kENCODING_DICT, ti.get_compression());
-      sd_inner = executor_->getStringDictionary(inner_col->get_comp_param(), executor_->row_set_mem_owner_);
-      CHECK(sd_inner);
-      sd_outer = executor_->getStringDictionary(cols.second->get_comp_param(), executor_->row_set_mem_owner_);
-      CHECK(sd_outer);
-    }
-    err = init_hash_join_buff(&cpu_hash_table_buff_[0],
-                              groups_buffer_entry_count,
-                              col_buff,
-                              chunk_meta_it->second.numElements,
-                              ti.get_size(),
-                              col_range_.int_min,
-                              inline_int_null_val(ti),
-                              col_range_.int_max + 1,
-                              sd_inner,
-                              sd_outer);
-    // Transfer the hash table on the GPU if we've only built it on CPU
-    // but the query runs on GPU (join on dictionary encoded columns).
-    // Don't transfer the buffer if there was an error since we'll bail anyway.
-    if (memory_level_ == Data_Namespace::GPU_LEVEL && !err) {
-#ifdef HAVE_CUDA
-      CHECK(ti.is_string());
+    // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
+    // once the join hash table has been built on the CPU.
+    if (memory_level_ == Data_Namespace::GPU_LEVEL) {
       auto& data_mgr = cat_.get_dataMgr();
-      copy_to_gpu(&data_mgr,
-                  gpu_hash_table_buff_,
-                  &cpu_hash_table_buff_[0],
-                  cpu_hash_table_buff_.size() * sizeof(cpu_hash_table_buff_[0]),
-                  device_id);
+      gpu_hash_table_buff_.push_back(
+          alloc_gpu_mem(&data_mgr, 2 * groups_buffer_entry_count * sizeof(int64_t), device_id));
+    }
+#else
+    CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
+#endif
+    if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
+      cpu_hash_table_buff_.resize(2 * groups_buffer_entry_count);
+      const StringDictionary* sd_inner{nullptr};
+      const StringDictionary* sd_outer{nullptr};
+      if (ti.is_string()) {
+        CHECK_EQ(kENCODING_DICT, ti.get_compression());
+        sd_inner = executor_->getStringDictionary(inner_col->get_comp_param(), executor_->row_set_mem_owner_);
+        CHECK(sd_inner);
+        sd_outer = executor_->getStringDictionary(cols.second->get_comp_param(), executor_->row_set_mem_owner_);
+        CHECK(sd_outer);
+      }
+      err = init_hash_join_buff(&cpu_hash_table_buff_[0],
+                                groups_buffer_entry_count,
+                                col_buff,
+                                chunk_meta_it->second.numElements,
+                                ti.get_size(),
+                                col_range_.int_min,
+                                inline_int_null_val(ti),
+                                col_range_.int_max + 1,
+                                sd_inner,
+                                sd_outer);
+      // Transfer the hash table on the GPU if we've only built it on CPU
+      // but the query runs on GPU (join on dictionary encoded columns).
+      // Don't transfer the buffer if there was an error since we'll bail anyway.
+      if (memory_level_ == Data_Namespace::GPU_LEVEL && !err) {
+#ifdef HAVE_CUDA
+        CHECK(ti.is_string());
+        auto& data_mgr = cat_.get_dataMgr();
+        copy_to_gpu(&data_mgr,
+                    gpu_hash_table_buff_.back(),
+                    &cpu_hash_table_buff_[0],
+                    cpu_hash_table_buff_.size() * sizeof(cpu_hash_table_buff_[0]),
+                    device_id);
+#else
+        CHECK(false);
+#endif
+      }
+    } else {
+#ifdef HAVE_CUDA
+      CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
+      auto& data_mgr = cat_.get_dataMgr();
+      auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id);
+      copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
+      init_hash_join_buff_on_device(reinterpret_cast<int64_t*>(gpu_hash_table_buff_.back()),
+                                    reinterpret_cast<int*>(dev_err_buff),
+                                    groups_buffer_entry_count,
+                                    col_buff,
+                                    chunk_meta_it->second.numElements,
+                                    ti.get_size(),
+                                    col_range_.int_min,
+                                    inline_int_null_val(ti),
+                                    col_range_.int_max + 1,
+                                    executor_->blockSize(),
+                                    executor_->gridSize());
+      copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
 #else
       CHECK(false);
 #endif
     }
-  } else {
-#ifdef HAVE_CUDA
-    CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
-    auto& data_mgr = cat_.get_dataMgr();
-    auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id);
-    copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
-    init_hash_join_buff_on_device(reinterpret_cast<int64_t*>(gpu_hash_table_buff_),
-                                  reinterpret_cast<int*>(dev_err_buff),
-                                  groups_buffer_entry_count,
-                                  col_buff,
-                                  chunk_meta_it->second.numElements,
-                                  ti.get_size(),
-                                  col_range_.int_min,
-                                  inline_int_null_val(ti),
-                                  col_range_.int_max + 1,
-                                  executor_->blockSize(),
-                                  executor_->gridSize());
-    copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
-#else
-    CHECK(false);
-#endif
   }
   return err;
 }
@@ -194,19 +197,8 @@ llvm::Value* JoinHashTable::codegenSlot(Executor* executor, const bool hoist_lit
   const auto key_lvs = executor->codegen(key_col, true, hoist_literals);
   CHECK_EQ(size_t(1), key_lvs.size());
   CHECK(executor->plan_state_->join_info_.join_hash_table_);
-#ifdef HAVE_CUDA
-  const int64_t join_hash_buff_ptr = memory_level_ == Data_Namespace::CPU_LEVEL
-                                         ? reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0])
-                                         : gpu_hash_table_buff_;
-#else
-  CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
-  const int64_t join_hash_buff_ptr = reinterpret_cast<int64_t>(&cpu_hash_table_buff_[0]);
-#endif
-  const auto i64_ty = get_int_type(64, executor->cgen_state_->context_);
-  const auto hash_ptr = llvm::ConstantInt::get(i64_ty, join_hash_buff_ptr);
-  // TODO(alex): maybe make the join hash table buffer a parameter (or a hoisted literal?),
-  //             otoh once we fully set up the join hash table caching it won't change often
-  std::vector<llvm::Value*> hash_join_idx_args{hash_ptr,
+  auto& hash_ptr = executor->cgen_state_->row_func_->getArgumentList().back();
+  std::vector<llvm::Value*> hash_join_idx_args{&hash_ptr,
                                                executor->toDoublePrecision(key_lvs.front()),
                                                executor->ll_int(col_range_.int_min),
                                                executor->ll_int(col_range_.int_max)};
