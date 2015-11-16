@@ -4288,6 +4288,8 @@ declare i8 @string_ge_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_eq_nullable(i8*, i32, i8*, i32, i8);
 declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i32 @merge_error_code(i32, i32*);
+declare i64 @hash_join_idx(i64, i64, i64, i64);
+declare i64 @hash_join_idx_nullable(i64, i64, i64, i64, i64);
 )" +
     gen_array_any_all_sigs();
 
@@ -4315,6 +4317,12 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
   auto get_group_value_func = module->getFunction("get_group_value_one_key");
   CHECK(get_group_value_func);
   get_group_value_func->setAttributes(llvm::AttributeSet{});
+  auto hash_join_idx_func = module->getFunction("hash_join_idx");
+  CHECK(hash_join_idx_func);
+  hash_join_idx_func->setAttributes(llvm::AttributeSet{});
+  auto hash_join_idx_nullable_func = module->getFunction("hash_join_idx_nullable");
+  CHECK(hash_join_idx_nullable_func);
+  hash_join_idx_nullable_func->setAttributes(llvm::AttributeSet{});
 
   bool row_func_not_inlined = false;
   if (no_inline) {

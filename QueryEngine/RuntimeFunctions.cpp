@@ -626,23 +626,3 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                resume_row_index);
   }
 }
-
-extern "C" __attribute__((always_inline)) int64_t
-    hash_join_idx(int64_t hash_buff, const int64_t key, const int64_t min_key, const int64_t max_key) {
-  if (key >= min_key && key <= max_key) {
-    return *get_hash_slot(reinterpret_cast<int64_t*>(hash_buff), key, min_key, 1);
-  }
-  return -1;
-}
-
-extern "C" __attribute__((always_inline)) int64_t hash_join_idx_nullable(int64_t hash_buff,
-                                                                         const int64_t key,
-                                                                         const int64_t min_key,
-                                                                         const int64_t max_key,
-                                                                         const int64_t null_val) {
-  if (key != null_val) {
-    return hash_join_idx(hash_buff, key, min_key, max_key);
-  }
-  const int64_t translated_key = max_key + 1;
-  return hash_join_idx(hash_buff, translated_key, min_key, translated_key);
-}
