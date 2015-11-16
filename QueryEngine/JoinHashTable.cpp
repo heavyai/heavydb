@@ -62,9 +62,12 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     return nullptr;
   }
   const auto& ti = inner_col->get_type_info();
-  const auto col_range = getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, nullptr);
-  if (col_range.has_nulls) {  // TODO(alex): lift this constraint
-    return nullptr;
+  auto col_range = getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, nullptr);
+  if (ti.is_string()) {
+    // For dictionary encoded strings, we only borrow the min and the max from
+    // the target column. The nullable info must be the same as the source column.
+    const auto source_col_range = getExpressionRange(inner_col, query_infos, nullptr);
+    col_range.has_nulls = source_col_range.has_nulls;
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
@@ -107,7 +110,8 @@ int JoinHashTable::reify() {
   auto ab = chunk->get_buffer();
   CHECK(ab->getMemoryPtr());
   const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-  const int32_t groups_buffer_entry_count = col_range_.int_max - col_range_.int_min + 1;
+  const int32_t groups_buffer_entry_count =
+      col_range_.int_max - col_range_.int_min + 1 + (col_range_.has_nulls ? 1 : 0);
 #ifdef HAVE_CUDA
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
@@ -133,8 +137,10 @@ int JoinHashTable::reify() {
                               groups_buffer_entry_count,
                               col_buff,
                               chunk_meta_it->second.numElements,
-                              inner_col->get_type_info().get_size(),
+                              ti.get_size(),
                               col_range_.int_min,
+                              inline_int_null_val(ti),
+                              col_range_.int_max + 1,
                               sd_inner,
                               sd_outer);
     // Transfer the hash table on the GPU if we've only built it on CPU
@@ -164,8 +170,10 @@ int JoinHashTable::reify() {
                                   groups_buffer_entry_count,
                                   col_buff,
                                   chunk_meta_it->second.numElements,
-                                  inner_col->get_type_info().get_size(),
+                                  ti.get_size(),
                                   col_range_.int_min,
+                                  inline_int_null_val(ti),
+                                  col_range_.int_max + 1,
                                   executor_->blockSize(),
                                   executor_->gridSize());
     copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
@@ -198,11 +206,18 @@ llvm::Value* JoinHashTable::codegenSlot(Executor* executor, const bool hoist_lit
   const auto hash_ptr = llvm::ConstantInt::get(i64_ty, join_hash_buff_ptr);
   // TODO(alex): maybe make the join hash table buffer a parameter (or a hoisted literal?),
   //             otoh once we fully set up the join hash table caching it won't change often
-  const auto slot_lv = executor->cgen_state_->emitCall("hash_join_idx",
-                                                       {hash_ptr,
-                                                        executor->toDoublePrecision(key_lvs.front()),
-                                                        executor->ll_int(col_range_.int_min),
-                                                        executor->ll_int(col_range_.int_max)});
+  std::vector<llvm::Value*> hash_join_idx_args{hash_ptr,
+                                               executor->toDoublePrecision(key_lvs.front()),
+                                               executor->ll_int(col_range_.int_min),
+                                               executor->ll_int(col_range_.int_max)};
+  if (col_range_.has_nulls) {
+    hash_join_idx_args.push_back(executor->ll_int(inline_int_null_val(key_col->get_type_info())));
+  }
+  std::string fname{"hash_join_idx"};
+  if (col_range_.has_nulls) {
+    fname += "_nullable";
+  }
+  const auto slot_lv = executor->cgen_state_->emitCall(fname, hash_join_idx_args);
   const auto it_ok = executor->cgen_state_->scan_idx_to_hash_pos_.emplace(val_col->get_rte_idx(), slot_lv);
   CHECK(it_ok.second);
   const auto slot_valid_lv =

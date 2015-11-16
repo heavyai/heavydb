@@ -17,6 +17,8 @@ int init_hash_join_buff(int64_t* buff,
                         const size_t num_elems,
                         const size_t elem_sz,
                         const int64_t min_val,
+                        const int64_t null_val,
+                        const int64_t translated_null_val,
                         const void* sd_inner,
                         const void* sd_outer);
 
@@ -27,6 +29,8 @@ void init_hash_join_buff_on_device(int64_t* buff,
                                    const size_t num_elems,
                                    const size_t elem_sz,
                                    const int64_t min_val,
+                                   const int64_t null_val,
+                                   const int64_t translated_null_val,
                                    const size_t block_size_x,
                                    const size_t grid_size_x);
 
