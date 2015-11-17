@@ -28,6 +28,7 @@
 #include <unordered_set>
 #include <vector>
 #include <deque>
+#include <unistd.h>
 #include "../Shared/measure.h"
 
 enum class NVVMBackend { CUDA, NVPTX };
@@ -35,6 +36,13 @@ enum class NVVMBackend { CUDA, NVPTX };
 enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 
 class Executor;
+
+inline int cpu_threads() {
+  // could use std::thread::hardware_concurrency(), but some
+  // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
+  // Play it POSIX.1 safe instead.
+  return std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
+}
 
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   switch (width) {

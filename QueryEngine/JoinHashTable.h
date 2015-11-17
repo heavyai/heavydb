@@ -10,6 +10,7 @@
 
 #include "ExpressionRange.h"
 #include "../Analyzer/Analyzer.h"
+#include "../Chunk/Chunk.h"
 #include "../Fragmenter/Fragmenter.h"
 
 #include <llvm/IR/Value.h>
@@ -17,6 +18,7 @@
 #include <cuda.h>
 #endif
 #include <memory>
+#include <mutex>
 
 class Executor;
 
@@ -57,6 +59,11 @@ class JoinHashTable {
   }
 
   int reify(const int device_count);
+  int initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk> chunk,
+                             const size_t num_elements,
+                             const std::pair<const Analyzer::ColumnVar*, const Analyzer::ColumnVar*>& cols,
+                             const Data_Namespace::MemoryLevel effective_memory_level,
+                             const int device_id);
   llvm::Value* codegenSlot(Executor*, const bool hoist_literals);
 
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
@@ -64,6 +71,7 @@ class JoinHashTable {
   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   std::vector<int64_t> cpu_hash_table_buff_;
+  std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
   std::vector<CUdeviceptr> gpu_hash_table_buff_;
 #endif

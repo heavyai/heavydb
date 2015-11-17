@@ -2729,7 +2729,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
-  int available_cpus = std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
+  int available_cpus = cpu_threads();
   std::unordered_set<int> available_gpus;
   if (cat.get_dataMgr().gpusPresent()) {
     int gpu_count = cat.get_dataMgr().cudaMgr_->getDeviceCount();
