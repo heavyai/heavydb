@@ -26,6 +26,12 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
   }
 }
 
+#ifdef __CUDACC__
+#define mapd_cas(address, compare, val) atomicCAS(address, compare, val)
+#else
+#define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
+#endif
+
 DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
                                        const int32_t invalid_slot_val,
                                        const int8_t* col_buff,
@@ -64,19 +70,14 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
     }
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot)(buff, elem, min_val);
-#ifdef __CUDACC__
-    int32_t old = atomicCAS(entry_ptr, invalid_slot_val, i);
-    if (old != invalid_slot_val) {
+    if (mapd_cas(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
       return -1;
     }
-#else
-    if (__sync_val_compare_and_swap(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
-      return -1;
-    }
-#endif
   }
   return 0;
 }
+
+#undef mapd_cas
 
 #ifdef __CUDACC__
 
