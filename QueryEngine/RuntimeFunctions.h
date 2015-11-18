@@ -57,6 +57,8 @@ extern "C" int64_t* get_group_value_one_key(int64_t* groups_buffer,
                                             const uint32_t agg_col_count,
                                             const int64_t* init_vals);
 
+extern "C" int32_t* get_hash_slot(int32_t* buff, const int64_t key, const int64_t min_key);
+
 // Regular fixed_width_*_decode are only available from the JIT,
 // we need to call them for lazy fetch columns -- create wrappers.
 

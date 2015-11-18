@@ -1,8 +1,7 @@
 #include "HashJoinRuntime.h"
 #ifdef __CUDACC__
-#include "GpuRtConstants.h"
 #include "DecodersImpl.h"
-#include "GroupByFastImpl.h"
+#include "JoinHashImpl.h"
 #else
 #include "RuntimeFunctions.h"
 #include "../StringDictionary/StringDictionary.h"
@@ -10,12 +9,11 @@
 #endif
 #include "../Shared/funcannotations.h"
 
-DEVICE void SUFFIX(preinit_hash_join_buff)(int64_t* groups_buffer,
-                                           const int32_t groups_buffer_entry_count,
-                                           const int64_t hash_join_invalid_val,
-                                           const int32_t cpu_thread_idx,
-                                           const int32_t cpu_thread_count) {
-  int32_t groups_buffer_entry_qw_count = groups_buffer_entry_count * 2;
+DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
+                                        const int32_t hash_entry_count,
+                                        const int32_t invalid_slot_val,
+                                        const int32_t cpu_thread_idx,
+                                        const int32_t cpu_thread_count) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -23,14 +21,13 @@ DEVICE void SUFFIX(preinit_hash_join_buff)(int64_t* groups_buffer,
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
-  for (int32_t i = start; i < groups_buffer_entry_qw_count; i += step) {
-    groups_buffer[i] = (i % 2 == 0) ? EMPTY_KEY : hash_join_invalid_val;
+  for (int32_t i = start; i < hash_entry_count; i += step) {
+    groups_buffer[i] = invalid_slot_val;
   }
 }
 
-DEVICE int SUFFIX(init_hash_join_buff)(int64_t* buff,
-                                       const int64_t hash_join_invalid_val,
-                                       const int32_t groups_buffer_entry_count,
+DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
+                                       const int32_t invalid_slot_val,
                                        const int8_t* col_buff,
                                        const size_t num_elems,
                                        const size_t elem_sz,
@@ -66,14 +63,14 @@ DEVICE int SUFFIX(init_hash_join_buff)(int64_t* buff,
       elem = outer_id;
     }
 #endif
-    int64_t* entry_ptr = SUFFIX(get_group_value_fast)(buff, elem, min_val, 1);
+    int32_t* entry_ptr = SUFFIX(get_hash_slot)(buff, elem, min_val);
 #ifdef __CUDACC__
-    unsigned long long old = atomicCAS(reinterpret_cast<unsigned long long*>(entry_ptr), hash_join_invalid_val, i);
-    if (old != static_cast<unsigned long long>(hash_join_invalid_val)) {
+    int32_t old = atomicCAS(entry_ptr, invalid_slot_val, i);
+    if (old != invalid_slot_val) {
       return -1;
     }
 #else
-    if (__sync_val_compare_and_swap(entry_ptr, hash_join_invalid_val, i) != hash_join_invalid_val) {
+    if (__sync_val_compare_and_swap(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
       return -1;
     }
 #endif
@@ -83,9 +80,8 @@ DEVICE int SUFFIX(init_hash_join_buff)(int64_t* buff,
 
 #ifdef __CUDACC__
 
-__global__ void init_hash_join_buff_wrapper(int64_t* buff,
-                                            const int64_t hash_join_invalid_val,
-                                            const int32_t groups_buffer_entry_count,
+__global__ void fill_hash_join_buff_wrapper(int32_t* buff,
+                                            const int32_t invalid_slot_val,
                                             const int8_t* col_buff,
                                             const size_t num_elems,
                                             const size_t elem_sz,
@@ -93,26 +89,14 @@ __global__ void init_hash_join_buff_wrapper(int64_t* buff,
                                             const int64_t null_val,
                                             const int64_t translated_null_val,
                                             int* err) {
-  int partial_err = SUFFIX(init_hash_join_buff)(buff,
-                                                hash_join_invalid_val,
-                                                groups_buffer_entry_count,
-                                                col_buff,
-                                                num_elems,
-                                                elem_sz,
-                                                min_val,
-                                                null_val,
-                                                translated_null_val,
-                                                NULL,
-                                                NULL,
-                                                -1,
-                                                -1);
+  int partial_err = SUFFIX(fill_hash_join_buff)(
+      buff, invalid_slot_val, col_buff, num_elems, elem_sz, min_val, null_val, translated_null_val, NULL, NULL, -1, -1);
   atomicCAS(err, 0, partial_err);
 }
 
-void init_hash_join_buff_on_device(int64_t* buff,
-                                   const int64_t hash_join_invalid_val,
+void fill_hash_join_buff_on_device(int32_t* buff,
+                                   const int32_t invalid_slot_val,
                                    int* dev_err_buff,
-                                   const int32_t groups_buffer_entry_count,
                                    const int8_t* col_buff,
                                    const size_t num_elems,
                                    const size_t elem_sz,
@@ -121,32 +105,22 @@ void init_hash_join_buff_on_device(int64_t* buff,
                                    const int64_t translated_null_val,
                                    const size_t block_size_x,
                                    const size_t grid_size_x) {
-  // TODO(alex): parallelize the initialization
-  init_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>(buff,
-                                                             hash_join_invalid_val,
-                                                             groups_buffer_entry_count,
-                                                             col_buff,
-                                                             num_elems,
-                                                             elem_sz,
-                                                             min_val,
-                                                             null_val,
-                                                             translated_null_val,
-                                                             dev_err_buff);
+  fill_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>
+      (buff, invalid_slot_val, col_buff, num_elems, elem_sz, min_val, null_val, translated_null_val, dev_err_buff);
 }
 
-__global__ void preinit_hash_join_buff_wrapper(int64_t* buff,
-                                               const int32_t groups_buffer_entry_count,
-                                               const int64_t hash_join_invalid_val) {
-  SUFFIX(preinit_hash_join_buff)(buff, groups_buffer_entry_count, hash_join_invalid_val, -1, -1);
+__global__ void init_hash_join_buff_wrapper(int32_t* buff,
+                                            const int32_t hash_entry_count,
+                                            const int32_t invalid_slot_val) {
+  SUFFIX(init_hash_join_buff)(buff, hash_entry_count, invalid_slot_val, -1, -1);
 }
 
-void preinit_hash_join_buff_on_device(int64_t* buff,
-                                      const int32_t groups_buffer_entry_count,
-                                      const int64_t hash_join_invalid_val,
-                                      const size_t block_size_x,
-                                      const size_t grid_size_x) {
-  preinit_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>>
-      (buff, groups_buffer_entry_count, hash_join_invalid_val);
+void init_hash_join_buff_on_device(int32_t* buff,
+                                   const int32_t hash_entry_count,
+                                   const int32_t invalid_slot_val,
+                                   const size_t block_size_x,
+                                   const size_t grid_size_x) {
+  init_hash_join_buff_wrapper<<<grid_size_x, block_size_x>>> (buff, hash_entry_count, invalid_slot_val);
 }
 
 #endif

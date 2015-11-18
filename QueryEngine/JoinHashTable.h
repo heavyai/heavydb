@@ -70,7 +70,7 @@ class JoinHashTable {
   const Catalog_Namespace::Catalog& cat_;
   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
-  std::vector<int64_t> cpu_hash_table_buff_;
+  std::vector<int32_t> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
   std::vector<CUdeviceptr> gpu_hash_table_buff_;

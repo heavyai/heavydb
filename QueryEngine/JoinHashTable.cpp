@@ -141,26 +141,24 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
   auto ab = chunk->get_buffer();
   CHECK(ab->getMemoryPtr());
   const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-  const int32_t groups_buffer_entry_count =
-      col_range_.int_max - col_range_.int_min + 1 + (col_range_.has_nulls ? 1 : 0);
+  const int32_t hash_entry_count = col_range_.int_max - col_range_.int_min + 1 + (col_range_.has_nulls ? 1 : 0);
 #ifdef HAVE_CUDA
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     auto& data_mgr = cat_.get_dataMgr();
-    gpu_hash_table_buff_[device_id] =
-        alloc_gpu_mem(&data_mgr, 2 * groups_buffer_entry_count * sizeof(int64_t), device_id);
+    gpu_hash_table_buff_[device_id] = alloc_gpu_mem(&data_mgr, hash_entry_count * sizeof(int32_t), device_id);
   }
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
 #endif
   int err = 0;
-  const int64_t hash_join_invalid_val{-1};
+  const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       if (cpu_hash_table_buff_.empty()) {
-        cpu_hash_table_buff_.resize(2 * groups_buffer_entry_count);
+        cpu_hash_table_buff_.resize(hash_entry_count);
         const StringDictionary* sd_inner{nullptr};
         const StringDictionary* sd_outer{nullptr};
         if (ti.is_string()) {
@@ -173,8 +171,9 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
         int thread_count = cpu_threads();
         std::vector<std::thread> init_cpu_buff_threads;
         for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-          init_cpu_buff_threads.emplace_back([this, groups_buffer_entry_count, thread_idx, thread_count] {
-            preinit_hash_join_buff(&cpu_hash_table_buff_[0], groups_buffer_entry_count, -1, thread_idx, thread_count);
+          init_cpu_buff_threads.emplace_back([this, hash_entry_count, thread_idx, thread_count] {
+            init_hash_join_buff(
+                &cpu_hash_table_buff_[0], hash_entry_count, hash_join_invalid_val, thread_idx, thread_count);
           });
         }
         for (auto& t : init_cpu_buff_threads) {
@@ -184,7 +183,7 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
         for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
           init_cpu_buff_threads.emplace_back([this,
                                               hash_join_invalid_val,
-                                              groups_buffer_entry_count,
+                                              hash_entry_count,
                                               col_buff,
                                               num_elements,
                                               sd_inner,
@@ -193,9 +192,8 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
                                               thread_count,
                                               &ti,
                                               &err] {
-            int partial_err = init_hash_join_buff(&cpu_hash_table_buff_[0],
+            int partial_err = fill_hash_join_buff(&cpu_hash_table_buff_[0],
                                                   hash_join_invalid_val,
-                                                  groups_buffer_entry_count,
                                                   col_buff,
                                                   num_elements,
                                                   ti.get_size(),
@@ -236,15 +234,14 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
     auto& data_mgr = cat_.get_dataMgr();
     auto dev_err_buff = alloc_gpu_mem(&data_mgr, sizeof(int), device_id);
     copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
-    preinit_hash_join_buff_on_device(reinterpret_cast<int64_t*>(gpu_hash_table_buff_[device_id]),
-                                     groups_buffer_entry_count,
-                                     -1,
-                                     executor_->blockSize(),
-                                     executor_->gridSize());
-    init_hash_join_buff_on_device(reinterpret_cast<int64_t*>(gpu_hash_table_buff_[device_id]),
+    init_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
+                                  hash_entry_count,
+                                  hash_join_invalid_val,
+                                  executor_->blockSize(),
+                                  executor_->gridSize());
+    fill_hash_join_buff_on_device(reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]),
                                   hash_join_invalid_val,
                                   reinterpret_cast<int*>(dev_err_buff),
-                                  groups_buffer_entry_count,
                                   col_buff,
                                   num_elements,
                                   ti.get_size(),
