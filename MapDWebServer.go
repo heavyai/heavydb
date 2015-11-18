@@ -144,6 +144,9 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	if _, err := os.Stat(dataDir + "/mapd_log/"); os.IsNotExist(err) {
+		os.MkdirAll(dataDir+"/mapd_log/", 0755)
+	}
 	lf, err := os.OpenFile(dataDir+"/mapd_log/"+getLogName("ALL"), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		log.Fatal("Error opening log file: ", err)
