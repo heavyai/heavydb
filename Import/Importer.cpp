@@ -126,8 +126,6 @@ static const char* get_row(const char* buf,
         } else {
           char field_buf[p - field + 1];
           int j = 0, i = 0;
-          if (strip_quotes)
-            i++;
           for (; i < p - field; i++, j++) {
             if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
               field_buf[j] = copy_params.quote;
@@ -135,11 +133,13 @@ static const char* get_row(const char* buf,
             } else
               field_buf[j] = field[i];
           }
-          if (strip_quotes)
-            field_buf[j - 1] = '\0';
-          else
-            field_buf[j] = '\0';
-          std::string s = trim_space(field_buf, strip_quotes ? j - 1 : j);
+          std::string s = trim_space(field_buf, j);
+          if (copy_params.quoted && s.front() == copy_params.quote) {
+            s.erase(0, 1);
+          }
+          if (copy_params.quoted && s.back() == copy_params.quote) {
+            s.pop_back();
+          }
           row.push_back(s);
         }
         field = p + 1;
@@ -149,12 +149,13 @@ static const char* get_row(const char* buf,
     }
   }
   if (*p == copy_params.line_delim) {
-    size_t back_offset = 0;
-    if (copy_params.quoted && *field == copy_params.quote) {
-      field++;
-      back_offset += 2;
+    std::string s = trim_space(field, p - field);
+    if (copy_params.quoted && s.front() == copy_params.quote) {
+      s.erase(0, 1);
     }
-    std::string s = trim_space(field, p - field - back_offset);
+    if (copy_params.quoted && s.back() == copy_params.quote) {
+      s.pop_back();
+    }
     row.push_back(s);
     return p;
   }
@@ -172,14 +173,12 @@ static const char* get_row(const char* buf,
       in_array = false;
     } else if (*p == copy_params.delimiter) {
       if (!in_quote && !in_array) {
-        if (!has_escape) {
+        if (!has_escape && !strip_quotes) {
           std::string s = trim_space(field, p - field);
           row.push_back(s);
         } else {
           char field_buf[p - field + 1];
           int j = 0, i = 0;
-          if (strip_quotes)
-            i++;
           for (; i < p - field; i++, j++) {
             if (has_escape && field[i] == copy_params.escape && field[i + 1] == copy_params.quote) {
               field_buf[j] = copy_params.quote;
@@ -187,11 +186,13 @@ static const char* get_row(const char* buf,
             } else
               field_buf[j] = field[i];
           }
-          if (strip_quotes)
-            field_buf[j - 1] = '\0';
-          else
-            field_buf[j] = '\0';
           std::string s = trim_space(field_buf, j);
+          if (copy_params.quoted && s.front() == copy_params.quote) {
+            s.erase(0, 1);
+          }
+          if (copy_params.quoted && s.back() == copy_params.quote) {
+            s.pop_back();
+          }
           row.push_back(s);
         }
         field = p + 1;
@@ -201,12 +202,13 @@ static const char* get_row(const char* buf,
     }
   }
   if (*p == copy_params.line_delim) {
-    size_t back_offset = 0;
-    if (copy_params.quoted && *field == copy_params.quote) {
-      field++;
-      back_offset += 2;
+    std::string s = trim_space(field, p - field);
+    if (copy_params.quoted && s.front() == copy_params.quote) {
+      s.erase(0, 1);
     }
-    std::string s = trim_space(field, p - field - back_offset);
+    if (copy_params.quoted && s.back() == copy_params.quote) {
+      s.pop_back();
+    }
     row.push_back(s);
     return p;
   }
