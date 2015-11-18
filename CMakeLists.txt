@@ -29,6 +29,7 @@ if(ENABLE_CUDA)
   list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY} ${CUDA_NVVM_LIBRARY})
   add_definitions("-DHAVE_CUDA")
 else()
+  set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-nocuda")
 endif()
 
