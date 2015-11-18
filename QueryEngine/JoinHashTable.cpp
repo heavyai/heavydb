@@ -98,7 +98,9 @@ int JoinHashTable::reify(const int device_count) {
   // Since we don't have the string dictionary payloads on the GPU, we'll build
   // the join hash table on the CPU and transfer it to the GPU.
   const auto effective_memory_level = ti.is_string() ? Data_Namespace::CPU_LEVEL : memory_level_;
+#ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
+#endif
   std::vector<int> errors(device_count);
   std::vector<std::thread> init_threads;
   for (int device_id = 0; device_id < device_count; ++device_id) {
