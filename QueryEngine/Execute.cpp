@@ -106,7 +106,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                        const Planner::Sort* sort_plan_in,
                                        const bool allow_multifrag,
                                        const bool just_explain,
-                                       const bool allow_joins) {
+                                       const bool allow_loop_joins) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
@@ -127,7 +127,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                      false,
                                      allow_multifrag,
                                      just_explain,
-                                     allow_joins);
+                                     allow_loop_joins);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       rows.dropFirstN(offset);
       if (limit) {
@@ -149,7 +149,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                               false,
                               allow_multifrag,
                               just_explain,
-                              allow_joins);
+                              allow_loop_joins);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -165,7 +165,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                     sort_plan_in,
                                     allow_multifrag,
                                     just_explain,
-                                    allow_joins);
+                                    allow_loop_joins);
       rows.dropFirstN(offset);
       if (limit) {
         rows.keepFirstN(limit);
@@ -183,7 +183,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                              sort_plan_in,
                              allow_multifrag,
                              just_explain,
-                             allow_joins);
+                             allow_loop_joins);
   }
   const auto sort_plan = dynamic_cast<const Planner::Sort*>(plan);
   if (sort_plan) {
@@ -199,7 +199,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                            error_code,
                            allow_multifrag,
                            just_explain,
-                           allow_joins);
+                           allow_loop_joins);
   }
   CHECK(false);
 }
@@ -218,7 +218,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                              const NVVMBackend nvvm_backend,
                              const ExecutorOptLevel opt_level,
                              const bool allow_multifrag,
-                             const bool allow_joins) {
+                             const bool allow_loop_joins) {
   catalog_ = &root_plan->get_catalog();
   const auto stmt_type = root_plan->get_stmt_type();
   std::lock_guard<std::mutex> lock(execute_mutex_);
@@ -240,7 +240,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     nullptr,
                                     allow_multifrag,
                                     root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
-                                    allow_joins);
+                                    allow_loop_joins);
       if (error_code == ERR_DIV_BY_ZERO) {
         throw std::runtime_error("Division by zero");
       }
@@ -261,7 +261,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                  nullptr,
                                  false,
                                  false,
-                                 allow_joins);
+                                 allow_loop_joins);
       }
       if (error_code) {
         max_groups_buffer_entry_guess = 0;
@@ -279,7 +279,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                    nullptr,
                                    false,
                                    false,
-                                   allow_joins);
+                                   allow_loop_joins);
           if (!error_code) {
             return rows;
           }
@@ -2199,7 +2199,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        const Planner::Sort* sort_plan,
                                        const bool allow_multifrag,
                                        const bool just_explain,
-                                       const bool allow_joins) {
+                                       const bool allow_loop_joins) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
   CHECK(agg_plan);
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
@@ -2217,7 +2217,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                         false,
                                         allow_multifrag,
                                         just_explain,
-                                        allow_joins);
+                                        allow_loop_joins);
   if (just_explain) {
     return result_rows;
   }
@@ -2299,7 +2299,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                   just_explain,
                   llvm_ir,
                   JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr),
-                  allow_joins);
+                  allow_loop_joins);
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), in_col_count);
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
@@ -2336,7 +2336,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                      int32_t* error_code,
                                      const bool allow_multifrag,
                                      const bool just_explain,
-                                     const bool allow_joins) {
+                                     const bool allow_loop_joins) {
   *error_code = 0;
   auto rows_to_sort = executeSelectPlan(sort_plan->get_child_plan(),
                                         0,
@@ -2351,7 +2351,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
                                         sort_plan,
                                         allow_multifrag,
                                         just_explain,
-                                        allow_joins);
+                                        allow_loop_joins);
   if (just_explain) {
     return rows_to_sort;
   }
@@ -2498,7 +2498,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                         const bool output_columnar_hint,
                                         const bool allow_multifrag,
                                         const bool just_explain,
-                                        const bool allow_joins) {
+                                        const bool allow_loop_joins) {
   *error_code = 0;
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
   // TODO(alex): heuristic for group by buffer size
@@ -2612,7 +2612,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            just_explain,
                                            llvm_ir_cpu,
                                            join_info,
-                                           allow_joins);
+                                           allow_loop_joins);
     } catch (...) {
       compilation_result_cpu = compilePlan(plan,
                                            query_infos,
@@ -2636,7 +2636,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            just_explain,
                                            llvm_ir_cpu,
                                            join_info,
-                                           allow_joins);
+                                           allow_loop_joins);
     }
   };
 
@@ -2671,7 +2671,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            just_explain,
                                            llvm_ir_gpu,
                                            join_info,
-                                           allow_joins);
+                                           allow_loop_joins);
     } catch (...) {
       compilation_result_gpu = compilePlan(plan,
                                            query_infos,
@@ -2695,7 +2695,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            just_explain,
                                            llvm_ir_gpu,
                                            join_info,
-                                           allow_joins);
+                                           allow_loop_joins);
     }
   }
 
@@ -3771,7 +3771,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const bool serialize_llvm_ir,
                                                   std::string& llvm_ir,
                                                   const JoinInfo& join_info,
-                                                  const bool allow_joins) {
+                                                  const bool allow_loop_joins) {
   if (query_infos.size() == 1) {
     QueryRewriter query_rewriter(plan, query_infos, this);
     query_rewriter.rewrite();
@@ -3831,7 +3831,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
-  allocateInnerScansIterators(scan_ids, allow_joins);
+  allocateInnerScansIterators(scan_ids, allow_loop_joins);
 
   // generate the code for the filter
   allocateLocalColumnIds(scan_cols);
@@ -3993,15 +3993,15 @@ void Executor::codegenInnerScanNextRow() {
   }
 }
 
-void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_joins) {
+void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_loop_joins) {
   if (scan_ids.size() <= 1) {
     return;
   }
-  if (!allow_joins) {
-    throw std::runtime_error("Join plans not supported yet");
-  }
   if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
     return;
+  }
+  if (!allow_loop_joins) {
+    throw std::runtime_error("Loop joins are disabled; run the server with --allow-loop-joins to enable them.");
   }
   CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
   auto preheader = cgen_state_->ir_builder_.GetInsertBlock();

@@ -51,14 +51,16 @@ class MapDHandler : virtual public MapDIf {
               const NVVMBackend nvvm_backend,
               const bool allow_multifrag,
               const bool jit_debug,
-              const bool read_only)
+              const bool read_only,
+              const bool allow_loop_joins)
       : base_data_path_(base_data_path),
         nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
         session_id_dist_(0, INT32_MAX),
         jit_debug_(jit_debug),
         allow_multifrag_(allow_multifrag),
-        read_only_(read_only) {
+        read_only_(read_only),
+        allow_loop_joins_(allow_loop_joins) {
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
       executor_device_type_ = ExecutorDeviceType::GPU;
@@ -345,7 +347,7 @@ class MapDHandler : virtual public MapDIf {
                                           nvvm_backend_,
                                           ExecutorOptLevel::Default,
                                           allow_multifrag_,
-                                          false);
+                                          allow_loop_joins_);
             });
             if (explain_stmt) {
               CHECK_EQ(size_t(1), results.rowCount());
@@ -882,7 +884,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void create_link(std::string& _return, const TSessionId session, const std::string& view_state) {
-    //check_read_only("create_link");
+    // check_read_only("create_link");
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
 
@@ -1015,6 +1017,7 @@ class MapDHandler : virtual public MapDIf {
   const bool jit_debug_;
   const bool allow_multifrag_;
   const bool read_only_;
+  const bool allow_loop_joins_;
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
 };
@@ -1037,6 +1040,7 @@ int main(int argc, char** argv) {
   bool use_nvptx = true;
   bool allow_multifrag = true;
   bool read_only = false;
+  bool allow_loop_joins = false;
 
   namespace po = boost::program_options;
 
@@ -1048,8 +1052,8 @@ int main(int argc, char** argv) {
       "use-nvvm", "Use NVVM instead of NVPTX")(
       "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
       "read-only", "Enable read-only mode")("cpu", "Run on CPU only")("gpu", "Run on GPUs (Default)")(
-      "hybrid", "Run on both CPU and GPUs")("version,v", "Print Release Version Number")(
-      "port,p", po::value<int>(&port), "Port number (default 9091)")(
+      "allow-loop-joins", "Enable loop joins")("hybrid", "Run on both CPU and GPUs")(
+      "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
       "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)");
 
   po::positional_options_description positionalOptions;
@@ -1084,6 +1088,8 @@ int main(int argc, char** argv) {
       allow_multifrag = false;
     if (vm.count("read-only"))
       read_only = true;
+    if (vm.count("allow-loop-joins"))
+      allow_loop_joins = true;
 
     po::notify(vm);
   } catch (boost::program_options::error& e) {
@@ -1149,8 +1155,13 @@ int main(int argc, char** argv) {
     FLAGS_logbuflevel = -1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
-  shared_ptr<MapDHandler> handler(new MapDHandler(
-      base_path, device, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA, allow_multifrag, jit_debug, read_only));
+  shared_ptr<MapDHandler> handler(new MapDHandler(base_path,
+                                                  device,
+                                                  use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA,
+                                                  allow_multifrag,
+                                                  jit_debug,
+                                                  read_only,
+                                                  allow_loop_joins));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));

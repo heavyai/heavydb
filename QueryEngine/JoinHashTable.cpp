@@ -54,7 +54,6 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
     const Executor* executor) {
-  return nullptr;
   CHECK_EQ(kEQ, qual_bin_oper->get_optype());
   const auto cols = get_cols(qual_bin_oper);
   const auto inner_col = cols.first;

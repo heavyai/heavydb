@@ -198,6 +198,7 @@ int main(int argc, char* argv[]) {
   bool timer = false;
   bool jit_debug = false;
   bool use_nvptx = true;
+  bool allow_loop_joins = false;
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -206,6 +207,7 @@ int main(int argc, char* argv[]) {
       "db", po::value<string>(&db_name), "Database name")(
       "user,u", po::value<string>(&user_name)->required(), "User name")(
       "passwd,p", po::value<string>(&passwd)->required(), "Password")("debug,d", "Verbose debug mode")(
+      "allow-loop-joins", "Enable loop joins")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
       "use-nvvm", "Use NVVM instead of NVPTX")("execute,e", "Execute queries")("version,v", "Print MapD Version")(
       "timer,t", "Show query time information");
@@ -236,6 +238,8 @@ int main(int argc, char* argv[]) {
       jit_debug = true;
     if (vm.count("use-nvvm"))
       use_nvptx = false;
+    if (vm.count("allow-loop-joins"))
+      allow_loop_joins = true;
 
     po::notify(vm);
   } catch (boost::program_options::error& e) {
@@ -339,8 +343,13 @@ int main(int argc, char* argv[]) {
             const NVVMBackend nvvm_backend{use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA};
             {
               auto ms = measure<>::execution([&]() {
-                results_cpu = executor->execute(
-                    plan, true, ExecutorDeviceType::CPU, nvvm_backend, ExecutorOptLevel::Default, true, false);
+                results_cpu = executor->execute(plan,
+                                                true,
+                                                ExecutorDeviceType::CPU,
+                                                nvvm_backend,
+                                                ExecutorOptLevel::Default,
+                                                true,
+                                                allow_loop_joins);
               });
               if (timer) {
                 cout << "Query took " << ms << " ms to execute." << endl;
@@ -350,8 +359,13 @@ int main(int argc, char* argv[]) {
               ResultRows results_gpu({}, nullptr, nullptr, ExecutorDeviceType::GPU);
               {
                 auto ms = measure<>::execution([&]() {
-                  results_gpu = executor->execute(
-                      plan, true, ExecutorDeviceType::GPU, nvvm_backend, ExecutorOptLevel::Default, true, false);
+                  results_gpu = executor->execute(plan,
+                                                  true,
+                                                  ExecutorDeviceType::GPU,
+                                                  nvvm_backend,
+                                                  ExecutorOptLevel::Default,
+                                                  true,
+                                                  allow_loop_joins);
                 });
                 if (timer) {
                   cout << "Query took " << ms << " ms to execute." << endl;
