@@ -3997,13 +3997,13 @@ void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, 
   if (scan_ids.size() <= 1) {
     return;
   }
+  if (!allow_joins) {
+    throw std::runtime_error("Join plans not supported yet");
+  }
   if (plan_state_->join_info_.join_impl_type_ == JoinImplType::HashOneToOne) {
     return;
   }
   CHECK(plan_state_->join_info_.join_impl_type_ == JoinImplType::Loop);
-  if (!allow_joins) {
-    throw std::runtime_error("Join plans not supported yet");
-  }
   auto preheader = cgen_state_->ir_builder_.GetInsertBlock();
   for (auto it = scan_ids.begin() + 1; it != scan_ids.end(); ++it) {
     const int inner_scan_idx = it - scan_ids.begin();
