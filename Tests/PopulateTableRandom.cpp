@@ -239,7 +239,7 @@ vector<size_t> populate_table_random(const string& table_name, const size_t num_
   vector<unique_ptr<vector<vector<int8_t>>>> gc_int8arrays;
   vector<unique_ptr<vector<vector<int16_t>>>> gc_int16arrays;
   vector<unique_ptr<vector<vector<int32_t>>>> gc_int32arrays;
-  DataBlockPtr p;
+  DataBlockPtr p{0};
   // now allocate space for insert data
   for (auto cd : cds) {
     if (cd->columnType.is_varlen()) {
