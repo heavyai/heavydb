@@ -276,7 +276,12 @@ int main(int argc, char* argv[]) {
   lockf << getpid();
   lockf.close();
 
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(base_path + "/mapd_data/", true);
+#ifdef HAVE_CUDA
+  const bool use_gpus{true};
+#else
+  const bool use_gpus{false};
+#endif
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(base_path + "/mapd_data/", use_gpus);
   SysCatalog sys_cat(base_path, dataMgr);
   UserMetadata user;
   if (!sys_cat.getMetadataForUser(user_name, user)) {
