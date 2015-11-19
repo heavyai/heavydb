@@ -63,10 +63,11 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   const auto& ti = inner_col->get_type_info();
   auto col_range = getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, nullptr);
   if (ti.is_string()) {
-    // For dictionary encoded strings, we only borrow the min and the max from
-    // the target column. The nullable info must be the same as the source column.
+    // The nullable info must be the same as the source column.
     const auto source_col_range = getExpressionRange(inner_col, query_infos, nullptr);
     col_range.has_nulls = source_col_range.has_nulls;
+    col_range.int_max = std::max(source_col_range.int_max, col_range.int_max);
+    col_range.int_min = std::min(source_col_range.int_min, col_range.int_min);
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
