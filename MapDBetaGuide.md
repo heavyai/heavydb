@@ -1,8 +1,8 @@
-#MapD Quick Guide (Release 0.1 BETA)
-##Getting Started
+# MapD Quick Guide (Release 0.1 BETA)
+## Getting Started
 Assuming `$MAPDHOME` is the directory where MapD software is installed, make sure that `$MAPDHOME/bin` is in PATH.
 
-###initdb
+### initdb
 The very first step before using MapD is to run initdb:
 ```
 initdb [-f] <MapD Directory>
@@ -15,7 +15,7 @@ initializes the MapD directory. It creates three subdirectories:
 
 The `-f` flag forces `initdb` to overwrite existing data and catalogs in the specified directory.
 
-###mapd_server
+### mapd_server
 
 ```
 mapd_server <MapD directory> [--cpu|--gpu|--hybrid]
@@ -33,7 +33,7 @@ This command starts the MapD Server process. `<MapD directory>` must match that 
 
 `mapd_server` automatically re-spawns itself in case of unexpected termination.  To force termination of `mapd_server` kill -9 **all** `mapd_server` processes.
 
-###mapd_web_server
+### mapd_web_server
 
 ```
 mapd_web_server [{--port} <port number>]
@@ -48,7 +48,7 @@ This command starts the MapD web server.  This server provides access to MapD's 
 * `[{--backend-url} <backend URL>]`: Specify the URL to the backend HTTP server. The default is `http://localhost:9090`.
 * `[{--frontend} <path/to/frontend>]`: Specify the path to the frontend directory. The default is `frontend`.
 
-###mapdql
+### mapdql
 
 ```
 mapdql [<database>]
@@ -83,11 +83,11 @@ In addition to SQL statements `mapdql` also accepts the following list of backsl
 * `\q`: Quit.
 
 `mapdql` automatically attempts to reconnect to `mapd_server` in case it restarts due to crashes or human intervention.  There is no need to restart or reconnect.
-##Users and Databases
+## Users and Databases
 
 Users and databases can only be manipulated when connected to the MapD system database ``mapd`` as a super user.  MapD ships with a default super user named ``mapd`` with default password ``HyperInteractive``.
 
-###CREATE USER
+### CREATE USER
 
 ```
 CREATE USER <name> (<property> = value, ...);
@@ -96,7 +96,7 @@ Example:
 ```
 CREATE USER jason (password = 'MapDRocks!', is_super = 'true');
 ```
-###DROP USER
+### DROP USER
 ```
 DROP USER <name>;
 ```
@@ -104,7 +104,7 @@ Example:
 ```
 DROP USER jason;
 ```
-###ALTER USER
+### ALTER USER
 ```
 ALTER USER <name> (<property> = value, ...);
 ```
@@ -113,7 +113,7 @@ Example:
 ALTER USER mapd (password = 'MapDIsFast!');
 ALTER USER jason (is_super = 'false', password = 'SilkySmooth');
 ```
-###CREATE DATABASE
+### CREATE DATABASE
 ```
 CREATE DATABASE <name> (<property> = value, ...);
 ```
@@ -121,7 +121,7 @@ Example:
 ```
 CREATE DATABASE test (owner = 'jason');
 ```
-###DROP DATABASE
+### DROP DATABASE
 ```
 DROP DATABASE <name>;
 ```
@@ -130,9 +130,9 @@ Example:
 DROP DATABASE test;
 ```
 
-##Tables
+## Tables
 
-###CREATE TABLE
+### CREATE TABLE
 
 ```
 CREATE TABLE [IF NOT EXISTS] <table>
@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS tweets (
   county_state TEXT ENCODING DICT, 
   origin TEXT ENCODING DICT);
 ```
-###DROP TABLE
+### DROP TABLE
 ```
 DROP TABLE [IF EXISTS] <table>;
 ```
@@ -198,7 +198,7 @@ Example:
 ```
 DROP TABLE IF EXISTS tweets;
 ```
-###COPY FROM
+### COPY FROM
 ```
 COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 ```
@@ -220,7 +220,7 @@ Example:
 COPY tweets from '/tmp/tweets.csv' WITH (nulls = 'NA');
 COPY tweets from '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'false');
 ```
-##COPY TO
+## COPY TO
 ```
 COPY ( <SELECT statement> ) TO '<file path>' [WITH (<property> = value, ...)];
 ```
@@ -242,8 +242,8 @@ COPY (SELECT * FROM tweets) TO '/tmp/tweets.csv';
 COPY (SELECT * tweets ORDER BY tweet_time LIMIT 10000) TO
   '/tmp/tweets.tsv' WITH (delimiter = '\t', quoted = 'true', header = 'false');
 ```
-##DML
-###INSERT
+## DML
+### INSERT
 ```
 INSERT INTO <table> VALUES (value, ...);
 ```
@@ -253,7 +253,7 @@ Example:
 CREATE TABLE foo (a INT, b FLOAT, c TEXT, d TIMESTAMP);
 INSERT INTO foo VALUES (NULL, 3.1415, 'xyz', '2015-05-11 211720`);
 ```
-###SELECT
+### SELECT
 ```
 SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table>
   [WHERE <expr>]
@@ -267,6 +267,6 @@ It supports all the common SELECT features except for the following temporary li
 * Only a single table is allowed in FROM clause.
 * Subqueries are not supported.
 
-##Client Interfaces
+## Client Interfaces
 
 MapD uses [Apache Thrift](https://thrift.apache.org) to generate client-side interfaces.  The *interface definitions* are in `$MAPDHOME/mapd.thrift`.  See Apache Thrift documentation on how to generate client-side interfaces for different programming languages with Thrift.  Also see `$MAPDHOME/samples` for sample client code.
