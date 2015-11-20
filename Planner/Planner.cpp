@@ -222,11 +222,11 @@ void Optimizer::optimize_aggs() {
   }
 
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_list;
+  auto target_list = cur_plan->get_targetlist();
+  if (dynamic_cast<const Planner::Join*>(cur_plan)) {
+    target_list = get_join_target_list(static_cast<const Planner::Join*>(cur_plan));
+  }
   if (!cur_query->get_group_by().empty()) {
-    auto target_list = cur_plan->get_targetlist();
-    if (dynamic_cast<const Planner::Join*>(cur_plan)) {
-      target_list = get_join_target_list(static_cast<const Planner::Join*>(cur_plan));
-    }
     for (auto e : cur_query->get_group_by()) {
       groupby_list.push_back(e->rewrite_with_child_targetlist(target_list));
     }
@@ -249,7 +249,7 @@ void Optimizer::optimize_aggs() {
   }
   for (auto e : aggexpr_list) {
     Analyzer::TargetEntry* new_tle;
-    new_tle = new Analyzer::TargetEntry("", e->rewrite_with_child_targetlist(cur_plan->get_targetlist()), false);
+    new_tle = new Analyzer::TargetEntry("", e->rewrite_with_child_targetlist(target_list), false);
     agg_tlist.push_back(new_tle);
   }
 
