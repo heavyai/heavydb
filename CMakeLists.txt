@@ -169,6 +169,17 @@ if(GO_EXECUTABLE)
   install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
 endif()
 
+# Docs
+find_program(PANDOC_EXECUTABLE NAMES pandoc)
+find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
+if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
+  add_custom_target(docs ALL
+    COMMAND pandoc --output=${CMAKE_BINARY_DIR}/MapDBetaGuide.pdf ${CMAKE_SOURCE_DIR}/MapDBetaGuide.md
+    SOURCES MapDBetaGuide.md
+    )
+  install(FILES ${CMAKE_BINARY_DIR}/MapDBetaGuide.pdf DESTINATION docs)
+endif()
+
 install(TARGETS initdb mapd mapd_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 if(ENABLE_CUDA)
