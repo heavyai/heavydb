@@ -413,6 +413,7 @@ class Executor {
                                 const std::vector<Executor::AggInfo>& agg_infos,
                                 const std::vector<ScanId>& scan_ids,
                                 const std::list<ScanColDescriptor>& scan_cols,
+                                const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                 const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                 const bool hoist_literals,

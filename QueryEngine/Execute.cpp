@@ -2313,6 +2313,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                   agg_infos,
                   {},
                   pseudo_scan_cols,
+                  {},
                   result_plan->get_constquals(),
                   result_plan->get_quals(),
                   hoist_literals,
@@ -2605,13 +2606,15 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
 
   CHECK(static_cast<bool>(scan_plan) != static_cast<bool>(join_plan));
 
+  const auto join_quals = join_plan ? join_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
+
   auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   if (join_plan) {
     collect_simple_quals(simple_quals, outer_plan);
     collect_simple_quals(simple_quals, inner_plan);
   }
 
-  auto quals = scan_plan ? scan_plan->get_quals() : join_plan->get_quals();
+  auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   if (join_plan) {
     collect_quals(quals, outer_plan);
     collect_quals(quals, inner_plan);
@@ -2629,6 +2632,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            agg_infos,
                                            scan_ids,
                                            scan_cols,
+                                           join_quals,
                                            simple_quals,
                                            quals,
                                            hoist_literals,
@@ -2653,6 +2657,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            agg_infos,
                                            scan_ids,
                                            scan_cols,
+                                           join_quals,
                                            simple_quals,
                                            quals,
                                            hoist_literals,
@@ -2688,6 +2693,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            agg_infos,
                                            scan_ids,
                                            scan_cols,
+                                           join_quals,
                                            simple_quals,
                                            quals,
                                            hoist_literals,
@@ -2712,6 +2718,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                            agg_infos,
                                            scan_ids,
                                            scan_cols,
+                                           join_quals,
                                            simple_quals,
                                            quals,
                                            hoist_literals,
@@ -3797,6 +3804,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
                                                   const std::vector<Executor::AggInfo>& agg_infos,
                                                   const std::vector<ScanId>& scan_ids,
                                                   const std::list<ScanColDescriptor>& scan_cols,
+                                                  const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
                                                   const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                                   const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
                                                   const bool hoist_literals,
@@ -3881,6 +3889,12 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
 
   std::vector<Analyzer::Expr*> deferred_quals;
   llvm::Value* filter_lv = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), true);
+
+  for (auto expr : join_quals) {
+    filter_lv =
+        cgen_state_->ir_builder_.CreateAnd(filter_lv, toBool(codegen(expr.get(), true, hoist_literals).front()));
+  }
+
   for (auto expr : simple_quals) {
     if (should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());
