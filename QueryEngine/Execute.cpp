@@ -90,7 +90,7 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
 namespace {
 
 int64_t get_scan_limit(const Planner::Plan* plan, const int64_t limit) {
-  return dynamic_cast<const Planner::Scan*>(plan) && limit ? limit : 0;
+  return (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::Join*>(plan)) ? limit : 0;
 }
 
 }  // namespace
