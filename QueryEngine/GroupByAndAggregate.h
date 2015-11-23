@@ -928,6 +928,7 @@ class GroupByAndAggregate {
                       const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
+                      const size_t small_groups_buffer_entry_count,
                       const int64_t scan_limit,
                       const bool allow_multifrag,
                       const Planner::Sort* sort_plan,
@@ -969,7 +970,9 @@ class GroupByAndAggregate {
     DiamondCodegen* parent_;
   };
 
-  void initQueryMemoryDescriptor(const size_t, const bool sort_on_gpu_hint);
+  void initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count,
+                                 const size_t small_groups_buffer_entry_count,
+                                 const bool sort_on_gpu_hint);
 
   llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&,
                               const ExecutorDeviceType,

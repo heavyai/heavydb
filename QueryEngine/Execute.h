@@ -425,6 +425,7 @@ class Executor {
                                 const bool allow_lazy_fetch,
                                 std::shared_ptr<RowSetMemoryOwner>,
                                 const size_t max_groups_buffer_entry_count,
+                                const size_t small_groups_buffer_entry_count,
                                 const int64_t scan_limit,
                                 const Planner::Sort* sort_plan,
                                 const bool output_columnar_hint,
@@ -712,7 +713,10 @@ class Executor {
   std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> cpu_code_cache_;
   std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>> gpu_code_cache_;
 
+
   const size_t small_groups_buffer_entry_count_{512};
+  const size_t render_small_groups_buffer_entry_count_{2 * 1024 * 1024};
+
   const unsigned block_size_x_;
   const unsigned grid_size_x_;
   const std::string debug_dir_;
