@@ -959,6 +959,9 @@ std::vector<std::string> Detector::get_headers() {
 void Importer::import() {
   set_import_status(import_id, import_status);
   p_file = fopen(file_path.c_str(), "rb");
+  if (!p_file) {
+    throw std::runtime_error("fopen failure for '" + file_path + "': " + strerror(errno));
+  }
   (void)fseek(p_file, 0, SEEK_END);
   file_size = ftell(p_file);
   if (copy_params.threads == 0)
