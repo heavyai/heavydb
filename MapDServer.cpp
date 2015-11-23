@@ -86,7 +86,7 @@ class MapDHandler : virtual public MapDIf {
           initGLFW();
         } catch (const std::exception& e) {
           enable_rendering_ = false;
-          LOG(ERROR) << "Backend rendering disabled due to GLFW failure.";
+          LOG(ERROR) << "Backend rendering disabled: " << e.what();
         }
       }
     } else if (executor_device == "hybrid") {
@@ -1065,6 +1065,7 @@ class MapDHandler : virtual public MapDIf {
   typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
 
   void initGLFW() {
+    throw std::runtime_error("Backend rendering disabled in this build.");
   }
 
   SessionMap::iterator get_session_it(const TSessionId session) {
