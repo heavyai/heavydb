@@ -5,11 +5,7 @@ set(csv_import_source_files
     ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
     )
 
+set_source_files_properties(${mapd_thrift_gen_files} GENERATED)
+
 add_library(CsvImport ${csv_import_source_files})
 target_link_libraries(CsvImport Shared Catalog Chunk DataMgr StringDictionary ${Glog_LIBRARIES} "-ldl")
-
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
-    OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
