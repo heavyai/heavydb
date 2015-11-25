@@ -12,8 +12,10 @@
 
 class RenderAllocator {
  public:
-  RenderAllocator(int8_t* preallocated_ptr, const size_t preallocated_size)
-      : preallocated_ptr_(preallocated_ptr), preallocated_size_(preallocated_size), crt_allocated_bytes_(0) {}
+  RenderAllocator(int8_t* preallocated_ptr,
+                  const size_t preallocated_size,
+                  const unsigned block_size_x,
+                  const unsigned grid_size_x);
 
   CUdeviceptr alloc(const size_t bytes) {
     auto ptr = preallocated_ptr_ + crt_allocated_bytes_;

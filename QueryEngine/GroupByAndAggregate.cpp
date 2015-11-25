@@ -1689,9 +1689,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                        render_allocator);
       if (render_allocator) {
         CHECK_EQ(size_t(0), render_allocator->getAllocatedSize() % 8);
-        const size_t qw_count{render_allocator->getAllocatedSize() / 8};
-        init_render_buffer_on_device(
-            reinterpret_cast<int64_t*>(render_allocator->getBasePtr()), qw_count, block_size_x, grid_size_x);
       }
       if (query_mem_desc_.lazyInitGroups(ExecutorDeviceType::GPU) &&
           query_mem_desc_.hash_type != GroupByColRangeType::MultiCol) {

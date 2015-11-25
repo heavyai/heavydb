@@ -1,9 +1,19 @@
 #include "GpuMemUtils.h"
+#include "GpuInitGroups.h"
 
 #include "../CudaMgr/CudaMgr.h"
 #include "GroupByAndAggregate.h"
 
 #include <glog/logging.h>
+
+RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
+                                 const size_t preallocated_size,
+                                 const unsigned block_size_x,
+                                 const unsigned grid_size_x)
+    : preallocated_ptr_(preallocated_ptr), preallocated_size_(preallocated_size), crt_allocated_bytes_(0) {
+  init_render_buffer_on_device(
+      reinterpret_cast<int64_t*>(preallocated_ptr_), preallocated_size_ / 8, block_size_x, grid_size_x);
+}
 
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
                           const size_t num_bytes,
