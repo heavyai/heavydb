@@ -923,7 +923,7 @@ class MapDHandler : virtual public MapDIf {
                                               _windowPtr);
         const auto results = executor->execute(root_plan,
                                                true,
-                                               ExecutorDeviceType::GPU,
+                                               session_info.get_executor_device_type(),
                                                nvvm_backend_,
                                                ExecutorOptLevel::Default,
                                                allow_multifrag_,

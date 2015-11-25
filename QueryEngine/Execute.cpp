@@ -234,6 +234,9 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       size_t max_groups_buffer_entry_guess{2048};
       std::unique_ptr<RenderAllocator> render_allocator;
       if (root_plan->get_plan_dest() == Planner::RootPlan::kRENDER) {
+        if (device_type != ExecutorDeviceType::GPU) {
+          throw std::runtime_error("Backend rendering is only supported on GPU");
+        }
         throw std::runtime_error("This build doesn't support backend rendering");
       }
       auto rows = executeSelectPlan(root_plan->get_plan(),
