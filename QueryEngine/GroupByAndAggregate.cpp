@@ -279,8 +279,8 @@ void ResultRows::reduce(const ResultRows& other_results,
 
   if (simple_keys_.empty() && multi_keys_.empty() && !in_place_) {
     CHECK(!query_mem_desc.sortOnGpu());
-    CHECK_EQ(1, rowCount());
-    CHECK_EQ(1, other_results.rowCount());
+    CHECK_EQ(size_t(1), rowCount());
+    CHECK_EQ(size_t(1), other_results.rowCount());
     auto& crt_results = target_values_.front();
     const auto& new_results = other_results.target_values_.front();
     for (size_t agg_col_idx = 0; agg_col_idx < colCount(); ++agg_col_idx) {
@@ -528,7 +528,7 @@ void ResultRows::sort(const Planner::Sort* sort_plan, const int64_t top_n) {
     // std::sort will trigger a segmentation fault (or corrupt memory).
     for (const auto order_entry : order_entries) {
       CHECK_GE(order_entry.tle_no, 1);
-      CHECK_LE(order_entry.tle_no, target_list.size());
+      CHECK_LE(size_t(order_entry.tle_no), target_list.size());
       const auto& entry_ti = targets_[order_entry.tle_no - 1].sql_type;
       const auto is_dict = entry_ti.is_string() && entry_ti.get_compression() == kENCODING_DICT;
       const auto& lhs_v = lhs[order_entry.tle_no - 1];
@@ -700,7 +700,7 @@ int64_t lazy_decode(const Analyzer::ColumnVar* col_var, const int8_t* byte_strea
   if (col_var->get_type_info().get_compression() == kENCODING_FIXED) {
     type_bitwidth = col_var->get_type_info().get_comp_param();
   }
-  CHECK_EQ(0, type_bitwidth % 8);
+  CHECK_EQ(size_t(0), type_bitwidth % 8);
   return fixed_width_int_decode_noinline(byte_stream, type_bitwidth / 8, pos);
 }
 
@@ -724,7 +724,7 @@ template <class T>
 std::vector<int64_t> arr_from_buffer(const int8_t* buff, const size_t buff_sz) {
   std::vector<int64_t> result;
   auto buff_elems = reinterpret_cast<const T*>(buff);
-  CHECK_EQ(0, buff_sz % sizeof(T));
+  CHECK_EQ(size_t(0), buff_sz % sizeof(T));
   const size_t num_elems = buff_sz / sizeof(T);
   for (size_t i = 0; i < num_elems; ++i) {
     result.push_back(arr_elem_bitcast(buff_elems[i]));
@@ -741,8 +741,6 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
   if (just_explain_) {
     return explanation_;
   }
-  CHECK_GE(row_idx, 0);
-  CHECK_GE(col_idx, 0);
   const auto& agg_info = targets_[col_idx];
   if (in_place_ || group_by_buffer_) {
     moveToBegin();
@@ -917,7 +915,7 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
               const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(target_expr);
               CHECK(col_var);
               auto col_id = executor_->getLocalColumnId(col_var, false);
-              CHECK_EQ(1, col_buffers.size());
+              CHECK_EQ(size_t(1), col_buffers.size());
               auto& frag_col_buffers = col_buffers.front();
               bool is_end{false};
               if (is_real_string) {
@@ -1146,7 +1144,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
   }
 
   if (query_mem_desc_.keyless_hash) {
-    CHECK_EQ(0, query_mem_desc_.getSmallBufferSizeQuad());
+    CHECK_EQ(size_t(0), query_mem_desc_.getSmallBufferSizeQuad());
   }
 
   std::vector<int64_t> group_by_small_buffer_template;
@@ -1312,7 +1310,7 @@ ResultRows QueryExecutionContext::getRowSet(const std::vector<Analyzer::Expr*>& 
   std::vector<std::pair<ResultRows, std::vector<size_t>>> results_per_sm;
   CHECK_EQ(num_buffers_, group_by_buffers_.size());
   if (device_type_ == ExecutorDeviceType::CPU) {
-    CHECK_EQ(1, num_buffers_);
+    CHECK_EQ(size_t(1), num_buffers_);
     return groupBufferToResults(0, targets, was_auto_device);
   }
   size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
@@ -1374,7 +1372,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
         CHECK_GE(global_col_id, 0);
         CHECK(col_var);
         auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var, false);
-        CHECK_EQ(1, col_buffers_.size());
+        CHECK_EQ(size_t(1), col_buffers_.size());
         auto& frag_col_buffers = col_buffers_.front();
         if (is_real_string) {
           VarlenDatum vd;
@@ -1492,7 +1490,7 @@ void QueryExecutionContext::outputBin(ResultRows& results,
         CHECK_GE(global_col_id, 0);
         CHECK(col_var);
         auto col_id = query_mem_desc_.executor_->getLocalColumnId(col_var, false);
-        CHECK_EQ(1, col_buffers_.size());
+        CHECK_EQ(size_t(1), col_buffers_.size());
         auto& frag_col_buffers = col_buffers_.front();
         val1 = lazy_decode(static_cast<Analyzer::ColumnVar*>(target_expr), frag_col_buffers[col_id], val1);
       }
@@ -1523,7 +1521,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
       const size_t groups_buffer_entry_count, int64_t* group_by_buffer) {
     if (query_mem_desc_.keyless_hash) {
       CHECK(!sort_on_gpu_);
-      CHECK_EQ(1, group_by_col_count);
+      CHECK_EQ(size_t(1), group_by_col_count);
       CHECK_EQ(targets.size(), agg_col_count);
       const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
       if (!query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU) || !was_auto_device) {
@@ -1889,7 +1887,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {
   if (keyless_hash) {
-    CHECK_EQ(1, group_col_widths.size());
+    CHECK_EQ(size_t(1), group_col_widths.size());
     return (interleavedBins(device_type) ? executor_->warpSize() * agg_col_widths.size() : agg_col_widths.size()) *
            entry_count;
   }
@@ -2273,7 +2271,7 @@ bool GroupByAndAggregate::gpuCanHandleOrderEntries(const Planner::Sort* sort_pla
   }
   for (const auto order_entry : order_entries) {
     CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(order_entry.tle_no, target_list.size());
+    CHECK_LE(static_cast<size_t>(order_entry.tle_no), target_list.size());
     const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
     if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
       return false;
@@ -2467,7 +2465,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
     case GroupByColRangeType::OneColKnownRange:
     case GroupByColRangeType::OneColGuessedRange:
     case GroupByColRangeType::Scan: {
-      CHECK_EQ(1, groupby_list.size());
+      CHECK_EQ(size_t(1), groupby_list.size());
       const auto group_expr = groupby_list.front();
       const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr.get(),
                                                                  hoist_literals,
@@ -2567,7 +2565,7 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
   CHECK(agg_plan);
   const auto& groupby_exprs = agg_plan->get_groupby_list();
-  CHECK_GT(groupby_exprs.size(), 1);
+  CHECK_GT(groupby_exprs.size(), size_t(1));
   auto ft = llvm::FunctionType::get(get_int_type(32, LL_CONTEXT),
                                     std::vector<llvm::Type*>{llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0)},
                                     false);
@@ -2676,8 +2674,8 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
       target_lvs.erase(target_lvs.begin());
     }
     if (target_lvs.size() < agg_fn_names.size()) {
-      CHECK_EQ(1, target_lvs.size());
-      CHECK_EQ(2, agg_fn_names.size());
+      CHECK_EQ(size_t(1), target_lvs.size());
+      CHECK_EQ(size_t(2), agg_fn_names.size());
       for (size_t i = 1; i < agg_fn_names.size(); ++i) {
         target_lvs.push_back(target_lvs.front());
       }
@@ -2687,7 +2685,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
     }
     const bool is_simple_count = agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
     if (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() && is_simple_count) {
-      CHECK_EQ(1, agg_fn_names.size());
+      CHECK_EQ(size_t(1), agg_fn_names.size());
       // TODO(alex): use 32-bit wherever possible, avoid casts
       auto acc_i32 = LL_BUILDER.CreateCast(
           llvm::Instruction::CastOps::BitCast,
@@ -2807,7 +2805,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Exp
     if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
       const auto target_lvs =
           executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, hoist_literals);
-      CHECK_EQ(1, target_lvs.size());
+      CHECK_EQ(size_t(1), target_lvs.size());
       CHECK(!agg_expr);
       const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
       const auto i8p_ty = llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);

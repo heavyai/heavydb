@@ -81,7 +81,7 @@ std::pair<CUdeviceptr, CUdeviceptr> create_dev_group_by_buffers(Data_Namespace::
   size_t groups_buffer_size{small_buffers ? query_mem_desc.getSmallBufferSizeBytes()
                                           : query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
 
-  CHECK_GT(groups_buffer_size, 0);
+  CHECK_GT(groups_buffer_size, size_t(0));
 
   const size_t mem_size{coalesced_size(
       query_mem_desc, groups_buffer_size, block_size_x, query_mem_desc.blocksShareMemory() ? 1 : grid_size_x)};

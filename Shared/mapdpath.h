@@ -20,7 +20,7 @@ inline std::string mapd_root_abs_path() {
   auto path_len = readlink("/proc/self/exe", abs_exe_path, sizeof(abs_exe_path));
 #endif
   CHECK_GT(path_len, 0);
-  CHECK_LT(path_len, sizeof(abs_exe_path));
+  CHECK_LT(static_cast<size_t>(path_len), sizeof(abs_exe_path));
   boost::filesystem::path abs_exe_dir(std::string(abs_exe_path, path_len));
   abs_exe_dir.remove_filename();
   const auto mapd_root = abs_exe_dir.parent_path();

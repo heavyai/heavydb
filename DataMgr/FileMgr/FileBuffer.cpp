@@ -246,11 +246,11 @@ void FileBuffer::writeHeader(Page& page, const int pageId, const int epoch, cons
 void FileBuffer::readMetadata(const Page& page) {
   FILE* f = fm_->getFileForFileId(page.fileId);
   fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
-  CHECK_RET(fread((int8_t*)&pageSize_, sizeof(size_t), 1, f));
-  CHECK_RET(fread((int8_t*)&size_, sizeof(size_t), 1, f));
+  fread((int8_t*)&pageSize_, sizeof(size_t), 1, f);
+  fread((int8_t*)&size_, sizeof(size_t), 1, f);
   vector<int> typeData(
       NUM_METADATA);  // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
-  CHECK_RET(fread((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f));
+  fread((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
   int version = typeData[0];
   CHECK(version == METADATA_VERSION);  // add backward compatibility code here
   hasEncoder = static_cast<bool>(typeData[1]);
@@ -275,10 +275,8 @@ void FileBuffer::writeMetadata(const int epoch) {
   writeHeader(page, -1, epoch, true);
   FILE* f = fm_->getFileForFileId(page.fileId);
   fseek(f, page.pageNum * METADATA_PAGE_SIZE + reservedHeaderSize_, SEEK_SET);
-  size_t numBytesWritten = fwrite((int8_t*)&pageSize_, sizeof(size_t), 1, f);
-  CHECK_GE(numBytesWritten, 0);
-  numBytesWritten = fwrite((int8_t*)&size_, sizeof(size_t), 1, f);
-  CHECK_GE(numBytesWritten, 0);
+  fwrite((int8_t*)&pageSize_, sizeof(size_t), 1, f);
+  fwrite((int8_t*)&size_, sizeof(size_t), 1, f);
   vector<int> typeData(
       NUM_METADATA);  // assumes we will encode hasEncoder, bufferType, encodingType, encodingBits all as int
   typeData[0] = METADATA_VERSION;
@@ -293,8 +291,7 @@ void FileBuffer::writeMetadata(const int epoch) {
     typeData[8] = sqlType.get_comp_param();
     typeData[9] = sqlType.get_size();
   }
-  numBytesWritten = fwrite((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
-  CHECK_GE(numBytesWritten, 0);
+  fwrite((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
   if (hasEncoder) {  // redundant
     encoder->writeMetadata(f);
   }

@@ -66,7 +66,7 @@ void run_ddl(const string& input_str) {
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
   CHECK_EQ(parser.parse(input_str, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), 1);
+  CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front();
   unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
@@ -79,7 +79,7 @@ RootPlan* plan_dml(const string& input_str) {
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
   CHECK_EQ(parser.parse(input_str, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), 1);
+  CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front();
   unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
   Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);

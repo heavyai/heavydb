@@ -45,7 +45,7 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
     return;
   }
   // initial capacity must be a power of two for efficient bucket computation
-  CHECK_EQ(0, (initial_capacity & (initial_capacity - 1)));
+  CHECK_EQ(size_t(0), (initial_capacity & (initial_capacity - 1)));
   boost::filesystem::path storage_path(folder);
   offsets_path_ = (storage_path / boost::filesystem::path("DictOffsets")).string();
   const auto payload_path = (storage_path / boost::filesystem::path("DictPayload")).string();

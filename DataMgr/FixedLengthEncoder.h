@@ -61,18 +61,18 @@ class FixedLengthEncoder : public Encoder {
 
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
-    CHECK_RET(fwrite((int8_t*)&numElems, sizeof(size_t), 1, f));
-    CHECK_RET(fwrite((int8_t*)&dataMin, sizeof(T), 1, f));
-    CHECK_RET(fwrite((int8_t*)&dataMax, sizeof(T), 1, f));
-    CHECK_RET(fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f));
+    fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fwrite((int8_t*)&dataMin, sizeof(T), 1, f);
+    fwrite((int8_t*)&dataMax, sizeof(T), 1, f);
+    fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
   }
 
   void readMetadata(FILE* f) {
     // assumes pointer is already in right place
-    CHECK_RET(fread((int8_t*)&numElems, sizeof(size_t), 1, f));
-    CHECK_RET(fread((int8_t*)&dataMin, 1, sizeof(T), f));
-    CHECK_RET(fread((int8_t*)&dataMax, 1, sizeof(T), f));
-    CHECK_RET(fread((int8_t*)&has_nulls, 1, sizeof(bool), f));
+    fread((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fread((int8_t*)&dataMin, 1, sizeof(T), f);
+    fread((int8_t*)&dataMax, 1, sizeof(T), f);
+    fread((int8_t*)&has_nulls, 1, sizeof(bool), f);
   }
   T dataMin;
   T dataMax;

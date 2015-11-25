@@ -1116,7 +1116,7 @@ inline std::vector<int8_t> get_col_byte_widths(const T& col_expr_list) {
         continue;
       }
       const auto col_expr_bitwidth = get_bit_width(agg_info.sql_type);
-      CHECK_EQ(0, col_expr_bitwidth % 8);
+      CHECK_EQ(size_t(0), col_expr_bitwidth % 8);
       col_widths.push_back(col_expr_bitwidth / 8);
       // for average, we'll need to keep the count as well
       if (agg_info.agg_kind == kAVG) {

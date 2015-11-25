@@ -115,20 +115,20 @@ class ArrayNoneEncoder : public Encoder {
 
   void writeMetadata(FILE* f) {
     // assumes pointer is already in right place
-    CHECK_RET(fwrite((int8_t*)&numElems, sizeof(size_t), 1, f));
-    CHECK_RET(fwrite((int8_t*)&elem_min, sizeof(Datum), 1, f));
-    CHECK_RET(fwrite((int8_t*)&elem_max, sizeof(Datum), 1, f));
-    CHECK_RET(fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f));
-    CHECK_RET(fwrite((int8_t*)&initialized, sizeof(bool), 1, f));
+    fwrite((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fwrite((int8_t*)&elem_min, sizeof(Datum), 1, f);
+    fwrite((int8_t*)&elem_max, sizeof(Datum), 1, f);
+    fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
+    fwrite((int8_t*)&initialized, sizeof(bool), 1, f);
   }
 
   void readMetadata(FILE* f) {
     // assumes pointer is already in right place
-    CHECK_RET(fread((int8_t*)&numElems, sizeof(size_t), 1, f));
-    CHECK_RET(fread((int8_t*)&elem_min, sizeof(Datum), 1, f));
-    CHECK_RET(fread((int8_t*)&elem_max, sizeof(Datum), 1, f));
-    CHECK_RET(fread((int8_t*)&has_nulls, sizeof(bool), 1, f));
-    CHECK_RET(fread((int8_t*)&initialized, sizeof(bool), 1, f));
+    fread((int8_t*)&numElems, sizeof(size_t), 1, f);
+    fread((int8_t*)&elem_min, sizeof(Datum), 1, f);
+    fread((int8_t*)&elem_max, sizeof(Datum), 1, f);
+    fread((int8_t*)&has_nulls, sizeof(bool), 1, f);
+    fread((int8_t*)&initialized, sizeof(bool), 1, f);
   }
 
   void copyMetadata(const Encoder* copyFromEncoder) {

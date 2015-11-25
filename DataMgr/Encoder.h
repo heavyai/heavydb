@@ -35,6 +35,4 @@ class Encoder {
   // ChunkMetadata metadataTemplate_;
 };
 
-#define CHECK_RET(x) CHECK_GE(x, 0)
-
 #endif  // Encoder_h

@@ -44,7 +44,7 @@ void run_ddl_statement(const string& create_table_stmt) {
   list<Parser::Stmt*> parse_trees;
   string last_parsed;
   CHECK_EQ(parser.parse(create_table_stmt, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), 1);
+  CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front();
   unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
@@ -423,8 +423,8 @@ TEST(Select, OrderBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     const auto rows = run_multiple_agg("SELECT x, y, z + t, x * y as m FROM test ORDER BY 3 desc LIMIT 5;", dt);
-    CHECK_EQ(rows.rowCount(), std::min(5, static_cast<int>(g_num_rows)));
-    CHECK_EQ(rows.colCount(), 4);
+    CHECK_EQ(rows.rowCount(), std::min(size_t(5), static_cast<size_t>(g_num_rows)));
+    CHECK_EQ(rows.colCount(), size_t(4));
     for (size_t row_idx = 0; row_idx < rows.rowCount(); ++row_idx) {
       ASSERT_TRUE(v<int64_t>(rows.getRowAt(row_idx, 0, true)) == 8 || v<int64_t>(rows.getRowAt(row_idx, 0, true)) == 7);
       ASSERT_EQ(v<int64_t>(rows.getRowAt(row_idx, 1, true)), 43);

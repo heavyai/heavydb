@@ -7,8 +7,6 @@
 #include <utility>
 using namespace std;
 
-#define CHECK_RET(x) CHECK_GE(x, 0)
-
 namespace File_Namespace {
 
 FileInfo::FileInfo(const int fileId, FILE* f, const size_t pageSize, size_t numPages, bool init)
@@ -51,7 +49,7 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
     int headerSize;
     fseek(f, pageNum * pageSize, SEEK_SET);
-    CHECK_RET(fread((int8_t*)(&headerSize), sizeof(int), 1, f));
+    fread((int8_t*)(&headerSize), sizeof(int), 1, f);
     if (headerSize != 0) {
       // headerSize doesn't include headerSize itself
       // We're tying ourself to headers of ints here
@@ -65,11 +63,11 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec, const int fi
       // size_t chunkSize;
       // We don't want to read headerSize in our header - so start
       // reading 4 bytes past it
-      CHECK_RET(fread((int8_t*)(&chunkKey[0]), headerSize - 2 * sizeof(int), 1, f));
+      fread((int8_t*)(&chunkKey[0]), headerSize - 2 * sizeof(int), 1, f);
       // cout << "Chunk key: " << chunkKey[0] << endl;
-      CHECK_RET(fread((int8_t*)(&pageId), sizeof(int), 1, f));
+      fread((int8_t*)(&pageId), sizeof(int), 1, f);
       // cout << "Page id: " << pageId << endl;
-      CHECK_RET(fread((int8_t*)(&versionEpoch), sizeof(int), 1, f));
+      fread((int8_t*)(&versionEpoch), sizeof(int), 1, f);
       // read(f,pageNum*pageSize+sizeof(int),headerSize-2*sizeof(int),(int8_t *)(&chunkKey[0]));
       // read(f,pageNum*pageSize+sizeof(int) + headerSize - 2*sizeof(int),sizeof(int),(int8_t *)(&pageId));
       // read(f,pageNum*pageSize+sizeof(int) + headerSize - sizeof(int),sizeof(int),(int8_t *)(&versionEpoch));

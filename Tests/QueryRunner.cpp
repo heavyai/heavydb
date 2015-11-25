@@ -41,7 +41,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
   std::list<Parser::Stmt*> parse_trees;
   std::string last_parsed;
   CHECK_EQ(parser.parse(query_str, parse_trees, last_parsed), 0);
-  CHECK_EQ(parse_trees.size(), 1);
+  CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front();
   std::unique_ptr<Stmt> stmt_ptr(stmt);  // make sure it's deleted
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);

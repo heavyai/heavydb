@@ -379,7 +379,7 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
   CHECK(lit_buf_size <= static_cast<size_t>(std::numeric_limits<int16_t>::max()));
   int16_t crt_real_str_off = lit_buf_size;
   for (const auto& real_str : real_strings) {
-    CHECK_LE(real_str.size(), std::numeric_limits<int16_t>::max());
+    CHECK_LE(real_str.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));
     lit_buf_size += real_str.size();
   }
   unsigned crt_real_str_idx = 0;
@@ -535,7 +535,7 @@ extern "C" int32_t string_compress(const int64_t ptr_and_len, const int64_t stri
 llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const bool hoist_literals) {
   auto str_lv = codegen(expr->get_arg(), true, hoist_literals);
   if (str_lv.size() != 3) {
-    CHECK_EQ(1, str_lv.size());
+    CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
     cgen_state_->must_run_on_cpu_ = true;
@@ -560,12 +560,12 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
     CHECK(escape_char_expr);
     CHECK(escape_char_expr->get_type_info().is_string());
-    CHECK_EQ(1, escape_char_expr->get_constval().stringval->size());
+    CHECK_EQ(size_t(1), escape_char_expr->get_constval().stringval->size());
     escape_char = (*escape_char_expr->get_constval().stringval)[0];
   }
   auto str_lv = codegen(expr->get_arg(), true, hoist_literals);
   if (str_lv.size() != 3) {
-    CHECK_EQ(1, str_lv.size());
+    CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
     cgen_state_->must_run_on_cpu_ = true;
@@ -573,7 +573,7 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
   auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
   CHECK(like_expr_arg_const);
   auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, hoist_literals);
-  CHECK_EQ(3, like_expr_arg_lvs.size());
+  CHECK_EQ(size_t(3), like_expr_arg_lvs.size());
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
   std::vector<llvm::Value*> str_like_args{str_lv[1], str_lv[2], like_expr_arg_lvs[1], like_expr_arg_lvs[2]};
   std::string fn_name{expr->get_is_ilike() ? "string_ilike" : "string_like"};
@@ -708,7 +708,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     col_id = var->get_varno();
     CHECK_GE(col_id, 1);
     if (var->get_which_row() == Analyzer::Var::kGROUPBY) {
-      CHECK_LE(col_id, cgen_state_->group_by_expr_cache_.size());
+      CHECK_LE(static_cast<size_t>(col_id), cgen_state_->group_by_expr_cache_.size());
       return {cgen_state_->group_by_expr_cache_[col_id - 1]};
     }
   }
@@ -775,7 +775,7 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
                                      const bool fetch_column,
                                      const bool hoist_literals) {
   auto& in_arg_list = cgen_state_->row_func_->getArgumentList();
-  CHECK_GE(in_arg_list.size(), 3);
+  CHECK_GE(in_arg_list.size(), size_t(3));
   size_t arg_idx = 0;
   size_t pos_idx = 0;
   llvm::Value* pos_arg{nullptr};
@@ -879,7 +879,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, ll_int(lit_off));
     if (type_info.is_string() && enc_type != kENCODING_DICT) {
       CHECK_EQ(kENCODING_NONE, type_info.get_compression());
-      CHECK_EQ(4, literalBytes(LiteralValue(std::string(""))));
+      CHECK_EQ(size_t(4), literalBytes(LiteralValue(std::string(""))));
       auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(
           lit_buf_start, llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
       // packed offset + length, 16 bits each
@@ -891,7 +891,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
     }
     llvm::Type* val_ptr_type{nullptr};
     const auto val_bits = get_bit_width(type_info);
-    CHECK_EQ(0, val_bits % 8);
+    CHECK_EQ(size_t(0), val_bits % 8);
     if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_string() ||
         type_info.is_boolean()) {
       val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
@@ -1017,14 +1017,14 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
         case_func_args.push_back(branch_val_lvs.front());
       }
     } else {
-      CHECK_EQ(1, branch_val_lvs.size());
+      CHECK_EQ(size_t(1), branch_val_lvs.size());
       case_func_args.push_back(branch_val_lvs.front());
     }
   }
   CHECK(else_expr);
   auto else_lvs = codegen(else_expr, true, hoist_literals);
   if (is_real_str && dynamic_cast<const Analyzer::Constant*>(else_expr)) {
-    CHECK_EQ(3, else_lvs.size());
+    CHECK_EQ(size_t(3), else_lvs.size());
     case_func_args.push_back(cgen_state_->emitCall("string_pack", {else_lvs[1], else_lvs[2]}));
   } else {
     case_func_args.push_back(else_lvs.front());
@@ -1239,7 +1239,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
       fname += elem_ti.get_type() == kDOUBLE ? "_double" : "_float";
     }
     if (is_real_string) {
-      CHECK_EQ(3, lhs_lvs.size());
+      CHECK_EQ(size_t(3), lhs_lvs.size());
       return cgen_state_->emitExternalCall(
           fname,
           get_int_type(1, cgen_state_->context_),
@@ -1275,12 +1275,12 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
       if (lhs_ti.get_compression() == kENCODING_NONE) {
         // unpack pointer + length if necessary
         if (lhs_lvs.size() != 3) {
-          CHECK_EQ(1, lhs_lvs.size());
+          CHECK_EQ(size_t(1), lhs_lvs.size());
           lhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", {lhs_lvs.front()}));
           lhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", {lhs_lvs.front()}));
         }
         if (rhs_lvs.size() != 3) {
-          CHECK_EQ(1, rhs_lvs.size());
+          CHECK_EQ(size_t(1), rhs_lvs.size());
           rhs_lvs.push_back(cgen_state_->emitCall("extract_str_ptr", {rhs_lvs.front()}));
           rhs_lvs.push_back(cgen_state_->emitCall("extract_str_len", {rhs_lvs.front()}));
         }
@@ -1552,7 +1552,7 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at, const b
   const auto& idx_ti = idx_expr->get_type_info();
   CHECK(idx_ti.is_integer());
   auto idx_lvs = codegen(idx_expr, true, hoist_literals);
-  CHECK_EQ(1, idx_lvs.size());
+  CHECK_EQ(size_t(1), idx_lvs.size());
   auto idx_lv = idx_lvs.front();
   if (idx_ti.get_size() < 8) {
     idx_lv = cgen_state_->ir_builder_.CreateCast(
@@ -1568,7 +1568,7 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at, const b
                                                                        : llvm::Type::getFloatTy(cgen_state_->context_))
                                       : get_int_type(elem_ti.get_size() * 8, cgen_state_->context_);
   const auto arr_lvs = codegen(arr_expr, true, hoist_literals);
-  CHECK_EQ(1, arr_lvs.size());
+  CHECK_EQ(size_t(1), arr_lvs.size());
   return cgen_state_->emitExternalCall(array_at_fname,
                                        ret_ty,
                                        {arr_lvs.front(),
@@ -2337,7 +2337,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                   JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr),
                   allow_loop_joins);
   auto column_buffers = result_columns.getColumnBuffers();
-  CHECK_EQ(column_buffers.size(), in_col_count);
+  CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
       init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_, false, false, nullptr);
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
@@ -3208,7 +3208,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
       const auto fragments = fragments_it->second;
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+      CHECK_LT(static_cast<size_t>(it->second), plan_state_->global_to_local_col_ids_.size());
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
       CHECK_LT(frag_id, fragments->size());
       const auto& fragment = (*fragments)[frag_id];
@@ -3273,7 +3273,7 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
       }
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
       CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(it->second, plan_state_->global_to_local_col_ids_.size());
+      CHECK_LT(static_cast<size_t>(it->second), plan_state_->global_to_local_col_ids_.size());
       local_col_to_frag_pos[it->second] = frag_pos;
     }
     ++frag_pos;
@@ -3382,7 +3382,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
                                          RenderAllocator* render_allocator) {
-  CHECK_GT(group_by_col_count, 0);
+  CHECK_NE(group_by_col_count, size_t(0));
   // TODO(alex):
   // 1. Optimize size (make keys more compact).
   // 2. Resize on overflow.
@@ -3634,7 +3634,7 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(fetch_bb.begin());
   auto& in_arg_list = query_func->getArgumentList();
-  CHECK_GE(in_arg_list.size(), 4);
+  CHECK_GE(in_arg_list.size(), size_t(4));
   auto& byte_stream_arg = in_arg_list.front();
   std::vector<llvm::Value*> col_heads;
   for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
@@ -4615,7 +4615,7 @@ unsigned Executor::blockSize() const {
 llvm::Value* Executor::toDoublePrecision(llvm::Value* val) {
   if (val->getType()->isIntegerTy()) {
     auto val_width = static_cast<llvm::IntegerType*>(val->getType())->getBitWidth();
-    CHECK_LE(val_width, 64);
+    CHECK_LE(val_width, unsigned(64));
     const auto cast_op = val_width == 1 ? llvm::Instruction::CastOps::ZExt : llvm::Instruction::CastOps::SExt;
     return val_width < 64 ? cgen_state_->ir_builder_.CreateCast(cast_op, val, get_int_type(64, cgen_state_->context_))
                           : val;
