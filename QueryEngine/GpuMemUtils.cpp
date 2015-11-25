@@ -11,8 +11,12 @@ RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
                                  const unsigned block_size_x,
                                  const unsigned grid_size_x)
     : preallocated_ptr_(preallocated_ptr), preallocated_size_(preallocated_size), crt_allocated_bytes_(0) {
+#ifdef HAVE_CUDA
   init_render_buffer_on_device(
       reinterpret_cast<int64_t*>(preallocated_ptr_), preallocated_size_ / 8, block_size_x, grid_size_x);
+#else
+  CHECK(false);
+#endif
 }
 
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
