@@ -69,22 +69,23 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const size_t grid_size_x,
                                                 GLFWwindow* prnt_window,
                                                 const size_t render_mem_bytes) {
+  const auto executor_key = std::make_pair(db_id, prnt_window);
   {
     mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
-    auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
+    auto it = executors_.find(executor_key);
     if (it != executors_.end()) {
       return it->second;
     }
   }
   {
     mapd_unique_lock<mapd_shared_mutex> write_lock(executors_cache_mutex_);
-    auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
+    auto it = executors_.find(executor_key);
     if (it != executors_.end()) {
       return it->second;
     }
     auto executor = std::make_shared<Executor>(
         db_id, block_size_x, grid_size_x, debug_dir, debug_file, prnt_window, render_mem_bytes);
-    auto it_ok = executors_.insert(std::make_pair(std::make_tuple(db_id, block_size_x, grid_size_x), executor));
+    auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
     CHECK(it_ok.second);
     return executor;
   }
@@ -4821,6 +4822,6 @@ std::pair<bool, int64_t> Executor::skipFragment(const int table_id,
   return {false, -1};
 }
 
-std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> Executor::executors_;
+std::map<std::pair<int, GLFWwindow*>, std::shared_ptr<Executor>> Executor::executors_;
 std::mutex Executor::execute_mutex_;
 mapd_shared_mutex Executor::executors_cache_mutex_;

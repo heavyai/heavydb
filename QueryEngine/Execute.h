@@ -727,7 +727,7 @@ class Executor {
   const int db_id_;
   const Catalog_Namespace::Catalog* catalog_;
 
-  static std::map<std::tuple<int, size_t, size_t>, std::shared_ptr<Executor>> executors_;
+  static std::map<std::pair<int, GLFWwindow*>, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;
   static mapd_shared_mutex executors_cache_mutex_;
 
