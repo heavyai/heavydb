@@ -239,6 +239,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
         }
         throw std::runtime_error("This build doesn't support backend rendering");
       }
+      const std::string out_of_opengl_mem_err_str{"Not enough OpenGL memory to render the query results"};
       auto rows = executeSelectPlan(root_plan->get_plan(),
                                     root_plan->get_limit(),
                                     root_plan->get_offset(),
@@ -256,7 +257,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     render_allocator.get());
       if (error_code == ERR_OUT_OF_RENDER_MEM) {
         CHECK_EQ(Planner::RootPlan::kRENDER, root_plan->get_plan_dest());
-        throw std::runtime_error("Not enough OpenGL memory to render the query results");
+        throw std::runtime_error(out_of_opengl_mem_err_str);
       }
       if (render_allocator) {
         throw std::runtime_error("This build doesn't support backend rendering");
@@ -3436,7 +3437,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getRowSet(target_exprs, query_exe_context->query_mem_desc_, was_auto_device);
   }
-  if (error_code && (!scan_limit || results.rowCount() < static_cast<size_t>(scan_limit))) {
+  if (error_code && (render_allocator || (!scan_limit || results.rowCount() < static_cast<size_t>(scan_limit)))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
   return 0;
