@@ -144,14 +144,16 @@ class Executor {
            const size_t grid_size_x,
            const std::string& debug_dir,
            const std::string& debug_file,
-           GLFWwindow* prntWindow = nullptr);
+           GLFWwindow* prnt_window,
+           const size_t render_mem_bytes);
 
   static std::shared_ptr<Executor> getExecutor(const int db_id,
                                                const std::string& debug_dir = "",
                                                const std::string& debug_file = "",
                                                const size_t block_size_x = 0,
                                                const size_t grid_size_x = 0,
-                                               GLFWwindow* prntWindow = nullptr);
+                                               GLFWwindow* prntWindow = nullptr,
+                                               const size_t render_mem_bytes = 0);
 
   static void nukeCacheOfExecutors() {
     std::lock_guard<std::mutex> flush_lock(execute_mutex_);  // don't want native code to vanish while executing

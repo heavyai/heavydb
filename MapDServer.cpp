@@ -61,7 +61,8 @@ class MapDHandler : virtual public MapDIf {
               const bool jit_debug,
               const bool read_only,
               const bool allow_loop_joins,
-              const bool enable_rendering)
+              const bool enable_rendering,
+              const size_t render_mem_bytes)
       : base_data_path_(base_data_path),
         nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
@@ -71,7 +72,8 @@ class MapDHandler : virtual public MapDIf {
         read_only_(read_only),
         allow_loop_joins_(allow_loop_joins),
         enable_rendering_(enable_rendering),
-        _windowPtr(nullptr) {
+        window_ptr_(nullptr),
+        render_mem_bytes_(render_mem_bytes) {
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
       executor_device_type_ = ExecutorDeviceType::GPU;
@@ -370,7 +372,8 @@ class MapDHandler : virtual public MapDIf {
                                                   jit_debug_ ? "mapdquery" : "",
                                                   0,
                                                   0,
-                                                  _windowPtr);
+                                                  window_ptr_,
+                                                  render_mem_bytes_);
             ResultRows results({}, nullptr, nullptr, executor_device_type);
             execute_time += measure<>::execution([&]() {
               results = executor->execute(root_plan,
@@ -920,7 +923,8 @@ class MapDHandler : virtual public MapDIf {
                                               jit_debug_ ? "mapdquery" : "",
                                               0,
                                               0,
-                                              _windowPtr);
+                                              window_ptr_,
+                                              render_mem_bytes_);
         const auto results = executor->execute(root_plan,
                                                true,
                                                session_info.get_executor_device_type(),
@@ -1104,7 +1108,8 @@ class MapDHandler : virtual public MapDIf {
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
 
-  GLFWwindow* _windowPtr;
+  GLFWwindow* window_ptr_;
+  const size_t render_mem_bytes_;
 };
 
 void start_server(TThreadedServer& server) {
@@ -1127,6 +1132,7 @@ int main(int argc, char** argv) {
   bool read_only = false;
   bool allow_loop_joins = false;
   bool enable_rendering = true;
+  size_t render_mem_bytes = 500000000;
 
   namespace po = boost::program_options;
 
@@ -1140,7 +1146,8 @@ int main(int argc, char** argv) {
       "read-only", "Enable read-only mode")("disable-rendering", "Disable backend rendering")("cpu", "Run on CPU only")(
       "gpu", "Run on GPUs (Default)")("allow-loop-joins", "Enable loop joins")("hybrid", "Run on both CPU and GPUs")(
       "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
-      "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)");
+      "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)")(
+      "render-mem-bytes", po::value<size_t>(&render_mem_bytes), "Size of memory reserved for rendering (in bytes)");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -1251,7 +1258,8 @@ int main(int argc, char** argv) {
                                                   jit_debug,
                                                   read_only,
                                                   allow_loop_joins,
-                                                  enable_rendering));
+                                                  enable_rendering,
+                                                  render_mem_bytes));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));

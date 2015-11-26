@@ -50,7 +50,8 @@ Executor::Executor(const int db_id,
                    const size_t grid_size_x,
                    const std::string& debug_dir,
                    const std::string& debug_file,
-                   GLFWwindow* prntWindow)
+                   GLFWwindow* prnt_window,
+                   const size_t render_mem_bytes)
     : cgen_state_(new CgenState()),
       is_nested_(false),
       block_size_x_(block_size_x),
@@ -66,7 +67,8 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const std::string& debug_file,
                                                 const size_t block_size_x,
                                                 const size_t grid_size_x,
-                                                GLFWwindow* prntWindow) {
+                                                GLFWwindow* prnt_window,
+                                                const size_t render_mem_bytes) {
   {
     mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
     auto it = executors_.find(std::make_tuple(db_id, block_size_x, grid_size_x));
@@ -80,7 +82,8 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
     if (it != executors_.end()) {
       return it->second;
     }
-    auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file, prntWindow);
+    auto executor = std::make_shared<Executor>(
+        db_id, block_size_x, grid_size_x, debug_dir, debug_file, prnt_window, render_mem_bytes);
     auto it_ok = executors_.insert(std::make_pair(std::make_tuple(db_id, block_size_x, grid_size_x), executor));
     CHECK(it_ok.second);
     return executor;
