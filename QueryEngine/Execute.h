@@ -733,6 +733,7 @@ class Executor {
   static const int32_t ERR_OUT_OF_GPU_MEM{2};
   static const int32_t ERR_OUT_OF_SLOTS{3};
   static const int32_t ERR_UNSUPPORTED_SELF_JOIN{4};
+  static const int32_t ERR_OUT_OF_RENDER_MEM{5};
   friend class GroupByAndAggregate;
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;

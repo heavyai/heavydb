@@ -10,6 +10,11 @@
 #include <utility>
 #include <vector>
 
+class OutOfRenderMemory : public std::runtime_error {
+ public:
+  OutOfRenderMemory() : std::runtime_error("OutOfMemory") {}
+};
+
 class RenderAllocator {
  public:
   RenderAllocator(int8_t* preallocated_ptr,
@@ -20,8 +25,10 @@ class RenderAllocator {
   CUdeviceptr alloc(const size_t bytes) {
     auto ptr = preallocated_ptr_ + crt_allocated_bytes_;
     crt_allocated_bytes_ += bytes;
-    CHECK(crt_allocated_bytes_ <= preallocated_size_);  // TODO(alex): return null instead
-    return reinterpret_cast<CUdeviceptr>(ptr);
+    if (crt_allocated_bytes_ <= preallocated_size_) {
+      return reinterpret_cast<CUdeviceptr>(ptr);
+    }
+    throw OutOfRenderMemory();
   }
 
   size_t getAllocatedSize() const { return crt_allocated_bytes_; }
