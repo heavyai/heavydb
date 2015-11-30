@@ -625,7 +625,7 @@ class MapDHandler : virtual public MapDIf {
   }
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {
-    mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     auto session_it = get_session_it(session);
     const std::string& user_name = session_it->second->get_currentUser().userName;
     switch (mode) {
