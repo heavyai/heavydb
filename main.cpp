@@ -349,6 +349,8 @@ int main(int argc, char* argv[]) {
             {
               auto ms = measure<>::execution([&]() {
                 results_cpu = executor->execute(plan,
+                                                session,
+                                                -1,
                                                 true,
                                                 ExecutorDeviceType::CPU,
                                                 nvvm_backend,
@@ -365,6 +367,8 @@ int main(int argc, char* argv[]) {
               {
                 auto ms = measure<>::execution([&]() {
                   results_gpu = executor->execute(plan,
+                                                  session,
+                                                  -1,
                                                   true,
                                                   ExecutorDeviceType::GPU,
                                                   nvvm_backend,

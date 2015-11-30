@@ -55,8 +55,10 @@ ResultRows run_multiple_agg(const std::string& query_str,
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
   auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId);
 #ifdef HAVE_CUDA
-  return executor->execute(plan, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, true, true);
+  return executor->execute(
+      plan, *session, -1, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, true, true);
 #else
-  return executor->execute(plan, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, false, true);
+  return executor->execute(
+      plan, *session, -1, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, false, true);
 #endif
 }

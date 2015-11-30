@@ -222,6 +222,8 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
  */
 
 ResultRows Executor::execute(const Planner::RootPlan* root_plan,
+                             const Catalog_Namespace::SessionInfo& session,
+                             const int render_widget_id,
                              const bool hoist_literals,
                              const ExecutorDeviceType device_type,
                              const NVVMBackend nvvm_backend,

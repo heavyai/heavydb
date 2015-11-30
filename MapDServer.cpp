@@ -377,6 +377,8 @@ class MapDHandler : virtual public MapDIf {
             ResultRows results({}, nullptr, nullptr, executor_device_type);
             execute_time += measure<>::execution([&]() {
               results = executor->execute(root_plan,
+                                          session_info,
+                                          -1,
                                           true,
                                           executor_device_type,
                                           nvvm_backend_,
@@ -926,6 +928,8 @@ class MapDHandler : virtual public MapDIf {
                                               window_ptr_,
                                               render_mem_bytes_);
         const auto results = executor->execute(root_plan,
+                                               session_info,
+                                               1,  // TODO(alex): de-hardcode widget id
                                                true,
                                                session_info.get_executor_device_type(),
                                                nvvm_backend_,
