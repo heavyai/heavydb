@@ -6,6 +6,6 @@
 
 #include <string>
 
-const Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& catalog);
+Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& catalog);
 
 #endif  // QUERYENGINE_CALCITEADAPTER_H
