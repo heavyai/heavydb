@@ -29,7 +29,7 @@ class DataMgr {
   friend class FileMgr;
 
  public:
-  DataMgr(const std::string& dataDir, const bool useGpus, const int numGpus);
+  DataMgr(const std::string& dataDir, const bool useGpus);
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,

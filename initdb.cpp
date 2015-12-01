@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
   }
 
   try {
-    auto dummy = std::make_shared<Data_Namespace::DataMgr>(data_path, false, 0);
+    auto dummy = std::make_shared<Data_Namespace::DataMgr>(data_path, false);
     Catalog_Namespace::SysCatalog sys_cat(base_path, dummy, true);
     sys_cat.initDB();
   } catch (std::exception& e) {
