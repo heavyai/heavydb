@@ -52,7 +52,7 @@ else()
     list(INSERT Boost_LIBRARIES 0 pthread)
   endif()
 endif()
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
 set(llvm_config_cmd "llvm-config")
 set(llvm_config_inc_arg "--includedir")
 set(llvm_config_ld_arg "--ldflags")
@@ -63,28 +63,7 @@ execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_l
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
 include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/")
-
-set(mapd_thrift_gen_files
-    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.h
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.h
-    )
-
-add_custom_command(
-    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
-    OUTPUT
-    ${mapd_thrift_gen_files}
-    COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
-
-add_custom_target(mapd_thrift_gen ALL
-    DEPENDS ${mapd_thrift_gen_files})
 
 # Google Test and Google Mock
 include_directories(ThirdParty/googletest)
@@ -128,6 +107,12 @@ add_executable(initdb ${initdb_source_files})
 set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
 add_executable(mapd_server ${mapd_server_source_files})
+
+add_custom_command(
+    DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
+    COMMAND ${Thrift_EXECUTABLE}
+    ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
 execute_process(
   COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
