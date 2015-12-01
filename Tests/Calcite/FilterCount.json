@@ -1,0 +1,53 @@
+{
+  "rels": [
+    {
+      "id": "0",
+      "relOp": "LogicalTableScan",
+      "table": [
+        "CATALOG",
+        "mapd",
+        "test"
+      ],
+      "inputs": []
+    },
+    {
+      "id": "1",
+      "relOp": "LogicalFilter",
+      "condition": {
+        "op": ">",
+        "operands": [
+          {
+            "input": 12
+          },
+          5
+        ]
+      }
+    },
+    {
+      "id": "2",
+      "relOp": "LogicalProject",
+      "fields": [
+        "$f0"
+      ],
+      "exprs": [
+        0
+      ]
+    },
+    {
+      "id": "3",
+      "relOp": "LogicalAggregate",
+      "group": [],
+      "aggs": [
+        {
+          "agg": "COUNT",
+          "type": {
+            "type": "BIGINT",
+            "nullable": false
+          },
+          "distinct": false,
+          "operands": []
+        }
+      ]
+    }
+  ]
+}
