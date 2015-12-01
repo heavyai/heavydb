@@ -16,7 +16,7 @@ using namespace std;
 
 namespace {
 
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session(get_session(BASE_PATH));
+std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 NVVMBackend g_nvvm_backend{NVVMBackend::NVPTX};
 
 ResultRows run_multiple_agg(const string& query_str, const ExecutorDeviceType device_type) {
@@ -975,6 +975,8 @@ int main(int argc, char** argv) {
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   if (vm.count("use-nvvm"))
     g_nvvm_backend = NVVMBackend::CUDA;
+
+  g_session.reset(get_session(BASE_PATH));
 
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test;"};
