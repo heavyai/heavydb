@@ -25,10 +25,10 @@ using namespace File_Namespace;
 
 namespace Data_Namespace {
 
-DataMgr::DataMgr(const string& dataDir, const bool useGpus) : dataDir_(dataDir) {
+DataMgr::DataMgr(const string& dataDir, const bool useGpus, const int numGpus) : dataDir_(dataDir) {
   if (useGpus) {
     try {
-      cudaMgr_ = new CudaMgr_Namespace::CudaMgr;
+      cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus);
       hasGpus_ = true;
     } catch (std::runtime_error& error) {
       hasGpus_ = false;

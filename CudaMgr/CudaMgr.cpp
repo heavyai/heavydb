@@ -2,16 +2,21 @@
 #include <stdexcept>
 #include <iostream>
 #include "assert.h"
+#include <algorithm>
+#include <glog/logging.h>
 
 using std::cout;
 using std::endl;
 
 namespace CudaMgr_Namespace {
 
-CudaMgr::CudaMgr() {
+CudaMgr::CudaMgr(const int numGpus) {
 #ifdef HAVE_CUDA
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&deviceCount));
+  if (numGpus > 0) // numGpus <= 0 will just use numbe rof gpus found
+    deviceCount = std::min(deviceCount, numGpus);
+  LOG(INFO) << "Using " << deviceCount << " Gpus." << std::endl;
   fillDeviceProperties();
   createDeviceContexts();
 #endif

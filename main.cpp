@@ -281,7 +281,7 @@ int main(int argc, char* argv[]) {
 #else
   const bool use_gpus{false};
 #endif
-  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(base_path + "/mapd_data/", use_gpus);
+  auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(base_path + "/mapd_data/", use_gpus, -1);
   SysCatalog sys_cat(base_path, dataMgr);
   UserMetadata user;
   if (!sys_cat.getMetadataForUser(user_name, user)) {
