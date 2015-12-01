@@ -69,6 +69,8 @@ include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_SOURCE_DIR
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
+include_directories(ThirdParty/rapidjson)
+
 
 ADD_SUBDIRECTORY    (SqliteConnector)
 ADD_SUBDIRECTORY    (Catalog)
