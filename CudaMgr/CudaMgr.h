@@ -27,7 +27,7 @@ struct DeviceProperties {
 
 class CudaMgr {
  public:
-  CudaMgr();
+  CudaMgr(const int numGpus);
   ~CudaMgr();
   void setContext(const int deviceNum) const;
   void printDeviceProperties() const;

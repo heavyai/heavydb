@@ -63,7 +63,8 @@ class MapDHandler : virtual public MapDIf {
               const bool read_only,
               const bool allow_loop_joins,
               const bool enable_rendering,
-              const size_t render_mem_bytes)
+              const size_t render_mem_bytes,
+              const int num_gpus)
       : base_data_path_(base_data_path),
         nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
@@ -102,7 +103,7 @@ class MapDHandler : virtual public MapDIf {
       cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_));
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_, num_gpus));
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
     import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
@@ -1153,6 +1154,7 @@ int main(int argc, char** argv) {
   bool allow_loop_joins = false;
   bool enable_rendering = true;
   size_t render_mem_bytes = 500000000;
+  int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
 
   namespace po = boost::program_options;
 
@@ -1167,7 +1169,8 @@ int main(int argc, char** argv) {
       "gpu", "Run on GPUs (Default)")("allow-loop-joins", "Enable loop joins")("hybrid", "Run on both CPU and GPUs")(
       "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
       "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)")(
-      "render-mem-bytes", po::value<size_t>(&render_mem_bytes), "Size of memory reserved for rendering (in bytes)");
+      "render-mem-bytes", po::value<size_t>(&render_mem_bytes), "Size of memory reserved for rendering (in bytes)")(
+      "num-gpus", po::value<int>(&num_gpus), "Number of gpus to use");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -1208,6 +1211,9 @@ int main(int argc, char** argv) {
     }
 
     po::notify(vm);
+
+    if (num_gpus == 0)
+      device = "cpu";
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
@@ -1279,7 +1285,8 @@ int main(int argc, char** argv) {
                                                   read_only,
                                                   allow_loop_joins,
                                                   enable_rendering,
-                                                  render_mem_bytes));
+                                                  render_mem_bytes,
+                                                  num_gpus));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));
