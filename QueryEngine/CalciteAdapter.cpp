@@ -6,6 +6,8 @@
 #include <glog/logging.h>
 #include <rapidjson/document.h>
 
+#include <set>
+
 namespace {
 
 std::string get_table_name_from_table_scan(const rapidjson::Value& scan_ra) {
@@ -15,32 +17,47 @@ std::string get_table_name_from_table_scan(const rapidjson::Value& scan_ra) {
   return table_info[2].GetString();
 }
 
-std::shared_ptr<Analyzer::Expr> get_expr_from_node(const rapidjson::Value& expr, const TableDescriptor* td) {
-  if (expr.IsObject() && expr.HasMember("op")) {
-    const auto op_name = expr["op"].GetString();
-    if (op_name == std::string(">")) {
-      const auto& operands = expr["operands"];
-      CHECK(operands.IsArray());
-      CHECK_EQ(unsigned(2), operands.Size());
-      const auto lhs = get_expr_from_node(operands[0], td);
-      const auto rhs = get_expr_from_node(operands[1], td);
-      return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false), false, kGT, kONE, lhs, rhs);
+class CalciteAdapter {
+ public:
+  std::shared_ptr<Analyzer::Expr> getExprFromNode(const rapidjson::Value& expr, const TableDescriptor* td) {
+    if (expr.IsObject() && expr.HasMember("op")) {
+      const auto op_name = expr["op"].GetString();
+      if (op_name == std::string(">")) {
+        const auto& operands = expr["operands"];
+        CHECK(operands.IsArray());
+        CHECK_EQ(unsigned(2), operands.Size());
+        const auto lhs = getExprFromNode(operands[0], td);
+        const auto rhs = getExprFromNode(operands[1], td);
+        return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false), false, kGT, kONE, lhs, rhs);
+      }
+      CHECK(false);
+      return nullptr;
+    }
+    if (expr.IsObject() && expr.HasMember("input")) {
+      const int col_id = expr["input"].GetInt();
+      used_columns_.insert(col_id);
+      return std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo(kINT, false), td->tableId, col_id, 0);
+    }
+    if (expr.IsInt()) {
+      Datum d;
+      d.intval = expr.GetInt();
+      return std::make_shared<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
     }
     CHECK(false);
     return nullptr;
   }
-  if (expr.IsObject() && expr.HasMember("input")) {
-    const int col_id = expr["input"].GetInt();
-    return std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo(kINT, false), td->tableId, col_id, 0);
+
+  std::list<int> getUsedColumnList() const {
+    std::list<int> used_column_list;
+    for (const int used_col : used_columns_) {
+      used_column_list.insert(used_column_list.end(), used_col);
+    }
+    return used_column_list;
   }
-  if (expr.IsInt()) {
-    Datum d;
-    d.intval = expr.GetInt();
-    return std::make_shared<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
-  }
-  CHECK(false);
-  return nullptr;
-}
+
+ private:
+  std::set<int> used_columns_;
+};
 
 }  // namespace
 
@@ -60,9 +77,17 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(td);
   const auto& filter_ra = rels[1];
   CHECK(filter_ra.IsObject());
-  const auto filter_expr = get_expr_from_node(filter_ra["condition"], td);
-  filter_expr->print();
+  CalciteAdapter calcite_adapter;
+  const auto filter_expr = calcite_adapter.getExprFromNode(filter_ra["condition"], td);
+  std::vector<Analyzer::TargetEntry*> t;
+  std::list<std::shared_ptr<Analyzer::Expr>> q;
+  std::list<std::shared_ptr<Analyzer::Expr>> sq{filter_expr};
+  auto scan_plan = new Planner::Scan(t, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
+  auto count_expr = std::make_shared<Analyzer::AggExpr>(SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false);
+  t.push_back(new Analyzer::TargetEntry("", count_expr, false));
+  auto agg_plan = new Planner::AggPlan(t, 0., scan_plan, {});
+  auto root_plan = new Planner::RootPlan(agg_plan, kSELECT, td->tableId, {}, cat, 0, 0);
+  root_plan->print();
   puts("");
-  LOG(FATAL) << td->tableName << " " << td->tableId;
-  return nullptr;
+  return root_plan;
 }
