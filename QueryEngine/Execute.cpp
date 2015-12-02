@@ -263,9 +263,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     render_allocator.get());
       const int user_id = session.get_currentUser().userId;
       if (error_code == ERR_OUT_OF_RENDER_MEM) {
-        CHECK_EQ(Planner::RootPlan::kRENDER, root_plan->get_plan_dest());
-        renderRows(root_plan->get_plan()->get_targetlist(), root_plan->get_render_type(), 0, user_id, render_widget_id);
-        throw std::runtime_error(out_of_opengl_mem_err_str);
+        CHECK(false);
       }
       if (render_allocator) {
         throw std::runtime_error("This build doesn't support backend rendering");
