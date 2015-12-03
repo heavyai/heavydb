@@ -31,12 +31,25 @@ class CalciteAdapter {
         return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false), false, kGT, kONE, lhs, rhs);
       }
       CHECK(false);
-      return nullptr;
     }
     if (expr.IsObject() && expr.HasMember("input")) {
       const int col_id = expr["input"].GetInt();
       used_columns_.insert(col_id);
       return std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo(kINT, false), td->tableId, col_id, 0);
+    }
+    if (expr.IsObject() && expr.HasMember("agg")) {
+      const auto agg_name = expr["agg"].GetString();
+      CHECK_EQ(std::string("COUNT"), agg_name);
+      CHECK(expr.HasMember("type"));
+      const auto type_name = expr["type"]["type"].GetString();
+      SQLTypes agg_type{kNULLT};
+      if (type_name == std::string("BIGINT")) {
+        agg_type = kBIGINT;
+      }
+      const auto is_nullable = expr["type"]["nullable"].GetBool();
+      SQLTypeInfo agg_ti(agg_type, is_nullable);
+      SQLAgg agg_kind{kCOUNT};
+      return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, nullptr, is_nullable);
     }
     if (expr.IsInt()) {
       Datum d;
@@ -83,8 +96,11 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq{filter_expr};
   auto scan_plan = new Planner::Scan(t, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
-  auto count_expr = std::make_shared<Analyzer::AggExpr>(SQLTypeInfo(kBIGINT, false), kCOUNT, nullptr, false);
-  t.push_back(new Analyzer::TargetEntry("", count_expr, false));
+  const auto& agg_nodes = rels[3]["aggs"];
+  for (size_t i = 0; i < agg_nodes.Size(); ++i) {
+    auto agg_expr = calcite_adapter.getExprFromNode(rels[3]["aggs"][i], td);
+    t.push_back(new Analyzer::TargetEntry("", agg_expr, false));
+  }
   auto agg_plan = new Planner::AggPlan(t, 0., scan_plan, {});
   auto root_plan = new Planner::RootPlan(agg_plan, kSELECT, td->tableId, {}, cat, 0, 0);
   root_plan->print();
