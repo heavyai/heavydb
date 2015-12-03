@@ -63,7 +63,7 @@ class CalciteAdapter {
   std::list<int> getUsedColumnList() const {
     std::list<int> used_column_list;
     for (const int used_col : used_columns_) {
-      used_column_list.insert(used_column_list.end(), used_col);
+      used_column_list.push_back(used_col);
     }
     return used_column_list;
   }
@@ -92,16 +92,33 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(filter_ra.IsObject());
   CalciteAdapter calcite_adapter;
   const auto filter_expr = calcite_adapter.getExprFromNode(filter_ra["condition"], td);
-  std::vector<Analyzer::TargetEntry*> t;
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq{filter_expr};
-  auto scan_plan = new Planner::Scan(t, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
+  const auto& project_ra = rels[2];
+  const auto& project_exprs = project_ra["exprs"];
+  CHECK(project_exprs.IsArray());
+  std::vector<Analyzer::TargetEntry*> agg_targets;
+  std::vector<Analyzer::TargetEntry*> scan_targets;
+  for (size_t i = 0; i < project_exprs.Size(); ++i) {
+    const auto proj_expr = calcite_adapter.getExprFromNode(project_exprs[i], td);
+    scan_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
+    agg_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
+  }
+  auto scan_plan =
+      new Planner::Scan(scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
   const auto& agg_nodes = rels[3]["aggs"];
   for (size_t i = 0; i < agg_nodes.Size(); ++i) {
     auto agg_expr = calcite_adapter.getExprFromNode(rels[3]["aggs"][i], td);
-    t.push_back(new Analyzer::TargetEntry("", agg_expr, false));
+    agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
   }
-  auto agg_plan = new Planner::AggPlan(t, 0., scan_plan, {});
+  const auto& group_list = rels[3]["group"];
+  CHECK(group_list.IsArray());
+  std::list<std::shared_ptr<Analyzer::Expr>> group_exprs;
+  for (size_t i = 0; i < group_list.Size(); ++i) {
+    const int target_idx = group_list[i].GetInt();
+    group_exprs.push_back(agg_targets[target_idx]->get_expr()->deep_copy());
+  }
+  auto agg_plan = new Planner::AggPlan(agg_targets, 0., scan_plan, group_exprs);
   auto root_plan = new Planner::RootPlan(agg_plan, kSELECT, td->tableId, {}, cat, 0, 0);
   root_plan->print();
   puts("");

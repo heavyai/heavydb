@@ -17,9 +17,9 @@
         "op": ">",
         "operands": [
           {
-            "input": 12
+            "input": 1
           },
-          5
+          7
         ]
       }
     },
@@ -27,16 +27,20 @@
       "id": "2",
       "relOp": "LogicalProject",
       "fields": [
-        "$f0"
+        "y"
       ],
       "exprs": [
-        0
+        {
+          "input": 2
+        }
       ]
     },
     {
       "id": "3",
       "relOp": "LogicalAggregate",
-      "group": [],
+      "group": [
+        0
+      ],
       "aggs": [
         {
           "agg": "COUNT",
