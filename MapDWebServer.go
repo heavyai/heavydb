@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -10,6 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -26,6 +29,15 @@ var (
 	dataDir      string
 	readOnly     bool
 )
+
+type Server struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Port     int    `json:"port"`
+	Host     string `json:"host"`
+	Database string `json:"database"`
+	Master   bool   `json:"master"`
+}
 
 func getLogName(lvl string) string {
 	n := filepath.Base(os.Args[0])
@@ -143,6 +155,31 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
+func serversHandler(rw http.ResponseWriter, r *http.Request) {
+	var j []byte
+	j, err := ioutil.ReadFile(frontend + "/servers.json")
+	if err != nil {
+		s := Server{}
+		s.Master = true
+		s.Username = "mapd"
+		s.Password = "HyperInteractive"
+		s.Database = "mapd"
+
+		hp := strings.Split(r.Host, ":")
+		s.Host = hp[0]
+		if len(hp) > 1 {
+			s.Port, _ = strconv.Atoi(hp[1])
+		} else if r.URL.Scheme == "https" {
+			s.Port = 443
+		} else {
+			s.Port = 80
+		}
+		ss := []Server{s}
+		j, _ = json.Marshal(ss)
+	}
+	rw.Write(j)
+}
+
 func main() {
 	if _, err := os.Stat(dataDir + "/mapd_log/"); os.IsNotExist(err) {
 		os.MkdirAll(dataDir+"/mapd_log/", 0755)
@@ -165,6 +202,7 @@ func main() {
 	mux.HandleFunc("/images/", imagesHandler)
 	mux.HandleFunc("/downloads/", downloadsHandler)
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
+	mux.HandleFunc("/servers.json", serversHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
 	lmux := handlers.LoggingHandler(io.MultiWriter(os.Stdout, alf), mux)
