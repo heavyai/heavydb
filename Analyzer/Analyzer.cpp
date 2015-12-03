@@ -434,10 +434,14 @@ std::shared_ptr<Analyzer::Expr> Expr::add_cast(const SQLTypeInfo& new_type_info)
     throw std::runtime_error("Cannot CAST from " + type_info.get_type_name() + " to " + new_type_info.get_type_name());
   // @TODO(wei) temporary restriction until executor can support this.
   if (typeid(*this) != typeid(Constant) && new_type_info.is_string() &&
-      new_type_info.get_compression() == kENCODING_DICT && new_type_info.get_comp_param() <= TRANSIENT_DICT_ID)
+      new_type_info.get_compression() == kENCODING_DICT && new_type_info.get_comp_param() <= TRANSIENT_DICT_ID) {
+    if (type_info.is_string() && type_info.get_compression() != kENCODING_DICT) {
+      throw std::runtime_error("Cannot group by string columns which are not dictionary encoded.");
+    }
     throw std::runtime_error(
         "Internal error: Cannot apply transient dictionary encoding to non-literal expression "
         "yet.");
+  }
   return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
 }
 
