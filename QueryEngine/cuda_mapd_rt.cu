@@ -287,6 +287,7 @@ extern "C" __device__ void agg_max_double_skip_val_shared(int64_t* agg, const do
 #undef DEF_SKIP_AGG
 
 #include "ExtractFromTime.cpp"
+#include "DateTruncate.cpp"
 #include "../Utils/ChunkIter.cpp"
 #define EXECUTE_INCLUDE
 #include "ArrayOps.cpp"
