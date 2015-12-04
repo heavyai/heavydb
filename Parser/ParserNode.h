@@ -499,6 +499,22 @@ class ExtractExpr : public Expr {
 };
 
 /*
+ * DATE_TRUNC node
+ */
+class DatetruncExpr : public Expr {
+ public:
+  DatetruncExpr(std::string* f, Expr* a) : field(f), from_arg(a) {}
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  virtual std::string to_string() const;
+
+ private:
+  std::unique_ptr<std::string> field;
+  std::unique_ptr<Expr> from_arg;
+};
+
+/*
  * @type TableRef
  * @brief table reference in FROM clause
  */

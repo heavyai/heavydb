@@ -491,6 +491,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (extract_expr) {
     return {codegen(extract_expr, hoist_literals)};
   }
+  auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
+  if (datetrunc_expr) {
+    return {codegen(datetrunc_expr, hoist_literals)};
+  }
   auto charlength_expr = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
   if (charlength_expr) {
     return {codegen(charlength_expr, hoist_literals)};
@@ -1067,6 +1071,24 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr, const 
     extract_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(extract_fname, get_int_type(64, cgen_state_->context_), extract_args);
+}
+
+llvm::Value* Executor::codegen(const Analyzer::DatetruncExpr* datetrunc_expr, const bool hoist_literals) {
+  auto from_expr = codegen(datetrunc_expr->get_from_expr(), true, hoist_literals).front();
+  const auto& datetrunc_expr_ti = datetrunc_expr->get_from_expr()->get_type_info();
+  CHECK(from_expr->getType()->isIntegerTy(32) || from_expr->getType()->isIntegerTy(64));
+  static_assert(sizeof(time_t) == 4 || sizeof(time_t) == 8, "Unsupported time_t size");
+  if (sizeof(time_t) == 4 && from_expr->getType()->isIntegerTy(64)) {
+    from_expr = cgen_state_->ir_builder_.CreateCast(
+        llvm::Instruction::CastOps::Trunc, from_expr, get_int_type(32, cgen_state_->context_));
+  }
+  std::vector<llvm::Value*> datetrunc_args{ll_int(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
+  std::string datetrunc_fname{"DateTruncate"};
+  if (!datetrunc_expr_ti.get_notnull()) {
+    datetrunc_args.push_back(inlineIntNull(datetrunc_expr_ti));
+    datetrunc_fname += "Nullable";
+  }
+  return cgen_state_->emitExternalCall(datetrunc_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
 }
 
 namespace {
@@ -4366,6 +4388,8 @@ declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_double_shared(i64*, double);
 declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
+declare i64 @DateTruncate(i32, i64);
+declare i64 @DateTruncateNullable(i32, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i1 @array_is_null(i8*, i64);

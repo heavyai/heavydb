@@ -50,6 +50,7 @@ SET (parser_source_files
 	ParserNode.cpp
 	ParserNode.h
 	${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/ExtractFromTime.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
 )
 
 ADD_LIBRARY (Parser ${BisonppOutput} ${FlexppOutput} ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})

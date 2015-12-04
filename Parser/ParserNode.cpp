@@ -544,7 +544,6 @@ std::string CaseExpr::to_string() const {
   str += " END";
   return str;
 }
-
 std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                      Analyzer::Query& query,
                                                      TlistRefType allow_tlist_ref) const {
@@ -597,6 +596,79 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Ca
 std::string ExtractExpr::to_string() const {
   std::string str("EXTRACT(");
   str += *field + " FROM " + from_arg->to_string() + ")";
+  return str;
+}
+/*
+ * year
+ * month
+ * day
+ * hour
+ * minute
+ * second
+ *
+ * millennium
+ * century
+ * decade
+ * milliseconds
+ * microseconds
+ * week
+ */
+std::shared_ptr<Analyzer::Expr> DatetruncExpr::analyze(const Catalog_Namespace::Catalog& catalog,
+                                                       Analyzer::Query& query,
+                                                       TlistRefType allow_tlist_ref) const {
+  DatetruncField fieldno;
+  if (boost::iequals(*field, "year"))
+    fieldno = dtYEAR;
+  else if (boost::iequals(*field, "month"))
+    fieldno = dtMONTH;
+  else if (boost::iequals(*field, "day"))
+    fieldno = dtDAY;
+  else if (boost::iequals(*field, "hour"))
+    fieldno = dtHOUR;
+  else if (boost::iequals(*field, "minute"))
+    fieldno = dtMINUTE;
+  else if (boost::iequals(*field, "second"))
+    fieldno = dtSECOND;
+  else if (boost::iequals(*field, "millennium"))
+    fieldno = dtMILLENNIUM;
+  else if (boost::iequals(*field, "century"))
+    fieldno = dtCENTURY;
+  else if (boost::iequals(*field, "decade"))
+    fieldno = dtDECADE;
+  else if (boost::iequals(*field, "millisecond"))
+    fieldno = dtMILLISECOND;
+  else if (boost::iequals(*field, "microsecond"))
+    fieldno = dtMICROSECOND;
+  else if (boost::iequals(*field, "week"))
+    fieldno = dtWEEK;
+  else
+    throw std::runtime_error("Invalid field in DATE_TRUNC function " + *field);
+  auto from_expr = from_arg->analyze(catalog, query, allow_tlist_ref);
+  if (!from_expr->get_type_info().is_time())
+    throw std::runtime_error("Only TIME, TIMESTAMP and DATE types can be in DATE_TRUNC function.");
+  switch (from_expr->get_type_info().get_type()) {
+    case kTIME:
+      if (fieldno != dtHOUR && fieldno != dtMINUTE && fieldno != dtSECOND)
+        throw std::runtime_error("Cannot DATE_TRUNC " + *field + " from TIME.");
+      break;
+    default:
+      break;
+  }
+  SQLTypeInfo ti(kTIMESTAMP, 0, 0, from_expr->get_type_info().get_notnull());
+  auto c = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
+  if (c != nullptr) {
+    c->set_type_info(ti);
+    Datum d;
+    d.bigintval = DateTruncate(fieldno, c->get_constval().timeval);
+    c->set_constval(d);
+    return c;
+  }
+  return makeExpr<Analyzer::DatetruncExpr>(ti, from_expr->get_contains_agg(), fieldno, from_expr->decompress());
+}
+
+std::string DatetruncExpr::to_string() const {
+  std::string str("DATE_TRUNC(");
+  str += *field + " , " + from_arg->to_string() + ")";
   return str;
 }
 
