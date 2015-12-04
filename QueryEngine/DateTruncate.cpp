@@ -11,34 +11,48 @@ extern "C" __attribute__((noinline))
 __device__
 #endif
   time_t create_epoch(int year) {
-  // 1972 was a leap year
-  int year_offset = (year - 1972);
-  // get basic time not taking leap days into account for 1972
-  time_t time_calc = 2 *365 * SECSPERDAY;
-  time_calc += year_offset * 365 * SECSPERDAY;
-  // now calculate number of leap years
-  // this math doesn't work due to century rule
-  //int leap_years = (year_offset >0) ? (year_offset-1)/4 +1  : year_offset/4;
-  //handle weird century case 
-  int leap_years = 0;
-  int year_count;
-  if (year_offset > 0){
-    for (year_count = 1972 ; year_count < year; year_count+=4  ){
-      if (year_count % 100 == 0 && year_count % 400 != 0)
-        continue;
-      leap_years++;
-      }
-    }
-   else {
-    int year_count;
-    for (year_count = 1968; year_count >= year; year_count-=4  ){
-      if (year_count % 100 == 0 && year_count % 400 != 0)
-        continue;
-      leap_years--;
-    }
+  // Note this is not general purpose 
+  // it has a final assumption that the year being passed can never be a leap 
+  // year 
+  // use 2001 epoch time 31 March as start
+  
+  time_t new_time = EPOCH_ADJUSTMENT_DAYS * SECSPERDAY;
+  bool forward = true;
+  int years_offset = year - ADJUSTED_EPOCH_YEAR;
+  // convert year_offset to positive
+  if (years_offset < 0){
+    forward = false;
+    years_offset = -years_offset;
   }
-  time_calc += leap_years * SECSPERDAY; 
-  return time_calc;
+  // now get number of 400 year cycles in the years_offset;
+  
+  int year400 = years_offset/ 400;
+  int years_remaining = years_offset - (year400 * 400);
+  int year100 = years_remaining/100;
+  years_remaining -= year100 * 100;
+  int year4 = years_remaining / 4;
+  years_remaining -= year4 * 4;
+  
+  // get new date I know the final year will never be a leap year
+  if (forward){
+    new_time += (year400 * DAYS_PER_400_YEARS +
+            year100 * DAYS_PER_100_YEARS +
+            year4 * DAYS_PER_4_YEARS +
+            years_remaining * DAYS_PER_YEAR
+            - DAYS_IN_JANUARY
+            - DAYS_IN_FEBRUARY) * SECSPERDAY;
+  } else {
+    new_time -= (year400 * DAYS_PER_400_YEARS +
+            year100 * DAYS_PER_100_YEARS +
+            year4 * DAYS_PER_4_YEARS +
+            years_remaining * DAYS_PER_YEAR +
+            // one more day for leap year of 2000 when going backward;
+            1
+            + DAYS_IN_JANUARY
+            + DAYS_IN_FEBRUARY) * SECSPERDAY;
+  };
+  
+  return new_time;
 }
 
 /*
