@@ -453,6 +453,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti);
 #endif
 
 #include "../QueryEngine/ExtractFromTime.h"
+#include "../QueryEngine/DateTruncate.h"
 
 typedef int32_t StringOffsetT;
 

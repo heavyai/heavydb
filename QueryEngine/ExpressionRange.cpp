@@ -1,5 +1,6 @@
 #include "ExpressionRange.h"
 #include "ExtractFromTime.h"
+#include "DateTruncate.h"
 #include "GroupByAndAggregate.h"
 #include "Execute.h"
 
@@ -88,6 +89,11 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
 ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
                                    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                    const Executor*);
+
+ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* extract_expr,
+                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const Executor*);
+
 
 ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
                                    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,

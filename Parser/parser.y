@@ -70,7 +70,7 @@ using namespace Parser;
 
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
-%token DATABASE DATE CURSOR DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
+%token DATABASE DATE CURSOR DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
@@ -856,6 +856,12 @@ extract_exp: EXTRACT '(' NAME FROM scalar_exp ')'
     $<nodeval>$ = new ExtractExpr($<stringval>3, dynamic_cast<Expr*>($<nodeval>5));
   }
   ;
+  
+datetrunc_exp: DATE_TRUNC '(' NAME ',' scalar_exp ')'
+  {
+    $<nodeval>$ = new DatetruncExpr($<stringval>3, dynamic_cast<Expr*>($<nodeval>5));
+  }
+  ;  
 
  charlength_exp: 
 	      CHAR_LENGTH '(' scalar_exp ')' { $<nodeval>$ = new CharLengthExpr(dynamic_cast<Expr*>($<nodeval>3),true); }
@@ -888,6 +894,7 @@ scalar_exp:
 	{ $<nodeval>$ = new CastExpr(dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<SQLType*>($<nodeval>5)); }
 	| case_exp { $<nodeval>$ = $<nodeval>1; }
   | extract_exp { $<nodeval>$ = $<nodeval>1; }
+  | datetrunc_exp { $<nodeval>$ = $<nodeval>1; }
   | charlength_exp { $<nodeval>$ = $<nodeval>1; }
   | array_at_exp { $<nodeval>$ = $<nodeval>1; }
 	;
