@@ -140,6 +140,7 @@ time_t DateTruncate(DatetruncField field, time_t timeval) {
       int millennium_start = ((year-1)/1000)*1000+1;
       return create_epoch(millennium_start);
     }
+      return timeval;
     default:
 #ifdef __CUDACC__
       return -1;
