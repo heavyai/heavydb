@@ -4,6 +4,39 @@
 #include <glog/logging.h>
 #endif
 
+#define SECSPERMIN 60L
+#define MINSPERHOUR 60L
+#define HOURSPERDAY 24L
+#define SECSPERHOUR (SECSPERMIN * MINSPERHOUR)
+#define SECSPERDAY (SECSPERHOUR * HOURSPERDAY)
+#define DAYSPERWEEK 7
+#define MONSPERYEAR 12
+
+#define YEAR_BASE 1900
+
+/* move epoch from 01.01.1970 to 01.03.2000 - this is the first day of new
+ * 400-year long cycle, right after additional day of leap year. This adjustment
+ * is required only for date calculation, so instead of modifying time_t value
+ * (which would require 64-bit operations to work correctly) it's enough to
+ * adjust the calculated number of days since epoch. */
+#define EPOCH_ADJUSTMENT_DAYS 11017
+/* year to which the adjustment was made */
+#define ADJUSTED_EPOCH_YEAR 2000
+/* 1st March of 2000 is Wednesday */
+#define ADJUSTED_EPOCH_WDAY 3
+/* there are 97 leap years in 400-year periods. ((400 - 97) * 365 + 97 * 366) */
+#define DAYS_PER_400_YEARS 146097L
+/* there are 24 leap years in 100-year periods. ((100 - 24) * 365 + 24 * 366) */
+#define DAYS_PER_100_YEARS 36524L
+/* there is one leap year every 4 years */
+#define DAYS_PER_4_YEARS (3 * 365 + 366)
+/* number of days in a non-leap year */
+#define DAYS_PER_YEAR 365
+/* number of days in January */
+#define DAYS_IN_JANUARY 31
+/* number of days in non-leap February */
+#define DAYS_IN_FEBRUARY 28
+
 extern "C" __attribute__((noinline))
 
 #ifdef __CUDACC__
