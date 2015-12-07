@@ -261,13 +261,6 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
                                     allow_loop_joins,
                                     render_allocator.get());
-      const int user_id = session.get_currentUser().userId;
-      if (error_code == ERR_OUT_OF_RENDER_MEM) {
-        CHECK(false);
-      }
-      if (render_allocator) {
-        throw std::runtime_error("This build doesn't support backend rendering");
-      }
       if (error_code == ERR_DIV_BY_ZERO) {
         throw std::runtime_error("Division by zero");
       }
