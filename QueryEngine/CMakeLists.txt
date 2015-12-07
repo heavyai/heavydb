@@ -44,6 +44,11 @@ if(ENABLE_CUDA)
     set(MAPD_DEFINITIONS "-DHAVE_CUDA")
 endif()
 
+if(XCODE)
+set(CLANG_SDK_INC "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include/")
+set(CLANG_CRT_INC "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/")
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp
@@ -60,7 +65,11 @@ add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
     COMMAND clang++
-    ARGS -std=c++11 -O3 -c -S -emit-llvm ${MAPD_DEFINITIONS} ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
+    ARGS -std=c++11 -O3 -c -S -emit-llvm
+    ${CLANG_SDK_INC}
+    ${CLANG_CRT_INC}
+    ${MAPD_DEFINITIONS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 

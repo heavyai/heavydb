@@ -138,11 +138,6 @@ class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
 
- private:
-  void markDeadRuntimeFuncs(llvm::Module* module,
-                            const std::vector<llvm::Function*>& roots,
-                            const std::vector<llvm::Function*>& leaves);
-
  public:
   Executor(const int db_id,
            const size_t block_size_x,
@@ -461,11 +456,13 @@ class Executor {
   void nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_info);
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,
+                                           std::unordered_set<llvm::Function*>&,
                                            const bool hoist_literals,
                                            const ExecutorOptLevel,
                                            llvm::Module*);
   std::vector<void*> optimizeAndCodegenGPU(llvm::Function*,
                                            llvm::Function*,
+                                           std::unordered_set<llvm::Function*>&,
                                            const bool hoist_literals,
                                            const NVVMBackend,
                                            const ExecutorOptLevel,
@@ -702,6 +699,10 @@ class Executor {
       return columns_to_fetch_.find(do_not_fetch_column->get_column_id()) == columns_to_fetch_.end();
     }
   };
+
+  std::unordered_set<llvm::Function*> markDeadRuntimeFuncs(llvm::Module& module,
+                                                           const std::vector<llvm::Function*>& roots,
+                                                           const std::vector<llvm::Function*>& leaves);
 
   struct RowSetHolder {
     RowSetHolder(Executor* executor) : executor_(executor) {}
