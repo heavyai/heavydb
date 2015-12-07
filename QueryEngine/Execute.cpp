@@ -13,11 +13,7 @@
 #include "QueryRewrite.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
-#ifdef __x86_64__
-#include <llvm/ExecutionEngine/JIT.h>
-#else
 #include <llvm/ExecutionEngine/MCJIT.h>
-#endif
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
@@ -34,6 +30,7 @@
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+
 #include <nvvm.h>
 
 #include <algorithm>
@@ -42,6 +39,7 @@
 #include <unistd.h>
 #include <map>
 #include <set>
+
 #include <boost/filesystem/path.hpp>
 #include <boost/filesystem/operations.hpp>
 
@@ -1812,6 +1810,34 @@ llvm::Value* Executor::codegenMod(llvm::Value* lhs_lv,
   cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));
   cgen_state_->ir_builder_.SetInsertPoint(mod_ok);
   return ret;
+}
+
+void Executor::markDeadRuntimeFuncs(llvm::Module* module,
+                                    const std::vector<llvm::Function*>& roots,
+                                    const std::vector<llvm::Function*>& leaves) {
+  std::unordered_set<llvm::Function*> live_funcs(roots.begin(), roots.end());
+  live_funcs.insert(leaves.begin(), leaves.end());
+
+  if (auto F = module->getFunction("init_shared_mem_nop"))
+    live_funcs.insert(F);
+  if (auto F = module->getFunction("write_back_nop"))
+    live_funcs.insert(F);
+
+  for (const llvm::Function* F : roots) {
+    for (const llvm::BasicBlock& BB : *F) {
+      for (const llvm::Instruction& I : BB) {
+        if (const llvm::CallInst* CI = llvm::dyn_cast<const llvm::CallInst>(&I)) {
+          live_funcs.insert(CI->getCalledFunction());
+        }
+      }
+    }
+  }
+
+  for (llvm::Function& F : *module) {
+    if (!live_funcs.count(&F) && !F.isDeclaration()) {
+      F.setLinkage(llvm::GlobalValue::InternalLinkage);
+    }
+  }
 }
 
 namespace {
@@ -4062,6 +4088,9 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
              "query_stub" + std::string(hoist_literals ? "_hoisted_literals" : ""),
              multifrag_query_func,
              cgen_state_->module_);
+
+  markDeadRuntimeFuncs(cgen_state_->module_, {query_func, cgen_state_->row_func_}, {multifrag_query_func});
+
   if (serialize_llvm_ir) {
     llvm_ir = serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
   }
@@ -4209,6 +4238,7 @@ void optimizeIR(llvm::Function* query_func,
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
   pass_manager.add(llvm::createInstructionSimplifierPass());
   pass_manager.add(llvm::createInstructionCombiningPass());
+  pass_manager.add(llvm::createGlobalOptimizerPass());
   if (!debug_dir.empty()) {
     CHECK(!debug_file.empty());
     pass_manager.add(llvm::createDebugIRPass(false, false, debug_dir, debug_file));
@@ -4275,6 +4305,7 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   if (!cached_code.empty()) {
     return cached_code;
   }
+
   // run optimizations
   optimizeIR(query_func, module, hoist_literals, opt_level, debug_dir_, debug_file_);
 
@@ -4282,18 +4313,15 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
 
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
-#ifndef __x86_64__
+
   llvm::InitializeAllTargetMCs();
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
-#endif
 
   std::string err_str;
   llvm::EngineBuilder eb(module);
   eb.setErrorStr(&err_str);
-#ifndef __x86_64__
   eb.setUseMCJIT(true);
-#endif
   eb.setEngineKind(llvm::EngineKind::JIT);
   llvm::TargetOptions to;
   to.EnableFastISel = true;
@@ -4307,11 +4335,10 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
     LOG(FATAL) << ss.str();
   }
 
-#ifndef __x86_64__
   execution_engine->finalizeObject();
-#endif
 
   auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
+
   CHECK(native_code);
   addCodeToCache(key, {{std::make_tuple(native_code, execution_engine, nullptr)}}, module, cpu_code_cache_);
 
