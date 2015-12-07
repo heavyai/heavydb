@@ -21,7 +21,7 @@
  * microseconds
  * week
  */
-enum DatetruncField : int32_t {
+enum DatetruncField {
   dtYEAR,
   dtMONTH,
   dtDAY,
