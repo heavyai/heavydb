@@ -2259,7 +2259,9 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        const bool just_explain,
                                        const bool allow_loop_joins) {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(result_plan->get_child_plan());
-  CHECK(agg_plan);
+  if (!agg_plan) {  // TODO(alex)
+    throw std::runtime_error("Query not supported yet, child plan needs to be an aggregate plan.");
+  }
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   auto result_rows = executeAggScanPlan(agg_plan,
                                         0,
