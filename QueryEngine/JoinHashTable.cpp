@@ -65,9 +65,9 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
     const auto source_col_range = getExpressionRange(inner_col, query_infos, nullptr);
-    col_range.has_nulls = source_col_range.has_nulls;
-    col_range.int_max = std::max(source_col_range.int_max, col_range.int_max);
-    col_range.int_min = std::min(source_col_range.int_min, col_range.int_min);
+    col_range = ExpressionRange::makeIntRange(std::min(source_col_range.getIntMin(), col_range.getIntMin()),
+                                              std::max(source_col_range.getIntMax(), col_range.getIntMax()),
+                                              source_col_range.hasNulls());
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(
       new JoinHashTable(qual_bin_oper, inner_col, cat, query_infos, memory_level, col_range, executor));
@@ -143,7 +143,8 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
   auto ab = chunk->get_buffer();
   CHECK(ab->getMemoryPtr());
   const auto col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-  const int32_t hash_entry_count = col_range_.int_max - col_range_.int_min + 1 + (col_range_.has_nulls ? 1 : 0);
+  const int32_t hash_entry_count =
+      col_range_.getIntMax() - col_range_.getIntMin() + 1 + (col_range_.hasNulls() ? 1 : 0);
 #ifdef HAVE_CUDA
   // Even if we join on dictionary encoded strings, the memory on the GPU is still needed
   // once the join hash table has been built on the CPU.
@@ -199,9 +200,9 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
                                                   col_buff,
                                                   num_elements,
                                                   ti.get_size(),
-                                                  col_range_.int_min,
+                                                  col_range_.getIntMin(),
                                                   inline_int_null_val(ti),
-                                                  col_range_.int_max + 1,
+                                                  col_range_.getIntMax() + 1,
                                                   sd_inner,
                                                   sd_outer,
                                                   thread_idx,
@@ -247,9 +248,9 @@ int JoinHashTable::initHashTableForDevice(const std::shared_ptr<Chunk_NS::Chunk>
                                   col_buff,
                                   num_elements,
                                   ti.get_size(),
-                                  col_range_.int_min,
+                                  col_range_.getIntMin(),
                                   inline_int_null_val(ti),
-                                  col_range_.int_max + 1,
+                                  col_range_.getIntMax() + 1,
                                   executor_->blockSize(),
                                   executor_->gridSize());
     copy_from_gpu(&data_mgr, &err, dev_err_buff, sizeof(err), device_id);
@@ -273,13 +274,13 @@ llvm::Value* JoinHashTable::codegenSlot(Executor* executor, const bool hoist_lit
   auto& hash_ptr = executor->cgen_state_->row_func_->getArgumentList().back();
   std::vector<llvm::Value*> hash_join_idx_args{&hash_ptr,
                                                executor->toDoublePrecision(key_lvs.front()),
-                                               executor->ll_int(col_range_.int_min),
-                                               executor->ll_int(col_range_.int_max)};
-  if (col_range_.has_nulls) {
+                                               executor->ll_int(col_range_.getIntMin()),
+                                               executor->ll_int(col_range_.getIntMax())};
+  if (col_range_.hasNulls()) {
     hash_join_idx_args.push_back(executor->ll_int(inline_int_null_val(key_col->get_type_info())));
   }
   std::string fname{"hash_join_idx"};
-  if (col_range_.has_nulls) {
+  if (col_range_.hasNulls()) {
     fname += "_nullable";
   }
   const auto slot_lv = executor->cgen_state_->emitCall(fname, hash_join_idx_args);

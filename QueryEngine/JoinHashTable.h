@@ -55,7 +55,7 @@ class JoinHashTable {
         memory_level_(memory_level),
         col_range_(col_range),
         executor_(executor) {
-    CHECK(col_range.type == ExpressionRangeType::Integer);
+    CHECK(col_range.getType() == ExpressionRangeType::Integer);
   }
 
   int reify(const int device_count);

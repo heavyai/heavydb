@@ -59,11 +59,11 @@ void QueryRewriter::rewriteConstrainedByIn() {
     ++groupby_idx;
     if (*group_expr == *in_vals->get_arg()) {
       const auto expr_range = getExpressionRange(group_expr.get(), query_infos_, executor_);
-      if (expr_range.type != ExpressionRangeType::Integer) {
+      if (expr_range.getType() != ExpressionRangeType::Integer) {
         continue;
       }
       const size_t use_constraint_thresh{10};
-      const size_t range_sz = expr_range.int_max - expr_range.int_min + 1;
+      const size_t range_sz = expr_range.getIntMax() - expr_range.getIntMin() + 1;
       if (range_sz <= in_vals->get_value_list().size() * use_constraint_thresh) {
         continue;
       }

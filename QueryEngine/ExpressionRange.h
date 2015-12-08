@@ -28,16 +28,39 @@ T getMax(const ExpressionRange& other);
 
 class ExpressionRange {
  public:
-  ExpressionRangeType type;
-  bool has_nulls;
-  union {
-    int64_t int_min;
-    double fp_min;
-  };
-  union {
-    int64_t int_max;
-    double fp_max;
-  };
+  static ExpressionRange makeIntRange(const int64_t int_min, const int64_t int_max, const bool has_nulls) {
+    return ExpressionRange(int_min, int_max, has_nulls);
+  }
+
+  static ExpressionRange makeFpRange(const double fp_min, const double fp_max, const bool has_nulls) {
+    return ExpressionRange(fp_min, fp_max, has_nulls);
+  }
+
+  static ExpressionRange makeInvalidRange() { return ExpressionRange(); }
+
+  int64_t getIntMin() const {
+    CHECK(ExpressionRangeType::Integer == type);
+    return int_min;
+  }
+
+  int64_t getIntMax() const {
+    CHECK(ExpressionRangeType::Integer == type);
+    return int_max;
+  }
+
+  double getFpMin() const {
+    CHECK(ExpressionRangeType::FloatingPoint == type);
+    return fp_min;
+  }
+
+  double getFpMax() const {
+    CHECK(ExpressionRangeType::FloatingPoint == type);
+    return fp_max;
+  }
+
+  ExpressionRangeType getType() const { return type; }
+
+  bool hasNulls() const { return has_nulls; }
 
   ExpressionRange operator+(const ExpressionRange& other) const;
   ExpressionRange operator-(const ExpressionRange& other) const;
@@ -46,10 +69,18 @@ class ExpressionRange {
   ExpressionRange operator||(const ExpressionRange& other) const;
 
  private:
+  ExpressionRange(const int64_t int_min_in, const int64_t int_max_in, const bool has_nulls_in)
+      : type(ExpressionRangeType::Integer), has_nulls(has_nulls_in), int_min(int_min_in), int_max(int_max_in) {}
+
+  ExpressionRange(const double fp_min_in, const double fp_max_in, const bool has_nulls_in)
+      : type(ExpressionRangeType::FloatingPoint), has_nulls(has_nulls_in), fp_min(fp_min_in), fp_max(fp_max_in) {}
+
+  ExpressionRange() : type(ExpressionRangeType::Invalid), has_nulls(false) {}
+
   template <class T, class BinOp>
   ExpressionRange binOp(const ExpressionRange& other, const BinOp& bin_op) const {
     if (type == ExpressionRangeType::Invalid || other.type == ExpressionRangeType::Invalid) {
-      return {ExpressionRangeType::Invalid, false, {0}, {0}};
+      return ExpressionRange::makeInvalidRange();
     }
     try {
       std::vector<T> limits{bin_op(getMin<T>(*this), getMin<T>(other)),
@@ -77,29 +108,40 @@ class ExpressionRange {
       }
       return result;
     } catch (...) {
-      return {ExpressionRangeType::Invalid, false, {0}, {0}};
+      return ExpressionRange::makeInvalidRange();
     }
   }
+
+  ExpressionRangeType type;
+  bool has_nulls;
+  union {
+    int64_t int_min;
+    double fp_min;
+  };
+  union {
+    int64_t int_max;
+    double fp_max;
+  };
 };
 
 template <>
 inline int64_t getMin<int64_t>(const ExpressionRange& e) {
-  return e.int_min;
+  return e.getIntMin();
 }
 
 template <>
 inline double getMin<double>(const ExpressionRange& e) {
-  return e.fp_min;
+  return e.getFpMin();
 }
 
 template <>
 inline int64_t getMax<int64_t>(const ExpressionRange& e) {
-  return e.int_max;
+  return e.getIntMax();
 }
 
 template <>
 inline double getMax<double>(const ExpressionRange& e) {
-  return e.fp_max;
+  return e.getFpMax();
 }
 
 class Executor;

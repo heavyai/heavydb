@@ -1975,9 +1975,10 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
 
   const auto expr_range = getExpressionRange(expr, query_infos_, executor_);
-  switch (expr_range.type) {
+  switch (expr_range.getType()) {
     case ExpressionRangeType::Integer:
-      return {GroupByColRangeType::OneColKnownRange, expr_range.int_min, expr_range.int_max, expr_range.has_nulls};
+      return {
+          GroupByColRangeType::OneColKnownRange, expr_range.getIntMin(), expr_range.getIntMax(), expr_range.hasNulls()};
     case ExpressionRangeType::Invalid:
     case ExpressionRangeType::FloatingPoint:
       return {GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, false};
