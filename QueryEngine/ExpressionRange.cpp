@@ -1,5 +1,6 @@
 #include "ExpressionRange.h"
 #include "ExtractFromTime.h"
+#include "DateTruncate.h"
 #include "GroupByAndAggregate.h"
 #include "Execute.h"
 
@@ -89,6 +90,10 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
                                    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                    const Executor*);
 
+ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
+                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const Executor* executor);
+
 ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
                                    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                    const Executor* executor) {
@@ -119,6 +124,10 @@ ExpressionRange getExpressionRange(const Analyzer::Expr* expr,
   auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
   if (extract_expr) {
     return getExpressionRange(extract_expr, query_infos, executor);
+  }
+  auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
+  if (datetrunc_expr) {
+    return getExpressionRange(datetrunc_expr, query_infos, executor);
   }
   return ExpressionRange::makeInvalidRange();
 }
@@ -395,4 +404,16 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
       CHECK(false);
   }
   return ExpressionRange::makeInvalidRange();
+}
+
+ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
+                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                   const Executor* executor) {
+  const auto arg_range = getExpressionRange(datetrunc_expr->get_from_expr(), query_infos, executor);
+  if (arg_range.getType() == ExpressionRangeType::Invalid) {
+    return ExpressionRange::makeInvalidRange();
+  }
+  const int64_t min_ts = DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMin());
+  const int64_t max_ts = DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMax());
+  return ExpressionRange::makeIntRange(min_ts, max_ts, arg_range.hasNulls());
 }
