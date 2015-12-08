@@ -245,7 +245,6 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
         }
         throw std::runtime_error("This build doesn't support backend rendering");
       }
-      const std::string out_of_opengl_mem_err_str{"Not enough OpenGL memory to render the query results"};
       auto rows = executeSelectPlan(root_plan->get_plan(),
                                     root_plan->get_limit(),
                                     root_plan->get_offset(),
