@@ -28,8 +28,11 @@ T getMax(const ExpressionRange& other);
 
 class ExpressionRange {
  public:
-  static ExpressionRange makeIntRange(const int64_t int_min, const int64_t int_max, const bool has_nulls) {
-    return ExpressionRange(int_min, int_max, has_nulls);
+  static ExpressionRange makeIntRange(const int64_t int_min,
+                                      const int64_t int_max,
+                                      const int64_t bucket,
+                                      const bool has_nulls) {
+    return ExpressionRange(int_min, int_max, bucket, has_nulls);
   }
 
   static ExpressionRange makeFpRange(const double fp_min, const double fp_max, const bool has_nulls) {
@@ -60,6 +63,8 @@ class ExpressionRange {
 
   ExpressionRangeType getType() const { return type; }
 
+  int64_t getBucket() const { return bucket_; }
+
   bool hasNulls() const { return has_nulls; }
 
   ExpressionRange operator+(const ExpressionRange& other) const;
@@ -69,13 +74,21 @@ class ExpressionRange {
   ExpressionRange operator||(const ExpressionRange& other) const;
 
  private:
-  ExpressionRange(const int64_t int_min_in, const int64_t int_max_in, const bool has_nulls_in)
-      : type(ExpressionRangeType::Integer), has_nulls(has_nulls_in), int_min(int_min_in), int_max(int_max_in) {}
+  ExpressionRange(const int64_t int_min_in, const int64_t int_max_in, const int64_t bucket, const bool has_nulls_in)
+      : type(ExpressionRangeType::Integer),
+        has_nulls(has_nulls_in),
+        int_min(int_min_in),
+        int_max(int_max_in),
+        bucket_(bucket) {}
 
   ExpressionRange(const double fp_min_in, const double fp_max_in, const bool has_nulls_in)
-      : type(ExpressionRangeType::FloatingPoint), has_nulls(has_nulls_in), fp_min(fp_min_in), fp_max(fp_max_in) {}
+      : type(ExpressionRangeType::FloatingPoint),
+        has_nulls(has_nulls_in),
+        fp_min(fp_min_in),
+        fp_max(fp_max_in),
+        bucket_(0) {}
 
-  ExpressionRange() : type(ExpressionRangeType::Invalid), has_nulls(false) {}
+  ExpressionRange() : type(ExpressionRangeType::Invalid), has_nulls(false), bucket_(0) {}
 
   template <class T, class BinOp>
   ExpressionRange binOp(const ExpressionRange& other, const BinOp& bin_op) const {
@@ -122,6 +135,7 @@ class ExpressionRange {
     int64_t int_max;
     double fp_max;
   };
+  int64_t bucket_;
 };
 
 template <>

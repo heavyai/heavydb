@@ -67,6 +67,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const auto source_col_range = getExpressionRange(inner_col, query_infos, nullptr);
     col_range = ExpressionRange::makeIntRange(std::min(source_col_range.getIntMin(), col_range.getIntMin()),
                                               std::max(source_col_range.getIntMax(), col_range.getIntMax()),
+                                              0,
                                               source_col_range.hasNulls());
   }
   auto join_hash_table = std::shared_ptr<JoinHashTable>(

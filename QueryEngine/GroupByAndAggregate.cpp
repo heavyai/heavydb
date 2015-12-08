@@ -1939,7 +1939,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan_);
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
   if (!agg_plan) {
-    return {GroupByColRangeType::Scan, 0, guessed_range_max, false};
+    return {GroupByColRangeType::Scan, 0, guessed_range_max, 0, false};
   }
   const auto& groupby_exprs = agg_plan->get_groupby_list();
   if (groupby_exprs.size() != 1) {
@@ -1949,7 +1949,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
       for (const auto groupby_expr : groupby_exprs) {
         auto col_range_info = getExprRangeInfo(groupby_expr.get(), query_infos_);
         if (col_range_info.hash_type_ != GroupByColRangeType::OneColKnownRange) {
-          return {GroupByColRangeType::MultiCol, 0, 0, false};
+          return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
         }
         auto crt_col_cardinality = col_range_info.max - col_range_info.min + 1 + (col_range_info.has_nulls ? 1 : 0);
         CHECK_GT(crt_col_cardinality, 0);
@@ -1959,11 +1959,11 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
         }
       }
       if (cardinality > 10000000) {  // more than 10M groups is a lot
-        return {GroupByColRangeType::MultiCol, 0, 0, false};
+        return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
       }
-      return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), has_nulls};
+      return {GroupByColRangeType::MultiColPerfectHash, 0, int64_t(cardinality), 0, has_nulls};
     } catch (...) {  // overflow when computing cardinality
-      return {GroupByColRangeType::MultiCol, 0, 0, false};
+      return {GroupByColRangeType::MultiCol, 0, 0, 0, false};
     }
   }
   return getExprRangeInfo(groupby_exprs.front().get(), query_infos_);
@@ -1977,16 +1977,19 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(
   const auto expr_range = getExpressionRange(expr, query_infos_, executor_);
   switch (expr_range.getType()) {
     case ExpressionRangeType::Integer:
-      return {
-          GroupByColRangeType::OneColKnownRange, expr_range.getIntMin(), expr_range.getIntMax(), expr_range.hasNulls()};
+      return {GroupByColRangeType::OneColKnownRange,
+              expr_range.getIntMin(),
+              expr_range.getIntMax(),
+              expr_range.getBucket(),
+              expr_range.hasNulls()};
     case ExpressionRangeType::Invalid:
     case ExpressionRangeType::FloatingPoint:
-      return {GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, false};
+      return {GroupByColRangeType::OneColGuessedRange, 0, guessed_range_max, 0, false};
     default:
       CHECK(false);
   }
   CHECK(false);
-  return {GroupByColRangeType::Scan, 0, 0, false};
+  return {GroupByColRangeType::Scan, 0, 0, 0, false};
 }
 
 #define LL_CONTEXT executor_->cgen_state_->context_
@@ -2135,6 +2138,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                        0,
                        0,
                        0,
+                       0,
                        false,
                        GroupByMemSharing::Private,
                        count_distinct_descriptors,
@@ -2163,6 +2167,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            scan_limit_ ? static_cast<size_t>(scan_limit_) : small_groups_buffer_entry_count,
                            col_range_info.min,
                            col_range_info.max,
+                           0,
                            col_range_info.has_nulls,
                            GroupByMemSharing::Shared,
                            count_distinct_descriptors,
@@ -2205,6 +2210,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            0,
                            col_range_info.min,
                            col_range_info.max,
+                           col_range_info.bucket,
                            col_range_info.has_nulls,
                            GroupByMemSharing::Shared,
                            count_distinct_descriptors,
@@ -2221,6 +2227,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          group_col_widths,
                          agg_col_widths,
                          max_groups_buffer_entry_count,
+                         0,
                          0,
                          0,
                          0,
@@ -2242,6 +2249,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          0,
                          col_range_info.min,
                          col_range_info.max,
+                         0,
                          col_range_info.has_nulls,
                          GroupByMemSharing::Shared,
                          count_distinct_descriptors,

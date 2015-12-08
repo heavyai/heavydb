@@ -89,6 +89,7 @@ struct QueryMemoryDescriptor {
   size_t entry_count_small;  // the number of entries in the small buffer
   int64_t min_val;           // meaningful for OneColKnownRange, MultiColPerfectHash only
   int64_t max_val;
+  int64_t bucket;
   bool has_nulls;
   GroupByMemSharing sharing;  // meaningful for GPU only
   CountDistinctDescriptors count_distinct_descriptors_;
@@ -949,6 +950,7 @@ class GroupByAndAggregate {
     const GroupByColRangeType hash_type_;
     const int64_t min;
     const int64_t max;
+    const int64_t bucket;
     const bool has_nulls;
   };
 

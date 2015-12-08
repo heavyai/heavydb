@@ -161,21 +161,21 @@ ExpressionRange getExpressionRange(const Analyzer::Constant* constant_expr) {
   switch (constant_type) {
     case kSMALLINT: {
       const int64_t v = datum.smallintval;
-      return ExpressionRange::makeIntRange(v, v, false);
+      return ExpressionRange::makeIntRange(v, v, 0, false);
     }
     case kINT: {
       const int64_t v = datum.intval;
-      return ExpressionRange::makeIntRange(v, v, false);
+      return ExpressionRange::makeIntRange(v, v, 0, false);
     }
     case kBIGINT: {
       const int64_t v = datum.bigintval;
-      return ExpressionRange::makeIntRange(v, v, false);
+      return ExpressionRange::makeIntRange(v, v, 0, false);
     }
     case kTIME:
     case kTIMESTAMP:
     case kDATE: {
       const int64_t v = datum.timeval;
-      return ExpressionRange::makeIntRange(v, v, false);
+      return ExpressionRange::makeIntRange(v, v, 0, false);
     }
     case kFLOAT:
     case kDOUBLE: {
@@ -281,7 +281,7 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
       const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
       CHECK_GE(max_val, min_val);
-      return ExpressionRange::makeIntRange(min_val, max_val, has_nulls);
+      return ExpressionRange::makeIntRange(min_val, max_val, 0, has_nulls);
     }
     default:
       break;
@@ -295,7 +295,7 @@ ExpressionRange getExpressionRange(const Analyzer::LikeExpr* like_expr) {
   const auto& ti = like_expr->get_type_info();
   CHECK(ti.is_boolean());
   const auto& arg_ti = like_expr->get_arg()->get_type_info();
-  return ExpressionRange::makeIntRange(arg_ti.get_notnull() ? 0 : inline_int_null_val(ti), 1, false);
+  return ExpressionRange::makeIntRange(arg_ti.get_notnull() ? 0 : inline_int_null_val(ti), 1, 0, false);
 }
 
 ExpressionRange getExpressionRange(const Analyzer::CaseExpr* case_expr,
@@ -335,7 +335,7 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
     CHECK(const_operand);
     CHECK(const_operand->get_constval().stringval);
     const int64_t v = sd->get(*const_operand->get_constval().stringval);
-    return ExpressionRange::makeIntRange(v, v, false);
+    return ExpressionRange::makeIntRange(v, v, 0, false);
   }
   const auto arg_range = getExpressionRange(u_expr->get_operand(), query_infos, executor);
   switch (arg_range.getType()) {
@@ -345,7 +345,7 @@ ExpressionRange getExpressionRange(const Analyzer::UOper* u_expr,
         return arg_range;
       }
       if (ti.is_integer()) {
-        return ExpressionRange::makeIntRange(arg_range.getFpMin(), arg_range.getFpMax(), arg_range.hasNulls());
+        return ExpressionRange::makeIntRange(arg_range.getFpMin(), arg_range.getFpMax(), 0, arg_range.hasNulls());
       }
       break;
     }
@@ -380,31 +380,62 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
       CHECK(arg_range.getType() == ExpressionRangeType::Integer);
       const int64_t year_range_min = ExtractFromTime(kYEAR, arg_range.getIntMin());
       const int64_t year_range_max = ExtractFromTime(kYEAR, arg_range.getIntMax());
-      return ExpressionRange::makeIntRange(year_range_min, year_range_max, arg_range.hasNulls());
+      return ExpressionRange::makeIntRange(year_range_min, year_range_max, 0, arg_range.hasNulls());
     }
     case kEPOCH:
       return arg_range;
     case kMONTH:
-      return ExpressionRange::makeIntRange(1, 12, has_nulls);
+      return ExpressionRange::makeIntRange(1, 12, 0, has_nulls);
     case kDAY:
-      return ExpressionRange::makeIntRange(1, 31, has_nulls);
+      return ExpressionRange::makeIntRange(1, 31, 0, has_nulls);
     case kHOUR:
-      return ExpressionRange::makeIntRange(0, 23, has_nulls);
+      return ExpressionRange::makeIntRange(0, 23, 0, has_nulls);
     case kMINUTE:
-      return ExpressionRange::makeIntRange(0, 59, has_nulls);
+      return ExpressionRange::makeIntRange(0, 59, 0, has_nulls);
     case kSECOND:
-      return ExpressionRange::makeIntRange(0, 60, has_nulls);
+      return ExpressionRange::makeIntRange(0, 60, 0, has_nulls);
     case kDOW:
-      return ExpressionRange::makeIntRange(0, 6, has_nulls);
+      return ExpressionRange::makeIntRange(0, 6, 0, has_nulls);
     case kISODOW:
-      return ExpressionRange::makeIntRange(1, 7, has_nulls);
+      return ExpressionRange::makeIntRange(1, 7, 0, has_nulls);
     case kDOY:
-      return ExpressionRange::makeIntRange(1, 366, has_nulls);
+      return ExpressionRange::makeIntRange(1, 366, 0, has_nulls);
     default:
       CHECK(false);
   }
   return ExpressionRange::makeInvalidRange();
 }
+
+namespace {
+
+int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) {
+  const int64_t day_seconds{24 * 3600};
+  const int64_t year_days{365};
+  switch (datetrunc_field) {
+    case dtYEAR:
+      return year_days * day_seconds;
+    case dtMONTH:
+      return 28 * day_seconds;
+    case dtDAY:
+      return day_seconds;
+    case dtHOUR:
+      return 3600;
+    case dtMINUTE:
+      return 60;
+    case dtMILLENNIUM:
+      return 1000 * year_days * day_seconds;
+    case dtCENTURY:
+      return 100 * year_days * day_seconds;
+    case dtDECADE:
+      return 10 * year_days * day_seconds;
+    case dtWEEK:
+      return 7 * day_seconds;
+    default:
+      return 0;
+  }
+}
+
+}  // namespace
 
 ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr,
                                    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
@@ -415,5 +446,6 @@ ExpressionRange getExpressionRange(const Analyzer::DatetruncExpr* datetrunc_expr
   }
   const int64_t min_ts = DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMin());
   const int64_t max_ts = DateTruncate(datetrunc_expr->get_field(), arg_range.getIntMax());
-  return ExpressionRange::makeIntRange(min_ts, max_ts, arg_range.hasNulls());
+  const int64_t bucket = get_conservative_datetrunc_bucket(datetrunc_expr->get_field());
+  return ExpressionRange::makeIntRange(min_ts, max_ts, bucket, arg_range.hasNulls());
 }
