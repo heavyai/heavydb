@@ -635,78 +635,78 @@ TEST(Select, Time) {
  */
     ASSERT_EQ(1325376000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(year, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(year, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1335830400L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(month, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(month, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1336435200L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(day, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(day, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1336507200L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(hour, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(hour, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1336508112L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(second, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(second, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(978307200L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(millennium, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(millennium, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(978307200L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(century, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(century, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1293840000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(decade, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(decade, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1336508112L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(millisecond, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(millisecond, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1336508112L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(microsecond, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(microsecond, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(1336262400L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(week, CAST('2012-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(week, CAST('2012-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
 
     ASSERT_EQ(-2114380800L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(year, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(year, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2104012800L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(month, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(month, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2103408000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(day, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(day, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2103336000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(hour, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(hour, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2103335088L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(second, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(second, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-30578688000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(millennium, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(millennium, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2177452800L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(century, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(century, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2177452800L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(decade, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(decade, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2103335088L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(millisecond, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(millisecond, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2103335088L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(microsecond, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(microsecond, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(-2103840000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(week, CAST('1903-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(week, CAST('1903-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
 
     ASSERT_EQ(31536000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(decade, CAST('1972-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(decade, CAST('1972-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
     ASSERT_EQ(662688000L,
               v<int64_t>(run_simple_agg(
-                  "SELECT DATE_TRUNC(decade, CAST('2000-05-08 20:15:12' AS TIMESTAMP) )FROM test limit 1;", dt)));
+                  "SELECT DATE_TRUNC(decade, CAST('2000-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
   }
 }
 
