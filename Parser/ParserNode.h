@@ -182,6 +182,23 @@ class DoubleLiteral : public Literal {
 };
 
 /*
+ * @type TimestampLiteral
+ * @brief the literal for Timestamp
+ */
+class TimestampLiteral : public Literal {
+ public:
+  explicit TimestampLiteral() { time(&timestampval); }
+  time_t get_timestampval() const { return timestampval; }
+  virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
+                                                  Analyzer::Query& query,
+                                                  TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  virtual std::string to_string() const { return boost::lexical_cast<std::string>(timestampval); }
+
+ private:
+  time_t timestampval;
+};
+
+/*
  * @type UserLiteral
  * @brief the literal for USER
  */

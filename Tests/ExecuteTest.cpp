@@ -72,6 +72,15 @@ class SQLiteComparator {
   void query(const std::string& query_string) { connector_.query(query_string); }
 
   void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
+    compare_impl(query_string, device_type, false);
+  }
+
+  // added to deal with time shift for now testing
+  void compare_timstamp_approx(const std::string& query_string, const ExecutorDeviceType device_type) {
+    compare_impl(query_string, device_type, true);
+  }
+
+  void compare_impl(const std::string& query_string, const ExecutorDeviceType device_type, bool timestamp_approx) {
     connector_.query(query_string);
     const auto mapd_results = run_multiple_agg(query_string, device_type);
     ASSERT_EQ(connector_.getNumRows(), mapd_results.rowCount());
@@ -134,13 +143,18 @@ class SQLiteComparator {
                     0
                   };
                   const auto end_str =
-                      strptime(ref_val.c_str(), mapd_type == kTIMESTAMP ? "%Y-%m-%dT%H%M%S" : "%Y-%m-%d", &tm_struct);
+                      strptime(ref_val.c_str(), mapd_type == kTIMESTAMP ? "%Y-%m-%d %H:%M:%S" : "%Y-%m-%d", &tm_struct);
                   if (end_str != nullptr) {
                     ASSERT_EQ(0, *end_str);
                     ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
                   }
                   const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-                  ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
+                  if (timestamp_approx) {
+                    // approximate result give 10 second lee way
+                    ASSERT_NEAR(*mapd_as_int_p, timegm(&tm_struct), 10);
+                  } else {
+                    ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct));
+                  }
                   break;
                 }
                 case kBOOLEAN: {
@@ -188,6 +202,10 @@ SQLiteComparator g_sqlite_comparator;
 
 void c(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, device_type);
+}
+/* timestamp approximate checking for NOW() */
+void cta(const std::string& query_string, const ExecutorDeviceType device_type) {
+  g_sqlite_comparator.compare_timstamp_approx(query_string, device_type);
 }
 }
 
@@ -593,6 +611,9 @@ TEST(Select, StringsNoneEncoding) {
 TEST(Select, Time) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    cta("SELECT DATETIME('NOW') FROM test limit 1;", dt);
+    // these next tests work because all dates are before now 2015-12-8 17:00:00
+    ASSERT_EQ(2 * g_num_rows, v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m < NOW();", dt)));
     ASSERT_EQ(2 * g_num_rows,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test WHERE m > timestamp(0) '2014-12-13T000000';", dt)));
     ASSERT_EQ(2 * g_num_rows,
@@ -1087,21 +1108,24 @@ int main(int argc, char** argv) {
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13T222315', '15:13:14', "
+        "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 2.2, 'foo', 'real_foo', '2014-12-13 22:23:15', "
+        "'15:13:14', "
         "'1999-09-09', 9, 111.1);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13T222315', '15:13:14', "
+        "INSERT INTO test VALUES(8, 43, 102, 1002, 'f', 1.2, 2.4, 'bar', 'real_bar', '2014-12-13 22:23:15', "
+        "'15:13:14', "
         "'1999-09-09', 10, 222.2);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13T222315', '15:13:14', "
+        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 2.6, 'baz', 'real_baz', '2014-12-13 22:23:15', "
+        "'15:13:14', "
         "'1999-09-09', 11, 333.3);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);

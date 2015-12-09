@@ -78,6 +78,14 @@ std::shared_ptr<Analyzer::Expr> DoubleLiteral::analyze(const Catalog_Namespace::
   return makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
 }
 
+std::shared_ptr<Analyzer::Expr> TimestampLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
+                                                          Analyzer::Query& query,
+                                                          TlistRefType allow_tlist_ref) const {
+  Datum d;
+  d.timeval = timestampval;
+  return makeExpr<Analyzer::Constant>(kTIMESTAMP, false, d);
+}
+
 std::shared_ptr<Analyzer::Expr> UserLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
                                                      Analyzer::Query& query,
                                                      TlistRefType allow_tlist_ref) const {

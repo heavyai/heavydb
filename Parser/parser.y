@@ -70,10 +70,10 @@ using namespace Parser;
 
 %token ALL ALTER AMMSC ANY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE COLUMN COMMIT CONTINUE COPY CREATE CURRENT
-%token DATABASE DATE CURSOR DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
-%token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM 
+%token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
+%token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
-%token IS LANGUAGE LAST LENGTH LIKE LIMIT NULLX NUMERIC OF OFFSET ON OPEN OPTION
+%token IS LANGUAGE LAST LENGTH LIKE LIMIT NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHOW
 %token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
@@ -85,8 +85,8 @@ using namespace Parser;
 
 sql_list:
 		sql ';'	{ parseTrees.push_front(dynamic_cast<Stmt*>($<nodeval>1)); }
-	|	sql_list sql ';' 
-	{ 
+	|	sql_list sql ';'
+	{
 		parseTrees.push_front(dynamic_cast<Stmt*>($<nodeval>2));
 	}
 	;
@@ -111,7 +111,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| alter_user_statement { $<nodeval>$ = $<nodeval>1; }
   | explain_statement { $<nodeval>$ = $<nodeval>1; }
 	;
-	
+
 /* NOT SUPPORTED
 schema:
 		CREATE SCHEMA AUTHORIZATION user opt_schema_element_list
@@ -123,7 +123,7 @@ opt_schema_element_list:
 	;
 
 schema_element_list:
-		schema_element 
+		schema_element
 	|	schema_element_list schema_element
 	;
 
@@ -200,7 +200,7 @@ show_table_schema:
 		{
 		  $<nodeval>$ = new ShowCreateTableStmt($<stringval>4);
 		}
-			
+
 opt_if_exists:
 		IF EXISTS { $<boolval>$ = true; }
 		| /* empty */ { $<boolval>$ = false; }
@@ -213,7 +213,7 @@ drop_table_statement:
 		}
 		;
 rename_table_statement:
-		ALTER TABLE table RENAME TO table  
+		ALTER TABLE table RENAME TO table
 		{
 		   $<nodeval>$ = new RenameTableStmt($<stringval>3, $<stringval>6);
 		}
@@ -229,7 +229,7 @@ rename_column_statement:
 copy_table_statement:
     COPY table FROM STRING opt_with_option_list
     {
-      $<nodeval>$ = new CopyTableStmt($<stringval>2, $<stringval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5)); 
+      $<nodeval>$ = new CopyTableStmt($<stringval>2, $<stringval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
     }
     | COPY '(' select_statement ')' TO STRING opt_with_option_list
     {
@@ -254,9 +254,9 @@ base_table_element:
 column_def:
 		column data_type opt_compression
 		{	$<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<CompressDef*>($<nodeval>3), nullptr); }
-		| column data_type column_constraint_def opt_compression 
+		| column data_type column_constraint_def opt_compression
 		{ $<nodeval>$ = new ColumnDef($<stringval>1, dynamic_cast<SQLType*>($<nodeval>2), dynamic_cast<CompressDef*>($<nodeval>4), dynamic_cast<ColumnConstraintDef*>($<nodeval>3)); }
-		| 
+		|
 	;
 
 opt_compression:
@@ -280,8 +280,8 @@ opt_compression:
 column_constraint_def:
 		NOT NULLX { $<nodeval>$ = new ColumnConstraintDef(true, false, false, nullptr); }
 	|	NOT NULLX UNIQUE { $<nodeval>$ = new ColumnConstraintDef(true, true, false, nullptr); }
-	|	NOT NULLX PRIMARY NAME 
-  { 
+	|	NOT NULLX PRIMARY NAME
+  {
     if (!boost::iequals(*$<stringval>4, "key"))
       throw std::runtime_error("Syntax error at " + *$<stringval>4);
     $<nodeval>$ = new ColumnConstraintDef(true, true, true, nullptr);
@@ -298,21 +298,21 @@ table_constraint_def:
 		UNIQUE '(' column_commalist ')'
 	{ $<nodeval>$ = new UniqueDef(false, $<slistval>3); }
 	|	PRIMARY NAME '(' column_commalist ')'
-	{ 
+	{
     if (!boost::iequals(*$<stringval>2, "key"))
       throw std::runtime_error("Syntax error at " + *$<stringval>2);
     $<nodeval>$ = new UniqueDef(true, $<slistval>4);
   }
 	|	FOREIGN NAME '(' column_commalist ')'
-			REFERENCES table 
-	{ 
+			REFERENCES table
+	{
     if (!boost::iequals(*$<stringval>2, "key"))
       throw std::runtime_error("Syntax error at " + *$<stringval>2);
     $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, nullptr);
   }
 	|	FOREIGN NAME '(' column_commalist ')'
 			REFERENCES table '(' column_commalist ')'
-	{ 
+	{
     if (!boost::iequals(*$<stringval>2, "key"))
       throw std::runtime_error("Syntax error at " + *$<stringval>2);
     $<nodeval>$ = new ForeignKeyDef($<slistval>4, $<stringval>7, $<slistval>9);   }
@@ -371,7 +371,7 @@ drop_view_statement:
 			$<nodeval>$ = new DropViewStmt($<stringval>4, $<boolval>3);
 		}
 		;
-	
+
 opt_with_check_option:
 		/* empty */	{	$<boolval>$ = false; }
 	|	WITH CHECK OPTION { $<boolval>$ = true; }
@@ -566,7 +566,7 @@ assignment_commalist:
 	;
 
 assignment:
-		column EQUAL general_exp 
+		column EQUAL general_exp
 		{ $<nodeval>$ = new Assignment($<stringval>1, dynamic_cast<Expr*>($<nodeval>3)); }
 	;
 
@@ -605,7 +605,7 @@ opt_offset_clause:
 		delete $<stringval>3;
 		$<intval>$ = $<intval>2;
 	}
-	| /* empty */ 
+	| /* empty */
 	{
 		$<intval>$ = 0;
 	}
@@ -620,7 +620,7 @@ select_statement:
 
 query_exp:
 		query_term { $<nodeval>$ = $<nodeval>1; }
-	|	query_exp UNION query_term 
+	|	query_exp UNION query_term
 	{ $<nodeval>$ = new UnionQuery(false, dynamic_cast<QueryExpr*>($<nodeval>1), dynamic_cast<QueryExpr*>($<nodeval>3)); }
 	|	query_exp UNION ALL query_term
 	{ $<nodeval>$ = new UnionQuery(true, dynamic_cast<QueryExpr*>($<nodeval>1), dynamic_cast<QueryExpr*>($<nodeval>4)); }
@@ -716,8 +716,8 @@ comparison_predicate:
 		scalar_exp comparison scalar_exp
 		{ $<nodeval>$ = new OperExpr($<opval>2, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	scalar_exp comparison subquery
-		{ 
-			$<nodeval>$ = new OperExpr($<opval>2, kONE, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); 
+		{
+			$<nodeval>$ = new OperExpr($<opval>2, kONE, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3));
 			/* subquery can only return a single result */
 		}
 	;
@@ -804,7 +804,7 @@ comparison:
 	EQUAL { $<opval>$ = $<opval>1; }
 	| COMPARISON { $<opval>$ = $<opval>1; }
 	;
-			
+
 any_all_some:
 		ANY
 	|	ALL
@@ -863,7 +863,7 @@ datetrunc_exp: DATE_TRUNC '(' NAME ',' scalar_exp ')'
   }
   ;
 
- charlength_exp: 
+ charlength_exp:
 	      CHAR_LENGTH '(' scalar_exp ')' { $<nodeval>$ = new CharLengthExpr(dynamic_cast<Expr*>($<nodeval>3),true); }
 	    | LENGTH '(' scalar_exp ')'	{ $<nodeval>$ = new CharLengthExpr(dynamic_cast<Expr*>($<nodeval>3),false); }
 	    ;
@@ -939,10 +939,12 @@ function_ref:
 	;
 
 literal:
-		STRING { $<nodeval>$ = new StringLiteral($<stringval>1); }
-	|	INTNUM { $<nodeval>$ = new IntLiteral($<intval>1); }
-	|	FIXEDNUM 
-  { 
+    STRING { $<nodeval>$ = new StringLiteral($<stringval>1); }
+  | INTNUM { $<nodeval>$ = new IntLiteral($<intval>1); }
+  | NOW '(' ')' { $<nodeval>$ = new TimestampLiteral(); }
+  | DATETIME '(' general_exp ')' { $<nodeval>$ = new TimestampLiteral(); }
+  | FIXEDNUM
+  {
     $<nodeval>$ = new FixedPtLiteral($<stringval>1);
   }
 	| FLOAT { $<nodeval>$ = new FloatLiteral($<floatval>1); }
@@ -965,11 +967,11 @@ column_ref:
 	/* |	NAME '.' NAME '.' NAME { $$ = new ColumnRef($<stringval>1, $<stringval>3, $<stringval>5); } */
 	;
 
-non_neg_int: INTNUM 
-		{ 
+non_neg_int: INTNUM
+		{
 			if ($<intval>1 < 0)
 				throw std::runtime_error("No negative number in type definition.");
-			$<intval>$ = $<intval>1; 
+			$<intval>$ = $<intval>1;
 		}
 
 		/* data types */
@@ -999,7 +1001,7 @@ data_type:
 	| TIMESTAMP { $<nodeval>$ = new SQLType(kTIMESTAMP); }
 	| TIMESTAMP '(' non_neg_int ')' { $<nodeval>$ = new SQLType(kTIMESTAMP, $<intval>3); }
   | data_type '[' ']'
-  { $<nodeval>$ = $<nodeval>1; 
+  { $<nodeval>$ = $<nodeval>1;
     if (dynamic_cast<SQLType*>($<nodeval>$)->get_is_array())
       throw std::runtime_error("array of array not supported.");
     dynamic_cast<SQLType*>($<nodeval>$)->set_is_array(true); }
@@ -1025,7 +1027,7 @@ parameter:
 range_variable:	NAME { $<stringval>$ = $<stringval>1; }
 	;
 
-/* 
+/*
 user:		NAME { $<stringval>$ = $<stringval>1; }
 	;
 */
