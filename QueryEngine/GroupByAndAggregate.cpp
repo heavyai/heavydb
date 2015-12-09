@@ -1343,11 +1343,9 @@ void QueryExecutionContext::outputBin(ResultRows& results,
     }
     results.beginRow(multi_key);
   } else {
-    for (size_t val_tuple_idx = 0; val_tuple_idx < group_by_col_count; ++val_tuple_idx) {
-      const int64_t key_comp = group_by_buffer[key_off + val_tuple_idx];
-      CHECK_NE(key_comp, EMPTY_KEY);
-      results.beginRow(key_comp);
-    }
+    const int64_t key_comp = group_by_buffer[key_off];
+    CHECK_NE(key_comp, EMPTY_KEY);
+    results.beginRow(key_comp);
   }
   for (const auto target_expr : targets) {
     bool is_real_string = (target_expr && target_expr->get_type_info().is_string() &&
