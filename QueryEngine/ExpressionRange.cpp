@@ -8,7 +8,7 @@
 
 #define DEF_OPERATOR(fname, op)                                                                                    \
   ExpressionRange fname(const ExpressionRange& other) const {                                                      \
-    return (type == ExpressionRangeType::Integer && other.type == ExpressionRangeType::Integer)                    \
+    return (type_ == ExpressionRangeType::Integer && other.type_ == ExpressionRangeType::Integer)                  \
                ? binOp<int64_t>(other,                                                                             \
                                 [](const int64_t x, const int64_t y) { return int64_t(checked_int64_t(x) op y); }) \
                : binOp<double>(other, [](const double x, const double y) {                                         \
@@ -27,10 +27,10 @@ DEF_OPERATOR(ExpressionRange::operator-, -)
 DEF_OPERATOR(ExpressionRange::operator*, *)
 
 ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
-  if (type != ExpressionRangeType::Integer || other.type != ExpressionRangeType::Integer) {
+  if (type_ != ExpressionRangeType::Integer || other.type_ != ExpressionRangeType::Integer) {
     return ExpressionRange::makeInvalidRange();
   }
-  if (other.int_min * other.int_max <= 0) {
+  if (other.int_min_ * other.int_max_ <= 0) {
     // if the other interval contains 0, the rule is more complicated;
     // punt for now, we can revisit by splitting the other interval and
     // taking the convex hull of the resulting two intervals
@@ -40,25 +40,25 @@ ExpressionRange ExpressionRange::operator/(const ExpressionRange& other) const {
 }
 
 ExpressionRange ExpressionRange::operator||(const ExpressionRange& other) const {
-  if (type != other.type) {
+  if (type_ != other.type_) {
     return ExpressionRange::makeInvalidRange();
   }
   ExpressionRange result;
-  switch (type) {
+  switch (type_) {
     case ExpressionRangeType::Invalid:
       return ExpressionRange::makeInvalidRange();
     case ExpressionRangeType::Integer: {
-      result.type = ExpressionRangeType::Integer;
-      result.has_nulls = has_nulls || other.has_nulls;
-      result.int_min = std::min(int_min, other.int_min);
-      result.int_max = std::max(int_max, other.int_max);
+      result.type_ = ExpressionRangeType::Integer;
+      result.has_nulls_ = has_nulls_ || other.has_nulls_;
+      result.int_min_ = std::min(int_min_, other.int_min_);
+      result.int_max_ = std::max(int_max_, other.int_max_);
       break;
     }
     case ExpressionRangeType::FloatingPoint: {
-      result.type = ExpressionRangeType::FloatingPoint;
-      result.has_nulls = has_nulls || other.has_nulls;
-      result.fp_min = std::min(fp_min, other.fp_min);
-      result.fp_max = std::max(fp_max, other.fp_max);
+      result.type_ = ExpressionRangeType::FloatingPoint;
+      result.has_nulls_ = has_nulls_ || other.has_nulls_;
+      result.fp_min_ = std::min(fp_min_, other.fp_min_);
+      result.fp_max_ = std::max(fp_max_, other.fp_max_);
       break;
     }
     default:

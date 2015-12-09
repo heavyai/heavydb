@@ -42,30 +42,30 @@ class ExpressionRange {
   static ExpressionRange makeInvalidRange() { return ExpressionRange(); }
 
   int64_t getIntMin() const {
-    CHECK(ExpressionRangeType::Integer == type);
-    return int_min;
+    CHECK(ExpressionRangeType::Integer == type_);
+    return int_min_;
   }
 
   int64_t getIntMax() const {
-    CHECK(ExpressionRangeType::Integer == type);
-    return int_max;
+    CHECK(ExpressionRangeType::Integer == type_);
+    return int_max_;
   }
 
   double getFpMin() const {
-    CHECK(ExpressionRangeType::FloatingPoint == type);
-    return fp_min;
+    CHECK(ExpressionRangeType::FloatingPoint == type_);
+    return fp_min_;
   }
 
   double getFpMax() const {
-    CHECK(ExpressionRangeType::FloatingPoint == type);
-    return fp_max;
+    CHECK(ExpressionRangeType::FloatingPoint == type_);
+    return fp_max_;
   }
 
-  ExpressionRangeType getType() const { return type; }
+  ExpressionRangeType getType() const { return type_; }
 
   int64_t getBucket() const { return bucket_; }
 
-  bool hasNulls() const { return has_nulls; }
+  bool hasNulls() const { return has_nulls_; }
 
   ExpressionRange operator+(const ExpressionRange& other) const;
   ExpressionRange operator-(const ExpressionRange& other) const;
@@ -75,24 +75,24 @@ class ExpressionRange {
 
  private:
   ExpressionRange(const int64_t int_min_in, const int64_t int_max_in, const int64_t bucket, const bool has_nulls_in)
-      : type(ExpressionRangeType::Integer),
-        has_nulls(has_nulls_in),
-        int_min(int_min_in),
-        int_max(int_max_in),
+      : type_(ExpressionRangeType::Integer),
+        has_nulls_(has_nulls_in),
+        int_min_(int_min_in),
+        int_max_(int_max_in),
         bucket_(bucket) {}
 
   ExpressionRange(const double fp_min_in, const double fp_max_in, const bool has_nulls_in)
-      : type(ExpressionRangeType::FloatingPoint),
-        has_nulls(has_nulls_in),
-        fp_min(fp_min_in),
-        fp_max(fp_max_in),
+      : type_(ExpressionRangeType::FloatingPoint),
+        has_nulls_(has_nulls_in),
+        fp_min_(fp_min_in),
+        fp_max_(fp_max_in),
         bucket_(0) {}
 
-  ExpressionRange() : type(ExpressionRangeType::Invalid), has_nulls(false), bucket_(0) {}
+  ExpressionRange() : type_(ExpressionRangeType::Invalid), has_nulls_(false), bucket_(0) {}
 
   template <class T, class BinOp>
   ExpressionRange binOp(const ExpressionRange& other, const BinOp& bin_op) const {
-    if (type == ExpressionRangeType::Invalid || other.type == ExpressionRangeType::Invalid) {
+    if (type_ == ExpressionRangeType::Invalid || other.type_ == ExpressionRangeType::Invalid) {
       return ExpressionRange::makeInvalidRange();
     }
     try {
@@ -101,19 +101,19 @@ class ExpressionRange {
                             bin_op(getMax<T>(*this), getMin<T>(other)),
                             bin_op(getMax<T>(*this), getMax<T>(other))};
       ExpressionRange result;
-      result.type = (type == ExpressionRangeType::Integer && other.type == ExpressionRangeType::Integer)
-                        ? ExpressionRangeType::Integer
-                        : ExpressionRangeType::FloatingPoint;
-      result.has_nulls = has_nulls || other.has_nulls;
-      switch (result.type) {
+      result.type_ = (type_ == ExpressionRangeType::Integer && other.type_ == ExpressionRangeType::Integer)
+                         ? ExpressionRangeType::Integer
+                         : ExpressionRangeType::FloatingPoint;
+      result.has_nulls_ = has_nulls_ || other.has_nulls_;
+      switch (result.type_) {
         case ExpressionRangeType::Integer: {
-          result.int_min = *std::min_element(limits.begin(), limits.end());
-          result.int_max = *std::max_element(limits.begin(), limits.end());
+          result.int_min_ = *std::min_element(limits.begin(), limits.end());
+          result.int_max_ = *std::max_element(limits.begin(), limits.end());
           break;
         }
         case ExpressionRangeType::FloatingPoint: {
-          result.fp_min = *std::min_element(limits.begin(), limits.end());
-          result.fp_max = *std::max_element(limits.begin(), limits.end());
+          result.fp_min_ = *std::min_element(limits.begin(), limits.end());
+          result.fp_max_ = *std::max_element(limits.begin(), limits.end());
           break;
         }
         default:
@@ -125,15 +125,15 @@ class ExpressionRange {
     }
   }
 
-  ExpressionRangeType type;
-  bool has_nulls;
+  ExpressionRangeType type_;
+  bool has_nulls_;
   union {
-    int64_t int_min;
-    double fp_min;
+    int64_t int_min_;
+    double fp_min_;
   };
   union {
-    int64_t int_max;
-    double fp_max;
+    int64_t int_max_;
+    double fp_max_;
   };
   int64_t bucket_;
 };
