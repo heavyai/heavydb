@@ -985,8 +985,7 @@ class GroupByAndAggregate {
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo();
 
-  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr,
-                                                     const std::vector<Fragmenter_Namespace::QueryInfo>&);
+  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr);
 
   void codegenAggCalls(llvm::Value* agg_out_start_ptr,
                        const std::vector<llvm::Value*>& agg_out_vec,
