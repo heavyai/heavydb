@@ -2014,7 +2014,7 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
 }
 
 bool many_entries(const int64_t max_val, const int64_t min_val, const int64_t bucket) {
-  return max_val - min_val > 10000 * std::max(bucket, 1L);
+  return max_val - min_val > 10000 * std::max(bucket, int64_t(1));
 }
 
 }  // namespace
