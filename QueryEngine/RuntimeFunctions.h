@@ -38,9 +38,13 @@ extern "C" int64_t* get_group_value(int64_t* groups_buffer,
 extern "C" int64_t* get_group_value_fast(int64_t* groups_buffer,
                                          const int64_t key,
                                          const int64_t min_key,
+                                         const int64_t bucket,
                                          const uint32_t agg_col_count);
 
-extern "C" int64_t* get_columnar_group_value_fast(int64_t* groups_buffer, const int64_t key, const int64_t min_key);
+extern "C" int64_t* get_columnar_group_value_fast(int64_t* groups_buffer,
+                                                  const int64_t key,
+                                                  const int64_t min_key,
+                                                  const int64_t bucket);
 
 extern "C" int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer,
                                                           const uint32_t h,

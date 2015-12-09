@@ -33,8 +33,13 @@ extern "C" NEVER_INLINE DEVICE int64_t* get_group_value(int64_t* groups_buffer,
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(int64_t* groups_buffer,
                                                               const int64_t key,
                                                               const int64_t min_key,
+                                                              const int64_t bucket,
                                                               const uint32_t agg_col_count) {
-  int64_t off = (key - min_key) * (1 + agg_col_count);
+  int64_t key_diff = key - min_key;
+  if (bucket) {
+    key_diff /= bucket;
+  }
+  int64_t off = key_diff * (1 + agg_col_count);
   if (groups_buffer[off] == EMPTY_KEY) {
     groups_buffer[off] = key;
   }
@@ -43,8 +48,12 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_fast(int64_t* groups_bu
 
 extern "C" ALWAYS_INLINE DEVICE int64_t* get_columnar_group_value_fast(int64_t* groups_buffer,
                                                                        const int64_t key,
-                                                                       const int64_t min_key) {
+                                                                       const int64_t min_key,
+                                                                       const int64_t bucket) {
   int64_t off = key - min_key;
+  if (bucket) {
+    off /= bucket;
+  }
   if (groups_buffer[off] == EMPTY_KEY) {
     groups_buffer[off] = key;
   }
@@ -61,7 +70,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t* get_group_value_one_key(int64_t* groups
                                                                  const int64_t* init_vals) {
   int64_t off = key - min_key;
   if (0 <= off && off < small_groups_buffer_qw_count) {
-    return get_group_value_fast(small_groups_buffer, key, min_key, agg_col_count);
+    return get_group_value_fast(small_groups_buffer, key, min_key, 0, agg_col_count);
   }
   return get_group_value(groups_buffer, groups_buffer_entry_count, &key, 1, agg_col_count, init_vals);
 }

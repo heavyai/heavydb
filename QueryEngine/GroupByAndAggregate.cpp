@@ -347,8 +347,11 @@ void ResultRows::reduce(const ResultRows& other_results,
         switch (hash_type) {
           case GroupByColRangeType::OneColKnownRange:
             group_val_buff =
-                output_columnar ? get_columnar_group_value_fast(*group_by_buffer_ptr, other_key_buff[0], min_val)
-                                : get_group_value_fast(*group_by_buffer_ptr, other_key_buff[0], min_val, agg_col_count);
+                output_columnar
+                    ? get_columnar_group_value_fast(
+                          *group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket)
+                    : get_group_value_fast(
+                          *group_by_buffer_ptr, other_key_buff[0], min_val, query_mem_desc_in.bucket, agg_col_count);
             break;
           case GroupByColRangeType::MultiColPerfectHash:
             group_val_buff = get_matching_group_value_perfect_hash(
@@ -2010,8 +2013,8 @@ std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
   return {nullptr};
 }
 
-bool many_entries(const int64_t max_val, const int64_t min_val) {
-  return max_val - min_val > 10000;
+bool many_entries(const int64_t max_val, const int64_t min_val, const int64_t bucket) {
+  return max_val - min_val > 10000 * std::max(bucket, 1L);
 }
 
 }  // namespace
@@ -2152,7 +2155,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
       if (col_range_info.hash_type_ == GroupByColRangeType::OneColGuessedRange ||
           col_range_info.hash_type_ == GroupByColRangeType::Scan ||
           ((group_cols.size() != 1 || !group_cols.front()->get_type_info().is_string()) &&
-           col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count))) {
+           col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count) &&
+           !col_range_info.bucket)) {
         query_mem_desc_ = {executor_,
                            col_range_info.hash_type_,
                            false,
@@ -2171,7 +2175,9 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            false};
         return;
       } else {
-        bool keyless = !sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min);
+        bool keyless =
+            (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
+            !col_range_info.bucket;
         if (keyless) {
           bool found_count = false;  // shouldn't use keyless for projection only
           for (const auto target_expr : target_expr_list) {
@@ -2193,7 +2199,11 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
             keyless = false;
           }
         }
-        const size_t bin_count = col_range_info.max - col_range_info.min + 1 + (col_range_info.has_nulls ? 1 : 0);
+        size_t bin_count = col_range_info.max - col_range_info.min;
+        if (col_range_info.bucket) {
+          bin_count /= col_range_info.bucket;
+        }
+        bin_count += (1 + (col_range_info.has_nulls ? 1 : 0));
         const size_t interleaved_max_threshold{20};
         bool interleaved_bins = keyless && bin_count <= interleaved_max_threshold;
         query_mem_desc_ = {executor_,
@@ -2319,7 +2329,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
   if (executor_->isCPUOnly()) {
     return true;
   }
-  return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && many_entries(max_val, min_val);
+  return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && many_entries(max_val, min_val, bucket);
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
@@ -2472,12 +2482,13 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
     case GroupByColRangeType::Scan: {
       CHECK_EQ(size_t(1), groupby_list.size());
       const auto group_expr = groupby_list.front();
-      const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr.get(),
-                                                                 hoist_literals,
-                                                                 query_mem_desc.has_nulls,
-                                                                 query_mem_desc.max_val + 1,
-                                                                 diamond_codegen,
-                                                                 array_loops);
+      const auto group_expr_lv =
+          executor_->groupByColumnCodegen(group_expr.get(),
+                                          hoist_literals,
+                                          query_mem_desc.has_nulls,
+                                          query_mem_desc.max_val + (query_mem_desc.bucket ? query_mem_desc.bucket : 1),
+                                          diamond_codegen,
+                                          array_loops);
       auto small_groups_buffer = arg_it;
       if (query_mem_desc.usesGetGroupValueFast()) {
         std::string get_group_fn_name{outputColumnar() && !query_mem_desc.keyless_hash ? "get_columnar_group_value_fast"
@@ -2490,7 +2501,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
           CHECK(query_mem_desc.keyless_hash);
           get_group_fn_name += "_semiprivate";
         }
-        std::vector<llvm::Value*> get_group_fn_args{groups_buffer, group_expr_lv, LL_INT(query_mem_desc.min_val)};
+        std::vector<llvm::Value*> get_group_fn_args{
+            groups_buffer, group_expr_lv, LL_INT(query_mem_desc.min_val), LL_INT(query_mem_desc.bucket)};
         if (!query_mem_desc.keyless_hash) {
           if (!outputColumnar()) {
             get_group_fn_args.push_back(LL_INT(static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));

@@ -502,6 +502,7 @@ extern "C" __attribute__((always_inline)) int64_t* get_matching_group_value_perf
 extern "C" __attribute__((always_inline)) int64_t* get_group_value_fast_keyless(int64_t* groups_buffer,
                                                                                 const int64_t key,
                                                                                 const int64_t min_key,
+                                                                                const int64_t /* bucket */,
                                                                                 const uint32_t agg_col_count) {
   return groups_buffer + agg_col_count * (key - min_key);
 }
@@ -510,6 +511,7 @@ extern "C" __attribute__((always_inline)) int64_t
     * get_group_value_fast_keyless_semiprivate(int64_t* groups_buffer,
                                                const int64_t key,
                                                const int64_t min_key,
+                                               const int64_t /* bucket */,
                                                const uint32_t agg_col_count,
                                                const uint8_t thread_warp_idx,
                                                const uint8_t warp_size) {
