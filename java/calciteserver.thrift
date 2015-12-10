@@ -1,6 +1,5 @@
 namespace java com.mapd.thrift.calciteserver
 
-
 exception InvalidParseRequest {
   1: i32 whatUp,
   2: string whyUp
