@@ -173,7 +173,7 @@ class Executor {
                      const bool allow_multifrag,
                      const bool allow_loop_joins);
 
-  int64_t getRowidForPixel(const int64_t x, const int64_t y, const int user_id, const int render_widget_id);
+  int64_t getRowidForPixel(const int64_t x, const int64_t y, const int session_id, const int render_widget_id);
 
   int32_t getStringId(const std::string& table_name, const std::string& col_name, const std::string& col_val) const;
 
@@ -288,7 +288,7 @@ class Executor {
   std::string renderRows(const std::vector<Analyzer::TargetEntry*>& targets,
                          const std::string& config_json,
                          const size_t used_bytes,
-                         const int user_id,
+                         const int session_id,
                          const int render_widget_id);
 
   typedef std::deque<Fragmenter_Namespace::FragmentInfo> TableFragments;
