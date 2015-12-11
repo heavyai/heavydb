@@ -10,17 +10,16 @@ using std::endl;
 
 namespace CudaMgr_Namespace {
 
-CudaMgr::CudaMgr(const int numGpus, const unsigned int startGpu): startGpu_(startGpu) {
+CudaMgr::CudaMgr(const int numGpus, const int startGpu) : startGpu_(startGpu) {
 #ifdef HAVE_CUDA
   checkError(cuInit(0));
   checkError(cuDeviceGetCount(&deviceCount_));
 
   if (numGpus > 0) {  // numGpus <= 0 will just use number of gpus found
-    CHECK_LE(numGpus + startGpu_ ,deviceCount_);
+    CHECK_LE(numGpus + startGpu_, deviceCount_);
     deviceCount_ = std::min(deviceCount_, numGpus);
-  }
-  else {
-    CHECK_EQ(startGpu_, 0); // if we are using all gpus we cannot start on a gpu other than 0
+  } else {
+    CHECK_EQ(startGpu_, 0);  // if we are using all gpus we cannot start on a gpu other than 0
   }
 
   LOG(INFO) << "Using " << deviceCount_ << " Gpus." << std::endl;

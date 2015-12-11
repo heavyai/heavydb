@@ -29,7 +29,11 @@ class DataMgr {
   friend class FileMgr;
 
  public:
-  DataMgr(const std::string& dataDir, const size_t cpuBufferSize /* 0 means auto set size */, const bool useGpus, const int numGpus, const unsigned int startGpu = 0);
+  DataMgr(const std::string& dataDir,
+          const size_t cpuBufferSize /* 0 means auto set size */,
+          const bool useGpus,
+          const int numGpus,
+          const int startGpu = 0);
   ~DataMgr();
   AbstractBuffer* createChunkBuffer(const ChunkKey& key, const MemoryLevel memoryLevel, const int deviceId = 0);
   AbstractBuffer* getChunkBuffer(const ChunkKey& key,

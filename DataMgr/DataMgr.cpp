@@ -25,7 +25,12 @@ using namespace File_Namespace;
 
 namespace Data_Namespace {
 
-DataMgr::DataMgr(const string& dataDir, const size_t cpuBufferSize, const bool useGpus, const int numGpus, const unsigned int startGpu) : dataDir_(dataDir) {
+DataMgr::DataMgr(const string& dataDir,
+                 const size_t cpuBufferSize,
+                 const bool useGpus,
+                 const int numGpus,
+                 const int startGpu)
+    : dataDir_(dataDir) {
   if (useGpus) {
     try {
       cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus, startGpu);
@@ -78,7 +83,7 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize) {
   bufferMgrs_[0].push_back(new FileMgr(0, dataDir_));
   levelSizes_.push_back(1);
   size_t cpuBufferSize = userSpecifiedCpuBufferSize;
-  if (cpuBufferSize == 0) // if size is not specified
+  if (cpuBufferSize == 0)                           // if size is not specified
     cpuBufferSize = getTotalSystemMemory() * 0.65;  // should get free memory instead of this ugly heuristic
   size_t bufferAllocIncrement{1L << 31};
   while (bufferAllocIncrement > cpuBufferSize) {
