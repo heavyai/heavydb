@@ -37,7 +37,7 @@ class SQLTestEnv : public ::testing::Environment {
     UserMetadata user;
     DBMetadata db;
     {
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false, 0);
+      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0,  false, 0);
       if (!boost::filesystem::exists(system_db_file)) {
         SysCatalog syscat(base_path.string(), dataMgr, true);
         syscat.initDB();
@@ -53,7 +53,7 @@ class SQLTestEnv : public ::testing::Environment {
         CHECK(sys_cat.getMetadataForDB("gtest_db", db));
       }
     }
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), false, 0);
+    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), 0, false, 0);
     gsession.reset(new SessionInfo(std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr),
                                    user,
                                    ExecutorDeviceType::GPU,

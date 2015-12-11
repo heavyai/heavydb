@@ -68,6 +68,7 @@ class MapDHandler : virtual public MapDIf {
               const bool read_only,
               const bool allow_loop_joins,
               const bool enable_rendering,
+              const size_t cpu_buffer_mem_bytes,
               const size_t render_mem_bytes,
               const int num_gpus,
               const unsigned int start_gpu,
@@ -119,7 +120,7 @@ class MapDHandler : virtual public MapDIf {
       cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_, num_gpus, start_gpu));
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu));
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
     import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
@@ -1226,6 +1227,7 @@ int main(int argc, char** argv) {
   bool read_only = false;
   bool allow_loop_joins = false;
   bool enable_rendering = true;
+  size_t cpu_buffer_mem_bytes = 0; // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
   unsigned int start_gpu = 0;
@@ -1243,6 +1245,7 @@ int main(int argc, char** argv) {
       "gpu", "Run on GPUs (Default)")("allow-loop-joins", "Enable loop joins")("hybrid", "Run on both CPU and GPUs")(
       "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
       "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)")(
+      "cpu-buffer-mem-bytes", po::value<size_t>(&cpu_buffer_mem_bytes), "Size of memory reserved for rendering (in bytes)")(
       "render-mem-bytes", po::value<size_t>(&render_mem_bytes), "Size of memory reserved for rendering (in bytes)")(
       "num-gpus", po::value<int>(&num_gpus), "Number of gpus to use")(
       "start-gpu", po::value<unsigned int>(&start_gpu), "First gpu to use");
@@ -1367,6 +1370,7 @@ int main(int argc, char** argv) {
                                                   read_only,
                                                   allow_loop_joins,
                                                   enable_rendering,
+                                                  cpu_buffer_mem_bytes,
                                                   render_mem_bytes,
                                                   num_gpus,
                                                   start_gpu,
