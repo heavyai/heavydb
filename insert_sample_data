@@ -25,7 +25,7 @@ download_and_extract_file() {
 start_server() {
   if [ -z "$PID" ]; then
     if ! pgrep mapd_server; then
-      ./bin/mapd_server data $DEVICE $RO &
+      ./bin/mapd_server data $DEVICE $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT &
       PID=$!
     fi
     echo "- mapd_server started"
@@ -55,17 +55,17 @@ for idx in $idxs; do
     start_server
 
     echo "- adding schema"
-    ./bin/mapdql mapd -u mapd -p HyperInteractive < $filebase/*.sql
+    ./bin/mapdql mapd -u mapd -p HyperInteractive --port $MAPD_TCP_PORT < $filebase/*.sql
     table=${tables[$idx]}
     for csv in $PWD/$filebase/*csv; do
       echo "- inserting file: $csv"
-      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/mapdql mapd -u mapd -p HyperInteractive
+      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/mapdql mapd -u mapd -p HyperInteractive --port $MAPD_TCP_PORT
     done
 
     DASH="$PWD/$filebase/$filebase.dash"
     if [ -f $DASH ]; then
       MAPDDASH=$(head -n 1 "$DASH")
-      MAPDDASH="&table=$table$MAPDDASH"
+      MAPDDASH="&table=${table}${MAPDDASH}"
     fi
 
     #echo "- killing mapd_server"

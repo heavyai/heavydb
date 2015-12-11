@@ -1,5 +1,9 @@
 #!/bin/bash
 
+MAPD_TCP_PORT=${MAPD_TCP_PORT:-9091}
+MAPD_HTTP_PORT=${MAPD_HTTP_PORT:-9090}
+MAPD_WEB_PORT=${MAPD_WEB_PORT:-9092}
+
 have_gpu() {
     if [[ "$(uname -s)" == "Darwin" ]]; then
         system_profiler SPDisplaysDataType | grep -q -i nvidia
@@ -27,11 +31,21 @@ while (( $# )); do
             DEVICE="" ;;
         --read-only)
             RO="--read-only" ;;
+        --base-port)
+            shift
+            MAPD_WEB_PORT=$1
+            MAPD_TCP_PORT=$(($MAPD_WEB_PORT-1))
+            MAPD_HTTP_PORT=$(($MAPD_WEB_PORT-2))
+            ;;
         *)
             break ;;
     esac
     shift
 done
+
+echo "Backend TCP:  localhost:${MAPD_TCP_PORT}"
+echo "Backend HTTP: localhost:${MAPD_HTTP_PORT}"
+echo "Frontend Web: localhost:${MAPD_WEB_PORT}"
 
 if ! have_gpu ; then
     if [[ "$DEVICE" != "--cpu" ]]; then
@@ -40,8 +54,8 @@ if ! have_gpu ; then
     DEVICE="--cpu"
 fi
 
-if [ ! -d data ]; then
-    mkdir data
+if [ ! -d data/mapd_data ]; then
+    mkdir -p data
     ./bin/initdb -f --path data
     echo "Download and insert sample data? Y/n"
     read choice
@@ -54,17 +68,17 @@ if [ ! -d data ]; then
 fi
 
 if ! pgrep mapd_server; then
-    ./bin/mapd_server data $DEVICE $RO &
+    ./bin/mapd_server data $DEVICE $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT &
 fi
 
 if [ -d frontend -a -e ./bin/mapd_web_server ]; then
     trap 'kill -TERM $WEBPID' TERM INT
-    PORT=9092 ./bin/mapd_web_server $RO &
+    ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" &
     WEBPID=$!
 
-    MAPDFRONTEND="http://localhost:9092"
+    MAPDFRONTEND="http://localhost:${MAPD_WEB_PORT}"
     if [ ! -z "$MAPDDASH" ]; then
-        MAPDFRONTEND="$MAPDFRONTEND/?style=light-style&platform=mapd&host=localhost&port=9092&db=mapd&$MAPDDASH"
+        MAPDFRONTEND="${MAPDFRONTEND}/?style=light-style&platform=mapd&host=localhost&port=${MAPD_WEB_PORT}&db=mapd&${MAPDDASH}"
     fi
     if hash open 2>/dev/null; then
         open "$MAPDFRONTEND"
