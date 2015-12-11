@@ -4,6 +4,8 @@ MAPD_TCP_PORT=${MAPD_TCP_PORT:-9091}
 MAPD_HTTP_PORT=${MAPD_HTTP_PORT:-9090}
 MAPD_WEB_PORT=${MAPD_WEB_PORT:-9092}
 
+MAPD_DATA=${MAPD_DATA:="data"}
+
 have_gpu() {
     if [[ "$(uname -s)" == "Darwin" ]]; then
         system_profiler SPDisplaysDataType | grep -q -i nvidia
@@ -37,6 +39,10 @@ while (( $# )); do
             MAPD_TCP_PORT=$(($MAPD_WEB_PORT-1))
             MAPD_HTTP_PORT=$(($MAPD_WEB_PORT-2))
             ;;
+        --data)
+            shift
+            MAPD_DATA=$1
+            ;;
         *)
             break ;;
     esac
@@ -54,9 +60,9 @@ if ! have_gpu ; then
     DEVICE="--cpu"
 fi
 
-if [ ! -d data/mapd_data ]; then
-    mkdir -p data
-    ./bin/initdb -f --path data
+if [ ! -d $MAPD_DATA/mapd_data ]; then
+    mkdir -p $MAPD_DATA
+    ./bin/initdb -f --path $MAPD_DATA
     echo "Download and insert sample data? Y/n"
     read choice
     if [ -z "$choice" ]; then choice="Y"; fi
@@ -68,7 +74,7 @@ if [ ! -d data/mapd_data ]; then
 fi
 
 if ! pgrep mapd_server; then
-    ./bin/mapd_server data $DEVICE $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT &
+    ./bin/mapd_server $MAPD_DATA $DEVICE $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT &
 fi
 
 if [ -d frontend -a -e ./bin/mapd_web_server ]; then
