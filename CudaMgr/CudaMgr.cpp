@@ -10,13 +10,20 @@ using std::endl;
 
 namespace CudaMgr_Namespace {
 
-CudaMgr::CudaMgr(const int numGpus) {
+CudaMgr::CudaMgr(const int numGpus, const unsigned int startGpu): startGpu_(startGpu) {
 #ifdef HAVE_CUDA
   checkError(cuInit(0));
-  checkError(cuDeviceGetCount(&deviceCount));
-  if (numGpus > 0)  // numGpus <= 0 will just use number of gpus found
-    deviceCount = std::min(deviceCount, numGpus);
-  LOG(INFO) << "Using " << deviceCount << " Gpus." << std::endl;
+  checkError(cuDeviceGetCount(&deviceCount_));
+
+  if (numGpus > 0) {  // numGpus <= 0 will just use number of gpus found
+    CHECK_LE(numGpus + startGpu_ ,deviceCount_);
+    deviceCount_ = std::min(deviceCount_, numGpus);
+  }
+  else {
+    CHECK_EQ(startGpu_, 0); // if we are using all gpus we cannot start on a gpu other than 0
+  }
+
+  LOG(INFO) << "Using " << deviceCount_ << " Gpus." << std::endl;
   fillDeviceProperties();
   createDeviceContexts();
 #endif
@@ -24,7 +31,7 @@ CudaMgr::CudaMgr(const int numGpus) {
 
 CudaMgr::~CudaMgr() {
 #ifdef HAVE_CUDA
-  for (int d = 0; d < deviceCount; ++d) {
+  for (int d = 0; d < deviceCount_; ++d) {
     checkError(cuCtxDestroy(deviceContexts[d]));
   }
 #endif
@@ -32,9 +39,9 @@ CudaMgr::~CudaMgr() {
 
 void CudaMgr::fillDeviceProperties() {
 #ifdef HAVE_CUDA
-  deviceProperties.resize(deviceCount);
-  for (int deviceNum = 0; deviceNum < deviceCount; ++deviceNum) {
-    checkError(cuDeviceGet(&deviceProperties[deviceNum].device, deviceNum));
+  deviceProperties.resize(deviceCount_);
+  for (int deviceNum = 0; deviceNum < deviceCount_; ++deviceNum) {
+    checkError(cuDeviceGet(&deviceProperties[deviceNum].device, deviceNum + startGpu_));
     checkError(cuDeviceComputeCapability(&deviceProperties[deviceNum].computeMajor,
                                          &deviceProperties[deviceNum].computeMinor,
                                          deviceProperties[deviceNum].device));
@@ -78,8 +85,8 @@ void CudaMgr::fillDeviceProperties() {
 
 void CudaMgr::createDeviceContexts() {
 #ifdef HAVE_CUDA
-  deviceContexts.resize(deviceCount);
-  for (int d = 0; d < deviceCount; ++d) {
+  deviceContexts.resize(deviceCount_);
+  for (int d = 0; d < deviceCount_; ++d) {
     CUresult status = cuCtxCreate(&deviceContexts[d], 0, deviceProperties[d].device);
     if (status != CUDA_SUCCESS) {
       // this is called from destructor so we need
@@ -97,8 +104,8 @@ void CudaMgr::createDeviceContexts() {
 
 void CudaMgr::printDeviceProperties() const {
 #ifdef HAVE_CUDA
-  cout << "Num devices: " << deviceCount << endl << endl;
-  for (int d = 0; d < deviceCount; ++d) {
+  cout << "Num devices: " << deviceCount_ << endl << endl;
+  for (int d = 0; d < deviceCount_; ++d) {
     cout << "Device: " << deviceProperties[d].device << endl;
     cout << "Compute Major: " << deviceProperties[d].computeMajor << endl;
     cout << "Compute Minor: " << deviceProperties[d].computeMinor << endl;
@@ -114,7 +121,7 @@ void CudaMgr::printDeviceProperties() const {
 
 void CudaMgr::setContext(const int deviceNum) const {
 #ifdef HAVE_CUDA
-  // assert (deviceNum < deviceCount);
+  // assert (deviceNum < deviceCount_);
   cuCtxSetCurrent(deviceContexts[deviceNum]);
 #endif
 }

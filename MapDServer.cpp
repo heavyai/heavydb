@@ -70,6 +70,7 @@ class MapDHandler : virtual public MapDIf {
               const bool enable_rendering,
               const size_t render_mem_bytes,
               const int num_gpus,
+              const unsigned int start_gpu,
 #ifdef HAVE_CALCITE
               const int calcite_port)
 #else
@@ -118,7 +119,7 @@ class MapDHandler : virtual public MapDIf {
       cpu_mode_only_ = true;
     }
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
-    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_, num_gpus));
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(), !cpu_mode_only_, num_gpus, start_gpu));
     sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
     import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
@@ -1227,6 +1228,7 @@ int main(int argc, char** argv) {
   bool enable_rendering = true;
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
+  unsigned int start_gpu = 0;
 
   namespace po = boost::program_options;
 
@@ -1242,7 +1244,8 @@ int main(int argc, char** argv) {
       "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
       "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)")(
       "render-mem-bytes", po::value<size_t>(&render_mem_bytes), "Size of memory reserved for rendering (in bytes)")(
-      "num-gpus", po::value<int>(&num_gpus), "Number of gpus to use");
+      "num-gpus", po::value<int>(&num_gpus), "Number of gpus to use")(
+      "start-gpu", po::value<unsigned int>(&start_gpu), "First gpu to use");
 #ifdef HAVE_CALCITE
   desc.add_options()("calcite-port", po::value<int>(&calcite_port), "Calcite port number (default 9092)");
 #endif  // HAVE_CALCITE
@@ -1366,6 +1369,7 @@ int main(int argc, char** argv) {
                                                   enable_rendering,
                                                   render_mem_bytes,
                                                   num_gpus,
+                                                  start_gpu,
                                                   calcite_port));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 

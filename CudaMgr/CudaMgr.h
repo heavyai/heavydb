@@ -27,7 +27,7 @@ struct DeviceProperties {
 
 class CudaMgr {
  public:
-  CudaMgr(const int numGpus);
+  CudaMgr(const int numGpus, const unsigned int startGpu = 0);
   ~CudaMgr();
   void setContext(const int deviceNum) const;
   void printDeviceProperties() const;
@@ -43,7 +43,7 @@ class CudaMgr {
                           const int destDeviceNum,
                           const int srcDeviceNum);
   void zeroDeviceMem(int8_t* devicePtr, const size_t numBytes, const int deviceNum);
-  inline int getDeviceCount() const { return deviceCount; }
+  inline int getDeviceCount() const { return deviceCount_; }
   std::vector<DeviceProperties> deviceProperties;
 
  private:
@@ -51,7 +51,8 @@ class CudaMgr {
   void createDeviceContexts();
   void checkError(CUresult cuResult);
 
-  int deviceCount;
+  int deviceCount_;
+  unsigned int startGpu_;
   std::vector<CUcontext> deviceContexts;
 
 };  // class CudaMgr
