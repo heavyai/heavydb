@@ -384,6 +384,8 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
     }
     case kEPOCH:
       return arg_range;
+    case kQUARTER:
+      return ExpressionRange::makeIntRange(1, 4, 0, has_nulls);
     case kMONTH:
       return ExpressionRange::makeIntRange(1, 12, 0, has_nulls);
     case kDAY:
@@ -414,6 +416,8 @@ int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) 
   switch (datetrunc_field) {
     case dtYEAR:
       return year_days * day_seconds;
+    case dtQUARTER:
+      return 90 * day_seconds;  // 90 is least number of days in any quater
     case dtMONTH:
       return 28 * day_seconds;
     case dtDAY:

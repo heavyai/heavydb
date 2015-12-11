@@ -5,71 +5,72 @@
 #endif
 
 extern "C" __attribute__((noinline))
+#ifdef __CUDACC__
+__device__
+#endif
+    int extract_hour(const time_t* tim_p) {
+  long days, rem;
+  const time_t lcltime = *tim_p;
+  days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = ((long)lcltime) % SECSPERDAY;
+  if (rem < 0) {
+    rem += SECSPERDAY;
+    --days;
+  }
+  return (int)(rem / SECSPERHOUR);
+}
 
 #ifdef __CUDACC__
 __device__
 #endif
-  int extract_hour(const time_t* tim_p) {
-    long days, rem;
-    const time_t lcltime = *tim_p;
-    days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-    rem = ((long)lcltime) % SECSPERDAY;
-    if (rem < 0) {
-      rem += SECSPERDAY;
-      --days;
-    }
-    return (int)(rem / SECSPERHOUR);
+    int
+    extract_minute(const time_t* tim_p) {
+  long days, rem;
+  const time_t lcltime = *tim_p;
+  days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = ((long)lcltime) % SECSPERDAY;
+  if (rem < 0) {
+    rem += SECSPERDAY;
+    --days;
   }
-
-#ifdef __CUDACC__
-  __device__
-#endif
-  int extract_minute(const time_t* tim_p) {
-    long days, rem;
-    const time_t lcltime = *tim_p;
-    days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-    rem = ((long)lcltime) % SECSPERDAY;
-    if (rem < 0) {
-      rem += SECSPERDAY;
-      --days;
-    }
-    rem %= SECSPERHOUR;
-    return (int)(rem / SECSPERMIN);
-  }
-
-#ifdef __CUDACC__
-  __device__
-#endif
-  int extract_second(const time_t* tim_p) {
-    const time_t lcltime = *tim_p;
-    return (int) ((long)lcltime % SECSPERMIN);
-  }
-
-#ifdef __CUDACC__
-  __device__
-#endif
-  int extract_dow(const time_t* tim_p) {
-    long days, rem;
-    int weekday;
-    const time_t lcltime = *tim_p;
-    days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
-    rem = ((long)lcltime) % SECSPERDAY;
-    if (rem < 0) {
-      rem += SECSPERDAY;
-      --days;
-    }
-
-    if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
-      weekday += DAYSPERWEEK;
-    return weekday;
-  }
-
-
+  rem %= SECSPERHOUR;
+  return (int)(rem / SECSPERMIN);
+}
 
 #ifdef __CUDACC__
 __device__
 #endif
-  tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
+    int
+    extract_second(const time_t* tim_p) {
+  const time_t lcltime = *tim_p;
+  return (int)((long)lcltime % SECSPERMIN);
+}
+
+#ifdef __CUDACC__
+__device__
+#endif
+    int
+    extract_dow(const time_t* tim_p) {
+  long days, rem;
+  int weekday;
+  const time_t lcltime = *tim_p;
+  days = ((long)lcltime) / SECSPERDAY - EPOCH_ADJUSTMENT_DAYS;
+  rem = ((long)lcltime) % SECSPERDAY;
+  if (rem < 0) {
+    rem += SECSPERDAY;
+    --days;
+  }
+
+  if ((weekday = ((ADJUSTED_EPOCH_WDAY + days) % DAYSPERWEEK)) < 0)
+    weekday += DAYSPERWEEK;
+  return weekday;
+}
+
+#ifdef __CUDACC__
+__device__
+#endif
+    tm*
+    gmtime_r_newlib(const time_t* tim_p, tm* res) {
   const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
                                              {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   long days, rem;
@@ -165,7 +166,7 @@ extern "C" __attribute__((noinline))
 #ifdef __CUDACC__
 __device__
 #endif
-int64_t ExtractFromTime(ExtractField field, time_t timeval) {
+    int64_t ExtractFromTime(ExtractField field, time_t timeval) {
 
   // We have fast paths for the 5 fields below - do not need to do full gmtime
   switch (field) {
@@ -192,6 +193,8 @@ int64_t ExtractFromTime(ExtractField field, time_t timeval) {
   switch (field) {
     case kYEAR:
       return 1900 + tm_struct.tm_year;
+    case kQUARTER:
+      return (tm_struct.tm_mon) / 3 + 1;
     case kMONTH:
       return tm_struct.tm_mon + 1;
     case kDAY:

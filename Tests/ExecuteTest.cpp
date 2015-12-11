@@ -728,6 +728,28 @@ TEST(Select, Time) {
     ASSERT_EQ(662688000L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATE_TRUNC(decade, CAST('2000-05-08 20:15:12' AS TIMESTAMP)) FROM test limit 1;", dt)));
+    // test QUARTER
+    ASSERT_EQ(4,
+              v<int64_t>(run_simple_agg(
+                  "select EXTRACT(quarter from CAST('2008-11-27 12:12:12' as timestamp)) from test limit 1;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "select EXTRACT(quarter from CAST('2008-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+    ASSERT_EQ(1199145600L,
+              v<int64_t>(run_simple_agg(
+                  "select DATE_TRUNC(quarter, CAST('2008-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+    ASSERT_EQ(1230768000L,
+              v<int64_t>(run_simple_agg(
+                  "select DATE_TRUNC(quarter, CAST('2009-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+    ASSERT_EQ(1254355200L,
+              v<int64_t>(run_simple_agg(
+                  "select DATE_TRUNC(quarter, CAST('2009-11-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+    ASSERT_EQ(946684800L,
+              v<int64_t>(run_simple_agg(
+                  "select DATE_TRUNC(quarter, CAST('2000-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+    ASSERT_EQ(-2208988800L,
+              v<int64_t>(run_simple_agg(
+                  "select DATE_TRUNC(quarter, CAST('1900-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
   }
 }
 

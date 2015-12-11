@@ -558,6 +558,8 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Ca
   ExtractField fieldno;
   if (boost::iequals(*field, "year"))
     fieldno = kYEAR;
+  else if (boost::iequals(*field, "quarter"))
+    fieldno = kQUARTER;
   else if (boost::iequals(*field, "month"))
     fieldno = kMONTH;
   else if (boost::iequals(*field, "day"))
@@ -627,6 +629,8 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::analyze(const Catalog_Namespace::
   DatetruncField fieldno;
   if (boost::iequals(*field, "year"))
     fieldno = dtYEAR;
+  else if (boost::iequals(*field, "quarter"))
+    fieldno = dtQUARTER;
   else if (boost::iequals(*field, "month"))
     fieldno = dtMONTH;
   else if (boost::iequals(*field, "day"))

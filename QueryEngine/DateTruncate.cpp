@@ -57,7 +57,8 @@ extern "C" __attribute__((noinline))
 __device__
 #endif
     time_t DateTruncate(DatetruncField field, time_t timeval) {
-
+  const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
+                                             {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   switch (field) {
     case dtMICROSECOND:
     case dtMILLISECOND:
@@ -109,6 +110,34 @@ __device__
       // calculate the day of month offset
       int dom = tm_struct.tm_mday;
       return day - ((dom - 1) * SECSPERDAY);
+    }
+    case dtQUARTER: {
+      // clear the time
+      time_t day = (uint64_t)(timeval / SECSPERDAY) * SECSPERDAY;
+      if (day < 0)
+        day -= SECSPERDAY;
+      // calculate the day of month offset
+      int dom = tm_struct.tm_mday;
+      // go to the start of the current month
+      day = day - ((dom - 1) * SECSPERDAY);
+      // find what month we are
+      int mon = tm_struct.tm_mon;
+      // find start of quarter
+      int start_of_quarter = tm_struct.tm_mon / 3 * 3;
+      int year = tm_struct.tm_year + YEAR_BASE;
+      // are we in a leap year
+      int leap_year = 0;
+      // only matters if month is March so save some mod operations
+      if (mon == 2) {
+        if (((year % 400) == 0) || ((year % 4) == 0 && ((year % 100) != 0))) {
+          leap_year = 1;
+        }
+      }
+      // now walk back until at correct quarter start
+      for (; mon > start_of_quarter; mon--) {
+        day = day - (month_lengths[0 + leap_year][mon - 1] * SECSPERDAY);
+      }
+      return day;
     }
     case dtYEAR: {
       // clear the time

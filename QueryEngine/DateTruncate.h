@@ -23,6 +23,7 @@
  */
 enum DatetruncField {
   dtYEAR,
+  dtQUARTER,
   dtMONTH,
   dtDAY,
   dtHOUR,
