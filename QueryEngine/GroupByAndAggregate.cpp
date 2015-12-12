@@ -2022,6 +2022,7 @@ bool many_entries(const int64_t max_val, const int64_t min_val, const int64_t bu
 GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const ExecutorDeviceType device_type,
                                          const Planner::Plan* plan,
+                                         const bool render_output,
                                          const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                          const size_t max_groups_buffer_entry_count,
@@ -2047,7 +2048,8 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
   }
   bool sort_on_gpu_hint =
       device_type == ExecutorDeviceType::GPU && allow_multifrag && sort_plan && gpuCanHandleOrderEntries(sort_plan);
-  initQueryMemoryDescriptor(max_groups_buffer_entry_count, small_groups_buffer_entry_count, sort_on_gpu_hint);
+  initQueryMemoryDescriptor(
+      max_groups_buffer_entry_count, small_groups_buffer_entry_count, sort_on_gpu_hint, render_output);
   query_mem_desc_.sort_on_gpu_ =
       sort_on_gpu_hint && query_mem_desc_.canOutputColumnar() && !query_mem_desc_.keyless_hash;
   query_mem_desc_.is_sort_plan = sort_plan && !query_mem_desc_.sort_on_gpu_;
@@ -2057,7 +2059,8 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
 
 void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count,
                                                     const size_t small_groups_buffer_entry_count,
-                                                    const bool sort_on_gpu_hint) {
+                                                    const bool sort_on_gpu_hint,
+                                                    const bool render_output) {
   auto group_cols = group_by_exprs(plan_);
   for (const auto group_expr : group_cols) {
     const auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(group_expr);
@@ -2157,14 +2160,19 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
           ((group_cols.size() != 1 || !group_cols.front()->get_type_info().is_string()) &&
            col_range_info.max >= col_range_info.min + static_cast<int64_t>(max_groups_buffer_entry_count) &&
            !col_range_info.bucket)) {
+        const auto hash_type = render_output ? GroupByColRangeType::MultiCol : col_range_info.hash_type_;
+        size_t small_group_slots = scan_limit_ ? static_cast<size_t>(scan_limit_) : small_groups_buffer_entry_count;
+        if (render_output) {
+          small_group_slots = 0;
+        }
         query_mem_desc_ = {executor_,
-                           col_range_info.hash_type_,
+                           hash_type,
                            false,
                            false,
                            group_col_widths,
                            agg_col_widths,
                            max_groups_buffer_entry_count,
-                           scan_limit_ ? static_cast<size_t>(scan_limit_) : small_groups_buffer_entry_count,
+                           small_group_slots,
                            col_range_info.min,
                            col_range_info.max,
                            0,

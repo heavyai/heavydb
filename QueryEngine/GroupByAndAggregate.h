@@ -926,6 +926,7 @@ class GroupByAndAggregate {
   GroupByAndAggregate(Executor* executor,
                       const ExecutorDeviceType device_type,
                       const Planner::Plan* plan,
+                      const bool render_output,
                       const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
                       const size_t max_groups_buffer_entry_count,
@@ -974,7 +975,8 @@ class GroupByAndAggregate {
 
   void initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count,
                                  const size_t small_groups_buffer_entry_count,
-                                 const bool sort_on_gpu_hint);
+                                 const bool sort_on_gpu_hint,
+                                 const bool render_output);
 
   llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&,
                               const ExecutorDeviceType,

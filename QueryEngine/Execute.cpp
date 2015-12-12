@@ -2366,6 +2366,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   std::string llvm_ir;
   auto compilation_result =
       compilePlan(result_plan,
+                  false,
                   {},
                   agg_infos,
                   {},
@@ -2687,6 +2688,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     try {
       compilation_result_cpu =
           compilePlan(plan,
+                      false,
                       query_infos,
                       agg_infos,
                       scan_ids,
@@ -2714,6 +2716,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     } catch (...) {
       compilation_result_cpu =
           compilePlan(plan,
+                      false,
                       query_infos,
                       agg_infos,
                       scan_ids,
@@ -2752,6 +2755,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     try {
       compilation_result_gpu =
           compilePlan(plan,
+                      render_allocator,
                       query_infos,
                       agg_infos,
                       scan_ids,
@@ -2779,6 +2783,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     } catch (...) {
       compilation_result_gpu =
           compilePlan(plan,
+                      render_allocator,
                       query_infos,
                       agg_infos,
                       scan_ids,
@@ -3868,6 +3873,7 @@ void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_in
 }
 
 Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
+                                                  const bool render_output,
                                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                                   const std::vector<Executor::AggInfo>& agg_infos,
                                                   const std::vector<ScanId>& scan_ids,
@@ -3901,6 +3907,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   GroupByAndAggregate group_by_and_aggregate(this,
                                              device_type,
                                              plan,
+                                             render_output,
                                              query_infos,
                                              row_set_mem_owner,
                                              max_groups_buffer_entry_guess,

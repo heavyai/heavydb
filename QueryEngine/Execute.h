@@ -421,6 +421,7 @@ class Executor {
   };
 
   CompilationResult compilePlan(const Planner::Plan* plan,
+                                const bool render_output,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const std::vector<Executor::AggInfo>& agg_infos,
                                 const std::vector<ScanId>& scan_ids,
