@@ -164,6 +164,13 @@ configure_file(
   "${CMAKE_BINARY_DIR}/MapDRelease.h"
   @ONLY
   )
+# required to force regen of MAPD_GIT_HASH.txt, MapDRelease.h
+add_custom_target(rerun_cmake ALL
+  COMMAND cmake .
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+add_dependencies(mapd rerun_cmake)
+add_dependencies(mapd_server rerun_cmake)
 
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp GENERATED)
 set_source_files_properties(${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp GENERATED)
