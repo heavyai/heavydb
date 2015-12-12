@@ -96,6 +96,7 @@ struct QueryMemoryDescriptor {
   bool sort_on_gpu_;
   bool is_sort_plan;  // TODO(alex): remove
   bool output_columnar;
+  bool render_output;
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const std::vector<int64_t>& init_agg_vals,

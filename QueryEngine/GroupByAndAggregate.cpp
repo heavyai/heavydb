@@ -2130,6 +2130,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
   auto agg_col_widths = get_col_byte_widths(target_expr_list);
 
   if (group_col_widths.empty()) {
+    CHECK(!render_output);
     query_mem_desc_ = {executor_,
                        GroupByColRangeType::Scan,
                        false,
@@ -2144,6 +2145,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                        false,
                        GroupByMemSharing::Private,
                        count_distinct_descriptors,
+                       false,
+                       false,
                        false,
                        false};
     return;
@@ -2171,7 +2174,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            false,
                            group_col_widths,
                            agg_col_widths,
-                           max_groups_buffer_entry_count,
+                           max_groups_buffer_entry_count * (render_output ? 4 : 1),
                            small_group_slots,
                            col_range_info.min,
                            col_range_info.max,
@@ -2180,9 +2183,12 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            GroupByMemSharing::Shared,
                            count_distinct_descriptors,
                            false,
-                           false};
+                           false,
+                           false,
+                           render_output};
         return;
       } else {
+        CHECK(!render_output);
         bool keyless =
             (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
             !col_range_info.bucket;
@@ -2229,11 +2235,14 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            GroupByMemSharing::Shared,
                            count_distinct_descriptors,
                            false,
+                           false,
+                           false,
                            false};
         return;
       }
     }
     case GroupByColRangeType::MultiCol: {
+      CHECK(!render_output);
       query_mem_desc_ = {executor_,
                          col_range_info.hash_type_,
                          false,
@@ -2249,10 +2258,13 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          GroupByMemSharing::Shared,
                          count_distinct_descriptors,
                          false,
+                         false,
+                         false,
                          false};
       return;
     }
     case GroupByColRangeType::MultiColPerfectHash: {
+      CHECK(!render_output);
       query_mem_desc_ = {executor_,
                          col_range_info.hash_type_,
                          false,
@@ -2267,6 +2279,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          col_range_info.has_nulls,
                          GroupByMemSharing::Shared,
                          count_distinct_descriptors,
+                         false,
+                         false,
                          false,
                          false};
       return;
@@ -2334,14 +2348,14 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (executor_->isCPUOnly()) {
+  if (executor_->isCPUOnly() || render_output) {
     return true;
   }
   return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) && many_entries(max_val, min_val, bucket);
 }
 
 bool QueryMemoryDescriptor::lazyInitGroups(const ExecutorDeviceType device_type) const {
-  return device_type == ExecutorDeviceType::GPU && !getSmallBufferSizeQuad();
+  return device_type == ExecutorDeviceType::GPU && !render_output && !getSmallBufferSizeQuad();
 }
 
 bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type) const {

@@ -2353,7 +2353,9 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                                        GroupByMemSharing::Shared,
                                        CountDistinctDescriptors{},
                                        false,
-                                       true};
+                                       true,
+                                       false,
+                                       false};
   auto query_func = query_group_by_template(
       cgen_state_->module_, is_nested_, hoist_literals, query_mem_desc, ExecutorDeviceType::CPU, false);
   std::tie(row_func, col_heads) = create_row_function(
