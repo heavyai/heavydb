@@ -1236,25 +1236,47 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("help,h", "Print help messages ")(
-      "path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")(
-      "flush-log", "Force aggressive log file flushes.  Use when trouble-shooting.")(
-      "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
-      "use-nvvm", "Use NVVM instead of NVPTX")(
-      "disable-multifrag", "Disable execution over multiple fragments in a single round-trip to GPU")(
-      "read-only", "Enable read-only mode")("disable-rendering", "Disable backend rendering")("cpu", "Run on CPU only")(
-      "gpu", "Run on GPUs (Default)")("allow-loop-joins", "Enable loop joins")("hybrid", "Run on both CPU and GPUs")(
-      "version,v", "Print Release Version Number")("port,p", po::value<int>(&port), "Port number (default 9091)")(
-      "http-port", po::value<int>(&http_port), "HTTP port number (default 9090)")(
-      "cpu-buffer-mem-bytes",
-      po::value<size_t>(&cpu_buffer_mem_bytes),
-      "Size of memory reserved for rendering (in bytes)")(
-      "render-mem-bytes", po::value<size_t>(&render_mem_bytes), "Size of memory reserved for rendering (in bytes)")(
-      "num-gpus", po::value<int>(&num_gpus), "Number of gpus to use")(
-      "start-gpu", po::value<int>(&start_gpu), "First gpu to use");
+  desc.add_options()("help,h", "Print help messages");
+  desc.add_options()(
+      "path", po::value<std::string>(&base_path)->required()->default_value("data"), "Directory path to Mapd catalogs");
+  desc.add_options()("cpu", "Run on CPU only");
+  desc.add_options()("gpu", "Run on GPUs (Default)");
+  desc.add_options()("hybrid", "Run on both CPU and GPUs");
+  desc.add_options()("read-only",
+                     po::bool_switch(&read_only)->default_value(read_only)->implicit_value(true),
+                     "Enable read-only mode");
+  desc.add_options()("disable-rendering",
+                     po::bool_switch(&enable_rendering)->default_value(enable_rendering)->implicit_value(false),
+                     "Disable backend rendering");
+  desc.add_options()("port,p", po::value<int>(&port)->default_value(port), "Port number");
+  desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
 #ifdef HAVE_CALCITE
-  desc.add_options()("calcite-port", po::value<int>(&calcite_port), "Calcite port number (default 9092)");
+  desc.add_options()("calcite-port", po::value<int>(&calcite_port)->default_value(calcite_port), "Calcite port number");
 #endif  // HAVE_CALCITE
+  desc.add_options()("flush-log",
+                     po::bool_switch(&flush_log)->default_value(flush_log)->implicit_value(true),
+                     "Force aggressive log file flushes. Use when trouble-shooting.");
+  desc.add_options()("jit-debug",
+                     po::bool_switch(&jit_debug)->default_value(jit_debug)->implicit_value(true),
+                     "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
+  desc.add_options()("use-nvvm",
+                     po::bool_switch(&use_nvptx)->default_value(use_nvptx)->implicit_value(false),
+                     "Use NVVM instead of NVPTX");
+  desc.add_options()("disable-multifrag",
+                     po::bool_switch(&allow_multifrag)->default_value(allow_multifrag)->implicit_value(false),
+                     "Disable execution over multiple fragments in a single round-trip to GPU");
+  desc.add_options()("allow-loop-joins",
+                     po::bool_switch(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
+                     "Enable loop joins");
+  desc.add_options()("cpu-buffer-mem-bytes",
+                     po::value<size_t>(&cpu_buffer_mem_bytes)->default_value(cpu_buffer_mem_bytes),
+                     "Size of memory reserved for rendering [bytes]");
+  desc.add_options()("render-mem-bytes",
+                     po::value<size_t>(&render_mem_bytes)->default_value(render_mem_bytes),
+                     "Size of memory reserved for rendering [bytes]");
+  desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
+  desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
+  desc.add_options()("version,v", "Print Release Version Number");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -1263,13 +1285,12 @@ int main(int argc, char** argv) {
 
   try {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
+    po::notify(vm);
+
     if (vm.count("help")) {
       std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
-                   "number>][--http-port <http port number>][--flush-log][--version|-v]";
-#ifdef HAVE_CALCITE
-      std::cout << "[--calcite-port <calcite port number>]";
-#endif  // HAVE_CALCITE
-      std::cout << "\n";
+                   "number>] [--http-port <http port number>] [--flush-log] [--version|-v]" << std::endl << std::endl;
+      std::cout << desc << std::endl;
       return 0;
     }
     if (vm.count("version")) {
@@ -1282,24 +1303,9 @@ int main(int argc, char** argv) {
       device = "gpu";
     if (vm.count("hybrid"))
       device = "hybrid";
-    if (vm.count("flush-log"))
-      flush_log = true;
-    if (vm.count("jit-debug"))
-      jit_debug = true;
-    if (vm.count("use-nvvm"))
-      use_nvptx = false;
-    if (vm.count("disable-multifrag"))
-      allow_multifrag = false;
-    if (vm.count("read-only"))
-      read_only = true;
-    if (vm.count("allow-loop-joins"))
-      allow_loop_joins = true;
     if (vm.count("disable-rendering") || device == "cpu") {
       enable_rendering = false;
     }
-
-    po::notify(vm);
-
     if (num_gpus == 0)
       device = "cpu";
   } catch (boost::program_options::error& e) {
