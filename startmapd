@@ -87,7 +87,7 @@ fi
 
 if [ -d frontend -a -e ./bin/mapd_web_server ]; then
     trap 'kill -TERM $WEBPID' TERM INT
-    ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" &
+    ./bin/mapd_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA &
     WEBPID=$!
 
     MAPDFRONTEND="http://localhost:${MAPD_WEB_PORT}"
