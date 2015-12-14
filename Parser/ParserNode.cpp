@@ -39,6 +39,10 @@ std::shared_ptr<Analyzer::Expr> StringLiteral::analyze(const Catalog_Namespace::
 std::shared_ptr<Analyzer::Expr> IntLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
                                                     Analyzer::Query& query,
                                                     TlistRefType allow_tlist_ref) const {
+  return analyzeValue(intval);
+}
+
+std::shared_ptr<Analyzer::Expr> IntLiteral::analyzeValue(const int64_t intval) {
   SQLTypes t;
   Datum d;
   if (intval >= INT16_MIN && intval <= INT16_MAX) {

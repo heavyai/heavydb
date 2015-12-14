@@ -124,6 +124,7 @@ class IntLiteral : public Literal {
   virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  static std::shared_ptr<Analyzer::Expr> analyzeValue(const int64_t intval);
   virtual std::string to_string() const { return boost::lexical_cast<std::string>(intval); }
 
  private:

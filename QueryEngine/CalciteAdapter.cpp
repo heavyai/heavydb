@@ -1,5 +1,6 @@
 #include "CalciteAdapter.h"
 
+#include "../Parser/ParserNode.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
@@ -52,9 +53,7 @@ class CalciteAdapter {
       return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, nullptr, is_nullable);
     }
     if (expr.IsInt()) {
-      Datum d;
-      d.intval = expr.GetInt();
-      return std::make_shared<Analyzer::Constant>(SQLTypeInfo(kINT, false), false, d);
+      return Parser::IntLiteral::analyzeValue(expr.GetInt64());
     }
     CHECK(false);
     return nullptr;
