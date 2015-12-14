@@ -11,52 +11,66 @@
 
 namespace {
 
-std::string get_table_name_from_table_scan(const rapidjson::Value& scan_ra) {
-  const auto& table_info = scan_ra["table"];
-  CHECK(table_info.IsArray());
-  CHECK_EQ(unsigned(3), table_info.Size());
-  return table_info[2].GetString();
-}
-
 class CalciteAdapter {
  public:
+  CalciteAdapter(const Catalog_Namespace::Catalog& cat) : cat_(cat) {}
+
   std::shared_ptr<Analyzer::Expr> getExprFromNode(const rapidjson::Value& expr, const TableDescriptor* td) {
     if (expr.IsObject() && expr.HasMember("op")) {
-      const auto op_name = expr["op"].GetString();
-      if (op_name == std::string(">")) {
-        const auto& operands = expr["operands"];
-        CHECK(operands.IsArray());
-        CHECK_EQ(unsigned(2), operands.Size());
-        const auto lhs = getExprFromNode(operands[0], td);
-        const auto rhs = getExprFromNode(operands[1], td);
-        return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false), false, kGT, kONE, lhs, rhs);
-      }
-      CHECK(false);
+      return translateBinOp(expr, td);
     }
     if (expr.IsObject() && expr.HasMember("input")) {
-      const int col_id = expr["input"].GetInt();
-      used_columns_.insert(col_id);
-      return std::make_shared<Analyzer::ColumnVar>(SQLTypeInfo(kINT, false), td->tableId, col_id, 0);
+      return translateColRef(expr, td);
     }
     if (expr.IsObject() && expr.HasMember("agg")) {
-      const auto agg_name = expr["agg"].GetString();
-      CHECK_EQ(std::string("COUNT"), agg_name);
-      CHECK(expr.HasMember("type"));
-      const auto type_name = expr["type"]["type"].GetString();
-      SQLTypes agg_type{kNULLT};
-      if (type_name == std::string("BIGINT")) {
-        agg_type = kBIGINT;
-      }
-      const auto is_nullable = expr["type"]["nullable"].GetBool();
-      SQLTypeInfo agg_ti(agg_type, is_nullable);
-      SQLAgg agg_kind{kCOUNT};
-      return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, nullptr, is_nullable);
+      return translateAggregate(expr, td);
     }
     if (expr.IsInt()) {
-      return Parser::IntLiteral::analyzeValue(expr.GetInt64());
+      return translateIntLiteral(expr);
     }
     CHECK(false);
     return nullptr;
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateBinOp(const rapidjson::Value& expr, const TableDescriptor* td) {
+    const auto op_name = expr["op"].GetString();
+    if (op_name == std::string(">")) {
+      const auto& operands = expr["operands"];
+      CHECK(operands.IsArray());
+      CHECK_EQ(unsigned(2), operands.Size());
+      const auto lhs = getExprFromNode(operands[0], td);
+      const auto rhs = getExprFromNode(operands[1], td);
+      return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false), false, kGT, kONE, lhs, rhs);
+    }
+    CHECK(false);
+    return nullptr;
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr, const TableDescriptor* td) {
+    const int col_id = expr["input"].GetInt();
+    used_columns_.insert(col_id);
+    const auto cd = cat_.getMetadataForColumn(td->tableId, col_id);
+    CHECK(cd);
+    return std::make_shared<Analyzer::ColumnVar>(cd->columnType, td->tableId, col_id, 0);
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateAggregate(const rapidjson::Value& expr, const TableDescriptor* td) {
+    const auto agg_name = expr["agg"].GetString();
+    CHECK_EQ(std::string("COUNT"), agg_name);
+    CHECK(expr.HasMember("type"));
+    const auto type_name = expr["type"]["type"].GetString();
+    SQLTypes agg_type{kNULLT};
+    if (type_name == std::string("BIGINT")) {
+      agg_type = kBIGINT;
+    }
+    const auto is_nullable = expr["type"]["nullable"].GetBool();
+    SQLTypeInfo agg_ti(agg_type, is_nullable);
+    SQLAgg agg_kind{kCOUNT};
+    return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, nullptr, is_nullable);
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateIntLiteral(const rapidjson::Value& expr) {
+    return Parser::IntLiteral::analyzeValue(expr.GetInt64());
   }
 
   std::list<int> getUsedColumnList() const {
@@ -69,7 +83,15 @@ class CalciteAdapter {
 
  private:
   std::set<int> used_columns_;
+  const Catalog_Namespace::Catalog& cat_;
 };
+
+std::string get_table_name_from_table_scan(const rapidjson::Value& scan_ra) {
+  const auto& table_info = scan_ra["table"];
+  CHECK(table_info.IsArray());
+  CHECK_EQ(unsigned(3), table_info.Size());
+  return table_info[2].GetString();
+}
 
 }  // namespace
 
@@ -89,7 +111,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(td);
   const auto& filter_ra = rels[1];
   CHECK(filter_ra.IsObject());
-  CalciteAdapter calcite_adapter;
+  CalciteAdapter calcite_adapter(cat);
   const auto filter_expr = calcite_adapter.getExprFromNode(filter_ra["condition"], td);
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq{filter_expr};
