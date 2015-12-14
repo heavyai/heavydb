@@ -11,6 +11,14 @@
 
 namespace {
 
+SQLOps to_bin_op(const std::string& bin_op_str) {
+  if (bin_op_str == std::string(">")) {
+    return kGT;
+  }
+  CHECK(false);
+  return kEQ;
+}
+
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat) : cat_(cat) {}
@@ -33,17 +41,13 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateBinOp(const rapidjson::Value& expr, const TableDescriptor* td) {
-    const auto op_name = expr["op"].GetString();
-    if (op_name == std::string(">")) {
-      const auto& operands = expr["operands"];
-      CHECK(operands.IsArray());
-      CHECK_EQ(unsigned(2), operands.Size());
-      const auto lhs = getExprFromNode(operands[0], td);
-      const auto rhs = getExprFromNode(operands[1], td);
-      return std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, false), false, kGT, kONE, lhs, rhs);
-    }
-    CHECK(false);
-    return nullptr;
+    const auto bin_op_str = expr["op"].GetString();
+    const auto& operands = expr["operands"];
+    CHECK(operands.IsArray());
+    CHECK_EQ(unsigned(2), operands.Size());
+    const auto lhs = getExprFromNode(operands[0], td);
+    const auto rhs = getExprFromNode(operands[1], td);
+    return Parser::OperExpr::normalize(to_bin_op(bin_op_str), kONE, lhs, rhs);
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr, const TableDescriptor* td) {

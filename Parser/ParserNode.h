@@ -226,6 +226,10 @@ class OperExpr : public Expr {
   virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  static std::shared_ptr<Analyzer::Expr> normalize(const SQLOps optype,
+                                                   const SQLQualifier qual,
+                                                   std::shared_ptr<Analyzer::Expr> left_expr,
+                                                   std::shared_ptr<Analyzer::Expr> right_expr);
   virtual std::string to_string() const;
 
  private:

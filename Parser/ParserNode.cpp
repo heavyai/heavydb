@@ -100,10 +100,8 @@ std::shared_ptr<Analyzer::Expr> UserLiteral::analyze(const Catalog_Namespace::Ca
 std::shared_ptr<Analyzer::Expr> OperExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref) const {
-  SQLTypeInfo result_type, left_type, right_type;
-  SQLTypeInfo new_left_type, new_right_type;
   auto left_expr = left->analyze(catalog, query, allow_tlist_ref);
-  left_type = left_expr->get_type_info();
+  const auto& left_type = left_expr->get_type_info();
   if (right == nullptr) {
     return makeExpr<Analyzer::UOper>(left_type, left_expr->get_contains_agg(), optype, left_expr->decompress());
   }
@@ -111,15 +109,21 @@ std::shared_ptr<Analyzer::Expr> OperExpr::analyze(const Catalog_Namespace::Catal
     if (left_type.get_type() != kARRAY)
       throw std::runtime_error(left->to_string() + " is not of array type.");
     auto right_expr = right->analyze(catalog, query, allow_tlist_ref);
-    right_type = right_expr->get_type_info();
+    const auto& right_type = right_expr->get_type_info();
     if (!right_type.is_integer())
       throw std::runtime_error(right->to_string() + " is not of integer type.");
     return makeExpr<Analyzer::BinOper>(left_type.get_elem_type(), false, kARRAY_AT, kONE, left_expr, right_expr);
   }
-  SQLQualifier qual = opqualifier;
   auto right_expr = right->analyze(catalog, query, allow_tlist_ref);
-  bool has_agg = (left_expr->get_contains_agg() || right_expr->get_contains_agg());
-  right_type = right_expr->get_type_info();
+  return normalize(optype, opqualifier, left_expr, right_expr);
+}
+
+std::shared_ptr<Analyzer::Expr> OperExpr::normalize(const SQLOps optype,
+                                                    const SQLQualifier qual,
+                                                    std::shared_ptr<Analyzer::Expr> left_expr,
+                                                    std::shared_ptr<Analyzer::Expr> right_expr) {
+  const auto& left_type = left_expr->get_type_info();
+  auto right_type = right_expr->get_type_info();
   if (qual != kONE) {
     // subquery not supported yet.
     assert(typeid(*right_expr) != typeid(Analyzer::Subquery));
@@ -129,7 +133,10 @@ std::shared_ptr<Analyzer::Expr> OperExpr::analyze(const Catalog_Namespace::Catal
           "expression of array type.");
     right_type = right_type.get_elem_type();
   }
-  result_type = Analyzer::BinOper::analyze_type_info(optype, left_type, right_type, &new_left_type, &new_right_type);
+  SQLTypeInfo new_left_type;
+  SQLTypeInfo new_right_type;
+  const auto result_type =
+      Analyzer::BinOper::analyze_type_info(optype, left_type, right_type, &new_left_type, &new_right_type);
   if (left_type != new_left_type)
     left_expr = left_expr->add_cast(new_left_type);
   if (right_type != new_right_type) {
@@ -160,6 +167,7 @@ std::shared_ptr<Analyzer::Expr> OperExpr::analyze(const Catalog_Namespace::Catal
     left_expr = left_expr->decompress();
     right_expr = right_expr->decompress();
   }
+  bool has_agg = (left_expr->get_contains_agg() || right_expr->get_contains_agg());
   return makeExpr<Analyzer::BinOper>(result_type, has_agg, optype, qual, left_expr, right_expr);
 }
 
