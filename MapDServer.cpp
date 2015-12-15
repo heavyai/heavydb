@@ -18,6 +18,7 @@
 #include "Import/Importer.h"
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
+#include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/measure.h"
@@ -201,7 +202,7 @@ class MapDHandler : virtual public MapDIf {
     _return.rendering_enabled = enable_rendering_;
   }
 
-  void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
+  void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) const {
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     if (!scalar_tv) {
       const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
@@ -266,7 +267,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) {
+  TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) const {
     TDatum datum;
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     if (!scalar_tv) {
@@ -952,6 +953,119 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
+  void execute_root_plan(TQueryResult& _return,
+                         const Planner::RootPlan* root_plan,
+                         const bool column_format,
+                         const Catalog_Namespace::SessionInfo& session_info,
+                         const ExecutorDeviceType executor_device_type) const {
+    auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+                                          jit_debug_ ? "/tmp" : "",
+                                          jit_debug_ ? "mapdquery" : "",
+                                          0,
+                                          0,
+                                          window_ptr_,
+                                          render_mem_bytes_);
+    ResultRows results({}, nullptr, nullptr, executor_device_type);
+    _return.execution_time_ms += measure<>::execution([&]() {
+      results = executor->execute(root_plan,
+                                  session_info,
+                                  -1,
+                                  true,
+                                  executor_device_type,
+                                  nvvm_backend_,
+                                  ExecutorOptLevel::Default,
+                                  allow_multifrag_,
+                                  allow_loop_joins_);
+    });
+    if (root_plan->get_plan_dest() == Planner::RootPlan::Dest::kEXPLAIN) {
+      CHECK_EQ(size_t(1), results.rowCount());
+      TColumnType proj_info;
+      proj_info.col_name = "Explanation";
+      proj_info.col_type.type = TDatumType::STR;
+      proj_info.col_type.nullable = false;
+      proj_info.col_type.is_array = false;
+      _return.row_set.row_desc.push_back(proj_info);
+      const auto crt_row = results.getNextRow(true, true);
+      const auto tv = crt_row[0];
+      CHECK(results.getNextRow(true, true).empty());
+      const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+      CHECK(scalar_tv);
+      const auto s_n = boost::get<NullableString>(scalar_tv);
+      CHECK(s_n);
+      const auto s = boost::get<std::string>(s_n);
+      CHECK(s);
+      if (column_format) {
+        TColumn tcol;
+        LOG(ERROR) << *s;
+        tcol.data.str_col.push_back(*s);
+        tcol.nulls.push_back(false);
+        _return.row_set.is_columnar = true;
+        _return.row_set.columns.push_back(tcol);
+      } else {
+        TDatum explanation;
+        explanation.val.str_val = *s;
+        explanation.is_null = false;
+        TRow trow;
+        trow.cols.push_back(explanation);
+        _return.row_set.is_columnar = false;
+        _return.row_set.rows.push_back(trow);
+      }
+      return;
+    }
+    const auto plan = root_plan->get_plan();
+    const auto& targets = plan->get_targetlist();
+    {
+      CHECK(plan);
+      TColumnType proj_info;
+      size_t i = 0;
+      for (const auto target : targets) {
+        proj_info.col_name = target->get_resname();
+        if (proj_info.col_name.empty()) {
+          proj_info.col_name = "result_" + std::to_string(i + 1);
+        }
+        const auto& target_ti = target->get_expr()->get_type_info();
+        proj_info.col_type.type = type_to_thrift(target_ti);
+        proj_info.col_type.encoding = encoding_to_thrift(target_ti);
+        proj_info.col_type.nullable = !target_ti.get_notnull();
+        proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
+        _return.row_set.row_desc.push_back(proj_info);
+        ++i;
+      }
+    }
+    if (column_format) {
+      _return.row_set.is_columnar = true;
+      std::vector<TColumn> tcolumns(results.colCount());
+      while (true) {
+        const auto crt_row = results.getNextRow(true, true);
+        if (crt_row.empty()) {
+          break;
+        }
+        for (size_t i = 0; i < results.colCount(); ++i) {
+          const auto agg_result = crt_row[i];
+          value_to_thrift_column(agg_result, targets[i]->get_expr()->get_type_info(), tcolumns[i]);
+        }
+      }
+      for (size_t i = 0; i < results.colCount(); ++i) {
+        _return.row_set.columns.push_back(tcolumns[i]);
+      }
+    } else {
+      _return.row_set.is_columnar = false;
+      while (true) {
+        const auto crt_row = results.getNextRow(true, true);
+        if (crt_row.empty()) {
+          break;
+        }
+        TRow trow;
+        trow.cols.reserve(results.colCount());
+        for (size_t i = 0; i < results.colCount(); ++i) {
+          const auto agg_result = crt_row[i];
+          trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
+        }
+        _return.row_set.rows.push_back(trow);
+      }
+    }
+  }
+
   void rel_algebra_execute(TQueryResult& _return,
                            const TSessionId session,
                            const std::string& rel_algebra,
@@ -995,23 +1109,30 @@ class MapDHandler : virtual public MapDIf {
                         const bool /* with_calcite */) {
 #endif  // HAVE_CALCITE
     _return.nonce = nonce;
+    _return.execution_time_ms = 0;
     auto& cat = session_info.get_catalog();
     auto executor_device_type = session_info.get_executor_device_type();
     LOG(INFO) << query_str;
-    auto execute_time = measure<>::execution([]() {});
     auto total_time = measure<>::execution([&]() {
       SQLParser parser;
       std::list<Parser::Stmt*> parse_trees;
       std::string last_parsed;
       int num_parse_errors = 0;
+      Planner::RootPlan* root_plan{nullptr};
 #ifdef HAVE_CALCITE
       if (with_calcite) {
         try {
-          // pass sql to calcite server to let it parse for testing purposes
-          calcite_.process(session_info.get_currentUser().userName,
-                           session_info.get_currentUser().passwd,
-                           session_info.get_catalog().get_currentDB().dbName,
-                           query_str);
+          _return.execution_time_ms += measure<>::execution([&]() {
+            // pass sql to calcite server to let it parse for testing purposes
+            const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
+                                                   session_info.get_currentUser().passwd,
+                                                   session_info.get_catalog().get_currentDB().dbName,
+                                                   query_str);
+            root_plan = translate_query(query_ra, session_info.get_catalog());
+            CHECK(root_plan);
+            execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
+          });
+          return;
         } catch (InvalidParseRequest& e) {
           TMapDException ex;
           ex.error_msg = std::string("Exception: ") + e.whyUp;
@@ -1035,7 +1156,6 @@ class MapDHandler : virtual public MapDIf {
         LOG(ERROR) << ex.error_msg;
         throw ex;
       }
-      execute_time = 0;
       for (auto stmt : parse_trees) {
         try {
           auto select_stmt = dynamic_cast<Parser::SelectStmt*>(stmt);
@@ -1048,7 +1168,7 @@ class MapDHandler : virtual public MapDIf {
           if (ddl != nullptr)
             explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
           if (ddl != nullptr && explain_stmt == nullptr) {
-            execute_time += measure<>::execution([&]() { ddl->execute(session_info); });
+            _return.execution_time_ms += measure<>::execution([&]() { ddl->execute(session_info); });
           } else {
             const Parser::DMLStmt* dml;
             if (explain_stmt != nullptr)
@@ -1058,117 +1178,13 @@ class MapDHandler : virtual public MapDIf {
             Analyzer::Query query;
             dml->analyze(cat, query);
             Planner::Optimizer optimizer(query, cat);
-            auto root_plan = optimizer.optimize();
+            root_plan = optimizer.optimize();
+            CHECK(root_plan);
             std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
             if (explain_stmt != nullptr) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
-            auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
-                                                  jit_debug_ ? "/tmp" : "",
-                                                  jit_debug_ ? "mapdquery" : "",
-                                                  0,
-                                                  0,
-                                                  window_ptr_,
-                                                  render_mem_bytes_);
-            ResultRows results({}, nullptr, nullptr, executor_device_type);
-            execute_time += measure<>::execution([&]() {
-              results = executor->execute(root_plan,
-                                          session_info,
-                                          -1,
-                                          true,
-                                          executor_device_type,
-                                          nvvm_backend_,
-                                          ExecutorOptLevel::Default,
-                                          allow_multifrag_,
-                                          allow_loop_joins_);
-            });
-            if (explain_stmt) {
-              CHECK_EQ(size_t(1), results.rowCount());
-              TColumnType proj_info;
-              proj_info.col_name = "Explanation";
-              proj_info.col_type.type = TDatumType::STR;
-              proj_info.col_type.nullable = false;
-              proj_info.col_type.is_array = false;
-              _return.row_set.row_desc.push_back(proj_info);
-              const auto crt_row = results.getNextRow(true, true);
-              const auto tv = crt_row[0];
-              CHECK(results.getNextRow(true, true).empty());
-              const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-              CHECK(scalar_tv);
-              const auto s_n = boost::get<NullableString>(scalar_tv);
-              CHECK(s_n);
-              const auto s = boost::get<std::string>(s_n);
-              CHECK(s);
-              if (column_format) {
-                TColumn tcol;
-                LOG(ERROR) << *s;
-                tcol.data.str_col.push_back(*s);
-                tcol.nulls.push_back(false);
-                _return.row_set.is_columnar = true;
-                _return.row_set.columns.push_back(tcol);
-              } else {
-                TDatum explanation;
-                explanation.val.str_val = *s;
-                explanation.is_null = false;
-                TRow trow;
-                trow.cols.push_back(explanation);
-                _return.row_set.is_columnar = false;
-                _return.row_set.rows.push_back(trow);
-              }
-              return;
-            }
-            const auto plan = root_plan->get_plan();
-            const auto& targets = plan->get_targetlist();
-            {
-              CHECK(plan);
-              TColumnType proj_info;
-              size_t i = 0;
-              for (const auto target : targets) {
-                proj_info.col_name = target->get_resname();
-                if (proj_info.col_name.empty()) {
-                  proj_info.col_name = "result_" + std::to_string(i + 1);
-                }
-                const auto& target_ti = target->get_expr()->get_type_info();
-                proj_info.col_type.type = type_to_thrift(target_ti);
-                proj_info.col_type.encoding = encoding_to_thrift(target_ti);
-                proj_info.col_type.nullable = !target_ti.get_notnull();
-                proj_info.col_type.is_array = target_ti.get_type() == kARRAY;
-                _return.row_set.row_desc.push_back(proj_info);
-                ++i;
-              }
-            }
-            if (column_format) {
-              _return.row_set.is_columnar = true;
-              std::vector<TColumn> tcolumns(results.colCount());
-              while (true) {
-                const auto crt_row = results.getNextRow(true, true);
-                if (crt_row.empty()) {
-                  break;
-                }
-                for (size_t i = 0; i < results.colCount(); ++i) {
-                  const auto agg_result = crt_row[i];
-                  value_to_thrift_column(agg_result, targets[i]->get_expr()->get_type_info(), tcolumns[i]);
-                }
-              }
-              for (size_t i = 0; i < results.colCount(); ++i) {
-                _return.row_set.columns.push_back(tcolumns[i]);
-              }
-            } else {
-              _return.row_set.is_columnar = false;
-              while (true) {
-                const auto crt_row = results.getNextRow(true, true);
-                if (crt_row.empty()) {
-                  break;
-                }
-                TRow trow;
-                trow.cols.reserve(results.colCount());
-                for (size_t i = 0; i < results.colCount(); ++i) {
-                  const auto agg_result = crt_row[i];
-                  trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
-                }
-                _return.row_set.rows.push_back(trow);
-              }
-            }
+            execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
           }
         } catch (std::exception& e) {
           TMapDException ex;
@@ -1178,8 +1194,7 @@ class MapDHandler : virtual public MapDIf {
         }
       }
     });
-    _return.execution_time_ms = execute_time;
-    LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << execute_time << " (ms)";
+    LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
   }
 
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;

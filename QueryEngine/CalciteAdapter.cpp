@@ -124,6 +124,9 @@ void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
   CHECK(proj_nodes.IsArray());
   for (size_t i = 0; i < proj_nodes.Size(); ++i) {
     const auto proj_expr = calcite_adapter.getExprFromNode(proj_nodes[i], td);
+    if (std::dynamic_pointer_cast<const Analyzer::Constant>(proj_expr)) {  // TODO(alex): fix
+      continue;
+    }
     scan_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
     agg_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
   }
@@ -165,19 +168,22 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(query_ast.IsObject());
   const auto& rels = query_ast["rels"];
   CHECK(rels.IsArray());
-  CHECK_EQ(unsigned(4), rels.Size());
   const auto& scan_ra = rels[0];
   CHECK(scan_ra.IsObject());
   CHECK_EQ(std::string("LogicalTableScan"), scan_ra["relOp"].GetString());
-  const auto& filter_ra = rels[1];
-  CHECK(filter_ra.IsObject());
   CalciteAdapter calcite_adapter(cat, get_col_names(scan_ra));
   auto td = calcite_adapter.getTableFromScanNode(scan_ra);
-  const auto filter_expr = calcite_adapter.getExprFromNode(filter_ra["condition"], td);
-  const auto& project_ra = rels[2];
+  std::shared_ptr<Analyzer::Expr> filter_expr;
+  if (rels.Size() == 4) {  // TODO(alex)
+    const auto& filter_ra = rels[1];
+    CHECK(filter_ra.IsObject());
+    filter_expr = calcite_adapter.getExprFromNode(filter_ra["condition"], td);
+  }
+  const size_t base_off = rels.Size() == 4 ? 2 : 1;
+  const auto& project_ra = rels[base_off];
   const auto& proj_nodes = project_ra["exprs"];
-  const auto& agg_nodes = rels[3]["aggs"];
-  const auto& group_nodes = rels[3]["group"];
+  const auto& agg_nodes = rels[base_off + 1]["aggs"];
+  const auto& group_nodes = rels[base_off + 1]["group"];
   CHECK(proj_nodes.IsArray());
   std::vector<Analyzer::TargetEntry*> agg_targets;
   std::vector<Analyzer::TargetEntry*> scan_targets;
@@ -185,7 +191,10 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   collect_target_entries(agg_targets, scan_targets, proj_nodes, agg_nodes, calcite_adapter, td);
   collect_groupby(group_nodes, agg_targets, groupby_exprs);
   std::list<std::shared_ptr<Analyzer::Expr>> q;
-  std::list<std::shared_ptr<Analyzer::Expr>> sq{filter_expr};
+  std::list<std::shared_ptr<Analyzer::Expr>> sq;
+  if (filter_expr) {
+    sq.push_back(filter_expr);
+  }
   auto scan_plan =
       new Planner::Scan(scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
   auto agg_plan = new Planner::AggPlan(agg_targets, 0., scan_plan, groupby_exprs);
