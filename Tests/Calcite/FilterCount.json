@@ -3,6 +3,22 @@
     {
       "id": "0",
       "relOp": "LogicalTableScan",
+      "fieldNames": [
+        "b",
+        "dec",
+        "d",
+        "f",
+        "m",
+        "n",
+        "o",
+        "real_str",
+        "str",
+        "fx",
+        "t",
+        "x",
+        "y",
+        "z"
+      ],
       "table": [
         "CATALOG",
         "mapd",
@@ -17,9 +33,9 @@
         "op": ">",
         "operands": [
           {
-            "input": 1
+            "input": 11
           },
-          7
+          5
         ]
       }
     },
@@ -31,7 +47,7 @@
       ],
       "exprs": [
         {
-          "input": 2
+          "input": 12
         }
       ]
     },
