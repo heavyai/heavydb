@@ -15,7 +15,7 @@ import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.prepare.Prepare;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
-import org.apache.calcite.rel.externalize.RelJsonWriter;
+import org.apache.calcite.rel.externalize.MapDRelJsonWriter;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
@@ -44,7 +44,7 @@ class MapDSerializer {
     if (rel == null) {
       return null;
     }
-    final RelJsonWriter planWriter = new RelJsonWriter();
+    final MapDRelJsonWriter planWriter = new MapDRelJsonWriter();
     rel.explain(planWriter);
     return planWriter.asString();
   }
