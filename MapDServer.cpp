@@ -1238,9 +1238,7 @@ int main(int argc, char** argv) {
 
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages");
-  desc.add_options()("config",
-                     po::value<std::string>(&config_file)->required()->default_value(config_file),
-                     "Path to MapD config file");
+  desc.add_options()("config", po::value<std::string>(&config_file), "Path to mapd.conf");
   desc.add_options()(
       "path", po::value<std::string>(&base_path)->required()->default_value("data"), "Directory path to MapD catalogs");
   desc.add_options()("cpu", "Run on CPU only");
@@ -1314,7 +1312,7 @@ int main(int argc, char** argv) {
       device = "gpu";
     if (vm.count("hybrid"))
       device = "hybrid";
-    if (vm.count("disable-rendering") || device == "cpu") {
+    if (device == "cpu") {
       enable_rendering = false;
     }
     if (num_gpus == 0)
