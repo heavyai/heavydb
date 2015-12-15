@@ -19,6 +19,22 @@ SQLOps to_bin_op(const std::string& bin_op_str) {
   return kEQ;
 }
 
+SQLAgg to_agg_kind(const std::string& agg_name) {
+  if (agg_name == std::string("COUNT")) {
+    return kCOUNT;
+  }
+  CHECK(false);
+  return kCOUNT;
+}
+
+SQLTypes to_sql_type(const std::string& type_name) {
+  if (type_name == std::string("BIGINT")) {
+    return kBIGINT;
+  }
+  CHECK(false);
+  return kNULLT;
+}
+
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat) : cat_(cat) {}
@@ -59,18 +75,12 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateAggregate(const rapidjson::Value& expr, const TableDescriptor* td) {
+    CHECK(expr.IsObject() && expr.HasMember("type"));
+    const auto& expr_type = expr["type"];
+    CHECK(expr_type.IsObject());
+    SQLTypeInfo agg_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
     const auto agg_name = expr["agg"].GetString();
-    CHECK_EQ(std::string("COUNT"), agg_name);
-    CHECK(expr.HasMember("type"));
-    const auto type_name = expr["type"]["type"].GetString();
-    SQLTypes agg_type{kNULLT};
-    if (type_name == std::string("BIGINT")) {
-      agg_type = kBIGINT;
-    }
-    const auto is_nullable = expr["type"]["nullable"].GetBool();
-    SQLTypeInfo agg_ti(agg_type, is_nullable);
-    SQLAgg agg_kind{kCOUNT};
-    return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, nullptr, is_nullable);
+    return std::make_shared<Analyzer::AggExpr>(agg_ti, to_agg_kind(agg_name), nullptr, false);
   }
 
   std::shared_ptr<Analyzer::Expr> translateIntLiteral(const rapidjson::Value& expr) {
