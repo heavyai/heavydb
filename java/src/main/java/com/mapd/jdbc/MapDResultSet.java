@@ -8,7 +8,6 @@ package com.mapd.jdbc;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRowSet;
-import com.mapd.thrift.server.TTypeInfo;
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -31,8 +30,6 @@ import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
