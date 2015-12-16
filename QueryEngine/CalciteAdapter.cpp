@@ -159,8 +159,9 @@ class CalciteAdapter {
     CHECK(agg_operands.Size() <= 1);
     size_t operand = agg_operands.Empty() ? 0 : agg_operands[0].GetInt();
     const auto agg_kind = to_agg_kind(agg_name);
-    return std::make_shared<Analyzer::AggExpr>(
-        agg_ti, agg_kind, agg_kind == kCOUNT ? nullptr : scan_targets[operand]->get_own_expr(), false);
+    const bool is_distinct = expr["distinct"].GetBool();
+    const auto arg_expr = agg_kind == kCOUNT && !is_distinct ? nullptr : scan_targets[operand]->get_own_expr();
+    return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
   }
 
   std::shared_ptr<Analyzer::Expr> translateIntLiteral(const rapidjson::Value& expr) {
