@@ -1255,7 +1255,7 @@ int main(int argc, char** argv) {
   desc.add_options()("help,h", "Print help messages");
   desc.add_options()("config", po::value<std::string>(&config_file), "Path to mapd.conf");
   desc.add_options()(
-      "path", po::value<std::string>(&base_path)->required()->default_value("data"), "Directory path to MapD catalogs");
+      "data", po::value<std::string>(&base_path)->required()->default_value("data"), "Directory path to MapD catalogs");
   desc.add_options()("cpu", "Run on CPU only");
   desc.add_options()("gpu", "Run on GPUs (Default)");
   desc.add_options()("hybrid", "Run on both CPU and GPUs");
@@ -1296,7 +1296,7 @@ int main(int argc, char** argv) {
   desc.add_options()("version,v", "Print Release Version Number");
 
   po::positional_options_description positionalOptions;
-  positionalOptions.add("path", 1);
+  positionalOptions.add("data", 1);
 
   po::variables_map vm;
 
@@ -1338,7 +1338,7 @@ int main(int argc, char** argv) {
   }
 
   if (!boost::filesystem::exists(base_path)) {
-    std::cerr << "Path " << base_path << " does not exist." << std::endl;
+    std::cerr << "Data directory " << base_path << " does not exist." << std::endl;
     return 1;
   }
   const auto system_db_file = boost::filesystem::path(base_path) / "mapd_catalogs" / "mapd";

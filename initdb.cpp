@@ -12,11 +12,11 @@ int main(int argc, char* argv[]) {
 
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages ")(
-      "path", po::value<std::string>(&base_path)->required(), "Directory path to Mapd catalogs")(
+      "data", po::value<std::string>(&base_path)->required(), "Directory path to MapD catalogs")(
       "force,f", "Force overwriting of existing MapD instance");
 
   po::positional_options_description positionalOptions;
-  positionalOptions.add("path", 1);
+  positionalOptions.add("data", 1);
 
   po::variables_map vm;
 
