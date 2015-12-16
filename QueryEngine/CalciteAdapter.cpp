@@ -42,6 +42,9 @@ SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string("/")) {
     return kDIVIDE;
   }
+  if (op_str == "MOD") {
+    return kMODULO;
+  }
   if (op_str == std::string("AND")) {
     return kAND;
   }
