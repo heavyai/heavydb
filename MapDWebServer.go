@@ -28,6 +28,7 @@ var (
 	frontend   string
 	dataDir    string
 	readOnly   bool
+	quiet      bool
 )
 
 type Server struct {
@@ -57,6 +58,7 @@ func init() {
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
 	pflag.StringP("config", "c", "mapd.conf", "path to MapD configuration file")
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
+	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
 
 	pflag.Parse()
 
@@ -67,6 +69,7 @@ func init() {
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
 	viper.BindPFlag("read-only", pflag.CommandLine.Lookup("read-only"))
+	viper.BindPFlag("quiet", pflag.CommandLine.Lookup("quiet"))
 
 	viper.SetDefault("http-port", 9090)
 
@@ -224,13 +227,21 @@ func main() {
 		log.Fatal("Error opening log file: ", err)
 	}
 	defer lf.Close()
-	log.SetOutput(io.MultiWriter(os.Stdout, lf))
 
 	alf, err := os.OpenFile(dataDir+"/mapd_log/"+getLogName("ACCESS"), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		log.Fatal("Error opening log file: ", err)
 	}
 	defer alf.Close()
+
+	var alog io.Writer
+	if quiet {
+		log.SetOutput(lf)
+		alog = alf
+	} else {
+		log.SetOutput(io.MultiWriter(os.Stdout, lf))
+		alog = io.MultiWriter(os.Stdout, alf)
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/upload", uploadHandler)
@@ -240,7 +251,7 @@ func main() {
 	mux.HandleFunc("/servers.json", serversHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
-	lmux := handlers.LoggingHandler(io.MultiWriter(os.Stdout, alf), mux)
+	lmux := handlers.LoggingHandler(alog, mux)
 	cmux := cors.Default().Handler(lmux)
 	err = http.ListenAndServe(":"+strconv.Itoa(port), cmux)
 	if err != nil {
