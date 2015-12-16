@@ -44,6 +44,9 @@ SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == std::string("MAX")) {
     return kMAX;
   }
+  if (agg_name == std::string("SUM")) {
+    return kSUM;
+  }
   CHECK(false);
   return kCOUNT;
 }
@@ -54,6 +57,9 @@ SQLTypes to_sql_type(const std::string& type_name) {
   }
   if (type_name == std::string("INTEGER")) {
     return kINT;
+  }
+  if (type_name == std::string("SMALLINT")) {
+    return kSMALLINT;
   }
   CHECK(false);
   return kNULLT;
