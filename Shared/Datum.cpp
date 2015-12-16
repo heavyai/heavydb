@@ -110,7 +110,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
     case kTIME: {
       // @TODO handle fractional seconds
       std::tm tm_struct;
-      if (strptime(s.c_str(), "%T", &tm_struct) == nullptr && strptime(s.c_str(), "%H%M%S", &tm_struct) == nullptr)
+      if (!strptime(s.c_str(), "%T", &tm_struct) && !strptime(s.c_str(), "%H%M%S", &tm_struct))
         throw std::runtime_error("Invalid time string " + s);
       tm_struct.tm_mday = 1;
       tm_struct.tm_mon = 0;
@@ -124,9 +124,11 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       char* tp;
       // try ISO8601 date first
       tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
-      if (tp == nullptr)
+      if (!tp)
         tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
-      if (tp == nullptr) {
+      if (!tp)
+        tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-2015
+      if (!tp) {
         try {
           d.timeval = std::stoll(s);
           break;
@@ -141,9 +143,36 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       // now parse the time
       // @TODO handle fractional seconds
       char* p = strptime(tp, "%T", &tm_struct);
-      if (p == nullptr)
+      if (!p)
         p = strptime(tp, "%H%M%S", &tm_struct);
-      if (p == nullptr)
+      if (!p) {
+        // check for weird customer format
+        // remove decimal seconds from string if there is a period followed by a number
+        char* startptr = nullptr;
+        char* endptr;
+        // find last decimal in string
+        int loop = strlen(tp);
+        while (loop > 0) {
+          if (tp[loop] == '.') {
+            // found last period
+            startptr = &tp[loop];
+            break;
+          }
+          loop--;
+        }
+        if (startptr) {
+          // look for space
+          endptr = strchr(startptr, ' ');
+          if (endptr) {
+            // ok we found a start and and end
+            // remove the decimal portion
+            // will need to capture this for later
+            memmove(startptr, endptr, strlen(endptr) + 1);
+          }
+        }
+        p = strptime(tp, "%I . %M . %S %p", &tm_struct);  // customers weird '.' separated date
+      }
+      if (!p)
         throw std::runtime_error("Invalid timestamp string " + s);
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
       d.timeval = my_timegm(&tm_struct);
@@ -151,8 +180,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
     }
     case kDATE: {
       std::tm tm_struct;
-      if (strptime(s.c_str(), "%Y-%m-%d", &tm_struct) == nullptr &&
-          strptime(s.c_str(), "%m/%d/%Y", &tm_struct) == nullptr)
+      if (!strptime(s.c_str(), "%Y-%m-%d", &tm_struct) && !strptime(s.c_str(), "%m/%d/%Y", &tm_struct))
         throw std::runtime_error("Invalid timestamp string " + s);
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;

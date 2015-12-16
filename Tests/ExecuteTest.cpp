@@ -750,6 +750,18 @@ TEST(Select, Time) {
     ASSERT_EQ(-2208988800L,
               v<int64_t>(run_simple_agg(
                   "select DATE_TRUNC(quarter, CAST('1900-03-21 12:12:12' as timestamp)) from test limit 1;", dt)));
+    // test different input formats
+    // added new format for customer
+    ASSERT_EQ(1434896116L,
+              v<int64_t>(run_simple_agg("select CAST('2015-06-21 14:15:16' as timestamp) from test limit 1;", dt)));
+    ASSERT_EQ(
+        1434896116L,
+        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 PM' as timestamp) from test limit 1;", dt)));
+    ASSERT_EQ(
+        1434852916L,
+        v<int64_t>(run_simple_agg("select CAST('21-JUN-15 2.15.16.12345 AM' as timestamp) from test limit 1;", dt)));
+    ASSERT_EQ(1434896116L,
+              v<int64_t>(run_simple_agg("select CAST('06/21/2015 14:15:16' as timestamp) from test limit 1;", dt)));
   }
 }
 
