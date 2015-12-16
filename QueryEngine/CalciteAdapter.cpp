@@ -11,24 +11,45 @@
 
 namespace {
 
-SQLOps to_bin_op(const std::string& bin_op_str) {
-  if (bin_op_str == std::string(">")) {
+SQLOps to_sql_op(const std::string& op_str) {
+  if (op_str == std::string(">")) {
     return kGT;
   }
-  if (bin_op_str == std::string(">=")) {
+  if (op_str == std::string(">=")) {
     return kGE;
   }
-  if (bin_op_str == std::string("<")) {
+  if (op_str == std::string("<")) {
     return kLT;
   }
-  if (bin_op_str == std::string("<=")) {
+  if (op_str == std::string("<=")) {
     return kLE;
   }
-  if (bin_op_str == std::string("=")) {
+  if (op_str == std::string("=")) {
     return kEQ;
   }
-  if (bin_op_str == std::string("<>")) {
-    return kEQ;
+  if (op_str == std::string("<>")) {
+    return kNE;
+  }
+  if (op_str == std::string("+")) {
+    return kPLUS;
+  }
+  if (op_str == std::string("-")) {
+    return kMINUS;
+  }
+  if (op_str == std::string("*")) {
+    return kMULTIPLY;
+  }
+  if (op_str == std::string("/")) {
+    return kDIVIDE;
+  }
+  if (op_str == std::string("AND")) {
+    return kAND;
+  }
+  if (op_str == std::string("OR")) {
+    return kOR;
+  }
+  if (op_str == std::string("CAST")) {
+    return kCAST;
   }
   CHECK(false);
   return kEQ;
@@ -74,7 +95,7 @@ class CalciteAdapter {
                                                   const TableDescriptor* td,
                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     if (expr.IsObject() && expr.HasMember("op")) {
-      return translateBinOp(expr, td);
+      return translateOp(expr, td);
     }
     if (expr.IsObject() && expr.HasMember("input")) {
       return translateColRef(expr, td);
@@ -89,14 +110,25 @@ class CalciteAdapter {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::Expr> translateBinOp(const rapidjson::Value& expr, const TableDescriptor* td) {
-    const auto bin_op_str = expr["op"].GetString();
+  std::shared_ptr<Analyzer::Expr> translateOp(const rapidjson::Value& expr, const TableDescriptor* td) {
+    const auto op_str = expr["op"].GetString();
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
-    CHECK_EQ(unsigned(2), operands.Size());
-    const auto lhs = getExprFromNode(operands[0], td, {});
-    const auto rhs = getExprFromNode(operands[1], td, {});
-    return Parser::OperExpr::normalize(to_bin_op(bin_op_str), kONE, lhs, rhs);
+    if (operands.Size() == 1) {
+      // TODO(alex): implement the rest, also is it a good idea to handle it here?
+      CHECK_EQ(kCAST, to_sql_op(op_str));
+      const auto operand_expr = getExprFromNode(operands[0], td, {});
+      const auto& expr_type = expr["type"];
+      SQLTypeInfo target_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
+      return std::make_shared<Analyzer::UOper>(target_ti, false, kCAST, operand_expr);
+    }
+    CHECK_GE(operands.Size(), unsigned(2));
+    auto lhs = getExprFromNode(operands[0], td, {});
+    for (size_t i = 1; i < operands.Size(); ++i) {
+      const auto rhs = getExprFromNode(operands[i], td, {});
+      lhs = Parser::OperExpr::normalize(to_sql_op(op_str), kONE, lhs, rhs);
+    }
+    return lhs;
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr, const TableDescriptor* td) {
@@ -235,8 +267,8 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   collect_groupby(group_nodes, agg_targets, groupby_exprs);
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq;
-  if (filter_expr) {
-    sq.push_back(filter_expr);
+  if (filter_expr) {  // TODO(alex): take advantage of simple qualifiers where possible
+    q.push_back(filter_expr);
   }
   auto scan_plan =
       new Planner::Scan(scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
