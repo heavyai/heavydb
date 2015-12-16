@@ -59,8 +59,9 @@ public class CalciteParser {
   Casing quotedCasing = Casing.UNCHANGED;
 
   private RelDataTypeFactory typeFactory;
-
-  private Function<RelDataTypeFactory, Prepare.CatalogReader> catalogReaderFactory;
+  private Prepare.CatalogReader catalogReader;
+  private SqlValidator validator;
+  private SqlToRelConverter converter;
 
   private SqlOperatorTable opTab;
   private RelOptPlanner planner;
@@ -90,6 +91,7 @@ public class CalciteParser {
   }
 
   public String getRelAlgebra(String sql) throws SqlParseException {
+    long timer = System.currentTimeMillis();
     SqlNode node = processSQL(sql);
 
     typeFactory = getTypeFactory();
@@ -114,17 +116,17 @@ public class CalciteParser {
     //RexNode convertExpression = converter.convertExpression(node);
 
     //logger.debug("After convert relNode is "+ convertExpression.toString());
-    logger.debug("After convert relRoot kind is " + sqlRel.kind);
+    //logger.debug("After convert relRoot kind is " + sqlRel.kind);
 
-    logger.debug("After convert relRoot project is " + sqlRel.project().toString());
+    //logger.debug("After convert relRoot project is " + sqlRel.project().toString());
 
-    logger.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
+    //logger.debug("After convert relalgebra is \n" + RelOptUtil.toString(sqlRel.project()));
 
     RelNode project = sqlRel.project();
 
     String res = MapDSerializer.toString(project);
 
-    logger.info("After convert relalgebra is \n" + res);
+    //logger.info("After convert relalgebra is \n" + res);
 
     return res;
   }
@@ -155,20 +157,23 @@ public class CalciteParser {
 
   protected Prepare.CatalogReader createCatalogReader(
           RelDataTypeFactory typeFactory) {
-    if (this.catalogReaderFactory != null) {
-      return catalogReaderFactory.apply(typeFactory);
+    if (catalogReader == null) {
+      catalogReader = new MapDCatalogReader(typeFactory, true).init();
     }
-    return new MapDCatalogReader(typeFactory, true).init();
+    return catalogReader;
   }
 
   protected SqlValidator createValidator(
           SqlValidatorCatalogReader catalogReader,
           RelDataTypeFactory typeFactory) {
-    return new MapDTestValidator(
-            getOperatorTable(),
-            createCatalogReader(typeFactory),
-            typeFactory,
-            getConformance());
+    if (validator == null) {
+      validator = new MapDTestValidator(
+              getOperatorTable(),
+              createCatalogReader(typeFactory),
+              typeFactory,
+              getConformance());
+    }
+    return validator;
   }
 
   protected SqlConformance getConformance() {
@@ -200,11 +205,14 @@ public class CalciteParser {
           final SqlValidator validator,
           final Prepare.CatalogReader catalogReader,
           final RelDataTypeFactory typeFactory) {
-    final RexBuilder rexBuilder = new RexBuilder(typeFactory);
-    final RelOptCluster cluster
-            = RelOptCluster.create(getPlanner(), rexBuilder);
-    return new SqlToRelConverter(null, validator, catalogReader, cluster,
-            StandardConvertletTable.INSTANCE);
+    if (converter == null) {
+      final RexBuilder rexBuilder = new RexBuilder(typeFactory);
+      final RelOptCluster cluster
+              = RelOptCluster.create(getPlanner(), rexBuilder);
+      converter = new SqlToRelConverter(null, validator, catalogReader, cluster,
+              StandardConvertletTable.INSTANCE);
+    }
+    return converter;
   }
 
   protected final RelOptPlanner getPlanner() {
