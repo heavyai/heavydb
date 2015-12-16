@@ -15,6 +15,21 @@ SQLOps to_bin_op(const std::string& bin_op_str) {
   if (bin_op_str == std::string(">")) {
     return kGT;
   }
+  if (bin_op_str == std::string(">=")) {
+    return kGE;
+  }
+  if (bin_op_str == std::string("<")) {
+    return kLT;
+  }
+  if (bin_op_str == std::string("<=")) {
+    return kLE;
+  }
+  if (bin_op_str == std::string("=")) {
+    return kEQ;
+  }
+  if (bin_op_str == std::string("<>")) {
+    return kEQ;
+  }
   CHECK(false);
   return kEQ;
 }
