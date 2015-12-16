@@ -17,17 +17,17 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/handlers"
-	"github.com/namsral/flag"
 	"github.com/rs/cors"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 var (
-	port         int
-	proxyBackend bool
-	backendUrl   string
-	frontend     string
-	dataDir      string
-	readOnly     bool
+	port       int
+	backendUrl string
+	frontend   string
+	dataDir    string
+	readOnly   bool
 )
 
 type Server struct {
@@ -51,13 +51,48 @@ func getLogName(lvl string) string {
 }
 
 func init() {
-	flag.IntVar(&port, "port", 9092, "frontend server port")
-	flag.BoolVar(&proxyBackend, "proxy-backend", true, "proxy mapd_http_server")
-	flag.StringVar(&backendUrl, "backend-url", "http://localhost:9090", "url to mapd_http_server")
-	flag.StringVar(&frontend, "frontend", "frontend", "path to frontend directory")
-	flag.StringVar(&dataDir, "data", "data", "path to MapD data directory")
-	flag.BoolVar(&readOnly, "read-only", false, "enable read-only mode")
-	flag.Parse()
+	pflag.IntP("port", "p", 9092, "frontend server port")
+	pflag.StringP("backend-url", "b", "", "url to http-port on mapd_server [http://localhost:9090]")
+	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
+	pflag.StringP("data", "d", "data", "path to MapD data directory")
+	pflag.StringP("config", "c", "mapd.conf", "path to MapD configuration file")
+	pflag.BoolP("read-only", "r", false, "enable read-only mode")
+
+	pflag.Parse()
+
+	viper.BindPFlag("web.port", pflag.CommandLine.Lookup("port"))
+	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
+	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
+
+	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
+	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
+	viper.BindPFlag("read-only", pflag.CommandLine.Lookup("read-only"))
+
+	viper.SetDefault("http-port", 9090)
+
+	viper.SetEnvPrefix("MAPD")
+	r := strings.NewReplacer(".", "_")
+	viper.SetEnvKeyReplacer(r)
+	viper.AutomaticEnv()
+
+	viper.SetConfigFile(viper.GetString("config"))
+	viper.SetConfigType("toml")
+	viper.AddConfigPath("/etc/mapd")
+	viper.AddConfigPath("$HOME/.config/mapd")
+	viper.AddConfigPath(".")
+
+	_ = viper.ReadInConfig()
+
+	port = viper.GetInt("web.port")
+	backendUrl = viper.GetString("web.backend-url")
+	frontend = viper.GetString("web.frontend")
+	dataDir = viper.GetString("data")
+	readOnly = viper.GetBool("read-only")
+	quiet = viper.GetBool("quiet")
+
+	if backendUrl == "" {
+		backendUrl = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
+	}
 }
 
 func uploadHandler(rw http.ResponseWriter, r *http.Request) {
@@ -128,7 +163,7 @@ func deleteUploadHandler(rw http.ResponseWriter, r *http.Request) {
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
 
-	if proxyBackend && r.Method == "POST" {
+	if r.Method == "POST" {
 		u, _ := url.Parse(backendUrl)
 		h = httputil.NewSingleHostReverseProxy(u)
 		rw.Header().Del("Access-Control-Allow-Origin")
