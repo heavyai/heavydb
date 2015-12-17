@@ -8,6 +8,7 @@
 #include <rapidjson/document.h>
 
 #include <set>
+#include <unordered_map>
 
 namespace {
 
@@ -89,6 +90,17 @@ SQLTypes to_sql_type(const std::string& type_name) {
   return kNULLT;
 }
 
+ssize_t get_agg_operand_idx(const rapidjson::Value& expr) {
+  CHECK(expr.IsObject());
+  if (!expr.HasMember("agg")) {
+    return -1;
+  }
+  const auto& agg_operands = expr["operands"];
+  CHECK(agg_operands.IsArray());
+  CHECK(agg_operands.Size() <= 1);
+  return agg_operands.Empty() ? -1 : agg_operands[0].GetInt();
+}
+
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat, const std::vector<std::string>& col_names)
@@ -153,14 +165,15 @@ class CalciteAdapter {
     const auto& expr_type = expr["type"];
     CHECK(expr_type.IsObject());
     SQLTypeInfo agg_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
-    const auto agg_name = expr["agg"].GetString();
-    const auto& agg_operands = expr["operands"];
-    CHECK(agg_operands.IsArray());
-    CHECK(agg_operands.Size() <= 1);
-    size_t operand = agg_operands.Empty() ? 0 : agg_operands[0].GetInt();
-    const auto agg_kind = to_agg_kind(agg_name);
+    const auto operand = get_agg_operand_idx(expr);
+    const auto agg_kind = to_agg_kind(expr["agg"].GetString());
     const bool is_distinct = expr["distinct"].GetBool();
-    const auto arg_expr = agg_kind == kCOUNT && !is_distinct ? nullptr : scan_targets[operand]->get_own_expr();
+    const bool takes_arg = agg_kind != kCOUNT || is_distinct;
+    if (takes_arg) {
+      CHECK_GE(operand, ssize_t(0));
+      CHECK_LT(operand, static_cast<ssize_t>(scan_targets.size()));
+    }
+    const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
     return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
   }
 
@@ -205,15 +218,29 @@ void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
       continue;
     }
     scan_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
-    if (!group_nodes.Empty()) {
-      agg_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
+  }
+  std::unordered_map<size_t, std::shared_ptr<Analyzer::Expr>> idx_to_expr;
+  std::vector<Analyzer::TargetEntry*> more_agg_targets;  // TODO(alex): broken, remove
+  for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it) {
+    auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, td, scan_targets);
+    const auto operand_idx = get_agg_operand_idx(*agg_nodes_it);
+    if (operand_idx < 0) {  // TODO(alex): broken, remove
+      more_agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
+    } else {
+      idx_to_expr.insert(std::make_pair(operand_idx, agg_expr));
     }
   }
   CHECK(agg_nodes.IsArray());
-  for (size_t i = 0; i < agg_nodes.Size(); ++i) {
-    auto agg_expr = calcite_adapter.getExprFromNode(agg_nodes[i], td, scan_targets);
-    agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
+  for (size_t target_idx = 0; target_idx < scan_targets.size(); ++target_idx) {
+    const auto it = idx_to_expr.find(target_idx);
+    if (it != idx_to_expr.end()) {
+      agg_targets.push_back(new Analyzer::TargetEntry("", it->second, false));
+    } else {
+      agg_targets.push_back(new Analyzer::TargetEntry("", scan_targets[target_idx]->get_own_expr(), false));
+    }
   }
+  // TODO(alex): broken, remove
+  agg_targets.insert(agg_targets.end(), more_agg_targets.begin(), more_agg_targets.end());
 }
 
 void collect_groupby(const rapidjson::Value& group_nodes,
