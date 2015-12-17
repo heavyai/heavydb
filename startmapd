@@ -66,7 +66,7 @@ fi
 
 if [ ! -d $MAPD_DATA/mapd_data ]; then
     mkdir -p $MAPD_DATA
-    ./bin/initdb -f --path $MAPD_DATA
+    ./bin/initdb -f --data $MAPD_DATA
     echo "Download and insert sample data? Y/n"
     read choice
     if [ -z "$choice" ]; then choice="Y"; fi
