@@ -1,0 +1,13 @@
+[Unit]
+Description=MapD web server
+After=network.target remote-fs.target
+Requires=mapd_server.service
+
+[Service]
+#User=mapd
+#Group=mapd
+WorkingDirectory=@MAPD_PATH@
+ExecStart=@MAPD_PATH@/bin/mapd_web_server --config mapd.conf
+
+[Install]
+WantedBy=multi-user.target

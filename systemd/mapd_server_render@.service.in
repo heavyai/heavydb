@@ -1,0 +1,14 @@
+[Unit]
+Description=MapD database server for %i
+After=network.target remote-fs.target xorg.target
+
+[Service]
+#User=mapd
+#Group=mapd
+Environment="LD_LIBRARY_PATH=/usr/local/cuda/nvvm/lib64" DISPLAY=:1
+WorkingDirectory=@MAPD_PATH@
+ExecStart=@MAPD_PATH@/bin/mapd_server --config %I.conf
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

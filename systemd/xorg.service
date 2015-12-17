@@ -1,0 +1,6 @@
+[Unit]
+Description=Xorg
+Before=xorg.target
+
+[Service]
+ExecStart=/usr/bin/Xorg :1 -nolisten tcp -noreset
