@@ -326,20 +326,6 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
 }
 
 
-int32_t Executor::getStringId(const std::string& table_name,
-                              const std::string& col_name,
-                              const std::string& col_val) const {
-  const auto td = catalog_->getMetadataForTable(table_name);
-  CHECK(td);
-  const auto cd = catalog_->getMetadataForColumn(td->tableId, col_name);
-  CHECK(cd);
-  CHECK(cd->columnType.is_string() && cd->columnType.get_compression() == kENCODING_DICT);
-  const int dict_id = cd->columnType.get_comp_param();
-  const auto sd = getStringDictionary(dict_id, row_set_mem_owner_);
-  CHECK(sd);
-  return sd->get(col_val);
-}
-
 StringDictionary* Executor::getStringDictionary(const int dict_id_in,
                                                 std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) const {
   const int dict_id{dict_id_in < 0 ? REGULAR_DICT(dict_id_in) : dict_id_in};
