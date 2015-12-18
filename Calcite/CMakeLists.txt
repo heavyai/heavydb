@@ -14,6 +14,6 @@ TARGET_LINK_LIBRARIES (Calcite Catalog)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift
-    OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constatnts.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp
+    OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constants.cpp ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift)

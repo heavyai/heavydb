@@ -1092,6 +1092,10 @@ class MapDHandler : virtual public MapDIf {
     const auto session_info = get_session(session);
     TQueryResult ret;
     sql_execute_impl(ret, session_info, "SELECT COUNT(*) FROM " + table_name + ";", true, "", false);
+    // check for our slightly weird zero row condition
+    if (ret.row_set.columns.empty()) {
+      return 0;
+    }
     return ret.row_set.columns[0].data.int_col[0];
 #else
     throw std::runtime_error("Not implemented yet");
@@ -1136,7 +1140,7 @@ class MapDHandler : virtual public MapDIf {
         } catch (InvalidParseRequest& e) {
           TMapDException ex;
           ex.error_msg = std::string("Exception: ") + e.whyUp;
-          LOG(ERROR) << "Calcite had an issue parsing this sql" << ex.error_msg << "sql was " << query_str;
+          LOG(ERROR) << "Calcite had an issue parsing this sql " << ex.error_msg << "sql was " << query_str;
           // TODO MAT don't actually throw exception yet as normal parse is still to be done
           // throw ex;
         }
