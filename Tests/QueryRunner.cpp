@@ -1,6 +1,10 @@
 #include "QueryRunner.h"
 
 #include "../Parser/parser.h"
+#ifdef HAVE_CALCITE
+#include "../Calcite/Calcite.h"
+#include "../QueryEngine/CalciteAdapter.h"
+#endif  // HAVE_CALCITE
 
 #include <boost/filesystem/operations.hpp>
 
@@ -33,10 +37,9 @@ Catalog_Namespace::SessionInfo* get_session(const char* db_path) {
       std::make_shared<Catalog_Namespace::Catalog>(base_path.string(), db, dataMgr), user, ExecutorDeviceType::GPU, 0);
 }
 
-ResultRows run_multiple_agg(const std::string& query_str,
-                            const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
-                            const ExecutorDeviceType device_type,
-                            const NVVMBackend nvvm_backend) {
+namespace {
+
+Planner::RootPlan* parse_plan_legacy(const std::string& query_str, const Catalog_Namespace::Catalog& cat) {
   SQLParser parser;
   std::list<Parser::Stmt*> parse_trees;
   std::string last_parsed;
@@ -48,12 +51,38 @@ ResultRows run_multiple_agg(const std::string& query_str,
   CHECK(!ddl);
   Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);
   Analyzer::Query query;
-  auto& g_cat = session->get_catalog();
-  dml->analyze(g_cat, query);
-  Planner::Optimizer optimizer(query, g_cat);
-  Planner::RootPlan* plan = optimizer.optimize();
+  dml->analyze(cat, query);
+  Planner::Optimizer optimizer(query, cat);
+  return optimizer.optimize();
+}
+
+#ifdef HAVE_CALCITE
+Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
+                                      const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) noexcept {
+  static Calcite calcite_cli(9092);
+  const auto query_ra = calcite_cli.process(session->get_currentUser().userName,
+                                            session->get_currentUser().passwd,
+                                            session->get_catalog().get_currentDB().dbName,
+                                            query_str);
+  return translate_query(query_ra, session->get_catalog());
+}
+#endif  // HAVE_CALCITE
+
+}  // namespace
+
+ResultRows run_multiple_agg(const std::string& query_str,
+                            const bool use_calcite,
+                            const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                            const ExecutorDeviceType device_type,
+                            const NVVMBackend nvvm_backend) {
+  const auto& cat = session->get_catalog();
+#ifdef HAVE_CALCITE
+  Planner::RootPlan* plan = use_calcite ? parse_plan_calcite(query_str, session) : parse_plan_legacy(query_str, cat);
+#else
+  Planner::RootPlan* plan = parse_plan_legacy(query_str, cat);
+#endif                                                // HAVE_CALCITE
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
-  auto executor = Executor::getExecutor(g_cat.get_currentDB().dbId);
+  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 #ifdef HAVE_CUDA
   return executor->execute(
       plan, *session, -1, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, true, true);

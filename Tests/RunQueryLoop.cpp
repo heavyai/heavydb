@@ -7,6 +7,7 @@ int main(int argc, char** argv) {
   std::string query;
   size_t iter;
   bool use_nvptx = true;
+  bool use_calcite = false;
 
   ExecutorDeviceType device_type{ExecutorDeviceType::GPU};
 
@@ -15,7 +16,8 @@ int main(int argc, char** argv) {
       "path", boost::program_options::value<std::string>(&db_path)->required(), "Directory path to Mapd catalogs")(
       "query", boost::program_options::value<std::string>(&query)->required(), "Query")(
       "iter", boost::program_options::value<size_t>(&iter), "Number of iterations")(
-      "use-nvvm", "Use NVVM instead of NVPTX")("cpu", "Run on CPU (run on GPU by default)");
+      "use-nvvm", "Use NVVM instead of NVPTX")("cpu", "Run on CPU (run on GPU by default)")("use-calcite",
+                                                                                            "Use Calcite frontend");
 
   boost::program_options::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -44,9 +46,13 @@ int main(int argc, char** argv) {
     use_nvptx = false;
   }
 
+  if (vm.count("use-calcite")) {
+    use_calcite = true;
+  }
+
   std::unique_ptr<Catalog_Namespace::SessionInfo> session(get_session(db_path.c_str()));
   for (size_t i = 0; i < iter; ++i) {
-    run_multiple_agg(query, session, device_type, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA);
+    run_multiple_agg(query, use_calcite, session, device_type, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA);
   }
   return 0;
 }

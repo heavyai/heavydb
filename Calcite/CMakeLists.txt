@@ -1,16 +1,18 @@
 cmake_minimum_required(VERSION 2.8)
 
-SET (analyzer_source_files
+SET (calcite_source_files
     Calcite.cpp
     Calcite.h
     ${CMAKE_BINARY_DIR}/gen-cpp/CalciteServer.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp
 )
 
 include_directories("/usr/local/include")
 
-ADD_LIBRARY (Calcite ${analyzer_source_files})
+ADD_LIBRARY (Calcite ${calcite_source_files})
 
-TARGET_LINK_LIBRARIES (Calcite Catalog)
+TARGET_LINK_LIBRARIES (Calcite Catalog ${Thrift_LIBRARIES})
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift
