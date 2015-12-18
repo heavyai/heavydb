@@ -253,6 +253,19 @@ void collect_groupby(const rapidjson::Value& group_nodes,
   }
 }
 
+void reproject_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
+                              const std::vector<size_t>& result_proj_indices) {
+  if (result_proj_indices.empty()) {
+    return;
+  }
+  std::vector<Analyzer::TargetEntry*> agg_targets_reproj;
+  for (const auto proj_idx : result_proj_indices) {
+    CHECK_LT(proj_idx, agg_targets.size());
+    agg_targets_reproj.push_back(agg_targets[proj_idx]);
+  }
+  agg_targets.swap(agg_targets_reproj);
+}
+
 std::vector<std::string> get_col_names(const rapidjson::Value& scan_ra) {
   CHECK(scan_ra.IsObject() && scan_ra.HasMember("fieldNames"));
   const auto& col_names_node = scan_ra["fieldNames"];
@@ -280,22 +293,33 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CalciteAdapter calcite_adapter(cat, get_col_names(scan_ra));
   auto td = calcite_adapter.getTableFromScanNode(scan_ra);
   std::shared_ptr<Analyzer::Expr> filter_expr;
-  if (rels.Size() == 4) {  // TODO(alex)
+  if (rels.Size() >= 4) {  // TODO(alex): find the nodes by name, this is incorrect!
     const auto& filter_ra = rels[1];
     CHECK(filter_ra.IsObject());
     filter_expr = calcite_adapter.getExprFromNode(filter_ra["condition"], td, {});
   }
-  const size_t base_off = rels.Size() == 4 ? 2 : 1;
+  const size_t base_off = rels.Size() >= 4 ? 2 : 1;
   const auto& project_ra = rels[base_off];
   const auto& proj_nodes = project_ra["exprs"];
   const auto& agg_nodes = rels[base_off + 1]["aggs"];
   const auto& group_nodes = rels[base_off + 1]["group"];
+  std::vector<size_t> result_proj_indices;
+  if (rels.Size() >= 5) {  // TODO(alex): find the nodes by name, this is incorrect!
+    const auto& result_proj_ra = rels[base_off + 2];
+    const auto& result_proj_nodes = result_proj_ra["exprs"];
+    CHECK(result_proj_nodes.IsArray());
+    for (auto it = result_proj_nodes.Begin(); it != result_proj_nodes.End(); ++it) {
+      CHECK(it->IsObject());
+      result_proj_indices.push_back((*it)["input"].GetInt());
+    }
+  }
   CHECK(proj_nodes.IsArray());
   std::vector<Analyzer::TargetEntry*> agg_targets;
   std::vector<Analyzer::TargetEntry*> scan_targets;
   collect_target_entries(agg_targets, scan_targets, group_nodes, proj_nodes, agg_nodes, calcite_adapter, td);
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   collect_groupby(group_nodes, agg_targets, groupby_exprs);
+  reproject_target_entries(agg_targets, result_proj_indices);
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq;
   if (filter_expr) {  // TODO(alex): take advantage of simple qualifiers where possible
