@@ -292,6 +292,33 @@ std::shared_ptr<Analyzer::Expr> get_filter_expr(const rapidjson::Value& rels,
   return nullptr;
 }
 
+const rapidjson::Value& get_first_of_type(const rapidjson::Value& rels, const std::string& type) {
+  for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
+    const auto& proj_ra = *rels_it;
+    if (type == proj_ra["relOp"].GetString()) {
+      return proj_ra;
+    }
+  }
+  CHECK(false);
+  return rels;
+}
+
+std::vector<size_t> get_result_proj_indices(const rapidjson::Value& rels) {
+  CHECK(rels.IsArray() && rels.Size());
+  const auto& last_rel = *(rels.End() - 1);
+  if (std::string("LogicalProject") != last_rel["relOp"].GetString()) {
+    return {};
+  }
+  const auto& result_proj_nodes = last_rel["exprs"];
+  std::vector<size_t> result_proj_indices;
+  CHECK(result_proj_nodes.IsArray());
+  for (auto it = result_proj_nodes.Begin(); it != result_proj_nodes.End(); ++it) {
+    CHECK(it->IsObject());
+    result_proj_indices.push_back((*it)["input"].GetInt());
+  }
+  return result_proj_indices;
+}
+
 }  // namespace
 
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& cat) {
@@ -307,22 +334,13 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CalciteAdapter calcite_adapter(cat, get_col_names(scan_ra));
   auto td = calcite_adapter.getTableFromScanNode(scan_ra);
   const auto filter_expr = get_filter_expr(rels, calcite_adapter, td);
-  const size_t base_off = rels.Size() >= 4 ? 2 : 1;
-  const auto& project_ra = rels[base_off];
+  const auto& project_ra = get_first_of_type(rels, "LogicalProject");
   const auto& proj_nodes = project_ra["exprs"];
-  const auto& agg_nodes = rels[base_off + 1]["aggs"];
-  const auto& group_nodes = rels[base_off + 1]["group"];
-  std::vector<size_t> result_proj_indices;
-  if (rels.Size() >= 5) {  // TODO(alex): find the nodes by name, this is incorrect!
-    const auto& result_proj_ra = rels[base_off + 2];
-    const auto& result_proj_nodes = result_proj_ra["exprs"];
-    CHECK(result_proj_nodes.IsArray());
-    for (auto it = result_proj_nodes.Begin(); it != result_proj_nodes.End(); ++it) {
-      CHECK(it->IsObject());
-      result_proj_indices.push_back((*it)["input"].GetInt());
-    }
-  }
   CHECK(proj_nodes.IsArray());
+  const auto& agg_ra = get_first_of_type(rels, "LogicalAggregate");
+  const auto& agg_nodes = agg_ra["aggs"];
+  const auto& group_nodes = agg_ra["group"];
+  const auto result_proj_indices = get_result_proj_indices(rels);
   std::vector<Analyzer::TargetEntry*> agg_targets;
   std::vector<Analyzer::TargetEntry*> scan_targets;
   collect_target_entries(agg_targets, scan_targets, group_nodes, proj_nodes, agg_nodes, calcite_adapter, td);
