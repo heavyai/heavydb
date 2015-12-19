@@ -212,35 +212,24 @@ void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
                             CalciteAdapter& calcite_adapter,
                             const TableDescriptor* td) {
   CHECK(proj_nodes.IsArray());
-  for (size_t i = 0; i < proj_nodes.Size(); ++i) {
-    const auto proj_expr = calcite_adapter.getExprFromNode(proj_nodes[i], td, {});
+  for (auto proj_nodes_it = proj_nodes.Begin(); proj_nodes_it != proj_nodes.End(); ++proj_nodes_it) {
+    const auto proj_expr = calcite_adapter.getExprFromNode(*proj_nodes_it, td, {});
     if (std::dynamic_pointer_cast<const Analyzer::Constant>(proj_expr)) {  // TODO(alex): fix
       continue;
     }
     scan_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
   }
-  std::unordered_map<size_t, std::shared_ptr<Analyzer::Expr>> idx_to_expr;
-  std::vector<Analyzer::TargetEntry*> more_agg_targets;  // TODO(alex): broken, remove
+  CHECK(group_nodes.IsArray());
+  CHECK(agg_nodes.IsArray());
+  for (auto group_nodes_it = group_nodes.Begin(); group_nodes_it != group_nodes.End(); ++group_nodes_it) {
+    CHECK(group_nodes_it->IsInt());
+    const int target_idx = group_nodes_it->GetInt();
+    agg_targets.push_back(new Analyzer::TargetEntry("", scan_targets[target_idx]->get_own_expr(), false));
+  }
   for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it) {
     auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, td, scan_targets);
-    const auto operand_idx = get_agg_operand_idx(*agg_nodes_it);
-    if (operand_idx < 0) {  // TODO(alex): broken, remove
-      more_agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
-    } else {
-      idx_to_expr.insert(std::make_pair(operand_idx, agg_expr));
-    }
+    agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
   }
-  CHECK(agg_nodes.IsArray());
-  for (size_t target_idx = 0; target_idx < scan_targets.size(); ++target_idx) {
-    const auto it = idx_to_expr.find(target_idx);
-    if (it != idx_to_expr.end()) {
-      agg_targets.push_back(new Analyzer::TargetEntry("", it->second, false));
-    } else {
-      agg_targets.push_back(new Analyzer::TargetEntry("", scan_targets[target_idx]->get_own_expr(), false));
-    }
-  }
-  // TODO(alex): broken, remove
-  agg_targets.insert(agg_targets.end(), more_agg_targets.begin(), more_agg_targets.end());
 }
 
 void collect_groupby(const rapidjson::Value& group_nodes,
