@@ -72,6 +72,9 @@ SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == std::string("SUM")) {
     return kSUM;
   }
+  if (agg_name == std::string("AVG")) {
+    return kAVG;
+  }
   CHECK(false);
   return kCOUNT;
 }
@@ -164,9 +167,13 @@ class CalciteAdapter {
     CHECK(expr.IsObject() && expr.HasMember("type"));
     const auto& expr_type = expr["type"];
     CHECK(expr_type.IsObject());
-    SQLTypeInfo agg_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
+    const bool is_nullable{expr_type["nullable"].GetBool()};
+    SQLTypeInfo agg_ti(to_sql_type(expr_type["type"].GetString()), is_nullable);
     const auto operand = get_agg_operand_idx(expr);
     const auto agg_kind = to_agg_kind(expr["agg"].GetString());
+    if (agg_kind == kAVG) {
+      agg_ti = SQLTypeInfo(kDOUBLE, is_nullable);
+    }
     const bool is_distinct = expr["distinct"].GetBool();
     const bool takes_arg = agg_kind != kCOUNT || is_distinct;
     if (takes_arg) {
