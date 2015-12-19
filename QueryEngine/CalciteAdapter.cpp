@@ -244,12 +244,12 @@ void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
 }
 
 void collect_groupby(const rapidjson::Value& group_nodes,
-                     const std::vector<Analyzer::TargetEntry*>& agg_targets,
+                     const std::vector<Analyzer::TargetEntry*>& scan_targets,
                      std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs) {
   CHECK(group_nodes.IsArray());
   for (size_t i = 0; i < group_nodes.Size(); ++i) {
     const int target_idx = group_nodes[i].GetInt();
-    groupby_exprs.push_back(agg_targets[target_idx]->get_expr()->deep_copy());
+    groupby_exprs.push_back(scan_targets[target_idx]->get_expr()->deep_copy());
   }
 }
 
@@ -327,7 +327,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   std::vector<Analyzer::TargetEntry*> scan_targets;
   collect_target_entries(agg_targets, scan_targets, group_nodes, proj_nodes, agg_nodes, calcite_adapter, td);
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-  collect_groupby(group_nodes, agg_targets, groupby_exprs);
+  collect_groupby(group_nodes, scan_targets, groupby_exprs);
   reproject_target_entries(agg_targets, result_proj_indices);
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq;
