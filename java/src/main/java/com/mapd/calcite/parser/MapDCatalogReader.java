@@ -43,12 +43,17 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumnType;
+import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTypeInfo;
+import com.mapd.thrift.server.ThriftException;
+import java.util.ArrayList;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -59,9 +64,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * MapD implementation of {@link SqlValidatorCatalogReader} which returns tables "EMP", "DEPT",
- * "BONUS", "SALGRADE" (same as Oracle's SCOTT schema). Also two streams "ORDERS", "SHIPMENTS"; and
- * a view "EMP_20".
+ * MapD implementation of {@link SqlValidatorCatalogReader} which returns tables "EMP", "DEPT", "BONUS", "SALGRADE"
+ * (same as Oracle's SCOTT schema). Also two streams "ORDERS", "SHIPMENTS"; and a view "EMP_20".
  */
 public class MapDCatalogReader implements Prepare.CatalogReader {
   //~ Static fields/initializers ---------------------------------------------
@@ -108,8 +112,8 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   /**
    * Initializes this catalog reader.
    *
-   * @return MapDCatalogReader reads the catalog for this database we will need to hold catalog info
-   * in the calcite server with a mechanism to overwrite, each schema will equate to one catalog
+   * @return MapDCatalogReader reads the catalog for this database we will need to hold catalog info in the calcite
+   * server with a mechanism to overwrite, each schema will equate to one catalog
    */
   public MapDCatalogReader init() {
     return init("mapd", "HyperInteractive", "localhost", 9091, "mapd");
@@ -127,200 +131,116 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
    */
   public MapDCatalogReader init(String user, String passwd, String host, int port, String db) {
 
-     DEFAULT_SCHEMA = db;
+    DEFAULT_SCHEMA = db;
 
-    final RelDataType intType
-            = typeFactory.createSqlType(SqlTypeName.INTEGER);
-    final RelDataType smallIntType
-            = typeFactory.createSqlType(SqlTypeName.SMALLINT);
-    final RelDataType floatType
-            = typeFactory.createSqlType(SqlTypeName.FLOAT);
-    final RelDataType stringType
-            = typeFactory.createSqlType(SqlTypeName.VARCHAR, 50);
-    final RelDataType timestampType
-            = typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
-    final RelDataType booleanType
-            = typeFactory.createSqlType(SqlTypeName.BOOLEAN);
-    final RelDataType dateType
-            = typeFactory.createSqlType(SqlTypeName.DATE);
-    final RelDataType timeType
-            = typeFactory.createSqlType(SqlTypeName.TIME);
-    final RelDataType bigIntType
-            = typeFactory.createSqlType(SqlTypeName.BIGINT);
-    final RelDataType decimalType
-            = typeFactory.createSqlType(SqlTypeName.DECIMAL);
-    final RelDataType doubleType
-            = typeFactory.createSqlType(SqlTypeName.DOUBLE);
-    final RelDataType arrayType
-            = typeFactory.createSqlType(SqlTypeName.ARRAY);
+    // add all the MapD datatype into this structure
+    // it is indexed with the TDatumType,  isArray , isNullable
+    final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
+    mapDTypes = new EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>>(TDatumType.class);
 
-    // now with nulls
-    final RelDataType intTypeNull
-            = typeFactory.createTypeWithNullability(intType, true);
-    final RelDataType smallIntTypeNull
-            = typeFactory.createTypeWithNullability(smallIntType, true);
-    final RelDataType floatTypeNull
-            = typeFactory.createTypeWithNullability(floatType, true);
-    final RelDataType stringTypeNull
-            = typeFactory.createTypeWithNullability(stringType, true);
-    final RelDataType timestampTypeNull
-            = typeFactory.createTypeWithNullability(timestampType, true);
-    final RelDataType booleanTypeNull
-            = typeFactory.createTypeWithNullability(booleanType, true);
-    final RelDataType dateTypeNull
-            = typeFactory.createTypeWithNullability(dateType, true);
-    final RelDataType timeTypeNull
-            = typeFactory.createTypeWithNullability(timeType, true);
-    final RelDataType bigIntTypeNull
-            = typeFactory.createTypeWithNullability(bigIntType, true);
-    final RelDataType decimalTypeNull
-            = typeFactory.createTypeWithNullability(decimalType, true);
-    final RelDataType doubleTypeNull
-            = typeFactory.createTypeWithNullability(doubleType, true);
-    final RelDataType arrayTypeNull
-            = typeFactory.createTypeWithNullability(arrayType, true);
+    for (TDatumType dType : TDatumType.values()) {
+      RelDataType cType = getRelDataType(dType);
+      ArrayList<ArrayList<RelDataType>> nullList = new ArrayList<ArrayList<RelDataType>>(2);
+      for (int nullable = 0; nullable < 2; nullable++) {
+        ArrayList<RelDataType> arrayList = new ArrayList<RelDataType>(2);
+        if (nullable == 0) {
+          arrayList.add(0, cType);                                              // regular type
+          arrayList.add(1, typeFactory.createArrayType(cType, -1));             // Array type
+        } else {
+          arrayList.add(0, typeFactory.createTypeWithNullability(cType, true)); // regular type nullable
+          arrayList.add(1, typeFactory.createArrayType(arrayList.get(0), -1));  // Array type nullable
+        }
+        nullList.add(nullable, arrayList);
+      }
+      mapDTypes.put(dType, nullList);
+    }
 
     int session = 0;
     MapD.Client client = null;
     // establish connection to mapd server
 
     TTransport transport;
+    transport = new TSocket(host, port);
+
     try {
-      transport = new TSocket(host, port);
-
       transport.open();
+    } catch (TTransportException ex) {
+      throw new RuntimeException("Open failed - " + ex.toString());
+    }
 
-      TProtocol protocol = new TBinaryProtocol(transport);
+    TProtocol protocol = new TBinaryProtocol(transport);
 
-      client = new MapD.Client(protocol);
+    client = new MapD.Client(protocol);
 
+    try {
       session = client.connect(user, passwd, db);
+    } catch (ThriftException ex) {
+      throw new RuntimeException("Connect failed - " + ex.toString());
+    } catch (TException ex) {
+      throw new RuntimeException("Connect failed - " + ex.toString());
+    }
 
-      logger.debug("Connected session is " + session);
+    logger.debug("Connected session is " + session);
 
-      MapDSchema schema = new MapDSchema(db);
+    MapDSchema schema = new MapDSchema(db);
 
-      registerSchema(schema);
+    registerSchema(schema);
 
-      logger.debug("Schema is " + db);
+    logger.debug("Schema is " + db);
 
-      // now for each db collect all tables
-      List<String> ttables = client.get_tables(session);
-      for (String table : ttables) {
-        logger.debug("\t table  is " + table);
-        MapDTable mtable = MapDTable.create(this, schema, table, false);
+    // now for each db collect all tables
+    List<String> ttables = null;
+    try {
+      ttables = client.get_tables(session);
+    } catch (ThriftException ex) {
+      throw new RuntimeException("Get tables failed - " + ex.toString());
+    } catch (TException ex) {
+      throw new RuntimeException("Get tables failed - " + ex.toString());
+    }
+    for (String table : ttables) {
+      logger.debug("\t table  is " + table);
+      MapDTable mtable = MapDTable.create(this, schema, table, false);
 
-        // Now get tables column details
-        Map<String, TColumnType> tableDescriptor = client.get_table_descriptor(session, table);
-
-        for (Map.Entry<String, TColumnType> entry : tableDescriptor.entrySet()) {
-          TColumnType value = entry.getValue();
-          //logger.info(" Key String "+entry.getKey());
-          logger.debug("'" + entry.getKey() + "'"
-                  + " \t" + value.getCol_type().getEncoding()
-                  + " \t" + value.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
-                  + " \t" + value.getCol_type().nullable
-                  + " \t" + value.getCol_type().is_array
-          );
-
-          // check if it is an array
-          if (value.getCol_type().is_array) {
-            // set column to array
-          } else {
-
-            switch (value.getCol_type().type) {
-              case SMALLINT:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), smallIntTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), smallIntType);
-                }
-                break;
-              case INT:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), intTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), intType);
-                }
-                break;
-              case BIGINT:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), bigIntTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), bigIntType);
-                }
-                break;
-              case FLOAT:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), floatTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), floatType);
-                }
-                break;
-              case DECIMAL:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), decimalTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), decimalType);
-                }
-                break;
-              case DOUBLE:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), doubleTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), doubleType);
-                }
-                break;
-              case STR:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), stringTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), stringType);
-                }
-                break;
-              case TIME:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), timeTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), timeType);
-                }
-                break;
-              case TIMESTAMP:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), timestampTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), timestampType);
-                }
-                break;
-              case DATE:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), dateTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), dateType);
-                }
-                break;
-              case BOOL:
-                if (value.getCol_type().nullable) {
-                  mtable.addColumn(entry.getKey(), booleanTypeNull);
-                } else {
-                  mtable.addColumn(entry.getKey(), booleanType);
-                }
-                break;
-              default:
-                throw new java.lang.AssertionError(value.getCol_type().type.name());
-            };
-          }
-        }
-        mtable.setRowCount(client.get_row_count(session, table));
-        registerTable(mtable);
+      // Now get tables column details
+      Map<String, TColumnType> tableDescriptor = null;
+      try {
+        tableDescriptor = client.get_table_descriptor(session, table);
+      } catch (ThriftException ex) {
+        throw new RuntimeException("Get table descriptor failed - " + ex.toString());
+      } catch (TException ex) {
+        throw new RuntimeException("Get table descriptor failed - " + ex.toString());
       }
 
-      client.disconnect(session);
+      for (Map.Entry<String, TColumnType> entry : tableDescriptor.entrySet()) {
+        TColumnType value = entry.getValue();
+        logger.debug("'" + entry.getKey() + "'"
+                + " \t" + value.getCol_type().getEncoding()
+                + " \t" + value.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
+                + " \t" + value.getCol_type().nullable
+                + " \t" + value.getCol_type().is_array
+        );
 
-    } catch (TTransportException ex) {
-      throw new RuntimeException("Connection failed - " + ex.toString());
+        mtable.addColumn(entry.getKey(), mapDTypes.get(value.getCol_type().type)
+                .get(value.getCol_type().nullable ? 1 : 0)
+                .get(value.getCol_type().is_array ? 1 : 0));
+
+      }
+      try {
+        mtable.setRowCount(client.get_row_count(session, table));
+      } catch (ThriftException ex) {
+        throw new RuntimeException("Get Row Count failed - " + ex.toString());
+      } catch (TException ex) {
+        throw new RuntimeException("Get Row Count failed - " + ex.toString());
+      }
+      registerTable(mtable);
+    }
+
+    try {
+      client.disconnect(session);
+    } catch (ThriftException ex) {
+      throw new RuntimeException("Disconnect failed - " + ex.toString());
     } catch (TException ex) {
-      throw new RuntimeException("Connection failed - " + ex.toString());
+      throw new RuntimeException("Disconnect failed - " + ex.toString());
     }
 
     addDefaultTestSchemas();
@@ -343,6 +263,8 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
             = typeFactory.createSqlType(SqlTypeName.VARCHAR, 20);
     final RelDataType timestampType
             = typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
+    final RelDataType stringArrayType
+            = typeFactory.createArrayType(varchar10Type, -1);
     final RelDataType booleanType
             = typeFactory.createSqlType(SqlTypeName.BOOLEAN);
     final RelDataType rectilinearCoordType
@@ -378,6 +300,8 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     empTable.addColumn("COMM", intType);
     empTable.addColumn("DEPTNO", intType);
     empTable.addColumn("SLACKER", booleanType);
+    empTable.addColumn("SLACKARR1", stringArrayType);
+    empTable.addColumn("SLACKARR2", stringArrayType);
     registerTable(empTable);
 
     // Register "DEPT" table.
@@ -754,5 +678,37 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
             typeFactory, caseSensitive, elideRecord);
   }
 
+  // Convert our TDataumn type in to a base calcite SqlType
+  // todo confirm whether it is ok to ignore thinsg like lengths
+  // since we do not use them on the validator side of the calcite 'fence'
+  private RelDataType getRelDataType(TDatumType dType) {
+
+    switch (dType) {
+      case SMALLINT:
+        return typeFactory.createSqlType(SqlTypeName.SMALLINT);
+      case INT:
+        return typeFactory.createSqlType(SqlTypeName.INTEGER);
+      case BIGINT:
+        return typeFactory.createSqlType(SqlTypeName.BIGINT);
+      case FLOAT:
+        return typeFactory.createSqlType(SqlTypeName.FLOAT);
+      case DECIMAL:
+        return typeFactory.createSqlType(SqlTypeName.DECIMAL);
+      case DOUBLE:
+        return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+      case STR:
+        return typeFactory.createSqlType(SqlTypeName.VARCHAR, 50);
+      case TIME:
+        return typeFactory.createSqlType(SqlTypeName.TIME);
+      case TIMESTAMP:
+        return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
+      case DATE:
+        return typeFactory.createSqlType(SqlTypeName.DATE);
+      case BOOL:
+        return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+      default:
+        throw new AssertionError(dType.name());
+    }
+  }
 }
 // End MapDCatalogReader.java

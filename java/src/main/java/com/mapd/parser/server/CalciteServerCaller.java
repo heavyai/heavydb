@@ -21,8 +21,8 @@ public class CalciteServerCaller {
   private static CalciteServerHandler handler;
 
   private static CalciteServer.Processor processor;
-  
-  private static int port=9092;
+
+  private static int port=9093;
 
   public static void main(String[] args) {
     try {
