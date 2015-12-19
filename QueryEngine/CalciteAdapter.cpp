@@ -204,11 +204,21 @@ class CalciteAdapter {
   const std::vector<std::string> col_names_;
 };
 
+const rapidjson::Value* get_first_of_type(const rapidjson::Value& rels, const std::string& type) {
+  for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
+    const auto& proj_ra = *rels_it;
+    if (type == proj_ra["relOp"].GetString()) {
+      return &proj_ra;
+    }
+  }
+  return nullptr;
+}
+
 void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
                             std::vector<Analyzer::TargetEntry*>& scan_targets,
-                            const rapidjson::Value& group_nodes,
+                            std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
                             const rapidjson::Value& proj_nodes,
-                            const rapidjson::Value& agg_nodes,
+                            const rapidjson::Value& rels,
                             CalciteAdapter& calcite_adapter,
                             const TableDescriptor* td) {
   CHECK(proj_nodes.IsArray());
@@ -219,26 +229,27 @@ void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
     }
     scan_targets.push_back(new Analyzer::TargetEntry("", proj_expr, false));
   }
-  CHECK(group_nodes.IsArray());
-  CHECK(agg_nodes.IsArray());
-  for (auto group_nodes_it = group_nodes.Begin(); group_nodes_it != group_nodes.End(); ++group_nodes_it) {
-    CHECK(group_nodes_it->IsInt());
-    const int target_idx = group_nodes_it->GetInt();
-    agg_targets.push_back(new Analyzer::TargetEntry("", scan_targets[target_idx]->get_own_expr(), false));
-  }
-  for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it) {
-    auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, td, scan_targets);
-    agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
-  }
-}
-
-void collect_groupby(const rapidjson::Value& group_nodes,
-                     const std::vector<Analyzer::TargetEntry*>& scan_targets,
-                     std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs) {
-  CHECK(group_nodes.IsArray());
-  for (size_t i = 0; i < group_nodes.Size(); ++i) {
-    const int target_idx = group_nodes[i].GetInt();
-    groupby_exprs.push_back(scan_targets[target_idx]->get_expr()->deep_copy());
+  const auto agg_ra_ptr = get_first_of_type(rels, "LogicalAggregate");
+  if (agg_ra_ptr) {
+    const auto& agg_ra = *agg_ra_ptr;
+    const auto& agg_nodes = agg_ra["aggs"];
+    const auto& group_nodes = agg_ra["group"];
+    CHECK(group_nodes.IsArray());
+    for (auto group_nodes_it = group_nodes.Begin(); group_nodes_it != group_nodes.End(); ++group_nodes_it) {
+      CHECK(group_nodes_it->IsInt());
+      const int target_idx = group_nodes_it->GetInt();
+      groupby_exprs.push_back(scan_targets[target_idx]->get_expr()->deep_copy());
+    }
+    CHECK(agg_nodes.IsArray());
+    for (auto group_nodes_it = group_nodes.Begin(); group_nodes_it != group_nodes.End(); ++group_nodes_it) {
+      CHECK(group_nodes_it->IsInt());
+      const int target_idx = group_nodes_it->GetInt();
+      agg_targets.push_back(new Analyzer::TargetEntry("", scan_targets[target_idx]->get_own_expr(), false));
+    }
+    for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it) {
+      auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, td, scan_targets);
+      agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
+    }
   }
 }
 
@@ -281,21 +292,14 @@ std::shared_ptr<Analyzer::Expr> get_filter_expr(const rapidjson::Value& rels,
   return nullptr;
 }
 
-const rapidjson::Value& get_first_of_type(const rapidjson::Value& rels, const std::string& type) {
-  for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
-    const auto& proj_ra = *rels_it;
-    if (type == proj_ra["relOp"].GetString()) {
-      return proj_ra;
-    }
-  }
-  CHECK(false);
-  return rels;
-}
-
 std::vector<size_t> get_result_proj_indices(const rapidjson::Value& rels) {
   CHECK(rels.IsArray() && rels.Size());
   const auto& last_rel = *(rels.End() - 1);
   if (std::string("LogicalProject") != last_rel["relOp"].GetString()) {
+    return {};
+  }
+  const auto first_rel_ptr = get_first_of_type(rels, "LogicalProject");
+  if (&last_rel == first_rel_ptr) {
     return {};
   }
   const auto& result_proj_nodes = last_rel["exprs"];
@@ -323,28 +327,29 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CalciteAdapter calcite_adapter(cat, get_col_names(scan_ra));
   auto td = calcite_adapter.getTableFromScanNode(scan_ra);
   const auto filter_expr = get_filter_expr(rels, calcite_adapter, td);
-  const auto& project_ra = get_first_of_type(rels, "LogicalProject");
+  const auto project_ra_ptr = get_first_of_type(rels, "LogicalProject");
+  CHECK(project_ra_ptr);
+  const auto& project_ra = *project_ra_ptr;
   const auto& proj_nodes = project_ra["exprs"];
   CHECK(proj_nodes.IsArray());
-  const auto& agg_ra = get_first_of_type(rels, "LogicalAggregate");
-  const auto& agg_nodes = agg_ra["aggs"];
-  const auto& group_nodes = agg_ra["group"];
-  const auto result_proj_indices = get_result_proj_indices(rels);
   std::vector<Analyzer::TargetEntry*> agg_targets;
   std::vector<Analyzer::TargetEntry*> scan_targets;
-  collect_target_entries(agg_targets, scan_targets, group_nodes, proj_nodes, agg_nodes, calcite_adapter, td);
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-  collect_groupby(group_nodes, scan_targets, groupby_exprs);
+  collect_target_entries(agg_targets, scan_targets, groupby_exprs, proj_nodes, rels, calcite_adapter, td);
+  const auto result_proj_indices = get_result_proj_indices(rels);
   reproject_target_entries(agg_targets, result_proj_indices);
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq;
   if (filter_expr) {  // TODO(alex): take advantage of simple qualifiers where possible
     q.push_back(filter_expr);
   }
-  auto scan_plan =
+  Planner::Plan* scan_plan =
       new Planner::Scan(scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
-  auto agg_plan = new Planner::AggPlan(agg_targets, 0., scan_plan, groupby_exprs);
-  auto root_plan = new Planner::RootPlan(agg_plan, kSELECT, td->tableId, {}, cat, 0, 0);
+  Planner::Plan* agg_plan{nullptr};
+  if (!agg_targets.empty()) {
+    agg_plan = new Planner::AggPlan(agg_targets, 0., scan_plan, groupby_exprs);
+  }
+  auto root_plan = new Planner::RootPlan(agg_plan ? agg_plan : scan_plan, kSELECT, td->tableId, {}, cat, 0, 0);
   root_plan->print();
   puts("");
   return root_plan;
