@@ -278,6 +278,20 @@ std::vector<std::string> get_col_names(const rapidjson::Value& scan_ra) {
   return result;
 }
 
+std::shared_ptr<Analyzer::Expr> get_filter_expr(const rapidjson::Value& rels,
+                                                CalciteAdapter& calcite_adapter,
+                                                const TableDescriptor* td) {
+  CHECK(rels.IsArray());
+  for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
+    const auto& filter_ra = *rels_it;
+    CHECK(filter_ra.IsObject() && filter_ra.HasMember("relOp"));
+    if (std::string("LogicalFilter") == filter_ra["relOp"].GetString()) {
+      return calcite_adapter.getExprFromNode(filter_ra["condition"], td, {});
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace
 
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& cat) {
@@ -292,12 +306,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK_EQ(std::string("LogicalTableScan"), scan_ra["relOp"].GetString());
   CalciteAdapter calcite_adapter(cat, get_col_names(scan_ra));
   auto td = calcite_adapter.getTableFromScanNode(scan_ra);
-  std::shared_ptr<Analyzer::Expr> filter_expr;
-  if (rels.Size() >= 4) {  // TODO(alex): find the nodes by name, this is incorrect!
-    const auto& filter_ra = rels[1];
-    CHECK(filter_ra.IsObject());
-    filter_expr = calcite_adapter.getExprFromNode(filter_ra["condition"], td, {});
-  }
+  const auto filter_expr = get_filter_expr(rels, calcite_adapter, td);
   const size_t base_off = rels.Size() >= 4 ? 2 : 1;
   const auto& project_ra = rels[base_off];
   const auto& proj_nodes = project_ra["exprs"];
