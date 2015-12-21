@@ -342,13 +342,37 @@ LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
       if (sort_rel.HasMember("offset")) {
         result.offset = sort_rel["offset"].GetInt64();
       }
+      CHECK(sort_rel.HasMember("collation"));
+      const auto& collation = sort_rel["collation"];
+      CHECK(collation.IsArray());
+      for (auto collation_it = collation.Begin(); collation_it != collation.End(); ++collation_it) {
+        const auto& oe_node = *collation_it;
+        CHECK(oe_node.IsObject());
+        result.order_entries.emplace_back(oe_node["field"].GetInt() + 1,
+                                          std::string("DESCENDING") == oe_node["direction"].GetString(),
+                                          std::string("FIRST") == oe_node["nulls"].GetString());
+      }
       found = true;
     } else {
+      // Looks like there are two structurally identical LogicalSortInfo nodes
+      // in the Calcite AST. Validation for now, but maybe they can be different?
       if (sort_rel.HasMember("fetch")) {
         CHECK_EQ(result.limit, sort_rel["fetch"].GetInt64());
       }
       if (sort_rel.HasMember("offset")) {
         CHECK_EQ(result.offset, sort_rel["offset"].GetInt64());
+      }
+      CHECK(sort_rel.HasMember("collation"));
+      const auto& collation = sort_rel["collation"];
+      CHECK(collation.IsArray());
+      CHECK_EQ(static_cast<size_t>(collation.Size()), result.order_entries.size());
+      auto oe_it = result.order_entries.begin();
+      for (size_t i = 0; i < result.order_entries.size(); ++i, ++oe_it) {
+        const auto& oe_node = collation[i];
+        const auto& oe = *oe_it;
+        CHECK_EQ(oe.tle_no, oe_node["field"].GetInt() + 1);
+        CHECK_EQ(oe.is_desc, std::string("DESCENDING") == oe_node["direction"].GetString());
+        CHECK_EQ(oe.nulls_first, std::string("FIRST") == oe_node["nulls"].GetString());
       }
     }
   }
@@ -386,20 +410,18 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   if (filter_expr) {  // TODO(alex): take advantage of simple qualifiers where possible
     q.push_back(filter_expr);
   }
-  Planner::Plan* scan_plan =
+  Planner::Plan* select_plan =
       new Planner::Scan(scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
-  Planner::Plan* agg_plan{nullptr};
   if (!agg_targets.empty()) {
-    agg_plan = new Planner::AggPlan(agg_targets, 0., scan_plan, groupby_exprs);
+    select_plan = new Planner::AggPlan(agg_targets, 0., select_plan, groupby_exprs);
   }
   const auto logical_sort_info = get_logical_sort_info(rels);
-  auto root_plan = new Planner::RootPlan(agg_plan ? agg_plan : scan_plan,
-                                         kSELECT,
-                                         td->tableId,
-                                         {},
-                                         cat,
-                                         logical_sort_info.limit,
-                                         logical_sort_info.offset);
+  if (!logical_sort_info.order_entries.empty()) {
+    const auto& sort_target_entries = agg_targets.empty() ? scan_targets : agg_targets;
+    select_plan = new Planner::Sort(sort_target_entries, 0, select_plan, logical_sort_info.order_entries, false);
+  }
+  auto root_plan = new Planner::RootPlan(
+      select_plan, kSELECT, td->tableId, {}, cat, logical_sort_info.limit, logical_sort_info.offset);
   root_plan->print();
   puts("");
   return root_plan;
