@@ -130,12 +130,18 @@ class CalciteAdapter {
     if (expr.IsInt()) {
       return translateIntLiteral(expr);
     }
+    if (expr.IsString()) {
+      return translateStrLiteral(expr);
+    }
     CHECK(false);
     return nullptr;
   }
 
   std::shared_ptr<Analyzer::Expr> translateOp(const rapidjson::Value& expr, const TableDescriptor* td) {
     const auto op_str = expr["op"].GetString();
+    if (op_str == std::string("LIKE")) {
+      return translateLike(expr, td);
+    }
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
     if (operands.Size() == 1) {
@@ -153,6 +159,15 @@ class CalciteAdapter {
       lhs = Parser::OperExpr::normalize(to_sql_op(op_str), kONE, lhs, rhs);
     }
     return lhs;
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateLike(const rapidjson::Value& expr, const TableDescriptor* td) {
+    const auto& operands = expr["operands"];
+    CHECK_GE(operands.Size(), unsigned(2));
+    auto lhs = getExprFromNode(operands[0], td, {});
+    auto rhs = getExprFromNode(operands[1], td, {});
+    auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], td, {}) : nullptr;
+    return Parser::LikeExpr::get(lhs, rhs, esc, false, false);
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr, const TableDescriptor* td) {
@@ -192,6 +207,10 @@ class CalciteAdapter {
 
   std::shared_ptr<Analyzer::Expr> translateIntLiteral(const rapidjson::Value& expr) {
     return Parser::IntLiteral::analyzeValue(expr.GetInt64());
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateStrLiteral(const rapidjson::Value& expr) {
+    return Parser::StringLiteral::analyzeValue(expr.GetString());
   }
 
   std::list<int> getUsedColumnList() const {

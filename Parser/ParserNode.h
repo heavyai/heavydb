@@ -107,6 +107,7 @@ class StringLiteral : public Literal {
   virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  static std::shared_ptr<Analyzer::Expr> analyzeValue(const std::string&);
   virtual std::string to_string() const { return "'" + *stringval + "'"; }
 
  private:
@@ -390,6 +391,11 @@ class LikeExpr : public Expr {
   virtual std::shared_ptr<Analyzer::Expr> analyze(const Catalog_Namespace::Catalog& catalog,
                                                   Analyzer::Query& query,
                                                   TlistRefType allow_tlist_ref = TLIST_NONE) const;
+  static std::shared_ptr<Analyzer::Expr> get(std::shared_ptr<Analyzer::Expr> arg_expr,
+                                             std::shared_ptr<Analyzer::Expr> like_expr,
+                                             std::shared_ptr<Analyzer::Expr> escape_expr,
+                                             const bool is_ilike,
+                                             const bool is_not);
   virtual std::string to_string() const;
 
  private:

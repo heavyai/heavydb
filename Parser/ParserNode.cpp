@@ -30,9 +30,13 @@ std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(const Catalog_Namespace::Ca
 std::shared_ptr<Analyzer::Expr> StringLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
                                                        Analyzer::Query& query,
                                                        TlistRefType allow_tlist_ref) const {
-  SQLTypeInfo ti(kVARCHAR, stringval->length(), 0, true);
+  return analyzeValue(*stringval);
+}
+
+std::shared_ptr<Analyzer::Expr> StringLiteral::analyzeValue(const std::string& stringval) {
+  SQLTypeInfo ti(kVARCHAR, stringval.length(), 0, true);
   Datum d;
-  d.stringval = new std::string(*stringval);
+  d.stringval = new std::string(stringval);
   return makeExpr<Analyzer::Constant>(ti, false, d);
 }
 
@@ -316,6 +320,14 @@ std::shared_ptr<Analyzer::Expr> LikeExpr::analyze(const Catalog_Namespace::Catal
   auto arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
   auto like_expr = like_string->analyze(catalog, query, allow_tlist_ref);
   auto escape_expr = escape_string == nullptr ? nullptr : escape_string->analyze(catalog, query, allow_tlist_ref);
+  return LikeExpr::get(arg_expr, like_expr, escape_expr, is_ilike, is_not);
+}
+
+std::shared_ptr<Analyzer::Expr> LikeExpr::get(std::shared_ptr<Analyzer::Expr> arg_expr,
+                                              std::shared_ptr<Analyzer::Expr> like_expr,
+                                              std::shared_ptr<Analyzer::Expr> escape_expr,
+                                              const bool is_ilike,
+                                              const bool is_not) {
   if (!arg_expr->get_type_info().is_string())
     throw std::runtime_error("expression before LIKE must be of a string type.");
   if (!like_expr->get_type_info().is_string())
