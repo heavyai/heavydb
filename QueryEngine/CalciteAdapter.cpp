@@ -95,6 +95,12 @@ SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("DOUBLE")) {
     return kDOUBLE;
   }
+  if (type_name == std::string("DECIMAL")) {
+    return kDECIMAL;
+  }
+  if (type_name == std::string("CHAR")) {
+    return kTEXT;
+  }
   CHECK(false);
   return kNULLT;
 }
@@ -127,11 +133,8 @@ class CalciteAdapter {
     if (expr.IsObject() && expr.HasMember("agg")) {
       return translateAggregate(expr, td, scan_targets);
     }
-    if (expr.IsInt()) {
-      return translateIntLiteral(expr);
-    }
-    if (expr.IsString()) {
-      return translateStrLiteral(expr);
+    if (expr.IsObject() && expr.HasMember("literal")) {
+      return translateTypedLiteral(expr);
     }
     CHECK(false);
     return nullptr;
@@ -205,12 +208,39 @@ class CalciteAdapter {
     return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
   }
 
-  std::shared_ptr<Analyzer::Expr> translateIntLiteral(const rapidjson::Value& expr) {
-    return Parser::IntLiteral::analyzeValue(expr.GetInt64());
-  }
-
-  std::shared_ptr<Analyzer::Expr> translateStrLiteral(const rapidjson::Value& expr) {
-    return Parser::StringLiteral::analyzeValue(expr.GetString());
+  std::shared_ptr<Analyzer::Expr> translateTypedLiteral(const rapidjson::Value& expr) {
+    CHECK(expr.IsObject());
+    auto val_it = expr.FindMember("literal");
+    CHECK(val_it != expr.MemberEnd());
+    auto type_it = expr.FindMember("type");
+    CHECK(type_it != expr.MemberEnd());
+    CHECK(type_it->value.IsString());
+    const auto type_name = std::string(type_it->value.GetString());
+    auto scale_it = expr.FindMember("scale");
+    CHECK(scale_it != expr.MemberEnd());
+    CHECK(scale_it->value.IsInt());
+    const int scale = scale_it->value.GetInt();
+    auto precision_it = expr.FindMember("precision");
+    CHECK(precision_it != expr.MemberEnd());
+    CHECK(precision_it->value.IsInt());
+    const int precision = precision_it->value.GetInt();
+    const auto sql_type = to_sql_type(type_name);
+    switch (sql_type) {
+      case kDECIMAL: {
+        CHECK(val_it->value.IsInt64());
+        const auto val = val_it->value.GetInt64();
+        return scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision)
+                     : Parser::IntLiteral::analyzeValue(val);
+      }
+      case kTEXT: {
+        CHECK(val_it->value.IsString());
+        const auto val = val_it->value.GetString();
+        return Parser::StringLiteral::analyzeValue(val);
+      }
+      default:
+        CHECK(false);
+    }
+    return nullptr;
   }
 
   std::list<int> getUsedColumnList() const {

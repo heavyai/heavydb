@@ -70,6 +70,17 @@ std::shared_ptr<Analyzer::Expr> FixedPtLiteral::analyze(const Catalog_Namespace:
   return makeExpr<Analyzer::Constant>(ti, false, d);
 }
 
+std::shared_ptr<Analyzer::Expr> FixedPtLiteral::analyzeValue(const int64_t numericval,
+                                                             const int scale,
+                                                             const int precision) {
+  SQLTypeInfo ti(kNUMERIC, 0, 0, false);
+  ti.set_scale(scale);
+  ti.set_precision(precision);
+  Datum d;
+  d.bigintval = numericval;
+  return makeExpr<Analyzer::Constant>(ti, false, d);
+}
+
 std::shared_ptr<Analyzer::Expr> FloatLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
                                                       Analyzer::Query& query,
                                                       TlistRefType allow_tlist_ref) const {

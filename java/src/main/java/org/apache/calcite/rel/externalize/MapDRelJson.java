@@ -288,16 +288,12 @@ public class MapDRelJson {
     case LITERAL:
       final RexLiteral literal = (RexLiteral) node;
       final Object value2 = literal.getValue2();
-      if (value2 == null) {
-        // Special treatment for null literal because (1) we wouldn't want
-        // 'null' to be confused as an empty expression and (2) for null
-        // literals we need an explicit type.
-        map = jsonBuilder.map();
-        map.put("literal", null);
-        map.put("type", literal.getTypeName().name());
-        return map;
-      }
-      return value2;
+      map = jsonBuilder.map();
+      map.put("literal", value2);
+      map.put("type", literal.getTypeName().name());
+      map.put("scale", literal.getType().getScale());
+      map.put("precision", literal.getType().getPrecision());
+      return map;
     case INPUT_REF:
       map = jsonBuilder.map();
       map.put("input", ((RexInputRef) node).getIndex());
