@@ -319,6 +319,42 @@ std::vector<size_t> get_result_proj_indices(const rapidjson::Value& rels) {
   return result_proj_indices;
 }
 
+struct LogicalSortInfo {
+  LogicalSortInfo() : limit(0), offset(0) {}
+  int64_t limit;
+  int64_t offset;
+  std::list<Analyzer::OrderEntry> order_entries;
+};
+
+LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
+  LogicalSortInfo result;
+  bool found{false};
+  for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
+    const auto& sort_rel = *rels_it;
+    CHECK(sort_rel.IsObject() && sort_rel.HasMember("relOp"));
+    if (std::string("LogicalSort") != sort_rel["relOp"].GetString()) {
+      continue;
+    }
+    if (!found) {
+      if (sort_rel.HasMember("fetch")) {
+        result.limit = sort_rel["fetch"].GetInt64();
+      }
+      if (sort_rel.HasMember("offset")) {
+        result.offset = sort_rel["offset"].GetInt64();
+      }
+      found = true;
+    } else {
+      if (sort_rel.HasMember("fetch")) {
+        CHECK_EQ(result.limit, sort_rel["fetch"].GetInt64());
+      }
+      if (sort_rel.HasMember("offset")) {
+        CHECK_EQ(result.offset, sort_rel["offset"].GetInt64());
+      }
+    }
+  }
+  return result;
+}
+
 }  // namespace
 
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& cat) {
@@ -356,7 +392,14 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   if (!agg_targets.empty()) {
     agg_plan = new Planner::AggPlan(agg_targets, 0., scan_plan, groupby_exprs);
   }
-  auto root_plan = new Planner::RootPlan(agg_plan ? agg_plan : scan_plan, kSELECT, td->tableId, {}, cat, 0, 0);
+  const auto logical_sort_info = get_logical_sort_info(rels);
+  auto root_plan = new Planner::RootPlan(agg_plan ? agg_plan : scan_plan,
+                                         kSELECT,
+                                         td->tableId,
+                                         {},
+                                         cat,
+                                         logical_sort_info.limit,
+                                         logical_sort_info.offset);
   root_plan->print();
   puts("");
   return root_plan;
