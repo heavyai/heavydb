@@ -55,6 +55,9 @@ SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string("CAST")) {
     return kCAST;
   }
+  if (op_str == std::string("NOT")) {
+    return kNOT;
+  }
   CHECK(false);
   return kEQ;
 }
@@ -148,12 +151,7 @@ class CalciteAdapter {
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
     if (operands.Size() == 1) {
-      // TODO(alex): implement the rest, also is it a good idea to handle it here?
-      CHECK_EQ(kCAST, to_sql_op(op_str));
-      const auto operand_expr = getExprFromNode(operands[0], td, {});
-      const auto& expr_type = expr["type"];
-      SQLTypeInfo target_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
-      return std::make_shared<Analyzer::UOper>(target_ti, false, kCAST, operand_expr);
+      return translateUnaryOp(expr, td);
     }
     CHECK_GE(operands.Size(), unsigned(2));
     auto lhs = getExprFromNode(operands[0], td, {});
@@ -162,6 +160,30 @@ class CalciteAdapter {
       lhs = Parser::OperExpr::normalize(to_sql_op(op_str), kONE, lhs, rhs);
     }
     return lhs;
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateUnaryOp(const rapidjson::Value& expr, const TableDescriptor* td) {
+    const auto& operands = expr["operands"];
+    CHECK_EQ(unsigned(1), operands.Size());
+    const auto operand_expr = getExprFromNode(operands[0], td, {});
+    const auto op_str = expr["op"].GetString();
+    const auto sql_op = to_sql_op(op_str);
+    switch (sql_op) {
+      case kCAST: {
+        const auto& expr_type = expr["type"];
+        SQLTypeInfo target_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
+        return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
+      }
+      case kNOT: {
+        return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
+      }
+      case kMINUS: {
+        const auto& ti = operand_expr->get_type_info();
+        return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
+      }
+      default:
+        CHECK(false);
+    }
   }
 
   std::shared_ptr<Analyzer::Expr> translateLike(const rapidjson::Value& expr, const TableDescriptor* td) {
