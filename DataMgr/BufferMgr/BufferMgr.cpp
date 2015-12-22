@@ -88,7 +88,7 @@ AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunkKey,
     deleteBuffer(chunkKey);
     throw;
   }
-  assert(chunkIndex_[chunkKey]->buffer->getMemoryPtr());
+  assert(initialSize == 0 || chunkIndex_[chunkKey]->buffer->getMemoryPtr());
   // chunkIndex_[chunkKey]->buffer->pin();
   std::lock_guard<std::mutex> lock(chunkIndexMutex_);
   return chunkIndex_[chunkKey]->buffer;
