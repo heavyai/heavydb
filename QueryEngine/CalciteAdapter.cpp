@@ -184,6 +184,7 @@ class CalciteAdapter {
       default:
         CHECK(false);
     }
+    return nullptr;
   }
 
   std::shared_ptr<Analyzer::Expr> translateLike(const rapidjson::Value& expr, const TableDescriptor* td) {
