@@ -68,5 +68,7 @@ time_t my_timegm(const struct tm* tm) {
   minutes = hours * 60 + tm->tm_min;
   seconds = minutes * 60 + tm->tm_sec;
 
+  seconds -= tm->tm_gmtoff;
+
   return seconds;
 }

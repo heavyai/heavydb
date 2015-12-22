@@ -115,19 +115,23 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_mday = 1;
       tm_struct.tm_mon = 0;
       tm_struct.tm_year = 70;
-      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
+      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff = 0;
       d.timeval = my_timegm(&tm_struct);
       break;
     }
     case kTIMESTAMP: {
       std::tm tm_struct;
+      // not sure in advance if it is used so need to zero before processing
+      tm_struct.tm_gmtoff = 0;
       char* tp;
       // try ISO8601 date first
       tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
       if (!tp)
         tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
       if (!tp)
-        tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-2015
+        tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
+      if (!tp)
+        tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
       if (!tp) {
         try {
           d.timeval = std::stoll(s);
@@ -136,13 +140,15 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
           throw std::runtime_error("Invalid timestamp string " + s);
         }
       }
-      if (*tp == 'T' || *tp == ' ')
+      if (*tp == 'T' || *tp == ' ' || *tp == ':')
         tp++;
       else
-        throw std::runtime_error("Invalid timestamp string " + s);
+        throw std::runtime_error("Invalid timestamp break string " + s);
       // now parse the time
       // @TODO handle fractional seconds
-      char* p = strptime(tp, "%T", &tm_struct);
+      char* p = strptime(tp, "%T %z", &tm_struct);
+      if (!p)
+        p = strptime(tp, "%T", &tm_struct);
       if (!p)
         p = strptime(tp, "%H%M%S", &tm_struct);
       if (!p) {
@@ -173,7 +179,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
         p = strptime(tp, "%I . %M . %S %p", &tm_struct);  // customers weird '.' separated date
       }
       if (!p)
-        throw std::runtime_error("Invalid timestamp string " + s);
+        throw std::runtime_error("Invalid timestamp time string " + s);
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
       d.timeval = my_timegm(&tm_struct);
       break;
@@ -183,7 +189,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       if (!strptime(s.c_str(), "%Y-%m-%d", &tm_struct) && !strptime(s.c_str(), "%m/%d/%Y", &tm_struct))
         throw std::runtime_error("Invalid timestamp string " + s);
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
-      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
+      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff = 0;
       d.timeval = my_timegm(&tm_struct);
       break;
     }

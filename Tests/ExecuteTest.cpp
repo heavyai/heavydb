@@ -802,6 +802,23 @@ TEST(Select, Time) {
     ASSERT_EQ(
         1434896116L,
         v<int64_t>(run_simple_agg("select CAST('06/21/2015 14:15:16' as timestamp) from test limit 1;", false, dt)));
+
+    // Support ISO date offset format
+    ASSERT_EQ(1440180794L,
+              v<int64_t>(run_simple_agg(
+                  "select CAST('21/Aug/2015:12:13:14 -0600' as timestamp) from test limit 1;", false, dt)));
+    ASSERT_EQ(1440180794L,
+              v<int64_t>(run_simple_agg(
+                  "select CAST('2015-08-21T12:13:14 -0600' as timestamp) from test limit 1;", false, dt)));
+    ASSERT_EQ(1440180794L,
+              v<int64_t>(run_simple_agg(
+                  "select CAST('21-Aug-15 12:13:14 -0600' as timestamp) from test limit 1;", false, dt)));
+    ASSERT_EQ(1440180794L,
+              v<int64_t>(run_simple_agg(
+                  "select CAST('21/Aug/2015:13:13:14 -0500' as timestamp) from test limit 1;", false, dt)));
+    ASSERT_EQ(
+        1440180794L,
+        v<int64_t>(run_simple_agg("select CAST('2015-08-21T18:13:14' as timestamp) from test limit 1;", false, dt)));
   }
 }
 
