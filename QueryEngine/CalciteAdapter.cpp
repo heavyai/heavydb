@@ -119,6 +119,29 @@ ssize_t get_agg_operand_idx(const rapidjson::Value& expr) {
   return agg_operands.Empty() ? -1 : agg_operands[0].GetInt();
 }
 
+std::pair<const rapidjson::Value&, SQLTypeInfo> parse_literal(const rapidjson::Value& expr) {
+  CHECK(expr.IsObject());
+  auto val_it = expr.FindMember("literal");
+  CHECK(val_it != expr.MemberEnd());
+  auto type_it = expr.FindMember("type");
+  CHECK(type_it != expr.MemberEnd());
+  CHECK(type_it->value.IsString());
+  const auto type_name = std::string(type_it->value.GetString());
+  auto scale_it = expr.FindMember("scale");
+  CHECK(scale_it != expr.MemberEnd());
+  CHECK(scale_it->value.IsInt());
+  const int scale = scale_it->value.GetInt();
+  auto precision_it = expr.FindMember("precision");
+  CHECK(precision_it != expr.MemberEnd());
+  CHECK(precision_it->value.IsInt());
+  const int precision = precision_it->value.GetInt();
+  const auto sql_type = to_sql_type(type_name);
+  SQLTypeInfo ti(sql_type, 0, 0, false);
+  ti.set_scale(scale);
+  ti.set_precision(precision);
+  return {val_it->value, ti};
+}
+
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat, const std::vector<std::string>& col_names)
@@ -232,32 +255,21 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateTypedLiteral(const rapidjson::Value& expr) {
-    CHECK(expr.IsObject());
-    auto val_it = expr.FindMember("literal");
-    CHECK(val_it != expr.MemberEnd());
-    auto type_it = expr.FindMember("type");
-    CHECK(type_it != expr.MemberEnd());
-    CHECK(type_it->value.IsString());
-    const auto type_name = std::string(type_it->value.GetString());
-    auto scale_it = expr.FindMember("scale");
-    CHECK(scale_it != expr.MemberEnd());
-    CHECK(scale_it->value.IsInt());
-    const int scale = scale_it->value.GetInt();
-    auto precision_it = expr.FindMember("precision");
-    CHECK(precision_it != expr.MemberEnd());
-    CHECK(precision_it->value.IsInt());
-    const int precision = precision_it->value.GetInt();
-    const auto sql_type = to_sql_type(type_name);
+    const auto parsed_lit = parse_literal(expr);
+    const auto sql_type = parsed_lit.second.get_type();
+    const auto& json_val = parsed_lit.first;
+    const int scale = parsed_lit.second.get_scale();
+    const int precision = parsed_lit.second.get_precision();
     switch (sql_type) {
       case kDECIMAL: {
-        CHECK(val_it->value.IsInt64());
-        const auto val = val_it->value.GetInt64();
+        CHECK(json_val.IsInt64());
+        const auto val = json_val.GetInt64();
         return scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision)
                      : Parser::IntLiteral::analyzeValue(val);
       }
       case kTEXT: {
-        CHECK(val_it->value.IsString());
-        const auto val = val_it->value.GetString();
+        CHECK(json_val.IsString());
+        const auto val = json_val.GetString();
         return Parser::StringLiteral::analyzeValue(val);
       }
       default:
@@ -415,10 +427,16 @@ LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
     }
     if (!found) {
       if (sort_rel.HasMember("fetch")) {
-        result.limit = sort_rel["fetch"].GetInt64();
+        const auto& limit_lit = parse_literal(sort_rel["fetch"]);
+        CHECK(limit_lit.second.is_decimal() && limit_lit.second.get_scale() == 0);
+        CHECK(limit_lit.first.IsInt64());
+        result.limit = limit_lit.first.GetInt64();
       }
       if (sort_rel.HasMember("offset")) {
-        result.offset = sort_rel["offset"].GetInt64();
+        const auto& offset_lit = parse_literal(sort_rel["offset"]);
+        CHECK(offset_lit.second.is_decimal() && offset_lit.second.get_scale() == 0);
+        CHECK(offset_lit.first.IsInt64());
+        result.offset = offset_lit.first.GetInt64();
       }
       CHECK(sort_rel.HasMember("collation"));
       const auto& collation = sort_rel["collation"];
@@ -435,10 +453,16 @@ LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
       // Looks like there are two structurally identical LogicalSortInfo nodes
       // in the Calcite AST. Validation for now, but maybe they can be different?
       if (sort_rel.HasMember("fetch")) {
-        CHECK_EQ(result.limit, sort_rel["fetch"].GetInt64());
+        const auto& limit_lit = parse_literal(sort_rel["fetch"]);
+        CHECK(limit_lit.second.is_decimal() && limit_lit.second.get_scale() == 0);
+        CHECK(limit_lit.first.IsInt64());
+        CHECK_EQ(result.limit, limit_lit.first.GetInt64());
       }
       if (sort_rel.HasMember("offset")) {
-        CHECK_EQ(result.offset, sort_rel["offset"].GetInt64());
+        const auto& offset_lit = parse_literal(sort_rel["offset"]);
+        CHECK(offset_lit.second.is_decimal() && offset_lit.second.get_scale() == 0);
+        CHECK(offset_lit.first.IsInt64());
+        CHECK_EQ(result.offset, offset_lit.first.GetInt64());
       }
       CHECK(sort_rel.HasMember("collation"));
       const auto& collation = sort_rel["collation"];
