@@ -110,6 +110,9 @@ SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("CHAR")) {
     return kTEXT;
   }
+  if (type_name == std::string("BOOLEAN")) {
+    return kBOOLEAN;
+  }
   CHECK(false);
   return kNULLT;
 }
@@ -282,6 +285,12 @@ class CalciteAdapter {
         CHECK(json_val.IsString());
         const auto val = json_val.GetString();
         return Parser::StringLiteral::analyzeValue(val);
+      }
+      case kBOOLEAN: {
+        CHECK(json_val.IsBool());
+        Datum d;
+        d.boolval = json_val.GetBool();
+        return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
       }
       default:
         CHECK(false);
