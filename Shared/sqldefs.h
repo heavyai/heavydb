@@ -27,6 +27,7 @@ enum SQLOps {
   kMODULO,
   kUMINUS,
   kISNULL,
+  kISNOTNULL,
   kEXISTS,
   kCAST,
   kARRAY_AT,

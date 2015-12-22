@@ -58,6 +58,12 @@ SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string("NOT")) {
     return kNOT;
   }
+  if (op_str == std::string("IS NULL")) {
+    return kISNULL;
+  }
+  if (op_str == std::string("IS NOT NULL")) {
+    return kISNOTNULL;
+  }
   CHECK(false);
   return kEQ;
 }
@@ -197,8 +203,13 @@ class CalciteAdapter {
         SQLTypeInfo target_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
         return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
       }
-      case kNOT: {
+      case kNOT:
+      case kISNULL: {
         return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
+      }
+      case kISNOTNULL: {
+        auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
+        return std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
       }
       case kMINUS: {
         const auto& ti = operand_expr->get_type_info();
