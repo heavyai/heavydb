@@ -52,10 +52,12 @@ Calcite::Calcite(int port) : server_available(true) {
 string Calcite::process(string user, string passwd, string catalog, string sql_string) {
   if (server_available) {
     LOG(INFO) << "User " << user << " catalog " << catalog << " sql " << sql_string << endl;
-    string ret;
+    TPlanResult ret;
     auto ms = measure<>::execution([&]() { client->process(ret, user, passwd, catalog, sql_string); });
-    LOG(INFO) << "Return is '" << ret << "' time in ms " << ms << endl;
-    return ret;
+    LOG(INFO) << ret.plan_result << endl;
+    LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
+              << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)" << endl;
+    return ret.plan_result;
   } else {
     LOG(INFO) << "Not routing to Calcite server, server is not up" << endl;
     return "";

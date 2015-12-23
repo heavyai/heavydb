@@ -1132,11 +1132,10 @@ class MapDHandler : virtual public MapDIf {
                                                    session_info.get_currentUser().passwd,
                                                    session_info.get_catalog().get_currentDB().dbName,
                                                    query_str);
-            // LOG(INFO) << " query plan from calcite " << query_ra;
             root_plan = translate_query(query_ra, session_info.get_catalog());
             CHECK(root_plan);
-            execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
           });
+          execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
           return;
         } catch (InvalidParseRequest& e) {
           TMapDException ex;

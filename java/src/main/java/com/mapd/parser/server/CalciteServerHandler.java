@@ -7,6 +7,7 @@ package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.CalciteParser;
 import com.mapd.thrift.calciteserver.InvalidParseRequest;
+import com.mapd.thrift.calciteserver.TPlanResult;
 import com.mapd.thrift.calciteserver.CalciteServer;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
@@ -30,7 +31,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public String process(String user, String passwd, String catalog, String sqlText) throws InvalidParseRequest, TException {
+  public TPlanResult process(String user, String passwd, String catalog, String sqlText) throws InvalidParseRequest, TException {
+    long timer = System.currentTimeMillis();
     logger.info("process was called User:"+user + " Catalog:"+ catalog+ "sql :" + sqlText);
 
     // remove last charcter if it is a ;
@@ -47,8 +49,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       logger.error("Validate failed :"+ ex.getMessage());
       throw new InvalidParseRequest(-1, ex.getMessage());
     }
-
-    return relAlgebra;
+    return new TPlanResult(relAlgebra, System.currentTimeMillis() - timer);
   }
 
 }
