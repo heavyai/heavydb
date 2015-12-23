@@ -1,8 +1,8 @@
 #ifndef _MEASURE_H_
 #define _MEASURE_H_
 
-#include <atomic>
 #include <chrono>
+
 template <typename TimeT = std::chrono::milliseconds>
 struct measure {
   template <typename F, typename... Args>
