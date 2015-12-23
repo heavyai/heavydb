@@ -180,6 +180,9 @@ class CalciteAdapter {
     if (op_str == std::string("LIKE")) {
       return translateLike(expr, td);
     }
+    if (op_str == std::string("CASE")) {
+      return translateCase(expr, td);
+    }
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
     if (operands.Size() == 1) {
@@ -231,6 +234,23 @@ class CalciteAdapter {
     auto rhs = getExprFromNode(operands[1], td, {});
     auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], td, {}) : nullptr;
     return Parser::LikeExpr::get(lhs, rhs, esc, false, false);
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateCase(const rapidjson::Value& expr, const TableDescriptor* td) {
+    const auto& operands = expr["operands"];
+    CHECK_GE(operands.Size(), unsigned(2));
+    std::shared_ptr<Analyzer::Expr> else_expr;
+    std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
+    for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
+      const auto when_expr = getExprFromNode(*operands_it++, td, {});
+      if (operands_it == operands.End()) {
+        else_expr = when_expr;
+        break;
+      }
+      const auto then_expr = getExprFromNode(*operands_it++, td, {});
+      expr_list.emplace_back(when_expr, then_expr);
+    }
+    return Parser::CaseExpr::normalize(expr_list, else_expr);
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr, const TableDescriptor* td) {
