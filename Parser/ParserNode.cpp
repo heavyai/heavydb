@@ -523,12 +523,26 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(const Catalog_Namespace::Catal
                                                   TlistRefType allow_tlist_ref) const {
   SQLTypeInfo ti;
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_pair_list;
-  bool has_agg = false;
   for (auto& p : when_then_list) {
     auto e1 = p->get_expr1()->analyze(catalog, query, allow_tlist_ref);
     if (e1->get_type_info().get_type() != kBOOLEAN)
       throw std::runtime_error("Only boolean expressions can be used after WHEN.");
     auto e2 = p->get_expr2()->analyze(catalog, query, allow_tlist_ref);
+    expr_pair_list.emplace_back(e1, e2);
+  }
+  auto else_e = else_expr ? else_expr->analyze(catalog, query, allow_tlist_ref) : nullptr;
+  return normalize(expr_pair_list, else_e);
+}
+
+std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
+    const std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>& expr_pair_list,
+    const std::shared_ptr<Analyzer::Expr> else_e_in) {
+  SQLTypeInfo ti;
+  bool has_agg = false;
+  for (auto& p : expr_pair_list) {
+    auto e1 = p.first;
+    CHECK(e1->get_type_info().is_boolean());
+    auto e2 = p.second;
     if (ti.get_type() == kNULLT)
       ti = e2->get_type_info();
     else if (e2->get_type_info().get_type() == kNULLT)
@@ -543,11 +557,9 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(const Catalog_Namespace::Catal
     }
     if (e2->get_contains_agg())
       has_agg = true;
-    expr_pair_list.push_back(std::make_pair(e1, e2));
   }
-  std::shared_ptr<Analyzer::Expr> else_e;
-  if (else_expr != nullptr) {
-    else_e = else_expr->analyze(catalog, query, allow_tlist_ref);
+  auto else_e = else_e_in;
+  if (else_e) {
     if (else_e->get_contains_agg())
       has_agg = true;
     if (else_e->get_type_info().get_type() == kNULLT)
@@ -567,7 +579,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::analyze(const Catalog_Namespace::Catal
   for (auto p : expr_pair_list) {
     cast_expr_pair_list.push_back(std::make_pair(p.first, p.second->add_cast(ti)));
   }
-  if (else_expr != nullptr)
+  if (else_e != nullptr)
     else_e = else_e->add_cast(ti);
   else {
     Datum d;
