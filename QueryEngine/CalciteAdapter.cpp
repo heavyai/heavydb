@@ -113,6 +113,9 @@ SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("BOOLEAN")) {
     return kBOOLEAN;
   }
+  if (type_name == std::string("NULL")) {
+    return kNULLT;
+  }
   CHECK(false);
   return kNULLT;
 }
@@ -311,6 +314,9 @@ class CalciteAdapter {
         Datum d;
         d.boolval = json_val.GetBool();
         return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+      }
+      case kNULLT: {
+        return makeExpr<Analyzer::Constant>(kNULLT, true);
       }
       default:
         CHECK(false);
