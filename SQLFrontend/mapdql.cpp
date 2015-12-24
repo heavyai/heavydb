@@ -248,10 +248,17 @@ void process_backslash_commands(char* command, ClientContext& context) {
         return;
       }
       std::string table_name(command + 3);
-      if (thrift_with_retry(kGET_ROW_DESC, context, command + 3))
+      if (thrift_with_retry(kGET_ROW_DESC, context, command + 3)) {
+        std::string comma_or_blank("");
         for (auto p : context.rowdesc_return) {
-          std::cout << p.col_name << " " << thrift_to_name(p.col_type) << "\n";
+          std::cout << comma_or_blank << p.col_name << " " << thrift_to_name(p.col_type) << " "
+                    << (p.col_type.encoding == 0 ? "" : "ENCODING " + thrift_to_encoding_name(p.col_type) + " ")
+                    << (p.col_type.nullable ? "" : "NOT NULL");
+          comma_or_blank = ",\n";
         }
+        // push final "\n";
+        std::cout << "\n";
+      }
       return;
     }
     case 't': {
@@ -571,7 +578,8 @@ int main(int argc, char** argv) {
         }
         if (print_timing) {
           std::cout << row_count << " rows returned." << std::endl;
-          std::cout << "Execution time: " << context.query_return.execution_time_ms << " miliseconds" << std::endl;
+          std::cout << "Execution time: " << context.query_return.execution_time_ms << " ms,"
+                    << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
         }
       }
     } else if (!strncmp(line, "\\cpu", 4)) {

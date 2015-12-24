@@ -14,4 +14,15 @@ struct measure {
   }
 };
 
+template <typename Type = std::chrono::steady_clock::time_point>
+Type timer_start() {
+  return std::chrono::steady_clock::now();
+}
+
+template <typename Type = std::chrono::steady_clock::time_point, typename TypeR = std::chrono::milliseconds>
+typename TypeR::rep timer_stop(Type clock_begin) {
+  auto duration = std::chrono::duration_cast<TypeR>(std::chrono::steady_clock::now() - clock_begin);
+  return duration.count();
+}
+
 #endif  // _MEASURE_H_

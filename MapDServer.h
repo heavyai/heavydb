@@ -127,4 +127,12 @@ inline std::string thrift_to_name(const TTypeInfo& ti) {
   return internal_ti.get_type_name();
 }
 
+inline std::string thrift_to_encoding_name(const TTypeInfo& ti) {
+  const auto type = thrift_to_type(ti.type);
+  const auto encoding = thrift_to_encoding(ti.encoding);
+  auto internal_ti =
+      SQLTypeInfo(ti.is_array ? kARRAY : type, 0, 0, !ti.nullable, encoding, 0, ti.is_array ? type : kNULLT);
+  return internal_ti.get_compression_name();
+}
+
 #endif  // MAPDSERVER_H

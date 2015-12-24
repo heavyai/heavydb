@@ -230,7 +230,10 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                              const bool allow_loop_joins) {
   catalog_ = &root_plan->get_catalog();
   const auto stmt_type = root_plan->get_stmt_type();
+  // capture the lock acquistion time
+  auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(execute_mutex_);
+  int64_t queue_time_ms = timer_stop(clock_begin);
   RowSetHolder row_set_holder(this);
   switch (stmt_type) {
     case kSELECT: {
@@ -300,6 +303,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                    allow_loop_joins,
                                    nullptr);
           if (!error_code) {
+            rows.setQueueTime(queue_time_ms);
             return rows;
           }
           // Even the conservative guess failed; it should only happen when we group
@@ -309,20 +313,21 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
           max_groups_buffer_entry_guess *= 2;
         }
       }
+      rows.setQueueTime(queue_time_ms);
       return rows;
     }
     case kINSERT: {
       if (root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN) {
-        return ResultRows("No explanation available.");
+        return ResultRows("No explanation available.", queue_time_ms);
       }
       executeSimpleInsert(root_plan);
-      return ResultRows({}, nullptr, nullptr, ExecutorDeviceType::CPU);
+      return ResultRows({}, nullptr, nullptr, ExecutorDeviceType::CPU, nullptr, 0, 0, 0, queue_time_ms);
     }
     default:
       CHECK(false);
   }
   CHECK(false);
-  return ResultRows({}, nullptr, {}, ExecutorDeviceType::CPU);
+  return ResultRows({}, nullptr, {}, ExecutorDeviceType::CPU, nullptr, 0, 0, 0, queue_time_ms);
 }
 
 

@@ -93,7 +93,8 @@ struct TRowSet {
 struct TQueryResult {
   1: TRowSet row_set
   2: i64 execution_time_ms
-  3: string nonce
+  3: i64 total_time_ms
+  4: string nonce
 }
 
 struct TDBInfo {

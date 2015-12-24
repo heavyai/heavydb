@@ -507,7 +507,8 @@ class ResultRows {
              int64_t* group_by_buffer = nullptr,
              const int32_t groups_buffer_entry_count = 0,
              const int64_t min_val = 0,
-             const int8_t warp_count = 0)
+             const int8_t warp_count = 0,
+             const int64_t queue_time_ms = 0)
       : executor_(executor),
         query_mem_desc_{},
         row_set_mem_owner_(row_set_mem_owner),
@@ -526,7 +527,8 @@ class ResultRows {
         keep_first_(0),
         fetch_started_(false),
         in_place_buff_idx_(0),
-        just_explain_(false) {
+        just_explain_(false),
+        queue_time_ms_(queue_time_ms) {
     for (const auto target_expr : targets) {
       const auto agg_info = target_info(target_expr);
       targets_.push_back(agg_info);
@@ -543,6 +545,23 @@ class ResultRows {
              const ExecutorDeviceType device_type,
              const int device_id);
 
+  explicit ResultRows(const std::string& explanation, int64_t queue_time_ms)
+      : query_mem_desc_{},
+        group_by_buffer_idx_(0),
+        output_columnar_(false),
+        in_place_(false),
+        device_type_(ExecutorDeviceType::Hybrid),
+        device_id_(-1),
+        crt_row_idx_(0),
+        crt_row_buff_idx_(0),
+        drop_first_(0),
+        keep_first_(0),
+        fetch_started_(false),
+        in_place_buff_idx_(0),
+        just_explain_(true),
+        explanation_(explanation),
+        queue_time_ms_(queue_time_ms) {}
+
   explicit ResultRows(const std::string& explanation)
       : query_mem_desc_{},
         group_by_buffer_idx_(0),
@@ -557,7 +576,8 @@ class ResultRows {
         fetch_started_(false),
         in_place_buff_idx_(0),
         just_explain_(true),
-        explanation_(explanation) {}
+        explanation_(explanation),
+        queue_time_ms_(0) {}
 
   void moveToBegin() const {
     crt_row_idx_ = 0;
@@ -680,6 +700,8 @@ class ResultRows {
     return targets_[col_idx].agg_kind == kAVG ? SQLTypeInfo(kDOUBLE, false) : targets_[col_idx].sql_type;
   }
 
+  int64_t getQueueTime() { return queue_time_ms_; }
+
  private:
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                            const std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -718,6 +740,8 @@ class ResultRows {
     }
   }
 
+  void setQueueTime(int64_t queue_time) { queue_time_ms_ = queue_time; }
+
   std::vector<TargetInfo> targets_;
   std::vector<int64_t> simple_keys_;
   typedef std::vector<int64_t> MultiKey;
@@ -749,6 +773,7 @@ class ResultRows {
   bool just_explain_;
   std::string explanation_;
   std::unordered_set<int64_t> unkown_top_keys_;
+  int64_t queue_time_ms_;
 
   friend class Executor;
   friend class QueryExecutionContext;

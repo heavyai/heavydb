@@ -977,6 +977,8 @@ class MapDHandler : virtual public MapDIf {
                                   allow_multifrag_,
                                   allow_loop_joins_);
     });
+    // reduce execution time by the time spent during queue waiting
+    _return.execution_time_ms -= results.getQueueTime();
     if (root_plan->get_plan_dest() == Planner::RootPlan::Dest::kEXPLAIN) {
       CHECK_EQ(size_t(1), results.rowCount());
       TColumnType proj_info;
@@ -1117,7 +1119,7 @@ class MapDHandler : virtual public MapDIf {
     auto& cat = session_info.get_catalog();
     auto executor_device_type = session_info.get_executor_device_type();
     LOG(INFO) << query_str;
-    auto total_time = measure<>::execution([&]() {
+    _return.total_time_ms = measure<>::execution([&]() {
       SQLParser parser;
       std::list<Parser::Stmt*> parse_trees;
       std::string last_parsed;
@@ -1198,7 +1200,7 @@ class MapDHandler : virtual public MapDIf {
         }
       }
     });
-    LOG(INFO) << "Total: " << total_time << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
+    LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms << " (ms)";
   }
 
   std::unique_ptr<Catalog_Namespace::SysCatalog> sys_cat_;
