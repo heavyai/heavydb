@@ -545,9 +545,10 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     auto e2 = p.second;
     if (ti.get_type() == kNULLT)
       ti = e2->get_type_info();
-    else if (e2->get_type_info().get_type() == kNULLT)
+    else if (e2->get_type_info().get_type() == kNULLT) {
+      ti.set_notnull(false);
       e2->set_type_info(ti);
-    else if (ti != e2->get_type_info()) {
+    } else if (ti != e2->get_type_info()) {
       if (ti.is_string() && e2->get_type_info().is_string())
         ti = Analyzer::BinOper::common_string_type(ti, e2->get_type_info());
       else if (ti.is_number() && e2->get_type_info().is_number())
@@ -562,9 +563,11 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   if (else_e) {
     if (else_e->get_contains_agg())
       has_agg = true;
-    if (else_e->get_type_info().get_type() == kNULLT)
+    if (else_e->get_type_info().get_type() == kNULLT) {
+      ti.set_notnull(false);
       else_e->set_type_info(ti);
-    else if (ti != else_e->get_type_info()) {
+    } else if (ti != else_e->get_type_info()) {
+      ti.set_notnull(false);
       if (ti.is_string() && else_e->get_type_info().is_string())
         ti = Analyzer::BinOper::common_string_type(ti, else_e->get_type_info());
       else if (ti.is_number() && else_e->get_type_info().is_number())
@@ -577,13 +580,15 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
   }
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> cast_expr_pair_list;
   for (auto p : expr_pair_list) {
+    ti.set_notnull(false);
     cast_expr_pair_list.push_back(std::make_pair(p.first, p.second->add_cast(ti)));
   }
-  if (else_e != nullptr)
+  if (else_e != nullptr) {
     else_e = else_e->add_cast(ti);
-  else {
+  } else {
     Datum d;
     // always create an else expr so that executor doesn't need to worry about it
+    ti.set_notnull(false);
     else_e = makeExpr<Analyzer::Constant>(ti, true, d);
   }
   return makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
