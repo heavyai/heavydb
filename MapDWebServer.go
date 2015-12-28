@@ -1,10 +1,13 @@
 package main
 
 import (
+	crand "crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -29,6 +32,13 @@ var (
 	dataDir    string
 	readOnly   bool
 	quiet      bool
+	roundRobin bool
+)
+
+var (
+	backendUserMap map[string]string
+	backendUrls    []string
+	sessionCounter int
 )
 
 type Server struct {
@@ -53,18 +63,21 @@ func getLogName(lvl string) string {
 
 func init() {
 	pflag.IntP("port", "p", 9092, "frontend server port")
-	pflag.StringP("backend-url", "b", "", "url to http-port on mapd_server [http://localhost:9090]")
+	pflag.StringP("backend-url", "b", "", "url(s) to http-port on mapd_server, comma-delimited for multiple [http://localhost:9090]")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
 	pflag.StringP("config", "c", "mapd.conf", "path to MapD configuration file")
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
 	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
+	pflag.Bool("round-robin", false, "round-robin between backend urls")
+	pflag.CommandLine.MarkHidden("round-robin")
 
 	pflag.Parse()
 
 	viper.BindPFlag("web.port", pflag.CommandLine.Lookup("port"))
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
+	viper.BindPFlag("web.round-robin", pflag.CommandLine.Lookup("round-robin"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
@@ -89,6 +102,8 @@ func init() {
 	port = viper.GetInt("web.port")
 	backendUrl = viper.GetString("web.backend-url")
 	frontend = viper.GetString("web.frontend")
+	roundRobin = viper.GetBool("web.round-robin")
+
 	dataDir = viper.GetString("data")
 	readOnly = viper.GetBool("read-only")
 	quiet = viper.GetBool("quiet")
@@ -96,6 +111,10 @@ func init() {
 	if backendUrl == "" {
 		backendUrl = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
 	}
+
+	backendUrls = strings.Split(backendUrl, ",")
+	backendUserMap = make(map[string]string)
+	sessionCounter = 0
 }
 
 func uploadHandler(rw http.ResponseWriter, r *http.Request) {
@@ -163,11 +182,65 @@ func deleteUploadHandler(rw http.ResponseWriter, r *http.Request) {
 	// not yet implemented
 }
 
+func generateRandomBytes(n int) ([]byte, error) {
+	b := make([]byte, n)
+	_, err := crand.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func generateRandomString(n int) (string, error) {
+	sid := ""
+	sidb, err := generateRandomBytes(n)
+	if err != nil {
+		sid = strconv.Itoa(rand.Int())
+	} else {
+		sid = base64.URLEncoding.EncodeToString(sidb)
+	}
+	return sid, err
+}
+
+func selectBestServerRand() string {
+	return backendUrls[rand.Intn(len(backendUrls))]
+}
+
+func selectBestServerRR() string {
+	sessionCounter++
+	return backendUrls[sessionCounter%len(backendUrls)]
+}
+
+func selectBestServer() string {
+	if roundRobin {
+		return selectBestServerRR()
+	} else {
+		return selectBestServerRand()
+	}
+}
+
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
 
+	c, err := r.Cookie("session")
+	if err != nil || len(c.Value) < 1 {
+		sid, err := generateRandomString(32)
+		if err != nil {
+			log.Error("failed to generate random string: ", err)
+		}
+		c = &http.Cookie{Name: "session", Value: sid}
+		http.SetCookie(rw, c)
+	}
+	s := c.Value
+
+	be, ok := backendUserMap[s]
+	if !ok {
+		be = selectBestServer()
+		backendUserMap[s] = be
+	}
+
 	if r.Method == "POST" {
-		u, _ := url.Parse(backendUrl)
+		u, _ := url.Parse(be)
 		h = httputil.NewSingleHostReverseProxy(u)
 		rw.Header().Del("Access-Control-Allow-Origin")
 	}
@@ -198,7 +271,11 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	j, err := ioutil.ReadFile(frontend + "/servers.json")
 	if err != nil {
 		s := Server{}
-		s.Master = true
+		if len(backendUrls) == 1 {
+			s.Master = true
+		} else {
+			s.Master = false
+		}
 		s.Username = "mapd"
 		s.Password = "HyperInteractive"
 		s.Database = "mapd"
