@@ -20,6 +20,7 @@
  * milliseconds
  * microseconds
  * week
+ * quarterday
  */
 enum DatetruncField {
   dtYEAR,
@@ -34,7 +35,8 @@ enum DatetruncField {
   dtDECADE,
   dtMILLISECOND,
   dtMICROSECOND,
-  dtWEEK
+  dtWEEK,
+  dtQUARTERDAY
 };
 
 extern "C" __attribute__((noinline))

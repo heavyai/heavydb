@@ -191,6 +191,8 @@ __device__
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
   switch (field) {
+    case kQUARTERDAY:
+      return (tm_struct.tm_hour / 6) + 1;
     case kYEAR:
       return 1900 + tm_struct.tm_year;
     case kQUARTER:

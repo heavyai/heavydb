@@ -384,6 +384,7 @@ ExpressionRange getExpressionRange(const Analyzer::ExtractExpr* extract_expr,
     }
     case kEPOCH:
       return arg_range;
+    case kQUARTERDAY:
     case kQUARTER:
       return ExpressionRange::makeIntRange(1, 4, 0, has_nulls);
     case kMONTH:
@@ -434,6 +435,8 @@ int64_t get_conservative_datetrunc_bucket(const DatetruncField datetrunc_field) 
       return 10 * year_days * day_seconds;
     case dtWEEK:
       return 7 * day_seconds;
+    case dtQUARTERDAY:
+      return 4 * 60 * 50;
     default:
       return 0;
   }

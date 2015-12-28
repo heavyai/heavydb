@@ -820,6 +820,48 @@ TEST(Select, Time) {
     ASSERT_EQ(
         1440180794L,
         v<int64_t>(run_simple_agg("select CAST('2015-08-21T18:13:14' as timestamp) from test limit 1;", false, dt)));
+    // add test for quarterday behaviour
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T04:23:11' as timestamp)) from test limit 1;",
+                  false,
+                  dt)));
+    ASSERT_EQ(1L,
+              v<int64_t>(run_simple_agg(
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T00:00:00' as timestamp)) from test limit 1;",
+                  false,
+                  dt)));
+    ASSERT_EQ(2L,
+              v<int64_t>(run_simple_agg(
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T08:23:11' as timestamp)) from test limit 1;",
+                  false,
+                  dt)));
+    ASSERT_EQ(3L,
+              v<int64_t>(run_simple_agg(
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T14:23:11' as timestamp)) from test limit 1;",
+                  false,
+                  dt)));
+    ASSERT_EQ(4L,
+              v<int64_t>(run_simple_agg(
+                  "select EXTRACT (QUARTERDAY FROM CAST('2015-08-21T23:23:11' as timestamp)) from test limit 1;",
+                  false,
+                  dt)));
+    ASSERT_EQ(
+        1440115200L,
+        v<int64_t>(run_simple_agg(
+            "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T04:23:11' as timestamp)) from test limit 1;", false, dt)));
+    ASSERT_EQ(
+        1440136800L,
+        v<int64_t>(run_simple_agg(
+            "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T08:23:11' as timestamp)) from test limit 1;", false, dt)));
+    ASSERT_EQ(
+        1440158400L,
+        v<int64_t>(run_simple_agg(
+            "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T13:23:11' as timestamp)) from test limit 1;", false, dt)));
+    ASSERT_EQ(
+        1440180000L,
+        v<int64_t>(run_simple_agg(
+            "select DATE_TRUNC (QUARTERDAY, CAST('2015-08-21T23:59:59' as timestamp)) from test limit 1;", false, dt)));
   }
 }
 
