@@ -591,6 +591,9 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
     ti.set_notnull(false);
     else_e = makeExpr<Analyzer::Constant>(ti, true, d);
   }
+  if (ti.get_type() == kNULLT) {
+    throw std::runtime_error("Can't deduce the type for case expressions, all branches null");
+  }
   return makeExpr<Analyzer::CaseExpr>(ti, has_agg, cast_expr_pair_list, else_e);
 }
 
