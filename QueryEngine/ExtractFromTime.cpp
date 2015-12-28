@@ -69,6 +69,17 @@ __device__
 #ifdef __CUDACC__
 __device__
 #endif
+    int
+    extract_quarterday(const time_t* tim_p) {
+  long quarterdays;
+  const time_t lcltime = *tim_p;
+  quarterdays = ((long)lcltime) / SECSPERQUARTERDAY;
+  return (int)(quarterdays % 4) + 1;
+}
+
+#ifdef __CUDACC__
+__device__
+#endif
     tm*
     gmtime_r_newlib(const time_t* tim_p, tm* res) {
   const int month_lengths[2][MONSPERYEAR] = {{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
@@ -172,6 +183,8 @@ __device__
   switch (field) {
     case kEPOCH:
       return timeval;
+    case kQUARTERDAY:
+      return extract_quarterday(&timeval);
     case kHOUR:
       return extract_hour(&timeval);
     case kMINUTE:
@@ -191,8 +204,6 @@ __device__
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
   switch (field) {
-    case kQUARTERDAY:
-      return (tm_struct.tm_hour / 6) + 1;
     case kYEAR:
       return 1900 + tm_struct.tm_year;
     case kQUARTER:

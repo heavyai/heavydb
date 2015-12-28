@@ -79,6 +79,13 @@ __device__
         ret -= SECSPERHOUR;
       return ret;
     }
+    case dtQUARTERDAY: {
+      time_t ret = (uint64_t)(timeval / SECSPERQUARTERDAY) * SECSPERQUARTERDAY;
+      // in the case of a negative time we still want to push down so need to push one more
+      if (ret < 0)
+        ret -= SECSPERQUARTERDAY;
+      return ret;
+    }
     case dtDAY: {
       time_t ret = (uint64_t)(timeval / SECSPERDAY) * SECSPERDAY;
       // in the case of a negative time we still want to push down so need to push one more
@@ -102,15 +109,6 @@ __device__
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
   switch (field) {
-    case dtQUARTERDAY: {
-      time_t ret = (uint64_t)(timeval / SECSPERHOUR) * SECSPERHOUR;
-      // in the case of a negative time we still want to push down so need to push one more
-      if (ret < 0)
-        ret -= SECSPERHOUR;
-      // get hour of day
-      int hod = tm_struct.tm_hour;
-      return ret - (hod % 6) * SECSPERHOUR;
-    }
     case dtMONTH: {
       // clear the time
       time_t day = (uint64_t)(timeval / SECSPERDAY) * SECSPERDAY;
