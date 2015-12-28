@@ -156,20 +156,24 @@ std::pair<const rapidjson::Value&, SQLTypeInfo> parse_literal(const rapidjson::V
 
 class CalciteAdapter {
  public:
-  CalciteAdapter(const Catalog_Namespace::Catalog& cat, const std::vector<std::string>& col_names)
-      : cat_(cat), col_names_(col_names) {}
+  CalciteAdapter(const Catalog_Namespace::Catalog& cat, const rapidjson::Value& rels) : cat_(cat) {
+    const auto& scan_ra = rels[0];
+    CHECK(scan_ra.IsObject());
+    CHECK_EQ(std::string("LogicalTableScan"), scan_ra["relOp"].GetString());
+    col_names_ = getColNames(scan_ra);
+    td_ = getTableFromScanNode(scan_ra);
+  }
 
   std::shared_ptr<Analyzer::Expr> getExprFromNode(const rapidjson::Value& expr,
-                                                  const TableDescriptor* td,
                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     if (expr.IsObject() && expr.HasMember("op")) {
-      return translateOp(expr, td, scan_targets);
+      return translateOp(expr, scan_targets);
     }
     if (expr.IsObject() && expr.HasMember("input")) {
-      return translateColRef(expr, td, scan_targets);
+      return translateColRef(expr, scan_targets);
     }
     if (expr.IsObject() && expr.HasMember("agg")) {
-      return translateAggregate(expr, td, scan_targets);
+      return translateAggregate(expr, scan_targets);
     }
     if (expr.IsObject() && expr.HasMember("literal")) {
       return translateTypedLiteral(expr);
@@ -179,35 +183,33 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateOp(const rapidjson::Value& expr,
-                                              const TableDescriptor* td,
                                               const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     const auto op_str = expr["op"].GetString();
     if (op_str == std::string("LIKE")) {
-      return translateLike(expr, td, scan_targets);
+      return translateLike(expr, scan_targets);
     }
     if (op_str == std::string("CASE")) {
-      return translateCase(expr, td, scan_targets);
+      return translateCase(expr, scan_targets);
     }
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
     if (operands.Size() == 1) {
-      return translateUnaryOp(expr, td, scan_targets);
+      return translateUnaryOp(expr, scan_targets);
     }
     CHECK_GE(operands.Size(), unsigned(2));
-    auto lhs = getExprFromNode(operands[0], td, scan_targets);
+    auto lhs = getExprFromNode(operands[0], scan_targets);
     for (size_t i = 1; i < operands.Size(); ++i) {
-      const auto rhs = getExprFromNode(operands[i], td, scan_targets);
+      const auto rhs = getExprFromNode(operands[i], scan_targets);
       lhs = Parser::OperExpr::normalize(to_sql_op(op_str), kONE, lhs, rhs);
     }
     return lhs;
   }
 
   std::shared_ptr<Analyzer::Expr> translateUnaryOp(const rapidjson::Value& expr,
-                                                   const TableDescriptor* td,
                                                    const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     const auto& operands = expr["operands"];
     CHECK_EQ(unsigned(1), operands.Size());
-    const auto operand_expr = getExprFromNode(operands[0], td, scan_targets);
+    const auto operand_expr = getExprFromNode(operands[0], scan_targets);
     const auto op_str = expr["op"].GetString();
     const auto sql_op = to_sql_op(op_str);
     switch (sql_op) {
@@ -235,37 +237,34 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateLike(const rapidjson::Value& expr,
-                                                const TableDescriptor* td,
                                                 const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     const auto& operands = expr["operands"];
     CHECK_GE(operands.Size(), unsigned(2));
-    auto lhs = getExprFromNode(operands[0], td, scan_targets);
-    auto rhs = getExprFromNode(operands[1], td, scan_targets);
-    auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], td, scan_targets) : nullptr;
+    auto lhs = getExprFromNode(operands[0], scan_targets);
+    auto rhs = getExprFromNode(operands[1], scan_targets);
+    auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], scan_targets) : nullptr;
     return Parser::LikeExpr::get(lhs, rhs, esc, false, false);
   }
 
   std::shared_ptr<Analyzer::Expr> translateCase(const rapidjson::Value& expr,
-                                                const TableDescriptor* td,
                                                 const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     const auto& operands = expr["operands"];
     CHECK_GE(operands.Size(), unsigned(2));
     std::shared_ptr<Analyzer::Expr> else_expr;
     std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> expr_list;
     for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
-      const auto when_expr = getExprFromNode(*operands_it++, td, scan_targets);
+      const auto when_expr = getExprFromNode(*operands_it++, scan_targets);
       if (operands_it == operands.End()) {
         else_expr = when_expr;
         break;
       }
-      const auto then_expr = getExprFromNode(*operands_it++, td, scan_targets);
+      const auto then_expr = getExprFromNode(*operands_it++, scan_targets);
       expr_list.emplace_back(when_expr, then_expr);
     }
     return Parser::CaseExpr::normalize(expr_list, else_expr);
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr,
-                                                  const TableDescriptor* td,
                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     const int col_name_idx = expr["input"].GetInt();
     CHECK_GE(col_name_idx, 0);
@@ -277,15 +276,14 @@ class CalciteAdapter {
     }
     CHECK_LT(static_cast<size_t>(col_name_idx), col_names_.size());
     const auto& col_name = col_names_[col_name_idx];
-    const auto cd = cat_.getMetadataForColumn(td->tableId, col_name);
+    const auto cd = cat_.getMetadataForColumn(td_->tableId, col_name);
     CHECK(cd);
     used_columns_.insert(cd->columnId);
     CHECK(cd);
-    return std::make_shared<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+    return std::make_shared<Analyzer::ColumnVar>(cd->columnType, td_->tableId, cd->columnId, 0);
   }
 
   std::shared_ptr<Analyzer::Expr> translateAggregate(const rapidjson::Value& expr,
-                                                     const TableDescriptor* td,
                                                      const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     CHECK(expr.IsObject() && expr.HasMember("type"));
     const auto& expr_type = expr["type"];
@@ -348,6 +346,21 @@ class CalciteAdapter {
     return used_column_list;
   }
 
+  const TableDescriptor* getTableDescriptor() const { return td_; }
+
+ private:
+  static std::vector<std::string> getColNames(const rapidjson::Value& scan_ra) {
+    CHECK(scan_ra.IsObject() && scan_ra.HasMember("fieldNames"));
+    const auto& col_names_node = scan_ra["fieldNames"];
+    CHECK(col_names_node.IsArray());
+    std::vector<std::string> result;
+    for (auto field_it = col_names_node.Begin(); field_it != col_names_node.End(); ++field_it) {
+      CHECK(field_it->IsString());
+      result.push_back(field_it->GetString());
+    }
+    return result;
+  }
+
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
     const auto& table_info = scan_ra["table"];
     CHECK(table_info.IsArray());
@@ -357,10 +370,10 @@ class CalciteAdapter {
     return td;
   }
 
- private:
   std::set<int> used_columns_;
   const Catalog_Namespace::Catalog& cat_;
-  const std::vector<std::string> col_names_;
+  std::vector<std::string> col_names_;
+  const TableDescriptor* td_;
 };
 
 const rapidjson::Value* get_first_of_type(const rapidjson::Value& rels, const std::string& type) {
@@ -378,11 +391,10 @@ void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
                             std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
                             const rapidjson::Value& proj_nodes,
                             const rapidjson::Value& rels,
-                            CalciteAdapter& calcite_adapter,
-                            const TableDescriptor* td) {
+                            CalciteAdapter& calcite_adapter) {
   CHECK(proj_nodes.IsArray());
   for (auto proj_nodes_it = proj_nodes.Begin(); proj_nodes_it != proj_nodes.End(); ++proj_nodes_it) {
-    const auto proj_expr = calcite_adapter.getExprFromNode(*proj_nodes_it, td, {});
+    const auto proj_expr = calcite_adapter.getExprFromNode(*proj_nodes_it, {});
     if (std::dynamic_pointer_cast<const Analyzer::Constant>(proj_expr)) {  // TODO(alex): fix
       continue;
     }
@@ -406,7 +418,7 @@ void collect_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
       agg_targets.push_back(new Analyzer::TargetEntry("", scan_targets[target_idx]->get_own_expr(), false));
     }
     for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it) {
-      auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, td, scan_targets);
+      auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, scan_targets);
       agg_targets.push_back(new Analyzer::TargetEntry("", agg_expr, false));
     }
   }
@@ -425,27 +437,13 @@ void reproject_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
   agg_targets.swap(agg_targets_reproj);
 }
 
-std::vector<std::string> get_col_names(const rapidjson::Value& scan_ra) {
-  CHECK(scan_ra.IsObject() && scan_ra.HasMember("fieldNames"));
-  const auto& col_names_node = scan_ra["fieldNames"];
-  CHECK(col_names_node.IsArray());
-  std::vector<std::string> result;
-  for (auto field_it = col_names_node.Begin(); field_it != col_names_node.End(); ++field_it) {
-    CHECK(field_it->IsString());
-    result.push_back(field_it->GetString());
-  }
-  return result;
-}
-
-std::shared_ptr<Analyzer::Expr> get_filter_expr(const rapidjson::Value& rels,
-                                                CalciteAdapter& calcite_adapter,
-                                                const TableDescriptor* td) {
+std::shared_ptr<Analyzer::Expr> get_filter_expr(const rapidjson::Value& rels, CalciteAdapter& calcite_adapter) {
   CHECK(rels.IsArray());
   CHECK(rels.Size() >= 2);
   const auto& filter_ra = rels[1];
   CHECK(filter_ra.IsObject() && filter_ra.HasMember("relOp"));
   if (std::string("LogicalFilter") == filter_ra["relOp"].GetString()) {
-    return calcite_adapter.getExprFromNode(filter_ra["condition"], td, {});
+    return calcite_adapter.getExprFromNode(filter_ra["condition"], {});
   }
   return nullptr;
 }
@@ -465,15 +463,14 @@ bool is_having(const rapidjson::Value& rels) {
 
 std::shared_ptr<Analyzer::Expr> get_having_filter_expr(const rapidjson::Value& rels,
                                                        const std::vector<Analyzer::TargetEntry*>& targets,
-                                                       CalciteAdapter& calcite_adapter,
-                                                       const TableDescriptor* td) {
+                                                       CalciteAdapter& calcite_adapter) {
   CHECK(rels.IsArray());
   CHECK(rels.Size() >= 2);
   for (auto rels_it = rels.Begin() + 2; rels_it != rels.End(); ++rels_it) {
     const auto& filter_ra = *rels_it;
     CHECK(filter_ra.IsObject() && filter_ra.HasMember("relOp"));
     if (std::string("LogicalFilter") == filter_ra["relOp"].GetString()) {
-      return calcite_adapter.getExprFromNode(filter_ra["condition"], td, targets);
+      return calcite_adapter.getExprFromNode(filter_ra["condition"], targets);
     }
   }
   return nullptr;
@@ -580,12 +577,8 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(query_ast.IsObject());
   const auto& rels = query_ast["rels"];
   CHECK(rels.IsArray());
-  const auto& scan_ra = rels[0];
-  CHECK(scan_ra.IsObject());
-  CHECK_EQ(std::string("LogicalTableScan"), scan_ra["relOp"].GetString());
-  CalciteAdapter calcite_adapter(cat, get_col_names(scan_ra));
-  auto td = calcite_adapter.getTableFromScanNode(scan_ra);
-  const auto filter_expr = get_filter_expr(rels, calcite_adapter, td);
+  CalciteAdapter calcite_adapter(cat, rels);
+  const auto filter_expr = get_filter_expr(rels, calcite_adapter);
   const auto project_ra_ptr = get_first_of_type(rels, "LogicalProject");
   CHECK(project_ra_ptr);
   const auto& project_ra = *project_ra_ptr;
@@ -594,7 +587,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   std::vector<Analyzer::TargetEntry*> agg_targets;
   std::vector<Analyzer::TargetEntry*> scan_targets;
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
-  collect_target_entries(agg_targets, scan_targets, groupby_exprs, proj_nodes, rels, calcite_adapter, td);
+  collect_target_entries(agg_targets, scan_targets, groupby_exprs, proj_nodes, rels, calcite_adapter);
   const auto result_proj_indices = get_result_proj_indices(rels);
   reproject_target_entries(agg_targets, result_proj_indices);
   std::list<std::shared_ptr<Analyzer::Expr>> q;
@@ -602,6 +595,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   if (filter_expr) {  // TODO(alex): take advantage of simple qualifiers where possible
     q.push_back(filter_expr);
   }
+  auto td = calcite_adapter.getTableDescriptor();
   Planner::Plan* select_plan =
       new Planner::Scan(scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
   if (!agg_targets.empty()) {
@@ -622,7 +616,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
           false));
     }
     reproject_target_entries(result_targets, result_proj_indices);
-    const auto having_filter_expr = get_having_filter_expr(rels, result_targets, calcite_adapter, td);
+    const auto having_filter_expr = get_having_filter_expr(rels, result_targets, calcite_adapter);
     select_plan = new Planner::Result(result_targets, {having_filter_expr}, 0, select_plan, {});
   }
   auto root_plan = new Planner::RootPlan(
