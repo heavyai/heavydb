@@ -600,24 +600,39 @@ Planner::Scan* get_scan_plan(const TableDescriptor* td,
       scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList(td->tableId));
 }
 
-Planner::Plan* get_plan(const rapidjson::Value& rels,
-                        const TableDescriptor* td,
-                        const std::vector<Analyzer::TargetEntry*>& scan_targets,
-                        const std::vector<Analyzer::TargetEntry*>& agg_targets,
-                        const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
-                        std::list<std::shared_ptr<Analyzer::Expr>>& q,
-                        std::list<std::shared_ptr<Analyzer::Expr>>& sq,
-                        const std::vector<size_t>& result_proj_indices,
-                        CalciteAdapter& calcite_adapter) {
+Planner::Plan* get_agg_plan(const TableDescriptor* td,
+                            const std::vector<Analyzer::TargetEntry*>& scan_targets,
+                            const std::vector<Analyzer::TargetEntry*>& agg_targets,
+                            const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+                            std::list<std::shared_ptr<Analyzer::Expr>>& q,
+                            std::list<std::shared_ptr<Analyzer::Expr>>& sq,
+                            CalciteAdapter& calcite_adapter) {
   Planner::Plan* plan = get_scan_plan(td, scan_targets, q, sq, calcite_adapter);
   if (!agg_targets.empty()) {
     plan = new Planner::AggPlan(agg_targets, 0., plan, groupby_exprs);
   }
+  return plan;
+}
+
+Planner::Plan* get_sort_plan(Planner::Plan* plan,
+                             const rapidjson::Value& rels,
+                             const std::vector<Analyzer::TargetEntry*>& scan_targets,
+                             const std::vector<Analyzer::TargetEntry*>& agg_targets) {
   const auto logical_sort_info = get_logical_sort_info(rels);
   if (!logical_sort_info.order_entries.empty()) {
     const auto& sort_target_entries = agg_targets.empty() ? scan_targets : agg_targets;  // TODO(alex)
     plan = new Planner::Sort(sort_target_entries, 0, plan, logical_sort_info.order_entries, false);
   }
+  return plan;
+}
+
+Planner::Plan* get_plan(Planner::Plan* plan,
+                        const rapidjson::Value& rels,
+                        const std::vector<Analyzer::TargetEntry*>& scan_targets,
+                        const std::vector<Analyzer::TargetEntry*>& agg_targets,
+                        const std::vector<size_t>& result_proj_indices,
+                        CalciteAdapter& calcite_adapter) {
+  plan = get_sort_plan(plan, rels, scan_targets, agg_targets);
   const auto& orig_proj = agg_targets.empty() ? scan_targets : agg_targets;  // TODO(alex)
   if (is_having(rels)) {
     std::vector<Analyzer::TargetEntry*> result_targets;
@@ -672,16 +687,20 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
       join_qual.push_back(join_constraint);
     }
   }
-  auto outer_plan =
-      is_join
-          ? get_scan_plan(tds[0], scan_targets, q, sq, calcite_adapter)
-          : get_plan(
-                rels, tds[0], scan_targets, agg_targets, groupby_exprs, q, sq, result_proj_indices, calcite_adapter);
+  auto outer_plan = is_join ? get_scan_plan(tds[0], scan_targets, q, sq, calcite_adapter)
+                            : get_agg_plan(tds[0], scan_targets, agg_targets, groupby_exprs, q, sq, calcite_adapter);
+  if (!is_join) {
+    outer_plan = get_plan(outer_plan, rels, scan_targets, agg_targets, result_proj_indices, calcite_adapter);
+  }
   auto inner_plan = is_join ? get_scan_plan(tds[1], scan_targets, q, sq, calcite_adapter) : nullptr;
   const auto logical_sort_info = get_logical_sort_info(rels);
   auto plan = inner_plan ? new Planner::Join({}, join_qual, 0, outer_plan, inner_plan) : outer_plan;
-  if (is_join && !agg_targets.empty()) {
-    plan = new Planner::AggPlan(agg_targets, 0., plan, groupby_exprs);
+  if (is_join) {
+    if (!agg_targets.empty()) {
+      plan = new Planner::AggPlan(agg_targets, 0., plan, groupby_exprs);
+    }
+    plan = get_sort_plan(plan, rels, scan_targets, agg_targets);
+    // TODO(alex): handle join + HAVING
   }
   auto root_plan =
       new Planner::RootPlan(plan, kSELECT, tds[0]->tableId, {}, cat, logical_sort_info.limit, logical_sort_info.offset);
