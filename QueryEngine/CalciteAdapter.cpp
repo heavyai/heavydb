@@ -284,8 +284,7 @@ class CalciteAdapter {
         const auto& col_name = col_name_td.names_[col_name_idx];
         const auto cd = cat_.getMetadataForColumn(col_name_td.td_->tableId, col_name);
         CHECK(cd);
-        used_columns_.insert(cd->columnId);
-        CHECK(cd);
+        used_columns_[col_name_td.td_->tableId].insert(cd->columnId);
         return std::make_shared<Analyzer::ColumnVar>(cd->columnType, col_name_td.td_->tableId, cd->columnId, rte_idx);
       }
       col_name_idx -= col_name_td.names_.size();
@@ -350,9 +349,11 @@ class CalciteAdapter {
     return nullptr;
   }
 
-  std::list<int> getUsedColumnList() const {
+  std::list<int> getUsedColumnList(const int32_t table_id) const {
     std::list<int> used_column_list;
-    for (const int used_col : used_columns_) {
+    const auto it = used_columns_.find(table_id);
+    CHECK(it != used_columns_.end());
+    for (const int used_col : it->second) {
       used_column_list.push_back(used_col);
     }
     return used_column_list;
@@ -393,7 +394,7 @@ class CalciteAdapter {
     const TableDescriptor* td_;
   };
 
-  std::set<int> used_columns_;
+  std::unordered_map<int32_t, std::set<int>> used_columns_;
   const Catalog_Namespace::Catalog& cat_;
   std::vector<ColNames> col_names_;
 };
@@ -595,7 +596,8 @@ Planner::Scan* get_scan_plan(const TableDescriptor* td,
                              std::list<std::shared_ptr<Analyzer::Expr>>& q,
                              std::list<std::shared_ptr<Analyzer::Expr>>& sq,
                              CalciteAdapter& calcite_adapter) {
-  return new Planner::Scan(scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList());
+  return new Planner::Scan(
+      scan_targets, q, 0., nullptr, sq, td->tableId, calcite_adapter.getUsedColumnList(td->tableId));
 }
 
 Planner::Plan* get_plan(const rapidjson::Value& rels,
