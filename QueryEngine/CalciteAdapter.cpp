@@ -282,7 +282,7 @@ class CalciteAdapter {
     for (const auto& col_name_td : col_names_) {
       if (static_cast<size_t>(col_name_idx) < col_name_td.names_.size()) {
         const auto& col_name = col_name_td.names_[col_name_idx];
-        const auto cd = cat_.getMetadataForColumn(col_names_[0].td_->tableId, col_name);
+        const auto cd = cat_.getMetadataForColumn(col_name_td.td_->tableId, col_name);
         CHECK(cd);
         used_columns_.insert(cd->columnId);
         CHECK(cd);
