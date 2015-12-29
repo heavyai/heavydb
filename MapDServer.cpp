@@ -1142,9 +1142,8 @@ class MapDHandler : virtual public MapDIf {
         } catch (InvalidParseRequest& e) {
           TMapDException ex;
           ex.error_msg = std::string("Exception: ") + e.whyUp;
-          LOG(ERROR) << "Calcite had an issue parsing this sql " << ex.error_msg << "sql was " << query_str;
-          // TODO MAT don't actually throw exception yet as normal parse is still to be done
-          // throw ex;
+          LOG(ERROR) << "Calcite had an issue " << ex.error_msg << ", sql was " << query_str;
+          throw ex;
         }
       }
 #endif  // HAVE_CALCITE

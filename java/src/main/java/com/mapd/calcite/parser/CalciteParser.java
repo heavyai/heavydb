@@ -197,7 +197,7 @@ public class CalciteParser {
             = new MapDSqlOperatorTable(SqlStdOperatorTable.instance());
     // MAT 11 Nov 2015
     // Example of how to add custom function
-    // MapDSqlOperatorTable.addRamp(opTab);
+    MapDSqlOperatorTable.addUDF(tempOpTab);
     return tempOpTab;
   }
 

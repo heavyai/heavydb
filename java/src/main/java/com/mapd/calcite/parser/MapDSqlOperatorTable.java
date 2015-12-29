@@ -49,11 +49,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   // MAT Nov 11 2015
   // These are example of how to add custom functions
   // left in as a starting point for when we need them
-  public static void addRamp(MapDSqlOperatorTable opTab) {
+  public static void addUDF(MapDSqlOperatorTable opTab) {
     // Don't use anonymous inner classes. They can't be instantiated
     // using reflection when we are deserializing from JSON.
-    opTab.addOperator(new RampFunction());
-    opTab.addOperator(new DedupFunction());
+    //opTab.addOperator(new RampFunction());
+    //opTab.addOperator(new DedupFunction());
+    opTab.addOperator(new MyUDFFunction());
   }
 
   /**
@@ -98,6 +99,31 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               = opBinding.getTypeFactory();
       return typeFactory.builder()
               .add("NAME", SqlTypeName.VARCHAR, 1024)
+              .build();
+    }
+  }
+
+  /**
+   * "MyUDFFunction" user-defined function test.
+   * our udf's will look like system functions to calcite as it
+   * has no access to the code
+   */
+
+  public static class MyUDFFunction extends SqlFunction {
+
+    public MyUDFFunction() {
+      super("MyUDF",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.STRING_STRING,
+              SqlFunctionCategory.SYSTEM);
+    }
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory
+              = opBinding.getTypeFactory();
+      return typeFactory.builder()
+              .add("UDF_RESULT", SqlTypeName.BIGINT)
               .build();
     }
   }
