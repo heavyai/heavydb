@@ -352,7 +352,9 @@ class CalciteAdapter {
   std::list<int> getUsedColumnList(const int32_t table_id) const {
     std::list<int> used_column_list;
     const auto it = used_columns_.find(table_id);
-    CHECK(it != used_columns_.end());
+    if (it == used_columns_.end()) {
+      return {};
+    }
     for (const int used_col : it->second) {
       used_column_list.push_back(used_col);
     }
