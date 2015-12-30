@@ -644,8 +644,8 @@ Planner::Plan* get_plan(Planner::Plan* plan,
           makeExpr<Analyzer::Var>(orig_proj[i - 1]->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, i),
           false));
     }
-    reproject_target_entries(result_targets, result_proj_indices);
     const auto having_filter_expr = get_outer_filter_expr(rels, result_targets, calcite_adapter);
+    reproject_target_entries(result_targets, result_proj_indices);
     plan = new Planner::Result(result_targets, {having_filter_expr}, 0, plan, {});
   }
   return plan;
@@ -672,7 +672,9 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   collect_target_entries(agg_targets, scan_targets, groupby_exprs, proj_nodes, rels, calcite_adapter);
   const auto result_proj_indices = get_result_proj_indices(rels);
-  reproject_target_entries(agg_targets, result_proj_indices);
+  if (!is_having(rels)) {
+    reproject_target_entries(agg_targets, result_proj_indices);
+  }
   std::list<std::shared_ptr<Analyzer::Expr>> q;
   std::list<std::shared_ptr<Analyzer::Expr>> sq;
   if (filter_expr) {  // TODO(alex): take advantage of simple qualifiers where possible
