@@ -634,7 +634,6 @@ Planner::Plan* get_plan(Planner::Plan* plan,
                         const std::vector<Analyzer::TargetEntry*>& agg_targets,
                         const std::vector<size_t>& result_proj_indices,
                         CalciteAdapter& calcite_adapter) {
-  plan = get_sort_plan(plan, rels, scan_targets, agg_targets);
   const auto& orig_proj = agg_targets.empty() ? scan_targets : agg_targets;  // TODO(alex)
   if (is_having(rels)) {
     std::vector<Analyzer::TargetEntry*> result_targets;
@@ -648,6 +647,7 @@ Planner::Plan* get_plan(Planner::Plan* plan,
     reproject_target_entries(result_targets, result_proj_indices);
     plan = new Planner::Result(result_targets, {having_filter_expr}, 0, plan, {});
   }
+  plan = get_sort_plan(plan, rels, scan_targets, agg_targets);
   return plan;
 }
 
