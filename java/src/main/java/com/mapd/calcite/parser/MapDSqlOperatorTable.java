@@ -122,9 +122,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory
               = opBinding.getTypeFactory();
-      return typeFactory.builder()
-              .add("UDF_RESULT", SqlTypeName.BIGINT)
-              .build();
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
     }
   }
 }
