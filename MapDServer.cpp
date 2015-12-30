@@ -1227,6 +1227,23 @@ class MapDHandler : virtual public MapDIf {
 #endif  // HAVE_CALCITE
 };
 
+void mapd_signal_handler(int signal_number) {
+  LOG(INFO) << "Interrupt signal (" << signal_number << ") received.\n";
+  // shut down logging force a flush
+  google::ShutdownGoogleLogging();
+
+  // terminate program
+  exit(signal_number);
+}
+
+void register_signal_handler() {
+  // it appears we send both a signal SIGINT(2) and SIGTERM(15) each time we
+  // exit the startmapd script.
+  // Only catching the SIGTERM(15) to avoid double shut down request
+  // register SIGTERM and signal handler
+  signal(SIGTERM, mapd_signal_handler);
+}
+
 void start_server(TThreadedServer& server) {
   try {
     server.serve();
@@ -1400,6 +1417,11 @@ int main(int argc, char** argv) {
     FLAGS_logbuflevel = -1;
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
+
+  // rudimetary signal handling to try to guarantee the logging gets flushed to files
+  // on shutdown
+  register_signal_handler();
+
   shared_ptr<MapDHandler> handler(new MapDHandler(base_path,
                                                   device,
                                                   use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA,

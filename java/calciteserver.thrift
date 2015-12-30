@@ -12,7 +12,7 @@ struct TPlanResult {
 service CalciteServer {
 
    void ping(),
-
+   void shutdown(),
    TPlanResult process(1:string user 2:string passwd 3:string catalog 4:string sqlText) throws (1:InvalidParseRequest parseErr)
 
 }

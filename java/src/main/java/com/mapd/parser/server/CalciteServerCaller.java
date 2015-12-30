@@ -50,6 +50,7 @@ public class CalciteServerCaller {
       TServer server = new TSimpleServer(new Args(serverTransport).processor(processor));
 
       logger.info("Starting the simple server... Listening on port "+ port);
+      handler.setServer(server);
       server.serve();
     } catch (Exception e) {
       e.printStackTrace();

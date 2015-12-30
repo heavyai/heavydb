@@ -12,6 +12,7 @@ import com.mapd.thrift.calciteserver.CalciteServer;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.thrift.TException;
+import org.apache.thrift.server.TServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,8 +23,8 @@ import org.slf4j.LoggerFactory;
 class CalciteServerHandler implements CalciteServer.Iface {
 
   final static Logger logger = LoggerFactory.getLogger(CalciteServerHandler.class);
-
-  CalciteParser parser = new CalciteParser();
+  private TServer server;
+  private CalciteParser parser = new CalciteParser();
 
   @Override
   public void ping() throws TException {
@@ -50,6 +51,17 @@ class CalciteServerHandler implements CalciteServer.Iface {
       throw new InvalidParseRequest(-1, ex.getMessage());
     }
     return new TPlanResult(relAlgebra, System.currentTimeMillis() - timer);
+  }
+
+  @Override
+  public void shutdown() throws TException {
+    // received request to shutdown
+    logger.info("Shutdown calcite java server");
+    server.stop();
+  }
+
+  void setServer(TServer s) {
+    server = s;
   }
 
 }
