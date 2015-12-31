@@ -752,7 +752,7 @@ SQLException - if a database access error occurs
     // create a rowset for the result
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
-    TQueryResult result = new TQueryResult(rowSet, 0, null);
+    TQueryResult result = new TQueryResult(rowSet, 0, 0, null);
 
     MapDResultSet tab = new MapDResultSet(result, "GetTables");
     return tab;
@@ -816,7 +816,7 @@ SQLException - if a database access error occurs
     // create a rowset for the result
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
-    TQueryResult result = new TQueryResult(rowSet, 0, null);
+    TQueryResult result = new TQueryResult(rowSet, 0, 0, null);
 
     MapDResultSet schemas = new MapDResultSet(result, "getSchemas");
     return schemas;
@@ -858,7 +858,7 @@ SQLException - if a database access error occurs
     // create a rowset for the result
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
-    TQueryResult result = new TQueryResult(rowSet, 0, null);
+    TQueryResult result = new TQueryResult(rowSet, 0, 0, null);
 
     MapDResultSet tab = new MapDResultSet(result, "getTableTypes");
 
@@ -1014,7 +1014,7 @@ SQLException - if a database access error occurs
               dataMap.get("TABLE_NAME").add(tableName);
               dataMap.get("COLUMN_NAME").add(entry.getKey());
               dataMap.get("DATA_TYPE").add(MapDType.toJava(value.col_type.type));
-              dataMap.get("TYPE_NAME").add("COLUMN");
+              dataMap.get("TYPE_NAME").add((value.col_type.type.name() + (value.col_type.is_array ? "[]" : "")));
               dataMap.get("COLUMN_SIZE").add(100);
               dataMap.get("BUFFER_LENGTH").setNull(true);
               dataMap.get("DECIMAL_DIGITS").add(10);
@@ -1053,7 +1053,7 @@ SQLException - if a database access error occurs
     // create a rowset for the result
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
-    TQueryResult result = new TQueryResult(rowSet, 0, null);
+    TQueryResult result = new TQueryResult(rowSet, 0, 0, null);
 
     MapDResultSet cols = new MapDResultSet(result, "getColumns");
     return cols;
@@ -1234,7 +1234,7 @@ SQLException - if a database access error occurs
     // create a rowset for the result
     TRowSet rowSet = new TRowSet(rowDesc, null, columnsList, true);
 
-    TQueryResult result = new TQueryResult(rowSet, 0, null);
+    TQueryResult result = new TQueryResult(rowSet, 0, 0, null);
 
     MapDResultSet cols = new MapDResultSet(result, "getTypeInfo");
     return cols;
