@@ -231,6 +231,18 @@ void Catalog::updateLinkSchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::updateFrontendViewAndLinkUsers() {
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("UPDATE mapd_links SET userid = 0 WHERE userid IS NULL");
+    sqliteConnector_.query("UPDATE mapd_frontend_views SET userid = 0 WHERE userid IS NULL");
+  } catch (const std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void Catalog::buildMaps() {
   string dictQuery("SELECT dictid, name, nbits, is_shared from mapd_dictionaries");
   sqliteConnector_.query(dictQuery);
@@ -314,8 +326,9 @@ void Catalog::buildMaps() {
     td->fragmenter = nullptr;
   }
 
+  updateFrontendViewAndLinkUsers();
   updateFrontendViewSchema();
-  string frontendViewQuery("SELECT viewid, view_state, name, image_hash, update_time FROM mapd_frontend_views");
+  string frontendViewQuery("SELECT viewid, view_state, name, image_hash, update_time, userid FROM mapd_frontend_views");
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
@@ -325,7 +338,8 @@ void Catalog::buildMaps() {
     vd->viewName = sqliteConnector_.getData<string>(r, 2);
     vd->imageHash = sqliteConnector_.getData<string>(r, 3);
     vd->updateTime = sqliteConnector_.getData<string>(r, 4);
-    frontendViewDescriptorMap_[vd->viewName] = vd;
+    vd->userId = sqliteConnector_.getData<int>(r, 5);
+    frontendViewDescriptorMap_[std::to_string(vd->userId) + vd->viewName] = vd;
     frontendViewDescriptorMapById_[vd->viewId] = vd;
   }
 
@@ -341,7 +355,7 @@ void Catalog::buildMaps() {
     ld->link = sqliteConnector_.getData<string>(r, 3);
     ld->viewState = sqliteConnector_.getData<string>(r, 4);
     ld->updateTime = sqliteConnector_.getData<string>(r, 5);
-    linkDescriptorMap_[ld->link] = ld;
+    linkDescriptorMap_[std::to_string(ld->dbId) + ld->link] = ld;
     linkDescriptorMapById_[ld->linkId] = ld;
   }
 }
@@ -407,7 +421,7 @@ void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   FrontendViewDescriptor* new_vd = new FrontendViewDescriptor();
   *new_vd = vd;
-  frontendViewDescriptorMap_[vd.viewName] = new_vd;
+  frontendViewDescriptorMap_[std::to_string(vd.userId) + vd.viewName] = new_vd;
   frontendViewDescriptorMapById_[vd.viewId] = new_vd;
 }
 
@@ -415,7 +429,7 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   LinkDescriptor* new_ld = new LinkDescriptor();
   *new_ld = ld;
-  linkDescriptorMap_[ld.link] = new_ld;
+  linkDescriptorMap_[std::to_string(ld.dbId) + ld.link] = new_ld;
   linkDescriptorMapById_[ld.linkId] = new_ld;
 }
 
@@ -693,14 +707,19 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // TODO(andrew): this should be an upsert
-    sqliteConnector_.query_with_text_param("SELECT viewid FROM mapd_frontend_views WHERE name = ?", vd.viewName);
+    sqliteConnector_.query_with_text_param(
+        "SELECT viewid FROM mapd_frontend_views WHERE name = ? and userid = " + std::to_string(vd.userId), vd.viewName);
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_frontend_views SET view_state = ?, image_hash = ?, update_time = datetime('now') where name = ?",
+          "UPDATE mapd_frontend_views SET view_state = ?, image_hash = ?, update_time = datetime('now') where name = ? "
+          "and userid = " +
+              std::to_string(vd.userId),
           std::vector<std::string>{vd.viewState, vd.imageHash, vd.viewName});
     } else {
       sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_frontend_views (name, view_state, image_hash, update_time) VALUES (?,?,?, datetime('now'))",
+          "INSERT INTO mapd_frontend_views (name, view_state, image_hash, update_time, userid) VALUES (?,?,?, "
+          "datetime('now'), " +
+              std::to_string(vd.userId) + ")",
           std::vector<std::string>{vd.viewName, vd.viewState, vd.imageHash});
     }
   } catch (std::exception& e) {
@@ -711,8 +730,9 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
 
   // now get the auto generated viewid
   try {
-    sqliteConnector_.query_with_text_param("SELECT viewid, update_time FROM mapd_frontend_views WHERE name = ?",
-                                           vd.viewName);
+    sqliteConnector_.query_with_text_param(
+        "SELECT viewid, update_time FROM mapd_frontend_views WHERE name = ? and userid = " + std::to_string(vd.userId),
+        vd.viewName);
     vd.viewId = sqliteConnector_.getData<int>(0, 0);
     vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
   } catch (std::exception& e) {

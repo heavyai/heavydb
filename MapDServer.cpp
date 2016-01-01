@@ -403,7 +403,7 @@ class MapDHandler : virtual public MapDIf {
   void get_frontend_view(TFrontendView& _return, const TSessionId session, const std::string& view_name) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
-    auto vd = cat.getMetadataForFrontendView(view_name);
+    auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId) + view_name);
     if (!vd) {
       TMapDException ex;
       ex.error_msg = "View " + view_name + " doesn't exist";
@@ -418,8 +418,7 @@ class MapDHandler : virtual public MapDIf {
   void get_link_view(TFrontendView& _return, const TSessionId session, const std::string& link) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
-    auto ld = cat.getMetadataForLink(link);
-    // TODO(andrew): add authorization check. Potential data leak without it.
+    auto ld = cat.getMetadataForLink(std::to_string(cat.get_currentDB().dbId) + link);
     if (!ld) {
       TMapDException ex;
       ex.error_msg = "Link " + link + " is not valid.";
@@ -470,11 +469,13 @@ class MapDHandler : virtual public MapDIf {
     auto& cat = session_info.get_catalog();
     const auto views = cat.getAllFrontendViewMetadata();
     for (const auto vd : views) {
-      TFrontendView fv;
-      fv.view_name = vd->viewName;
-      fv.image_hash = vd->imageHash;
-      fv.update_time = vd->updateTime;
-      view_names.push_back(fv);
+      if (vd->userId == session_info.get_currentUser().userId) {
+        TFrontendView fv;
+        fv.view_name = vd->viewName;
+        fv.image_hash = vd->imageHash;
+        fv.update_time = vd->updateTime;
+        view_names.push_back(fv);
+      }
     }
   }
 
@@ -806,6 +807,7 @@ class MapDHandler : virtual public MapDIf {
     vd.viewName = view_name;
     vd.viewState = view_state;
     vd.imageHash = image_hash;
+    vd.userId = session_info.get_currentUser().userId;
 
     cat.createFrontendView(vd);
   }

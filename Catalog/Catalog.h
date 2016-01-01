@@ -196,6 +196,7 @@ class Catalog {
  protected:
   void updateFrontendViewSchema();
   void updateLinkSchema();
+  void updateFrontendViewAndLinkUsers();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
