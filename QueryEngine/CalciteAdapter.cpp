@@ -706,11 +706,11 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
     // TODO(alex): properly build the outer and inner plans
     auto outer_plan = get_agg_plan(tds[0], {}, {}, groupby_exprs, quals, simple_quals, calcite_adapter);
     auto inner_plan = get_agg_plan(tds[1], {}, {}, groupby_exprs, quals, simple_quals, calcite_adapter);
-    plan = new Planner::Join({}, join_quals, 0, outer_plan, inner_plan);
     if (is_agg_plan) {
+      plan = new Planner::Join({}, join_quals, 0, outer_plan, inner_plan);
       plan = new Planner::AggPlan(res_targets, 0., plan, groupby_exprs);
     } else {
-      CHECK(false);
+      plan = new Planner::Join(res_targets, join_quals, 0, outer_plan, inner_plan);
     }
   } else if (child_res_targets.empty()) {
     std::vector<Analyzer::TargetEntry*> agg_targets{is_agg_plan ? res_targets : std::vector<Analyzer::TargetEntry*>{}};
