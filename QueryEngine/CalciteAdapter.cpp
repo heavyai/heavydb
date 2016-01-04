@@ -706,11 +706,21 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
     // TODO(alex): properly build the outer and inner plans
     auto outer_plan = get_agg_plan(tds[0], {}, {}, groupby_exprs, quals, simple_quals, calcite_adapter);
     auto inner_plan = get_agg_plan(tds[1], {}, {}, groupby_exprs, quals, simple_quals, calcite_adapter);
-    if (is_agg_plan) {
-      plan = new Planner::Join({}, join_quals, 0, outer_plan, inner_plan);
-      plan = new Planner::AggPlan(res_targets, 0., plan, groupby_exprs);
+    if (child_res_targets.empty()) {
+      if (is_agg_plan) {
+        plan = new Planner::Join({}, join_quals, 0, outer_plan, inner_plan);
+        plan = new Planner::AggPlan(res_targets, 0., plan, groupby_exprs);
+      } else {
+        plan = new Planner::Join(res_targets, join_quals, 0, outer_plan, inner_plan);
+      }
     } else {
-      plan = new Planner::Join(res_targets, join_quals, 0, outer_plan, inner_plan);
+      if (is_agg_plan) {
+        plan = new Planner::Join({}, join_quals, 0, outer_plan, inner_plan);
+        plan = new Planner::AggPlan(child_res_targets, 0., plan, groupby_exprs);
+      } else {
+        plan = new Planner::Join(child_res_targets, join_quals, 0, outer_plan, inner_plan);
+      }
+      plan = new Planner::Result(res_targets, result_quals, 0, plan, {});
     }
   } else if (child_res_targets.empty()) {
     std::vector<Analyzer::TargetEntry*> agg_targets{is_agg_plan ? res_targets : std::vector<Analyzer::TargetEntry*>{}};
