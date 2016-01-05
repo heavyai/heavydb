@@ -13,7 +13,6 @@
 
 struct LinkDescriptor {
   int32_t linkId;
-  int32_t dbId;
   int32_t userId;
   std::string link;
   std::string viewState;

@@ -35,9 +35,6 @@ void SysCatalog::initDB() {
       std::vector<std::string>{MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT});
   sqliteConnector_.query(
       "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
-  sqliteConnector_.query(
-      "CREATE TABLE mapd_links (linkid integer primary key, dbid integer references mapd_databases, "
-      "userid integer references mapd_users, link text unique, view_state text, update_time timestamp)");
   createDatabase("mapd", MAPD_ROOT_USER_ID);
 };
 
@@ -92,6 +89,9 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   dbConn.query(
       "CREATE TABLE mapd_frontend_views (viewid integer primary key, name text unique, userid integer references "
       "mapd_users, view_state text, image_hash text, update_time timestamp)");
+  dbConn.query(
+      "CREATE TABLE mapd_links (linkid integer primary key, userid integer references mapd_users, "
+      "link text unique, view_state text, update_time timestamp)");
   dbConn.query(
       "CREATE TABLE mapd_dictionaries (dictid integer primary key, name text unique, nbits int, is_shared boolean)");
 }
@@ -222,8 +222,8 @@ void Catalog::updateLinkSchema() {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
-        "CREATE TABLE IF NOT EXISTS mapd_links (linkid integer primary key, dbid integer references mapd_databases, "
-        "userid integer references mapd_users, link text unique, view_state text, update_time timestamp)");
+        "CREATE TABLE IF NOT EXISTS mapd_links (linkid integer primary key, userid integer references mapd_users, "
+        "link text unique, view_state text, update_time timestamp)");
   } catch (const std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -344,18 +344,17 @@ void Catalog::buildMaps() {
   }
 
   updateLinkSchema();
-  string linkQuery("SELECT linkid, dbid, userid, link, view_state, update_time FROM mapd_links");
+  string linkQuery("SELECT linkid, userid, link, view_state, update_time FROM mapd_links");
   sqliteConnector_.query(linkQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
     LinkDescriptor* ld = new LinkDescriptor();
     ld->linkId = sqliteConnector_.getData<int>(r, 0);
-    ld->dbId = sqliteConnector_.getData<int>(r, 1);
-    ld->userId = sqliteConnector_.getData<int>(r, 2);
-    ld->link = sqliteConnector_.getData<string>(r, 3);
-    ld->viewState = sqliteConnector_.getData<string>(r, 4);
-    ld->updateTime = sqliteConnector_.getData<string>(r, 5);
-    linkDescriptorMap_[std::to_string(ld->dbId) + ld->link] = ld;
+    ld->userId = sqliteConnector_.getData<int>(r, 1);
+    ld->link = sqliteConnector_.getData<string>(r, 2);
+    ld->viewState = sqliteConnector_.getData<string>(r, 3);
+    ld->updateTime = sqliteConnector_.getData<string>(r, 4);
+    linkDescriptorMap_[std::to_string(currentDB_.dbId) + ld->link] = ld;
     linkDescriptorMapById_[ld->linkId] = ld;
   }
 }
@@ -429,7 +428,7 @@ void Catalog::addLinkToMap(LinkDescriptor& ld) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   LinkDescriptor* new_ld = new LinkDescriptor();
   *new_ld = ld;
-  linkDescriptorMap_[std::to_string(ld.dbId) + ld.link] = new_ld;
+  linkDescriptorMap_[std::to_string(currentDB_.dbId) + ld.link] = new_ld;
   linkDescriptorMapById_[ld.linkId] = new_ld;
 }
 
@@ -776,9 +775,8 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     ld.link = generateLink(min_length);
-    sqliteConnector_.query("INSERT INTO mapd_links (dbid, userid, link, view_state, update_time) VALUES (" +
-                           std::to_string(ld.dbId) + "," + std::to_string(ld.userId) + ",'" + ld.link + "','" +
-                           ld.viewState + "', datetime('now'))");
+    sqliteConnector_.query("INSERT INTO mapd_links (userid, link, view_state, update_time) VALUES (" +
+                           std::to_string(ld.userId) + ",'" + ld.link + "','" + ld.viewState + "', datetime('now'))");
     // now get the auto generated viewid
     sqliteConnector_.query("SELECT linkid, update_time FROM mapd_links WHERE link = '" + ld.link + "'");
     ld.linkId = sqliteConnector_.getData<int>(0, 0);

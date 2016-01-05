@@ -818,7 +818,6 @@ class MapDHandler : virtual public MapDIf {
     auto& cat = session_info.get_catalog();
 
     LinkDescriptor ld;
-    ld.dbId = cat.get_currentDB().dbId;
     ld.userId = session_info.get_currentUser().userId;
     ld.viewState = view_state;
 
