@@ -195,6 +195,9 @@ class CalciteAdapter {
     if (op_str == std::string("CASE")) {
       return translateCase(expr, scan_targets);
     }
+    if (op_str == std::string("ITEM")) {
+      return translateItem(expr, scan_targets);
+    }
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
     if (operands.Size() == 1) {
@@ -266,6 +269,16 @@ class CalciteAdapter {
       expr_list.emplace_back(when_expr, then_expr);
     }
     return Parser::CaseExpr::normalize(expr_list, else_expr);
+  }
+
+  std::shared_ptr<Analyzer::Expr> translateItem(const rapidjson::Value& expr,
+                                                const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+    const auto& operands = expr["operands"];
+    CHECK(operands.IsArray());
+    CHECK_EQ(operands.Size(), unsigned(2));
+    auto base = getExprFromNode(operands[0], scan_targets);
+    auto index = getExprFromNode(operands[1], scan_targets);
+    return makeExpr<Analyzer::BinOper>(base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr,
