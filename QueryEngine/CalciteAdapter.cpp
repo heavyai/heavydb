@@ -533,13 +533,19 @@ std::vector<size_t> collect_reproject_indices(const rapidjson::Value& exprs) {
 
 std::vector<Analyzer::TargetEntry*> get_input_targets(const std::vector<Analyzer::TargetEntry*>& in_targets,
                                                       const rapidjson::Value& exprs,
+                                                      const rapidjson::Value& fields,
                                                       CalciteAdapter& calcite_adapter) {
   CHECK(exprs.IsArray());
+  CHECK(fields.IsArray());
+  CHECK_EQ(exprs.Size(), fields.Size());
   std::vector<Analyzer::TargetEntry*> result;
   if (in_targets.empty()) {
-    for (auto exprs_it = exprs.Begin(); exprs_it != exprs.End(); ++exprs_it) {
+    auto fields_it = fields.Begin();
+    for (auto exprs_it = exprs.Begin(); exprs_it != exprs.End(); ++exprs_it, ++fields_it) {
       const auto proj_expr = calcite_adapter.getExprFromNode(*exprs_it, in_targets);
-      result.push_back(new Analyzer::TargetEntry("", proj_expr, false));
+      CHECK(fields_it != exprs.End());
+      CHECK(fields_it->IsString());
+      result.push_back(new Analyzer::TargetEntry(fields_it->GetString(), proj_expr, false));
     }
   } else {
     result = in_targets;
@@ -561,9 +567,10 @@ bool needs_result_plan(const rapidjson::Value& exprs) {
 std::vector<Analyzer::TargetEntry*> build_var_refs(const std::vector<Analyzer::TargetEntry*>& in_targets) {
   std::vector<Analyzer::TargetEntry*> var_refs_to_in_targets;
   for (size_t i = 1; i <= in_targets.size(); ++i) {
+    const auto target = in_targets[i - 1];
     var_refs_to_in_targets.push_back(new Analyzer::TargetEntry(
-        "",
-        makeExpr<Analyzer::Var>(in_targets[i - 1]->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, i),
+        target->get_resname(),
+        makeExpr<Analyzer::Var>(target->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, i),
         false));
   }
   return var_refs_to_in_targets;
@@ -571,12 +578,18 @@ std::vector<Analyzer::TargetEntry*> build_var_refs(const std::vector<Analyzer::T
 
 std::vector<Analyzer::TargetEntry*> build_result_plan_targets(const std::vector<Analyzer::TargetEntry*>& in_targets,
                                                               const rapidjson::Value& exprs,
+                                                              const rapidjson::Value& fields,
                                                               CalciteAdapter& calcite_adapter) {
   const auto var_refs_to_in_targets = build_var_refs(in_targets);
   std::vector<Analyzer::TargetEntry*> result;
-  for (auto exprs_it = exprs.Begin(); exprs_it != exprs.End(); ++exprs_it) {
+  CHECK(fields.IsArray());
+  CHECK_EQ(exprs.Size(), fields.Size());
+  auto fields_it = fields.Begin();
+  for (auto exprs_it = exprs.Begin(); exprs_it != exprs.End(); ++exprs_it, ++fields_it) {
     const auto analyzer_expr = calcite_adapter.getExprFromNode(*exprs_it, var_refs_to_in_targets);
-    result.push_back(new Analyzer::TargetEntry("", analyzer_expr, false));
+    CHECK(fields_it != exprs.End());
+    CHECK(fields_it->IsString());
+    result.push_back(new Analyzer::TargetEntry(fields_it->GetString(), analyzer_expr, false));
   }
   return result;
 }
@@ -595,8 +608,12 @@ std::vector<Analyzer::TargetEntry*> handle_logical_project(std::vector<Analyzer:
                                                            const rapidjson::Value& logical_project,
                                                            CalciteAdapter& calcite_adapter) {
   const auto exprs_mem_it = logical_project.FindMember("exprs");
+  CHECK(exprs_mem_it != logical_project.MemberEnd());
   const auto& exprs = exprs_mem_it->value;
-  auto result = get_input_targets(in_targets, exprs, calcite_adapter);
+  const auto fields_mem_it = logical_project.FindMember("fields");
+  CHECK(fields_mem_it != logical_project.MemberEnd());
+  const auto& fields = fields_mem_it->value;
+  auto result = get_input_targets(in_targets, exprs, fields, calcite_adapter);
   if (in_targets.empty()) {  // source scan was the table itself
     return result;
   }
@@ -605,7 +622,7 @@ std::vector<Analyzer::TargetEntry*> handle_logical_project(std::vector<Analyzer:
     if (!targets_are_refs(result)) {
       child_plan_targets = result;
     }
-    return build_result_plan_targets(result, exprs, calcite_adapter);
+    return build_result_plan_targets(result, exprs, fields, calcite_adapter);
   } else {  // just target permutation. no need to create a result plan
     const auto reproj_indices = collect_reproject_indices(exprs);
     reproject_target_entries(result, reproj_indices);
@@ -627,14 +644,23 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
     groupby_exprs.push_back(in_targets[target_idx]->get_expr()->deep_copy());
   }
   CHECK(agg_nodes.IsArray());
-  for (auto group_nodes_it = group_nodes.Begin(); group_nodes_it != group_nodes.End(); ++group_nodes_it) {
+  const auto& fields = logical_aggregate["fields"];
+  CHECK(fields.IsArray());
+  auto fields_it = fields.Begin();
+  for (auto group_nodes_it = group_nodes.Begin(); group_nodes_it != group_nodes.End(); ++group_nodes_it, ++fields_it) {
     CHECK(group_nodes_it->IsInt());
     const int target_idx = group_nodes_it->GetInt();
-    result.push_back(new Analyzer::TargetEntry("", in_targets[target_idx]->get_own_expr(), false));
+    const auto target = in_targets[target_idx];
+    CHECK(fields_it != fields.End());
+    CHECK(fields_it->IsString());
+    CHECK_EQ(target->get_resname(), fields_it->GetString());
+    result.push_back(new Analyzer::TargetEntry(target->get_resname(), target->get_own_expr(), false));
   }
-  for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it) {
+  for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it, ++fields_it) {
     auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, in_targets);
-    result.push_back(new Analyzer::TargetEntry("", agg_expr, false));
+    CHECK(fields_it != fields.End());
+    CHECK(fields_it->IsString());
+    result.push_back(new Analyzer::TargetEntry(fields_it->GetString(), agg_expr, false));
   }
   return result;
 }
