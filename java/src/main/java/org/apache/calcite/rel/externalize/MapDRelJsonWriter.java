@@ -2,6 +2,7 @@ package org.apache.calcite.rel.externalize;
 
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelWriter;
+import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlExplainLevel;
@@ -51,6 +52,9 @@ public class MapDRelJsonWriter implements RelWriter {
       RelDataType row_type = ((LogicalTableScan) rel).getTable().getRowType();
       List<String> field_names = row_type.getFieldNames();
       map.put("fieldNames", field_names);
+    }
+    if (rel instanceof LogicalAggregate) {
+      map.put("fields", rel.getRowType().getFieldNames());
     }
     for (Pair<String, Object> value : values) {
       if (value.right instanceof RelNode) {
