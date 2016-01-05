@@ -26,6 +26,7 @@ import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
+import org.apache.calcite.avatica.util.TimeUnitRange;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.JsonBuilder;
 import org.apache.calcite.util.Util;
@@ -289,7 +290,11 @@ public class MapDRelJson {
       final RexLiteral literal = (RexLiteral) node;
       final Object value2 = literal.getValue2();
       map = jsonBuilder.map();
-      map.put("literal", value2);
+      if (value2 instanceof TimeUnitRange) {
+        map.put("literal", value2.toString());
+      } else {
+        map.put("literal", value2);
+      }
       map.put("type", literal.getTypeName().name());
       map.put("scale", literal.getType().getScale());
       map.put("precision", literal.getType().getPrecision());
