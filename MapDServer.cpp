@@ -1141,8 +1141,13 @@ class MapDHandler : virtual public MapDIf {
           return;
         } catch (InvalidParseRequest& e) {
           TMapDException ex;
+          LOG(ERROR) << "Calcite had an issue parsing '" << query_str << "' query: " << e.whyUp;
           ex.error_msg = std::string("Exception: ") + e.whyUp;
-          LOG(ERROR) << "Calcite had an issue " << ex.error_msg << ", sql was " << query_str;
+          throw ex;
+        } catch (std::exception& e) {
+          TMapDException ex;
+          ex.error_msg = std::string("Exception: ") + e.what();
+          LOG(ERROR) << ex.error_msg;
           throw ex;
         }
       }
