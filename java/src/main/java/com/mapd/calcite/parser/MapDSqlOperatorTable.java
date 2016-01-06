@@ -25,106 +25,105 @@ import org.apache.calcite.sql.util.ListSqlOperatorTable;
  */
 public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
-  /**
-   * Mock operator table for testing purposes. Contains the standard SQL operator table, plus a list
-   * of operators.
-   */
-  //~ Instance fields --------------------------------------------------------
-  private final ListSqlOperatorTable listOpTab;
+    /**
+     * Mock operator table for testing purposes. Contains the standard SQL
+     * operator table, plus a list of operators.
+     */
+    //~ Instance fields --------------------------------------------------------
+    private final ListSqlOperatorTable listOpTab;
 
-  //~ Constructors -----------------------------------------------------------
-  public MapDSqlOperatorTable(SqlOperatorTable parentTable) {
-    super(ImmutableList.of(parentTable, new ListSqlOperatorTable()));
-    listOpTab = (ListSqlOperatorTable) tableList.get(1);
-  }
-
-  //~ Methods ----------------------------------------------------------------
-  /**
-   * Adds an operator to this table.
-   */
-  public void addOperator(SqlOperator op) {
-    listOpTab.add(op);
-  }
-
-  // MAT Nov 11 2015
-  // These are example of how to add custom functions
-  // left in as a starting point for when we need them
-  public static void addUDF(MapDSqlOperatorTable opTab) {
-    // Don't use anonymous inner classes. They can't be instantiated
-    // using reflection when we are deserializing from JSON.
-    //opTab.addOperator(new RampFunction());
-    //opTab.addOperator(new DedupFunction());
-    opTab.addOperator(new MyUDFFunction());
-  }
-
-  /**
-   * "RAMP" user-defined function.
-   */
-  public static class RampFunction extends SqlFunction {
-
-    public RampFunction() {
-      super("RAMP",
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.NUMERIC,
-              SqlFunctionCategory.USER_DEFINED_FUNCTION);
+    //~ Constructors -----------------------------------------------------------
+    public MapDSqlOperatorTable(SqlOperatorTable parentTable) {
+        super(ImmutableList.of(parentTable, new ListSqlOperatorTable()));
+        listOpTab = (ListSqlOperatorTable) tableList.get(1);
     }
 
-    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.builder()
-              .add("I", SqlTypeName.INTEGER)
-              .build();
-    }
-  }
-
-  /**
-   * "DEDUP" user-defined function.
-   */
-  public static class DedupFunction extends SqlFunction {
-
-    public DedupFunction() {
-      super("DEDUP",
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.VARIADIC,
-              SqlFunctionCategory.USER_DEFINED_FUNCTION);
+    //~ Methods ----------------------------------------------------------------
+    /**
+     * Adds an operator to this table.
+     */
+    public void addOperator(SqlOperator op) {
+        listOpTab.add(op);
     }
 
-    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.builder()
-              .add("NAME", SqlTypeName.VARCHAR, 1024)
-              .build();
+    // MAT Nov 11 2015
+    // These are example of how to add custom functions
+    // left in as a starting point for when we need them
+    public static void addUDF(MapDSqlOperatorTable opTab) {
+        // Don't use anonymous inner classes. They can't be instantiated
+        // using reflection when we are deserializing from JSON.
+        //opTab.addOperator(new RampFunction());
+        //opTab.addOperator(new DedupFunction());
+        opTab.addOperator(new MyUDFFunction());
     }
-  }
 
-  /**
-   * "MyUDFFunction" user-defined function test.
-   * our udf's will look like system functions to calcite as it
-   * has no access to the code
-   */
+    /**
+     * "RAMP" user-defined function.
+     */
+    public static class RampFunction extends SqlFunction {
 
-  public static class MyUDFFunction extends SqlFunction {
+        public RampFunction() {
+            super("RAMP",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.NUMERIC,
+                    SqlFunctionCategory.USER_DEFINED_FUNCTION);
+        }
 
-    public MyUDFFunction() {
-      super("MyUDF",
-              SqlKind.OTHER_FUNCTION,
-              null,
-              null,
-              OperandTypes.STRING_STRING,
-              SqlFunctionCategory.SYSTEM);
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.builder()
+                    .add("I", SqlTypeName.INTEGER)
+                    .build();
+        }
     }
-    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory
-              = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+
+    /**
+     * "DEDUP" user-defined function.
+     */
+    public static class DedupFunction extends SqlFunction {
+
+        public DedupFunction() {
+            super("DEDUP",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.VARIADIC,
+                    SqlFunctionCategory.USER_DEFINED_FUNCTION);
+        }
+
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.builder()
+                    .add("NAME", SqlTypeName.VARCHAR, 1024)
+                    .build();
+        }
     }
-  }
+
+    /**
+     * "MyUDFFunction" user-defined function test. our udf's will look like
+     * system functions to calcite as it has no access to the code
+     */
+    public static class MyUDFFunction extends SqlFunction {
+
+        public MyUDFFunction() {
+            super("MyUDF",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.STRING_STRING,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BIGINT);
+        }
+    }
 }
 
 // End MapDSqlOperatorTable.java
