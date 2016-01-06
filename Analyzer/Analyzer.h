@@ -270,7 +270,6 @@ class UOper : public Expr {
       : Expr(t, o == kISNULL ? true : p->get_type_info().get_notnull()), optype(o), operand(p) {}
   SQLOps get_optype() const { return optype; }
   const Expr* get_operand() const { return operand.get(); }
-  const std::shared_ptr<Expr> get_own_operand() const { return operand; }
   virtual void check_group_by(const std::list<std::shared_ptr<Analyzer::Expr>>& groupby) const;
   virtual std::shared_ptr<Analyzer::Expr> deep_copy() const;
   virtual void group_predicates(std::list<const Expr*>& scan_predicates,
