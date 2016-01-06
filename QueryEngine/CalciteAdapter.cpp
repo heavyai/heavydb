@@ -206,11 +206,27 @@ class CalciteAdapter {
     if (op_str == std::string("ITEM")) {
       return translateItem(expr, scan_targets);
     }
-    if (op_str == std::string("NOW")) {
-      return translateNow();
-    }
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
+    if (op_str == std::string("NOW")) {
+      CHECK_EQ(unsigned(0), operands.Size());
+      return translateNow();
+    }
+    if (op_str == std::string("DATETIME")) {
+      CHECK_EQ(unsigned(1), operands.Size());
+      const auto& now_lit = operands[0];
+      const std::string datetime_err{R"(Only DATETIME('NOW') supported for now.)"};
+      if (!now_lit.IsObject() || !now_lit.HasMember("literal")) {
+        throw std::runtime_error(datetime_err);
+      }
+      const auto now_lit_expr = std::dynamic_pointer_cast<const Analyzer::Constant>(translateTypedLiteral(now_lit));
+      CHECK(now_lit_expr);
+      CHECK(now_lit_expr->get_type_info().is_string());
+      if (*now_lit_expr->get_constval().stringval != std::string("NOW")) {
+        throw std::runtime_error(datetime_err);
+      }
+      return translateNow();
+    }
     if (operands.Size() == 1) {
       return translateUnaryOp(expr, scan_targets);
     }
