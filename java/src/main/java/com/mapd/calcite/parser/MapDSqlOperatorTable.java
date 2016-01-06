@@ -63,6 +63,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Datetime());
         opTab.addOperator(new PgExtract());
         opTab.addOperator(new PgDateTrunc());
+        opTab.addOperator(new Length());
+        opTab.addOperator(new CharLength());
     }
 
     /**
@@ -236,6 +238,42 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
+        }
+    }
+
+    public static class Length extends SqlFunction {
+        public Length() {
+            super("LENGTH",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.STRING,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
+        }
+    }
+
+    public static class CharLength extends SqlFunction {
+        public CharLength() {
+            super("CHAR_LENGTH",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.STRING,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.INTEGER);
         }
     }
 }

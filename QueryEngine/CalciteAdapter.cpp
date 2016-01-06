@@ -233,6 +233,11 @@ class CalciteAdapter {
     if (op_str == std::string("PG_EXTRACT") || op_str == std::string("PG_DATE_TRUNC")) {
       return translateExtract(operands, scan_targets, op_str == std::string("PG_DATE_TRUNC"));
     }
+    if (op_str == std::string("LENGTH") || op_str == std::string("CHAR_LENGTH")) {
+      CHECK_EQ(unsigned(1), operands.Size());
+      auto str_arg = getExprFromNode(operands[0], scan_targets);
+      return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(), op_str == std::string("CHAR_LENGTH"));
+    }
     if (operands.Size() == 1) {
       return translateUnaryOp(expr, scan_targets);
     }
