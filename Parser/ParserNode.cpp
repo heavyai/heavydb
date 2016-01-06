@@ -697,44 +697,19 @@ std::string ExtractExpr::to_string() const {
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                        Analyzer::Query& query,
                                                        TlistRefType allow_tlist_ref) const {
-  DatetruncField fieldno;
-  if (boost::iequals(*field, "year"))
-    fieldno = dtYEAR;
-  else if (boost::iequals(*field, "quarter"))
-    fieldno = dtQUARTER;
-  else if (boost::iequals(*field, "month"))
-    fieldno = dtMONTH;
-  else if (boost::iequals(*field, "quarterday"))
-    fieldno = dtQUARTERDAY;
-  else if (boost::iequals(*field, "day"))
-    fieldno = dtDAY;
-  else if (boost::iequals(*field, "hour"))
-    fieldno = dtHOUR;
-  else if (boost::iequals(*field, "minute"))
-    fieldno = dtMINUTE;
-  else if (boost::iequals(*field, "second"))
-    fieldno = dtSECOND;
-  else if (boost::iequals(*field, "millennium"))
-    fieldno = dtMILLENNIUM;
-  else if (boost::iequals(*field, "century"))
-    fieldno = dtCENTURY;
-  else if (boost::iequals(*field, "decade"))
-    fieldno = dtDECADE;
-  else if (boost::iequals(*field, "millisecond"))
-    fieldno = dtMILLISECOND;
-  else if (boost::iequals(*field, "microsecond"))
-    fieldno = dtMICROSECOND;
-  else if (boost::iequals(*field, "week"))
-    fieldno = dtWEEK;
-  else
-    throw std::runtime_error("Invalid field in DATE_TRUNC function " + *field);
   auto from_expr = from_arg->analyze(catalog, query, allow_tlist_ref);
+  return get(from_expr, *field);
+}
+
+std::shared_ptr<Analyzer::Expr> DatetruncExpr::get(const std::shared_ptr<Analyzer::Expr> from_expr,
+                                                   const std::string& field) {
+  const auto fieldno = to_date_trunc_field(field);
   if (!from_expr->get_type_info().is_time())
     throw std::runtime_error("Only TIME, TIMESTAMP and DATE types can be in DATE_TRUNC function.");
   switch (from_expr->get_type_info().get_type()) {
     case kTIME:
       if (fieldno != dtHOUR && fieldno != dtMINUTE && fieldno != dtSECOND)
-        throw std::runtime_error("Cannot DATE_TRUNC " + *field + " from TIME.");
+        throw std::runtime_error("Cannot DATE_TRUNC " + field + " from TIME.");
       break;
     default:
       break;
@@ -749,6 +724,42 @@ std::shared_ptr<Analyzer::Expr> DatetruncExpr::analyze(const Catalog_Namespace::
     return c;
   }
   return makeExpr<Analyzer::DatetruncExpr>(ti, from_expr->get_contains_agg(), fieldno, from_expr->decompress());
+}
+
+DatetruncField DatetruncExpr::to_date_trunc_field(const std::string& field) {
+  // TODO(alex): unify with the similar function in ExtractExpr?
+  DatetruncField fieldno;
+  if (boost::iequals(field, "year"))
+    fieldno = dtYEAR;
+  else if (boost::iequals(field, "quarter"))
+    fieldno = dtQUARTER;
+  else if (boost::iequals(field, "month"))
+    fieldno = dtMONTH;
+  else if (boost::iequals(field, "quarterday"))
+    fieldno = dtQUARTERDAY;
+  else if (boost::iequals(field, "day"))
+    fieldno = dtDAY;
+  else if (boost::iequals(field, "hour"))
+    fieldno = dtHOUR;
+  else if (boost::iequals(field, "minute"))
+    fieldno = dtMINUTE;
+  else if (boost::iequals(field, "second"))
+    fieldno = dtSECOND;
+  else if (boost::iequals(field, "millennium"))
+    fieldno = dtMILLENNIUM;
+  else if (boost::iequals(field, "century"))
+    fieldno = dtCENTURY;
+  else if (boost::iequals(field, "decade"))
+    fieldno = dtDECADE;
+  else if (boost::iequals(field, "millisecond"))
+    fieldno = dtMILLISECOND;
+  else if (boost::iequals(field, "microsecond"))
+    fieldno = dtMICROSECOND;
+  else if (boost::iequals(field, "week"))
+    fieldno = dtWEEK;
+  else
+    throw std::runtime_error("Invalid field in DATE_TRUNC function " + field);
+  return fieldno;
 }
 
 std::string DatetruncExpr::to_string() const {

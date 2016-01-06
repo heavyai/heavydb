@@ -116,6 +116,9 @@ SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("BOOLEAN")) {
     return kBOOLEAN;
   }
+  if (type_name == std::string("TIMESTAMP")) {
+    return kTIMESTAMP;
+  }
   if (type_name == std::string("NULL")) {
     return kNULLT;
   }
@@ -227,8 +230,8 @@ class CalciteAdapter {
       }
       return translateNow();
     }
-    if (op_str == std::string("PG_EXTRACT")) {
-      return translateExtract(operands, scan_targets);
+    if (op_str == std::string("PG_EXTRACT") || op_str == std::string("PG_DATE_TRUNC")) {
+      return translateExtract(operands, scan_targets, op_str == std::string("PG_DATE_TRUNC"));
     }
     if (operands.Size() == 1) {
       return translateUnaryOp(expr, scan_targets);
@@ -319,7 +322,8 @@ class CalciteAdapter {
   std::shared_ptr<Analyzer::Expr> translateNow() { return Parser::TimestampLiteral::get(now_); }
 
   std::shared_ptr<Analyzer::Expr> translateExtract(const rapidjson::Value& operands,
-                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets,
+                                                   const bool is_date_trunc) {
     CHECK(operands.IsArray());
     CHECK_EQ(unsigned(2), operands.Size());
     const auto& timeunit_lit = operands[0];
@@ -329,7 +333,8 @@ class CalciteAdapter {
     const auto timeunit_lit_expr =
         std::dynamic_pointer_cast<const Analyzer::Constant>(translateTypedLiteral(timeunit_lit));
     const auto from_expr = getExprFromNode(operands[1], scan_targets);
-    return Parser::ExtractExpr::get(from_expr, *timeunit_lit_expr->get_constval().stringval);
+    return is_date_trunc ? Parser::DatetruncExpr::get(from_expr, *timeunit_lit_expr->get_constval().stringval)
+                         : Parser::ExtractExpr::get(from_expr, *timeunit_lit_expr->get_constval().stringval);
   }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr,

@@ -62,6 +62,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new Now());
         opTab.addOperator(new Datetime());
         opTab.addOperator(new PgExtract());
+        opTab.addOperator(new PgDateTrunc());
     }
 
     /**
@@ -215,6 +216,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.BIGINT);
+        }
+    }
+
+    /* Postgres-style DATE_TRUNC */
+    public static class PgDateTrunc extends SqlFunction {
+
+        public PgDateTrunc() {
+            super("PG_DATE_TRUNC",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
         }
     }
 }
