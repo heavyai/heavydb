@@ -677,7 +677,10 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
     CHECK_EQ(target->get_resname(), fields_it->GetString());
     const auto uoper_expr = dynamic_cast<const Analyzer::UOper*>(target->get_expr());
     if (uoper_expr && uoper_expr->get_optype() == kUNNEST) {
-      result.push_back(new Analyzer::TargetEntry(target->get_resname(), uoper_expr->get_own_operand(), true));
+      // TODO(alex): we should always create a reference to the group by column, not just for UNNEST
+      auto group_var_ref = makeExpr<Analyzer::Var>(
+          uoper_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, group_nodes_it - group_nodes.Begin() + 1);
+      result.push_back(new Analyzer::TargetEntry(target->get_resname(), group_var_ref, true));
     } else {
       result.push_back(new Analyzer::TargetEntry(target->get_resname(), target->get_own_expr(), false));
     }
