@@ -614,40 +614,19 @@ std::string CaseExpr::to_string() const {
 std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Catalog& catalog,
                                                      Analyzer::Query& query,
                                                      TlistRefType allow_tlist_ref) const {
-  ExtractField fieldno;
-  if (boost::iequals(*field, "year"))
-    fieldno = kYEAR;
-  else if (boost::iequals(*field, "quarter"))
-    fieldno = kQUARTER;
-  else if (boost::iequals(*field, "month"))
-    fieldno = kMONTH;
-  else if (boost::iequals(*field, "day"))
-    fieldno = kDAY;
-  else if (boost::iequals(*field, "quarterday"))
-    fieldno = kQUARTERDAY;
-  else if (boost::iequals(*field, "hour"))
-    fieldno = kHOUR;
-  else if (boost::iequals(*field, "minute"))
-    fieldno = kMINUTE;
-  else if (boost::iequals(*field, "second"))
-    fieldno = kSECOND;
-  else if (boost::iequals(*field, "dow"))
-    fieldno = kDOW;
-  else if (boost::iequals(*field, "isodow"))
-    fieldno = kISODOW;
-  else if (boost::iequals(*field, "doy"))
-    fieldno = kDOY;
-  else if (boost::iequals(*field, "epoch"))
-    fieldno = kEPOCH;
-  else
-    throw std::runtime_error("Invalid field in EXTRACT function " + *field);
   auto from_expr = from_arg->analyze(catalog, query, allow_tlist_ref);
+  return get(from_expr, *field);
+}
+
+std::shared_ptr<Analyzer::Expr> ExtractExpr::get(const std::shared_ptr<Analyzer::Expr> from_expr,
+                                                 const std::string& field) {
+  const auto fieldno = to_extract_field(field);
   if (!from_expr->get_type_info().is_time())
     throw std::runtime_error("Only TIME, TIMESTAMP and DATE types can be in EXTRACT function.");
   switch (from_expr->get_type_info().get_type()) {
     case kTIME:
       if (fieldno != kHOUR && fieldno != kMINUTE && fieldno != kSECOND)
-        throw std::runtime_error("Cannot EXTRACT " + *field + " from TIME.");
+        throw std::runtime_error("Cannot EXTRACT " + field + " from TIME.");
       break;
     default:
       break;
@@ -662,6 +641,37 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::analyze(const Catalog_Namespace::Ca
     return c;
   }
   return makeExpr<Analyzer::ExtractExpr>(ti, from_expr->get_contains_agg(), fieldno, from_expr->decompress());
+}
+
+ExtractField ExtractExpr::to_extract_field(const std::string& field) {
+  ExtractField fieldno;
+  if (boost::iequals(field, "year"))
+    fieldno = kYEAR;
+  else if (boost::iequals(field, "quarter"))
+    fieldno = kQUARTER;
+  else if (boost::iequals(field, "month"))
+    fieldno = kMONTH;
+  else if (boost::iequals(field, "day"))
+    fieldno = kDAY;
+  else if (boost::iequals(field, "quarterday"))
+    fieldno = kQUARTERDAY;
+  else if (boost::iequals(field, "hour"))
+    fieldno = kHOUR;
+  else if (boost::iequals(field, "minute"))
+    fieldno = kMINUTE;
+  else if (boost::iequals(field, "second"))
+    fieldno = kSECOND;
+  else if (boost::iequals(field, "dow"))
+    fieldno = kDOW;
+  else if (boost::iequals(field, "isodow"))
+    fieldno = kISODOW;
+  else if (boost::iequals(field, "doy"))
+    fieldno = kDOY;
+  else if (boost::iequals(field, "epoch"))
+    fieldno = kEPOCH;
+  else
+    throw std::runtime_error("Invalid field in EXTRACT function " + field);
+  return fieldno;
 }
 
 std::string ExtractExpr::to_string() const {

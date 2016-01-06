@@ -15,6 +15,7 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.type.OperandTypes;
+import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
@@ -60,6 +61,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new PgUnnest());
         opTab.addOperator(new Now());
         opTab.addOperator(new Datetime());
+        opTab.addOperator(new PgExtract());
     }
 
     /**
@@ -193,6 +195,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
+        }
+    }
+
+    /* Postgres-style EXTRACT */
+    public static class PgExtract extends SqlFunction {
+
+        public PgExtract() {
+            super("PG_EXTRACT",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(SqlTypeFamily.STRING, SqlTypeFamily.DATETIME),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BIGINT);
         }
     }
 }
