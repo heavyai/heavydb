@@ -160,6 +160,7 @@ std::pair<const rapidjson::Value&, SQLTypeInfo> parse_literal(const rapidjson::V
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat, const rapidjson::Value& rels) : cat_(cat) {
+    time(&now_);
     CHECK(rels.IsArray());
     for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
       const auto& scan_ra = *rels_it;
@@ -170,6 +171,10 @@ class CalciteAdapter {
       col_names_.emplace_back(ColNames{getColNames(scan_ra), getTableFromScanNode(scan_ra)});
     }
   }
+
+  CalciteAdapter(const CalciteAdapter&) = delete;
+
+  CalciteAdapter& operator=(const CalciteAdapter&) = delete;
 
   std::shared_ptr<Analyzer::Expr> getExprFromNode(const rapidjson::Value& expr,
                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets) {
@@ -200,6 +205,9 @@ class CalciteAdapter {
     }
     if (op_str == std::string("ITEM")) {
       return translateItem(expr, scan_targets);
+    }
+    if (op_str == std::string("NOW")) {
+      return translateNow();
     }
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
@@ -288,6 +296,8 @@ class CalciteAdapter {
     auto index = getExprFromNode(operands[1], scan_targets);
     return makeExpr<Analyzer::BinOper>(base->get_type_info().get_elem_type(), false, kARRAY_AT, kONE, base, index);
   }
+
+  std::shared_ptr<Analyzer::Expr> translateNow() { return Parser::TimestampLiteral::get(now_); }
 
   std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr,
                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets) {
@@ -419,6 +429,7 @@ class CalciteAdapter {
 
   std::unordered_map<int32_t, std::set<int>> used_columns_;
   const Catalog_Namespace::Catalog& cat_;
+  time_t now_;
   std::vector<ColNames> col_names_;
 };
 

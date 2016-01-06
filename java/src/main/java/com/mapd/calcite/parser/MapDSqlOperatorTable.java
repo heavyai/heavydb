@@ -41,6 +41,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     //~ Methods ----------------------------------------------------------------
     /**
      * Adds an operator to this table.
+     *
      * @param op
      */
     public void addOperator(SqlOperator op) {
@@ -57,6 +58,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         //opTab.addOperator(new DedupFunction());
         opTab.addOperator(new MyUDFFunction());
         opTab.addOperator(new PgUnnest());
+        opTab.addOperator(new Now());
     }
 
     /**
@@ -148,6 +150,27 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             RelDataType elem_type = opBinding.getOperandType(0).getComponentType();
             assert elem_type != null;
             return elem_type;
+        }
+    }
+
+    /* NOW() */
+    public static class Now extends SqlFunction {
+
+        public Now() {
+            super("NOW",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.NILADIC,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 0;
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
         }
     }
 }

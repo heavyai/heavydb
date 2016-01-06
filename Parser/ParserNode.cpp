@@ -100,6 +100,10 @@ std::shared_ptr<Analyzer::Expr> DoubleLiteral::analyze(const Catalog_Namespace::
 std::shared_ptr<Analyzer::Expr> TimestampLiteral::analyze(const Catalog_Namespace::Catalog& catalog,
                                                           Analyzer::Query& query,
                                                           TlistRefType allow_tlist_ref) const {
+  return get(timestampval);
+}
+
+std::shared_ptr<Analyzer::Expr> TimestampLiteral::get(const time_t timestampval) {
   Datum d;
   d.timeval = timestampval;
   return makeExpr<Analyzer::Constant>(kTIMESTAMP, false, d);
