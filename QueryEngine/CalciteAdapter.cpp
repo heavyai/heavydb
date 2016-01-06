@@ -64,6 +64,9 @@ SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string("IS NOT NULL")) {
     return kISNOTNULL;
   }
+  if (op_str == std::string("PG_UNNEST")) {
+    return kUNNEST;
+  }
   CHECK(false);
   return kEQ;
 }
@@ -236,6 +239,11 @@ class CalciteAdapter {
       case kMINUS: {
         const auto& ti = operand_expr->get_type_info();
         return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
+      }
+      case kUNNEST: {
+        const auto& ti = operand_expr->get_type_info();
+        CHECK(ti.is_array());
+        return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
       }
       default:
         CHECK(false);
@@ -667,7 +675,12 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
     CHECK(fields_it != fields.End());
     CHECK(fields_it->IsString());
     CHECK_EQ(target->get_resname(), fields_it->GetString());
-    result.push_back(new Analyzer::TargetEntry(target->get_resname(), target->get_own_expr(), false));
+    const auto uoper_expr = dynamic_cast<const Analyzer::UOper*>(target->get_expr());
+    if (uoper_expr && uoper_expr->get_optype() == kUNNEST) {
+      result.push_back(new Analyzer::TargetEntry(target->get_resname(), uoper_expr->get_own_operand(), true));
+    } else {
+      result.push_back(new Analyzer::TargetEntry(target->get_resname(), target->get_own_expr(), false));
+    }
   }
   for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it, ++fields_it) {
     auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, in_targets);

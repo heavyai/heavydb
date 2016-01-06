@@ -41,6 +41,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     //~ Methods ----------------------------------------------------------------
     /**
      * Adds an operator to this table.
+     * @param op
      */
     public void addOperator(SqlOperator op) {
         listOpTab.add(op);
@@ -55,6 +56,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         //opTab.addOperator(new RampFunction());
         //opTab.addOperator(new DedupFunction());
         opTab.addOperator(new MyUDFFunction());
+        opTab.addOperator(new PgUnnest());
     }
 
     /**
@@ -71,6 +73,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     SqlFunctionCategory.USER_DEFINED_FUNCTION);
         }
 
+        @Override
         public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
@@ -94,6 +97,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     SqlFunctionCategory.USER_DEFINED_FUNCTION);
         }
 
+        @Override
         public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
@@ -118,10 +122,32 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
                     SqlFunctionCategory.SYSTEM);
         }
 
+        @Override
         public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.BIGINT);
+        }
+    }
+
+    /* Postgres-style UNNEST */
+    public static class PgUnnest extends SqlFunction {
+
+        public PgUnnest() {
+            super("PG_UNNEST",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.ARRAY,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            RelDataType elem_type = opBinding.getOperandType(0).getComponentType();
+            assert elem_type != null;
+            return elem_type;
         }
     }
 }
