@@ -163,6 +163,18 @@ std::pair<const rapidjson::Value&, SQLTypeInfo> parse_literal(const rapidjson::V
   return {val_it->value, ti};
 }
 
+std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyzer::Expr> expr) {
+  const auto& ti = expr->get_type_info();
+  if (!ti.is_string() || ti.get_compression() != kENCODING_NONE) {
+    return expr;
+  }
+  auto transient_dict_ti = ti;
+  transient_dict_ti.set_compression(kENCODING_DICT);
+  transient_dict_ti.set_comp_param(TRANSIENT_DICT_ID);
+  transient_dict_ti.set_fixed_size();
+  return expr->add_cast(transient_dict_ti);
+}
+
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat, const rapidjson::Value& rels) : cat_(cat) {
@@ -757,7 +769,7 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
   for (auto group_nodes_it = group_nodes.Begin(); group_nodes_it != group_nodes.End(); ++group_nodes_it) {
     CHECK(group_nodes_it->IsInt());
     const int target_idx = group_nodes_it->GetInt();
-    groupby_exprs.push_back(in_targets[target_idx]->get_expr()->deep_copy());
+    groupby_exprs.push_back(set_transient_dict(in_targets[target_idx]->get_own_expr()));
   }
   CHECK(agg_nodes.IsArray());
   const auto& fields = logical_aggregate["fields"];
@@ -777,7 +789,8 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
           uoper_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, group_nodes_it - group_nodes.Begin() + 1);
       result.push_back(new Analyzer::TargetEntry(target->get_resname(), group_var_ref, true));
     } else {
-      result.push_back(new Analyzer::TargetEntry(target->get_resname(), target->get_own_expr(), false));
+      result.push_back(
+          new Analyzer::TargetEntry(target->get_resname(), set_transient_dict(target->get_own_expr()), false));
     }
   }
   for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it, ++fields_it) {
