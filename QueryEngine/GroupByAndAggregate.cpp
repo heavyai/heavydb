@@ -2043,7 +2043,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
     }
     const auto& groupby_ti = groupby_expr->get_type_info();
     if (groupby_ti.is_string() && groupby_ti.get_compression() != kENCODING_DICT) {
-      throw std::runtime_error("Group by not supported for none-encoding strings");
+      throw std::runtime_error("Cannot group by string columns which are not dictionary encoded.");
     }
   }
   bool sort_on_gpu_hint =
@@ -2102,7 +2102,7 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
       const auto agg_expr = static_cast<const Analyzer::AggExpr*>(target_expr);
       const auto& arg_ti = agg_expr->get_arg()->get_type_info();
       if (arg_ti.is_string() && arg_ti.get_compression() != kENCODING_DICT) {
-        throw std::runtime_error("Count distinct not supported for none-encoding strings");
+        throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT).");
       }
       auto arg_range_info = getExprRangeInfo(agg_expr->get_arg());
       CountDistinctImplType count_distinct_impl_type{CountDistinctImplType::StdSet};

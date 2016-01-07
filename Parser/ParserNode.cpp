@@ -461,9 +461,9 @@ std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(const Catalog_Namespace::Ca
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);
       const SQLTypeInfo& ti = arg_expr->get_type_info();
       if (ti.is_string() && (ti.get_compression() != kENCODING_DICT || !distinct))
-        throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT ).");
+        throw std::runtime_error("Strings must be dictionary-encoded in COUNT(DISTINCT).");
       if (ti.get_type() == kARRAY && !distinct)
-        throw std::runtime_error("Only COUNT(DISTINCT ) is supported on arrays.");
+        throw std::runtime_error("Only COUNT(DISTINCT) is supported on arrays.");
     }
     is_distinct = distinct;
   } else {
