@@ -324,6 +324,8 @@ class BinOper : public Expr {
   SQLQualifier get_qualifier() const { return qualifier; }
   const Expr* get_left_operand() const { return left_operand.get(); }
   const Expr* get_right_operand() const { return right_operand.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_left_operand() const { return left_operand; }
+  const std::shared_ptr<Analyzer::Expr> get_own_right_operand() const { return right_operand; }
   static SQLTypeInfo analyze_type_info(SQLOps op,
                                        const SQLTypeInfo& left_type,
                                        const SQLTypeInfo& right_type,

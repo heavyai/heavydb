@@ -802,6 +802,29 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
   return result;
 }
 
+void add_quals(const std::shared_ptr<Analyzer::Expr> qual_expr,
+               std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
+               std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
+  CHECK(qual_expr);
+  const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  if (!bin_oper) {
+    quals.push_back(qual_expr);
+    return;
+  }
+  if (bin_oper->get_optype() == kAND) {
+    add_quals(bin_oper->get_own_left_operand(), simple_quals, quals);
+    add_quals(bin_oper->get_own_right_operand(), simple_quals, quals);
+    return;
+  }
+  int rte_idx{0};
+  const auto simple_qual = bin_oper->normalize_simple_predicate(rte_idx);
+  if (simple_qual) {
+    simple_quals.push_back(simple_qual);
+  } else {
+    quals.push_back(qual_expr);
+  }
+}
+
 }  // namespace
 
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& cat) {
@@ -843,7 +866,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
         if (is_join) {
           join_quals.push_back(calcite_adapter.getExprFromNode(crt_node["condition"], {}));
         } else {
-          quals.push_back(calcite_adapter.getExprFromNode(crt_node["condition"], {}));
+          add_quals(calcite_adapter.getExprFromNode(crt_node["condition"], {}), simple_quals, quals);
         }
       } else {
         child_res_targets = res_targets;
