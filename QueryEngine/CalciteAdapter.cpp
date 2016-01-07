@@ -313,7 +313,7 @@ class CalciteAdapter {
     switch (sql_op) {
       case kCAST: {
         const auto& expr_type = expr["type"];
-        SQLTypeInfo target_ti(to_sql_type(expr_type["type"].GetString()), expr_type["nullable"].GetBool());
+        SQLTypeInfo target_ti(to_sql_type(expr_type["type"].GetString()), !expr_type["nullable"].GetBool());
         return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
       }
       case kNOT:
@@ -426,12 +426,12 @@ class CalciteAdapter {
     CHECK(expr.IsObject() && expr.HasMember("type"));
     const auto& expr_type = expr["type"];
     CHECK(expr_type.IsObject());
-    const bool is_nullable{expr_type["nullable"].GetBool()};
-    SQLTypeInfo agg_ti(to_sql_type(expr_type["type"].GetString()), is_nullable);
+    const bool not_null{!expr_type["nullable"].GetBool()};
+    SQLTypeInfo agg_ti(to_sql_type(expr_type["type"].GetString()), not_null);
     const auto operand = get_agg_operand_idx(expr);
     const auto agg_kind = to_agg_kind(expr["agg"].GetString());
     if (agg_kind == kAVG) {
-      agg_ti = SQLTypeInfo(kDOUBLE, is_nullable);
+      agg_ti = SQLTypeInfo(kDOUBLE, not_null);
     }
     const bool is_distinct = expr["distinct"].GetBool();
     const bool takes_arg = agg_kind != kCOUNT || is_distinct;
