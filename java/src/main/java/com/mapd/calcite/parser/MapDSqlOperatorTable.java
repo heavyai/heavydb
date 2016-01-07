@@ -59,6 +59,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         //opTab.addOperator(new DedupFunction());
         opTab.addOperator(new MyUDFFunction());
         opTab.addOperator(new PgUnnest());
+        opTab.addOperator(new Any());
+        opTab.addOperator(new All());
         opTab.addOperator(new Now());
         opTab.addOperator(new Datetime());
         opTab.addOperator(new PgExtract());
@@ -159,6 +161,48 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         }
     }
 
+    /* ANY qualifier */
+    public static class Any extends SqlFunction {
+
+        public Any() {
+            super("PG_ANY",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.ARRAY,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            RelDataType elem_type = opBinding.getOperandType(0).getComponentType();
+            assert elem_type != null;
+            return elem_type;
+        }
+    }
+
+    /* ALL qualifier */
+    public static class All extends SqlFunction {
+
+        public All() {
+            super("PG_ALL",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.ARRAY,
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            assert opBinding.getOperandCount() == 1;
+            RelDataType elem_type = opBinding.getOperandType(0).getComponentType();
+            assert elem_type != null;
+            return elem_type;
+        }
+    }
+
     /* NOW() */
     public static class Now extends SqlFunction {
 
@@ -242,6 +286,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     public static class Length extends SqlFunction {
+
         public Length() {
             super("LENGTH",
                     SqlKind.OTHER_FUNCTION,
@@ -260,6 +305,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     public static class CharLength extends SqlFunction {
+
         public CharLength() {
             super("CHAR_LENGTH",
                     SqlKind.OTHER_FUNCTION,

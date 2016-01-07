@@ -67,6 +67,9 @@ SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string("PG_UNNEST")) {
     return kUNNEST;
   }
+  if (op_str == std::string("PG_ANY") || op_str == std::string("PG_ALL")) {
+    throw std::runtime_error("Invalid use of " + op_str + " operator");
+  }
   CHECK(false);
   return kEQ;
 }
@@ -197,6 +200,37 @@ class CalciteAdapter {
     return nullptr;
   }
 
+  std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> getQuantifiedRhs(
+      const rapidjson::Value& rhs_op,
+      const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+    std::shared_ptr<Analyzer::Expr> rhs;
+    SQLQualifier sql_qual{kONE};
+    const auto rhs_op_it = rhs_op.FindMember("op");
+    if (rhs_op_it == rhs_op.MemberEnd()) {
+      return std::make_pair(rhs, sql_qual);
+    }
+    CHECK(rhs_op_it->value.IsString());
+    const auto& qual_str = rhs_op_it->value.GetString();
+    if (qual_str == std::string("PG_ANY") || qual_str == std::string("PG_ALL")) {
+      const auto rhs_op_operands_it = rhs_op.FindMember("operands");
+      CHECK(rhs_op_operands_it != rhs_op.MemberEnd());
+      const auto& rhs_op_operands = rhs_op_operands_it->value;
+      CHECK(rhs_op_operands.IsArray());
+      CHECK_EQ(unsigned(1), rhs_op_operands.Size());
+      rhs = getExprFromNode(rhs_op_operands[0], scan_targets);
+      sql_qual = qual_str == std::string("PG_ANY") ? kANY : kALL;
+    }
+    if (!rhs && qual_str == std::string("CAST")) {
+      const auto rhs_op_operands_it = rhs_op.FindMember("operands");
+      CHECK(rhs_op_operands_it != rhs_op.MemberEnd());
+      const auto& rhs_op_operands = rhs_op_operands_it->value;
+      CHECK(rhs_op_operands.IsArray());
+      CHECK_EQ(unsigned(1), rhs_op_operands.Size());
+      std::tie(rhs, sql_qual) = getQuantifiedRhs(rhs_op_operands[0], scan_targets);
+    }
+    return std::make_pair(rhs, sql_qual);
+  }
+
   std::shared_ptr<Analyzer::Expr> translateOp(const rapidjson::Value& expr,
                                               const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     const auto op_str = expr["op"].GetString();
@@ -244,8 +278,15 @@ class CalciteAdapter {
     CHECK_GE(operands.Size(), unsigned(2));
     auto lhs = getExprFromNode(operands[0], scan_targets);
     for (size_t i = 1; i < operands.Size(); ++i) {
-      const auto rhs = getExprFromNode(operands[i], scan_targets);
-      lhs = Parser::OperExpr::normalize(to_sql_op(op_str), kONE, lhs, rhs);
+      std::shared_ptr<Analyzer::Expr> rhs;
+      SQLQualifier sql_qual{kONE};
+      const auto& rhs_op = operands[i];
+      std::tie(rhs, sql_qual) = getQuantifiedRhs(rhs_op, scan_targets);
+      if (!rhs) {
+        rhs = getExprFromNode(rhs_op, scan_targets);
+      }
+      CHECK(rhs);
+      lhs = Parser::OperExpr::normalize(to_sql_op(op_str), sql_qual, lhs, rhs);
     }
     return lhs;
   }
