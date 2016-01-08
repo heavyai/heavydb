@@ -293,7 +293,11 @@ public class MapDRelJson {
       if (value2 instanceof TimeUnitRange) {
         map.put("literal", value2.toString());
       } else {
-        map.put("literal", value2);
+        if (value2 instanceof String) {
+          map.put("literal", ((String) value2).replace("\\", "\\\\"));
+        } else {
+          map.put("literal", value2);
+        }
       }
       map.put("type", literal.getTypeName().name());
       map.put("scale", literal.getType().getScale());
