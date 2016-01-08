@@ -231,6 +231,15 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
     )
   install(FILES ${CMAKE_BINARY_DIR}/MapDBetaGuide.pdf ${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf DESTINATION docs)
 endif()
+install(FILES MapDBetaGuide.md MapDInstallGuide.md DESTINATION docs)
+
+# systemd
+if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  install(FILES systemd/mapd_server.service.in systemd/mapd_server@.service.in DESTINATION systemd)
+  install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
+  install(FILES systemd/mapd.conf.in DESTINATION systemd)
+  install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
+endif()
 
 if(ENABLE_CALCITE)
   ## mvn process for java code
@@ -252,7 +261,6 @@ if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
 endif()
 install(FILES mapd.thrift DESTINATION ".")
-install(FILES MapDBetaGuide.md DESTINATION docs)
 
 if(NOT PREFER_STATIC_LIBS)
   install(FILES ${Boost_LIBRARIES} DESTINATION thirdparty)
