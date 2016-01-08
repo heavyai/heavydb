@@ -226,9 +226,10 @@ find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
 if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
   add_custom_target(docs ALL
     COMMAND pandoc --output=${CMAKE_BINARY_DIR}/MapDBetaGuide.pdf ${CMAKE_SOURCE_DIR}/MapDBetaGuide.md
-    SOURCES MapDBetaGuide.md
+    COMMAND pandoc --output=${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf ${CMAKE_SOURCE_DIR}/MapDInstallGuide.md
+    SOURCES MapDBetaGuide.md MapDInstallGuide.md
     )
-  install(FILES ${CMAKE_BINARY_DIR}/MapDBetaGuide.pdf DESTINATION docs)
+  install(FILES ${CMAKE_BINARY_DIR}/MapDBetaGuide.pdf ${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf DESTINATION docs)
 endif()
 
 if(ENABLE_CALCITE)
