@@ -31,8 +31,8 @@ void SysCatalog::initDB() {
   sqliteConnector_.query(
       "CREATE TABLE mapd_users (userid integer primary key, name text unique, passwd text, issuper boolean)");
   sqliteConnector_.query_with_text_params(
-      string("INSERT INTO mapd_users VALUES (") + MAPD_ROOT_USER_ID_STR + ", ?, ?, 1)",
-      std::vector<std::string>{MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT});
+      "INSERT INTO mapd_users VALUES (?, ?, ?, 1)",
+      std::vector<std::string>{MAPD_ROOT_USER_ID_STR, MAPD_ROOT_USER, MAPD_ROOT_PASSWD_DEFAULT});
   sqliteConnector_.query(
       "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner integer references mapd_users)");
   createDatabase("mapd", MAPD_ROOT_USER_ID);
@@ -42,9 +42,8 @@ void SysCatalog::createUser(const string& name, const string& passwd, bool issup
   UserMetadata user;
   if (getMetadataForUser(name, user))
     throw runtime_error("User " + name + " already exists.");
-  sqliteConnector_.query_with_text_params(
-      "INSERT INTO mapd_users (name, passwd, issuper) VALUES (?, ?, " + std::to_string(issuper) + ")",
-      std::vector<std::string>{name, passwd});
+  sqliteConnector_.query_with_text_params("INSERT INTO mapd_users (name, passwd, issuper) VALUES (?, ?, ?)",
+                                          std::vector<std::string>{name, passwd, std::to_string(issuper)});
 }
 
 void SysCatalog::dropUser(const string& name) {
@@ -56,15 +55,16 @@ void SysCatalog::dropUser(const string& name) {
 
 void SysCatalog::alterUser(const int32_t userid, const string* passwd, bool* is_superp) {
   if (passwd != nullptr && is_superp != nullptr)
-    sqliteConnector_.query_with_text_param("UPDATE mapd_users SET passwd = ?, issuper = " + std::to_string(*is_superp) +
-                                               " WHERE userid = " + std::to_string(userid),
-                                           *passwd);
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_users SET passwd = ?, issuper = ? WHERE userid = ?",
+        std::vector<std::string>{*passwd, std::to_string(*is_superp), std::to_string(userid)});
   else if (passwd != nullptr)
-    sqliteConnector_.query_with_text_param("UPDATE mapd_users SET passwd = ? WHERE userid = " + std::to_string(userid),
-                                           *passwd);
+    sqliteConnector_.query_with_text_params("UPDATE mapd_users SET passwd = ? WHERE userid = ?",
+                                            std::vector<std::string>{*passwd, std::to_string(userid)});
   else if (is_superp != nullptr)
-    sqliteConnector_.query("UPDATE mapd_users SET issuper = " + std::to_string(*is_superp) + " WHERE userid = " +
-                           std::to_string(userid));
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_users SET issuper = ? WHERE userid = ?",
+        std::vector<std::string>{std::to_string(*is_superp), std::to_string(userid)});
 }
 
 void SysCatalog::createDatabase(const string& name, int owner) {
@@ -98,7 +98,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
 
 void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  sqliteConnector_.query("DELETE FROM mapd_databases WHERE dbid = " + std::to_string(dbid));
+  sqliteConnector_.query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?", std::to_string(dbid));
   boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
   ChunkKey chunkKeyPrefix = {dbid};
   dataMgr_->deleteChunksWithPrefix(chunkKeyPrefix);
@@ -580,23 +580,29 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
   list<DictDescriptor> dds;
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_param(
+    sqliteConnector_.query_with_text_params(
         "INSERT INTO mapd_tables (name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, "
-        "max_rows, partitions) VALUES (?, " +
-            std::to_string(columns.size()) + ", " + std::to_string(td.isView) + ", '', " + std::to_string(td.fragType) +
-            ", " + std::to_string(td.maxFragRows) + ", " + std::to_string(td.fragPageSize) + "," +
-            std::to_string(td.maxRows) + ", '')",
-        td.tableName);
+        "max_rows, partitions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        std::vector<std::string>{td.tableName,
+                                 std::to_string(columns.size()),
+                                 std::to_string(td.isView),
+                                 "",
+                                 std::to_string(td.fragType),
+                                 std::to_string(td.maxFragRows),
+                                 std::to_string(td.fragPageSize),
+                                 std::to_string(td.maxRows),
+                                 ""});
     // now get the auto generated tableid
-    sqliteConnector_.query("SELECT tableid FROM mapd_tables WHERE name = '" + td.tableName + "'");
+    sqliteConnector_.query_with_text_param("SELECT tableid FROM mapd_tables WHERE name = ?", td.tableName);
     td.tableId = sqliteConnector_.getData<int>(0, 0);
     int colId = 1;
     for (auto cd : columns) {
       if (cd.columnType.get_compression() == kENCODING_DICT) {
         std::string dictName = td.tableName + "_" + cd.columnName + "_dict";
-        sqliteConnector_.query("INSERT INTO mapd_dictionaries (name, nbits, is_shared) VALUES ('" + dictName + "', " +
-                               std::to_string(cd.columnType.get_comp_param()) + ", 0)");
-        sqliteConnector_.query("SELECT dictid FROM mapd_dictionaries WHERE name = '" + dictName + "'");
+        sqliteConnector_.query_with_text_params(
+            "INSERT INTO mapd_dictionaries (name, nbits, is_shared) VALUES (?, ?, ?)",
+            std::vector<std::string>{dictName, std::to_string(cd.columnType.get_comp_param()), "0"});
+        sqliteConnector_.query_with_text_param("SELECT dictid FROM mapd_dictionaries WHERE name = ?", dictName);
         int dictId = sqliteConnector_.getData<int>(0, 0);
         std::string folderPath = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
         DictDescriptor dd(dictId, dictName, cd.columnType.get_comp_param(), false, folderPath);
@@ -606,25 +612,37 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
         }
         cd.columnType.set_comp_param(dictId);
       }
-      sqliteConnector_.query(
+      sqliteConnector_.query_with_text_params(
           "INSERT INTO mapd_columns (tableid, columnid, name, coltype, colsubtype, coldim, colscale, is_notnull, "
-          "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (" +
-          std::to_string(td.tableId) + ", " + std::to_string(colId) + ", '" + cd.columnName + "', " +
-          std::to_string(cd.columnType.get_type()) + ", " + std::to_string(cd.columnType.get_subtype()) + ", " +
-          std::to_string(cd.columnType.get_dimension()) + ", " + std::to_string(cd.columnType.get_scale()) + ", " +
-          std::to_string(cd.columnType.get_notnull()) + ", " + std::to_string(cd.columnType.get_compression()) + ", " +
-          std::to_string(cd.columnType.get_comp_param()) + ", " + std::to_string(cd.columnType.get_size()) + ",''," +
-          std::to_string(cd.isSystemCol) + "," + std::to_string(cd.isVirtualCol) + ",'" + cd.virtualExpr + "')");
+          "compression, comp_param, size, chunks, is_systemcol, is_virtualcol, virtual_expr) VALUES (?, ?, ?, ?, ?, ?, "
+          "?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          std::vector<std::string>{std::to_string(td.tableId),
+                                   std::to_string(colId),
+                                   cd.columnName,
+                                   std::to_string(cd.columnType.get_type()),
+                                   std::to_string(cd.columnType.get_subtype()),
+                                   std::to_string(cd.columnType.get_dimension()),
+                                   std::to_string(cd.columnType.get_scale()),
+                                   std::to_string(cd.columnType.get_notnull()),
+                                   std::to_string(cd.columnType.get_compression()),
+                                   std::to_string(cd.columnType.get_comp_param()),
+                                   std::to_string(cd.columnType.get_size()),
+                                   "",
+                                   std::to_string(cd.isSystemCol),
+                                   std::to_string(cd.isVirtualCol),
+                                   cd.virtualExpr});
       cd.tableId = td.tableId;
       cd.columnId = colId++;
       cds.push_back(cd);
     }
     if (td.isView) {
-      sqliteConnector_.query_with_text_param(
-          "INSERT INTO mapd_views (tableid, sql, materialized, storage, refresh) VALUES (" +
-              std::to_string(td.tableId) + ", ?, " + std::to_string(td.isMaterialized) + ", " +
-              std::to_string(td.storageOption) + ", " + std::to_string(td.refreshOption) + ")",
-          td.viewSQL);
+      sqliteConnector_.query_with_text_params(
+          "INSERT INTO mapd_views (tableid, sql, materialized, storage, refresh) VALUES (?,?,?,?,?)",
+          std::vector<std::string>{std::to_string(td.tableId),
+                                   td.viewSQL,
+                                   std::to_string(td.isMaterialized),
+                                   std::to_string(td.storageOption),
+                                   std::to_string(td.refreshOption)});
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -637,13 +655,14 @@ void Catalog::createTable(TableDescriptor& td, const list<ColumnDescriptor>& col
 void Catalog::dropTable(const TableDescriptor* td) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query("DELETE FROM mapd_tables WHERE tableid = " + std::to_string(td->tableId));
-    sqliteConnector_.query(
-        "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = " +
-        std::to_string(kENCODING_DICT) + " and tableid = " + std::to_string(td->tableId) + ")");
-    sqliteConnector_.query("DELETE FROM mapd_columns WHERE tableid = " + std::to_string(td->tableId));
+    sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?", std::to_string(td->tableId));
+    sqliteConnector_.query_with_text_params(
+        "DELETE FROM mapd_dictionaries WHERE dictid in (select comp_param from mapd_columns where compression = ? and "
+        "tableid = ?)",
+        std::vector<std::string>{std::to_string(kENCODING_DICT), std::to_string(td->tableId)});
+    sqliteConnector_.query_with_text_param("DELETE FROM mapd_columns WHERE tableid = ?", std::to_string(td->tableId));
     if (td->isView)
-      sqliteConnector_.query("DELETE FROM mapd_views WHERE tableid = " + std::to_string(td->tableId));
+      sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?", std::to_string(td->tableId));
     // must destroy fragmenter before deleteChunks is called.
     if (td->fragmenter != nullptr) {
       auto tableDescIt = tableDescriptorMapById_.find(td->tableId);
@@ -666,8 +685,8 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
   std::lock_guard<std::mutex> lock(cat_mutex_);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_param(
-        "UPDATE mapd_tables SET name = ? WHERE tableid = " + std::to_string(td->tableId), newTableName);
+    sqliteConnector_.query_with_text_params("UPDATE mapd_tables SET name = ? WHERE tableid = ?",
+                                            std::vector<std::string>{newTableName, std::to_string(td->tableId)});
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -685,10 +704,9 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
 void Catalog::renameColumn(const TableDescriptor* td, const ColumnDescriptor* cd, const string& newColumnName) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    sqliteConnector_.query_with_text_param("UPDATE mapd_columns SET name = ? WHERE tableid = " +
-                                               std::to_string(td->tableId) + " AND columnid = " +
-                                               std::to_string(cd->columnId),
-                                           newColumnName);
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_columns SET name = ? WHERE tableid = ? AND columnid = ?",
+        std::vector<std::string>{newColumnName, std::to_string(td->tableId), std::to_string(cd->columnId)});
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -706,20 +724,18 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // TODO(andrew): this should be an upsert
-    sqliteConnector_.query_with_text_param(
-        "SELECT viewid FROM mapd_frontend_views WHERE name = ? and userid = " + std::to_string(vd.userId), vd.viewName);
+    sqliteConnector_.query_with_text_params("SELECT viewid FROM mapd_frontend_views WHERE name = ? and userid = ?",
+                                            std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
           "UPDATE mapd_frontend_views SET view_state = ?, image_hash = ?, update_time = datetime('now') where name = ? "
-          "and userid = " +
-              std::to_string(vd.userId),
-          std::vector<std::string>{vd.viewState, vd.imageHash, vd.viewName});
+          "and userid = ?",
+          std::vector<std::string>{vd.viewState, vd.imageHash, vd.viewName, std::to_string(vd.userId)});
     } else {
       sqliteConnector_.query_with_text_params(
           "INSERT INTO mapd_frontend_views (name, view_state, image_hash, update_time, userid) VALUES (?,?,?, "
-          "datetime('now'), " +
-              std::to_string(vd.userId) + ")",
-          std::vector<std::string>{vd.viewName, vd.viewState, vd.imageHash});
+          "datetime('now'), ?)",
+          std::vector<std::string>{vd.viewName, vd.viewState, vd.imageHash, std::to_string(vd.userId)});
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -729,9 +745,9 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
 
   // now get the auto generated viewid
   try {
-    sqliteConnector_.query_with_text_param(
-        "SELECT viewid, update_time FROM mapd_frontend_views WHERE name = ? and userid = " + std::to_string(vd.userId),
-        vd.viewName);
+    sqliteConnector_.query_with_text_params(
+        "SELECT viewid, update_time FROM mapd_frontend_views WHERE name = ? and userid = ?",
+        std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
     vd.viewId = sqliteConnector_.getData<int>(0, 0);
     vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
   } catch (std::exception& e) {
@@ -775,10 +791,11 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     ld.link = generateLink(min_length);
-    sqliteConnector_.query("INSERT INTO mapd_links (userid, link, view_state, update_time) VALUES (" +
-                           std::to_string(ld.userId) + ",'" + ld.link + "','" + ld.viewState + "', datetime('now'))");
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_links (userid, link, view_state, update_time) VALUES (?,?,?, datetime('now'))",
+        std::vector<std::string>{std::to_string(ld.userId), ld.link, ld.viewState});
     // now get the auto generated viewid
-    sqliteConnector_.query("SELECT linkid, update_time FROM mapd_links WHERE link = '" + ld.link + "'");
+    sqliteConnector_.query_with_text_param("SELECT linkid, update_time FROM mapd_links WHERE link = ?", ld.link);
     ld.linkId = sqliteConnector_.getData<int>(0, 0);
     ld.updateTime = sqliteConnector_.getData<std::string>(0, 1);
   } catch (std::exception& e) {
