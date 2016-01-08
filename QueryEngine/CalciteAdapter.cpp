@@ -175,6 +175,24 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyze
   return expr->add_cast(transient_dict_ti);
 }
 
+SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const std::shared_ptr<Analyzer::Expr> arg_expr) {
+  switch (agg_kind) {
+    case kCOUNT:
+      return arg_expr ? arg_expr->get_type_info() : SQLTypeInfo(kBIGINT, false);
+    case kMIN:
+    case kMAX:
+      return arg_expr->get_type_info();
+    case kSUM:
+      return arg_expr->get_type_info().is_integer() ? SQLTypeInfo(kBIGINT, false) : arg_expr->get_type_info();
+    case kAVG:
+      return SQLTypeInfo(kDOUBLE, false);
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return SQLTypeInfo();
+}
+
 class CalciteAdapter {
  public:
   CalciteAdapter(const Catalog_Namespace::Catalog& cat, const rapidjson::Value& rels) : cat_(cat) {
@@ -427,19 +445,16 @@ class CalciteAdapter {
     const auto& expr_type = expr["type"];
     CHECK(expr_type.IsObject());
     const bool not_null{!expr_type["nullable"].GetBool()};
-    SQLTypeInfo agg_ti(to_sql_type(expr_type["type"].GetString()), not_null);
-    const auto operand = get_agg_operand_idx(expr);
     const auto agg_kind = to_agg_kind(expr["agg"].GetString());
-    if (agg_kind == kAVG) {
-      agg_ti = SQLTypeInfo(kDOUBLE, not_null);
-    }
     const bool is_distinct = expr["distinct"].GetBool();
     const bool takes_arg = agg_kind != kCOUNT || is_distinct;
+    const auto operand = get_agg_operand_idx(expr);
+    const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
+    const auto agg_ti = get_agg_type(agg_kind, arg_expr);
     if (takes_arg) {
       CHECK_GE(operand, ssize_t(0));
       CHECK_LT(operand, static_cast<ssize_t>(scan_targets.size()));
     }
-    const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
     return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
   }
 
