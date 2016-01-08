@@ -738,11 +738,12 @@ std::vector<Analyzer::TargetEntry*> build_result_plan_targets(const std::vector<
 
 bool targets_are_refs(const std::vector<Analyzer::TargetEntry*>& in_targets) {
   CHECK(!in_targets.empty());
-  const bool first_is_ref = dynamic_cast<const Analyzer::Var*>(in_targets.front()->get_expr());
   for (const auto target : in_targets) {
-    CHECK_EQ(first_is_ref, !!dynamic_cast<const Analyzer::Var*>(target->get_expr()));
+    if (!dynamic_cast<const Analyzer::Var*>(target->get_expr())) {
+      return false;
+    }
   }
-  return first_is_ref;
+  return true;
 }
 
 std::vector<Analyzer::TargetEntry*> handle_logical_project(std::vector<Analyzer::TargetEntry*>& child_plan_targets,
@@ -796,16 +797,12 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
     CHECK(fields_it != fields.End());
     CHECK(fields_it->IsString());
     CHECK_EQ(target->get_resname(), fields_it->GetString());
+    const auto target_expr = target->get_expr();
     const auto uoper_expr = dynamic_cast<const Analyzer::UOper*>(target->get_expr());
-    if (uoper_expr && uoper_expr->get_optype() == kUNNEST) {
-      // TODO(alex): we should always create a reference to the group by column, not just for UNNEST
-      auto group_var_ref = makeExpr<Analyzer::Var>(
-          uoper_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, group_nodes_it - group_nodes.Begin() + 1);
-      result.push_back(new Analyzer::TargetEntry(target->get_resname(), group_var_ref, true));
-    } else {
-      result.push_back(
-          new Analyzer::TargetEntry(target->get_resname(), set_transient_dict(target->get_own_expr()), false));
-    }
+    const bool is_unnest{uoper_expr && uoper_expr->get_optype() == kUNNEST};
+    auto group_var_ref = makeExpr<Analyzer::Var>(
+        target_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, group_nodes_it - group_nodes.Begin() + 1);
+    result.push_back(new Analyzer::TargetEntry(target->get_resname(), group_var_ref, is_unnest));
   }
   for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it, ++fields_it) {
     auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, in_targets);
