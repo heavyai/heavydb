@@ -178,7 +178,7 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyze
 SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const std::shared_ptr<Analyzer::Expr> arg_expr) {
   switch (agg_kind) {
     case kCOUNT:
-      return arg_expr ? arg_expr->get_type_info() : SQLTypeInfo(kBIGINT, false);
+      return SQLTypeInfo(kBIGINT, false);
     case kMIN:
     case kMAX:
       return arg_expr->get_type_info();
@@ -444,7 +444,6 @@ class CalciteAdapter {
     CHECK(expr.IsObject() && expr.HasMember("type"));
     const auto& expr_type = expr["type"];
     CHECK(expr_type.IsObject());
-    const bool not_null{!expr_type["nullable"].GetBool()};
     const auto agg_kind = to_agg_kind(expr["agg"].GetString());
     const bool is_distinct = expr["distinct"].GetBool();
     const bool takes_arg = agg_kind != kCOUNT || is_distinct;
