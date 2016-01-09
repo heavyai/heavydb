@@ -14,6 +14,16 @@ using namespace std;
 
 namespace Buffer_Namespace {
 
+std::string BufferMgr::keyToString(const ChunkKey& key) {
+  std::ostringstream oss;
+
+  oss << " key: ";
+  for (auto subKey : key) {
+    oss << subKey << ",";
+  }
+  return oss.str();
+}
+
 /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
 BufferMgr::BufferMgr(const int deviceId,
                      const size_t maxBufferSize,
@@ -244,7 +254,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
   }
   // If here then we can't add a slab - so we need to evict
 
-  unsigned int minScore = std::numeric_limits<unsigned int>::max();
+  size_t minScore = std::numeric_limits<size_t>::max();
   // We're going for lowest score here, like golf
   // This is because score is the sum of the lastTouched score for all
   // pages evicted. Evicting less pages and older pages will lower the
@@ -278,7 +288,14 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
         }
         pageCount += evictIt->numPages;
         if (evictIt->memStatus == USED) {
-          score += evictIt->lastTouched;
+          // MAT changed from
+          // score += evictIt->lastTouched;
+          // Issue was thrashing when going from 8M fragment size chunks back to 64M
+          // basically the large chunks were being evicted prior to small as many small chunk
+          // score was larger than one large chunk so it always would evict a large chunk
+          // so under memory pressure a query would evict its own current chunks and cause reloads
+          // rather than evict several smaller unused older chunks.
+          score = std::max(score, (size_t)evictIt->lastTouched);
         }
         if (pageCount >= numPagesRequested) {
           solutionFound = true;
@@ -472,7 +489,6 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t numBytes)
 
   std::unique_lock<std::mutex> sizedSegsLock(sizedSegsMutex_);
   std::unique_lock<std::mutex> chunkIndexLock(chunkIndexMutex_);
-
   auto bufferIt = chunkIndex_.find(key);
   bool foundBuffer = bufferIt != chunkIndex_.end();
   chunkIndexLock.unlock();

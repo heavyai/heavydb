@@ -25,4 +25,18 @@ typename TypeR::rep timer_stop(Type clock_begin) {
   return duration.count();
 }
 
+template <typename Type = std::chrono::steady_clock::time_point, typename TypeR = std::chrono::milliseconds>
+std::string timer_lap(Type clock_begin, Type& clock_last) {
+  auto now = std::chrono::steady_clock::now();
+  auto overall_duration = (now - clock_begin);
+  auto since_last_duration = (now - clock_last);
+  auto overall = std::chrono::duration_cast<TypeR>(overall_duration);
+  auto since_last = std::chrono::duration_cast<TypeR>(since_last_duration);
+  clock_last = now;
+  // std::string ret(overall.count() + " elapsed " + since_last.count());
+  std::ostringstream oss;
+  oss << overall.count() << " - " << since_last.count();
+  return oss.str();
+}
+
 #endif  // _MEASURE_H_
