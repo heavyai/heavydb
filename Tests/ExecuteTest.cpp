@@ -214,11 +214,12 @@ const bool g_have_calcite{false};
 void c(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare(query_string, false, device_type);
 }
+
 /* timestamp approximate checking for NOW() */
 void cta(const std::string& query_string, const ExecutorDeviceType device_type) {
   g_sqlite_comparator.compare_timstamp_approx(query_string, false, device_type);
 }
-}
+}  // namespace
 
 #define SKIP_NO_GPU()                                        \
   if (skip_tests(dt)) {                                      \
