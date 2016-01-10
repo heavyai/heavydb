@@ -1388,7 +1388,10 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const bool hois
   const auto& operand_ti = operand->get_type_info();
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
-      CHECK(ti.is_string());
+      if (!ti.is_string()) {
+        throw std::runtime_error("Cast from " + operand_ti.get_type_name() + " to " + ti.get_type_name() +
+                                 " not supported");
+      }
       // dictionary encode non-constant
       if (operand_ti.get_compression() != kENCODING_DICT && !operand_as_const) {
         CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
