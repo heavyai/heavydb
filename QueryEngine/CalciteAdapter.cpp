@@ -332,6 +332,9 @@ class CalciteAdapter {
       case kCAST: {
         const auto& expr_type = expr["type"];
         SQLTypeInfo target_ti(to_sql_type(expr_type["type"].GetString()), !expr_type["nullable"].GetBool());
+        if (target_ti.is_time()) {  // TODO(alex): check and unify with the rest of the cases
+          return operand_expr->add_cast(target_ti);
+        }
         return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
       }
       case kNOT:
