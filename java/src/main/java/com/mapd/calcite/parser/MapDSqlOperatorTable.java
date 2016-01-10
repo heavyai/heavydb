@@ -5,6 +5,7 @@
  */
 package com.mapd.calcite.parser;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -67,6 +68,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         opTab.addOperator(new PgDateTrunc());
         opTab.addOperator(new Length());
         opTab.addOperator(new CharLength());
+        opTab.addOperator(new PgILike());
     }
 
     /**
@@ -320,6 +322,41 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
             final RelDataTypeFactory typeFactory
                     = opBinding.getTypeFactory();
             return typeFactory.createSqlType(SqlTypeName.INTEGER);
+        }
+    }
+
+    public static class PgILike extends SqlFunction {
+
+        public PgILike() {
+            super("PG_ILIKE",
+                    SqlKind.OTHER_FUNCTION,
+                    null,
+                    null,
+                    OperandTypes.family(getSignatureFamilies(), new EscapeOptional()),
+                    SqlFunctionCategory.SYSTEM);
+        }
+
+        private static java.util.List<SqlTypeFamily> getSignatureFamilies() {
+            java.util.ArrayList<SqlTypeFamily> families = new java.util.ArrayList<SqlTypeFamily>();
+            families.add(SqlTypeFamily.STRING);
+            families.add(SqlTypeFamily.STRING);
+            families.add(SqlTypeFamily.STRING);
+            return families;
+        }
+
+        private static class EscapeOptional implements Predicate<Integer> {
+
+            @Override
+            public boolean apply(Integer t) {
+                return t == 2;
+            }
+        }
+
+        @Override
+        public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+            final RelDataTypeFactory typeFactory
+                    = opBinding.getTypeFactory();
+            return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
         }
     }
 }

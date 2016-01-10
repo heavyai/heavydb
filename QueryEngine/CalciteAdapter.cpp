@@ -264,8 +264,8 @@ class CalciteAdapter {
   std::shared_ptr<Analyzer::Expr> translateOp(const rapidjson::Value& expr,
                                               const std::vector<Analyzer::TargetEntry*>& scan_targets) {
     const auto op_str = expr["op"].GetString();
-    if (op_str == std::string("LIKE")) {
-      return translateLike(expr, scan_targets);
+    if (op_str == std::string("LIKE") || op_str == std::string("PG_ILIKE")) {
+      return translateLike(expr, scan_targets, op_str == std::string("PG_ILIKE"));
     }
     if (op_str == std::string("CASE")) {
       return translateCase(expr, scan_targets);
@@ -361,13 +361,14 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateLike(const rapidjson::Value& expr,
-                                                const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+                                                const std::vector<Analyzer::TargetEntry*>& scan_targets,
+                                                const bool is_ilike) {
     const auto& operands = expr["operands"];
     CHECK_GE(operands.Size(), unsigned(2));
     auto lhs = getExprFromNode(operands[0], scan_targets);
     auto rhs = getExprFromNode(operands[1], scan_targets);
     auto esc = operands.Size() > 2 ? getExprFromNode(operands[2], scan_targets) : nullptr;
-    return Parser::LikeExpr::get(lhs, rhs, esc, false, false);
+    return Parser::LikeExpr::get(lhs, rhs, esc, is_ilike, false);
   }
 
   std::shared_ptr<Analyzer::Expr> translateCase(const rapidjson::Value& expr,
