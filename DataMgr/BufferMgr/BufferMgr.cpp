@@ -295,7 +295,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
           // score was larger than one large chunk so it always would evict a large chunk
           // so under memory pressure a query would evict its own current chunks and cause reloads
           // rather than evict several smaller unused older chunks.
-          score = std::max(score, (size_t)evictIt->lastTouched);
+          score = std::max(score, static_cast<size_t>(evictIt->lastTouched));
         }
         if (pageCount >= numPagesRequested) {
           solutionFound = true;
