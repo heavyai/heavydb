@@ -2,6 +2,7 @@
 #define _MEASURE_H_
 
 #include <chrono>
+#include <sstream>
 
 template <typename TimeT = std::chrono::milliseconds>
 struct measure {
