@@ -896,7 +896,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
       } else {
         child_res_targets = res_targets;
         res_targets = build_var_refs(res_targets);
-        result_quals.push_back(calcite_adapter.getExprFromNode(crt_node["condition"], res_targets));
+        add_quals(calcite_adapter.getExprFromNode(crt_node["condition"], res_targets), result_quals, result_quals);
       }
     } else if (rel_op_it->value.GetString() == std::string("LogicalJoin")) {
       // TODO(alex): use the information in this node?
