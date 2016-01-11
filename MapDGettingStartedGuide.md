@@ -1,6 +1,5 @@
 ---
-title: MapD Getting Started Guide
-subtitle: Release 0.1
+title: MapD Getting Started Guide | Release 0.1
 author: MapD Technologies, Inc.
 ---
 

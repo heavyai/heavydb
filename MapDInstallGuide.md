@@ -1,6 +1,5 @@
 ---
-title: MapD Install Guide
-subtitle: Release 0.1
+title: MapD Install Guide | Release 0.1
 author: MapD Technologies, Inc.
 ---
 
