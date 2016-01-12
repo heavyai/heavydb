@@ -1067,27 +1067,6 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  void rel_algebra_execute(TQueryResult& _return,
-                           const TSessionId session,
-                           const std::string& rel_algebra,
-                           const bool column_format) {
-    // TODO MAT
-    // This is a dumby entry point to send caclite
-    // relational algebra across to the MapD server
-    // it is probably not the way we will integrate in the longer
-    // term but it gives us a simple mechanism to start some testing
-    //
-    // we will need these later so will leave this here
-    // const auto session_info = get_session(session);
-    // auto& cat = session_info.get_catalog();
-    // auto executor_device_type = session_info.get_executor_device_type();
-    LOG(INFO) << rel_algebra;
-    TMapDException ex;
-    ex.error_msg = "Not supported yet";
-    LOG(ERROR) << ex.error_msg;
-    throw ex;
-  }
-
   virtual int64_t get_row_count(const TSessionId session, const std::string& table_name) {
 #ifdef HAVE_CALCITE
     const auto session_info = get_session(session);
