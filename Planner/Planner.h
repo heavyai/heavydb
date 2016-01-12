@@ -27,26 +27,25 @@ namespace Planner {
  */
 class Plan {
  public:
-  Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  Plan(const std::vector<Analyzer::TargetEntry*>& t,
        const std::list<std::shared_ptr<Analyzer::Expr>>& q,
        double c,
        Plan* p)
       : targetlist(t), quals(q), cost(c), child_plan(p) {}
-  Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t, double c, Plan* p)
-      : targetlist(t), cost(c), child_plan(p) {}
+  Plan(const std::vector<Analyzer::TargetEntry*>& t, double c, Plan* p) : targetlist(t), cost(c), child_plan(p) {}
   Plan() : cost(0.0), child_plan(nullptr) {}
-  Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
+  Plan(const std::vector<Analyzer::TargetEntry*>& t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
   virtual ~Plan();
-  const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& get_targetlist() const { return targetlist; }
+  const std::vector<Analyzer::TargetEntry*>& get_targetlist() const { return targetlist; }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_quals() const { return quals; }
   double get_cost() const { return cost; }
   const Plan* get_child_plan() const { return child_plan; }
-  void add_tle(std::shared_ptr<Analyzer::TargetEntry> tle) { targetlist.push_back(tle); }
-  void set_targetlist(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) { targetlist = t; }
+  void add_tle(Analyzer::TargetEntry* tle) { targetlist.push_back(tle); }
+  void set_targetlist(const std::vector<Analyzer::TargetEntry*>& t) { targetlist = t; }
   virtual void print() const;
 
  protected:
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>> targetlist;  // projection of this plan node
+  std::vector<Analyzer::TargetEntry*> targetlist;    // projection of this plan node
   std::list<std::shared_ptr<Analyzer::Expr>> quals;  // list of boolean expressions, implicitly conjunctive
   double cost;                                       // Planner assigned cost for optimization purpose
   Plan* child_plan;  // most plan nodes have at least one child, therefore keep it in super class
@@ -65,7 +64,7 @@ class Plan {
  */
 class Result : public Plan {
  public:
-  Result(std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  Result(std::vector<Analyzer::TargetEntry*>& t,
          const std::list<std::shared_ptr<Analyzer::Expr>>& q,
          double c,
          Plan* p,
@@ -84,7 +83,7 @@ class Result : public Plan {
  */
 class Scan : public Plan {
  public:
-  Scan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  Scan(const std::vector<Analyzer::TargetEntry*>& t,
        const std::list<std::shared_ptr<Analyzer::Expr>>& q,
        double c,
        Plan* p,
@@ -115,7 +114,7 @@ class Scan : public Plan {
  */
 class ValuesScan : public Plan {
  public:
-  ValuesScan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) : Plan(t) {}
+  ValuesScan(const std::vector<Analyzer::TargetEntry*>& t) : Plan(t) {}
   virtual ~ValuesScan(){};
   virtual void print() const;
 };
@@ -126,7 +125,7 @@ class ValuesScan : public Plan {
  */
 class Join : public Plan {
  public:
-  Join(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  Join(const std::vector<Analyzer::TargetEntry*>& t,
        const std::list<std::shared_ptr<Analyzer::Expr>>& q,
        double c,
        Plan* p,
@@ -147,7 +146,7 @@ class Join : public Plan {
  */
 class AggPlan : public Plan {
  public:
-  AggPlan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  AggPlan(const std::vector<Analyzer::TargetEntry*>& t,
           double c,
           Plan* p,
           const std::list<std::shared_ptr<Analyzer::Expr>>& gl)
@@ -170,7 +169,7 @@ class AggPlan : public Plan {
  */
 class Append : public Plan {
  public:
-  Append(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  Append(const std::vector<Analyzer::TargetEntry*>& t,
          const std::list<std::shared_ptr<Analyzer::Expr>>& q,
          double c,
          Plan* p,
@@ -191,7 +190,7 @@ class Append : public Plan {
  */
 class MergeAppend : public Plan {
  public:
-  MergeAppend(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  MergeAppend(const std::vector<Analyzer::TargetEntry*>& t,
               const std::list<std::shared_ptr<Analyzer::Expr>>& q,
               double c,
               Plan* p,
@@ -215,7 +214,7 @@ class MergeAppend : public Plan {
  */
 class Sort : public Plan {
  public:
-  Sort(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t,
+  Sort(const std::vector<Analyzer::TargetEntry*>& t,
        double c,
        Plan* p,
        const std::list<Analyzer::OrderEntry>& oe,

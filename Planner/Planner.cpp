@@ -15,6 +15,8 @@
 
 namespace Planner {
 Plan::~Plan() {
+  for (auto p : targetlist)
+    delete p;
   if (child_plan != nullptr)
     delete child_plan;
 }
@@ -87,9 +89,9 @@ Plan* Optimizer::optimize_query() {
       for (auto join_pred : join_predicates) {
         shared_join_predicates.emplace_back(join_pred->deep_copy());
       }
-      std::vector<std::shared_ptr<Analyzer::TargetEntry>> join_targetlist;
+      std::vector<Analyzer::TargetEntry*> join_targetlist;
       for (const auto tle : cur_plan->get_targetlist()) {
-        join_targetlist.emplace_back(
+        join_targetlist.push_back(
             new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->deep_copy(), tle->get_unnest()));
       }
       cur_plan = new Join(join_targetlist, shared_join_predicates, 0, cur_plan, base_scan);
@@ -111,10 +113,10 @@ void Optimizer::optimize_current_query() {
     process_targetlist();
     if (!const_predicates.empty()) {
       // add result node to evaluate constant predicates
-      std::vector<std::shared_ptr<Analyzer::TargetEntry>> tlist;
+      std::vector<Analyzer::TargetEntry*> tlist;
       int i = 1;
       for (auto tle : cur_query->get_targetlist()) {
-        tlist.emplace_back(new Analyzer::TargetEntry(
+        tlist.push_back(new Analyzer::TargetEntry(
             tle->get_resname(),
             makeExpr<Analyzer::Var>(tle->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, i++),
             false));
@@ -151,7 +153,7 @@ void Optimizer::optimize_scans() {
       base_scans[rte_idx]->add_predicate(p->deep_copy());
     }
   }
-  const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = cur_query->get_targetlist();
+  const std::vector<Analyzer::TargetEntry*>& tlist = cur_query->get_targetlist();
   bool (*fn_pt)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*) = Analyzer::ColumnVar::colvar_comp;
   std::set<const Analyzer::ColumnVar*, bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)> colvar_set(
       fn_pt);
@@ -169,7 +171,7 @@ void Optimizer::optimize_scans() {
   if (having_pred != nullptr)
     having_pred->collect_column_var(colvar_set, true);
   for (auto colvar : colvar_set) {
-    auto tle = std::make_shared<Analyzer::TargetEntry>("", colvar->deep_copy(), false);
+    Analyzer::TargetEntry* tle = new Analyzer::TargetEntry("", colvar->deep_copy(), false);
     base_scans[colvar->get_rte_idx()]->add_tle(tle);
   };
 }
@@ -182,7 +184,7 @@ const Planner::Scan* get_scan_child(const Planner::Plan* plan) {
                   : dynamic_cast<const Planner::Scan*>(plan);
 }
 
-std::vector<std::shared_ptr<Analyzer::TargetEntry>> get_join_target_list(const Planner::Join* join_plan) {
+std::vector<Analyzer::TargetEntry*> get_join_target_list(const Planner::Join* join_plan) {
   const auto outer_plan = get_scan_child(join_plan->get_outerplan());
   CHECK(outer_plan);
   auto join_target_list = outer_plan->get_targetlist();
@@ -196,7 +198,7 @@ std::vector<std::shared_ptr<Analyzer::TargetEntry>> get_join_target_list(const P
 }  // namespace
 
 void Optimizer::optimize_aggs() {
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>> agg_tlist;
+  std::vector<Analyzer::TargetEntry*> agg_tlist;
   const Analyzer::Expr* having_pred = cur_query->get_having_predicate();
   bool (*fn_pt)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*) = Analyzer::ColumnVar::colvar_comp;
   std::set<const Analyzer::ColumnVar*, bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)> colvar_set(
@@ -233,7 +235,7 @@ void Optimizer::optimize_aggs() {
   // form the AggPlan targetlist with the group by columns followed by aggregates
   int varno = 1;
   for (auto e : groupby_list) {
-    std::shared_ptr<Analyzer::TargetEntry> new_tle;
+    Analyzer::TargetEntry* new_tle;
     std::shared_ptr<Analyzer::Expr> expr;
     auto c = std::dynamic_pointer_cast<Analyzer::ColumnVar>(e);
     if (c != nullptr) {
@@ -241,13 +243,13 @@ void Optimizer::optimize_aggs() {
           c->get_type_info(), c->get_table_id(), c->get_column_id(), c->get_rte_idx(), Analyzer::Var::kGROUPBY, varno);
     } else
       expr = makeExpr<Analyzer::Var>(e->get_type_info(), Analyzer::Var::kGROUPBY, varno);
-    new_tle = std::make_shared<Analyzer::TargetEntry>("", expr, false);
+    new_tle = new Analyzer::TargetEntry("", expr, false);
     agg_tlist.push_back(new_tle);
     varno++;
   }
   for (auto e : aggexpr_list) {
-    std::shared_ptr<Analyzer::TargetEntry> new_tle;
-    new_tle = std::make_shared<Analyzer::TargetEntry>("", e->rewrite_with_child_targetlist(target_list), false);
+    Analyzer::TargetEntry* new_tle;
+    new_tle = new Analyzer::TargetEntry("", e->rewrite_with_child_targetlist(target_list), false);
     agg_tlist.push_back(new_tle);
   }
 
@@ -265,9 +267,9 @@ void Optimizer::optimize_aggs() {
     // in this case, no need to add a Result node on top
     process_targetlist();
   else {
-    std::vector<std::shared_ptr<Analyzer::TargetEntry>> result_tlist;
+    std::vector<Analyzer::TargetEntry*> result_tlist;
     for (auto tle : cur_query->get_targetlist()) {
-      result_tlist.emplace_back(new Analyzer::TargetEntry(
+      result_tlist.push_back(new Analyzer::TargetEntry(
           tle->get_resname(), tle->get_expr()->rewrite_agg_to_var(agg_tlist), tle->get_unnest()));
     }
     std::list<std::shared_ptr<Analyzer::Expr>> const_quals;
@@ -280,10 +282,10 @@ void Optimizer::optimize_aggs() {
 void Optimizer::optimize_orderby() {
   if (query.get_order_by() == nullptr)
     return;
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>> tlist;
+  std::vector<Analyzer::TargetEntry*> tlist;
   int varno = 1;
   for (auto tle : cur_plan->get_targetlist()) {
-    tlist.emplace_back(new Analyzer::TargetEntry(
+    tlist.push_back(new Analyzer::TargetEntry(
         tle->get_resname(),
         makeExpr<Analyzer::Var>(tle->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, varno),
         false));
@@ -293,18 +295,17 @@ void Optimizer::optimize_orderby() {
 }
 
 void Optimizer::process_targetlist() {
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>> final_tlist;
+  std::vector<Analyzer::TargetEntry*> final_tlist;
   for (auto tle : query.get_targetlist()) {
-    std::shared_ptr<Analyzer::TargetEntry> new_tle;
+    Analyzer::TargetEntry* new_tle;
     if (cur_plan == nullptr)
-      new_tle =
-          std::make_shared<Analyzer::TargetEntry>(tle->get_resname(), tle->get_expr()->deep_copy(), tle->get_unnest());
+      new_tle = new Analyzer::TargetEntry(tle->get_resname(), tle->get_expr()->deep_copy(), tle->get_unnest());
     else {
       auto target_list = cur_plan->get_targetlist();
       if (dynamic_cast<const Planner::Join*>(cur_plan)) {
         target_list = get_join_target_list(static_cast<const Planner::Join*>(cur_plan));
       }
-      new_tle = std::make_shared<Analyzer::TargetEntry>(
+      new_tle = new Analyzer::TargetEntry(
           tle->get_resname(), tle->get_expr()->rewrite_with_targetlist(target_list), tle->get_unnest());
     }
     final_tlist.push_back(new_tle);
@@ -312,6 +313,9 @@ void Optimizer::process_targetlist() {
   if (cur_plan == nullptr)
     cur_plan = new ValuesScan(final_tlist);
   else {
+    // delete the old TargetEntry's
+    for (auto tle : cur_plan->get_targetlist())
+      delete tle;
     cur_plan->set_targetlist(final_tlist);
   }
 }

@@ -32,6 +32,8 @@ RangeTblEntry::~RangeTblEntry() {
 }
 
 Query::~Query() {
+  for (auto p : targetlist)
+    delete p;
   for (auto p : rangetable)
     delete p;
   delete order_by;
@@ -835,12 +837,12 @@ void RangeTblEntry::add_all_column_descs(const Catalog_Namespace::Catalog& catal
 }
 
 void RangeTblEntry::expand_star_in_targetlist(const Catalog_Namespace::Catalog& catalog,
-                                              std::vector<std::shared_ptr<TargetEntry>>& tlist,
+                                              std::vector<TargetEntry*>& tlist,
                                               int rte_idx) {
   column_descs = catalog.getAllColumnMetadataForTable(table_desc->tableId, false, true);
   for (auto col_desc : column_descs) {
     auto cv = makeExpr<ColumnVar>(col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
-    auto tle = std::make_shared<TargetEntry>(col_desc->columnName, cv, false);
+    TargetEntry* tle = new TargetEntry(col_desc->columnName, cv, false);
     tlist.push_back(tle);
   }
 }
@@ -1054,8 +1056,7 @@ void DatetruncExpr::group_predicates(std::list<const Expr*>& scan_predicates,
     const_predicates.push_back(this);
 }
 
-std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
     const ColumnVar* colvar = dynamic_cast<const ColumnVar*>(e);
@@ -1067,8 +1068,7 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_targetlist(
   throw std::runtime_error("Internal error: cannot find ColumnVar in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
@@ -1087,8 +1087,7 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_with_child_targetlist(
   throw std::runtime_error("Internal error: cannot find ColumnVar in child targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
@@ -1109,7 +1108,7 @@ std::shared_ptr<Analyzer::Expr> ColumnVar::rewrite_agg_to_var(
   throw std::runtime_error("Internal error: cannot find ColumnVar from having clause in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> Var::rewrite_agg_to_var(const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> Var::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
@@ -1120,8 +1119,7 @@ std::shared_ptr<Analyzer::Expr> Var::rewrite_agg_to_var(const std::vector<std::s
   throw std::runtime_error("Internal error: cannot find Var from having clause in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_value_list;
   for (auto v : value_list) {
     new_value_list.push_back(v->deep_copy());
@@ -1129,8 +1127,7 @@ std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_targetlist(
   return makeExpr<InValues>(arg->rewrite_with_targetlist(tlist), new_value_list);
 }
 
-std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_child_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_value_list;
   for (auto v : value_list) {
     new_value_list.push_back(v->deep_copy());
@@ -1138,16 +1135,14 @@ std::shared_ptr<Analyzer::Expr> InValues::rewrite_with_child_targetlist(
   return makeExpr<InValues>(arg->rewrite_with_child_targetlist(tlist), new_value_list);
 }
 
-std::shared_ptr<Analyzer::Expr> InValues::rewrite_agg_to_var(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> InValues::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::shared_ptr<Analyzer::Expr>> new_value_list;
   for (auto v : value_list)
     new_value_list.push_back(v->rewrite_agg_to_var(tlist));
   return makeExpr<InValues>(arg->rewrite_agg_to_var(tlist), new_value_list);
 }
 
-std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
     if (typeid(*e) == typeid(AggExpr)) {
@@ -1159,13 +1154,11 @@ std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_targetlist(
   throw std::runtime_error("Internal error: cannot find AggExpr in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_child_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
   return makeExpr<AggExpr>(type_info, aggtype, arg ? arg->rewrite_with_child_targetlist(tlist) : nullptr, is_distinct);
 }
 
-std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   int varno = 1;
   for (auto tle : tlist) {
     const Expr* e = tle->get_expr();
@@ -1179,8 +1172,7 @@ std::shared_ptr<Analyzer::Expr> AggExpr::rewrite_agg_to_var(
   throw std::runtime_error("Internal error: cannot find AggExpr from having clause in targetlist.");
 }
 
-std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> epair_list;
   for (auto p : expr_pair_list) {
     epair_list.push_back(
@@ -1190,18 +1182,15 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_targetlist(
       type_info, contains_agg, epair_list, else_expr ? else_expr->rewrite_with_targetlist(tlist) : nullptr);
 }
 
-std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
 }
 
-std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_with_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_with_targetlist(const std::vector<TargetEntry*>& tlist) const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->rewrite_with_targetlist(tlist));
 }
 
-std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> epair_list;
   for (auto p : expr_pair_list) {
     epair_list.push_back(
@@ -1212,17 +1201,16 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_with_child_targetlist(
 }
 
 std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_with_child_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+    const std::vector<TargetEntry*>& tlist) const {
   return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
 }
 
 std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_with_child_targetlist(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+    const std::vector<TargetEntry*>& tlist) const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->rewrite_with_child_targetlist(tlist));
 }
 
-std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> epair_list;
   for (auto p : expr_pair_list) {
     epair_list.push_back(std::make_pair(p.first->rewrite_agg_to_var(tlist), p.second->rewrite_agg_to_var(tlist)));
@@ -1231,13 +1219,11 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::rewrite_agg_to_var(
       type_info, contains_agg, epair_list, else_expr ? else_expr->rewrite_agg_to_var(tlist) : nullptr);
 }
 
-std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_agg_to_var(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> ExtractExpr::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   return makeExpr<ExtractExpr>(type_info, contains_agg, field, from_expr->rewrite_agg_to_var(tlist));
 }
 
-std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_agg_to_var(
-    const std::vector<std::shared_ptr<TargetEntry>>& tlist) const {
+std::shared_ptr<Analyzer::Expr> DatetruncExpr::rewrite_agg_to_var(const std::vector<TargetEntry*>& tlist) const {
   return makeExpr<DatetruncExpr>(type_info, contains_agg, field, from_expr->rewrite_agg_to_var(tlist));
 }
 
