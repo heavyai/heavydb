@@ -134,6 +134,41 @@ Example:
 DROP DATABASE test;
 ```
 
+## Basic Database Security Example
+The system db is **mapd**
+The superuser is **mapd**
+
+There are two user: **Michael** and **Nagesh**
+
+There are two Databases: **db1** and **db2**
+
+Only user **Michael** can see **db1**
+
+Only user **Nagesh** can see **db2**
+```
+admin@hal:~$ bin/mapdql mapd -u mapd -p HyperInteractive
+mapd> create user Michael (password = 'Michael');
+mapd> create user Nagesh (password = 'Nagesh');
+mapd> create database db1 (owner = 'Michael');
+mapd> create database db2 (owner = 'Nagesh');
+mapd> \q
+User mapd disconnected from database mapd
+admin@hal:~$ bin/mapdql db1 -u Nagesh -p Nagesh
+User Nagesh is not authorized to access database db1
+mapd> \q
+admin@hal:~$ bin/mapdql db2 -u Nagesh -p Nagesh
+User Nagesh connected to database db2
+mapd> \q
+User Nagesh disconnected from database db2
+admin@hal:~$ bin/mapdql db1 -u Michael -p Michael
+User Michael connected to database db1
+mapd> \q
+User Michael disconnected from database db1
+admin@hal:~$ bin/mapdql db2 -u Michael -p Michael
+User Michael is not authorized to access database db2
+mapd>
+```
+
 # Tables
 
 ## `CREATE TABLE`
@@ -171,27 +206,27 @@ The `<property>` in the optional WITH clause can be
 Example:
 ```
 CREATE TABLE IF NOT EXISTS tweets (
-  tweet_id BIGINT NOT NULL, 
-  tweet_time TIMESTAMP NOT NULL ENCODING FIXED(32), 
-  lat REAL, 
-  lon REAL, 
+  tweet_id BIGINT NOT NULL,
+  tweet_time TIMESTAMP NOT NULL ENCODING FIXED(32),
+  lat REAL,
+  lon REAL,
   sender_id BIGINT NOT NULL,
-  sender_name TEXT NOT NULL ENCODING DICT, 
-  location TEXT ENCODING DICT, 
-  source TEXT ENCODING DICT, 
-  reply_to_user_id BIGINT, 
-  reply_to_tweet_id BIGINT, 
-  lang TEXT ENCODING DICT, 
-  followers INT, 
-  followees INT, 
-  tweet_count INT, 
-  join_time TIMESTAMP ENCODING FIXED(32), 
-  tweet_text TEXT, 
-  state TEXT ENCODING DICT, 
-  county TEXT ENCODING DICT, 
-  place_name TEXT, 
-  state_abbr TEXT ENCODING DICT, 
-  county_state TEXT ENCODING DICT, 
+  sender_name TEXT NOT NULL ENCODING DICT,
+  location TEXT ENCODING DICT,
+  source TEXT ENCODING DICT,
+  reply_to_user_id BIGINT,
+  reply_to_tweet_id BIGINT,
+  lang TEXT ENCODING DICT,
+  followers INT,
+  followees INT,
+  tweet_count INT,
+  join_time TIMESTAMP ENCODING FIXED(32),
+  tweet_text TEXT,
+  state TEXT ENCODING DICT,
+  county TEXT ENCODING DICT,
+  place_name TEXT,
+  state_abbr TEXT ENCODING DICT,
+  county_state TEXT ENCODING DICT,
   origin TEXT ENCODING DICT);
 ```
 ## `DROP TABLE`
@@ -236,7 +271,7 @@ COPY ( <SELECT statement> ) TO '<file path>' [WITH (<property> = value, ...)];
 * `nulls`: a string pattern indicating a field is NULL. The default is `\N`.
 * `escape`: a single-character string for escaping quotes. The default is the quote character itself.
 * `quoted`: `'true'` or `'false'` indicating whether all the column values should be output in quotes.  The default is `'false'`.
-* `quote`: a single-character string for quoting a column value. The default quote character is double quote `"`. 
+* `quote`: a single-character string for quoting a column value. The default quote character is double quote `"`.
 * `line_delimiter` a single-character string for terminating each line. The default is `"\n"`.
 * `header`: `'true'` or `'false'` indicating whether to output a header line for all the column names.  The default is `'true'`.
 
@@ -259,7 +294,7 @@ INSERT INTO foo VALUES (NULL, 3.1415, 'xyz', '2015-05-11 211720`);
 ```
 ## `SELECT`
 ```
-SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table>
+SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table> [,<table>]
   [WHERE <expr>]
   [GROUP BY <expr>, ...]
   [HAVING <expr>]
@@ -268,8 +303,31 @@ SELECT [ALL|DISTINCT] <expr> [AS [<alias>]], ... FROM <table>
 ```
 It supports all the common SELECT features except for the following temporary limitations:
 
-* Only a single table is allowed in FROM clause.
+* Only equi join between two tables is currently supported.
 * Subqueries are not supported.
+
+# Function Support
+```
+COUNT
+MIN
+MAX
+SUM
+NOW
+EXTRACT
+DATE_TRUNC
+CAST
+LENGTH
+CHAR_LENGTH
+```
+# Array Support
+```
+SELECT <ArrayCol>[n] ...
+```
+Query array elements n of column `ArrayCol`
+```
+SELECT UNNEST(<ArrayCol>) ...
+```
+ Flatten entire array `ArrayCol`
 
 # Client Interfaces
 
