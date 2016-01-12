@@ -225,8 +225,8 @@ find_program(PANDOC_EXECUTABLE NAMES pandoc)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
 if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
   add_custom_target(docs ALL
-    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone --chapters -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDGettingStartedGuide.pdf ${CMAKE_SOURCE_DIR}/MapDGettingStartedGuide.md
-    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone --chapters -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf ${CMAKE_SOURCE_DIR}/MapDInstallGuide.md
+    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone -V documentclass=report -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDGettingStartedGuide.pdf ${CMAKE_SOURCE_DIR}/MapDGettingStartedGuide.md
+    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone -V documentclass=report -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf ${CMAKE_SOURCE_DIR}/MapDInstallGuide.md
     SOURCES MapDGettingStartedGuide.md MapDInstallGuide.md
     )
   install(FILES ${CMAKE_BINARY_DIR}/MapDGettingStartedGuide.pdf ${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf DESTINATION docs)
