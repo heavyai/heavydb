@@ -1129,12 +1129,18 @@ class MapDHandler : virtual public MapDIf {
       if (with_calcite) {
         try {
           _return.execution_time_ms += measure<>::execution([&]() {
+            static const std::string explain_str{"explain"};
+            const bool is_explain{boost::istarts_with(query_str, explain_str)};
             // pass sql to calcite server to let it parse for testing purposes
-            const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
-                                                   session_info.get_currentUser().passwd,
-                                                   session_info.get_catalog().get_currentDB().dbName,
-                                                   query_str);
+            const auto query_ra = calcite_.process(
+                session_info.get_currentUser().userName,
+                session_info.get_currentUser().passwd,
+                session_info.get_catalog().get_currentDB().dbName,
+                is_explain ? query_str.substr(explain_str.size()) : query_str);
             root_plan = translate_query(query_ra, session_info.get_catalog());
+            if (is_explain) {
+              root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
+            }
             CHECK(root_plan);
           });
           execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
