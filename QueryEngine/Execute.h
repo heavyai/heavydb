@@ -289,7 +289,7 @@ class Executor {
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const bool output_columnar);
 
-  std::string renderRows(const std::vector<Analyzer::TargetEntry*>& targets,
+  std::string renderRows(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
                          const std::string& config_json,
                          const size_t used_bytes,
                          const int session_id,
