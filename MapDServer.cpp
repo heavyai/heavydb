@@ -998,7 +998,6 @@ class MapDHandler : virtual public MapDIf {
       CHECK(s);
       if (column_format) {
         TColumn tcol;
-        LOG(ERROR) << *s;
         tcol.data.str_col.push_back(*s);
         tcol.nulls.push_back(false);
         _return.row_set.is_columnar = true;
