@@ -962,9 +962,6 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(plan);
   const auto logical_sort_info = get_logical_sort_info(rels);
   plan = get_sort_plan(plan, rels, {}, res_targets);
-  auto root_plan =
-      new Planner::RootPlan(plan, kSELECT, tds[0]->tableId, {}, cat, logical_sort_info.limit, logical_sort_info.offset);
-  root_plan->print();
-  puts("");
-  return root_plan;
+  return new Planner::RootPlan(
+      plan, kSELECT, tds[0]->tableId, {}, cat, logical_sort_info.limit, logical_sort_info.offset);
 }
