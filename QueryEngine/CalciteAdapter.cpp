@@ -217,8 +217,9 @@ class CalciteAdapter {
 
   CalciteAdapter& operator=(const CalciteAdapter&) = delete;
 
-  std::shared_ptr<Analyzer::Expr> getExprFromNode(const rapidjson::Value& expr,
-                                                  const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+  std::shared_ptr<Analyzer::Expr> getExprFromNode(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     if (expr.IsObject() && expr.HasMember("op")) {
       return translateOp(expr, scan_targets);
     }
@@ -237,7 +238,7 @@ class CalciteAdapter {
 
   std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> getQuantifiedRhs(
       const rapidjson::Value& rhs_op,
-      const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     std::shared_ptr<Analyzer::Expr> rhs;
     SQLQualifier sql_qual{kONE};
     const auto rhs_op_it = rhs_op.FindMember("op");
@@ -267,7 +268,7 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateOp(const rapidjson::Value& expr,
-                                              const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+                                              const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     const auto op_str = expr["op"].GetString();
     if (op_str == std::string("LIKE") || op_str == std::string("PG_ILIKE")) {
       return translateLike(expr, scan_targets, op_str == std::string("PG_ILIKE"));
@@ -331,8 +332,9 @@ class CalciteAdapter {
     return lhs;
   }
 
-  std::shared_ptr<Analyzer::Expr> translateUnaryOp(const rapidjson::Value& expr,
-                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+  std::shared_ptr<Analyzer::Expr> translateUnaryOp(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     const auto& operands = expr["operands"];
     CHECK_EQ(unsigned(1), operands.Size());
     const auto operand_expr = getExprFromNode(operands[0], scan_targets);
@@ -371,7 +373,7 @@ class CalciteAdapter {
   }
 
   std::shared_ptr<Analyzer::Expr> translateLike(const rapidjson::Value& expr,
-                                                const std::vector<Analyzer::TargetEntry*>& scan_targets,
+                                                const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets,
                                                 const bool is_ilike) {
     const auto& operands = expr["operands"];
     CHECK_GE(operands.Size(), unsigned(2));
@@ -381,8 +383,9 @@ class CalciteAdapter {
     return Parser::LikeExpr::get(lhs, rhs, esc, is_ilike, false);
   }
 
-  std::shared_ptr<Analyzer::Expr> translateCase(const rapidjson::Value& expr,
-                                                const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+  std::shared_ptr<Analyzer::Expr> translateCase(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     const auto& operands = expr["operands"];
     CHECK_GE(operands.Size(), unsigned(2));
     std::shared_ptr<Analyzer::Expr> else_expr;
@@ -399,8 +402,9 @@ class CalciteAdapter {
     return Parser::CaseExpr::normalize(expr_list, else_expr);
   }
 
-  std::shared_ptr<Analyzer::Expr> translateItem(const rapidjson::Value& expr,
-                                                const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+  std::shared_ptr<Analyzer::Expr> translateItem(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     const auto& operands = expr["operands"];
     CHECK(operands.IsArray());
     CHECK_EQ(operands.Size(), unsigned(2));
@@ -411,9 +415,10 @@ class CalciteAdapter {
 
   std::shared_ptr<Analyzer::Expr> translateNow() { return Parser::TimestampLiteral::get(now_); }
 
-  std::shared_ptr<Analyzer::Expr> translateExtract(const rapidjson::Value& operands,
-                                                   const std::vector<Analyzer::TargetEntry*>& scan_targets,
-                                                   const bool is_date_trunc) {
+  std::shared_ptr<Analyzer::Expr> translateExtract(
+      const rapidjson::Value& operands,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets,
+      const bool is_date_trunc) {
     CHECK(operands.IsArray());
     CHECK_EQ(unsigned(2), operands.Size());
     const auto& timeunit_lit = operands[0];
@@ -427,8 +432,9 @@ class CalciteAdapter {
                          : Parser::ExtractExpr::get(from_expr, *timeunit_lit_expr->get_constval().stringval);
   }
 
-  std::shared_ptr<Analyzer::Expr> translateColRef(const rapidjson::Value& expr,
-                                                  const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+  std::shared_ptr<Analyzer::Expr> translateColRef(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     int col_name_idx = expr["input"].GetInt();
     CHECK_GE(col_name_idx, 0);
     if (static_cast<size_t>(col_name_idx) < scan_targets.size()) {
@@ -453,8 +459,9 @@ class CalciteAdapter {
     return nullptr;
   }
 
-  std::shared_ptr<Analyzer::Expr> translateAggregate(const rapidjson::Value& expr,
-                                                     const std::vector<Analyzer::TargetEntry*>& scan_targets) {
+  std::shared_ptr<Analyzer::Expr> translateAggregate(
+      const rapidjson::Value& expr,
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets) {
     CHECK(expr.IsObject() && expr.HasMember("type"));
     const auto& expr_type = expr["type"];
     CHECK(expr_type.IsObject());
@@ -557,12 +564,12 @@ class CalciteAdapter {
   std::vector<ColNames> col_names_;
 };
 
-void reproject_target_entries(std::vector<Analyzer::TargetEntry*>& agg_targets,
+void reproject_target_entries(std::vector<std::shared_ptr<Analyzer::TargetEntry>>& agg_targets,
                               const std::vector<size_t>& result_proj_indices) {
   if (result_proj_indices.empty()) {
     return;
   }
-  std::vector<Analyzer::TargetEntry*> agg_targets_reproj;
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> agg_targets_reproj;
   for (const auto proj_idx : result_proj_indices) {
     CHECK_LT(proj_idx, agg_targets.size());
     agg_targets_reproj.push_back(agg_targets[proj_idx]);
@@ -643,7 +650,7 @@ LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
 }
 
 Planner::Scan* get_scan_plan(const TableDescriptor* td,
-                             const std::vector<Analyzer::TargetEntry*>& scan_targets,
+                             const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets,
                              std::list<std::shared_ptr<Analyzer::Expr>>& q,
                              std::list<std::shared_ptr<Analyzer::Expr>>& sq,
                              CalciteAdapter& calcite_adapter) {
@@ -652,8 +659,8 @@ Planner::Scan* get_scan_plan(const TableDescriptor* td,
 }
 
 Planner::Plan* get_agg_plan(const TableDescriptor* td,
-                            const std::vector<Analyzer::TargetEntry*>& scan_targets,
-                            const std::vector<Analyzer::TargetEntry*>& agg_targets,
+                            const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets,
+                            const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& agg_targets,
                             const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
                             std::list<std::shared_ptr<Analyzer::Expr>>& q,
                             std::list<std::shared_ptr<Analyzer::Expr>>& sq,
@@ -667,8 +674,8 @@ Planner::Plan* get_agg_plan(const TableDescriptor* td,
 
 Planner::Plan* get_sort_plan(Planner::Plan* plan,
                              const rapidjson::Value& rels,
-                             const std::vector<Analyzer::TargetEntry*>& scan_targets,
-                             const std::vector<Analyzer::TargetEntry*>& agg_targets) {
+                             const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& scan_targets,
+                             const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& agg_targets) {
   const auto logical_sort_info = get_logical_sort_info(rels);
   if (!logical_sort_info.order_entries.empty()) {
     const auto& sort_target_entries = agg_targets.empty() ? scan_targets : agg_targets;  // TODO(alex)
@@ -687,21 +694,22 @@ std::vector<size_t> collect_reproject_indices(const rapidjson::Value& exprs) {
   return result_proj_indices;
 }
 
-std::vector<Analyzer::TargetEntry*> get_input_targets(const std::vector<Analyzer::TargetEntry*>& in_targets,
-                                                      const rapidjson::Value& exprs,
-                                                      const rapidjson::Value& fields,
-                                                      CalciteAdapter& calcite_adapter) {
+std::vector<std::shared_ptr<Analyzer::TargetEntry>> get_input_targets(
+    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& in_targets,
+    const rapidjson::Value& exprs,
+    const rapidjson::Value& fields,
+    CalciteAdapter& calcite_adapter) {
   CHECK(exprs.IsArray());
   CHECK(fields.IsArray());
   CHECK_EQ(exprs.Size(), fields.Size());
-  std::vector<Analyzer::TargetEntry*> result;
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> result;
   if (in_targets.empty()) {
     auto fields_it = fields.Begin();
     for (auto exprs_it = exprs.Begin(); exprs_it != exprs.End(); ++exprs_it, ++fields_it) {
       const auto proj_expr = calcite_adapter.getExprFromNode(*exprs_it, in_targets);
       CHECK(fields_it != exprs.End());
       CHECK(fields_it->IsString());
-      result.push_back(new Analyzer::TargetEntry(fields_it->GetString(), proj_expr, false));
+      result.emplace_back(new Analyzer::TargetEntry(fields_it->GetString(), proj_expr, false));
     }
   } else {
     result = in_targets;
@@ -720,11 +728,12 @@ bool needs_result_plan(const rapidjson::Value& exprs) {
   return false;
 }
 
-std::vector<Analyzer::TargetEntry*> build_var_refs(const std::vector<Analyzer::TargetEntry*>& in_targets) {
-  std::vector<Analyzer::TargetEntry*> var_refs_to_in_targets;
+std::vector<std::shared_ptr<Analyzer::TargetEntry>> build_var_refs(
+    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& in_targets) {
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> var_refs_to_in_targets;
   for (size_t i = 1; i <= in_targets.size(); ++i) {
     const auto target = in_targets[i - 1];
-    var_refs_to_in_targets.push_back(new Analyzer::TargetEntry(
+    var_refs_to_in_targets.emplace_back(new Analyzer::TargetEntry(
         target->get_resname(),
         makeExpr<Analyzer::Var>(target->get_expr()->get_type_info(), Analyzer::Var::kINPUT_OUTER, i),
         false));
@@ -732,12 +741,13 @@ std::vector<Analyzer::TargetEntry*> build_var_refs(const std::vector<Analyzer::T
   return var_refs_to_in_targets;
 }
 
-std::vector<Analyzer::TargetEntry*> build_result_plan_targets(const std::vector<Analyzer::TargetEntry*>& in_targets,
-                                                              const rapidjson::Value& exprs,
-                                                              const rapidjson::Value& fields,
-                                                              CalciteAdapter& calcite_adapter) {
+std::vector<std::shared_ptr<Analyzer::TargetEntry>> build_result_plan_targets(
+    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& in_targets,
+    const rapidjson::Value& exprs,
+    const rapidjson::Value& fields,
+    CalciteAdapter& calcite_adapter) {
   const auto var_refs_to_in_targets = build_var_refs(in_targets);
-  std::vector<Analyzer::TargetEntry*> result;
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> result;
   CHECK(fields.IsArray());
   CHECK_EQ(exprs.Size(), fields.Size());
   auto fields_it = fields.Begin();
@@ -745,12 +755,12 @@ std::vector<Analyzer::TargetEntry*> build_result_plan_targets(const std::vector<
     const auto analyzer_expr = calcite_adapter.getExprFromNode(*exprs_it, var_refs_to_in_targets);
     CHECK(fields_it != exprs.End());
     CHECK(fields_it->IsString());
-    result.push_back(new Analyzer::TargetEntry(fields_it->GetString(), analyzer_expr, false));
+    result.emplace_back(new Analyzer::TargetEntry(fields_it->GetString(), analyzer_expr, false));
   }
   return result;
 }
 
-bool targets_are_refs(const std::vector<Analyzer::TargetEntry*>& in_targets) {
+bool targets_are_refs(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& in_targets) {
   CHECK(!in_targets.empty());
   for (const auto target : in_targets) {
     if (!dynamic_cast<const Analyzer::Var*>(target->get_expr())) {
@@ -760,10 +770,11 @@ bool targets_are_refs(const std::vector<Analyzer::TargetEntry*>& in_targets) {
   return true;
 }
 
-std::vector<Analyzer::TargetEntry*> handle_logical_project(std::vector<Analyzer::TargetEntry*>& child_plan_targets,
-                                                           const std::vector<Analyzer::TargetEntry*>& in_targets,
-                                                           const rapidjson::Value& logical_project,
-                                                           CalciteAdapter& calcite_adapter) {
+std::vector<std::shared_ptr<Analyzer::TargetEntry>> handle_logical_project(
+    std::vector<std::shared_ptr<Analyzer::TargetEntry>>& child_plan_targets,
+    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& in_targets,
+    const rapidjson::Value& logical_project,
+    CalciteAdapter& calcite_adapter) {
   const auto exprs_mem_it = logical_project.FindMember("exprs");
   CHECK(exprs_mem_it != logical_project.MemberEnd());
   const auto& exprs = exprs_mem_it->value;
@@ -787,11 +798,12 @@ std::vector<Analyzer::TargetEntry*> handle_logical_project(std::vector<Analyzer:
   return result;
 }
 
-std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<Analyzer::TargetEntry*>& in_targets,
-                                                             std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
-                                                             const rapidjson::Value& logical_aggregate,
-                                                             CalciteAdapter& calcite_adapter) {
-  std::vector<Analyzer::TargetEntry*> result;
+std::vector<std::shared_ptr<Analyzer::TargetEntry>> handle_logical_aggregate(
+    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& in_targets,
+    std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+    const rapidjson::Value& logical_aggregate,
+    CalciteAdapter& calcite_adapter) {
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> result;
   const auto& agg_nodes = logical_aggregate["aggs"];
   const auto& group_nodes = logical_aggregate["group"];
   CHECK(group_nodes.IsArray());
@@ -816,13 +828,13 @@ std::vector<Analyzer::TargetEntry*> handle_logical_aggregate(const std::vector<A
     const bool is_unnest{uoper_expr && uoper_expr->get_optype() == kUNNEST};
     auto group_var_ref = makeExpr<Analyzer::Var>(
         target_expr->get_type_info(), 0, 0, -1, Analyzer::Var::kGROUPBY, group_nodes_it - group_nodes.Begin() + 1);
-    result.push_back(new Analyzer::TargetEntry(target->get_resname(), group_var_ref, is_unnest));
+    result.emplace_back(new Analyzer::TargetEntry(target->get_resname(), group_var_ref, is_unnest));
   }
   for (auto agg_nodes_it = agg_nodes.Begin(); agg_nodes_it != agg_nodes.End(); ++agg_nodes_it, ++fields_it) {
     auto agg_expr = calcite_adapter.getExprFromNode(*agg_nodes_it, in_targets);
     CHECK(fields_it != fields.End());
     CHECK(fields_it->IsString());
-    result.push_back(new Analyzer::TargetEntry(fields_it->GetString(), agg_expr, false));
+    result.emplace_back(new Analyzer::TargetEntry(fields_it->GetString(), agg_expr, false));
   }
   return result;
 }
@@ -865,8 +877,8 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   std::list<std::shared_ptr<Analyzer::Expr>> result_quals;
   std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
-  std::vector<Analyzer::TargetEntry*> child_res_targets;
-  std::vector<Analyzer::TargetEntry*> res_targets;
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> child_res_targets;
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> res_targets;
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   bool is_agg_plan{false};
   bool is_join{false};
@@ -934,14 +946,16 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
       plan = new Planner::Result(res_targets, result_quals, 0, plan, {});
     }
   } else if (child_res_targets.empty()) {
-    std::vector<Analyzer::TargetEntry*> agg_targets{is_agg_plan ? res_targets : std::vector<Analyzer::TargetEntry*>{}};
-    std::vector<Analyzer::TargetEntry*> scan_targets{is_agg_plan ? std::vector<Analyzer::TargetEntry*>{} : res_targets};
+    std::vector<std::shared_ptr<Analyzer::TargetEntry>> agg_targets{
+        is_agg_plan ? res_targets : std::vector<std::shared_ptr<Analyzer::TargetEntry>>{}};
+    std::vector<std::shared_ptr<Analyzer::TargetEntry>> scan_targets{
+        is_agg_plan ? std::vector<std::shared_ptr<Analyzer::TargetEntry>>{} : res_targets};
     plan = get_agg_plan(tds[0], scan_targets, agg_targets, groupby_exprs, quals, simple_quals, calcite_adapter);
   } else {
-    std::vector<Analyzer::TargetEntry*> agg_targets{is_agg_plan ? child_res_targets
-                                                                : std::vector<Analyzer::TargetEntry*>{}};
-    std::vector<Analyzer::TargetEntry*> scan_targets{is_agg_plan ? std::vector<Analyzer::TargetEntry*>{}
-                                                                 : child_res_targets};
+    std::vector<std::shared_ptr<Analyzer::TargetEntry>> agg_targets{
+        is_agg_plan ? child_res_targets : std::vector<std::shared_ptr<Analyzer::TargetEntry>>{}};
+    std::vector<std::shared_ptr<Analyzer::TargetEntry>> scan_targets{
+        is_agg_plan ? std::vector<std::shared_ptr<Analyzer::TargetEntry>>{} : child_res_targets};
     plan = get_agg_plan(tds[0], scan_targets, agg_targets, groupby_exprs, quals, simple_quals, calcite_adapter);
     plan = new Planner::Result(res_targets, result_quals, 0, plan, {});
   }

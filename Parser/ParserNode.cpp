@@ -419,7 +419,7 @@ std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(const Catalog_Namespace::Cata
       bool found = false;
       int varno;
       int i = 1;
-      Analyzer::TargetEntry* tle;
+      std::shared_ptr<Analyzer::TargetEntry> tle;
       for (auto p : query.get_targetlist()) {
         if (*column == p->get_resname() && !found) {
           found = true;
@@ -792,7 +792,7 @@ void QuerySpec::analyze_group_by(const Catalog_Namespace::Catalog& catalog, Anal
   if (!groupby_clause.empty()) {
     int gexpr_no = 1;
     std::shared_ptr<Analyzer::Expr> gexpr;
-    const std::vector<Analyzer::TargetEntry*>& tlist = query.get_targetlist();
+    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = query.get_targetlist();
     for (auto& c : groupby_clause) {
       // special-case ordinal numbers in GROUP BY
       if (dynamic_cast<Literal*>(c.get())) {
@@ -864,7 +864,7 @@ void QuerySpec::analyze_where_clause(const Catalog_Namespace::Catalog& catalog, 
 }
 
 void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const {
-  std::vector<Analyzer::TargetEntry*>& tlist = query.get_targetlist_nonconst();
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = query.get_targetlist_nonconst();
   if (select_clause.empty()) {
     // this means SELECT *
     int rte_idx = 0;
@@ -899,7 +899,7 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
           throw std::runtime_error("Untyped NULL in SELECT clause.  Use CAST to specify a type.");
         auto o = std::static_pointer_cast<Analyzer::UOper>(e);
         bool unnest = (o != nullptr && o->get_optype() == kUNNEST);
-        Analyzer::TargetEntry* tle = new Analyzer::TargetEntry(resname, e, unnest);
+        auto tle = std::make_shared<Analyzer::TargetEntry>(resname, e, unnest);
         tlist.push_back(tle);
       }
     }
@@ -945,7 +945,7 @@ void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
     query.set_order_by(nullptr);
     return;
   }
-  const std::vector<Analyzer::TargetEntry*>& tlist = query.get_targetlist();
+  const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = query.get_targetlist();
   std::list<Analyzer::OrderEntry>* order_by = new std::list<Analyzer::OrderEntry>();
   if (!orderby_clause.empty()) {
     for (auto& p : orderby_clause) {
@@ -1254,7 +1254,7 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Qu
 
 void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyzer::Query& query) const {
   InsertStmt::analyze(catalog, query);
-  std::vector<Analyzer::TargetEntry*>& tlist = query.get_targetlist_nonconst();
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = query.get_targetlist_nonconst();
   if (query.get_result_col_list().size() != value_list.size())
     throw std::runtime_error("Insert has more target columns than expressions.");
   std::list<int>::const_iterator it = query.get_result_col_list().begin();
@@ -1268,7 +1268,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog, Analyz
         throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
     }
     e = e->add_cast(cd->columnType);
-    tlist.push_back(new Analyzer::TargetEntry("", e, false));
+    tlist.emplace_back(new Analyzer::TargetEntry("", e, false));
     ++it;
   }
 }
@@ -1886,7 +1886,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   Analyzer::Query analyzed_query;
   query->analyze(catalog, analyzed_query);
-  const std::vector<Analyzer::TargetEntry*>& tlist = analyzed_query.get_targetlist();
+  const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& tlist = analyzed_query.get_targetlist();
   // @TODO check column name uniqueness.  for now let sqlite enforce.
   if (!column_list.empty()) {
     if (column_list.size() != tlist.size())
