@@ -14,31 +14,6 @@
 #include "gen-cpp/MapD.h"
 
 namespace Planner {
-Plan::~Plan() {
-  if (child_plan != nullptr)
-    delete child_plan;
-}
-
-Join::~Join() {
-  delete child_plan2;
-}
-
-Append::~Append() {
-  for (auto p : plan_list)
-    delete p;
-}
-
-MergeAppend::~MergeAppend() {
-  for (auto p : mergeplan_list)
-    delete p;
-}
-
-Sort::~Sort() {
-}
-
-RootPlan::~RootPlan() {
-  delete plan;
-}
 
 Scan::Scan(const Analyzer::RangeTblEntry& rte) : Plan() {
   table_id = rte.get_table_id();
@@ -380,14 +355,14 @@ void AggPlan::print() const {
 
 void Append::print() const {
   std::cout << "(Append" << std::endl;
-  for (auto p : plan_list)
+  for (const auto& p : plan_list)
     p->print();
   std::cout << ")" << std::endl;
 }
 
 void MergeAppend::print() const {
   std::cout << "(MergeAppend" << std::endl;
-  for (auto p : mergeplan_list)
+  for (const auto& p : mergeplan_list)
     p->print();
   std::cout << ")" << std::endl;
 }

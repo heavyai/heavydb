@@ -36,11 +36,10 @@ class Plan {
       : targetlist(t), cost(c), child_plan(p) {}
   Plan() : cost(0.0), child_plan(nullptr) {}
   Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
-  virtual ~Plan();
   const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& get_targetlist() const { return targetlist; }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_quals() const { return quals; }
   double get_cost() const { return cost; }
-  const Plan* get_child_plan() const { return child_plan; }
+  const Plan* get_child_plan() const { return child_plan.get(); }
   void add_tle(std::shared_ptr<Analyzer::TargetEntry> tle) { targetlist.push_back(tle); }
   void set_targetlist(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) { targetlist = t; }
   virtual void print() const;
@@ -49,7 +48,7 @@ class Plan {
   std::vector<std::shared_ptr<Analyzer::TargetEntry>> targetlist;  // projection of this plan node
   std::list<std::shared_ptr<Analyzer::Expr>> quals;  // list of boolean expressions, implicitly conjunctive
   double cost;                                       // Planner assigned cost for optimization purpose
-  Plan* child_plan;  // most plan nodes have at least one child, therefore keep it in super class
+  std::unique_ptr<Plan> child_plan;  // most plan nodes have at least one child, therefore keep it in super class
 };
 
 /*
@@ -116,7 +115,6 @@ class Scan : public Plan {
 class ValuesScan : public Plan {
  public:
   ValuesScan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) : Plan(t) {}
-  virtual ~ValuesScan(){};
   virtual void print() const;
 };
 
@@ -132,13 +130,12 @@ class Join : public Plan {
        Plan* p,
        Plan* cp2)
       : Plan(t, q, c, p), child_plan2(cp2) {}
-  virtual ~Join();
   virtual void print() const;
-  const Plan* get_outerplan() const { return child_plan; }
-  const Plan* get_innerplan() const { return child_plan2; }
+  const Plan* get_outerplan() const { return child_plan.get(); }
+  const Plan* get_innerplan() const { return child_plan2.get(); }
 
  private:
-  Plan* child_plan2;
+  std::unique_ptr<Plan> child_plan2;
 };
 
 /*
@@ -174,14 +171,13 @@ class Append : public Plan {
          const std::list<std::shared_ptr<Analyzer::Expr>>& q,
          double c,
          Plan* p,
-         const std::list<Plan*>& pl)
-      : Plan(t, q, c, p), plan_list(pl) {}
-  virtual ~Append();
-  const std::list<Plan*>& get_plan_list() const { return plan_list; }
+         std::list<std::unique_ptr<Plan>>& pl)
+      : Plan(t, q, c, p), plan_list(std::move(pl)) {}
+  const std::list<std::unique_ptr<Plan>>& get_plan_list() const { return plan_list; }
   virtual void print() const;
 
  private:
-  std::list<Plan*> plan_list;  // list of plans to union all
+  std::list<std::unique_ptr<Plan>> plan_list;  // list of plans to union all
 };
 
 /*
@@ -195,17 +191,16 @@ class MergeAppend : public Plan {
               const std::list<std::shared_ptr<Analyzer::Expr>>& q,
               double c,
               Plan* p,
-              const std::list<Plan*>& pl,
+              std::list<std::unique_ptr<Plan>>& pl,
               const std::list<Analyzer::OrderEntry>& oe)
-      : Plan(t, q, c, p), mergeplan_list(pl), order_entries(oe) {}
-  virtual ~MergeAppend();
-  const std::list<Plan*>& get_mergeplan_list() const { return mergeplan_list; }
+      : Plan(t, q, c, p), mergeplan_list(std::move(pl)), order_entries(oe) {}
+  const std::list<std::unique_ptr<Plan>>& get_mergeplan_list() const { return mergeplan_list; }
   const std::list<Analyzer::OrderEntry>& get_order_entries() const { return order_entries; }
   virtual void print() const;
 
  private:
-  std::list<Plan*> mergeplan_list;                // list of plans to merge
-  std::list<Analyzer::OrderEntry> order_entries;  // defines how the mergeplans are sorted
+  std::list<std::unique_ptr<Plan>> mergeplan_list;  // list of plans to merge
+  std::list<Analyzer::OrderEntry> order_entries;    // defines how the mergeplans are sorted
 };
 
 /*
@@ -221,7 +216,6 @@ class Sort : public Plan {
        const std::list<Analyzer::OrderEntry>& oe,
        bool d)
       : Plan(t, c, p), order_entries(oe), remove_duplicates(d) {}
-  virtual ~Sort();
   const std::list<Analyzer::OrderEntry>& get_order_entries() const { return order_entries; }
   bool get_remove_duplicates() const { return remove_duplicates; }
   virtual void print() const;
@@ -257,8 +251,7 @@ class RootPlan {
         render_properties(nullptr),
         column_render_properties(nullptr),
         plan_dest(kCLIENT) {}
-  ~RootPlan();
-  const Plan* get_plan() const { return plan; }
+  const Plan* get_plan() const { return plan.get(); }
   SQLStmtType get_stmt_type() const { return stmt_type; }
   int get_result_table_id() const { return result_table_id; }
   const std::list<int>& get_result_col_list() const { return result_col_list; }
@@ -276,7 +269,7 @@ class RootPlan {
   void set_plan_dest(Dest d) { plan_dest = d; }
 
  private:
-  Plan* plan;                                 // query plan
+  std::unique_ptr<Plan> plan;                 // query plan
   SQLStmtType stmt_type;                      // SELECT, UPDATE, DELETE or INSERT
   int result_table_id;                        // For UPDATE, DELETE or INSERT only: table id for the result table
   std::list<int> result_col_list;             // For UPDATE and INSERT only: list of result column ids.
@@ -297,7 +290,6 @@ class Optimizer {
  public:
   Optimizer(const Analyzer::Query& q, const Catalog_Namespace::Catalog& c)
       : cur_query(nullptr), cur_plan(nullptr), query(q), catalog(c) {}
-  ~Optimizer() {}
   /*
    * @brief optimize optimize an entire SQL DML statement
    */
