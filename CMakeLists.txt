@@ -225,15 +225,14 @@ find_program(PANDOC_EXECUTABLE NAMES pandoc)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
 if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
   add_custom_target(docs ALL
-    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone -V documentclass=report -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDGettingStartedGuide.pdf ${CMAKE_SOURCE_DIR}/MapDGettingStartedGuide.md
-    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone -V documentclass=report -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf ${CMAKE_SOURCE_DIR}/MapDInstallGuide.md
-    SOURCES MapDGettingStartedGuide.md MapDInstallGuide.md
+    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone -V documentclass=report -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDGuide.pdf ${CMAKE_SOURCE_DIR}/MapDGuide.md
+    SOURCES MapDGuide.md
     )
-  install(FILES ${CMAKE_BINARY_DIR}/MapDGettingStartedGuide.pdf ${CMAKE_BINARY_DIR}/MapDInstallGuide.pdf DESTINATION docs)
+  install(FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf DESTINATION docs)
 else()
   message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
 endif()
-install(FILES MapDGettingStartedGuide.md MapDInstallGuide.md DESTINATION docs)
+install(FILES MapDGuide.md DESTINATION docs)
 
 # systemd
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
