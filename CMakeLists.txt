@@ -221,9 +221,10 @@ if(GO_EXECUTABLE)
 endif()
 
 # Docs
+option(ENABLE_DOCS "Enable compilation of MapD docs" ON)
 find_program(PANDOC_EXECUTABLE NAMES pandoc)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
-if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
+if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
   add_custom_target(docs ALL
     COMMAND ${PANDOC_EXECUTABLE}
       --toc --standalone

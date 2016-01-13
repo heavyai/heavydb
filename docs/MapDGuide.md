@@ -1,6 +1,7 @@
 ---
 title: MapD Guide | Release 0.1
 author: MapD Technologies, Inc.
+logo: mapd-logo.pdf
 ---
 
 # Dependencies
