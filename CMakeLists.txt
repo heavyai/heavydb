@@ -225,14 +225,23 @@ find_program(PANDOC_EXECUTABLE NAMES pandoc)
 find_program(PDFLATEX_EXECUTABLE NAMES pdflatex)
 if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE)
   add_custom_target(docs ALL
-    COMMAND ${PANDOC_EXECUTABLE} --toc --standalone -V documentclass=report -V geometry:margin=1.5in --output=${CMAKE_BINARY_DIR}/MapDGuide.pdf ${CMAKE_SOURCE_DIR}/MapDGuide.md
-    SOURCES MapDGuide.md
+    COMMAND ${PANDOC_EXECUTABLE}
+      --toc --standalone
+      -V documentclass=report
+      -V geometry:margin=1.5in
+      -V graphics:on
+      --template=mapd
+      --data-dir=.
+      --output=${CMAKE_BINARY_DIR}/MapDGuide.pdf
+      ${CMAKE_SOURCE_DIR}/docs/MapDGuide.md
+    SOURCES docs/MapDGuide.md
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
     )
   install(FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf DESTINATION docs)
 else()
   message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
 endif()
-install(FILES MapDGuide.md DESTINATION docs)
+install(FILES docs/MapDGuide.md DESTINATION docs)
 
 # systemd
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
