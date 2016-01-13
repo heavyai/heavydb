@@ -283,24 +283,24 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT AVG(y) FROM test WHERE x > 6 AND x < 8;", dt);
     c("SELECT AVG(y) FROM test WHERE z > 100 AND z < 102;", dt);
     c("SELECT AVG(y) FROM test WHERE t > 1000 AND t < 1002;", dt);
-    c("SELECT MIN(dec) FROM test;", dt);
-    c("SELECT MAX(dec) FROM test;", dt);
-    c("SELECT SUM(dec) FROM test;", dt);
-    c("SELECT AVG(dec) FROM test;", dt);
-    c("SELECT AVG(dec) FROM test WHERE x > 6 AND x < 8;", dt);
-    c("SELECT COUNT(*) FROM test WHERE dec > 100;", dt);
-    c("SELECT COUNT(*) FROM test WHERE dec > 200;", dt);
-    c("SELECT COUNT(*) FROM test WHERE dec > 300;", dt);
-    c("SELECT COUNT(*) FROM test WHERE dec > 111.0;", dt);
-    c("SELECT COUNT(*) FROM test WHERE dec > 111.1;", dt);
-    c("SELECT COUNT(*) FROM test WHERE dec > 222.2;", dt);
-    c("SELECT MAX(x + dec) FROM test;", dt);
-    c("SELECT MAX(x + 2 * dec), MIN(x + 2 * dec) FROM test;", dt);
-    c("SELECT COUNT(*) FROM test where dec > CAST(111.0 AS decimal(10, 2));", dt);
-    c("SELECT COUNT(*) FROM test where dec > CAST(222.0 AS decimal(10, 2));", dt);
-    c("SELECT COUNT(*) FROM test where dec > CAST(333.0 AS decimal(10, 2));", dt);
-    c("SELECT MIN(dec * dec) FROM test;", dt);
-    c("SELECT MAX(dec * dec) FROM test;", dt);
+    c("SELECT MIN(dd) FROM test;", dt);
+    c("SELECT MAX(dd) FROM test;", dt);
+    c("SELECT SUM(dd) FROM test;", dt);
+    c("SELECT AVG(dd) FROM test;", dt);
+    c("SELECT AVG(dd) FROM test WHERE x > 6 AND x < 8;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > 100;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > 200;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > 300;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > 111.0;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > 111.1;", dt);
+    c("SELECT COUNT(*) FROM test WHERE dd > 222.2;", dt);
+    c("SELECT MAX(x + dd) FROM test;", dt);
+    c("SELECT MAX(x + 2 * dd), MIN(x + 2 * dd) FROM test;", dt);
+    c("SELECT COUNT(*) FROM test where dd > CAST(111.0 AS decimal(10, 2));", dt);
+    c("SELECT COUNT(*) FROM test where dd > CAST(222.0 AS decimal(10, 2));", dt);
+    c("SELECT COUNT(*) FROM test where dd > CAST(333.0 AS decimal(10, 2));", dt);
+    c("SELECT MIN(dd * dd) FROM test;", dt);
+    c("SELECT MAX(dd * dd) FROM test;", dt);
     c("SELECT COUNT(*) FROM test WHERE x % 7 = 0;", dt);
     c("SELECT COUNT(*) FROM test WHERE x % 7 = 7;", dt);
     c("SELECT COUNT(*) FROM test WHERE x % 7 <> 0;", dt);
@@ -392,8 +392,8 @@ TEST(Select, FilterAndGroupBy) {
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x, y;", dt);
     c("SELECT MIN(x + y) FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY x + 1, x + y;", dt);
     c("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", dt);
-    c("SELECT x, dec, COUNT(*) FROM test GROUP BY x, dec ORDER BY x;", dt);
-    c("SELECT dec as key, COUNT(*) AS value FROM test GROUP BY key HAVING key IS NOT NULL ORDER BY key, value DESC "
+    c("SELECT x, dd, COUNT(*) FROM test GROUP BY x, dd ORDER BY x;", dt);
+    c("SELECT dd as key, COUNT(*) AS value FROM test GROUP BY key HAVING key IS NOT NULL ORDER BY key, value DESC "
       "LIMIT 12;",
       dt);
   }
@@ -433,7 +433,7 @@ TEST(Select, CountDistinct) {
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x) FROM test GROUP BY y ORDER BY n;", dt);
     c("SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM test GROUP BY y ORDER BY n;",
       dt);
-    c("SELECT COUNT(distinct dec) AS n FROM test GROUP BY y ORDER BY n;", dt);
+    c("SELECT COUNT(distinct dd) AS n FROM test GROUP BY y ORDER BY n;", dt);
     EXPECT_THROW(run_multiple_agg("SELECT COUNT(distinct real_str) FROM test;", false, dt), std::runtime_error);
   }
 }
@@ -1243,12 +1243,12 @@ int main(int argc, char** argv) {
     g_sqlite_comparator.query(drop_old_test);
     const std::string create_test{
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text "
-        "encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dec decimal(10, "
+        "encoding dict, real_str text, m timestamp(0), n time(0), o date, fx int encoding fixed(16), dd decimal(10, "
         "2)) WITH (fragment_size=2);"};
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f float, d double, str text, "
-        "real_str text, m timestamp(0), n time(0), o date, fx int, dec decimal(10, 2));");
+        "real_str text, m timestamp(0), n time(0), o date, fx int, dd decimal(10, 2));");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test'";
     return -EEXIST;
