@@ -300,7 +300,13 @@ public class MapDRelJson {
         }
       }
       map.put("type", literal.getTypeName().name());
-      map.put("scale", literal.getType().getScale());
+      final Object value = literal.getValue();
+      if (value instanceof BigDecimal) {
+        map.put("scale", ((BigDecimal) value).scale());
+      } else {
+        map.put("scale", literal.getType().getScale());
+      }
+      map.put("type_scale", literal.getType().getScale());
       map.put("precision", literal.getType().getPrecision());
       return map;
     case INPUT_REF:

@@ -140,7 +140,7 @@ ssize_t get_agg_operand_idx(const rapidjson::Value& expr) {
   return agg_operands.Empty() ? -1 : agg_operands[0].GetInt();
 }
 
-std::pair<const rapidjson::Value&, SQLTypeInfo> parse_literal(const rapidjson::Value& expr) {
+std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   auto val_it = expr.FindMember("literal");
   CHECK(val_it != expr.MemberEnd());
@@ -152,6 +152,10 @@ std::pair<const rapidjson::Value&, SQLTypeInfo> parse_literal(const rapidjson::V
   CHECK(scale_it != expr.MemberEnd());
   CHECK(scale_it->value.IsInt());
   const int scale = scale_it->value.GetInt();
+  auto type_scale_it = expr.FindMember("type_scale");
+  CHECK(type_scale_it != expr.MemberEnd());
+  CHECK(type_scale_it->value.IsInt());
+  const int type_scale = type_scale_it->value.GetInt();
   auto precision_it = expr.FindMember("precision");
   CHECK(precision_it != expr.MemberEnd());
   CHECK(precision_it->value.IsInt());
@@ -160,7 +164,10 @@ std::pair<const rapidjson::Value&, SQLTypeInfo> parse_literal(const rapidjson::V
   SQLTypeInfo ti(sql_type, 0, 0, false);
   ti.set_scale(scale);
   ti.set_precision(precision);
-  return {val_it->value, ti};
+  SQLTypeInfo type_ti(sql_type, 0, 0, false);
+  type_ti.set_scale(type_scale);
+  type_ti.set_precision(precision);
+  return std::make_tuple(&(val_it->value), ti, type_ti);
 }
 
 std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyzer::Expr> expr) {
@@ -480,26 +487,29 @@ class CalciteAdapter {
 
   std::shared_ptr<Analyzer::Expr> translateTypedLiteral(const rapidjson::Value& expr) {
     const auto parsed_lit = parse_literal(expr);
-    const auto sql_type = parsed_lit.second.get_type();
-    const auto& json_val = parsed_lit.first;
-    const int scale = parsed_lit.second.get_scale();
-    const int precision = parsed_lit.second.get_precision();
-    switch (sql_type) {
+    const auto& lit_ti = std::get<1>(parsed_lit);
+    const auto json_val = std::get<0>(parsed_lit);
+    switch (lit_ti.get_type()) {
       case kDECIMAL: {
-        CHECK(json_val.IsInt64());
-        const auto val = json_val.GetInt64();
-        return scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision)
-                     : Parser::IntLiteral::analyzeValue(val);
+        CHECK(json_val->IsInt64());
+        const auto val = json_val->GetInt64();
+        const int precision = lit_ti.get_precision();
+        const int scale = lit_ti.get_scale();
+        const auto& target_ti = std::get<2>(parsed_lit);
+        const int target_scale = target_ti.get_scale();
+        auto lit_expr =
+            scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
+        return scale != target_scale ? lit_expr->add_cast(target_ti) : lit_expr;
       }
       case kTEXT: {
-        CHECK(json_val.IsString());
-        const auto val = json_val.GetString();
+        CHECK(json_val->IsString());
+        const auto val = json_val->GetString();
         return Parser::StringLiteral::analyzeValue(val);
       }
       case kBOOLEAN: {
-        CHECK(json_val.IsBool());
+        CHECK(json_val->IsBool());
         Datum d;
-        d.boolval = json_val.GetBool();
+        d.boolval = json_val->GetBool();
         return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
       }
       case kNULLT: {
@@ -596,15 +606,15 @@ LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
     if (!found) {
       if (sort_rel.HasMember("fetch")) {
         const auto& limit_lit = parse_literal(sort_rel["fetch"]);
-        CHECK(limit_lit.second.is_decimal() && limit_lit.second.get_scale() == 0);
-        CHECK(limit_lit.first.IsInt64());
-        result.limit = limit_lit.first.GetInt64();
+        CHECK(std::get<1>(limit_lit).is_decimal() && std::get<1>(limit_lit).get_scale() == 0);
+        CHECK(std::get<0>(limit_lit)->IsInt64());
+        result.limit = std::get<0>(limit_lit)->GetInt64();
       }
       if (sort_rel.HasMember("offset")) {
         const auto& offset_lit = parse_literal(sort_rel["offset"]);
-        CHECK(offset_lit.second.is_decimal() && offset_lit.second.get_scale() == 0);
-        CHECK(offset_lit.first.IsInt64());
-        result.offset = offset_lit.first.GetInt64();
+        CHECK(std::get<1>(offset_lit).is_decimal() && std::get<1>(offset_lit).get_scale() == 0);
+        CHECK(std::get<0>(offset_lit)->IsInt64());
+        result.offset = std::get<0>(offset_lit)->GetInt64();
       }
       CHECK(sort_rel.HasMember("collation"));
       const auto& collation = sort_rel["collation"];
@@ -622,15 +632,15 @@ LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
       // in the Calcite AST. Validation for now, but maybe they can be different?
       if (sort_rel.HasMember("fetch")) {
         const auto& limit_lit = parse_literal(sort_rel["fetch"]);
-        CHECK(limit_lit.second.is_decimal() && limit_lit.second.get_scale() == 0);
-        CHECK(limit_lit.first.IsInt64());
-        CHECK_EQ(result.limit, limit_lit.first.GetInt64());
+        CHECK(std::get<1>(limit_lit).is_decimal() && std::get<1>(limit_lit).get_scale() == 0);
+        CHECK(std::get<0>(limit_lit)->IsInt64());
+        CHECK_EQ(result.limit, std::get<0>(limit_lit)->GetInt64());
       }
       if (sort_rel.HasMember("offset")) {
         const auto& offset_lit = parse_literal(sort_rel["offset"]);
-        CHECK(offset_lit.second.is_decimal() && offset_lit.second.get_scale() == 0);
-        CHECK(offset_lit.first.IsInt64());
-        CHECK_EQ(result.offset, offset_lit.first.GetInt64());
+        CHECK(std::get<1>(offset_lit).is_decimal() && std::get<1>(offset_lit).get_scale() == 0);
+        CHECK(std::get<0>(offset_lit)->IsInt64());
+        CHECK_EQ(result.offset, std::get<0>(offset_lit)->GetInt64());
       }
       CHECK(sort_rel.HasMember("collation"));
       const auto& collation = sort_rel["collation"];
