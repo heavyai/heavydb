@@ -562,6 +562,24 @@ class ResultRows {
         explanation_(explanation),
         queue_time_ms_(queue_time_ms) {}
 
+  explicit ResultRows(const std::string& explanation, int64_t queue_time_ms, int64_t render_time_ms)
+      : query_mem_desc_{},
+        group_by_buffer_idx_(0),
+        output_columnar_(false),
+        in_place_(false),
+        device_type_(ExecutorDeviceType::Hybrid),
+        device_id_(-1),
+        crt_row_idx_(0),
+        crt_row_buff_idx_(0),
+        drop_first_(0),
+        keep_first_(0),
+        fetch_started_(false),
+        in_place_buff_idx_(0),
+        just_explain_(true),
+        explanation_(explanation),
+        queue_time_ms_(queue_time_ms),
+        render_time_ms_(render_time_ms) {}
+
   explicit ResultRows(const std::string& explanation)
       : query_mem_desc_{},
         group_by_buffer_idx_(0),
@@ -701,6 +719,7 @@ class ResultRows {
   }
 
   int64_t getQueueTime() { return queue_time_ms_; }
+  int64_t getRenderTime() { return render_time_ms_; }
 
  private:
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
@@ -774,6 +793,7 @@ class ResultRows {
   std::string explanation_;
   std::unordered_set<int64_t> unkown_top_keys_;
   int64_t queue_time_ms_;
+  int64_t render_time_ms_;
 
   friend class Executor;
   friend class QueryExecutionContext;

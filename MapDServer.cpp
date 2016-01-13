@@ -690,100 +690,109 @@ class MapDHandler : virtual public MapDIf {
               const TRenderPropertyMap& render_properties,
               const TColumnRenderMap& col_render_properties,
               const std::string& nonce) {
-    mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-    _return.nonce = nonce;
-    if (!enable_rendering_) {
-      TMapDException ex;
-      ex.error_msg = "Backend rendering is disabled.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    auto session_it = get_session_it(session);
-    auto session_info_ptr = session_it->second.get();
-    auto& cat = session_info_ptr->get_catalog();
-    LOG(INFO) << "Render: " << query_str;
-    SQLParser parser;
-    std::list<Parser::Stmt*> parse_trees;
-    std::string last_parsed;
-    int num_parse_errors = 0;
-    try {
-      num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
-    } catch (std::exception& e) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: ") + e.what();
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    if (num_parse_errors > 0) {
-      TMapDException ex;
-      ex.error_msg = "Syntax error at: " + last_parsed;
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    if (parse_trees.size() != 1) {
-      TMapDException ex;
-      ex.error_msg = "Can only render a single query at a time.";
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
-    Parser::Stmt* stmt = parse_trees.front();
-    try {
-      std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
-      Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-      if (ddl != nullptr) {
+    _return.total_time_ms = measure<>::execution([&]() {
+      mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+      _return.nonce = nonce;
+      if (!enable_rendering_) {
         TMapDException ex;
-        ex.error_msg = "Can only render SELECT statements.";
+        ex.error_msg = "Backend rendering is disabled.";
         LOG(ERROR) << ex.error_msg;
         throw ex;
-      } else {
-        auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
-        Analyzer::Query query;
-        dml->analyze(cat, query);
-        if (query.get_stmt_type() != kSELECT) {
+      }
+      auto session_it = get_session_it(session);
+      auto session_info_ptr = session_it->second.get();
+      auto& cat = session_info_ptr->get_catalog();
+      LOG(INFO) << "Render: " << query_str;
+      SQLParser parser;
+      std::list<Parser::Stmt*> parse_trees;
+      std::string last_parsed;
+      int num_parse_errors = 0;
+      try {
+        num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
+      } catch (std::exception& e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      if (num_parse_errors > 0) {
+        TMapDException ex;
+        ex.error_msg = "Syntax error at: " + last_parsed;
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      if (parse_trees.size() != 1) {
+        TMapDException ex;
+        ex.error_msg = "Can only render a single query at a time.";
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
+      }
+      Parser::Stmt* stmt = parse_trees.front();
+      try {
+        std::unique_ptr<Parser::Stmt> stmt_ptr(stmt);
+        Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+        if (ddl != nullptr) {
           TMapDException ex;
           ex.error_msg = "Can only render SELECT statements.";
           LOG(ERROR) << ex.error_msg;
           throw ex;
+        } else {
+          auto dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+          Analyzer::Query query;
+          dml->analyze(cat, query);
+          if (query.get_stmt_type() != kSELECT) {
+            TMapDException ex;
+            ex.error_msg = "Can only render SELECT statements.";
+            LOG(ERROR) << ex.error_msg;
+            throw ex;
+          }
+          Planner::Optimizer optimizer(query, cat);
+          auto root_plan = optimizer.optimize();
+          std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
+          root_plan->set_render_type(render_type);
+          root_plan->set_render_properties(&render_properties);
+          root_plan->set_column_render_properties(&col_render_properties);
+          root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
+          auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
+                                                jit_debug_ ? "/tmp" : "",
+                                                jit_debug_ ? "mapdquery" : "",
+                                                0,
+                                                0,
+                                                window_ptr_,
+                                                render_mem_bytes_);
+
+          auto clock_begin = timer_start();
+          auto results = executor->execute(root_plan,
+                                           *session_info_ptr,
+                                           1,  // TODO(alex): de-hardcode widget id
+                                           true,
+                                           session_info_ptr->get_executor_device_type(),
+                                           nvvm_backend_,
+                                           ExecutorOptLevel::Default,
+                                           allow_multifrag_,
+                                           false);
+          // reduce execution time by the time spent during queue waiting
+          _return.execution_time_ms = timer_stop(clock_begin) - results.getQueueTime() - results.getRenderTime();
+          _return.render_time_ms = results.getRenderTime();
+          const auto img_row = results.getNextRow(false, false);
+          CHECK_EQ(size_t(1), img_row.size());
+          const auto& img_tv = img_row.front();
+          const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
+          const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
+          CHECK(nullable_sptr);
+          auto sptr = boost::get<std::string>(nullable_sptr);
+          CHECK(sptr);
+          _return.image = *sptr;
         }
-        Planner::Optimizer optimizer(query, cat);
-        auto root_plan = optimizer.optimize();
-        std::unique_ptr<Planner::RootPlan> plan_ptr(root_plan);  // make sure it's deleted
-        root_plan->set_render_type(render_type);
-        root_plan->set_render_properties(&render_properties);
-        root_plan->set_column_render_properties(&col_render_properties);
-        root_plan->set_plan_dest(Planner::RootPlan::Dest::kRENDER);
-        auto executor = Executor::getExecutor(root_plan->get_catalog().get_currentDB().dbId,
-                                              jit_debug_ ? "/tmp" : "",
-                                              jit_debug_ ? "mapdquery" : "",
-                                              0,
-                                              0,
-                                              window_ptr_,
-                                              render_mem_bytes_);
-        const auto results = executor->execute(root_plan,
-                                               *session_info_ptr,
-                                               1,  // TODO(alex): de-hardcode widget id
-                                               true,
-                                               session_info_ptr->get_executor_device_type(),
-                                               nvvm_backend_,
-                                               ExecutorOptLevel::Default,
-                                               allow_multifrag_,
-                                               false);
-        const auto img_row = results.getNextRow(false, false);
-        CHECK_EQ(size_t(1), img_row.size());
-        const auto& img_tv = img_row.front();
-        const auto scalar_tv = boost::get<ScalarTargetValue>(&img_tv);
-        const auto nullable_sptr = boost::get<NullableString>(scalar_tv);
-        CHECK(nullable_sptr);
-        auto sptr = boost::get<std::string>(nullable_sptr);
-        CHECK(sptr);
-        _return.image = *sptr;
+      } catch (std::exception& e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
       }
-    } catch (std::exception& e) {
-      TMapDException ex;
-      ex.error_msg = std::string("Exception: ") + e.what();
-      LOG(ERROR) << ex.error_msg;
-      throw ex;
-    }
+    });
+    LOG(INFO) << "Total: " << _return.total_time_ms << " (ms), Execution: " << _return.execution_time_ms
+              << " (ms), Render: " << _return.render_time_ms << " (ms)";
   }
 
   void create_frontend_view(const TSessionId session,
