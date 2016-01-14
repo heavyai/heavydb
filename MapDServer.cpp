@@ -74,9 +74,11 @@ class MapDHandler : virtual public MapDIf {
               const int num_gpus,
               const int start_gpu,
 #ifdef HAVE_CALCITE
-              const int calcite_port)
+              const int calcite_port,
+              const bool legacy_syntax)
 #else
-              const int /* calcite_port */)
+              const int /* calcite_port */,
+              const bool /* legacy_syntax */)
 #endif  // HAVE_CALCITE
       : base_data_path_(base_data_path),
         nvvm_backend_(nvvm_backend),
@@ -90,7 +92,8 @@ class MapDHandler : virtual public MapDIf {
         window_ptr_(nullptr),
 #ifdef HAVE_CALCITE
         render_mem_bytes_(render_mem_bytes),
-        calcite_(calcite_port) {
+        calcite_(calcite_port),
+        legacy_syntax_(legacy_syntax) {
 #else
         render_mem_bytes_(render_mem_bytes) {
 #endif  // HAVE_CALCITE
@@ -1120,10 +1123,12 @@ class MapDHandler : virtual public MapDIf {
             static const std::string explain_str{"explain"};
             const bool is_explain{boost::istarts_with(query_str, explain_str)};
             // pass sql to calcite server to let it parse for testing purposes
+            const std::string actual_query{is_explain ? query_str.substr(explain_str.size()) : query_str};
             const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
                                                    session_info.get_currentUser().passwd,
                                                    session_info.get_catalog().get_currentDB().dbName,
-                                                   is_explain ? query_str.substr(explain_str.size()) : query_str);
+                                                   legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                                   legacy_syntax_);
             root_plan = translate_query(query_ra, session_info.get_catalog());
             if (is_explain) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
@@ -1222,6 +1227,7 @@ class MapDHandler : virtual public MapDIf {
   const size_t render_mem_bytes_;
 #ifdef HAVE_CALCITE
   Calcite calcite_;
+  const bool legacy_syntax_;
 #endif  // HAVE_CALCITE
 };
 
@@ -1263,6 +1269,7 @@ int main(int argc, char** argv) {
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
+  bool enable_legacy_syntax = false;
   bool enable_rendering = true;
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
@@ -1305,6 +1312,9 @@ int main(int argc, char** argv) {
   desc.add_options()("allow-loop-joins",
                      po::bool_switch(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
                      "Enable loop joins");
+  desc.add_options()("enable-legacy-syntax",
+                     po::bool_switch(&enable_legacy_syntax)->default_value(enable_legacy_syntax)->implicit_value(true),
+                     "Enable legacy syntax");
   desc.add_options()("cpu-buffer-mem-bytes",
                      po::value<size_t>(&cpu_buffer_mem_bytes)->default_value(cpu_buffer_mem_bytes),
                      "Size of memory reserved for rendering [bytes]");
@@ -1432,7 +1442,8 @@ int main(int argc, char** argv) {
                                                   render_mem_bytes,
                                                   num_gpus,
                                                   start_gpu,
-                                                  calcite_port));
+                                                  calcite_port,
+                                                  enable_legacy_syntax));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));

@@ -32,7 +32,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public TPlanResult process(String user, String passwd, String catalog, String sqlText) throws InvalidParseRequest, TException {
+  public TPlanResult process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     logger.info("process was called User:"+user + " Catalog:"+ catalog+ "sql :" + sqlText);
 
@@ -42,7 +42,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     }
     String relAlgebra;
     try {
-      relAlgebra = parser.getRelAlgebra(sqlText);
+      relAlgebra = parser.getRelAlgebra(sqlText, legacySyntax);
     } catch (SqlParseException ex) {
       logger.error("Parse failed :"+ ex.getMessage());
       throw new InvalidParseRequest(-1, ex.getMessage());

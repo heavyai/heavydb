@@ -49,11 +49,11 @@ Calcite::Calcite(int port) : server_available(true) {
   }
 }
 
-string Calcite::process(string user, string passwd, string catalog, string sql_string) {
+string Calcite::process(string user, string passwd, string catalog, string sql_string, const bool legacy_syntax) {
   if (server_available) {
     LOG(INFO) << "User " << user << " catalog " << catalog << " sql " << sql_string << endl;
     TPlanResult ret;
-    auto ms = measure<>::execution([&]() { client->process(ret, user, passwd, catalog, sql_string); });
+    auto ms = measure<>::execution([&]() { client->process(ret, user, passwd, catalog, sql_string, legacy_syntax); });
     LOG(INFO) << ret.plan_result << endl;
     LOG(INFO) << "Time in Thrift " << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
               << " (ms), Time in Java Calcite server " << ret.execution_time_ms << " (ms)" << endl;

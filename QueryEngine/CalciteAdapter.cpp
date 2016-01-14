@@ -4,6 +4,9 @@
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/replace.hpp>
+#include <boost/regex.hpp>
 #include <glog/logging.h>
 #include <rapidjson/document.h>
 
@@ -977,4 +980,76 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   plan = get_sort_plan(plan, rels, {}, res_targets);
   return new Planner::RootPlan(
       plan, kSELECT, tds[0]->tableId, {}, cat, logical_sort_info.limit, logical_sort_info.offset);
+}
+
+std::string pg_shim(const std::string& query) {
+  auto result = query;
+  boost::ireplace_all(result, "unnest", "PG_UNNEST");
+  {
+    boost::regex mod_expr{R"((\w+|\(.*\))\s*%\s*(\w+|\(.*\)))"};
+    boost::smatch what;
+    while (true) {
+      if (!boost::regex_search(result, what, mod_expr)) {
+        break;
+      }
+      result.replace(what.position(), what.length(), "MOD(" + what[1] + ", " + what[2] + ")");
+    }
+  }
+  {
+    boost::regex ilike_expr{R"((where|having)\s+([^\s]+)\s+ilike\s+('[^']+')(\s+escape(\s+('[^']+')))?)",
+                            boost::regex::extended | boost::regex::icase};
+    boost::smatch what;
+    while (true) {
+      if (!boost::regex_search(result, what, ilike_expr)) {
+        break;
+      }
+      std::string esc = what[6];
+      result.replace(what.position(),
+                     what.length(),
+                     what[1] + " PG_ILIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
+    }
+  }
+  {
+    boost::regex extract_expr{R"(extract\s*\(\s*(\w+)\s+from\s+(.+)\))", boost::regex::extended | boost::regex::icase};
+    boost::smatch what;
+    while (true) {
+      if (!boost::regex_search(result, what, extract_expr)) {
+        break;
+      }
+      result.replace(what.position(), what.length(), "PG_EXTRACT('" + what[1] + "', " + what[2] + ")");
+    }
+  }
+  {
+    boost::regex extract_expr{R"(date_trunc\s*\(\s*(\w+)\s*,(.*)\))", boost::regex::extended | boost::regex::icase};
+    boost::smatch what;
+    while (true) {
+      if (!boost::regex_search(result, what, extract_expr)) {
+        break;
+      }
+      result.replace(what.position(), what.length(), "PG_DATE_TRUNC('" + what[1] + "', " + what[2] + ")");
+    }
+  }
+  {
+    boost::regex quant_expr{R"((any|all)\s+([^(\s|;)]+))", boost::regex::extended | boost::regex::icase};
+    boost::smatch what;
+    while (true) {
+      if (!boost::regex_search(result, what, quant_expr)) {
+        break;
+      }
+      std::string qual_name = what[1];
+      std::string quant_fname{boost::iequals(qual_name, "any") ? "PG_ANY" : "PG_ALL"};
+      result.replace(what.position(), what.length(), quant_fname + "(" + what[2] + ")");
+    }
+  }
+  {
+    boost::regex immediate_cast_expr{R"(([^\s]+)\s+('[^']+'))"};
+    boost::smatch what;
+    while (true) {
+      if (!boost::regex_search(result, what, immediate_cast_expr)) {
+        break;
+      }
+      result.replace(what.position(), what.length(), "CAST(" + what[2] + " AS " + what[1] + ")");
+    }
+  }
+  return result;
 }

@@ -8,4 +8,6 @@
 
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& catalog);
 
+std::string pg_shim(const std::string&);
+
 #endif  // QUERYENGINE_CALCITEADAPTER_H

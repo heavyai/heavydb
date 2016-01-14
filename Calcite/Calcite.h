@@ -17,7 +17,11 @@
 class Calcite {
  public:
   Calcite(int port);
-  std::string process(std::string user, std::string passwd, std::string catalog, std::string sql_string);
+  std::string process(std::string user,
+                      std::string passwd,
+                      std::string catalog,
+                      std::string sql_string,
+                      const bool legacy_syntax);
   void init(int port);
   virtual ~Calcite();
 

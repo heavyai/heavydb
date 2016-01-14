@@ -17,11 +17,18 @@ import org.apache.calcite.rel.externalize.MapDRelJsonWriter;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.sql.SqlAsOperator;
+import org.apache.calcite.sql.SqlBasicCall;
+import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlNodeList;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
+import org.apache.calcite.sql.SqlOrderBy;
+import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
+import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.SqlTypeFactoryImpl;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -74,7 +81,7 @@ public class CalciteParser {
   protected void doWork(String[] args) throws UnsupportedEncodingException, FileNotFoundException, IOException, SqlParseException {
     logger.debug("In doWork");
 
-    logger.info(getRelAlgebra("SELECT origin_lon, origin_lat FROM flights group by origin_lon, origin_lat"));
+    logger.info(getRelAlgebra("SELECT origin_lon, origin_lat FROM flights group by origin_lon, origin_lat", false));
 
     //logger.info(getRelAlgebra("Select * from (SELECT a.deptime*1.4 as delay, a.foodrequest, b.plane_engine_type, "
     //       + "b.weatherdelay FROM flights b join food a on a.deptime=b.deptime"
@@ -88,9 +95,9 @@ public class CalciteParser {
     logger.info("time for 100 parses is " + (System.currentTimeMillis() - timer) + " ms");
   }
 
-  public String getRelAlgebra(String sql) throws SqlParseException {
+  public String getRelAlgebra(String sql, final boolean legacy_syntax) throws SqlParseException {
     long timer = System.currentTimeMillis();
-    SqlNode node = processSQL(sql);
+    SqlNode node = processSQL(sql, legacy_syntax);
 
     typeFactory = getTypeFactory();
 
@@ -129,7 +136,7 @@ public class CalciteParser {
     return res;
   }
 
-  private SqlNode processSQL(String sql) throws SqlParseException {
+  private SqlNode processSQL(String sql, final boolean legacy_syntax) throws SqlParseException {
     SqlNode node = null;
     SqlParser sqlp = getSqlParser(sql);
     try {
@@ -139,9 +146,81 @@ public class CalciteParser {
       logger.error("failed to process SQL '" + sql + "' \n" + ex.toString());
       throw ex;
     }
+    if (!legacy_syntax) {
+      return node;
+    }
+    SqlSelect select_node = null;
+    if (node instanceof SqlSelect) {
+      select_node = (SqlSelect) node;
+    } else if (node instanceof SqlOrderBy) {
+      SqlOrderBy order_by_node = (SqlOrderBy) node;
+      if (order_by_node.query instanceof SqlSelect) {
+        select_node = (SqlSelect) order_by_node.query;
+      }
+    }
+    if (select_node != null) {
+      desugar(select_node);
+    }
     return node;
   }
 
+  private static void desugar(SqlSelect select_node) {
+    SqlNodeList select_list = select_node.getSelectList();
+    java.util.Map<String, SqlNode> id_to_expr = new java.util.HashMap<String, SqlNode>();
+    for (SqlNode proj : select_list) {
+      if (!(proj instanceof SqlBasicCall)) {
+        continue;
+      }
+      SqlBasicCall proj_call = (SqlBasicCall) proj;
+      if (proj_call.getOperator() instanceof SqlAsOperator) {
+        SqlNode[] operands = proj_call.getOperands();
+        SqlIdentifier id = (SqlIdentifier) operands[1];
+        id_to_expr.put(id.toString(), operands[0]);
+      }
+    }
+    SqlNodeList group_by_list = select_node.getGroup();
+    if (group_by_list == null) {
+      return;
+    }
+    select_node.setGroupBy(expandAliases(group_by_list, id_to_expr));
+    SqlNode having = select_node.getHaving();
+    if (having == null) {
+      return;
+    }
+    expandAliases(having, id_to_expr);
+  }
+
+  private static SqlNode expandAliases(final SqlNode node,
+                                       final java.util.Map<String, SqlNode> id_to_expr) {
+    if (node instanceof SqlIdentifier && id_to_expr.containsKey(node.toString())) {
+      return id_to_expr.get(node.toString());
+    }
+    if (node instanceof SqlBasicCall) {
+      SqlBasicCall node_call = (SqlBasicCall) node;
+      SqlNode[] operands = node_call.getOperands();
+      for (int i = 0; i < operands.length; ++i) {
+        node_call.setOperand(i, expandAliases(operands[i], id_to_expr));
+      }
+    }
+    return node;
+  }
+
+  private static SqlNodeList expandAliases(final SqlNodeList group_by_list, final java.util.Map<String, SqlNode> id_to_expr) {
+    SqlNodeList new_group_by_list = new SqlNodeList(new SqlParserPos(-1, -1));
+    for (SqlNode group_by : group_by_list) {
+      if (!(group_by instanceof SqlIdentifier)) {
+        new_group_by_list.add(group_by);
+        continue;
+      }
+      SqlIdentifier group_by_id = ((SqlIdentifier) group_by);
+      if (id_to_expr.containsKey(group_by_id.toString())) {
+        new_group_by_list.add(id_to_expr.get(group_by_id.toString()));
+      } else {
+        new_group_by_list.add(group_by);
+      }
+    }
+    return new_group_by_list;
+  }
   protected final RelDataTypeFactory getTypeFactory() {
     if (typeFactory == null) {
       typeFactory = createTypeFactory();

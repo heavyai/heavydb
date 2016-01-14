@@ -63,7 +63,8 @@ Planner::RootPlan* parse_plan_calcite(const std::string& query_str,
   const auto query_ra = calcite_cli.process(session->get_currentUser().userName,
                                             session->get_currentUser().passwd,
                                             session->get_catalog().get_currentDB().dbName,
-                                            query_str);
+                                            query_str,
+                                            false);
   return translate_query(query_ra, session->get_catalog());
 }
 #endif  // HAVE_CALCITE
