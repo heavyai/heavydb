@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -280,15 +281,15 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 		s.Password = "HyperInteractive"
 		s.Database = "mapd"
 
-		hp := strings.Split(r.Host, ":")
-		s.Host = hp[0]
-		if len(hp) > 1 {
-			s.Port, _ = strconv.Atoi(hp[1])
-		} else if r.URL.Scheme == "https" {
-			s.Port = 443
-		} else {
-			s.Port = 80
+		h, p, _ := net.SplitHostPort(r.Host)
+		s.Port, _ = net.LookupPort("tcp", p)
+		s.Host = h
+		// handle IPv6 addresses
+		ip := net.ParseIP(h)
+		if ip != nil && ip.To4() == nil {
+			s.Host = "[" + h + "]"
 		}
+
 		ss := []Server{s}
 		j, _ = json.Marshal(ss)
 	}
