@@ -1270,7 +1270,7 @@ int main(int argc, char** argv) {
   bool read_only = false;
   bool allow_loop_joins = false;
   bool enable_legacy_syntax = false;
-  bool enable_rendering = true;
+  bool enable_rendering = false;
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
@@ -1289,9 +1289,6 @@ int main(int argc, char** argv) {
   desc.add_options()("read-only",
                      po::bool_switch(&read_only)->default_value(read_only)->implicit_value(true),
                      "Enable read-only mode");
-  desc.add_options()("disable-rendering",
-                     po::bool_switch(&enable_rendering)->default_value(enable_rendering)->implicit_value(false),
-                     "Disable backend rendering");
   desc.add_options()("port,p", po::value<int>(&port)->default_value(port), "Port number");
   desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
 #ifdef HAVE_CALCITE
@@ -1300,12 +1297,6 @@ int main(int argc, char** argv) {
   desc.add_options()("flush-log",
                      po::bool_switch(&flush_log)->default_value(flush_log)->implicit_value(true),
                      "Force aggressive log file flushes. Use when trouble-shooting.");
-  desc.add_options()("cpu-buffer-mem-bytes",
-                     po::value<size_t>(&cpu_buffer_mem_bytes)->default_value(cpu_buffer_mem_bytes),
-                     "Size of memory reserved for rendering [bytes]");
-  desc.add_options()("render-mem-bytes",
-                     po::value<size_t>(&render_mem_bytes)->default_value(render_mem_bytes),
-                     "Size of memory reserved for rendering [bytes]");
   desc.add_options()("num-gpus", po::value<int>(&num_gpus)->default_value(num_gpus), "Number of gpus to use");
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
