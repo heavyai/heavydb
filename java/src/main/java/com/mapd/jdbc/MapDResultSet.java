@@ -64,8 +64,11 @@ class MapDResultSet implements java.sql.ResultSet {
       columnMap.put(colType.getCol_name(), current);
       current++;
     }
-    //TODO MAT need to check for weird case where we dont respond rather than return empty
-    numOfRecords = rowSet.getColumns().get(0).getNullsSize();
+    if (rowSet.columns.isEmpty()){
+      numOfRecords = 0;
+    } else {
+      numOfRecords = rowSet.getColumns().get(0).getNullsSize();
+    }
 
     logger.debug("number of records is " + numOfRecords);
     //logger.debug("Record is "+ sqlResult.toString());
