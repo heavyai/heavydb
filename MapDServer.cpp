@@ -1300,21 +1300,6 @@ int main(int argc, char** argv) {
   desc.add_options()("flush-log",
                      po::bool_switch(&flush_log)->default_value(flush_log)->implicit_value(true),
                      "Force aggressive log file flushes. Use when trouble-shooting.");
-  desc.add_options()("jit-debug",
-                     po::bool_switch(&jit_debug)->default_value(jit_debug)->implicit_value(true),
-                     "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
-  desc.add_options()("use-nvvm",
-                     po::bool_switch(&use_nvptx)->default_value(use_nvptx)->implicit_value(false),
-                     "Use NVVM instead of NVPTX");
-  desc.add_options()("disable-multifrag",
-                     po::bool_switch(&allow_multifrag)->default_value(allow_multifrag)->implicit_value(false),
-                     "Disable execution over multiple fragments in a single round-trip to GPU");
-  desc.add_options()("allow-loop-joins",
-                     po::bool_switch(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
-                     "Enable loop joins");
-  desc.add_options()("enable-legacy-syntax",
-                     po::bool_switch(&enable_legacy_syntax)->default_value(enable_legacy_syntax)->implicit_value(true),
-                     "Enable legacy syntax");
   desc.add_options()("cpu-buffer-mem-bytes",
                      po::value<size_t>(&cpu_buffer_mem_bytes)->default_value(cpu_buffer_mem_bytes),
                      "Size of memory reserved for rendering [bytes]");
@@ -1325,18 +1310,40 @@ int main(int argc, char** argv) {
   desc.add_options()("start-gpu", po::value<int>(&start_gpu)->default_value(start_gpu), "First gpu to use");
   desc.add_options()("version,v", "Print Release Version Number");
 
+  po::options_description desc_adv("Advanced options");
+  desc_adv.add_options()("help-advanced", "Print advanced help messages");
+  desc_adv.add_options()("jit-debug",
+                         po::bool_switch(&jit_debug)->default_value(jit_debug)->implicit_value(true),
+                         "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
+  desc_adv.add_options()("use-nvvm",
+                         po::bool_switch(&use_nvptx)->default_value(use_nvptx)->implicit_value(false),
+                         "Use NVVM instead of NVPTX");
+  desc_adv.add_options()("disable-multifrag",
+                         po::bool_switch(&allow_multifrag)->default_value(allow_multifrag)->implicit_value(false),
+                         "Disable execution over multiple fragments in a single round-trip to GPU");
+  desc_adv.add_options()("allow-loop-joins",
+                         po::bool_switch(&allow_loop_joins)->default_value(allow_loop_joins)->implicit_value(true),
+                         "Enable loop joins");
+  desc_adv.add_options()(
+      "enable-legacy-syntax",
+      po::bool_switch(&enable_legacy_syntax)->default_value(enable_legacy_syntax)->implicit_value(true),
+      "Enable legacy syntax");
+
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
+
+  po::options_description desc_all("All options");
+  desc_all.add(desc).add(desc_adv);
 
   po::variables_map vm;
 
   try {
-    po::store(po::command_line_parser(argc, argv).options(desc).positional(positionalOptions).run(), vm);
+    po::store(po::command_line_parser(argc, argv).options(desc_all).positional(positionalOptions).run(), vm);
     po::notify(vm);
 
     if (vm.count("config")) {
       std::ifstream settings_file(config_file);
-      po::store(po::parse_config_file(settings_file, desc, true), vm);
+      po::store(po::parse_config_file(settings_file, desc_all, true), vm);
       po::notify(vm);
       settings_file.close();
     }
@@ -1345,6 +1352,12 @@ int main(int argc, char** argv) {
       std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
                    "number>] [--http-port <http port number>] [--flush-log] [--version|-v]" << std::endl << std::endl;
       std::cout << desc << std::endl;
+      return 0;
+    }
+    if (vm.count("help-advanced")) {
+      std::cout << "Usage: mapd_server <catalog path> [<database name>] [--cpu|--gpu|--hybrid] [-p <port "
+                   "number>] [--http-port <http port number>] [--flush-log] [--version|-v]" << std::endl << std::endl;
+      std::cout << desc_all << std::endl;
       return 0;
     }
     if (vm.count("version")) {
