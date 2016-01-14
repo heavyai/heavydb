@@ -303,11 +303,13 @@ public class MapDRelJson {
       final Object value = literal.getValue();
       if (value instanceof BigDecimal) {
         map.put("scale", ((BigDecimal) value).scale());
+        map.put("precision", ((BigDecimal) value).precision());
       } else {
         map.put("scale", literal.getType().getScale());
+        map.put("precision", literal.getType().getPrecision());
       }
       map.put("type_scale", literal.getType().getScale());
-      map.put("precision", literal.getType().getPrecision());
+      map.put("type_precision", literal.getType().getPrecision());
       return map;
     case INPUT_REF:
       map = jsonBuilder.map();

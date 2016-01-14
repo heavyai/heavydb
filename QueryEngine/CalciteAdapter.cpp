@@ -160,13 +160,17 @@ std::tuple<const rapidjson::Value*, SQLTypeInfo, SQLTypeInfo> parse_literal(cons
   CHECK(precision_it != expr.MemberEnd());
   CHECK(precision_it->value.IsInt());
   const int precision = precision_it->value.GetInt();
+  auto type_precision_it = expr.FindMember("type_precision");
+  CHECK(type_precision_it != expr.MemberEnd());
+  CHECK(type_precision_it->value.IsInt());
+  const int type_precision = type_precision_it->value.GetInt();
   const auto sql_type = to_sql_type(type_name);
   SQLTypeInfo ti(sql_type, 0, 0, false);
   ti.set_scale(scale);
   ti.set_precision(precision);
   SQLTypeInfo type_ti(sql_type, 0, 0, false);
   type_ti.set_scale(type_scale);
-  type_ti.set_precision(precision);
+  type_ti.set_precision(type_precision);
   return std::make_tuple(&(val_it->value), ti, type_ti);
 }
 
@@ -496,10 +500,9 @@ class CalciteAdapter {
         const int precision = lit_ti.get_precision();
         const int scale = lit_ti.get_scale();
         const auto& target_ti = std::get<2>(parsed_lit);
-        const int target_scale = target_ti.get_scale();
         auto lit_expr =
             scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
-        return scale != target_scale ? lit_expr->add_cast(target_ti) : lit_expr;
+        return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
       }
       case kTEXT: {
         CHECK(json_val->IsString());
