@@ -1042,13 +1042,13 @@ std::string pg_shim(const std::string& query) {
     }
   }
   {
-    boost::regex immediate_cast_expr{R"(([^\s]+)\s+('[^']+'))"};
+    boost::regex immediate_cast_expr{R"(TIMESTAMP\(0\)\s+('[^']+'))", boost::regex::extended | boost::regex::icase};
     boost::smatch what;
     while (true) {
       if (!boost::regex_search(result, what, immediate_cast_expr)) {
         break;
       }
-      result.replace(what.position(), what.length(), "CAST(" + what[2] + " AS " + what[1] + ")");
+      result.replace(what.position(), what.length(), "CAST(" + what[1] + " AS TIMESTAMP(0))");
     }
   }
   return result;
