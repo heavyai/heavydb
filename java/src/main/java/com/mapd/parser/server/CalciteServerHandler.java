@@ -32,7 +32,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public TPlanResult process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax) throws InvalidParseRequest, TException {
+  public synchronized TPlanResult process(String user, String passwd, String catalog, String sqlText, boolean legacySyntax) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     logger.info("process was called User:"+user + " Catalog:"+ catalog+ "sql :" + sqlText);
 

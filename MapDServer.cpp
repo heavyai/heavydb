@@ -1124,12 +1124,15 @@ class MapDHandler : virtual public MapDIf {
             const bool is_explain{boost::istarts_with(query_str, explain_str)};
             // pass sql to calcite server to let it parse for testing purposes
             const std::string actual_query{is_explain ? query_str.substr(explain_str.size()) : query_str};
-            const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
-                                                   session_info.get_currentUser().passwd,
-                                                   session_info.get_catalog().get_currentDB().dbName,
-                                                   legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                                   legacy_syntax_);
-            root_plan = translate_query(query_ra, session_info.get_catalog());
+            {
+              std::lock_guard<std::mutex> calcite_lock(calcite_mutex_);
+              const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
+                                                     session_info.get_currentUser().passwd,
+                                                     session_info.get_catalog().get_currentDB().dbName,
+                                                     legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                                     legacy_syntax_);
+              root_plan = translate_query(query_ra, session_info.get_catalog());
+            }
             if (is_explain) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
@@ -1223,6 +1226,7 @@ class MapDHandler : virtual public MapDIf {
   bool enable_rendering_;
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
+  std::mutex calcite_mutex_;
   GLFWwindow* window_ptr_;
   const size_t render_mem_bytes_;
 #ifdef HAVE_CALCITE
