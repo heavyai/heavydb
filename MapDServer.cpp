@@ -1119,6 +1119,7 @@ class MapDHandler : virtual public MapDIf {
 #ifdef HAVE_CALCITE
       if (with_calcite) {
         try {
+          std::unique_ptr<Planner::RootPlan> plan_ptr;
           _return.execution_time_ms += measure<>::execution([&]() {
             static const std::string explain_str{"explain"};
             const bool is_explain{boost::istarts_with(query_str, explain_str)};
@@ -1132,6 +1133,7 @@ class MapDHandler : virtual public MapDIf {
                                                      legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                                      legacy_syntax_);
               root_plan = translate_query(query_ra, session_info.get_catalog());
+              plan_ptr.reset(root_plan);
             }
             if (is_explain) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
