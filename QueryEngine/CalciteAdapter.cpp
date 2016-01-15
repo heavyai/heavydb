@@ -665,7 +665,6 @@ LogicalSortInfo get_logical_sort_info(const rapidjson::Value& rels) {
       for (size_t i = 0; i < result.order_entries.size(); ++i, ++oe_it) {
         const auto& oe_node = collation[i];
         const auto& oe = *oe_it;
-        CHECK_EQ(oe.tle_no, oe_node["field"].GetInt() + 1);
         CHECK_EQ(oe.is_desc, std::string("DESCENDING") == oe_node["direction"].GetString());
         CHECK_EQ(oe.nulls_first, std::string("FIRST") == oe_node["nulls"].GetString());
       }
