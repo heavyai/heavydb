@@ -223,6 +223,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
                 .get(value.getCol_type().is_array ? 1 : 0));
 
       }
+      mtable.addColumn("rowid", typeFactory.createSqlType(SqlTypeName.BIGINT));
       try {
         mtable.setRowCount(client.get_row_count(session, table));
       } catch (ThriftException ex) {

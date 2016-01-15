@@ -108,7 +108,25 @@ public class CalciteParser {
             = createValidator(
                     catalogReader, typeFactory);
 
+    boolean is_select_star = isSelectStar(node);
+
     SqlNode validate = validator.validate(node);
+
+    SqlSelect validate_select = getSelectChild(validate);
+
+    // Hide rowid from select * queries
+    if (legacy_syntax && is_select_star && validate_select != null) {
+      SqlNodeList proj_exprs = ((SqlSelect) validate).getSelectList();
+      SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
+      for (SqlNode proj_expr : proj_exprs) {
+        if (proj_expr instanceof SqlIdentifier &&
+            (((SqlIdentifier) proj_expr).toString().toLowerCase()).endsWith(".rowid")) {
+          continue;
+        }
+        new_proj_exprs.add(proj_expr);
+      }
+      validate_select.setSelectList(new_proj_exprs);
+    }
 
     final SqlToRelConverter converter
             = createSqlToRelConverter(
@@ -134,6 +152,35 @@ public class CalciteParser {
     //logger.info("After convert relalgebra is \n" + res);
 
     return res;
+  }
+
+  private boolean isSelectStar(SqlNode node) {
+    SqlSelect select_node = getSelectChild(node);
+    if (select_node == null) {
+      return false;
+    }
+    SqlNodeList proj_exprs = select_node.getSelectList();
+    if (proj_exprs.size() != 1) {
+      return false;
+    }
+    SqlNode proj_expr = proj_exprs.get(0);
+    if (!(proj_expr instanceof SqlIdentifier)) {
+      return false;
+    }
+    return ((SqlIdentifier) proj_expr).isStar();
+  }
+
+  private SqlSelect getSelectChild(SqlNode node) {
+    if (node instanceof SqlSelect) {
+      return (SqlSelect) node;
+    }
+    if (node instanceof SqlOrderBy) {
+      SqlOrderBy order_by_node = (SqlOrderBy) node;
+      if (order_by_node.query instanceof SqlSelect) {
+        return (SqlSelect) order_by_node.query;
+      }
+    }
+    return null;
   }
 
   private SqlNode processSQL(String sql, final boolean legacy_syntax) throws SqlParseException {
