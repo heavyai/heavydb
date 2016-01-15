@@ -36,7 +36,7 @@ import org.slf4j.LoggerFactory;
 class MapDPreparedStatement implements PreparedStatement {
 
   final static Logger logger = LoggerFactory.getLogger(MapDPreparedStatement.class);
-  
+
   private String currentSQL;
   private int session;
   private MapD.Client client;
@@ -534,7 +534,7 @@ class MapDPreparedStatement implements PreparedStatement {
   }
 
   @Override
-  public boolean isCloseOnCompletion()  throws SQLException { //logger.debug("Entered");    
+  public boolean isCloseOnCompletion()  throws SQLException { //logger.debug("Entered");
     logger.info("Entered");
     logger.info("Entered");
     throw new UnsupportedOperationException("Not supported yet, line:"+new Throwable().getStackTrace()[0].getLineNumber());

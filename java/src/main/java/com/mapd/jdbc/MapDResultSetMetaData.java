@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 class MapDResultSetMetaData implements ResultSetMetaData {
-  final static Logger logger = LoggerFactory.getLogger(MapDResultSetMetaData.class); 
+  final static Logger logger = LoggerFactory.getLogger(MapDResultSetMetaData.class);
   final TQueryResult sqlResult;
   final String sql;
 
@@ -32,6 +32,7 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public boolean isAutoIncrement(int column) throws SQLException { //logger.debug("Entered "+ sql );
+  //logger.debug("returning false");
     return false;
   }
 
@@ -69,7 +70,7 @@ class MapDResultSetMetaData implements ResultSetMetaData {
 
   @Override
   public String getColumnLabel(int column) throws SQLException { //logger.debug("Entered "+ sql );
-    logger.debug("ColumnLabel is "+ sqlResult.row_set.row_desc.get(column -1).col_name);
+    //logger.debug("ColumnLabel is "+ sqlResult.row_set.row_desc.get(column -1).col_name);
     return sqlResult.row_set.row_desc.get(column -1).col_name;
   }
 

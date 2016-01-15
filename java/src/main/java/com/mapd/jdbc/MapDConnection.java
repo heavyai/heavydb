@@ -11,6 +11,7 @@ import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
 import java.sql.Clob;
+import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.NClob;
 import java.sql.PreparedStatement;
@@ -178,12 +179,11 @@ public class MapDConnection implements java.sql.Connection {
 
   @Override
   public void setTransactionIsolation(int level) throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
   }
 
   @Override
   public int getTransactionIsolation() throws SQLException { //logger.debug("Entered");
-    throw new UnsupportedOperationException("Not supported yet.");
+    return Connection.TRANSACTION_NONE;
   }
 
   @Override

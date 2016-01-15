@@ -63,17 +63,17 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean isReadOnly() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean nullsAreSortedHigh() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean nullsAreSortedLow() throws SQLException { //logger.debug("Entered");
-    return true;
+    return false;
   }
 
   @Override
@@ -83,7 +83,7 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean nullsAreSortedAtEnd() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -147,12 +147,12 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean storesMixedCaseIdentifiers() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsMixedCaseQuotedIdentifiers() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -197,12 +197,13 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public String getTimeDateFunctions() throws SQLException { //logger.debug("Entered");
-    return "";
+    //return "NOW,CURDATE,SECOND,HOUR,YEAR,EXTRACT,QUARTER,WEEK,MONTH,DATETRUNC";
+    return "SECOND, MINUTE, WEEK, HOUR, MONTH, QUARTER, DATETRUNC, NOW, CURDATE, EXTRACT, DATENAME, DATEPART, DATEDIFF, DATETIME";
   }
 
   @Override
   public String getSearchStringEscape() throws SQLException { //logger.debug("Entered");
-    return "";
+    return "\\";
   }
 
   @Override
@@ -262,17 +263,17 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean supportsGroupBy() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsGroupByUnrelated() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsGroupByBeyondSelect() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -292,37 +293,37 @@ class MapDDatabaseMetaData implements DatabaseMetaData {
 
   @Override
   public boolean supportsNonNullableColumns() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsMinimumSQLGrammar() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsCoreSQLGrammar() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsExtendedSQLGrammar() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsANSI92EntryLevelSQL() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsANSI92IntermediateSQL() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
   public boolean supportsANSI92FullSQL() throws SQLException { //logger.debug("Entered");
-    return false;
+    return true;
   }
 
   @Override
@@ -1215,7 +1216,7 @@ SQLException - if a database access error occurs
 //typeSearchable - Supported for all WHERE ..
     dataMap.get("UNSIGNED_ATTRIBUTE").setNull(true);// boolean => is it unsigned.
     dataMap.get("FIXED_PREC_SCALE").setNull(true);// boolean => can it be a money value.
-    dataMap.get("AUTO_INCREMENT").setNull(true);// boolean => can it be used for an auto-increment value.
+    dataMap.get("AUTO_INCREMENT").setNull(false);// boolean => can it be used for an auto-increment value.
     dataMap.get("LOCAL_TYPE_NAME").setNull(true);// String => localized version of type name (may be null)
     dataMap.get("MINIMUM_SCALE").setNull(true);// short => minimum scale supported
     dataMap.get("MAXIMUM_SCALE").setNull(true);// short => maximum scale supported
