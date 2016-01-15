@@ -581,14 +581,23 @@ class CalciteAdapter {
 };
 
 void reproject_target_entries(std::vector<std::shared_ptr<Analyzer::TargetEntry>>& agg_targets,
-                              const std::vector<size_t>& result_proj_indices) {
+                              const std::vector<size_t>& result_proj_indices,
+                              const rapidjson::Value& fields) {
+  CHECK(fields.IsArray());
+  CHECK_EQ(static_cast<size_t>(fields.Size()), result_proj_indices.size());
   if (result_proj_indices.empty()) {
     return;
   }
   std::vector<std::shared_ptr<Analyzer::TargetEntry>> agg_targets_reproj;
+  auto fields_it = fields.Begin();
   for (const auto proj_idx : result_proj_indices) {
     CHECK_LT(proj_idx, agg_targets.size());
-    agg_targets_reproj.push_back(agg_targets[proj_idx]);
+    CHECK(fields_it != fields.End());
+    CHECK(fields_it->IsString());
+    const auto te = agg_targets[proj_idx];
+    agg_targets_reproj.emplace_back(
+        new Analyzer::TargetEntry(fields_it->GetString(), te->get_own_expr(), te->get_unnest()));
+    ++fields_it;
   }
   agg_targets.swap(agg_targets_reproj);
 }
@@ -809,7 +818,7 @@ std::vector<std::shared_ptr<Analyzer::TargetEntry>> handle_logical_project(
     return build_result_plan_targets(result, exprs, fields, calcite_adapter);
   } else {  // just target permutation. no need to create a result plan
     const auto reproj_indices = collect_reproject_indices(exprs);
-    reproject_target_entries(result, reproj_indices);
+    reproject_target_entries(result, reproj_indices, fields);
   }
   return result;
 }
