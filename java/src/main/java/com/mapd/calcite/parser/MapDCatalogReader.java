@@ -53,7 +53,6 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
@@ -70,7 +69,7 @@ import org.slf4j.LoggerFactory;
 public class MapDCatalogReader implements Prepare.CatalogReader {
   //~ Static fields/initializers ---------------------------------------------
 
-  final static Logger logger = LoggerFactory.getLogger(MapDCatalogReader.class);
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDCatalogReader.class);
 
   protected static final String DEFAULT_CATALOG = "CATALOG";
   protected static String DEFAULT_SCHEMA = "mapd";
@@ -156,9 +155,8 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     }
 
     int session = 0;
-    MapD.Client client = null;
-    // establish connection to mapd server
 
+    // establish connection to mapd server
     TTransport transport;
     transport = new TSocket(host, port);
 
@@ -170,7 +168,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
     TProtocol protocol = new TBinaryProtocol(transport);
 
-    client = new MapD.Client(protocol);
+    MapD.Client client = new MapD.Client(protocol);
 
     try {
       session = client.connect(user, passwd, db);
@@ -180,13 +178,13 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       throw new RuntimeException("Connect failed - " + ex.toString());
     }
 
-    logger.debug("Connected session is " + session);
+    MAPDLOGGER.debug("Connected session is " + session);
 
     MapDSchema schema = new MapDSchema(db);
 
     registerSchema(schema);
 
-    logger.debug("Schema is " + db);
+    MAPDLOGGER.debug("Schema is " + db);
 
     // now for each db collect all tables
     List<String> ttables = null;
@@ -198,7 +196,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       throw new RuntimeException("Get tables failed - " + ex.toString());
     }
     for (String table : ttables) {
-      logger.debug("\t table  is " + table);
+      MAPDLOGGER.debug("\t table  is " + table);
       MapDTable mtable = MapDTable.create(this, schema, table, false);
 
       // Now get tables column details
@@ -213,7 +211,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
       for (Map.Entry<String, TColumnType> entry : tableDescriptor.entrySet()) {
         TColumnType value = entry.getValue();
-        logger.debug("'" + entry.getKey() + "'"
+        MAPDLOGGER.debug("'" + entry.getKey() + "'"
                 + " \t" + value.getCol_type().getEncoding()
                 + " \t" + value.getCol_type().getFieldValue(TTypeInfo._Fields.TYPE)
                 + " \t" + value.getCol_type().nullable
@@ -650,28 +648,34 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     }
   }
 
+  @Override
   public List<String> getSchemaName() {
     return ImmutableList.of(DEFAULT_CATALOG, DEFAULT_SCHEMA);
   }
 
+  @Override
   public RelDataTypeField field(RelDataType rowType, String alias) {
     return SqlValidatorUtil.lookupField(caseSensitive, elideRecord, rowType,
             alias);
   }
 
+  @Override
   public int fieldOrdinal(RelDataType rowType, String alias) {
     final RelDataTypeField field = field(rowType, alias);
     return field != null ? field.getIndex() : -1;
   }
 
+  @Override
   public boolean matches(String string, String name) {
     return Util.matches(caseSensitive, string, name);
   }
 
+  @Override
   public int match(List<String> strings, String name) {
     return Util.findMatch(strings, name, caseSensitive);
   }
 
+  @Override
   public RelDataType createTypeFromProjection(final RelDataType type,
           final List<String> columnNameList) {
     return SqlValidatorUtil.createTypeFromProjection(type, columnNameList,
