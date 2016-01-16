@@ -1014,7 +1014,7 @@ std::string pg_shim(const std::string& query) {
   auto result = query;
   boost::ireplace_all(result, "unnest", "PG_UNNEST");
   {
-    boost::regex ilike_expr{R"((where|having)\s+([^\s]+)\s+ilike\s+('[^']+')(\s+escape(\s+('[^']+')))?)",
+    boost::regex ilike_expr{R"((\s+)([^\s]+)\s+ilike\s+('[^']+')(\s+escape(\s+('[^']+')))?)",
                             boost::regex::extended | boost::regex::icase};
     boost::smatch what;
     while (true) {
@@ -1024,7 +1024,7 @@ std::string pg_shim(const std::string& query) {
       std::string esc = what[6];
       result.replace(what.position(),
                      what.length(),
-                     what[1] + " PG_ILIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
+                     what[1] + "PG_ILIKE(" + what[2] + ", " + what[3] + (esc.empty() ? "" : ", " + esc) + ")");
     }
   }
   {
