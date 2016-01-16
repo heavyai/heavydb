@@ -515,11 +515,16 @@ class CalciteAdapter {
         d.boolval = json_val->GetBool();
         return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
       }
+      case kDOUBLE: {
+        CHECK(json_val->IsDouble());
+        Datum d;
+        d.doubleval = json_val->GetDouble();
+        return makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+      }
       case kNULLT: {
         return makeExpr<Analyzer::Constant>(kNULLT, true);
       }
-      default:
-        CHECK(false);
+      default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
     }
     return nullptr;
   }
