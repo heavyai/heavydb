@@ -134,9 +134,7 @@ SQLTypes to_sql_type(const std::string& type_name) {
 
 ssize_t get_agg_operand_idx(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
-  if (!expr.HasMember("agg")) {
-    return -1;
-  }
+  CHECK(expr.HasMember("agg"));
   const auto& agg_operands = expr["operands"];
   CHECK(agg_operands.IsArray());
   CHECK(agg_operands.Size() <= 1);
@@ -481,14 +479,13 @@ class CalciteAdapter {
     CHECK(expr_type.IsObject());
     const auto agg_kind = to_agg_kind(expr["agg"].GetString());
     const bool is_distinct = expr["distinct"].GetBool();
-    const bool takes_arg = agg_kind != kCOUNT || is_distinct;
     const auto operand = get_agg_operand_idx(expr);
-    const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
-    const auto agg_ti = get_agg_type(agg_kind, arg_expr);
+    const bool takes_arg{operand >= 0};
     if (takes_arg) {
-      CHECK_GE(operand, ssize_t(0));
       CHECK_LT(operand, static_cast<ssize_t>(scan_targets.size()));
     }
+    const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
+    const auto agg_ti = get_agg_type(agg_kind, arg_expr);
     return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
   }
 
