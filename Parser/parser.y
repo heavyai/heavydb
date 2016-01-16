@@ -73,7 +73,7 @@ using namespace Parser;
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DISTINCT DOUBLE DROP
 %token ELSE END EXISTS EXPLAIN EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
 %token GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
-%token IS LANGUAGE LAST LENGTH LIKE LIMIT NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
+%token IS LANGUAGE LAST LENGTH LIKE LIMIT MOD NOW NULLX NUMERIC OF OFFSET ON OPEN OPTION
 %token ORDER PARAMETER PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token PUBLIC REAL REFERENCES RENAME ROLLBACK SCHEMA SELECT SET SHOW
 %token SMALLINT SOME TABLE TEXT THEN TIME TIMESTAMP TO UNION
@@ -884,6 +884,7 @@ scalar_exp:
 	|	scalar_exp '*' scalar_exp { $<nodeval>$ = new OperExpr(kMULTIPLY, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	scalar_exp '/' scalar_exp { $<nodeval>$ = new OperExpr(kDIVIDE, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
 	|	scalar_exp '%' scalar_exp { $<nodeval>$ = new OperExpr(kMODULO, dynamic_cast<Expr*>($<nodeval>1), dynamic_cast<Expr*>($<nodeval>3)); }
+	|	MOD '(' scalar_exp ',' scalar_exp ')' { $<nodeval>$ = new OperExpr(kMODULO, dynamic_cast<Expr*>($<nodeval>3), dynamic_cast<Expr*>($<nodeval>5)); }
 	|	'+' scalar_exp %prec UMINUS { $<nodeval>$ = $<nodeval>2; }
 	|	'-' scalar_exp %prec UMINUS { $<nodeval>$ = new OperExpr(kUMINUS, dynamic_cast<Expr*>($<nodeval>2), nullptr); }
 	|	atom { $<nodeval>$ = $<nodeval>1; }
