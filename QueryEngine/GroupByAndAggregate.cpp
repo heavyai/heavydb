@@ -2723,7 +2723,9 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
       CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
     }
     const bool is_simple_count = agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
-    if (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() && is_simple_count) {
+    auto arg_expr = agg_arg(target_expr);
+    if (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() && is_simple_count &&
+        (!arg_expr || arg_expr->get_type_info().get_notnull())) {
       CHECK_EQ(size_t(1), agg_fn_names.size());
       // TODO(alex): use 32-bit wherever possible, avoid casts
       auto acc_i32 = LL_BUILDER.CreateCast(
@@ -2737,7 +2739,6 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
     }
     size_t target_lv_idx = 0;
     for (const auto& agg_base_name : agg_fn_names) {
-      auto arg_expr = agg_arg(target_expr);
       if (agg_info.is_distinct && arg_expr->get_type_info().is_array()) {
         CHECK(agg_info.is_distinct);
         const auto& elem_ti = arg_expr->get_type_info().get_elem_type();
