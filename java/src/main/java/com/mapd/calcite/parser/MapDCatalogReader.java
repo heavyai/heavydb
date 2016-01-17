@@ -1,18 +1,5 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Clever MapD license
  */
 package com.mapd.calcite.parser;
 
@@ -33,7 +20,6 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlMonikerImpl;
 import org.apache.calcite.sql.validate.SqlMonikerType;
-import org.apache.calcite.sql.validate.SqlValidatorCatalogReader;
 import org.apache.calcite.sql.validate.SqlValidatorUtil;
 import org.apache.calcite.util.Util;
 
@@ -63,8 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * MapD implementation of {@link SqlValidatorCatalogReader} which returns tables "EMP", "DEPT", "BONUS", "SALGRADE"
- * (same as Oracle's SCOTT schema). Also two streams "ORDERS", "SHIPMENTS"; and a view "EMP_20".
+ * MapD Catalog reader Includes default SALES schema for testing purposes
  */
 public class MapDCatalogReader implements Prepare.CatalogReader {
   //~ Static fields/initializers ---------------------------------------------
@@ -72,18 +57,20 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDCatalogReader.class);
 
   protected static final String DEFAULT_CATALOG = "CATALOG";
-  protected static String DEFAULT_SCHEMA = "mapd";
+  protected String CURRENT_DEFAULT_SCHEMA = "mapd";
 
   public static final Ordering<Iterable<String>> CASE_INSENSITIVE_LIST_COMPARATOR
           = Ordering.from(String.CASE_INSENSITIVE_ORDER).lexicographical();
 
+  private static volatile Map<List<String>, MapDTable> MAPD_TABLES = Maps.newConcurrentMap();
+  private static volatile Map<String, MapDSchema> MAPD_SCHEMAS = Maps.newConcurrentMap();
+
   //~ Instance fields --------------------------------------------------------
   protected final RelDataTypeFactory typeFactory;
-  private final boolean caseSensitive;
   private final boolean elideRecord = true;
-  private final Map<List<String>, MapDTable> tables;
-  protected final Map<String, MapDSchema> schemas;
   private RelDataType addressType;
+  private final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
+  private MapDUser currentMapDUser;
 
   //~ Constructors -----------------------------------------------------------
   /**
@@ -93,48 +80,12 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
    * Caller must then call {@link #init} to populate with data.</p>
    *
    * @param typeFactory Type factory
-   * @param caseSensitive boolean
    */
-  public MapDCatalogReader(RelDataTypeFactory typeFactory,
-          boolean caseSensitive) {
+  public MapDCatalogReader(RelDataTypeFactory typeFactory) {
     this.typeFactory = typeFactory;
-    this.caseSensitive = caseSensitive;
-    if (caseSensitive) {
-      tables = Maps.newHashMap();
-      schemas = Maps.newHashMap();
-    } else {
-      tables = Maps.newTreeMap(CASE_INSENSITIVE_LIST_COMPARATOR);
-      schemas = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
-    }
-  }
-
-  /**
-   * Initializes this catalog reader.
-   *
-   * @return MapDCatalogReader reads the catalog for this database we will need to hold catalog info in the calcite
-   * server with a mechanism to overwrite, each schema will equate to one catalog
-   */
-  public MapDCatalogReader init() {
-    return init("mapd", "HyperInteractive", "localhost", 9091, "mapd");
-  }
-
-  /**
-   * Initializes this catalog reader.
-   *
-   * @param user
-   * @param passwd
-   * @param host
-   * @param port
-   * @param db
-   * @return
-   */
-  public MapDCatalogReader init(String user, String passwd, String host, int port, String db) {
-
-    DEFAULT_SCHEMA = db;
 
     // add all the MapD datatype into this structure
     // it is indexed with the TDatumType,  isArray , isNullable
-    final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
     mapDTypes = new EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>>(TDatumType.class);
 
     for (TDatumType dType : TDatumType.values()) {
@@ -154,11 +105,17 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       mapDTypes.put(dType, nullList);
     }
 
+    addDefaultTestSchemas();
+  }
+
+  private MapDTable getTableData(String tableName) {
+
     int session = 0;
 
     // establish connection to mapd server
     TTransport transport;
-    transport = new TSocket(host, port);
+    //always local host do not support sepertion of calcite and mapd server
+    transport = new TSocket("localhost", currentMapDUser.getMapDPort());
 
     try {
       transport.open();
@@ -171,7 +128,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     MapD.Client client = new MapD.Client(protocol);
 
     try {
-      session = client.connect(user, passwd, db);
+      session = client.connect(currentMapDUser.getUser(), currentMapDUser.getPasswd(), currentMapDUser.getDB());
     } catch (ThriftException ex) {
       throw new RuntimeException("Connect failed - " + ex.toString());
     } catch (TException ex) {
@@ -180,35 +137,34 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
     MAPDLOGGER.debug("Connected session is " + session);
 
-    MapDSchema schema = new MapDSchema(db);
-
-    registerSchema(schema);
-
-    MAPDLOGGER.debug("Schema is " + db);
-
-    // now for each db collect all tables
-    List<String> ttables = null;
-    try {
-      ttables = client.get_tables(session);
-    } catch (ThriftException ex) {
-      throw new RuntimeException("Get tables failed - " + ex.toString());
-    } catch (TException ex) {
-      throw new RuntimeException("Get tables failed - " + ex.toString());
+    // get schema
+    MapDSchema schema = MAPD_SCHEMAS.get(currentMapDUser.getDB());
+    // if schema doesn't exist create it and store it
+    // note we are in sync block here as all table create is managed in sync
+    if (schema == null) {
+      schema = new MapDSchema(currentMapDUser.getDB());
+      registerSchema(schema);
     }
-    for (String table : ttables) {
-      MAPDLOGGER.debug("\t table  is " + table);
-      MapDTable mtable = MapDTable.create(this, schema, table, false);
 
-      // Now get tables column details
-      Map<String, TColumnType> tableDescriptor = null;
-      try {
-        tableDescriptor = client.get_table_descriptor(session, table);
-      } catch (ThriftException ex) {
-        throw new RuntimeException("Get table descriptor failed - " + ex.toString());
-      } catch (TException ex) {
-        throw new RuntimeException("Get table descriptor failed - " + ex.toString());
-      }
+    MAPDLOGGER.debug("Schema is " + currentMapDUser.getDB());
 
+    MAPDLOGGER.debug("\t table  is " + tableName);
+    MapDTable mtable = MapDTable.create(this, schema, tableName, false);
+
+    // Now get tables column details
+    Map<String, TColumnType> tableDescriptor = null;
+    try {
+      tableDescriptor = client.get_table_descriptor(session, tableName);
+    } catch (ThriftException ex) {
+      throw new RuntimeException("Get table descriptor failed - " + ex.toString());
+    } catch (TException ex) {
+      if (!ex.toString().equals("TMapDException(error_msg:Table doesn't exist)")) {
+        throw new RuntimeException("Get table descriptor failed - " + ex.toString());
+      } 
+    }
+
+    // if we have a table descriptor from mapd server
+    if (tableDescriptor != null) {
       for (Map.Entry<String, TColumnType> entry : tableDescriptor.entrySet()) {
         TColumnType value = entry.getValue();
         MAPDLOGGER.debug("'" + entry.getKey() + "'"
@@ -225,13 +181,16 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       }
       mtable.addColumn("rowid", typeFactory.createSqlType(SqlTypeName.BIGINT));
       try {
-        mtable.setRowCount(client.get_row_count(session, table));
+        mtable.setRowCount(client.get_row_count(session, tableName));
       } catch (ThriftException ex) {
         throw new RuntimeException("Get Row Count failed - " + ex.toString());
       } catch (TException ex) {
         throw new RuntimeException("Get Row Count failed - " + ex.toString());
       }
       registerTable(mtable);
+    } else {
+      // no table in MapD server schema
+      mtable = null;
     }
 
     try {
@@ -242,9 +201,8 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       throw new RuntimeException("Disconnect failed - " + ex.toString());
     }
 
-    addDefaultTestSchemas();
+    return mtable;
 
-    return this;
   }
 
   /**
@@ -372,128 +330,10 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     shipmentsStream.addColumn("ORDERID", intType);
     registerTable(shipmentsStream);
 
-//    // Register "EMP_20" view.
-//    // Same columns as "EMP",
-//    // but "DEPTNO" not visible and set to 20 by default
-//    // and "SAL" is visible but must be greater than 1000
-//    MapDTable emp20View = new MapDTable(this, salesSchema.getCatalogName(),
-//        salesSchema.name, "EMP_20", false) {
-//      private final Table table = empTable.unwrap(Table.class);
-//      private final ImmutableIntList mapping =
-//          ImmutableIntList.of(0, 1, 2, 3, 4, 5, 6, 8);
-//
-//      @Override public RelNode toRel(ToRelContext context) {
-//        // Expand to the equivalent of:
-//        //   SELECT EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, SLACKER
-//        //   FROM EMP
-//        //   WHERE DEPTNO = 20 AND SAL > 1000
-//        RelNode rel = LogicalTableScan.create(context.getCluster(), empTable);
-//        final RexBuilder rexBuilder = context.getCluster().getRexBuilder();
-//        rel = LogicalFilter.create(rel,
-//            rexBuilder.makeCall(
-//                SqlStdOperatorTable.AND,
-//                rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
-//                    rexBuilder.makeInputRef(rel, 7),
-//                    rexBuilder.makeExactLiteral(BigDecimal.valueOf(20))),
-//                rexBuilder.makeCall(SqlStdOperatorTable.GREATER_THAN,
-//                    rexBuilder.makeInputRef(rel, 5),
-//                    rexBuilder.makeExactLiteral(BigDecimal.valueOf(1000)))));
-//        final List<RelDataTypeField> fieldList =
-//            rel.getRowType().getFieldList();
-//        final List<Pair<RexNode, String>> projects =
-//            new AbstractList<Pair<RexNode, String>>() {
-//              @Override public Pair<RexNode, String> get(int index) {
-//                return RexInputRef.of2(mapping.get(index), fieldList);
-//              }
-//
-//              @Override public int size() {
-//                return mapping.size();
-//              }
-//            };
-//        return LogicalProject.create(rel, Pair.left(projects),
-//            Pair.right(projects));
-//      }
-//
-////      @Override public <T> T unwrap(Class<T> clazz) {
-////        if (clazz.isAssignableFrom(ModifiableView.class)) {
-////          return clazz.cast(
-////              new JdbcTest.AbstractModifiableView() {
-////                @Override public Table getTable() {
-////                  return empTable.unwrap(Table.class);
-////                }
-////
-////                @Override public Path getTablePath() {
-////                  final ImmutableList.Builder<Pair<String, Schema>> builder =
-////                      ImmutableList.builder();
-////                  builder.add(Pair.<String, Schema>of(empTable.names.get(0), null));
-////                  builder.add(Pair.<String, Schema>of(empTable.names.get(1), null));
-////                  builder.add(Pair.<String, Schema>of(empTable.names.get(2), null));
-////                  return Schemas.path(builder.build());
-//////                  return empTable.names;
-////                }
-////
-////                @Override public ImmutableIntList getColumnMapping() {
-////                  return mapping;
-////                }
-////
-////                @Override public RexNode getConstraint(RexBuilder rexBuilder,
-////                    RelDataType tableRowType) {
-////                  final RelDataTypeField deptnoField =
-////                      tableRowType.getFieldList().get(7);
-////                  final RelDataTypeField salField =
-////                      tableRowType.getFieldList().get(5);
-////                  final List<RexNode> nodes = Arrays.asList(
-////                      rexBuilder.makeCall(SqlStdOperatorTable.EQUALS,
-////                          rexBuilder.makeInputRef(deptnoField.getType(),
-////                              deptnoField.getIndex()),
-////                          rexBuilder.makeExactLiteral(BigDecimal.valueOf(20L),
-////                              deptnoField.getType())),
-////                      rexBuilder.makeCall(SqlStdOperatorTable.GREATER_THAN,
-////                          rexBuilder.makeInputRef(salField.getType(),
-////                              salField.getIndex()),
-////                          rexBuilder.makeExactLiteral(BigDecimal.valueOf(1000L),
-////                              salField.getType())));
-////                  return RexUtil.composeConjunction(rexBuilder, nodes, false);
-////                }
-////
-////                @Override public RelDataType
-////                getRowType(final RelDataTypeFactory typeFactory) {
-////                  return typeFactory.createStructType(
-////                      new AbstractList<Map.Entry<String, RelDataType>>() {
-////                        @Override public Map.Entry<String, RelDataType>
-////                        get(int index) {
-////                          return table.getRowType(typeFactory).getFieldList()
-////                              .get(mapping.get(index));
-////                        }
-////
-////                        @Override public int size() {
-////                          return mapping.size();
-////                        }
-////                      }
-////                  );
-////                }
-////              });
-////        }
-////        return super.unwrap(clazz);
-////      }
-//    };
-//    salesSchema.addTable(Util.last(emp20View.getQualifiedName()));
-//    emp20View.addColumn("EMPNO", intType);
-//    emp20View.addColumn("ENAME", varchar20Type);
-//    emp20View.addColumn("JOB", varchar10Type);
-//    emp20View.addColumn("MGR", intTypeNull);
-//    emp20View.addColumn("HIREDATE", timestampType);
-//    emp20View.addColumn("SAL", intType);
-//    emp20View.addColumn("COMM", intType);
-//    emp20View.addColumn("SLACKER", booleanType);
-//    registerTable(emp20View);
-//
-//    return this;
-//  }
     return this;
   }
-  //~ Methods ----------------------------------------------------------------
 
+  //~ Methods ----------------------------------------------------------------
   /**
    *
    * @param opName
@@ -555,11 +395,11 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   protected void registerTable(MapDTable table) {
     table.onRegister(typeFactory);
-    tables.put(table.getQualifiedName(), table);
+    MAPD_TABLES.put(table.getQualifiedName(), table);
   }
 
   protected void registerSchema(MapDSchema schema) {
-    schemas.put(schema.getSchemaName(), schema);
+    MAPD_SCHEMAS.put(schema.getSchemaName(), schema);
   }
 
   /**
@@ -571,19 +411,34 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   public Prepare.PreparingTable getTable(final List<String> names) {
     switch (names.size()) {
       case 1:
-        // assume table in SALES schema (the original default)
-        // if it's not supplied, because SqlValidatorTest is effectively
-        // using SALES as its default schema.
-        return tables.get(
-                ImmutableList.of(DEFAULT_CATALOG, DEFAULT_SCHEMA, names.get(0)));
+        return getMapDTable(
+                ImmutableList.of(DEFAULT_CATALOG, this.currentMapDUser.getDB(), names.get(0)));
       case 2:
-        return tables.get(
+        return getMapDTable(
                 ImmutableList.of(DEFAULT_CATALOG, names.get(0), names.get(1)));
       case 3:
-        return tables.get(names);
+        return getMapDTable(names);
       default:
         return null;
     }
+  }
+
+  private MapDTable getMapDTable(List<String> names) {
+    // get the mapd table if we have it in map
+    // if not see if it exists and add it to list and then return it
+    MapDTable returnTable = MAPD_TABLES.get(names);
+
+    // in case a table doesn't exist in map check it has not been added
+    // so check the mapd server for the new table
+    if (returnTable == null) {
+      synchronized (this) {
+        returnTable = MAPD_TABLES.get(names);
+        if (returnTable == null) {
+          returnTable = getTableData(names.get(2));
+        }
+      }
+    }
+    return returnTable;
   }
 
   /**
@@ -620,7 +475,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       case 1:
         // looking for schema names
         result = Lists.newArrayList();
-        for (MapDSchema schema : schemas.values()) {
+        for (MapDSchema schema : MAPD_SCHEMAS.values()) {
           final String catalogName = names.get(0);
           if (schema.getCatalogName().equals(catalogName)) {
             final ImmutableList<String> names1
@@ -631,7 +486,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
         return result;
       case 2:
         // looking for table names in the given schema
-        MapDSchema schema = schemas.get(names.get(1));
+        MapDSchema schema = MAPD_SCHEMAS.get(names.get(1));
         if (schema == null) {
           return Collections.emptyList();
         }
@@ -651,12 +506,12 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   @Override
   public List<String> getSchemaName() {
-    return ImmutableList.of(DEFAULT_CATALOG, DEFAULT_SCHEMA);
+    return ImmutableList.of(DEFAULT_CATALOG, CURRENT_DEFAULT_SCHEMA);
   }
 
   @Override
   public RelDataTypeField field(RelDataType rowType, String alias) {
-    return SqlValidatorUtil.lookupField(caseSensitive, elideRecord, rowType,
+    return SqlValidatorUtil.lookupField(true, elideRecord, rowType,
             alias);
   }
 
@@ -668,19 +523,23 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   @Override
   public boolean matches(String string, String name) {
-    return Util.matches(caseSensitive, string, name);
+    return Util.matches(true, string, name);
   }
 
   @Override
   public int match(List<String> strings, String name) {
-    return Util.findMatch(strings, name, caseSensitive);
+    return Util.findMatch(strings, name, true);
   }
 
   @Override
   public RelDataType createTypeFromProjection(final RelDataType type,
           final List<String> columnNameList) {
     return SqlValidatorUtil.createTypeFromProjection(type, columnNameList,
-            typeFactory, caseSensitive, elideRecord);
+            typeFactory, true, elideRecord);
+  }
+
+  public void setCurrentMapDUser(MapDUser mapDUser) {
+    currentMapDUser = mapDUser;
   }
 
   // Convert our TDataumn type in to a base calcite SqlType

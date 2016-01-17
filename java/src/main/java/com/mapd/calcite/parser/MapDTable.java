@@ -98,34 +98,42 @@ public class MapDTable implements Prepare.PreparingTable {
 //      }
 //      return null;
 //    }
+  @Override
   public double getRowCount() {
     return rowCount;
   }
 
+  @Override
   public RelOptSchema getRelOptSchema() {
     return catalogReader;
   }
 
+  @Override
   public RelNode toRel(RelOptTable.ToRelContext context) {
     return LogicalTableScan.create(context.getCluster(), this);
   }
 
+  @Override
   public List<RelCollation> getCollationList() {
     return collationList;
   }
 
+  @Override
   public RelDistribution getDistribution() {
     return RelDistributions.BROADCAST_DISTRIBUTED;
   }
 
+  @Override
   public boolean isKey(ImmutableBitSet columns) {
     return false;
   }
 
+  @Override
   public RelDataType getRowType() {
     return rowType;
   }
 
+  @Override
   public boolean supportsModality(SqlModality modality) {
     return modality == (stream ? SqlModality.STREAM : SqlModality.RELATION);
   }
@@ -160,20 +168,24 @@ public class MapDTable implements Prepare.PreparingTable {
 
   }
 
+  @Override
   public List<String> getQualifiedName() {
     return names;
   }
 
+  @Override
   public SqlMonotonicity getMonotonicity(String columnName) {
     return monotonicColumnSet.contains(columnName)
             ? SqlMonotonicity.INCREASING
             : SqlMonotonicity.NOT_MONOTONIC;
   }
 
+  @Override
   public SqlAccessType getAllowedAccess() {
     return SqlAccessType.ALL;
   }
 
+  @Override
   public Expression getExpression(Class clazz) {
     throw new UnsupportedOperationException();
   }

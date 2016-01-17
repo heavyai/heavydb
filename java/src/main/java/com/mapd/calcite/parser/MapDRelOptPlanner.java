@@ -57,11 +57,13 @@ public class MapDRelOptPlanner extends AbstractRelOptPlanner {
   }
 
   // implement RelOptPlanner
+  @Override
   public void setRoot(RelNode rel) {
     this.root = rel;
   }
 
   // implement RelOptPlanner
+  @Override
   public RelNode getRoot() {
     return root;
   }
@@ -72,6 +74,7 @@ public class MapDRelOptPlanner extends AbstractRelOptPlanner {
     this.rule = null;
   }
 
+  @Override
   public boolean addRule(RelOptRule rule) {
     assert this.rule == null : "MapDRelOptPlanner only supports a single rule";
     this.rule = rule;
@@ -79,16 +82,19 @@ public class MapDRelOptPlanner extends AbstractRelOptPlanner {
     return false;
   }
 
+  @Override
   public boolean removeRule(RelOptRule rule) {
     return false;
   }
 
   // implement RelOptPlanner
+  @Override
   public RelNode changeTraits(RelNode rel, RelTraitSet toTraits) {
     return rel;
   }
 
   // implement RelOptPlanner
+  @Override
   public RelNode findBestExp() {
     if (rule != null) {
       matchRecursive(root, null, -1);
@@ -176,6 +182,7 @@ public class MapDRelOptPlanner extends AbstractRelOptPlanner {
   }
 
   // implement RelOptPlanner
+  @Override
   public RelNode register(
           RelNode rel,
           RelNode equivRel) {
@@ -183,11 +190,13 @@ public class MapDRelOptPlanner extends AbstractRelOptPlanner {
   }
 
   // implement RelOptPlanner
+  @Override
   public RelNode ensureRegistered(RelNode rel, RelNode equivRel) {
     return rel;
   }
 
   // implement RelOptPlanner
+  @Override
   public boolean isRegistered(RelNode rel) {
     return true;
   }
@@ -199,6 +208,7 @@ public class MapDRelOptPlanner extends AbstractRelOptPlanner {
 
   /**
    * Allow tests to tweak the timestamp.
+   * @param metadataTimestamp
    */
   public void setRelMetadataTimestamp(long metadataTimestamp) {
     this.metadataTimestamp = metadataTimestamp;
@@ -229,6 +239,7 @@ public class MapDRelOptPlanner extends AbstractRelOptPlanner {
     }
 
     // implement RelOptRuleCall
+    @Override
     public void transformTo(RelNode rel, Map<RelNode, RelNode> equiv) {
       transformationResult = rel;
     }

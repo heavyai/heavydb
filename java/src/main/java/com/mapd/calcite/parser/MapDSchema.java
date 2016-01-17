@@ -17,7 +17,7 @@ import java.util.List;
 public class MapDSchema {
 
   private final List<String> tableNames = Lists.newArrayList();
-  private String name;
+  private final String name;
 
   public MapDSchema(String name) {
     this.name = name;
