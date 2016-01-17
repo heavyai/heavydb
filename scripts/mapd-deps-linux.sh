@@ -138,3 +138,21 @@ popd
 # thrift
 download_make_install https://github.com/libevent/libevent/releases/download/release-2.0.22-stable/libevent-2.0.22-stable.tar.gz
 download_make_install http://apache.claz.org/thrift/0.9.3/thrift-0.9.3.tar.gz "" "--with-lua=no --with-python=no --with-php=no --with-boost-libdir=$PREFIX/lib"
+
+# backend rendering
+download https://sourceforge.net/projects/glew/files/glew/1.13.0/glew-1.13.0.tgz
+extract glew-1.13.0.tgz
+pushd glew-1.13.0
+makej DESTDIR=$PREFIX GLEW_DEST="" install
+popd
+
+download https://github.com/glfw/glfw/releases/download/3.1.2/glfw-3.1.2.zip
+unzip glfw-3.1.2.zip
+mkdir -p glfw-3.1.2/build
+pushd glfw-3.1.2/build
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+makej
+make install
+popd
+
+download_make_install http://download.sourceforge.net/libpng/libpng-1.6.21.tar.xz

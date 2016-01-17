@@ -34,8 +34,12 @@ MapD has the following dependencies:
 - [Go 1.5+](https://golang.org/)
 - [OpenJDK](http://openjdk.java.net/)
 - [CUDA 7.0+](http://nvidia.com/cuda)
+- [GLEW](http://glew.sourceforge.net/)
+- [GLFW 3.1.2+](http://www.glfw.org/)
+- [libpng](http://libpng.org/pub/png/libpng.html)
 
 //TODO(@vastcharade): add backend rendering deps
+//TODO(@dwayneberry: add Calcite deps
 
 Generating PDFs of the documentation requires `pandoc` and `texlive` (specifically `pdflatex`).
 
@@ -76,7 +80,10 @@ Most build dependencies are available via APT. Thrift is the one exception and m
                     libgoogle-glog-dev \
                     golang \
                     libssl-dev \
-                    libevent-dev
+                    libevent-dev \
+                    libglew-dev \
+                    libglfw3-dev \
+                    libpng12-dev
 
     apt-get build-dep thrift-compiler
     wget http://apache.claz.org/thrift/0.9.2/thrift-0.9.2.tar.gz
@@ -94,7 +101,7 @@ CUDA should be installed via the .deb method, following the instructions provide
 
 Assuming you already have [yaourt](https://wiki.archlinux.org/index.php/Yaourt) or some other manager that supports the AUR installed:
 
-    yaourt -S git cmake boost google-glog extra/jdk8-openjdk clang llvm thrift go cuda nvidia
+    yaourt -S git cmake boost google-glog extra/jdk8-openjdk clang llvm thrift go cuda nvidia glew glfw libpng
     wget https://flexpp-bisonpp.googlecode.com/files/bisonpp-1.21-45.tar.gz
     tar xvf bisonpp-1.21-45.tar.gz
     cd bison++-1.21
