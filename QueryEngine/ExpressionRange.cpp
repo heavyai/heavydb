@@ -280,7 +280,12 @@ ExpressionRange getExpressionRange(const Analyzer::ColumnVar* col_expr,
       }
       const auto min_val = extract_min_stat(min_it->second.chunkStats, col_ti);
       const auto max_val = extract_max_stat(max_it->second.chunkStats, col_ti);
-      CHECK_GE(max_val, min_val);
+      if (max_val < min_val) {
+        CHECK_LT(max_val, 0);
+        CHECK_GT(min_val, 0);
+        CHECK_EQ(-(min_val + 1), max_val);
+        return ExpressionRange::makeIntRange(0, -1, 0, has_nulls);
+      }
       return ExpressionRange::makeIntRange(min_val, max_val, 0, has_nulls);
     }
     default:
