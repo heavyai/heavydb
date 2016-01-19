@@ -1,4 +1,4 @@
-time_slot_id,day,start_time,end_time
+time_slot_id,day_,start_time,end_time
 A,M,8:00:00,8:50:00
 A,W,8:00:00,8:50:00
 A,F,8:00:00,8:50:00

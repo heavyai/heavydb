@@ -1,4 +1,4 @@
-ID,course_id,sec_id,semester,year,grade
+ID,course_id,sec_id,semester,year_,grade
 00128,CS-101,1,Fall,2009,A
 00128,CS-347,1,Fall,2009,A-
 12345,CS-101,1,Fall,2009,C

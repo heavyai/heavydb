@@ -1,4 +1,4 @@
-course_id,sec_id,semester,year,building,room_number,time_slot_id
+course_id,sec_id,semester,year_,building,room_number,time_slot_id
 BIO-101,1,Summer,2009,Painter,514,B
 BIO-301,1,Summer,2010,Painter,514,A
 CS-101,1,Fall,2009,Packard,101,H
