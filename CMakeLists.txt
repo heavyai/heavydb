@@ -18,6 +18,11 @@ if(PREFER_STATIC_LIBS)
   set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
 endif()
 
+if(XCODE)
+set(CMAKE_EXE_LINKER_FLAGS "-F/Library/Frameworks -framework CUDA")
+add_definitions("-DXCODE")
+endif()
+
 # CUDA required for build, even when CUDA support is disabled
 find_package(CUDA REQUIRED)
 option(ENABLE_CUDA "Enable CUDA support" ON)
@@ -53,17 +58,46 @@ else()
   endif()
 endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -pthread -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
-set(llvm_config_cmd "llvm-config")
+option(ENABLE_LLVM_DBG "switch to local debug version of llvm" OFF)
+if (ENABLE_LLVM_DBG)
+# NOTE: specify LLVM_BIN_DIR to use your local llvm
+if (XCODE)
+set(LLVM_BIN_DIR ${CMAKE_SOURCE_DIR}/../llvm/build/xcode/Release/bin)
+elseif (APPLE)
+set(LLVM_BIN_DIR ${CMAKE_SOURCE_DIR}/../llvm/build/unix/bin)
+endif(XCODE)
+set(llvm_config_cmd "${LLVM_BIN_DIR}/llvm-config")
+else (ENABLE_LLVM_DBG)
+set(llvm_config_cmd llvm-config)
+endif (ENABLE_LLVM_DBG)
+
 set(llvm_config_inc_arg "--includedir")
 set(llvm_config_ld_arg "--ldflags")
 set(llvm_config_lib_arg "--libs")
 execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
     OUTPUT_VARIABLE LLVM_INC_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
+execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_lib_arg}
     OUTPUT_VARIABLE LLVM_LIB_FLAGS)
-string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg}
+    OUTPUT_VARIABLE LLVM_LD_FLAGS)
+if (ENABLE_LLVM_DBG)
+set(llvm_config_obj_arg "--obj-root")
+execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_obj_arg}
+    OUTPUT_VARIABLE LLVM_BUILD_DIR)
+string(REPLACE "\n" "" LLVM_BUILD_DIR "${LLVM_BUILD_DIR}")
+list(APPEND LLVM_INC_FLAGS "${LLVM_BUILD_DIR}/include")
+endif (ENABLE_LLVM_DBG)
+
+string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
 string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
-include_directories(${Boost_INCLUDE_DIR} "/usr/local/include" ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/Parser ${CMAKE_CURRENT_BINARY_DIR} ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/")
+include_directories(${Boost_INCLUDE_DIR}
+                    "/usr/local/include"
+                    ${CMAKE_SOURCE_DIR}
+                    ${CMAKE_SOURCE_DIR}/Parser
+                    ${CMAKE_CURRENT_BINARY_DIR}
+                    ${LLVM_INC_FLAGS}
+                    "/usr/local/cuda/nvvm/include/"
+                    "/usr/local/cuda/include/")
 
 # Google Test and Google Mock
 include_directories(ThirdParty/googletest)

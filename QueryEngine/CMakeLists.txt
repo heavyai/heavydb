@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes -Wno-strict-aliasing")
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
@@ -16,28 +17,23 @@ set(query_engine_source_files
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     RuntimeFunctions.cpp
-    RuntimeFunctionsCodegenWithIncludes.cpp
+    RuntimeFunctions.bc
     StringFunctions.cpp
     JoinHashTable.cpp
     HashJoinRuntime.cpp
     Codec.h
     Execute.h
-    RuntimeFunctions.h
     NvidiaKernel.h
     QueryTemplateGenerator.h)
+
 set(group_by_hash_test_files
     GroupByHashTest.cpp
     RuntimeFunctions.cpp
-    RuntimeFunctions.h)
+   )
 
-set(llvm_config_cmd "llvm-config")
-set(llvm_config_inc_arg "--includedir")
-set(llvm_config_ld_arg "--ldflags")
-set(llvm_config_lib_arg "--libs")
-execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_inc_arg}
-    OUTPUT_VARIABLE LLVM_INC_FLAGS)
-execute_process(COMMAND ${llvm_config_cmd} ${llvm_config_ld_arg} ${llvm_config_lib_arg}
-    OUTPUT_VARIABLE LLVM_LIB_FLAGS)
+execute_process(COMMAND ${llvm_config_cmd} "--includedir"
+                OUTPUT_VARIABLE LLVM_INC_FLAGS)
+
 include_directories(.. ${LLVM_INC_FLAGS} "/usr/local/cuda/nvvm/include/" "/usr/local/cuda/include/" "/usr/local/cuda/nvvm/libnvvm-samples/common/include/")
 
 if(ENABLE_CUDA)
@@ -49,40 +45,37 @@ set(CLANG_SDK_INC "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX
 set(CLANG_CRT_INC "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/")
 endif()
 
-add_custom_command(
-    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp
-    COMMAND llc
-    ARGS -march=cpp -cppgen=contents RuntimeFunctions.ll -o ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp)
-
-add_custom_command(
-    DEPENDS RuntimeFunctionsCodegen.cpp RuntimeFunctionsCodegenIncludes.cpp RuntimeFunctionsCodegenEpilogue.cpp
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp
-    COMMAND cat
-    ARGS ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenIncludes.cpp ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegen.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctionsCodegenEpilogue.cpp > ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctionsCodegenWithIncludes.cpp)
+if (ENABLE_LLVM_DBG)
+set(llvm_clangpp_cmd "${LLVM_BIN_DIR}/clang++")
+else ()
+set(llvm_clangpp_cmd clang++)
+endif (ENABLE_LLVM_DBG)
 
 add_custom_command(
     DEPENDS RuntimeFunctions.cpp RuntimeFunctions.h ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp GroupByRuntime.cpp
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.ll
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     COMMAND clang++
-    ARGS -std=c++11 -O3 -c -S -emit-llvm
+    ARGS -std=c++11 -O3 -c -emit-llvm
     ${CLANG_SDK_INC}
     ${CLANG_CRT_INC}
     ${MAPD_DEFINITIONS}
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
-string(REPLACE "\n" "" LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc DESTINATION QueryEngine)
+
 
 if(ENABLE_CUDA)
     add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/GpuSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
 else()
     add_library(QueryEngine ${query_engine_source_files})
 endif()
+
 if(ENABLE_RENDERING)
     target_link_libraries(QueryEngine CsvImport StringDictionary Utils QueryRenderer)
 else()
     target_link_libraries(QueryEngine CsvImport StringDictionary Utils)
 endif()
+
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o

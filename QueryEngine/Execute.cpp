@@ -17,6 +17,7 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/InstIterator.h>
+#include "llvm/IR/Intrinsics.h"
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Verifier.h>
@@ -30,6 +31,12 @@
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
+
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <nvvm.h>
 
@@ -3655,12 +3662,24 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
   }
 }
 
-llvm::Module* makeLLVMModuleContents(llvm::Module* mod);
-
 namespace {
 
-llvm::Module* create_runtime_module(llvm::LLVMContext& context) {
-  return makeLLVMModuleContents(new llvm::Module("empty_module", context));
+llvm::Module* read_template_module(llvm::LLVMContext& context) {
+  llvm::SMDiagnostic err;
+
+  auto buffer_or_error = llvm::MemoryBuffer::getFile(mapd_root_abs_path() + "/QueryEngine/RuntimeFunctions.bc");
+  CHECK(!buffer_or_error.getError());
+  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
+  auto module = llvm::parseBitcodeFile(buffer, context).get();
+#else
+  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
+  CHECK(!owner.getError());
+  auto module = owner.get().release();
+#endif
+  CHECK(module);
+
+  return module;
 }
 
 void bind_pos_placeholders(const std::string& pos_fn_name,
@@ -3816,19 +3835,22 @@ void bind_query(llvm::Function* query_func,
                 const std::string& query_fname,
                 llvm::Function* multifrag_query_func,
                 llvm::Module* module) {
+  std::vector<llvm::CallInst*> query_stubs;
   for (auto it = llvm::inst_begin(multifrag_query_func), e = llvm::inst_end(multifrag_query_func); it != e; ++it) {
     if (!llvm::isa<llvm::CallInst>(*it)) {
       continue;
     }
     auto& query_call = llvm::cast<llvm::CallInst>(*it);
-    std::vector<llvm::Value*> args;
-    for (size_t i = 0; i < query_call.getNumArgOperands(); ++i) {
-      args.push_back(query_call.getArgOperand(i));
-    }
     if (std::string(query_call.getCalledFunction()->getName()) == query_fname) {
-      llvm::ReplaceInstWithInst(&query_call, llvm::CallInst::Create(query_func, args, ""));
-      break;
+      query_stubs.push_back(&query_call);
     }
+  }
+  for (auto& S : query_stubs) {
+    std::vector<llvm::Value*> args;
+    for (size_t i = 0; i < S->getNumArgOperands(); ++i) {
+      args.push_back(S->getArgOperand(i));
+    }
+    llvm::ReplaceInstWithInst(S, llvm::CallInst::Create(query_func, args, ""));
   }
 }
 
@@ -3929,7 +3951,7 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   // Read the module template and target either CPU or GPU
   // by binding the stream position functions to the right implementation:
   // stride access for GPU, contiguous for CPU
-  cgen_state_->module_ = create_runtime_module(cgen_state_->context_);
+  cgen_state_->module_ = read_template_module(cgen_state_->context_);
 
   const bool is_group_by{!query_mem_desc.group_col_widths.empty()};
   auto query_func = is_group_by
@@ -4270,10 +4292,13 @@ void optimizeIR(llvm::Function* query_func,
   pass_manager.add(llvm::createInstructionSimplifierPass());
   pass_manager.add(llvm::createInstructionCombiningPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
+// FIXME(miyu): need investigate how 3.7+ dump debug IR.
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
   if (!debug_dir.empty()) {
     CHECK(!debug_file.empty());
     pass_manager.add(llvm::createDebugIRPass(false, false, debug_dir, debug_file));
   }
+#endif
   if (hoist_literals) {
     pass_manager.add(llvm::createLICMPass());
   }
@@ -4353,9 +4378,14 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   llvm::InitializeNativeTargetAsmParser();
 
   std::string err_str;
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
   llvm::EngineBuilder eb(module);
-  eb.setErrorStr(&err_str);
   eb.setUseMCJIT(true);
+#else
+  std::unique_ptr<llvm::Module> owner(module);
+  llvm::EngineBuilder eb(std::move(owner));
+#endif
+  eb.setErrorStr(&err_str);
   eb.setEngineKind(llvm::EngineKind::JIT);
   llvm::TargetOptions to;
   to.EnableFastISel = true;
@@ -4368,7 +4398,6 @@ std::vector<void*> Executor::optimizeAndCodegenCPU(llvm::Function* query_func,
   if (llvm::verifyFunction(*query_func, &raw_os)) {
     LOG(FATAL) << ss.str();
   }
-
   execution_engine->finalizeObject();
   auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
 
@@ -4412,11 +4441,10 @@ std::string gen_array_any_all_sigs() {
   return result;
 }
 
-const std::string cuda_llir_prologue =
+const std::string cuda_rt_decls =
     R"(
-target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
-target triple = "nvptx64-nvidia-cuda"
-
+declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
 declare i32 @pos_start_impl(i32*);
 declare i32 @group_buff_idx_impl();
 declare i32 @pos_step_impl();
@@ -4542,6 +4570,13 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
     }
   }
 
+  module->setDataLayout(
+      "e-p:64:64:64-i1:8:8-i8:8:8-"
+      "i16:16:16-i32:32:32-i64:64:64-"
+      "f32:32:32-f64:64:64-v16:16:16-"
+      "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
+  module->setTargetTriple("nvptx64-nvidia-cuda");
+
   // run optimizations
   optimizeIR(query_func, module, live_funcs, hoist_literals, opt_level, "", "");
 
@@ -4552,54 +4587,44 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
     like_pattern->print(os);
   }
 
+  llvm::LLVMContext& ctx = module->getContext();
+  // Get "nvvm.annotations" metadata node
+  llvm::NamedMDNode* md = module->getOrInsertNamedMetadata("nvvm.annotations");
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
+  llvm::Value* md_vals[] = {
+      multifrag_query_func, llvm::MDString::get(ctx, "kernel"), llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 1)};
+#else
+  llvm::Metadata* md_vals[] = {llvm::ConstantAsMetadata::get(multifrag_query_func),
+                               llvm::MDString::get(ctx, "kernel"),
+                               llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 1))};
+#endif
+  // Append metadata to nvvm.annotations
+  md->addOperand(llvm::MDNode::get(ctx, md_vals));
+
+  std::unordered_set<llvm::Function*> roots{multifrag_query_func, query_func};
   if (row_func_not_inlined) {
     llvm::AttributeSet no_attributes;
     cgen_state_->row_func_->setAttributes(no_attributes);
-    cgen_state_->row_func_->print(os);
+    roots.insert(cgen_state_->row_func_);
   }
 
-  query_func->print(os);
-  multifrag_query_func->print(os);
+  std::vector<llvm::Function*> rt_funcs;
+  for (auto& Fn : *module) {
+    if (roots.count(&Fn))
+      continue;
+    rt_funcs.push_back(&Fn);
+  }
+  for (auto& pFn : rt_funcs)
+    pFn->removeFromParent();
+  module->print(os, nullptr);
   os.flush();
+  for (auto& pFn : rt_funcs) {
+    module->getFunctionList().push_back(pFn);
+  }
+  module->eraseNamedMetadata(md);
 
-  char nvvm_annotations[1024];
-  auto func_name = multifrag_query_func->getName().str();
-  snprintf(nvvm_annotations,
-           sizeof(nvvm_annotations),
-           hoist_literals ?
-                          R"(
-!nvvm.annotations = !{!0}
-!0 = metadata !{void (i8***,
-                      i32*,
-                      i8*,
-                      i64*,
-                      i64*,
-                      i64*,
-                      i64*,
-                      i64**,
-                      i64**,
-                      i32*,
-                      i32*,
-                      i64*)* @%s, metadata !"kernel", i32 1}
-)"
-                          :
-                          R"(
-!nvvm.annotations = !{!0}
-!0 = metadata !{void (i8***,
-                      i32*,
-                      i64*,
-                      i64*,
-                      i64*,
-                      i64*,
-                      i64**,
-                      i64**,
-                      i32*,
-                      i32*,
-                      i64*)* @%s, metadata !"kernel", i32 1}
-)",
-           func_name.c_str());
-
-  auto cuda_llir = cuda_llir_prologue + ss.str() + std::string(nvvm_annotations);
+  auto cuda_llir = cuda_rt_decls + ss.str();
 
   std::vector<void*> native_functions;
   std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>> cached_functions;
@@ -4617,6 +4642,8 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
     }
   }
   CHECK_EQ(!!ptx_cuda, ptx_nvptx.empty());
+
+  auto func_name = multifrag_query_func->getName().str();
   for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
     boost::filesystem::path gpu_rt_path{mapd_root_abs_path()};
     gpu_rt_path /= "QueryEngine";
@@ -4645,21 +4672,45 @@ std::vector<void*> Executor::optimizeAndCodegenGPU(llvm::Function* query_func,
 std::string Executor::generatePTX(const std::string& cuda_llir) const {
   initializeNVPTXBackend();
   auto mem_buff = llvm::MemoryBuffer::getMemBuffer(cuda_llir, "", false);
+
   llvm::SMDiagnostic err;
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
   auto module = llvm::ParseIR(mem_buff, err, cgen_state_->context_);
+#else
+  auto module = llvm::parseIR(mem_buff->getMemBufferRef(), err, cgen_state_->context_);
+#endif
   if (!module) {
     LOG(FATAL) << err.getMessage().str();
   }
-  llvm::legacy::PassManager ptxgen_pm;
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
   std::stringstream ss;
   llvm::raw_os_ostream raw_os(ss);
   llvm::formatted_raw_ostream formatted_os(raw_os);
-  ptxgen_pm.add(new llvm::DataLayoutPass(module));
+#else
+  llvm::SmallString<256> code_str;
+  llvm::raw_svector_ostream formatted_os(code_str);
+#endif
   CHECK(nvptx_target_machine_);
-  nvptx_target_machine_->addPassesToEmitFile(ptxgen_pm, formatted_os, llvm::TargetMachine::CGFT_AssemblyFile);
-  ptxgen_pm.run(*module);
-  formatted_os.flush();
+  {
+    llvm::legacy::PassManager ptxgen_pm;
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
+    ptxgen_pm.add(new llvm::DataLayoutPass(module));
+#else
+    module->setDataLayout(nvptx_target_machine_->createDataLayout());
+#endif
+
+    nvptx_target_machine_->addPassesToEmitFile(ptxgen_pm, formatted_os, llvm::TargetMachine::CGFT_AssemblyFile);
+    ptxgen_pm.run(*module);
+    formatted_os.flush();
+  }
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
   return ss.str();
+#else
+  return code_str.str();
+#endif
 }
 
 void Executor::initializeNVPTXBackend() const {
