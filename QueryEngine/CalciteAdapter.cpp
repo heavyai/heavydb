@@ -12,6 +12,7 @@
 
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -906,6 +907,50 @@ void add_quals(const std::shared_ptr<Analyzer::Expr> qual_expr,
   }
 }
 
+void collect_used_columns(std::vector<std::shared_ptr<Analyzer::ColumnVar>>& used_cols,
+                          const std::shared_ptr<Analyzer::Expr> expr) {
+  const auto col_var = std::dynamic_pointer_cast<Analyzer::ColumnVar>(expr);
+  if (col_var && !std::dynamic_pointer_cast<Analyzer::Var>(col_var)) {
+    used_cols.push_back(col_var);
+    return;
+  }
+  const auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(expr);
+  if (uoper) {
+    collect_used_columns(used_cols, uoper->get_own_operand());
+    return;
+  }
+  const auto bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(expr);
+  if (bin_oper) {
+    collect_used_columns(used_cols, bin_oper->get_own_left_operand());
+    collect_used_columns(used_cols, bin_oper->get_own_right_operand());
+    return;
+  }
+}
+
+std::unordered_set<int> get_used_table_ids(const std::vector<std::shared_ptr<Analyzer::ColumnVar>>& used_cols) {
+  std::unordered_set<int> result;
+  for (const auto col_var : used_cols) {
+    result.insert(col_var->get_table_id());
+  }
+  return result;
+}
+
+void separate_join_quals(std::unordered_map<int, std::list<std::shared_ptr<Analyzer::Expr>>>& quals,
+                         std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
+                         const std::list<std::shared_ptr<Analyzer::Expr>>& all_quals) {
+  for (auto qual_candidate : all_quals) {
+    std::vector<std::shared_ptr<Analyzer::ColumnVar>> used_columns;
+    collect_used_columns(used_columns, qual_candidate);
+    const auto used_table_ids = get_used_table_ids(used_columns);
+    if (used_table_ids.size() > 1) {
+      CHECK_EQ(size_t(2), used_table_ids.size());
+      join_quals.push_back(qual_candidate);
+    } else {
+      quals[*used_table_ids.begin()].push_back(qual_candidate);
+    }
+  }
+}
+
 }  // namespace
 
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& cat) {
@@ -920,7 +965,8 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   std::list<std::shared_ptr<Analyzer::Expr>> result_quals;
-  std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+  std::list<std::shared_ptr<Analyzer::Expr>> all_join_simple_quals;
+  std::list<std::shared_ptr<Analyzer::Expr>> all_join_quals;
   std::vector<std::shared_ptr<Analyzer::TargetEntry>> child_res_targets;
   std::vector<std::shared_ptr<Analyzer::TargetEntry>> res_targets;
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
@@ -945,7 +991,7 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
     } else if (rel_op_it->value.GetString() == std::string("LogicalFilter")) {
       if (res_targets.empty()) {
         if (is_join) {
-          join_quals.push_back(calcite_adapter.getExprFromNode(crt_node["condition"], {}));
+          add_quals(calcite_adapter.getExprFromNode(crt_node["condition"], {}), all_join_simple_quals, all_join_quals);
         } else {
           add_quals(calcite_adapter.getExprFromNode(crt_node["condition"], {}), simple_quals, quals);
         }
@@ -970,9 +1016,20 @@ Planner::RootPlan* translate_query(const std::string& query, const Catalog_Names
   CHECK(!res_targets.empty());
   Planner::Plan* plan{nullptr};
   if (is_join) {
-    // TODO(alex): properly build the outer and inner plans
-    auto outer_plan = get_agg_plan(tds[0], {}, {}, groupby_exprs, quals, simple_quals, calcite_adapter);
-    auto inner_plan = get_agg_plan(tds[1], {}, {}, groupby_exprs, quals, simple_quals, calcite_adapter);
+    std::unordered_map<int, std::list<std::shared_ptr<Analyzer::Expr>>> scan_quals;
+    std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+    separate_join_quals(scan_quals, join_quals, all_join_quals);
+    std::unordered_map<int, std::list<std::shared_ptr<Analyzer::Expr>>> scan_simple_quals;
+    std::list<std::shared_ptr<Analyzer::Expr>> join_simple_quals;
+    separate_join_quals(scan_simple_quals, join_simple_quals, all_join_simple_quals);
+    CHECK_LE(scan_quals.size(), size_t(2));
+    CHECK_LE(scan_simple_quals.size(), size_t(2));
+    const int outer_tid = tds[0]->tableId;
+    const int inner_tid = tds[1]->tableId;
+    auto outer_plan = get_agg_plan(
+        tds[0], {}, {}, groupby_exprs, scan_quals[outer_tid], scan_simple_quals[outer_tid], calcite_adapter);
+    auto inner_plan = get_agg_plan(
+        tds[1], {}, {}, groupby_exprs, scan_quals[inner_tid], scan_simple_quals[inner_tid], calcite_adapter);
     if (child_res_targets.empty()) {
       if (is_agg_plan) {
         plan = new Planner::Join({}, join_quals, 0, outer_plan, inner_plan);
