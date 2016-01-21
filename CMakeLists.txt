@@ -274,7 +274,7 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
     )
   install(FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf DESTINATION docs)
-else()
+elseif(ENABLE_DOCS)
   message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
 endif()
 install(FILES docs/MapDGuide.md DESTINATION docs)
