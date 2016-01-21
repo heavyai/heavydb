@@ -1,9 +1,9 @@
 port = 9091
 http-port = 9090
-data = @MAPD_DATA@
+data = "@MAPD_DATA@"
 read-only = false
 quiet = false
 
 [web]
 port = 9092
-frontend = @MAPD_PATH@/frontend
+frontend = "@MAPD_PATH@/frontend"

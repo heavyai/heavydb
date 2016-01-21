@@ -98,7 +98,10 @@ func init() {
 	viper.AddConfigPath("$HOME/.config/mapd")
 	viper.AddConfigPath(".")
 
-	_ = viper.ReadInConfig()
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Fatalln(viper.GetString("config"), err)
+	}
 
 	port = viper.GetInt("web.port")
 	backendUrl = viper.GetString("web.backend-url")

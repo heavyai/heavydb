@@ -27,6 +27,7 @@
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <memory>
 #include <string>
 #include <fstream>
@@ -1378,6 +1379,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
   if (!boost::filesystem::exists(base_path)) {
     std::cerr << "Data directory " << base_path << " does not exist." << std::endl;
     return 1;
