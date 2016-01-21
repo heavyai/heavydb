@@ -73,6 +73,7 @@ add_subdirectory(ThirdParty/googletest)
 include_directories(ThirdParty/rapidjson)
 
 
+
 option(ENABLE_CALCITE "Build Calcite adapter" OFF)
 if(ENABLE_CALCITE)
     add_definitions("-DHAVE_CALCITE")

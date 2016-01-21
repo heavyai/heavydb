@@ -1277,6 +1277,7 @@ int main(int argc, char** argv) {
   bool allow_loop_joins = false;
   bool enable_legacy_syntax = false;
   bool enable_rendering = false;
+
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
   size_t render_mem_bytes = 500000000;
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1 means do not override
@@ -1413,6 +1414,7 @@ int main(int argc, char** argv) {
   lockf.open(lock_file.c_str(), std::ios::out | std::ios::trunc);
   lockf << getpid();
   lockf.close();
+
 
   while (true) {
     auto pid = fork();
