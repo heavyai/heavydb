@@ -591,8 +591,7 @@ class Executor {
     const LiteralValues& getLiterals() const { return literals_; }
 
     llvm::Value* addStringConstant(const std::string& str) {
-      auto str_lv =
-          ir_builder_.CreateGlobalStringPtr(str, "str_const_" + std::to_string(std::hash<std::string>()(str)));
+      auto str_lv = ir_builder_.CreateGlobalString(str, "str_const_" + std::to_string(std::hash<std::string>()(str)));
       auto i8_ptr = llvm::PointerType::get(get_int_type(8, context_), 0);
       str_constants_.push_back(str_lv);
       str_lv = ir_builder_.CreateBitCast(str_lv, i8_ptr);
