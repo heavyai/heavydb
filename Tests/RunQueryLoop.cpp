@@ -52,7 +52,8 @@ int main(int argc, char** argv) {
 
   std::unique_ptr<Catalog_Namespace::SessionInfo> session(get_session(db_path.c_str()));
   for (size_t i = 0; i < iter; ++i) {
-    run_multiple_agg(query, use_calcite, session, device_type, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA);
+    run_multiple_agg(
+        query, use_calcite, session, device_type, use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA, true);
   }
   return 0;
 }

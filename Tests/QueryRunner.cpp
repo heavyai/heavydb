@@ -75,7 +75,8 @@ ResultRows run_multiple_agg(const std::string& query_str,
                             const bool use_calcite,
                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
                             const ExecutorDeviceType device_type,
-                            const NVVMBackend nvvm_backend) {
+                            const NVVMBackend nvvm_backend,
+                            const bool hoist_literals) {
   const auto& cat = session->get_catalog();
 #ifdef HAVE_CALCITE
   Planner::RootPlan* plan = use_calcite ? parse_plan_calcite(query_str, session) : parse_plan_legacy(query_str, cat);
@@ -85,10 +86,24 @@ ResultRows run_multiple_agg(const std::string& query_str,
   std::unique_ptr<Planner::RootPlan> plan_ptr(plan);  // make sure it's deleted
   auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
 #ifdef HAVE_CUDA
-  return executor->execute(
-      plan, *session, -1, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, true, true);
+  return executor->execute(plan,
+                           *session,
+                           -1,
+                           hoist_literals,
+                           device_type,
+                           nvvm_backend,
+                           ExecutorOptLevel::LoopStrengthReduction,
+                           true,
+                           true);
 #else
-  return executor->execute(
-      plan, *session, -1, true, device_type, nvvm_backend, ExecutorOptLevel::LoopStrengthReduction, false, true);
+  return executor->execute(plan,
+                           *session,
+                           -1,
+                           hoist_literals,
+                           device_type,
+                           nvvm_backend,
+                           ExecutorOptLevel::LoopStrengthReduction,
+                           false,
+                           true);
 #endif
 }

@@ -13,6 +13,7 @@ ResultRows run_multiple_agg(const std::string& query_str,
                             const bool use_calcite,
                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
                             const ExecutorDeviceType device_type,
-                            const NVVMBackend nvvm_backend);
+                            const NVVMBackend nvvm_backend,
+                            const bool hoist_literals);
 
 #endif  // QUERY_RUNNER_H
