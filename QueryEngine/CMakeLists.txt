@@ -16,6 +16,7 @@ set(query_engine_source_files
     NvidiaKernel.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
+    RelAlgAbstractInterpreter.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
     StringFunctions.cpp
