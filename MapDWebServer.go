@@ -68,6 +68,7 @@ func init() {
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("data", "d", "data", "path to MapD data directory")
 	pflag.StringP("config", "c", "mapd.conf", "path to MapD configuration file")
+	pflag.Lookup("config").NoOptDefVal = "mapd.conf"
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
 	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
 	pflag.Bool("round-robin", false, "round-robin between backend urls")
@@ -92,15 +93,17 @@ func init() {
 	viper.SetEnvKeyReplacer(r)
 	viper.AutomaticEnv()
 
-	viper.SetConfigFile(viper.GetString("config"))
 	viper.SetConfigType("toml")
 	viper.AddConfigPath("/etc/mapd")
 	viper.AddConfigPath("$HOME/.config/mapd")
 	viper.AddConfigPath(".")
 
-	err := viper.ReadInConfig()
-	if err != nil {
-		log.Fatalln(viper.GetString("config"), err)
+	if viper.IsSet("config") {
+		viper.SetConfigFile(viper.GetString("config"))
+		err := viper.ReadInConfig()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	port = viper.GetInt("web.port")
