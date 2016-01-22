@@ -605,28 +605,12 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   group_buff_idx->setAttributes(group_buff_idx_PAL);
 
   CastInst* int64_153 = new SExtInst(int32_151, IntegerType::get(mod->getContext(), 64), "", label_146);
-  const PointerType* Ty = dyn_cast<PointerType>(ptr_group_by_buffers->getType());
-  CHECK(Ty);
-  GetElementPtrInst* ptr_154 = GetElementPtrInst::Create(
-#if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
-      Ty->getArrayElementType(),
-#endif
-      ptr_group_by_buffers,
-      group_buff_idx,
-      "",
-      label_146);
+  GetElementPtrInst* ptr_154 = GetElementPtrInst::Create(ptr_group_by_buffers, group_buff_idx, "", label_146);
   LoadInst* ptr_155 = new LoadInst(ptr_154, "", false, label_146);
   ptr_155->setAlignment(8);
   LoadInst* small_ptr_155{nullptr};
   if (query_mem_desc.getSmallBufferSizeBytes()) {
-    auto small_ptr_154 = GetElementPtrInst::Create(
-#if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
-        Ty->getArrayElementType(),
-#endif
-        ptr_small_groups_buffer,
-        group_buff_idx,
-        "",
-        label_146);
+    auto small_ptr_154 = GetElementPtrInst::Create(ptr_small_groups_buffer, group_buff_idx, "", label_146);
     small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
     small_ptr_155->setAlignment(8);
   }
