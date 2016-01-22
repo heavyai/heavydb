@@ -956,7 +956,6 @@ void separate_join_quals(std::unordered_map<int, std::list<std::shared_ptr<Analy
 Planner::RootPlan* translate_query(const std::string& query, const Catalog_Namespace::Catalog& cat) {
   rapidjson::Document query_ast;
   query_ast.Parse(query.c_str());
-  query_ast.Parse(query.c_str());
   CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
   const auto& rels = query_ast["rels"];
