@@ -27,11 +27,7 @@ endif()
 find_package(CUDA REQUIRED)
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
-  find_library(CUDA_NVVM_LIBRARY
-    NAMES nvvm
-    HINTS "${CUDA_TOOLKIT_TARGET_DIR}/nvvm" "${CUDA_TOOLKIT_ROOT_DIR}/nvvm"
-    PATH_SUFFIXES "lib64" "lib")
-  list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY} ${CUDA_NVVM_LIBRARY})
+  list(APPEND CUDA_LIBRARIES ${CUDA_CUDA_LIBRARY})
   add_definitions("-DHAVE_CUDA")
 else()
   set(CUDA_LIBRARIES "")
@@ -96,7 +92,6 @@ include_directories(${Boost_INCLUDE_DIR}
                     ${CMAKE_SOURCE_DIR}/Parser
                     ${CMAKE_CURRENT_BINARY_DIR}
                     ${LLVM_INC_FLAGS}
-                    "/usr/local/cuda/nvvm/include/"
                     "/usr/local/cuda/include/")
 
 # Google Test and Google Mock

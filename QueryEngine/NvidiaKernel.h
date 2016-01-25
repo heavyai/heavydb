@@ -4,8 +4,6 @@
 #include <cuda.h>
 #include <string>
 
-char* generatePTX(const char* ll, size_t size, const char* filename);
-
 class GpuCompilationContext {
  public:
   GpuCompilationContext(const char* ptx,

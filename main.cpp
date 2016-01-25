@@ -197,7 +197,6 @@ int main(int argc, char* argv[]) {
   bool execute = false;
   bool timer = false;
   bool jit_debug = false;
-  bool use_nvptx = true;
   bool allow_loop_joins = false;
   namespace po = boost::program_options;
 
@@ -209,8 +208,7 @@ int main(int argc, char* argv[]) {
       "passwd,p", po::value<string>(&passwd)->required(), "Password")("debug,d", "Verbose debug mode")(
       "allow-loop-joins", "Enable loop joins")(
       "jit-debug", "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery")(
-      "use-nvvm", "Use NVVM instead of NVPTX")("execute,e", "Execute queries")("version,v", "Print MapD Version")(
-      "timer,t", "Show query time information");
+      "execute,e", "Execute queries")("version,v", "Print MapD Version")("timer,t", "Show query time information");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("path", 1);
@@ -236,8 +234,6 @@ int main(int argc, char* argv[]) {
       timer = true;
     if (vm.count("jit-debug"))
       jit_debug = true;
-    if (vm.count("use-nvvm"))
-      use_nvptx = false;
     if (vm.count("allow-loop-joins"))
       allow_loop_joins = true;
 
@@ -345,7 +341,6 @@ int main(int argc, char* argv[]) {
                 plan->get_catalog().get_currentDB().dbId, jit_debug ? "/tmp" : "", jit_debug ? "mapdquery" : "");
             ResultRows results({}, nullptr, nullptr, ExecutorDeviceType::CPU);
             ResultRows results_cpu({}, nullptr, nullptr, ExecutorDeviceType::CPU);
-            const NVVMBackend nvvm_backend{use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA};
             {
               auto ms = measure<>::execution([&]() {
                 results_cpu = executor->execute(plan,
@@ -353,7 +348,6 @@ int main(int argc, char* argv[]) {
                                                 -1,
                                                 true,
                                                 ExecutorDeviceType::CPU,
-                                                nvvm_backend,
                                                 ExecutorOptLevel::Default,
                                                 true,
                                                 allow_loop_joins);
@@ -371,7 +365,6 @@ int main(int argc, char* argv[]) {
                                                   -1,
                                                   true,
                                                   ExecutorDeviceType::GPU,
-                                                  nvvm_backend,
                                                   ExecutorOptLevel::Default,
                                                   true,
                                                   allow_loop_joins);

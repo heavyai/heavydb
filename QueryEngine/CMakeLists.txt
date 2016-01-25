@@ -12,7 +12,6 @@ set(query_engine_source_files
     GpuMemUtils.cpp
     GpuSort.cpp
     GroupByAndAggregate.cpp
-    DeviceSideLaunch.cpp
     NvidiaKernel.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp

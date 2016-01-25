@@ -43,7 +43,6 @@ done
 export PATH=~/bin:$PATH
 
 cat >> ~/.bash_profile <<EOF
-DYLD_LIBRARY_PATH=/Developer/NVIDIA/CUDA-7.5/nvvm/lib:\$DYLD_LIBRARY_PATH
 DYLD_LIBRARY_PATH=/Developer/NVIDIA/CUDA-7.5/lib:\$DYLD_LIBRARY_PATH
 PATH=/Developer/NVIDIA/CUDA-7.5/bin:\$PATH
 PATH=\$HOME/bin:\$PATH

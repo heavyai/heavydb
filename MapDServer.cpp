@@ -64,7 +64,6 @@ class MapDHandler : virtual public MapDIf {
  public:
   MapDHandler(const std::string& base_data_path,
               const std::string& executor_device,
-              const NVVMBackend nvvm_backend,
               const bool allow_multifrag,
               const bool jit_debug,
               const bool read_only,
@@ -82,7 +81,6 @@ class MapDHandler : virtual public MapDIf {
               const bool /* legacy_syntax */)
 #endif  // HAVE_CALCITE
       : base_data_path_(base_data_path),
-        nvvm_backend_(nvvm_backend),
         random_gen_(std::random_device{}()),
         session_id_dist_(0, INT32_MAX),
         jit_debug_(jit_debug),
@@ -772,7 +770,6 @@ class MapDHandler : virtual public MapDIf {
                                            1,  // TODO(alex): de-hardcode widget id
                                            true,
                                            session_info_ptr->get_executor_device_type(),
-                                           nvvm_backend_,
                                            ExecutorOptLevel::Default,
                                            allow_multifrag_,
                                            false);
@@ -986,7 +983,6 @@ class MapDHandler : virtual public MapDIf {
                                   -1,
                                   true,
                                   executor_device_type,
-                                  nvvm_backend_,
                                   ExecutorOptLevel::Default,
                                   allow_multifrag_,
                                   allow_loop_joins_);
@@ -1219,7 +1215,6 @@ class MapDHandler : virtual public MapDIf {
   const std::string base_data_path_;
   boost::filesystem::path import_path_;
   ExecutorDeviceType executor_device_type_;
-  const NVVMBackend nvvm_backend_;
   std::default_random_engine random_gen_;
   std::uniform_int_distribution<int64_t> session_id_dist_;
   const bool jit_debug_;
@@ -1272,7 +1267,6 @@ int main(int argc, char** argv) {
   std::string config_file("mapd.conf");
   bool flush_log = false;
   bool jit_debug = false;
-  bool use_nvptx = true;
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
@@ -1314,9 +1308,6 @@ int main(int argc, char** argv) {
   desc_adv.add_options()("jit-debug",
                          po::bool_switch(&jit_debug)->default_value(jit_debug)->implicit_value(true),
                          "Enable debugger support for the JIT. The generated code can be found at /tmp/mapdquery");
-  desc_adv.add_options()("use-nvvm",
-                         po::bool_switch(&use_nvptx)->default_value(use_nvptx)->implicit_value(false),
-                         "Use NVVM instead of NVPTX");
   desc_adv.add_options()("disable-multifrag",
                          po::bool_switch(&allow_multifrag)->default_value(allow_multifrag)->implicit_value(false),
                          "Disable execution over multiple fragments in a single round-trip to GPU");
@@ -1446,7 +1437,6 @@ int main(int argc, char** argv) {
 
   shared_ptr<MapDHandler> handler(new MapDHandler(base_path,
                                                   device,
-                                                  use_nvptx ? NVVMBackend::NVPTX : NVVMBackend::CUDA,
                                                   allow_multifrag,
                                                   jit_debug,
                                                   read_only,

@@ -39,7 +39,7 @@ Other
 # Installation
 
 ## CUDA Installation
-CUDA-enabled installations of MapD depend on `libcuda` and `libnvvm` which are provided by the NVIDIA GPU drivers and NVIDIA CUDA Toolkit, respectively. As of January 2016, both CUDA 7.0 and CUDA 7.5 are supported by MapD.
+CUDA-enabled installations of MapD depends on `libcuda` which is provided by the NVIDIA GPU drivers and NVIDIA CUDA Toolkit, respectively. As of January 2016, both CUDA 7.0 and CUDA 7.5 are supported by MapD.
 
 The NVIDIA CUDA Toolkit, which includes the NVIDIA GPU drivers, is available from the [NVIDIA CUDA Zone](https://developer.nvidia.com/cuda-downloads).
 
@@ -86,15 +86,7 @@ Please download the DMG package provided by NVIDIA from the [NVIDIA CUDA Zone](h
 The DMG package will walk you through all required steps to install CUDA.
 
 ### Environment Variables
-MapD depends on `libcuda` and `libnvvm`, both of which must be available in your environment in order to run MapD. The NVIDIA GPU drivers usually make `libcuda` available by default by installing it to a system-wide `lib` directory such as `/usr/lib64` (on CentOS/RHEL) or `/usr/lib/x86_64-linux-gnu` (on Ubuntu). However, `libnvvm` is typically installed to a CUDA-specific directory which is not added to your environment by default (via `$LD_LIBRARY_PATH`). To make `libnvvm` available, add the following to `/etc/profile.d/cuda.sh` (on Linux) or your user's `$HOME/.bashrc`:
-```
-LD_LIBRARY_PATH=/usr/local/cuda-7.5/nvvm/lib64:$LD_LIBRARY_PATH
-```
-for Linux or
-```
-DYLD_LIBRARY_PATH=/Developer/NVIDIA/CUDA-7.5/nvvm/lib:$DYLD_LIBRARY_PATH
-```
-for Mac OS X, where `/usr/local/cuda-7.5` and `/Developer/NVIDIA/CUDA-7.5` are the default CUDA Toolkit install directories.
+MapD depends on `libcuda`, which must be available in your environment in order to run MapD. The NVIDIA GPU drivers usually make `libcuda` available by default by installing it to a system-wide `lib` directory such as `/usr/lib64` (on CentOS/RHEL) or `/usr/lib/x86_64-linux-gnu` (on Ubuntu).
 
 ### Verifying Installation
 After installing CUDA and setting up the environment variables, please restart your machine to activate the GPU drivers.

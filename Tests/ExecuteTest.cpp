@@ -17,11 +17,10 @@ using namespace std;
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
-NVVMBackend g_nvvm_backend{NVVMBackend::NVPTX};
 bool g_hoist_literals{true};
 
 ResultRows run_multiple_agg(const string& query_str, const bool use_calcite, const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, use_calcite, g_session, device_type, g_nvvm_backend, g_hoist_literals);
+  return run_multiple_agg(query_str, use_calcite, g_session, device_type, g_hoist_literals);
 }
 
 TargetValue run_simple_agg(const string& query_str, const bool use_calcite, const ExecutorDeviceType device_type) {
@@ -1229,13 +1228,11 @@ int main(int argc, char** argv) {
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
-  desc.add_options()("use-nvvm", "Use NVVM instead of NVPTX");
   desc.add_options()("disable-literal-hoisting", "Disable literal hoisting");
 
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
-  if (vm.count("use-nvvm"))
-    g_nvvm_backend = NVVMBackend::CUDA;
+
   if (vm.count("disable-literal-hoisting"))
     g_hoist_literals = false;
 

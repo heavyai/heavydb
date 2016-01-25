@@ -111,7 +111,7 @@ Assuming you already have [yaourt](https://wiki.archlinux.org/index.php/Yaourt) 
 
 CUDA is installed to `/opt/cuda` instead of the default `/usr/local/cuda`. You may have to add the following to `CMakeLists.txt` to support this:
 
-    include_directories("/opt/cuda/include" "/opt/cuda/nvvm/include" "/opt/cuda/nvvm/libnvvm-samples/common/include")
+    include_directories("/opt/cuda/include")
 
 # Environment variables
 
@@ -128,7 +128,6 @@ CUDA requires the following environment variables, assuming CUDA was installed t
     CUDA_PATH=/usr/local/cuda
     PATH=$CUDA_PATH/bin:$PATH
     LD_LIBRARY_PATH=$CUDA_PATH/lib64:$LD_LIBRARY_PATH
-    LD_LIBRARY_PATH=$CUDA_PATH/nvvm/lib64:$LD_LIBRARY_PATH
     export PATH LD_LIBRARY_PATH
 
 CUDA on OS X is usually installed under `/Developer/NVIDIA/CUDA-7.5`:
@@ -136,5 +135,4 @@ CUDA on OS X is usually installed under `/Developer/NVIDIA/CUDA-7.5`:
     CUDA_PATH=/Developer/NVIDIA/CUDA-7.5
     PATH=$CUDA_PATH/bin:$PATH
     DYLD_LIBRARY_PATH=$CUDA_PATH/lib64:$DYLD_LIBRARY_PATH
-    DYLD_LIBRARY_PATH=$CUDA_PATH/nvvm/lib64:$DYLD_LIBRARY_PATH
     export PATH DYLD_LIBRARY_PATH
