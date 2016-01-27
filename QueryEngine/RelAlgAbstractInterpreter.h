@@ -61,8 +61,13 @@ class RelAlgAggExpr : public RelAlgExpr {
 };
 
 class RelAlgNode {
+ public:
+  RelAlgNode() : context_data_(nullptr) {}
+  void setContextData(const void* context_data) { context_data_ = context_data; }
+
  protected:
   std::vector<std::unique_ptr<const RelAlgNode>> inputs_;  // TODO
+  const void* context_data_;
 };
 
 class RelAlgScan : public RelAlgNode {
@@ -176,6 +181,8 @@ class RelSequence : public RelAlgNode {
  private:
   std::vector<const RelAlgNode*> sequence_;
 };
+
+class RelNop : public RelAlgNode {};
 
 LoweringInfo ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
 

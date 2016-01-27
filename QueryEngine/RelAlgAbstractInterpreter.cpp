@@ -1,3 +1,4 @@
+#ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
 
 #include <glog/logging.h>
@@ -75,3 +76,4 @@ LoweringInfo ra_interpret(const rapidjson::Value& query_ast, const Catalog_Names
   RaAbstractInterp interp(query_ast, cat);
   return interp.run();
 }
+#endif  // HAVE_CALCITE
