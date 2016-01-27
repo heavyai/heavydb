@@ -187,6 +187,7 @@ service MapD {
   TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e 2: ThriftException te)
   TFrontendView get_frontend_view(1: TSessionId session, 2: string view_name) throws (1: TMapDException e 2: ThriftException te)
+  void delete_frontend_view(1: TSessionId session, 2: string view_name) throws (1: TMapDException e 2: ThriftException te)
   list<string> get_tables(1: TSessionId session) throws (1: TMapDException e 2: ThriftException te)
   list<string> get_users() throws (1: ThriftException te)
   list<TDBInfo> get_databases() throws (1: ThriftException te)

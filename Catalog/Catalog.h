@@ -165,8 +165,11 @@ class Catalog {
   const ColumnDescriptor* getMetadataForColumn(int tableId, const std::string& colName) const;
   const ColumnDescriptor* getMetadataForColumn(int tableId, int columnId) const;
 
-  const FrontendViewDescriptor* getMetadataForFrontendView(const std::string& viewName) const;
+  const FrontendViewDescriptor* getMetadataForFrontendView(const std::string& userId,
+                                                           const std::string& viewName) const;
   const FrontendViewDescriptor* getMetadataForFrontendView(int viewId) const;
+
+  void deleteMetadataForFrontendView(const std::string& userId, const std::string& viewName);
 
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
   const LinkDescriptor* getMetadataForLink(int linkId) const;
@@ -218,7 +221,6 @@ class Catalog {
   ColumnDescriptorMapById columnDescriptorMapById_;
   DictDescriptorMapById dictDescriptorMapById_;
   FrontendViewDescriptorMap frontendViewDescriptorMap_;
-  FrontendViewDescriptorMapById frontendViewDescriptorMapById_;
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;
   SqliteConnector sqliteConnector_;

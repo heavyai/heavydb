@@ -405,13 +405,14 @@ class MapDHandler : virtual public MapDIf {
   void get_frontend_view(TFrontendView& _return, const TSessionId session, const std::string& view_name) {
     const auto session_info = get_session(session);
     auto& cat = session_info.get_catalog();
-    auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId) + view_name);
+    auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
     if (!vd) {
       TMapDException ex;
       ex.error_msg = "View " + view_name + " doesn't exist";
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
+    _return.view_name = view_name;
     _return.view_state = vd->viewState;
     _return.image_hash = vd->imageHash;
     _return.update_time = vd->updateTime;
@@ -811,6 +812,20 @@ class MapDHandler : virtual public MapDIf {
     vd.userId = session_info.get_currentUser().userId;
 
     cat.createFrontendView(vd);
+  }
+
+  void delete_frontend_view(const TSessionId session, const std::string& view_name) {
+    check_read_only("delete_frontend_view");
+    const auto session_info = get_session(session);
+    auto& cat = session_info.get_catalog();
+    auto vd = cat.getMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
+    if (!vd) {
+      TMapDException ex;
+      ex.error_msg = "View " + view_name + " doesn't exist";
+      LOG(ERROR) << ex.error_msg;
+      throw ex;
+    }
+    cat.deleteMetadataForFrontendView(std::to_string(session_info.get_currentUser().userId), view_name);
   }
 
   void create_link(std::string& _return, const TSessionId session, const std::string& view_state) {

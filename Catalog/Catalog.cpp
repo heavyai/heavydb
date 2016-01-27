@@ -340,7 +340,6 @@ void Catalog::buildMaps() {
     vd->updateTime = sqliteConnector_.getData<string>(r, 4);
     vd->userId = sqliteConnector_.getData<int>(r, 5);
     frontendViewDescriptorMap_[std::to_string(vd->userId) + vd->viewName] = vd;
-    frontendViewDescriptorMapById_[vd->viewId] = vd;
   }
 
   updateLinkSchema();
@@ -421,7 +420,6 @@ void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
   FrontendViewDescriptor* new_vd = new FrontendViewDescriptor();
   *new_vd = vd;
   frontendViewDescriptorMap_[std::to_string(vd.userId) + vd.viewName] = new_vd;
-  frontendViewDescriptorMapById_[vd.viewId] = new_vd;
 }
 
 void Catalog::addLinkToMap(LinkDescriptor& ld) {
@@ -501,22 +499,34 @@ const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, int columnId)
   return colDescIt->second;
 }
 
-const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(const string& viewName) const {
+void Catalog::deleteMetadataForFrontendView(const std::string& userId, const std::string& viewName) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  auto viewDescIt = frontendViewDescriptorMap_.find(viewName);
+  auto viewDescIt = frontendViewDescriptorMap_.find(userId + viewName);
+  if (viewDescIt == frontendViewDescriptorMap_.end()) {  // check to make sure view exists
+    LOG(ERROR) << "deleteting view for user " << userId << " view " << viewName << " does not exist in map";
+    return;
+  }
+  // found view in Map now remove it
+  frontendViewDescriptorMap_.erase(viewDescIt);
+  // remove from DB
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query_with_text_params("DELETE FROM mapd_frontend_views WHERE name = ? and userid = ?",
+                                            std::vector<std::string>{viewName, userId});
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
+const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(const string& userId, const string& viewName) const {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  auto viewDescIt = frontendViewDescriptorMap_.find(userId + viewName);
   if (viewDescIt == frontendViewDescriptorMap_.end()) {  // check to make sure view exists
     return nullptr;
   }
   return viewDescIt->second;  // returns pointer to view descriptor
-}
-
-const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(int viewId) const {
-  std::lock_guard<std::mutex> lock(cat_mutex_);
-  auto frontendViewDescIt = frontendViewDescriptorMapById_.find(viewId);
-  if (frontendViewDescIt == frontendViewDescriptorMapById_.end()) {  // check to make sure view exists
-    return nullptr;
-  }
-  return frontendViewDescIt->second;
 }
 
 const LinkDescriptor* Catalog::getMetadataForLink(const string& link) const {
@@ -570,7 +580,7 @@ list<const TableDescriptor*> Catalog::getAllTableMetadata() const {
 
 list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const {
   list<const FrontendViewDescriptor*> view_list;
-  for (auto p : frontendViewDescriptorMapById_)
+  for (auto p : frontendViewDescriptorMap_)
     view_list.push_back(p.second);
   return view_list;
 }
