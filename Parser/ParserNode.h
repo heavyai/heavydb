@@ -884,7 +884,7 @@ class RenameColumnStmt : public DDLStmt {
  */
 class CopyTableStmt : public DDLStmt {
  public:
-  CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o) : table(t), file_path(f) {
+  CopyTableStmt(std::string* t, std::string* f, std::list<NameValueAssign*>* o) : table(t), file_pattern(f) {
     if (o) {
       for (const auto e : *o) {
         options.emplace_back(e);
@@ -896,7 +896,7 @@ class CopyTableStmt : public DDLStmt {
 
  private:
   std::unique_ptr<std::string> table;
-  std::unique_ptr<std::string> file_path;
+  std::unique_ptr<std::string> file_pattern;
   std::list<std::unique_ptr<NameValueAssign>> options;
 };
 
