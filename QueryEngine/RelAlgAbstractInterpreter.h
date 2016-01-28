@@ -24,7 +24,10 @@ class LoweringInfo {
   // TODO
 };
 
-class RelAlgExpr {};
+class RelAlgExpr {
+ public:
+  virtual ~RelAlgExpr() {};
+};
 
 class RelAlgScalarExpr : public RelAlgExpr {};
 
@@ -70,9 +73,9 @@ class RelAlgNode {
   const void* context_data_;
 };
 
-class RelAlgScan : public RelAlgNode {
+class RelScan : public RelAlgNode {
  public:
-  RelAlgScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
+  RelScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
       : td_(td), field_names_(field_names) {}
 
  private:

@@ -24,6 +24,33 @@ unsigned node_id(const rapidjson::Value& ra_node) noexcept {
   return std::stoi(id.GetString());
 }
 
+static RelAlgAbstractInput* parse_abstract_input(const rapidjson::Value& expr) {
+  CHECK(expr.IsObject());
+  const auto input_field_it = expr.FindMember("input");
+  CHECK(input_field_it != expr.MemberEnd());
+  const auto& input_field_json = input_field_it->value;
+  CHECK(input_field_json.IsInt());
+  return new RelAlgAbstractInput(input_field_json.GetInt());
+}
+
+static RelAlgExpr* parse_expr(const rapidjson::Value& expr) {
+  CHECK(expr.IsObject());
+  if (expr.IsObject() && expr.HasMember("input")) {
+    return parse_abstract_input(expr);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
+  std::vector<std::string> fields;
+  for (auto json_str_arr_it = json_str_arr.Begin(); json_str_arr_it != json_str_arr.End(); ++json_str_arr_it) {
+    CHECK(json_str_arr_it->IsString());
+    fields.emplace_back(json_str_arr_it->GetString());
+  }
+  return fields;
+}
+
 class RaAbstractInterp {
  public:
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
@@ -43,20 +70,37 @@ class RaAbstractInterp {
       CHECK(rel_op_it != crt_node.MemberEnd());
       if (rel_op_it->value.GetString() == std::string("LogicalTableScan")) {
         nodes_.push_back(dispatchTableScan(crt_node));
+      } else if (rel_op_it->value.GetString() == std::string("LogicalProject")) {
+        nodes_.push_back(dispatchProject(crt_node));
       } else {
         CHECK(false);
       }
-      CHECK(false);
     }
     return {};
   }
 
  private:
-  RelAlgScan* dispatchTableScan(const rapidjson::Value& scan_ra) {
+  RelScan* dispatchTableScan(const rapidjson::Value& scan_ra) {
     CHECK(scan_ra.IsObject());
     const auto td = getTableFromScanNode(scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
-    return new RelAlgScan(td, field_names);
+    return new RelScan(td, field_names);
+  }
+
+  RelProject* dispatchProject(const rapidjson::Value& proj_ra) {
+    const auto exprs_field_it = proj_ra.FindMember("exprs");
+    CHECK(exprs_field_it != proj_ra.MemberEnd());
+    const auto& exprs_json = exprs_field_it->value;
+    CHECK(exprs_json.IsArray());
+    std::vector<const RelAlgScalarExpr*> exprs;
+    for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End(); ++exprs_json_it) {
+      const auto scalar_expr = dynamic_cast<const RelAlgScalarExpr*>(parse_expr(*exprs_json_it));
+      CHECK(scalar_expr);
+      exprs.push_back(scalar_expr);
+    }
+    const auto fields_field_it = proj_ra.FindMember("fields");
+    CHECK(fields_field_it != proj_ra.MemberEnd());
+    return new RelProject(exprs, strings_from_json_array(fields_field_it->value));
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
@@ -73,12 +117,7 @@ class RaAbstractInterp {
     CHECK(it != scan_ra.MemberEnd());
     const auto& fields_json = it->value;
     CHECK(fields_json.IsArray());
-    std::vector<std::string> fields;
-    for (auto fields_json_it = fields_json.Begin(); fields_json_it != fields_json.End(); ++fields_json_it) {
-      CHECK(fields_json_it->IsString());
-      fields.emplace_back(fields_json_it->GetString());
-    }
-    return fields;
+    return strings_from_json_array(fields_json);
   }
 
   const rapidjson::Value& query_ast_;
