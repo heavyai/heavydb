@@ -18,11 +18,6 @@ if(PREFER_STATIC_LIBS)
   set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
 endif()
 
-if(XCODE)
-set(CMAKE_EXE_LINKER_FLAGS "-F/Library/Frameworks -framework CUDA")
-add_definitions("-DXCODE")
-endif()
-
 # CUDA required for build, even when CUDA support is disabled
 find_package(CUDA REQUIRED)
 option(ENABLE_CUDA "Enable CUDA support" ON)
@@ -32,6 +27,13 @@ if(ENABLE_CUDA)
 else()
   set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-nocuda")
+endif()
+
+if(XCODE)
+if (ENABLE_CUDA)
+set(CMAKE_EXE_LINKER_FLAGS "-F/Library/Frameworks -framework CUDA")
+endif()
+add_definitions("-DXCODE")
 endif()
 
 find_package(Git)

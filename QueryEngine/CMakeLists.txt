@@ -40,7 +40,7 @@ if(ENABLE_CUDA)
     set(MAPD_DEFINITIONS "-DHAVE_CUDA")
 endif()
 
-if(XCODE)
+if(ENABLE_LLVM_DBG)
 set(CLANG_SDK_INC "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include/")
 set(CLANG_CRT_INC "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/")
 endif()
