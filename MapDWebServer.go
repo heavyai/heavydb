@@ -21,7 +21,6 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/handlers"
-	"github.com/rs/cors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -335,7 +334,7 @@ func main() {
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
 	lmux := handlers.LoggingHandler(alog, mux)
-	cmux := cors.Default().Handler(lmux)
+	cmux := handlers.CORS()(lmux)
 	err = http.ListenAndServe(":"+strconv.Itoa(port), cmux)
 	if err != nil {
 		log.Fatal("Error listening: ", err)
