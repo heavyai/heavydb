@@ -182,11 +182,15 @@ class RelScan : public RelAlgNode {
 class RelProject : public RelAlgNode {
  public:
   // Takes memory ownership of the expressions.
-  RelProject(const std::vector<const RexScalar*>& exprs, const std::vector<std::string>& fields) : fields_(fields) {
+  RelProject(const std::vector<const RexScalar*>& exprs,
+             const std::vector<std::string>& fields,
+             const RelAlgNode* input)
+      : fields_(fields) {
     CHECK_EQ(exprs.size(), fields.size());
     for (auto expr : exprs) {
       scalar_exprs_.emplace_back(expr);
     }
+    inputs_.emplace_back(input);
   }
 
   // True iff all the projected expressions are inputs. If true,
@@ -204,11 +208,13 @@ class RelAggregate : public RelAlgNode {
   // Takes ownership of the aggregate expressions.
   RelAggregate(const std::vector<size_t>& group_indices,
                const std::vector<const RexAgg*>& agg_exprs,
-               const std::vector<std::string>& fields)
+               const std::vector<std::string>& fields,
+               const RelAlgNode* input)
       : group_indices_(group_indices), fields_(fields) {
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
     }
+    inputs_.emplace_back(input);
   }
 
  private:
@@ -227,7 +233,7 @@ class RelJoin : public RelAlgNode {
 
 class RelFilter : public RelAlgNode {
  public:
-  RelFilter(const RexScalar* filter) : filter_(filter) {}
+  RelFilter(const RexScalar* filter, const RelAlgNode* input) : filter_(filter) { inputs_.emplace_back(input); }
 
  private:
   std::unique_ptr<const RexScalar> filter_;

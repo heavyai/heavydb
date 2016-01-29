@@ -152,18 +152,20 @@ class RaAbstractInterp {
       const auto id = node_id(crt_node);
       CHECK_EQ(static_cast<size_t>(id), nodes_.size());
       CHECK(crt_node.IsObject());
+      const RelAlgNode* ra_node = nullptr;
       const auto rel_op = json_str(field(crt_node, "relOp"));
       if (rel_op == std::string("LogicalTableScan")) {
-        nodes_.push_back(dispatchTableScan(crt_node));
+        ra_node = dispatchTableScan(crt_node);
       } else if (rel_op == std::string("LogicalProject")) {
-        nodes_.push_back(dispatchProject(crt_node));
+        ra_node = dispatchProject(crt_node);
       } else if (rel_op == std::string("LogicalFilter")) {
-        nodes_.push_back(dispatchFilter(crt_node));
+        ra_node = dispatchFilter(crt_node);
       } else if (rel_op == std::string("LogicalAggregate")) {
-        nodes_.push_back(dispatchAggregate(crt_node));
+        ra_node = dispatchAggregate(crt_node);
       } else {
         CHECK(false);
       }
+      nodes_.push_back(ra_node);
     }
     return {};
   }
@@ -184,11 +186,20 @@ class RaAbstractInterp {
       exprs.push_back(parse_scalar_expr(*exprs_json_it));
     }
     const auto& fields = field(proj_ra, "fields");
-    return new RelProject(exprs, strings_from_json_array(fields));
+    return new RelProject(exprs, strings_from_json_array(fields), prev(proj_ra));
   }
 
   RelFilter* dispatchFilter(const rapidjson::Value& filter_ra) {
-    return new RelFilter(parse_operator(field(filter_ra, "condition")));
+    const auto id = node_id(filter_ra);
+    CHECK(id);
+    return new RelFilter(parse_operator(field(filter_ra, "condition")), prev(filter_ra));
+  }
+
+  const RelAlgNode* prev(const rapidjson::Value& crt_node) {
+    const auto id = node_id(crt_node);
+    CHECK(id);
+    CHECK_EQ(static_cast<size_t>(id), nodes_.size());
+    return nodes_.back();
   }
 
   RelAggregate* dispatchAggregate(const rapidjson::Value& agg_ra) {
@@ -200,7 +211,7 @@ class RaAbstractInterp {
     for (auto aggs_json_arr_it = aggs_json_arr.Begin(); aggs_json_arr_it != aggs_json_arr.End(); ++aggs_json_arr_it) {
       aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
-    return new RelAggregate(group, aggs, fields);
+    return new RelAggregate(group, aggs, fields, prev(agg_ra));
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
@@ -219,7 +230,7 @@ class RaAbstractInterp {
 
   const rapidjson::Value& query_ast_;
   const Catalog_Namespace::Catalog& cat_;
-  std::vector<RelAlgNode*> nodes_;
+  std::vector<const RelAlgNode*> nodes_;
 };
 
 }  // namespace
