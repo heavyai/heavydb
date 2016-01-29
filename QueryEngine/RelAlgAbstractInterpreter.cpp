@@ -24,16 +24,16 @@ unsigned node_id(const rapidjson::Value& ra_node) noexcept {
   return std::stoi(id.GetString());
 }
 
-static RelAlgAbstractInput* parse_abstract_input(const rapidjson::Value& expr) {
+static RexAbstractInput* parse_abstract_input(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   const auto input_field_it = expr.FindMember("input");
   CHECK(input_field_it != expr.MemberEnd());
   const auto& input_field_json = input_field_it->value;
   CHECK(input_field_json.IsInt());
-  return new RelAlgAbstractInput(input_field_json.GetInt());
+  return new RexAbstractInput(input_field_json.GetInt());
 }
 
-static RelAlgExpr* parse_expr(const rapidjson::Value& expr) {
+static Rex* parse_expr(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
     return parse_abstract_input(expr);
@@ -92,9 +92,9 @@ class RaAbstractInterp {
     CHECK(exprs_field_it != proj_ra.MemberEnd());
     const auto& exprs_json = exprs_field_it->value;
     CHECK(exprs_json.IsArray());
-    std::vector<const RelAlgScalarExpr*> exprs;
+    std::vector<const RexScalar*> exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End(); ++exprs_json_it) {
-      const auto scalar_expr = dynamic_cast<const RelAlgScalarExpr*>(parse_expr(*exprs_json_it));
+      const auto scalar_expr = dynamic_cast<const RexScalar*>(parse_expr(*exprs_json_it));
       CHECK(scalar_expr);
       exprs.push_back(scalar_expr);
     }

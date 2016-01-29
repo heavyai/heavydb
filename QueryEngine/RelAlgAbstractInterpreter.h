@@ -24,18 +24,18 @@ class LoweringInfo {
   // TODO
 };
 
-class RelAlgExpr {
+class Rex {
  public:
-  virtual ~RelAlgExpr() {};
+  virtual ~Rex(){};
 };
 
-class RelAlgScalarExpr : public RelAlgExpr {};
+class RexScalar : public Rex {};
 
 // For internal use of the abstract interpreter only. The result after abstract
 // interpretation will not have any references to RelAlgInput objects.
-class RelAlgAbstractInput : public RelAlgScalarExpr {
+class RexAbstractInput : public RexScalar {
  public:
-  RelAlgAbstractInput(const unsigned in_index) : in_index_(in_index) {}
+  RexAbstractInput(const unsigned in_index) : in_index_(in_index) {}
 
  private:
   unsigned in_index_;
@@ -45,22 +45,22 @@ class RelAlgNode;
 
 // The actual input node understood by the Executor.
 // The in_index_ is relative to the output of node_.
-class RelAlgInput : public RelAlgAbstractInput {
+class RexInput : public RexAbstractInput {
  public:
-  RelAlgInput(const RelAlgNode* node, const unsigned in_index) : RelAlgAbstractInput(in_index), node_(node) {}
+  RexInput(const RelAlgNode* node, const unsigned in_index) : RexAbstractInput(in_index), node_(node) {}
 
  private:
   const RelAlgNode* node_;
 };
 
-class RelAlgAggExpr : public RelAlgExpr {
+class RexAgg : public Rex {
  public:
   // The 'arg' expression is owned by the project node which created it.
-  RelAlgAggExpr(const SQLAgg agg, const RelAlgExpr* arg) : agg_(agg), arg_(arg){};
+  RexAgg(const SQLAgg agg, const Rex* arg) : agg_(agg), arg_(arg){};
 
  private:
   const SQLAgg agg_;
-  const RelAlgExpr* arg_;
+  const Rex* arg_;
 };
 
 class RelAlgNode {
@@ -86,8 +86,7 @@ class RelScan : public RelAlgNode {
 class RelProject : public RelAlgNode {
  public:
   // Takes memory ownership of the expressions.
-  RelProject(const std::vector<const RelAlgScalarExpr*>& exprs, const std::vector<std::string>& fields)
-      : fields_(fields) {
+  RelProject(const std::vector<const RexScalar*>& exprs, const std::vector<std::string>& fields) : fields_(fields) {
     CHECK_EQ(exprs.size(), fields.size());
     for (auto expr : exprs) {
       scalar_exprs_.emplace_back(expr);
@@ -100,7 +99,7 @@ class RelProject : public RelAlgNode {
   bool isSimple() const;
 
  private:
-  std::vector<std::unique_ptr<const RelAlgScalarExpr>> scalar_exprs_;
+  std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   const std::vector<std::string> fields_;
 };
 
@@ -110,8 +109,7 @@ class RelAggregate : public RelAlgNode {
   // are owned by the previous project node. The pointers to group by expressions
   // and to the arguments of aggregate expressions are guaranteed to be the
   // same the project node created so that the codegen can cache them.
-  RelAggregate(const std::vector<const RelAlgScalarExpr*>& group_exprs,
-               const std::vector<const RelAlgAggExpr*>& agg_exprs)
+  RelAggregate(const std::vector<const RexScalar*>& group_exprs, const std::vector<const RexAgg*>& agg_exprs)
       : group_exprs_(group_exprs) {
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
@@ -119,8 +117,8 @@ class RelAggregate : public RelAlgNode {
   }
 
  private:
-  const std::vector<const RelAlgScalarExpr*> group_exprs_;
-  std::vector<std::unique_ptr<const RelAlgAggExpr>> agg_exprs_;
+  const std::vector<const RexScalar*> group_exprs_;
+  std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
 };
 
 class RelJoin : public RelAlgNode {
@@ -133,10 +131,10 @@ class RelJoin : public RelAlgNode {
 
 class RelFilter : public RelAlgNode {
  public:
-  RelFilter(const RelAlgScalarExpr* filter) : filter_(filter) {}
+  RelFilter(const RexScalar* filter) : filter_(filter) {}
 
  private:
-  std::unique_ptr<const RelAlgScalarExpr> filter_;
+  std::unique_ptr<const RexScalar> filter_;
 };
 
 // The 'RelCompound' node combines filter and on the fly aggregate computation.
@@ -148,12 +146,12 @@ class RelCompound : public RelAlgNode {
   // 'target_exprs_' are either scalar expressions owned by 'scalar_sources_'
   // or aggregate expressions owned by 'agg_exprs_', with the arguments
   // owned by 'scalar_sources_'.
-  RelCompound(const RelAlgScalarExpr* filter_expr,
-              const std::vector<const RelAlgExpr*>& target_exprs,
-              const std::vector<const RelAlgScalarExpr*>& group_exprs,
-              const std::vector<const RelAlgAggExpr*>& agg_exprs,
+  RelCompound(const RexScalar* filter_expr,
+              const std::vector<const Rex*>& target_exprs,
+              const std::vector<const RexScalar*>& group_exprs,
+              const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
-              const std::vector<const RelAlgScalarExpr*>& scalar_sources)
+              const std::vector<const RexScalar*>& scalar_sources)
       : filter_expr_(filter_expr), target_exprs_(target_exprs), group_exprs_(group_exprs), fields_(fields) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
@@ -165,12 +163,12 @@ class RelCompound : public RelAlgNode {
   }
 
  private:
-  const std::unique_ptr<const RelAlgScalarExpr> filter_expr_;
-  const std::vector<const RelAlgExpr*> target_exprs_;
-  const std::vector<const RelAlgScalarExpr*> group_exprs_;
-  std::vector<std::unique_ptr<const RelAlgAggExpr>> agg_exprs_;
+  const std::unique_ptr<const RexScalar> filter_expr_;
+  const std::vector<const Rex*> target_exprs_;
+  const std::vector<const RexScalar*> group_exprs_;
+  std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
-  std::vector<std::unique_ptr<const RelAlgScalarExpr>>
+  std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_exprs_ and agg_exprs_; not actually projected, just owned
 };
 
