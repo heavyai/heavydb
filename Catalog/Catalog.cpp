@@ -11,7 +11,8 @@
 #include <cassert>
 #include <memory>
 #include <random>
-#include "boost/filesystem.hpp"
+#include <boost/filesystem.hpp>
+#include <boost/uuid/sha1.hpp>
 #include "Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
@@ -766,44 +767,33 @@ void Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   addFrontendViewToMap(vd);
 }
 
-std::string generateRandomString(const size_t length) {
-  const std::string charset =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-      "abcdefghijklmnopqrstuvwxyz";
-  std::random_device rd;
-  std::mt19937 gen(rd());
-  std::uniform_int_distribution<> dist(0, charset.length() - 1);
-  std::string str(length, 'a');
-  std::generate(str.begin(), str.end(), [&charset, &dist, &gen]() { return charset[dist(gen)]; });
-  return str;
-}
-
-std::string Catalog::generateLink(size_t min_length) {
-  size_t tries = 0;
-  std::string link;
-  try {
-    while (true) {
-      link = generateRandomString(min_length);
-      if (getMetadataForLink(link)) {
-        if (++tries % 3 != 0)
-          min_length++;
-      } else {
-        break;
-      }
-    }
-  } catch (const std::exception& e) {
-    throw;
+std::string Catalog::calculateSHA1(const std::string& data) {
+  boost::uuids::detail::sha1 sha1;
+  unsigned int digest[5];
+  sha1.process_bytes(data.c_str(), data.length());
+  sha1.get_digest(digest);
+  std::stringstream ss;
+  for (size_t i = 0; i < 5; i++) {
+    ss << std::hex << digest[i];
   }
-  return link;
+  return ss.str();
 }
 
 std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    ld.link = generateLink(min_length);
-    sqliteConnector_.query_with_text_params(
-        "INSERT INTO mapd_links (userid, link, view_state, update_time) VALUES (?,?,?, datetime('now'))",
-        std::vector<std::string>{std::to_string(ld.userId), ld.link, ld.viewState});
+    ld.link = calculateSHA1(ld.viewState + std::to_string(ld.userId)).substr(0,8);
+    sqliteConnector_.query_with_text_params("SELECT linkid FROM mapd_links WHERE link = ? and userid = ?",
+                                            std::vector<std::string>{ld.link, std::to_string(ld.userId)});
+    if (sqliteConnector_.getNumRows() > 0) {
+      sqliteConnector_.query_with_text_params(
+          "UPDATE mapd_links SET update_time = datetime('now') WHERE userid = ? AND link = ?",
+          std::vector<std::string>{std::to_string(ld.userId), ld.link});
+    } else {
+      sqliteConnector_.query_with_text_params(
+          "INSERT INTO mapd_links (userid, link, view_state, update_time) VALUES (?,?,?, datetime('now'))",
+          std::vector<std::string>{std::to_string(ld.userId), ld.link, ld.viewState});
+    }
     // now get the auto generated viewid
     sqliteConnector_.query_with_text_param("SELECT linkid, update_time FROM mapd_links WHERE link = ?", ld.link);
     ld.linkId = sqliteConnector_.getData<int>(0, 0);

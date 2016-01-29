@@ -212,7 +212,7 @@ class Catalog {
                                     std::list<const ColumnDescriptor*>& colDescs,
                                     const bool fetchSystemColumns,
                                     const bool fetchVirtualColumns) const;
-  std::string generateLink(size_t min_length);
+  std::string calculateSHA1(const std::string& data);
 
   std::string basePath_; /**< The OS file system path containing the catalog files. */
   TableDescriptorMap tableDescriptorMap_;
