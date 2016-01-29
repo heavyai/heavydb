@@ -79,7 +79,7 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
   return nullptr;
 }
 
-Rex* parse_expr(const rapidjson::Value& expr);
+RexScalar* parse_scalar_expr(const rapidjson::Value& expr);
 
 RexOperator* parse_operator(const rapidjson::Value& expr) {
   const auto op = to_sql_op(json_str(field(expr, "op")));
@@ -88,14 +88,43 @@ RexOperator* parse_operator(const rapidjson::Value& expr) {
   std::vector<const RexScalar*> operands;
   for (auto operators_json_arr_it = operators_json_arr.Begin(); operators_json_arr_it != operators_json_arr.End();
        ++operators_json_arr_it) {
-    const auto operand = dynamic_cast<RexScalar*>(parse_expr(*operators_json_arr_it));
-    CHECK(operand);
-    operands.push_back(operand);
+    operands.push_back(parse_scalar_expr(*operators_json_arr_it));
   }
   return new RexOperator(op, operands);
 }
 
-Rex* parse_expr(const rapidjson::Value& expr) {
+std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
+  CHECK(json_str_arr.IsArray());
+  std::vector<std::string> fields;
+  for (auto json_str_arr_it = json_str_arr.Begin(); json_str_arr_it != json_str_arr.End(); ++json_str_arr_it) {
+    CHECK(json_str_arr_it->IsString());
+    fields.emplace_back(json_str_arr_it->GetString());
+  }
+  return fields;
+}
+
+std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr) {
+  CHECK(json_idx_arr.IsArray());
+  std::vector<size_t> indices;
+  for (auto json_idx_arr_it = json_idx_arr.Begin(); json_idx_arr_it != json_idx_arr.End(); ++json_idx_arr_it) {
+    CHECK(json_idx_arr_it->IsInt());
+    indices.emplace_back(json_idx_arr_it->GetInt());
+  }
+  return indices;
+}
+
+RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
+  const auto agg = to_agg_kind(json_str(field(expr, "agg")));
+  const auto distinct = json_bool(field(expr, "distinct"));
+  const auto& type_json = field(expr, "type");
+  CHECK(type_json.IsObject() && type_json.MemberCount() == 2);
+  const auto type = to_sql_type(json_str(field(type_json, "type")));
+  const auto nullable = json_bool(field(type_json, "nullable"));
+  const auto operands = indices_from_json_array(field(expr, "operands"));
+  return new RexAgg(agg, distinct, type, nullable, operands);
+}
+
+RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
     return parse_abstract_input(expr);
@@ -108,15 +137,6 @@ Rex* parse_expr(const rapidjson::Value& expr) {
   }
   CHECK(false);
   return nullptr;
-}
-
-std::vector<std::string> strings_from_json_array(const rapidjson::Value& json_str_arr) {
-  std::vector<std::string> fields;
-  for (auto json_str_arr_it = json_str_arr.Begin(); json_str_arr_it != json_str_arr.End(); ++json_str_arr_it) {
-    CHECK(json_str_arr_it->IsString());
-    fields.emplace_back(json_str_arr_it->GetString());
-  }
-  return fields;
 }
 
 class RaAbstractInterp {
@@ -139,6 +159,8 @@ class RaAbstractInterp {
         nodes_.push_back(dispatchProject(crt_node));
       } else if (rel_op == std::string("LogicalFilter")) {
         nodes_.push_back(dispatchFilter(crt_node));
+      } else if (rel_op == std::string("LogicalAggregate")) {
+        nodes_.push_back(dispatchAggregate(crt_node));
       } else {
         CHECK(false);
       }
@@ -159,17 +181,26 @@ class RaAbstractInterp {
     CHECK(exprs_json.IsArray());
     std::vector<const RexScalar*> exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End(); ++exprs_json_it) {
-      const auto scalar_expr = dynamic_cast<const RexScalar*>(parse_expr(*exprs_json_it));
-      CHECK(scalar_expr);
-      exprs.push_back(scalar_expr);
+      exprs.push_back(parse_scalar_expr(*exprs_json_it));
     }
-    const auto fields_field_it = proj_ra.FindMember("fields");
-    CHECK(fields_field_it != proj_ra.MemberEnd());
-    return new RelProject(exprs, strings_from_json_array(fields_field_it->value));
+    const auto& fields = field(proj_ra, "fields");
+    return new RelProject(exprs, strings_from_json_array(fields));
   }
 
   RelFilter* dispatchFilter(const rapidjson::Value& filter_ra) {
     return new RelFilter(parse_operator(field(filter_ra, "condition")));
+  }
+
+  RelAggregate* dispatchAggregate(const rapidjson::Value& agg_ra) {
+    const auto fields = strings_from_json_array(field(agg_ra, "fields"));
+    const auto group = indices_from_json_array(field(agg_ra, "group"));
+    const auto& aggs_json_arr = field(agg_ra, "aggs");
+    CHECK(aggs_json_arr.IsArray());
+    std::vector<const RexAgg*> aggs;
+    for (auto aggs_json_arr_it = aggs_json_arr.Begin(); aggs_json_arr_it != aggs_json_arr.End(); ++aggs_json_arr_it) {
+      aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
+    }
+    return new RelAggregate(group, aggs, fields);
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
@@ -183,7 +214,6 @@ class RaAbstractInterp {
 
   std::vector<std::string> getFieldNamesFromScanNode(const rapidjson::Value& scan_ra) const {
     const auto& fields_json = field(scan_ra, "fieldNames");
-    CHECK(fields_json.IsArray());
     return strings_from_json_array(fields_json);
   }
 

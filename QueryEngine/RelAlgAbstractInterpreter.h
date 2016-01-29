@@ -35,7 +35,7 @@ class Rex {
 class RexScalar : public Rex {};
 
 // For internal use of the abstract interpreter only. The result after abstract
-// interpretation will not have any references to RelAlgInput objects.
+// interpretation will not have any references to 'RexAbstractInput' objects.
 class RexAbstractInput : public RexScalar {
  public:
   RexAbstractInput(const unsigned in_index) : in_index_(in_index) {}
@@ -144,12 +144,19 @@ class RexInput : public RexAbstractInput {
 
 class RexAgg : public Rex {
  public:
-  // The 'arg' expression is owned by the project node which created it.
-  RexAgg(const SQLAgg agg, const Rex* arg) : agg_(agg), arg_(arg){};
+  RexAgg(const SQLAgg agg,
+         const bool distinct,
+         const SQLTypes type,
+         const bool nullable,
+         const std::vector<size_t> operands)
+      : agg_(agg), distinct_(distinct), type_(type), nullable_(nullable), operands_(operands){};
 
  private:
   const SQLAgg agg_;
-  const Rex* arg_;
+  const bool distinct_;
+  const SQLTypes type_;
+  const bool nullable_;
+  const std::vector<size_t> operands_;
 };
 
 class RelAlgNode {
@@ -194,20 +201,20 @@ class RelProject : public RelAlgNode {
 
 class RelAggregate : public RelAlgNode {
  public:
-  // Takes ownership of the aggregate expressions, the group by expressions
-  // are owned by the previous project node. The pointers to group by expressions
-  // and to the arguments of aggregate expressions are guaranteed to be the
-  // same the project node created so that the codegen can cache them.
-  RelAggregate(const std::vector<const RexScalar*>& group_exprs, const std::vector<const RexAgg*>& agg_exprs)
-      : group_exprs_(group_exprs) {
+  // Takes ownership of the aggregate expressions.
+  RelAggregate(const std::vector<size_t>& group_indices,
+               const std::vector<const RexAgg*>& agg_exprs,
+               const std::vector<std::string>& fields)
+      : group_indices_(group_indices), fields_(fields) {
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
     }
   }
 
  private:
-  const std::vector<const RexScalar*> group_exprs_;
+  const std::vector<size_t> group_indices_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
+  const std::vector<std::string> fields_;
 };
 
 class RelJoin : public RelAlgNode {
