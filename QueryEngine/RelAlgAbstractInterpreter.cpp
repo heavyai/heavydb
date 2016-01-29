@@ -79,6 +79,22 @@ RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
   return nullptr;
 }
 
+Rex* parse_expr(const rapidjson::Value& expr);
+
+RexOperator* parse_operator(const rapidjson::Value& expr) {
+  const auto op = to_sql_op(json_str(field(expr, "op")));
+  const auto& operators_json_arr = field(expr, "operands");
+  CHECK(operators_json_arr.IsArray());
+  std::vector<const RexScalar*> operands;
+  for (auto operators_json_arr_it = operators_json_arr.Begin(); operators_json_arr_it != operators_json_arr.End();
+       ++operators_json_arr_it) {
+    const auto operand = dynamic_cast<RexScalar*>(parse_expr(*operators_json_arr_it));
+    CHECK(operand);
+    operands.push_back(operand);
+  }
+  return new RexOperator(op, operands);
+}
+
 Rex* parse_expr(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
@@ -86,6 +102,9 @@ Rex* parse_expr(const rapidjson::Value& expr) {
   }
   if (expr.IsObject() && expr.HasMember("literal")) {
     return parse_literal(expr);
+  }
+  if (expr.IsObject() && expr.HasMember("op")) {
+    return parse_operator(expr);
   }
   CHECK(false);
   return nullptr;
@@ -106,21 +125,20 @@ class RaAbstractInterp {
       : query_ast_(query_ast), cat_(cat) {}
 
   LoweringInfo run() {
-    const auto rels_mem_it = query_ast_.FindMember("rels");
-    CHECK(rels_mem_it != query_ast_.MemberEnd());
-    const auto& rels = rels_mem_it->value;
+    const auto& rels = field(query_ast_, "rels");
     CHECK(rels.IsArray());
     for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
       const auto& crt_node = *rels_it;
       const auto id = node_id(crt_node);
       CHECK_EQ(static_cast<size_t>(id), nodes_.size());
       CHECK(crt_node.IsObject());
-      const auto rel_op_it = crt_node.FindMember("relOp");
-      CHECK(rel_op_it != crt_node.MemberEnd());
-      if (rel_op_it->value.GetString() == std::string("LogicalTableScan")) {
+      const auto rel_op = json_str(field(crt_node, "relOp"));
+      if (rel_op == std::string("LogicalTableScan")) {
         nodes_.push_back(dispatchTableScan(crt_node));
-      } else if (rel_op_it->value.GetString() == std::string("LogicalProject")) {
+      } else if (rel_op == std::string("LogicalProject")) {
         nodes_.push_back(dispatchProject(crt_node));
+      } else if (rel_op == std::string("LogicalFilter")) {
+        nodes_.push_back(dispatchFilter(crt_node));
       } else {
         CHECK(false);
       }
@@ -137,9 +155,7 @@ class RaAbstractInterp {
   }
 
   RelProject* dispatchProject(const rapidjson::Value& proj_ra) {
-    const auto exprs_field_it = proj_ra.FindMember("exprs");
-    CHECK(exprs_field_it != proj_ra.MemberEnd());
-    const auto& exprs_json = exprs_field_it->value;
+    const auto& exprs_json = field(proj_ra, "exprs");
     CHECK(exprs_json.IsArray());
     std::vector<const RexScalar*> exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End(); ++exprs_json_it) {
@@ -152,19 +168,21 @@ class RaAbstractInterp {
     return new RelProject(exprs, strings_from_json_array(fields_field_it->value));
   }
 
+  RelFilter* dispatchFilter(const rapidjson::Value& filter_ra) {
+    return new RelFilter(parse_operator(field(filter_ra, "condition")));
+  }
+
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
-    const auto& table_info = scan_ra["table"];
-    CHECK(table_info.IsArray());
-    CHECK_EQ(unsigned(3), table_info.Size());
-    const auto td = cat_.getMetadataForTable(table_info[2].GetString());
+    const auto& table_json = field(scan_ra, "table");
+    CHECK(table_json.IsArray());
+    CHECK_EQ(unsigned(3), table_json.Size());
+    const auto td = cat_.getMetadataForTable(table_json[2].GetString());
     CHECK(td);
     return td;
   }
 
   std::vector<std::string> getFieldNamesFromScanNode(const rapidjson::Value& scan_ra) const {
-    const auto it = scan_ra.FindMember("fieldNames");
-    CHECK(it != scan_ra.MemberEnd());
-    const auto& fields_json = it->value;
+    const auto& fields_json = field(scan_ra, "fieldNames");
     CHECK(fields_json.IsArray());
     return strings_from_json_array(fields_json);
   }

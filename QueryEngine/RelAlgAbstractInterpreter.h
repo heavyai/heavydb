@@ -117,6 +117,19 @@ class RexLiteral : public RexScalar {
   const unsigned type_precision_;
 };
 
+class RexOperator : public RexScalar {
+ public:
+  RexOperator(const SQLOps op, const std::vector<const RexScalar*> operands) : op_(op) {
+    for (auto operand : operands) {
+      operands_.emplace_back(operand);
+    }
+  }
+
+ private:
+  const SQLOps op_;
+  std::vector<std::unique_ptr<const RexScalar>> operands_;
+};
+
 class RelAlgNode;
 
 // The actual input node understood by the Executor.
