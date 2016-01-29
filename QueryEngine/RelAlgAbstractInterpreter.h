@@ -1,8 +1,11 @@
 #ifndef QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 #define QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 
+#include "CalciteDeserializerUtils.h"
+
 #include "../Catalog/Catalog.h"
 
+#include <boost/variant.hpp>
 #include <rapidjson/document.h>
 
 #include <memory>
@@ -39,6 +42,79 @@ class RexAbstractInput : public RexScalar {
 
  private:
   unsigned in_index_;
+};
+
+class RexLiteral : public RexScalar {
+ public:
+  RexLiteral(const int64_t val,
+             const SQLTypes type,
+             const unsigned scale,
+             const unsigned precision,
+             const unsigned type_scale,
+             const unsigned type_precision)
+      : literal_(val),
+        type_(type),
+        scale_(scale),
+        precision_(precision),
+        type_scale_(type_scale),
+        type_precision_(type_precision) {
+    CHECK_EQ(kDECIMAL, type);
+  }
+
+  RexLiteral(const double val,
+             const SQLTypes type,
+             const unsigned scale,
+             const unsigned precision,
+             const unsigned type_scale,
+             const unsigned type_precision)
+      : literal_(val),
+        type_(type),
+        scale_(scale),
+        precision_(precision),
+        type_scale_(type_scale),
+        type_precision_(type_precision) {
+    CHECK_EQ(kDOUBLE, type);
+  }
+
+  RexLiteral(const std::string& val,
+             const SQLTypes type,
+             const unsigned scale,
+             const unsigned precision,
+             const unsigned type_scale,
+             const unsigned type_precision)
+      : literal_(val),
+        type_(type),
+        scale_(scale),
+        precision_(precision),
+        type_scale_(type_scale),
+        type_precision_(type_precision) {
+    CHECK_EQ(kTEXT, type);
+  }
+
+  RexLiteral(const bool val,
+             const SQLTypes type,
+             const unsigned scale,
+             const unsigned precision,
+             const unsigned type_scale,
+             const unsigned type_precision)
+      : literal_(val),
+        type_(type),
+        scale_(scale),
+        precision_(precision),
+        type_scale_(type_scale),
+        type_precision_(type_precision) {
+    CHECK_EQ(kBOOLEAN, type);
+  }
+
+  RexLiteral() : literal_(nullptr), type_(kNULLT), scale_(0), precision_(0), type_scale_(0), type_precision_(0) {}
+
+ private:
+  const boost::variant<int64_t, double, std::string, bool, void*> literal_;
+  const SQLTypes type_;
+  const unsigned scale_;
+  const unsigned precision_;
+  const unsigned type_scale_;
+  const unsigned type_precision_;
 };
 
 class RelAlgNode;

@@ -15,28 +15,77 @@ ScanBufferDesc::ScanBufferDesc(const TableDescriptor* td) : td_(td) {
 
 namespace {
 
+// Checked json field retrieval.
+const rapidjson::Value& field(const rapidjson::Value& obj, const char field[]) noexcept {
+  CHECK(obj.IsObject());
+  const auto field_it = obj.FindMember(field);
+  CHECK(field_it != obj.MemberEnd());
+  return field_it->value;
+}
+
+const int64_t json_i64(const rapidjson::Value& obj) noexcept {
+  CHECK(obj.IsInt64());
+  return obj.GetInt64();
+}
+
+const std::string json_str(const rapidjson::Value& obj) noexcept {
+  CHECK(obj.IsString());
+  return obj.GetString();
+}
+
+const bool json_bool(const rapidjson::Value& obj) noexcept {
+  CHECK(obj.IsBool());
+  return obj.GetBool();
+}
+
+const double json_double(const rapidjson::Value& obj) noexcept {
+  CHECK(obj.IsDouble());
+  return obj.GetDouble();
+}
+
 unsigned node_id(const rapidjson::Value& ra_node) noexcept {
-  CHECK(ra_node.IsObject());
-  const auto id_it = ra_node.FindMember("id");
-  CHECK(id_it != ra_node.MemberEnd());
-  const auto& id = id_it->value;
-  CHECK(id.IsString());
-  return std::stoi(id.GetString());
+  const auto& id = field(ra_node, "id");
+  return std::stoi(json_str(id));
 }
 
-static RexAbstractInput* parse_abstract_input(const rapidjson::Value& expr) {
+RexAbstractInput* parse_abstract_input(const rapidjson::Value& expr) noexcept {
+  const auto& input = field(expr, "input");
+  return new RexAbstractInput(json_i64(input));
+}
+
+RexLiteral* parse_literal(const rapidjson::Value& expr) noexcept {
   CHECK(expr.IsObject());
-  const auto input_field_it = expr.FindMember("input");
-  CHECK(input_field_it != expr.MemberEnd());
-  const auto& input_field_json = input_field_it->value;
-  CHECK(input_field_json.IsInt());
-  return new RexAbstractInput(input_field_json.GetInt());
+  const auto& literal = field(expr, "literal");
+  const auto type = to_sql_type(json_str(field(expr, "type")));
+  const auto scale = json_i64(field(expr, "scale"));
+  const auto precision = json_i64(field(expr, "precision"));
+  const auto type_scale = json_i64(field(expr, "type_scale"));
+  const auto type_precision = json_i64(field(expr, "type_precision"));
+  switch (type) {
+    case kDECIMAL:
+      return new RexLiteral(json_i64(literal), type, scale, precision, type_scale, type_precision);
+    case kDOUBLE:
+      return new RexLiteral(json_double(literal), type, scale, precision, type_scale, type_precision);
+    case kTEXT:
+      return new RexLiteral(json_str(literal), type, scale, precision, type_scale, type_precision);
+    case kBOOLEAN:
+      return new RexLiteral(json_bool(literal), type, scale, precision, type_scale, type_precision);
+    case kNULLT:
+      return new RexLiteral();
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return nullptr;
 }
 
-static Rex* parse_expr(const rapidjson::Value& expr) {
+Rex* parse_expr(const rapidjson::Value& expr) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
     return parse_abstract_input(expr);
+  }
+  if (expr.IsObject() && expr.HasMember("literal")) {
+    return parse_literal(expr);
   }
   CHECK(false);
   return nullptr;

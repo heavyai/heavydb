@@ -6,7 +6,6 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 
 #include <set>
