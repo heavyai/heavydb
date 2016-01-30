@@ -108,6 +108,7 @@ std::vector<size_t> indices_from_json_array(const rapidjson::Value& json_idx_arr
   std::vector<size_t> indices;
   for (auto json_idx_arr_it = json_idx_arr.Begin(); json_idx_arr_it != json_idx_arr.End(); ++json_idx_arr_it) {
     CHECK(json_idx_arr_it->IsInt());
+    CHECK_GE(json_idx_arr_it->GetInt(), 0);
     indices.emplace_back(json_idx_arr_it->GetInt());
   }
   return indices;
@@ -139,6 +140,17 @@ RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {
   return nullptr;
 }
 
+RelJoinType to_join_type(const std::string& join_type_name) {
+  if (join_type_name == "inner") {
+    return RelJoinType::INNER;
+  }
+  if (join_type_name == "left") {
+    return RelJoinType::LEFT;
+  }
+  CHECK(false);
+  return RelJoinType::INNER;
+}
+
 class RaAbstractInterp {
  public:
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
@@ -162,6 +174,8 @@ class RaAbstractInterp {
         ra_node = dispatchFilter(crt_node);
       } else if (rel_op == std::string("LogicalAggregate")) {
         ra_node = dispatchAggregate(crt_node);
+      } else if (rel_op == std::string("LogicalJoin")) {
+        ra_node = dispatchJoin(crt_node);
       } else {
         CHECK(false);
       }
@@ -212,6 +226,20 @@ class RaAbstractInterp {
       aggs.push_back(parse_aggregate_expr(*aggs_json_arr_it));
     }
     return new RelAggregate(group, aggs, fields, prev(agg_ra));
+  }
+
+  RelJoin* dispatchJoin(const rapidjson::Value& join_ra) {
+    const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
+    const auto filter_rex = parse_scalar_expr(field(join_ra, "condition"));
+    const auto str_input_indices = strings_from_json_array(field(join_ra, "inputs"));
+    CHECK_EQ(size_t(2), str_input_indices.size());
+    std::vector<size_t> input_indices;
+    for (const auto& str_index : str_input_indices) {
+      input_indices.push_back(std::stoi(str_index));
+    }
+    CHECK_LT(input_indices[0], nodes_.size());
+    CHECK_LT(input_indices[1], nodes_.size());
+    return new RelJoin(nodes_[input_indices[0]], nodes_[input_indices[1]], filter_rex, join_type);
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
