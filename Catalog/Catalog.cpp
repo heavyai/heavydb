@@ -163,6 +163,18 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name) {
   dataMgr_->checkpoint();
 }
 
+bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& user) {
+  std::lock_guard<std::mutex> lock(cat_mutex_);
+  if (ldap_server_) {
+    return ldap_server_->authenticate_user(user.userName, passwd);
+  } else {
+    if (user.passwd != passwd) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
   sqliteConnector_.query_with_text_param("SELECT userid, name, passwd, issuper FROM mapd_users WHERE name = ?", name);
@@ -221,10 +233,24 @@ bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
 Catalog::Catalog(const string& basePath,
                  const string& dbname,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                 LdapMetadata ldapMetadata,
                  bool is_initdb)
     : basePath_(basePath), sqliteConnector_(dbname, basePath + "/mapd_catalogs/"), dataMgr_(dataMgr) {
+  ldap_server_.reset(new LdapServer(ldapMetadata));
   if (!is_initdb)
     buildMaps();
+}
+
+Catalog::Catalog(const string& basePath,
+                 const DBMetadata& curDB,
+                 std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                 LdapMetadata ldapMetadata)
+    : basePath_(basePath),
+      sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
+      currentDB_(curDB),
+      dataMgr_(dataMgr) {
+  ldap_server_.reset(new LdapServer(ldapMetadata));
+  buildMaps();
 }
 
 Catalog::Catalog(const string& basePath, const DBMetadata& curDB, std::shared_ptr<Data_Namespace::DataMgr> dataMgr)
@@ -232,6 +258,7 @@ Catalog::Catalog(const string& basePath, const DBMetadata& curDB, std::shared_pt
       sqliteConnector_(curDB.dbName, basePath + "/mapd_catalogs/"),
       currentDB_(curDB),
       dataMgr_(dataMgr) {
+  ldap_server_.reset(new LdapServer());
   buildMaps();
 }
 

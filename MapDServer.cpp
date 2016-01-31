@@ -73,6 +73,7 @@ class MapDHandler : virtual public MapDIf {
               const size_t render_mem_bytes,
               const int num_gpus,
               const int start_gpu,
+              const LdapMetadata ldapMetadata,
 #ifdef HAVE_CALCITE
               const int calcite_port,
               const bool legacy_syntax)
@@ -125,9 +126,10 @@ class MapDHandler : virtual public MapDIf {
     const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
     data_mgr_.reset(
         new Data_Namespace::DataMgr(data_path.string(), cpu_buffer_mem_bytes, !cpu_mode_only_, num_gpus, start_gpu));
-    sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_));
+    sys_cat_.reset(new Catalog_Namespace::SysCatalog(base_data_path_, data_mgr_, ldapMetadata));
     import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
+
   ~MapDHandler() {
     LOG(INFO) << "mapd_server exits." << std::endl;
   }
@@ -150,7 +152,7 @@ class MapDHandler : virtual public MapDIf {
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    if (user_meta.passwd != passwd) {
+    if (!sys_cat_->checkPasswordForUser(passwd, user_meta)) {
       TMapDException ex;
       ex.error_msg = std::string("Password for User ") + user + " is incorrect.";
       LOG(ERROR) << ex.error_msg;
@@ -1290,6 +1292,7 @@ int main(int argc, char** argv) {
   bool read_only = false;
   bool allow_loop_joins = false;
   bool enable_legacy_syntax = false;
+  LdapMetadata ldapMetadata;
   bool enable_rendering = false;
 
   size_t cpu_buffer_mem_bytes = 0;  // 0 will cause DataMgr to auto set this based on available memory
@@ -1311,6 +1314,12 @@ int main(int argc, char** argv) {
                      po::bool_switch(&read_only)->default_value(read_only)->implicit_value(true),
                      "Enable read-only mode");
   desc.add_options()("port,p", po::value<int>(&port)->default_value(port), "Port number");
+  desc.add_options()(
+      "ldap-uri", po::value<std::string>(&ldapMetadata.uri)->default_value(std::string("")), "ldap server uri");
+  desc.add_options()(
+      "ldap-ou-dc",
+      po::value<std::string>(&ldapMetadata.orgUnit)->default_value(std::string("ou=users,dc=mapd,dc=com")),
+      "ldap Organizational Unit and Domain Component");
   desc.add_options()("http-port", po::value<int>(&http_port)->default_value(http_port), "HTTP port number");
 #ifdef HAVE_CALCITE
   desc.add_options()("calcite-port", po::value<int>(&calcite_port)->default_value(calcite_port), "Calcite port number");
@@ -1465,6 +1474,7 @@ int main(int argc, char** argv) {
                                                   render_mem_bytes,
                                                   num_gpus,
                                                   start_gpu,
+                                                  ldapMetadata,
                                                   calcite_port,
                                                   enable_legacy_syntax));
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));

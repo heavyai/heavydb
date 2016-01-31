@@ -30,6 +30,7 @@
 #include "FrontendViewDescriptor.h"
 #include "LinkDescriptor.h"
 #include "../DataMgr/DataMgr.h"
+#include "LdapServer.h"
 
 struct Privileges {
   bool super_;
@@ -130,6 +131,7 @@ class Catalog {
   Catalog(const std::string& basePath,
           const std::string& dbname,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+          LdapMetadata ldapMetadata,
           bool is_initdb);
 
   /**
@@ -142,6 +144,14 @@ class Catalog {
    */
 
   Catalog(const std::string& basePath, const DBMetadata& curDB, std::shared_ptr<Data_Namespace::DataMgr> dataMgr);
+
+  /*
+   builds a catlog that uses an ldap server
+   */
+  Catalog(const std::string& basePath,
+          const DBMetadata& curDB,
+          std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+          LdapMetadata ldapMetadata);
 
   /**
    * @brief Destructor - deletes all
@@ -233,6 +243,7 @@ class Catalog {
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   mutable std::mutex cat_mutex_;
+  std::unique_ptr<LdapServer> ldap_server_;
 };
 
 /*
@@ -241,8 +252,13 @@ class Catalog {
  */
 class SysCatalog : public Catalog {
  public:
+  SysCatalog(const std::string& basePath,
+             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+             LdapMetadata ldapMetadata,
+             bool is_initdb = false)
+      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, ldapMetadata, is_initdb) {}
   SysCatalog(const std::string& basePath, std::shared_ptr<Data_Namespace::DataMgr> dataMgr, bool is_initdb = false)
-      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, is_initdb) {
+      : Catalog(basePath, MAPD_SYSTEM_DB, dataMgr, LdapMetadata(), is_initdb) {
     if (!is_initdb) {
       migrateSysCatalogSchema();
     }
@@ -258,6 +274,7 @@ class SysCatalog : public Catalog {
   void createDatabase(const std::string& dbname, int owner);
   void dropDatabase(const int32_t dbid, const std::string& name);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
+  bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
