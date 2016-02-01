@@ -23,10 +23,6 @@ class ScanBufferDesc {
   const TableDescriptor* td_;
 };
 
-class LoweringInfo {
-  // TODO
-};
-
 class Rex {
  public:
   virtual ~Rex(){};
@@ -294,6 +290,6 @@ class RelSequence : public RelAlgNode {
 
 class RelNop : public RelAlgNode {};
 
-LoweringInfo ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
+std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
 
 #endif  // QUERYENGINE_RELALGABSTRACTINTERPRETER_H

@@ -156,7 +156,7 @@ class RaAbstractInterp {
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
       : query_ast_(query_ast), cat_(cat) {}
 
-  LoweringInfo run() {
+  std::unique_ptr<const RelAlgNode> run() {
     const auto& rels = field(query_ast_, "rels");
     CHECK(rels.IsArray());
     for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
@@ -181,7 +181,8 @@ class RaAbstractInterp {
       }
       nodes_.push_back(ra_node);
     }
-    return {};
+    CHECK(!nodes_.empty());
+    return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
 
  private:
@@ -263,7 +264,8 @@ class RaAbstractInterp {
 
 }  // namespace
 
-LoweringInfo ra_interpret(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat) {
+std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
+                                               const Catalog_Namespace::Catalog& cat) {
   RaAbstractInterp interp(query_ast, cat);
   return interp.run();
 }
