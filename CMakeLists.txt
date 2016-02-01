@@ -243,10 +243,10 @@ endif()
 ## Go server
 find_program(GO_EXECUTABLE NAMES go)
 if(GO_EXECUTABLE)
+  # fake GO15VENDOREXPERIMENT since Go 1.5 is not available on all build platforms
   add_custom_target(mapd_web_server ALL
-    COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} get github.com/gorilla/handlers github.com/spf13/pflag github.com/spf13/viper github.com/Sirupsen/logrus
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/vendor/ ${CMAKE_BINARY_DIR}/go/src/
     COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     SOURCES MapDWebServer.go
     )
   install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)

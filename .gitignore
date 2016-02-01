@@ -37,3 +37,8 @@ Debug/
 java/src/gen/
 gen-js/
 java/target/
+
+# go files
+go/
+!go/src/mapd.com/
+!go/src/vendor/
