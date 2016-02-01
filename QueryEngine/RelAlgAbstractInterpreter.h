@@ -159,6 +159,13 @@ class RelAlgNode {
  public:
   RelAlgNode() : context_data_(nullptr) {}
   void setContextData(const void* context_data) { context_data_ = context_data; }
+  const size_t inputCount() const { return inputs_.size(); }
+  const RelAlgNode* getInput(const size_t idx) const {
+    CHECK(idx < inputs_.size());
+    return inputs_[idx].get();
+  }
+
+  virtual ~RelAlgNode() {}
 
  protected:
   std::vector<std::unique_ptr<const RelAlgNode>> inputs_;  // TODO
@@ -169,6 +176,8 @@ class RelScan : public RelAlgNode {
  public:
   RelScan(const TableDescriptor* td, const std::vector<std::string>& field_names)
       : td_(td), field_names_(field_names) {}
+
+  size_t size() const { return field_names_.size(); }
 
  private:
   const TableDescriptor* td_;
@@ -194,6 +203,8 @@ class RelProject : public RelAlgNode {
   // since it's just a subset and / or permutation of its outputs.
   bool isSimple() const;
 
+  size_t size() const { return scalar_exprs_.size(); }
+
  private:
   std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   const std::vector<std::string> fields_;
@@ -212,6 +223,8 @@ class RelAggregate : public RelAlgNode {
     }
     inputs_.emplace_back(input);
   }
+
+  size_t size() const { return group_indices_.size() + agg_exprs_.size(); }
 
  private:
   const std::vector<size_t> group_indices_;

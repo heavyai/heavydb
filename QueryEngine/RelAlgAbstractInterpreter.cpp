@@ -151,6 +151,56 @@ RelJoinType to_join_type(const std::string& join_type_name) {
   return RelJoinType::INNER;
 }
 
+// Creates an output with n columns.
+std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
+  std::vector<RexInput> outputs;
+  for (size_t i = 0; i < n; ++i) {
+    outputs.emplace_back(node, i);
+  }
+  return outputs;
+}
+
+std::vector<RexInput> get_node_output(const RelAlgNode* ra_node) {
+  std::vector<RexInput> outputs;
+  const auto scan_node = dynamic_cast<const RelScan*>(ra_node);
+  if (scan_node) {
+    // Scan node has no inputs, output contains all columns in the table.
+    CHECK_EQ(size_t(0), scan_node->inputCount());
+    return n_outputs(scan_node, scan_node->size());
+  }
+  const auto project_node = dynamic_cast<const RelProject*>(ra_node);
+  if (project_node) {
+    // Project output count doesn't depend on the input
+    CHECK_EQ(size_t(1), project_node->inputCount());
+    return n_outputs(project_node, project_node->size());
+  }
+  const auto filter_node = dynamic_cast<const RelFilter*>(ra_node);
+  if (filter_node) {
+    // Filter preserves shape
+    CHECK_EQ(size_t(1), filter_node->inputCount());
+    const auto prev_out = get_node_output(filter_node->getInput(0));
+    return n_outputs(filter_node, prev_out.size());
+  }
+  const auto aggregate_node = dynamic_cast<const RelAggregate*>(ra_node);
+  if (aggregate_node) {
+    // Aggregate output count doesn't depend on the input
+    CHECK_EQ(size_t(1), aggregate_node->inputCount());
+    return n_outputs(aggregate_node, aggregate_node->size());
+  }
+  const auto join_node = dynamic_cast<const RelJoin*>(ra_node);
+  if (join_node) {
+    // Join concatenates the outputs from the inputs and the output
+    // directly references the nodes in the input.
+    CHECK_EQ(size_t(2), join_node->inputCount());
+    auto lhs_out = get_node_output(join_node->getInput(0));
+    const auto rhs_out = get_node_output(join_node->getInput(1));
+    lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
+    return lhs_out;
+  }
+  CHECK(false);
+  return outputs;
+}
+
 class RaAbstractInterp {
  public:
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
