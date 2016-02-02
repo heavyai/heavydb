@@ -165,7 +165,7 @@ void SysCatalog::dropDatabase(const int32_t dbid, const std::string& name) {
 
 bool SysCatalog::checkPasswordForUser(const std::string& passwd, UserMetadata& user) {
   std::lock_guard<std::mutex> lock(cat_mutex_);
-  if (ldap_server_) {
+  if (ldap_server_->inUse()) {
     return ldap_server_->authenticate_user(user.userName, passwd);
   } else {
     if (user.passwd != passwd) {
