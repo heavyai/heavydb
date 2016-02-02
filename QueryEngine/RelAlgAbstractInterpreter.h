@@ -219,7 +219,10 @@ class RelProject : public RelAlgNode {
   // True iff all the projected expressions are inputs. If true,
   // this node can be elided and merged into the previous node
   // since it's just a subset and / or permutation of its outputs.
-  bool isSimple() const;
+  bool isSimple() const {
+    // TODO(alex)
+    return false;
+  }
 
   size_t size() const { return scalar_exprs_.size(); }
 

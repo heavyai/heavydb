@@ -243,6 +243,57 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
   }
 }
 
+enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
+
+void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
+  std::vector<const RelAlgNode*> crt_pattern;
+  CoalesceState crt_state{CoalesceState::Initial};
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    const auto ra_node = nodes[i];
+    switch (crt_state) {
+      case CoalesceState::Initial: {
+        if (dynamic_cast<const RelFilter*>(ra_node)) {
+          crt_pattern.push_back(ra_node);
+          crt_state = CoalesceState::Filter;
+        } else if (dynamic_cast<const RelProject*>(ra_node)) {
+          crt_pattern.push_back(ra_node);
+          crt_state = CoalesceState::FirstProject;
+        }
+        break;
+      }
+      case CoalesceState::Filter: {
+        CHECK(dynamic_cast<const RelProject*>(ra_node));  // TODO: is filter always followed by project?
+        crt_pattern.push_back(ra_node);
+        crt_state = CoalesceState::FirstProject;
+        break;
+      }
+      case CoalesceState::FirstProject: {
+        if (dynamic_cast<const RelAggregate*>(ra_node)) {
+          crt_pattern.push_back(ra_node);
+          crt_state = CoalesceState::Aggregate;
+        } else {
+          crt_state = CoalesceState::Initial;
+          // TODO(alex): found a F?P pattern which ends here, create the compound node
+          decltype(crt_pattern)().swap(crt_pattern);
+        }
+        break;
+      }
+      case CoalesceState::Aggregate: {
+        if (dynamic_cast<const RelProject*>(ra_node) && static_cast<RelProject*>(ra_node)->isSimple()) {
+          crt_pattern.push_back(ra_node);
+        }
+        crt_state = CoalesceState::Initial;
+        // TODO(alex): found a F?P(A|AP)? pattern which ends here, create the compound node
+        decltype(crt_pattern)().swap(crt_pattern);
+        break;
+      }
+      default:
+        CHECK(false);
+    }
+  }
+  // TODO(alex): wrap-up this function
+}
+
 class RaAbstractInterp {
  public:
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
@@ -275,6 +326,7 @@ class RaAbstractInterp {
     }
     CHECK(!nodes_.empty());
     bind_inputs(nodes_);
+    coalesce_nodes(nodes_);
     return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
 
