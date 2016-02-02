@@ -216,7 +216,9 @@ const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RelAlgNode*
     }
     return new RexOperator(rex_operator->getOperator(), disambiguated_operands);
   }
-  return rex_scalar;
+  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex_scalar);
+  CHECK(rex_literal);
+  return new RexLiteral(*rex_literal);
 }
 
 void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
@@ -272,6 +274,7 @@ class RaAbstractInterp {
       nodes_.push_back(ra_node);
     }
     CHECK(!nodes_.empty());
+    bind_inputs(nodes_);
     return std::unique_ptr<const RelAlgNode>(nodes_.back());
   }
 
