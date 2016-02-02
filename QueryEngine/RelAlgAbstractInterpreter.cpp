@@ -160,8 +160,10 @@ std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
   return outputs;
 }
 
-std::vector<RexInput> get_node_output(const RelAlgNode* ra_node) {
-  std::vector<RexInput> outputs;
+typedef std::vector<RexInput> RANodeOutput;
+
+RANodeOutput get_node_output(const RelAlgNode* ra_node) {
+  RANodeOutput outputs;
   const auto scan_node = dynamic_cast<const RelScan*>(ra_node);
   if (scan_node) {
     // Scan node has no inputs, output contains all columns in the table.
@@ -201,6 +203,44 @@ std::vector<RexInput> get_node_output(const RelAlgNode* ra_node) {
   return outputs;
 }
 
+const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RelAlgNode* ra_output) {
+  const auto rex_abstract_input = dynamic_cast<const RexAbstractInput*>(rex_scalar);
+  if (rex_abstract_input) {
+    return new RexInput(ra_output, rex_abstract_input->getIndex());
+  }
+  const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
+  if (rex_operator) {
+    std::vector<const RexScalar*> disambiguated_operands;
+    for (size_t i = 0; i < rex_operator->size(); ++i) {
+      disambiguated_operands.push_back(disambiguate_rex(rex_operator->getOperand(i), ra_output));
+    }
+    return new RexOperator(rex_operator->getOperator(), disambiguated_operands);
+  }
+  return rex_scalar;
+}
+
+void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
+  for (auto ra_node : nodes) {
+    auto filter_node = dynamic_cast<RelFilter*>(ra_node);
+    if (filter_node) {
+      CHECK_EQ(size_t(1), filter_node->inputCount());
+      const auto disambiguated_condition = disambiguate_rex(filter_node->getCondition(), filter_node->getInput(0));
+      filter_node->setCondition(disambiguated_condition);
+      continue;
+    }
+    const auto project_node = dynamic_cast<RelProject*>(ra_node);
+    if (project_node) {
+      CHECK_EQ(size_t(1), project_node->inputCount());
+      std::vector<const RexScalar*> disambiguated_exprs;
+      for (size_t i = 0; i < project_node->size(); ++i) {
+        disambiguated_exprs.push_back(disambiguate_rex(project_node->getProjectAt(i), project_node->getInput(i)));
+      }
+      project_node->setExpressions(disambiguated_exprs);
+      continue;
+    }
+  }
+}
+
 class RaAbstractInterp {
  public:
   RaAbstractInterp(const rapidjson::Value& query_ast, const Catalog_Namespace::Catalog& cat)
@@ -214,7 +254,7 @@ class RaAbstractInterp {
       const auto id = node_id(crt_node);
       CHECK_EQ(static_cast<size_t>(id), nodes_.size());
       CHECK(crt_node.IsObject());
-      const RelAlgNode* ra_node = nullptr;
+      RelAlgNode* ra_node = nullptr;
       const auto rel_op = json_str(field(crt_node, "relOp"));
       if (rel_op == std::string("LogicalTableScan")) {
         ra_node = dispatchTableScan(crt_node);
@@ -309,7 +349,7 @@ class RaAbstractInterp {
 
   const rapidjson::Value& query_ast_;
   const Catalog_Namespace::Catalog& cat_;
-  std::vector<const RelAlgNode*> nodes_;
+  std::vector<RelAlgNode*> nodes_;
 };
 
 }  // namespace

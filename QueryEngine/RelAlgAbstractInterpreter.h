@@ -36,6 +36,8 @@ class RexAbstractInput : public RexScalar {
  public:
   RexAbstractInput(const unsigned in_index) : in_index_(in_index) {}
 
+  unsigned getIndex() const { return in_index_; }
+
  private:
   unsigned in_index_;
 };
@@ -121,6 +123,15 @@ class RexOperator : public RexScalar {
     }
   }
 
+  size_t size() const { return operands_.size(); }
+
+  const RexScalar* getOperand(const size_t idx) const {
+    CHECK(idx < operands_.size());
+    return operands_[idx].get();
+  }
+
+  SQLOps getOperator() const { return op_; }
+
  private:
   const SQLOps op_;
   std::vector<std::unique_ptr<const RexScalar>> operands_;
@@ -198,12 +209,26 @@ class RelProject : public RelAlgNode {
     inputs_.emplace_back(input);
   }
 
+  void setExpressions(const std::vector<const RexScalar*>& exprs) {
+    decltype(scalar_exprs_)().swap(scalar_exprs_);
+    for (auto expr : exprs) {
+      scalar_exprs_.emplace_back(expr);
+    }
+  }
+
   // True iff all the projected expressions are inputs. If true,
   // this node can be elided and merged into the previous node
   // since it's just a subset and / or permutation of its outputs.
   bool isSimple() const;
 
   size_t size() const { return scalar_exprs_.size(); }
+
+  const RexScalar* getProjectAt(const size_t idx) const {
+    CHECK(idx < scalar_exprs_.size());
+    return scalar_exprs_[idx].get();
+  }
+
+  const std::vector<std::string>& getFields() const { return fields_; }
 
  private:
   std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
@@ -250,6 +275,10 @@ class RelJoin : public RelAlgNode {
 class RelFilter : public RelAlgNode {
  public:
   RelFilter(const RexScalar* filter, const RelAlgNode* input) : filter_(filter) { inputs_.emplace_back(input); }
+
+  const RexScalar* getCondition() const { return filter_.get(); }
+
+  void setCondition(const RexScalar* condition) { filter_.reset(condition); }
 
  private:
   std::unique_ptr<const RexScalar> filter_;
