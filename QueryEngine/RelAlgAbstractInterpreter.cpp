@@ -248,7 +248,7 @@ enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
 void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
   std::vector<const RelAlgNode*> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
-  for (size_t i = 0; i < nodes.size(); ++i) {
+  for (size_t i = 0; i < nodes.size();) {
     const auto ra_node = nodes[i];
     switch (crt_state) {
       case CoalesceState::Initial: {
@@ -259,18 +259,21 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
           crt_pattern.push_back(ra_node);
           crt_state = CoalesceState::FirstProject;
         }
+        ++i;
         break;
       }
       case CoalesceState::Filter: {
         CHECK(dynamic_cast<const RelProject*>(ra_node));  // TODO: is filter always followed by project?
         crt_pattern.push_back(ra_node);
         crt_state = CoalesceState::FirstProject;
+        ++i;
         break;
       }
       case CoalesceState::FirstProject: {
         if (dynamic_cast<const RelAggregate*>(ra_node)) {
           crt_pattern.push_back(ra_node);
           crt_state = CoalesceState::Aggregate;
+          ++i;
         } else {
           crt_state = CoalesceState::Initial;
           // TODO(alex): found a F?P pattern which ends here, create the compound node
@@ -281,6 +284,7 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
       case CoalesceState::Aggregate: {
         if (dynamic_cast<const RelProject*>(ra_node) && static_cast<RelProject*>(ra_node)->isSimple()) {
           crt_pattern.push_back(ra_node);
+          ++i;
         }
         crt_state = CoalesceState::Initial;
         // TODO(alex): found a F?P(A|AP)? pattern which ends here, create the compound node
@@ -290,6 +294,10 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
       default:
         CHECK(false);
     }
+  }
+  if (crt_state == CoalesceState::FirstProject || crt_state == CoalesceState::Aggregate) {
+    // TODO(alex): found a pattern which ends here, create the compound node
+    CHECK(!crt_pattern.empty());
   }
   // TODO(alex): wrap-up this function
 }
