@@ -176,10 +176,27 @@ class RelAlgNode {
     return inputs_[idx].get();
   }
 
+  const RelAlgNode* getInputAndRelease(const size_t idx) {
+    CHECK(idx < inputs_.size());
+    return inputs_[idx].release();
+  }
+
+  const void addInput(const RelAlgNode* input) { inputs_.emplace_back(input); }
+
+  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+    for (auto& input_ptr : inputs_) {
+      if (input_ptr.get() == old_input) {
+        input_ptr.reset(input);
+        return true;
+      }
+    }
+    return false;
+  }
+
   virtual ~RelAlgNode() {}
 
  protected:
-  std::vector<std::unique_ptr<const RelAlgNode>> inputs_;  // TODO
+  std::vector<std::unique_ptr<const RelAlgNode>> inputs_;
   const void* context_data_;
 };
 
@@ -235,6 +252,14 @@ class RelProject : public RelAlgNode {
     return scalar_exprs_[idx].get();
   }
 
+  std::vector<const RexScalar*> getExpressionsAndRelease() {
+    std::vector<const RexScalar*> result;
+    for (auto& expr : scalar_exprs_) {
+      result.push_back(expr.release());
+    }
+    return result;
+  }
+
   const std::vector<std::string>& getFields() const { return fields_; }
 
  private:
@@ -257,6 +282,18 @@ class RelAggregate : public RelAlgNode {
   }
 
   size_t size() const { return group_indices_.size() + agg_exprs_.size(); }
+
+  const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
+
+  const std::vector<std::string>& getFields() const { return fields_; }
+
+  std::vector<const RexAgg*> getAggregatesAndRelease() {
+    std::vector<const RexAgg*> result;
+    for (auto& agg_expr : agg_exprs_) {
+      result.push_back(agg_expr.release());
+    }
+    return result;
+  }
 
  private:
   const std::vector<size_t> group_indices_;
@@ -285,6 +322,8 @@ class RelFilter : public RelAlgNode {
 
   const RexScalar* getCondition() const { return filter_.get(); }
 
+  const RexScalar* getAndReleaseCondition() { return filter_.release(); }
+
   void setCondition(const RexScalar* condition) { filter_.reset(condition); }
 
  private:
@@ -302,11 +341,11 @@ class RelCompound : public RelAlgNode {
   // owned by 'scalar_sources_'.
   RelCompound(const RexScalar* filter_expr,
               const std::vector<const Rex*>& target_exprs,
-              const std::vector<const RexScalar*>& group_exprs,
+              const std::vector<size_t>& group_indices,
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
               const std::vector<const RexScalar*>& scalar_sources)
-      : filter_expr_(filter_expr), target_exprs_(target_exprs), group_exprs_(group_exprs), fields_(fields) {
+      : filter_expr_(filter_expr), target_exprs_(target_exprs), group_indices_(group_indices), fields_(fields) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
@@ -316,14 +355,16 @@ class RelCompound : public RelAlgNode {
     }
   }
 
+  size_t size() const { return target_exprs_.size(); }
+
  private:
   const std::unique_ptr<const RexScalar> filter_expr_;
   const std::vector<const Rex*> target_exprs_;
-  const std::vector<const RexScalar*> group_exprs_;
+  const std::vector<size_t> group_indices_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
   std::vector<std::unique_ptr<const RexScalar>>
-      scalar_sources_;  // building blocks for group_exprs_ and agg_exprs_; not actually projected, just owned
+      scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually projected, just owned
 };
 
 // A sequence of nodes to be executed as-is. The node / buffer elision is completed
@@ -336,8 +377,6 @@ class RelSequence : public RelAlgNode {
  private:
   std::vector<const RelAlgNode*> sequence_;
 };
-
-class RelNop : public RelAlgNode {};
 
 std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
 

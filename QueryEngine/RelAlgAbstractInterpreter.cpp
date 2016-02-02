@@ -189,6 +189,12 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     CHECK_EQ(size_t(1), aggregate_node->inputCount());
     return n_outputs(aggregate_node, aggregate_node->size());
   }
+  const auto compound_node = dynamic_cast<const RelCompound*>(ra_node);
+  if (compound_node) {
+    // Compound output count doesn't depend on the input
+    CHECK_EQ(size_t(1), compound_node->inputCount());
+    return n_outputs(compound_node, compound_node->size());
+  }
   const auto join_node = dynamic_cast<const RelJoin*>(ra_node);
   if (join_node) {
     // Join concatenates the outputs from the inputs and the output
@@ -222,6 +228,15 @@ const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutpu
   return new RexLiteral(*rex_literal);
 }
 
+void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) {
+  CHECK_EQ(size_t(1), project_node->inputCount());
+  std::vector<const RexScalar*> disambiguated_exprs;
+  for (size_t i = 0; i < project_node->size(); ++i) {
+    disambiguated_exprs.push_back(disambiguate_rex(project_node->getProjectAt(i), input));
+  }
+  project_node->setExpressions(disambiguated_exprs);
+}
+
 void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
   for (auto ra_node : nodes) {
     auto filter_node = dynamic_cast<RelFilter*>(ra_node);
@@ -234,12 +249,7 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
     }
     const auto project_node = dynamic_cast<RelProject*>(ra_node);
     if (project_node) {
-      CHECK_EQ(size_t(1), project_node->inputCount());
-      std::vector<const RexScalar*> disambiguated_exprs;
-      for (size_t i = 0; i < project_node->size(); ++i) {
-        disambiguated_exprs.push_back(disambiguate_rex(project_node->getProjectAt(i), project_node->getInput(0)));
-      }
-      project_node->setExpressions(disambiguated_exprs);
+      bind_project_to_input(project_node, get_node_output(project_node->getInput(0)));
       continue;
     }
   }
@@ -247,18 +257,104 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
 
 enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
 
+std::vector<const Rex*> reproject_targets(const RelProject* simple_project,
+                                          const std::vector<const Rex*>& target_exprs) {
+  std::vector<const Rex*> result;
+  for (size_t i = 0; i < simple_project->size(); ++i) {
+    const auto input_rex = dynamic_cast<const RexInput*>(simple_project->getProjectAt(i));
+    CHECK(input_rex);
+    CHECK_LT(static_cast<size_t>(input_rex->getIndex()), target_exprs.size());
+    result.push_back(target_exprs[input_rex->getIndex()]);
+  }
+  return result;
+}
+
+void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>& pattern) {
+  CHECK_GE(pattern.size(), size_t(2));
+  CHECK_LE(pattern.size(), size_t(4));
+  const RexScalar* filter_rex{nullptr};
+  std::vector<const RexScalar*> scalar_sources;
+  std::vector<size_t> group_indices;
+  std::vector<std::string> fields;
+  std::vector<const RexAgg*> agg_exprs;
+  std::vector<const Rex*> target_exprs;
+  bool first_project{true};
+  for (const auto node_idx : pattern) {
+    const auto ra_node = nodes[node_idx];
+    const auto ra_filter = dynamic_cast<RelFilter*>(ra_node);
+    if (ra_filter) {
+      CHECK(!filter_rex);
+      filter_rex = ra_filter->getAndReleaseCondition();
+      CHECK(filter_rex);
+      continue;
+    }
+    const auto ra_project = dynamic_cast<RelProject*>(ra_node);
+    if (ra_project) {
+      fields = ra_project->getFields();
+      if (first_project) {
+        CHECK_EQ(size_t(1), ra_project->size());
+        // Rebind the input of the project to the input of the filter itself
+        // since we know that we'll evaluate the filter on the fly, with no
+        // intermediate buffer.
+        const auto filter_input = dynamic_cast<const RelFilter*>(ra_project->getInput(0));
+        if (filter_input) {
+          CHECK_EQ(size_t(1), filter_input->inputCount());
+          bind_project_to_input(ra_project, get_node_output(filter_input->getInput(0)));
+        }
+        scalar_sources = ra_project->getExpressionsAndRelease();
+        first_project = false;
+      } else {
+        CHECK(ra_project->isSimple());
+        target_exprs = reproject_targets(ra_project, target_exprs);
+      }
+      continue;
+    }
+    const auto ra_aggregate = dynamic_cast<RelAggregate*>(ra_node);
+    if (ra_aggregate) {
+      fields = ra_aggregate->getFields();
+      agg_exprs = ra_aggregate->getAggregatesAndRelease();
+      group_indices = ra_aggregate->getGroupIndices();
+      for (const auto group_idx : group_indices) {
+        CHECK_LT(group_idx, scalar_sources.size());
+        target_exprs.push_back(scalar_sources[group_idx]);
+      }
+      for (const auto rex_agg : agg_exprs) {
+        target_exprs.push_back(rex_agg);
+      }
+      continue;
+    }
+  }
+  auto compound_node = new RelCompound(filter_rex, target_exprs, group_indices, agg_exprs, fields, scalar_sources);
+  auto old_node = nodes[pattern.back()];
+  nodes[pattern.back()] = compound_node;
+  auto first_node = nodes[pattern.front()];
+  CHECK_EQ(size_t(1), first_node->inputCount());
+  compound_node->addInput(first_node->getInputAndRelease(0));
+  for (size_t i = 0; i < pattern.size() - 1; ++i) {
+    nodes[pattern[i]] = nullptr;
+  }
+  for (auto node : nodes) {
+    if (!node) {
+      continue;
+    }
+    if (node->replaceInput(old_node, compound_node)) {
+      break;
+    }
+  }
+}
+
 void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
-  std::vector<const RelAlgNode*> crt_pattern;
+  std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
   for (size_t i = 0; i < nodes.size();) {
     const auto ra_node = nodes[i];
     switch (crt_state) {
       case CoalesceState::Initial: {
         if (dynamic_cast<const RelFilter*>(ra_node)) {
-          crt_pattern.push_back(ra_node);
+          crt_pattern.push_back(i);
           crt_state = CoalesceState::Filter;
         } else if (dynamic_cast<const RelProject*>(ra_node)) {
-          crt_pattern.push_back(ra_node);
+          crt_pattern.push_back(i);
           crt_state = CoalesceState::FirstProject;
         }
         ++i;
@@ -266,30 +362,32 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
       }
       case CoalesceState::Filter: {
         CHECK(dynamic_cast<const RelProject*>(ra_node));  // TODO: is filter always followed by project?
-        crt_pattern.push_back(ra_node);
+        crt_pattern.push_back(i);
         crt_state = CoalesceState::FirstProject;
         ++i;
         break;
       }
       case CoalesceState::FirstProject: {
         if (dynamic_cast<const RelAggregate*>(ra_node)) {
-          crt_pattern.push_back(ra_node);
+          crt_pattern.push_back(i);
           crt_state = CoalesceState::Aggregate;
           ++i;
         } else {
           crt_state = CoalesceState::Initial;
-          // TODO(alex): found a F?P pattern which ends here, create the compound node
+          CHECK_GE(crt_pattern.size(), size_t(2));
+          create_compound(nodes, crt_pattern);
           decltype(crt_pattern)().swap(crt_pattern);
         }
         break;
       }
       case CoalesceState::Aggregate: {
         if (dynamic_cast<const RelProject*>(ra_node) && static_cast<RelProject*>(ra_node)->isSimple()) {
-          crt_pattern.push_back(ra_node);
+          crt_pattern.push_back(i);
           ++i;
         }
         crt_state = CoalesceState::Initial;
-        // TODO(alex): found a F?P(A|AP)? pattern which ends here, create the compound node
+        CHECK_GE(crt_pattern.size(), size_t(2));
+        create_compound(nodes, crt_pattern);
         decltype(crt_pattern)().swap(crt_pattern);
         break;
       }
@@ -298,7 +396,9 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
     }
   }
   if (crt_state == CoalesceState::FirstProject || crt_state == CoalesceState::Aggregate) {
-    // TODO(alex): found a pattern which ends here, create the compound node
+    if (crt_pattern.size() >= 2) {
+      create_compound(nodes, crt_pattern);
+    }
     CHECK(!crt_pattern.empty());
   }
   // TODO(alex): wrap-up this function
