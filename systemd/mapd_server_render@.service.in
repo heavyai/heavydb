@@ -1,13 +1,12 @@
 [Unit]
 Description=MapD database server for %i
-After=network.target remote-fs.target xorg.target
+After=network.target remote-fs.target
 
 [Service]
-#User=mapd
-#Group=mapd
+User=@MAPD_USER@
+Group=@MAPD_GROUP@
 Environment=DISPLAY=:1
-WorkingDirectory=@MAPD_PATH@
-ExecStart=@MAPD_PATH@/bin/mapd_server --config %I.conf
+ExecStart=@MAPD_PATH@/bin/mapd_server --config @MAPD_STORAGE@/%I/mapd.conf
 KillMode=control-group
 
 [Install]

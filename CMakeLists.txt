@@ -278,10 +278,17 @@ install(FILES docs/MapDGuide.md DESTINATION docs)
 
 # systemd
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  install(FILES systemd/mapd_server.service.in systemd/mapd_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/mapd.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
+
+  if (NOT ENABLE_RENDERING)
+    install(FILES systemd/mapd_server.service.in systemd/mapd_server@.service.in DESTINATION systemd)
+  else()
+    install(FILES systemd/mapd_server_render.service.in RENAME mapd_server.service.in DESTINATION systemd)
+    install(FILES systemd/mapd_server_render@.service.in RENAME mapd_server@.service.in DESTINATION systemd)
+    install(FILES systemd/mapd_xorg.service DESTINATION systemd)
+  endif()
 endif()
 
 if(ENABLE_CALCITE)

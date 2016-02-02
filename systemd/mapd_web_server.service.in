@@ -1,7 +1,6 @@
 [Unit]
 Description=MapD web server
 After=network.target remote-fs.target
-Requires=mapd_server.service
 
 [Service]
 User=@MAPD_USER@
