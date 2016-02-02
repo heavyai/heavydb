@@ -235,7 +235,7 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
       CHECK_EQ(size_t(1), project_node->inputCount());
       std::vector<const RexScalar*> disambiguated_exprs;
       for (size_t i = 0; i < project_node->size(); ++i) {
-        disambiguated_exprs.push_back(disambiguate_rex(project_node->getProjectAt(i), project_node->getInput(i)));
+        disambiguated_exprs.push_back(disambiguate_rex(project_node->getProjectAt(i), project_node->getInput(0)));
       }
       project_node->setExpressions(disambiguated_exprs);
       continue;
