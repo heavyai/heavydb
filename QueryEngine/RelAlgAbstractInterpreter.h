@@ -220,8 +220,12 @@ class RelProject : public RelAlgNode {
   // this node can be elided and merged into the previous node
   // since it's just a subset and / or permutation of its outputs.
   bool isSimple() const {
-    // TODO(alex)
-    return false;
+    for (const auto& expr : scalar_exprs_) {
+      if (!dynamic_cast<const RexInput*>(expr.get())) {
+        return false;
+      }
+    }
+    return true;
   }
 
   size_t size() const { return scalar_exprs_.size(); }
