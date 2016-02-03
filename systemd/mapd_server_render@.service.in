@@ -1,6 +1,7 @@
 [Unit]
 Description=MapD database server for %i
 After=network.target remote-fs.target
+Requires=mapd_xorg.service
 
 [Service]
 User=@MAPD_USER@
