@@ -271,7 +271,7 @@ ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const Copy
   }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
-    int8_t* buf = (int8_t*)malloc(len);
+    int8_t* buf = (int8_t*)checked_malloc(len);
     int8_t* p = buf;
     for (auto& e : elem_strs) {
       Datum d = StringToDatum(e, elem_ti);
@@ -344,7 +344,7 @@ ArrayDatum TDatumToArrayDatum(const TDatum& datum, const SQLTypeInfo& ti) {
   SQLTypeInfo elem_ti = ti.get_elem_type();
   CHECK(!elem_ti.is_string());
   size_t len = datum.val.arr_val.size() * elem_ti.get_size();
-  int8_t* buf = (int8_t*)malloc(len);
+  int8_t* buf = (int8_t*)checked_malloc(len);
   int8_t* p = buf;
   for (auto& e : datum.val.arr_val) {
     p = appendDatum(p, TDatumToDatum(e, elem_ti), elem_ti);
@@ -968,9 +968,9 @@ void Importer::import() {
     max_threads = sysconf(_SC_NPROCESSORS_CONF);
   else
     max_threads = copy_params.threads;
-  buffer[0] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
+  buffer[0] = (char*)checked_malloc(IMPORT_FILE_BUFFER_SIZE);
   if (max_threads > 1)
-    buffer[1] = (char*)malloc(IMPORT_FILE_BUFFER_SIZE);
+    buffer[1] = (char*)checked_malloc(IMPORT_FILE_BUFFER_SIZE);
   for (int i = 0; i < max_threads; i++) {
     import_buffers_vec.push_back(std::vector<std::unique_ptr<TypedImportBuffer>>());
     for (const auto cd : loader.get_column_descs())

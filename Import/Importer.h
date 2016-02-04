@@ -19,6 +19,7 @@
 #include "../Catalog/TableDescriptor.h"
 #include "../Catalog/Catalog.h"
 #include "../Fragmenter/Fragmenter.h"
+#include "../Shared/checked_alloc.h"
 #include "../StringDictionary/StringDictionary.h"
 
 class TDatum;
@@ -183,7 +184,7 @@ class TypedImportBuffer : boost::noncopyable {
     CHECK(string_dict_);
     for (auto& p : string_array_vec) {
       size_t len = p.size() * sizeof(int32_t);
-      auto a = static_cast<int32_t*>(malloc(len));
+      auto a = static_cast<int32_t*>(checked_malloc(len));
       string_dict_->getOrAddBulk(p, a);
       string_array_dict_buffer_->push_back(ArrayDatum(len, reinterpret_cast<int8_t*>(a), len == 0));
     }

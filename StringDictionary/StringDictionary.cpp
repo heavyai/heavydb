@@ -293,6 +293,7 @@ size_t StringDictionary::addStorageCapacity(int fd) noexcept {
   static const ssize_t CANARY_BUFF_SIZE = 1024 * PAGE_SIZE;
   if (!CANARY_BUFFER) {
     CANARY_BUFFER = static_cast<char*>(malloc(CANARY_BUFF_SIZE));
+    CHECK(CANARY_BUFFER);
     memset(CANARY_BUFFER, 0xff, CANARY_BUFF_SIZE);
   }
   CHECK_NE(lseek(fd, 0, SEEK_END), -1);

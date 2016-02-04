@@ -8,8 +8,8 @@
 #include "QueryTemplateGenerator.h"
 #include "RuntimeFunctions.h"
 #include "../CudaMgr/CudaMgr.h"
+#include "../Shared/checked_alloc.h"
 #include "../Utils/ChunkIter.h"
-#include "RuntimeFunctions.h"
 
 #include <numeric>
 #include <thread>
@@ -1165,7 +1165,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
                                ? query_mem_desc_.entry_count
                                : 0};
     auto group_by_buffer = static_cast<int64_t*>(
-        malloc(query_mem_desc_.getBufferSizeBytes(device_type_) + index_buffer_qw * sizeof(int64_t)));
+        checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_) + index_buffer_qw * sizeof(int64_t)));
     if (!query_mem_desc_.lazyInitGroups(device_type)) {
       memcpy(group_by_buffer + index_buffer_qw,
              &group_by_buffer_template[0],
@@ -1177,7 +1177,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
       group_by_buffers_.push_back(nullptr);
     }
     if (query_mem_desc_.getSmallBufferSizeBytes()) {
-      auto group_by_small_buffer = static_cast<int64_t*>(malloc(query_mem_desc_.getSmallBufferSizeBytes()));
+      auto group_by_small_buffer = static_cast<int64_t*>(checked_malloc(query_mem_desc_.getSmallBufferSizeBytes()));
       row_set_mem_owner_->addGroupByBuffer(group_by_small_buffer);
       memcpy(group_by_small_buffer, &group_by_small_buffer_template[0], query_mem_desc_.getSmallBufferSizeBytes());
       small_group_by_buffers_.push_back(group_by_small_buffer);
@@ -1296,7 +1296,7 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
 
 int64_t QueryExecutionContext::allocateCountDistinctBitmap(const size_t bitmap_sz) {
   auto bitmap_byte_sz = bitmap_size_bytes(bitmap_sz);
-  auto count_distinct_buffer = static_cast<int8_t*>(calloc(bitmap_byte_sz, 1));
+  auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
 }
@@ -2111,7 +2111,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
           !arg_ti.is_array()) {  // TODO(alex): allow bitmap implementation for arrays
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         bitmap_sz_bits = arg_range_info.max - arg_range_info.min + 1;
-        if (bitmap_sz_bits <= 0) {
+        const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
+        if (bitmap_sz_bits <= 0 || bitmap_sz_bits > MAX_BITMAP_BITS) {
           count_distinct_impl_type = CountDistinctImplType::StdSet;
         }
       }

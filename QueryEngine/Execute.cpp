@@ -6,12 +6,13 @@
 #include "GpuSort.h"
 #include "GroupByAndAggregate.h"
 #include "NvidiaKernel.h"
+#include "QueryTemplateGenerator.h"
+#include "QueryRewrite.h"
+#include "RuntimeFunctions.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
 #include "Shared/mapdpath.h"
-#include "QueryTemplateGenerator.h"
-#include "RuntimeFunctions.h"
-#include "QueryRewrite.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"
+#include "Shared/checked_alloc.h"
 
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IRReader/IRReader.h>
@@ -263,6 +264,9 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
       }
       if (error_code == ERR_UNSUPPORTED_SELF_JOIN) {
         throw std::runtime_error("Self joins not supported yet");
+      }
+      if (error_code == ERR_OUT_OF_CPU_MEM) {
+        throw std::runtime_error("Not enough host memory to execute the query");
       }
       if (error_code == ERR_OUT_OF_GPU_MEM) {
         rows = executeSelectPlan(root_plan->get_plan(),
@@ -2089,7 +2093,7 @@ class ColumnarResults {
     for (size_t i = 0; i < num_columns; ++i) {
       CHECK(!target_types[i].is_string() ||
             (target_types[i].get_compression() == kENCODING_DICT && target_types[i].get_size() == 4));
-      column_buffers_[i] = static_cast<const int8_t*>(malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
+      column_buffers_[i] = static_cast<const int8_t*>(checked_malloc(num_rows_ * (get_bit_width(target_types[i]) / 8)));
     }
     size_t row_idx{0};
     while (true) {
@@ -2946,10 +2950,33 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
     const CompilationResult& compilation_result =
         chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
     CHECK(!compilation_result.query_mem_desc.usesCachedContext() || !scan_limit);
-    auto query_exe_context_owned =
-        compilation_result.query_mem_desc.usesCachedContext()
-            ? nullptr
-            : compilation_result.query_mem_desc.getQueryExecutionContext(plan_state_->init_agg_vals_,
+    std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
+    try {
+      query_exe_context_owned = compilation_result.query_mem_desc.usesCachedContext()
+                                    ? nullptr
+                                    : compilation_result.query_mem_desc.getQueryExecutionContext(
+                                          plan_state_->init_agg_vals_,
+                                          this,
+                                          chosen_device_type,
+                                          chosen_device_id,
+                                          col_buffers,
+                                          row_set_mem_owner,
+                                          compilation_result.output_columnar,
+                                          compilation_result.query_mem_desc.sortOnGpu(),
+                                          render_allocator);
+    } catch (const OutOfHostMemory& e) {
+      LOG(ERROR) << e.what();
+      *error_code = ERR_OUT_OF_CPU_MEM;
+      return;
+    }
+    QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
+    std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
+    if (compilation_result.query_mem_desc.usesCachedContext()) {
+      query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes[ctx_idx]));
+      if (!query_contexts[ctx_idx]) {
+        try {
+          query_contexts[ctx_idx] =
+              compilation_result.query_mem_desc.getQueryExecutionContext(plan_state_->init_agg_vals_,
                                                                          this,
                                                                          chosen_device_type,
                                                                          chosen_device_id,
@@ -2958,21 +2985,11 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                                                                          compilation_result.output_columnar,
                                                                          compilation_result.query_mem_desc.sortOnGpu(),
                                                                          render_allocator);
-    QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
-    std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
-    if (compilation_result.query_mem_desc.usesCachedContext()) {
-      query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes[ctx_idx]));
-      if (!query_contexts[ctx_idx]) {
-        query_contexts[ctx_idx] =
-            compilation_result.query_mem_desc.getQueryExecutionContext(plan_state_->init_agg_vals_,
-                                                                       this,
-                                                                       chosen_device_type,
-                                                                       chosen_device_id,
-                                                                       col_buffers,
-                                                                       row_set_mem_owner,
-                                                                       compilation_result.output_columnar,
-                                                                       compilation_result.query_mem_desc.sortOnGpu(),
-                                                                       render_allocator);
+        } catch (const OutOfHostMemory& e) {
+          LOG(ERROR) << e.what();
+          *error_code = ERR_OUT_OF_CPU_MEM;
+          return;
+        }
       }
       query_exe_context = query_contexts[ctx_idx].get();
     }
@@ -3547,37 +3564,37 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
     auto col_type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType) : cd->columnType.get_type();
     switch (col_type) {
       case kBOOLEAN: {
-        auto col_data = reinterpret_cast<int8_t*>(malloc(sizeof(int8_t)));
+        auto col_data = reinterpret_cast<int8_t*>(checked_malloc(sizeof(int8_t)));
         *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : (col_datum.boolval ? 1 : 0);
         col_buffers[col_ids[col_idx]] = col_data;
         break;
       }
       case kSMALLINT: {
-        auto col_data = reinterpret_cast<int16_t*>(malloc(sizeof(int16_t)));
+        auto col_data = reinterpret_cast<int16_t*>(checked_malloc(sizeof(int16_t)));
         *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : col_datum.smallintval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kINT: {
-        auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
+        auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));
         *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : col_datum.intval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kBIGINT: {
-        auto col_data = reinterpret_cast<int64_t*>(malloc(sizeof(int64_t)));
+        auto col_data = reinterpret_cast<int64_t*>(checked_malloc(sizeof(int64_t)));
         *col_data = col_cv->get_is_null() ? inline_int_null_val(cd->columnType) : col_datum.bigintval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kFLOAT: {
-        auto col_data = reinterpret_cast<float*>(malloc(sizeof(float)));
+        auto col_data = reinterpret_cast<float*>(checked_malloc(sizeof(float)));
         *col_data = col_datum.floatval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
       }
       case kDOUBLE: {
-        auto col_data = reinterpret_cast<double*>(malloc(sizeof(double)));
+        auto col_data = reinterpret_cast<double*>(checked_malloc(sizeof(double)));
         *col_data = col_datum.doubleval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
@@ -3590,7 +3607,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
             str_col_buffers[col_ids[col_idx]].push_back(*col_datum.stringval);
             break;
           case kENCODING_DICT: {
-            auto col_data = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
+            auto col_data = reinterpret_cast<int32_t*>(checked_malloc(sizeof(int32_t)));
             if (col_cv->get_is_null()) {
               *col_data = NULL_INT;
             } else {
@@ -3609,7 +3626,7 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
-        auto col_data = reinterpret_cast<time_t*>(malloc(sizeof(time_t)));
+        auto col_data = reinterpret_cast<time_t*>(checked_malloc(sizeof(time_t)));
         *col_data = col_datum.timeval;
         col_buffers[col_ids[col_idx]] = reinterpret_cast<int8_t*>(col_data);
         break;
