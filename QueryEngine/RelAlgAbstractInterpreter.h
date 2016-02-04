@@ -367,15 +367,29 @@ class RelCompound : public RelAlgNode {
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually projected, just owned
 };
 
-// A sequence of nodes to be executed as-is. The node / buffer elision is completed
-// at this point and every RelProject / RelAggregate / RelCompound node should output
-// a new buffer and trigger a result reduction between multiple devices.
-class RelSequence : public RelAlgNode {
+enum class SortDirection { Ascending, Descending };
+
+enum class NullSortedPosition { First, Last };
+
+class SortField {
  public:
-  void addNode(const RelAlgNode* node) { sequence_.push_back(node); }
+  SortField(const size_t field, const SortDirection sort_dir, const NullSortedPosition nulls_pos)
+      : field_(field), sort_dir_(sort_dir), nulls_pos_(nulls_pos) {}
 
  private:
-  std::vector<const RelAlgNode*> sequence_;
+  const size_t field_;
+  const SortDirection sort_dir_;
+  const NullSortedPosition nulls_pos_;
+};
+
+class RelSort : public RelAlgNode {
+ public:
+  RelSort(const std::vector<SortField>& collation, const RelAlgNode* input) : collation_(collation) {
+    inputs_.emplace_back(input);
+  }
+
+ private:
+  const std::vector<SortField> collation_;
 };
 
 std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);

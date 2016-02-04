@@ -205,6 +205,13 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
     return lhs_out;
   }
+  const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
+  if (sort_node) {
+    // Sort preserves shape
+    CHECK_EQ(size_t(1), sort_node->inputCount());
+    const auto prev_out = get_node_output(sort_node->getInput(0));
+    return n_outputs(sort_node, prev_out.size());
+  }
   CHECK(false);
   return outputs;
 }
@@ -374,8 +381,9 @@ void coalesce_nodes(std::vector<RelAlgNode*>& nodes) {
           ++i;
         } else {
           crt_state = CoalesceState::Initial;
-          CHECK_GE(crt_pattern.size(), size_t(2));
-          create_compound(nodes, crt_pattern);
+          if (crt_pattern.size() >= 2) {
+            create_compound(nodes, crt_pattern);
+          }
           decltype(crt_pattern)().swap(crt_pattern);
         }
         break;
@@ -429,6 +437,8 @@ class RaAbstractInterp {
         ra_node = dispatchAggregate(crt_node);
       } else if (rel_op == std::string("LogicalJoin")) {
         ra_node = dispatchJoin(crt_node);
+      } else if (rel_op == std::string("LogicalSort")) {
+        ra_node = dispatchSort(crt_node);
       } else {
         CHECK(false);
       }
@@ -496,6 +506,23 @@ class RaAbstractInterp {
     CHECK_LT(input_indices[0], nodes_.size());
     CHECK_LT(input_indices[1], nodes_.size());
     return new RelJoin(nodes_[input_indices[0]], nodes_[input_indices[1]], filter_rex, join_type);
+  }
+
+  RelSort* dispatchSort(const rapidjson::Value& sort_ra) {
+    std::vector<SortField> collation;
+    const auto& collation_arr = field(sort_ra, "collation");
+    CHECK(collation_arr.IsArray());
+    for (auto collation_arr_it = collation_arr.Begin(); collation_arr_it != collation_arr.End(); ++collation_arr_it) {
+      const size_t field_idx = json_i64(field(*collation_arr_it, "field"));
+      const SortDirection sort_dir = json_str(field(*collation_arr_it, "direction")) == std::string("DESCENDING")
+                                         ? SortDirection::Descending
+                                         : SortDirection::Ascending;
+      const NullSortedPosition null_pos = json_str(field(*collation_arr_it, "nulls")) == std::string("FIRST")
+                                              ? NullSortedPosition::First
+                                              : NullSortedPosition::Last;
+      collation.emplace_back(field_idx, sort_dir, null_pos);
+    }
+    return new RelSort(collation, prev(sort_ra));
   }
 
   const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
