@@ -11,26 +11,26 @@
 
 namespace {
 
-llvm::Function* pos_start_helper(llvm::Module* mod, const std::string& name) {
+llvm::Function* default_func_builder(llvm::Module* mod, const std::string& name) {
   using namespace llvm;
 
-  std::vector<Type*> FuncTy_7_args;
-  FunctionType* FuncTy_7 = FunctionType::get(
+  std::vector<Type*> func_args;
+  FunctionType* func_type = FunctionType::get(
       /*Result=*/IntegerType::get(mod->getContext(), 32),
-      /*Params=*/FuncTy_7_args,
+      /*Params=*/func_args,
       /*isVarArg=*/false);
 
-  auto func_pos_start = mod->getFunction(name);
-  if (!func_pos_start) {
-    func_pos_start = Function::Create(
-        /*Type=*/FuncTy_7,
+  auto func_ptr = mod->getFunction(name);
+  if (!func_ptr) {
+    func_ptr = Function::Create(
+        /*Type=*/func_type,
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/name,
         mod);  // (external, no body)
-    func_pos_start->setCallingConv(CallingConv::C);
+    func_ptr->setCallingConv(CallingConv::C);
   }
 
-  AttributeSet func_pos_start_PAL;
+  AttributeSet func_pal;
   {
     SmallVector<AttributeSet, 4> Attrs;
     AttributeSet PAS;
@@ -40,41 +40,41 @@ llvm::Function* pos_start_helper(llvm::Module* mod, const std::string& name) {
     }
 
     Attrs.push_back(PAS);
-    func_pos_start_PAL = AttributeSet::get(mod->getContext(), Attrs);
+    func_pal = AttributeSet::get(mod->getContext(), Attrs);
   }
-  func_pos_start->setAttributes(func_pos_start_PAL);
+  func_ptr->setAttributes(func_pal);
 
-  return func_pos_start;
+  return func_ptr;
 }
 
 llvm::Function* pos_start(llvm::Module* mod) {
-  return pos_start_helper(mod, "pos_start");
+  return default_func_builder(mod, "pos_start");
 }
 
 llvm::Function* group_buff_idx(llvm::Module* mod) {
-  return pos_start_helper(mod, "group_buff_idx");
+  return default_func_builder(mod, "group_buff_idx");
 }
 
 llvm::Function* pos_step(llvm::Module* mod) {
   using namespace llvm;
 
-  std::vector<Type*> FuncTy_7_args;
-  FunctionType* FuncTy_7 = FunctionType::get(
+  std::vector<Type*> func_args;
+  FunctionType* func_type = FunctionType::get(
       /*Result=*/IntegerType::get(mod->getContext(), 32),
-      /*Params=*/FuncTy_7_args,
+      /*Params=*/func_args,
       /*isVarArg=*/false);
 
-  auto func_pos_step = mod->getFunction("pos_step");
-  if (!func_pos_step) {
-    func_pos_step = Function::Create(
-        /*Type=*/FuncTy_7,
+  auto func_ptr = mod->getFunction("pos_step");
+  if (!func_ptr) {
+    func_ptr = Function::Create(
+        /*Type=*/func_type,
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/"pos_step",
         mod);  // (external, no body)
-    func_pos_step->setCallingConv(CallingConv::C);
+    func_ptr->setCallingConv(CallingConv::C);
   }
 
-  AttributeSet func_pos_step_PAL;
+  AttributeSet func_pal;
   {
     SmallVector<AttributeSet, 4> Attrs;
     AttributeSet PAS;
@@ -84,11 +84,11 @@ llvm::Function* pos_step(llvm::Module* mod) {
     }
 
     Attrs.push_back(PAS);
-    func_pos_step_PAL = AttributeSet::get(mod->getContext(), Attrs);
+    func_pal = AttributeSet::get(mod->getContext(), Attrs);
   }
-  func_pos_step->setAttributes(func_pos_step_PAL);
+  func_ptr->setAttributes(func_pal);
 
-  return func_pos_step;
+  return func_ptr;
 }
 
 llvm::Function* init_group_by_buffer(llvm::Module* mod) {
@@ -98,19 +98,19 @@ llvm::Function* init_group_by_buffer(llvm::Module* mod) {
   auto pi64_type = PointerType::get(i64_type, 0);
   auto i32_type = IntegerType::get(mod->getContext(), 32);
 
-  std::vector<Type*> init_group_by_buffer_args{pi64_type, pi64_type, i32_type, i32_type, i32_type};
+  std::vector<Type*> func_args{pi64_type, pi64_type, i32_type, i32_type, i32_type};
 
-  auto init_group_by_buffer_type =
-      FunctionType::get(Type::getVoidTy(mod->getContext()), init_group_by_buffer_args, false);
+  auto func_type =
+      FunctionType::get(Type::getVoidTy(mod->getContext()), func_args, false);
 
-  auto func_init_group_by_buffer = mod->getFunction("init_group_by_buffer");
-  if (!func_init_group_by_buffer) {
-    func_init_group_by_buffer =
-        Function::Create(init_group_by_buffer_type, GlobalValue::ExternalLinkage, "init_group_by_buffer", mod);
-    func_init_group_by_buffer->setCallingConv(CallingConv::C);
+  auto func_ptr = mod->getFunction("init_group_by_buffer");
+  if (!func_ptr) {
+    func_ptr =
+        Function::Create(func_type, GlobalValue::ExternalLinkage, "init_group_by_buffer", mod);
+    func_ptr->setCallingConv(CallingConv::C);
   }
 
-  AttributeSet func_init_group_by_buffer_PAL;
+  AttributeSet func_pal;
   {
     SmallVector<AttributeSet, 4> Attrs;
     AttributeSet PAS;
@@ -120,11 +120,11 @@ llvm::Function* init_group_by_buffer(llvm::Module* mod) {
     }
 
     Attrs.push_back(PAS);
-    func_init_group_by_buffer_PAL = AttributeSet::get(mod->getContext(), Attrs);
+    func_pal = AttributeSet::get(mod->getContext(), Attrs);
   }
-  func_init_group_by_buffer->setAttributes(func_init_group_by_buffer_PAL);
+  func_ptr->setAttributes(func_pal);
 
-  return func_init_group_by_buffer;
+  return func_ptr;
 }
 
 llvm::Function* row_process(llvm::Module* mod,
@@ -133,44 +133,48 @@ llvm::Function* row_process(llvm::Module* mod,
                             const bool hoist_literals) {
   using namespace llvm;
 
-  std::vector<Type*> FuncTy_5_args;
-  PointerType* PointerTy_6 = PointerType::get(IntegerType::get(mod->getContext(), 64), 0);
+  std::vector<Type*> func_args;
+  auto i8_type = IntegerType::get(mod->getContext(), 8);
+  auto i32_type = IntegerType::get(mod->getContext(), 32);
+  auto i64_type = IntegerType::get(mod->getContext(), 64);
+  auto pi64_type = PointerType::get(i64_type, 0);
+  
 
   if (aggr_col_count) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
-      FuncTy_5_args.push_back(PointerTy_6);
+      func_args.push_back(pi64_type);
     }
   } else {                                 // group by query
-    FuncTy_5_args.push_back(PointerTy_6);  // groups buffer
-    FuncTy_5_args.push_back(PointerTy_6);  // small groups buffer
-    FuncTy_5_args.push_back(PointerTy_6);  // max matched
+    func_args.push_back(pi64_type);  // groups buffer
+    func_args.push_back(pi64_type);  // small groups buffer
+    func_args.push_back(pi64_type);  // max matched
   }
 
-  FuncTy_5_args.push_back(PointerTy_6);  // aggregate init values
+  func_args.push_back(pi64_type);  // aggregate init values
 
-  FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
-  FuncTy_5_args.push_back(IntegerType::get(mod->getContext(), 64));
-  FuncTy_5_args.push_back(PointerTy_6);
+  func_args.push_back(i64_type);
+  func_args.push_back(i64_type);
+  func_args.push_back(pi64_type);
   if (hoist_literals) {
-    FuncTy_5_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 8), 0));
+    func_args.push_back(PointerType::get(i8_type, 0));
   }
-  FunctionType* FuncTy_5 = FunctionType::get(
-      /*Result=*/IntegerType::get(mod->getContext(), 32),
-      /*Params=*/FuncTy_5_args,
+  FunctionType* func_type = FunctionType::get(
+      /*Result=*/i32_type,
+      /*Params=*/func_args,
       /*isVarArg=*/false);
 
-  auto row_process_name = unique_name("row_process", is_nested);
-  auto func_row_process = mod->getFunction(row_process_name);
+  auto func_name = unique_name("row_process", is_nested);
+  auto func_ptr = mod->getFunction(func_name);
 
-  if (!func_row_process) {
-    func_row_process = Function::Create(
-        /*Type=*/FuncTy_5,
+  if (!func_ptr) {
+    func_ptr = Function::Create(
+        /*Type=*/func_type,
         /*Linkage=*/GlobalValue::ExternalLinkage,
-        /*Name=*/row_process_name,
+        /*Name=*/func_name,
         mod);  // (external, no body)
-    func_row_process->setCallingConv(CallingConv::C);
+    func_ptr->setCallingConv(CallingConv::C);
 
-    AttributeSet func_row_process_PAL;
+    AttributeSet func_pal;
     {
       SmallVector<AttributeSet, 4> Attrs;
       AttributeSet PAS;
@@ -180,12 +184,12 @@ llvm::Function* row_process(llvm::Module* mod,
       }
 
       Attrs.push_back(PAS);
-      func_row_process_PAL = AttributeSet::get(mod->getContext(), Attrs);
+      func_pal = AttributeSet::get(mod->getContext(), Attrs);
     }
-    func_row_process->setAttributes(func_row_process_PAL);
+    func_ptr->setAttributes(func_pal);
   }
 
-  return func_row_process;
+  return func_ptr;
 }
 
 }  // namespace
@@ -205,44 +209,48 @@ llvm::Function* query_template(llvm::Module* mod,
   auto func_row_process = row_process(mod, aggr_col_count, is_nested, hoist_literals);
   CHECK(func_row_process);
 
-  PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
-  PointerType* PointerTy_6 = PointerType::get(IntegerType::get(mod->getContext(), 64), 0);
-  PointerType* PointerTy_9 = PointerType::get(PointerTy_1, 0);
+  auto i8_type = IntegerType::get(mod->getContext(), 8);
+  auto i32_type = IntegerType::get(mod->getContext(), 32);
+  auto i64_type = IntegerType::get(mod->getContext(), 64);
+  auto pi8_type = PointerType::get(i8_type, 0);
+  auto ppi8_type = PointerType::get(pi8_type, 0);
+  auto pi32_type = PointerType::get(i32_type, 0);
+  auto pi64_type = PointerType::get(i64_type, 0);
+  auto ppi64_type = PointerType::get(pi64_type, 0);
 
-  std::vector<Type*> FuncTy_8_args;
-  FuncTy_8_args.push_back(PointerTy_9);
+  std::vector<Type*> query_args;
+  query_args.push_back(ppi8_type);
   if (hoist_literals) {
-    FuncTy_8_args.push_back(PointerTy_1);
+    query_args.push_back(pi8_type);
   }
-  FuncTy_8_args.push_back(PointerTy_6);
-  FuncTy_8_args.push_back(PointerTy_6);
-  FuncTy_8_args.push_back(PointerTy_6);
+  query_args.push_back(pi64_type);
+  query_args.push_back(pi64_type);
+  query_args.push_back(pi64_type);
 
-  FuncTy_8_args.push_back(PointerTy_6);
-  PointerType* PointerTy_10 = PointerType::get(PointerTy_6, 0);
-  FuncTy_8_args.push_back(PointerTy_10);
-  FuncTy_8_args.push_back(PointerTy_10);
-  FuncTy_8_args.push_back(IntegerType::get(mod->getContext(), 32));
-  FuncTy_8_args.push_back(IntegerType::get(mod->getContext(), 64));
-  FuncTy_8_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
+  query_args.push_back(pi64_type);
+  query_args.push_back(ppi64_type);
+  query_args.push_back(ppi64_type);
+  query_args.push_back(i32_type);
+  query_args.push_back(i64_type);
+  query_args.push_back(pi32_type);
 
-  FunctionType* FuncTy_8 = FunctionType::get(
+  FunctionType* query_func_type = FunctionType::get(
       /*Result=*/Type::getVoidTy(mod->getContext()),
-      /*Params=*/FuncTy_8_args,
+      /*Params=*/query_args,
       /*isVarArg=*/false);
 
   auto query_template_name = unique_name("query_template", is_nested);
-  auto func_query_template = mod->getFunction(query_template_name);
-  CHECK(!func_query_template);
+  auto query_func_ptr = mod->getFunction(query_template_name);
+  CHECK(!query_func_ptr);
 
-  func_query_template = Function::Create(
-      /*Type=*/FuncTy_8,
+  query_func_ptr = Function::Create(
+      /*Type=*/query_func_type,
       /*Linkage=*/GlobalValue::ExternalLinkage,
       /*Name=*/query_template_name,
       mod);
-  func_query_template->setCallingConv(CallingConv::C);
+  query_func_ptr->setCallingConv(CallingConv::C);
 
-  AttributeSet func_query_template_PAL;
+  AttributeSet query_func_pal;
   {
     SmallVector<AttributeSet, 4> Attrs;
     AttributeSet PAS;
@@ -275,161 +283,161 @@ llvm::Function* query_template(llvm::Module* mod,
 
     Attrs.push_back(PAS);
 
-    func_query_template_PAL = AttributeSet::get(mod->getContext(), Attrs);
+    query_func_pal = AttributeSet::get(mod->getContext(), Attrs);
   }
-  func_query_template->setAttributes(func_query_template_PAL);
+  query_func_ptr->setAttributes(query_func_pal);
 
-  Function::arg_iterator args = func_query_template->arg_begin();
-  Value* ptr_byte_stream_119 = args++;
-  ptr_byte_stream_119->setName("byte_stream");
+  Function::arg_iterator query_arg_it = query_func_ptr->arg_begin();
+  Value* byte_stream = query_arg_it;
+  byte_stream->setName("byte_stream");
   Value* literals{nullptr};
   if (hoist_literals) {
-    literals = args++;
+    literals = ++query_arg_it;
     literals->setName("literals");
   }
-  Value* ptr_row_count_ptr = args++;
-  ptr_row_count_ptr->setName("row_count_ptr");
-  Value* frag_row_off_ptr = args++;
+  Value* row_count_ptr = ++query_arg_it;
+  row_count_ptr->setName("row_count_ptr");
+  Value* frag_row_off_ptr = ++query_arg_it;
   frag_row_off_ptr->setName("frag_row_off_ptr");
-  Value* ptr_max_matched_ptr = args++;
-  ptr_max_matched_ptr->setName("max_matched_ptr");
-  Value* ptr_agg_init_val = args++;
-  ptr_agg_init_val->setName("agg_init_val");
-  Value* ptr_out = args++;
-  ptr_out->setName("out");
-  Value* ptr_unused = args++;
-  ptr_unused->setName("unused");
-  Value* frag_idx = args++;
+  Value* max_matched_ptr = ++query_arg_it;
+  max_matched_ptr->setName("max_matched_ptr");
+  Value* agg_init_val = ++query_arg_it;
+  agg_init_val->setName("agg_init_val");
+  Value* out = ++query_arg_it;
+  out->setName("out");
+  Value* unused = ++query_arg_it;
+  unused->setName("unused");
+  Value* frag_idx = ++query_arg_it;
   frag_idx->setName("frag_idx");
-  Value* ptr_join_hash_table = args++;
-  ptr_join_hash_table->setName("join_hash_table");
-  Value* ptr_error_code = args++;
-  ptr_error_code->setName("error_code");
+  Value* join_hash_table = ++query_arg_it;
+  join_hash_table->setName("join_hash_table");
+  Value* error_code = ++query_arg_it;
+  error_code->setName("error_code");
 
-  BasicBlock* label_120 = BasicBlock::Create(mod->getContext(), "", func_query_template, 0);
-  BasicBlock* label__lr_ph = BasicBlock::Create(mod->getContext(), ".lr.ph", func_query_template, 0);
-  BasicBlock* label_121 = BasicBlock::Create(mod->getContext(), "", func_query_template, 0);
-  BasicBlock* label___crit_edge = BasicBlock::Create(mod->getContext(), "._crit_edge", func_query_template, 0);
-  BasicBlock* label_122 = BasicBlock::Create(mod->getContext(), "", func_query_template, 0);
+  auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
+  auto bb_prehader = BasicBlock::Create(mod->getContext(), ".loop.preheader", query_func_ptr, 0);
+  auto bb_forbody = BasicBlock::Create(mod->getContext(), ".for.body", query_func_ptr, 0);
+  auto bb_crit_edge = BasicBlock::Create(mod->getContext(), "._crit_edge", query_func_ptr, 0);
+  auto bb_exit = BasicBlock::Create(mod->getContext(), ".exit", query_func_ptr, 0);
 
-  // Block  (label_120)
-  std::vector<Value*> ptr_result_vec;
+  // Block  (.entry)
+  std::vector<Value*> result_ptr_vec;
   for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto ptr_result = new AllocaInst(IntegerType::get(mod->getContext(), 64), "result", label_120);
-    ptr_result->setAlignment(8);
-    ptr_result_vec.push_back(ptr_result);
+    auto result_ptr = new AllocaInst(i64_type, "result", bb_entry);
+    result_ptr->setAlignment(8);
+    result_ptr_vec.push_back(result_ptr);
   }
 
-  LoadInst* int64_123 = new LoadInst(ptr_row_count_ptr, "", false, label_120);
-  int64_123->setAlignment(8);
-  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "", false, label_120);
+  LoadInst* row_count = new LoadInst(row_count_ptr, "row_count", false, bb_entry);
+  row_count->setAlignment(8);
+  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "frag_row_off", false, bb_entry);
   frag_row_off->setAlignment(8);
 
-  std::vector<Value*> int64_124_vec;
+  std::vector<Value*> agg_init_val_vec;
   for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto idx_lv = ConstantInt::get(IntegerType::get(mod->getContext(), 32), i);
-    auto agg_init_gep = GetElementPtrInst::CreateInBounds(ptr_agg_init_val, idx_lv, "", label_120);
-    auto int64_124 = new LoadInst(agg_init_gep, "", false, label_120);
-    int64_124->setAlignment(8);
-    int64_124_vec.push_back(int64_124);
-    auto void_125 = new StoreInst(int64_124, ptr_result_vec[i], false, label_120);
-    void_125->setAlignment(8);
+    auto idx_lv = ConstantInt::get(i32_type, i);
+    auto agg_init_gep = GetElementPtrInst::CreateInBounds(agg_init_val, idx_lv, "", bb_entry);
+    auto agg_init_val = new LoadInst(agg_init_gep, "", false, bb_entry);
+    agg_init_val->setAlignment(8);
+    agg_init_val_vec.push_back(agg_init_val);
+    auto init_val_st = new StoreInst(agg_init_val, result_ptr_vec[i], false, bb_entry);
+    init_val_st->setAlignment(8);
   }
 
-  CallInst* int32_126 = CallInst::Create(func_pos_start, "", label_120);
-  int32_126->setCallingConv(CallingConv::C);
-  int32_126->setTailCall(true);
-  AttributeSet int32_126_PAL;
-  int32_126->setAttributes(int32_126_PAL);
+  CallInst* pos_start = CallInst::Create(func_pos_start, "pos_start", bb_entry);
+  pos_start->setCallingConv(CallingConv::C);
+  pos_start->setTailCall(true);
+  AttributeSet pos_start_pal;
+  pos_start->setAttributes(pos_start_pal);
 
-  CallInst* int32_127 = CallInst::Create(func_pos_step, "", label_120);
-  int32_127->setCallingConv(CallingConv::C);
-  int32_127->setTailCall(true);
-  AttributeSet int32_127_PAL;
-  int32_127->setAttributes(int32_127_PAL);
+  CallInst* pos_step = CallInst::Create(func_pos_step, "pos_step", bb_entry);
+  pos_step->setCallingConv(CallingConv::C);
+  pos_step->setTailCall(true);
+  AttributeSet pos_step_pal;
+  pos_step->setAttributes(pos_step_pal);
 
-  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "", label_120);
+  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "group_buff_idx", bb_entry);
   group_buff_idx->setCallingConv(CallingConv::C);
   group_buff_idx->setTailCall(true);
-  AttributeSet group_buff_idx_PAL;
-  group_buff_idx->setAttributes(group_buff_idx_PAL);
+  AttributeSet group_buff_idx_pal;
+  group_buff_idx->setAttributes(group_buff_idx_pal);
 
-  CastInst* int64_128 = new SExtInst(int32_126, IntegerType::get(mod->getContext(), 64), "", label_120);
-  ICmpInst* int1_129 = new ICmpInst(*label_120, ICmpInst::ICMP_SLT, int64_128, int64_123, "");
-  BranchInst::Create(label__lr_ph, label_122, int1_129, label_120);
+  CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
+  ICmpInst* enter_or_not = new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
+  BranchInst::Create(bb_prehader, bb_exit, enter_or_not, bb_entry);
 
-  // Block .lr.ph (label__lr_ph)
-  CastInst* int64_131 = new SExtInst(int32_127, IntegerType::get(mod->getContext(), 64), "", label__lr_ph);
-  BranchInst::Create(label_121, label__lr_ph);
+  // Block .loop.preheader
+  CastInst* pos_step_i64 = new SExtInst(pos_step, i64_type, "", bb_prehader);
+  BranchInst::Create(bb_forbody, bb_prehader);
 
-  // Block  (label_121)
-  Argument* fwdref_133 = new Argument(IntegerType::get(mod->getContext(), 64));
-  PHINode* int64_pos_01 = PHINode::Create(IntegerType::get(mod->getContext(), 64), 2, "pos.01", label_121);
-  int64_pos_01->addIncoming(int64_128, label__lr_ph);
-  int64_pos_01->addIncoming(fwdref_133, label_121);
+  // Block  .for.body
+  Argument* pos_inc_pre = new Argument(i64_type);
+  PHINode* pos = PHINode::Create(i64_type, 2, "pos", bb_forbody);
+  pos->addIncoming(pos_start_i64, bb_prehader);
+  pos->addIncoming(pos_inc_pre, bb_forbody);
 
-  std::vector<Value*> void_134_params;
-  void_134_params.insert(void_134_params.end(), ptr_result_vec.begin(), ptr_result_vec.end());
-  void_134_params.push_back(ptr_agg_init_val);
-  void_134_params.push_back(int64_pos_01);
-  void_134_params.push_back(frag_row_off);
-  void_134_params.push_back(ptr_row_count_ptr);
+  std::vector<Value*> row_process_params;
+  row_process_params.insert(row_process_params.end(), result_ptr_vec.begin(), result_ptr_vec.end());
+  row_process_params.push_back(agg_init_val);
+  row_process_params.push_back(pos);
+  row_process_params.push_back(frag_row_off);
+  row_process_params.push_back(row_count_ptr);
   if (hoist_literals) {
     CHECK(literals);
-    void_134_params.push_back(literals);
+    row_process_params.push_back(literals);
   }
-  CallInst* void_134 = CallInst::Create(func_row_process, void_134_params, "", label_121);
-  void_134->setCallingConv(CallingConv::C);
-  void_134->setTailCall(false);
-  AttributeSet void_134_PAL;
-  void_134->setAttributes(void_134_PAL);
+  CallInst* row_process = CallInst::Create(func_row_process, row_process_params, "", bb_forbody);
+  row_process->setCallingConv(CallingConv::C);
+  row_process->setTailCall(false);
+  AttributeSet row_process_pal;
+  row_process->setAttributes(row_process_pal);
 
-  BinaryOperator* int64_135 = BinaryOperator::CreateNSW(Instruction::Add, int64_pos_01, int64_131, "", label_121);
-  ICmpInst* int1_136 = new ICmpInst(*label_121, ICmpInst::ICMP_SLT, int64_135, int64_123, "");
-  BranchInst::Create(label_121, label___crit_edge, int1_136, label_121);
+  BinaryOperator* pos_inc = BinaryOperator::CreateNSW(Instruction::Add, pos, pos_step_i64, "", bb_forbody);
+  ICmpInst* loop_or_exit = new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
+  BranchInst::Create(bb_forbody, bb_crit_edge, loop_or_exit, bb_forbody);
 
-  // Block ._crit_edge (label___crit_edge)
-  std::vector<Instruction*> int64__pre_vec;
+  // Block ._crit_edge
+  std::vector<Instruction*> result_vec_pre;
   for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto int64__pre = new LoadInst(ptr_result_vec[i], ".pre", false, label___crit_edge);
-    int64__pre->setAlignment(8);
-    int64__pre_vec.push_back(int64__pre);
+    auto result = new LoadInst(result_ptr_vec[i], ".pre.result", false, bb_crit_edge);
+    result->setAlignment(8);
+    result_vec_pre.push_back(result);
   }
 
-  BranchInst::Create(label_122, label___crit_edge);
+  BranchInst::Create(bb_exit, bb_crit_edge);
 
-  // Block  (label_122)
-  std::vector<PHINode*> int64_139_vec;
+  // Block  .exit
+  std::vector<PHINode*> result_vec;
   for (int64_t i = aggr_col_count - 1; i >= 0; --i) {
-    auto int64_139 = PHINode::Create(IntegerType::get(mod->getContext(), 64), 2, "", label_122);
-    int64_139->addIncoming(int64__pre_vec[i], label___crit_edge);
-    int64_139->addIncoming(int64_124_vec[i], label_120);
-    int64_139_vec.insert(int64_139_vec.begin(), int64_139);
+    auto result = PHINode::Create(IntegerType::get(mod->getContext(), 64), 2, "", bb_exit);
+    result->addIncoming(result_vec_pre[i], bb_crit_edge);
+    result->addIncoming(agg_init_val_vec[i], bb_entry);
+    result_vec.insert(result_vec.begin(), result);
   }
 
   for (size_t i = 0; i < aggr_col_count; ++i) {
-    auto idx_lv = ConstantInt::get(IntegerType::get(mod->getContext(), 32), i);
-    auto out_gep = GetElementPtrInst::CreateInBounds(ptr_out, idx_lv, "", label_122);
-    auto ptr_140 = new LoadInst(out_gep, "", false, label_122);
-    ptr_140->setAlignment(8);
+    auto col_idx = ConstantInt::get(i32_type, i);
+    auto out_gep = GetElementPtrInst::CreateInBounds(out, col_idx, "", bb_exit);
+    auto col_buffer = new LoadInst(out_gep, "", false, bb_exit);
+    col_buffer->setAlignment(8);
     auto slot_idx = BinaryOperator::CreateAdd(
-        group_buff_idx, BinaryOperator::CreateMul(frag_idx, int32_127, "", label_122), "", label_122);
-    auto ptr_141 = GetElementPtrInst::CreateInBounds(ptr_140, slot_idx, "", label_122);
-    StoreInst* void_142 = new StoreInst(int64_139_vec[i], ptr_141, false, label_122);
-    void_142->setAlignment(8);
+        group_buff_idx, BinaryOperator::CreateMul(frag_idx, pos_step, "", bb_exit), "", bb_exit);
+    auto target_addr = GetElementPtrInst::CreateInBounds(col_buffer, slot_idx, "", bb_exit);
+    StoreInst* result_st = new StoreInst(result_vec[i], target_addr, false, bb_exit);
+    result_st->setAlignment(8);
   }
 
-  ReturnInst::Create(mod->getContext(), label_122);
+  ReturnInst::Create(mod->getContext(), bb_exit);
 
   // Resolve Forward References
-  fwdref_133->replaceAllUsesWith(int64_135);
-  delete fwdref_133;
+  pos_inc_pre->replaceAllUsesWith(pos_inc);
+  delete pos_inc_pre;
 
-  if (verifyFunction(*func_query_template)) {
+  if (verifyFunction(*query_func_ptr)) {
     LOG(FATAL) << "Generated invalid code. ";
   }
 
-  return func_query_template;
+  return query_func_ptr;
 }
 
 llvm::Function* query_group_by_template(llvm::Module* mod,
@@ -456,45 +464,48 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
       query_mem_desc.sharedMemBytes(device_type) ? mod->getFunction("write_back") : mod->getFunction("write_back_nop");
   CHECK(func_write_back);
 
-  PointerType* PointerTy_1 = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
-  PointerType* PointerTy_6 = PointerType::get(IntegerType::get(mod->getContext(), 64), 0);
-  PointerType* PointerTy_9 = PointerType::get(PointerTy_1, 0);
+  auto i32_type = IntegerType::get(mod->getContext(), 32);
+  auto i64_type = IntegerType::get(mod->getContext(), 64);
+  auto pi8_type = PointerType::get(IntegerType::get(mod->getContext(), 8), 0);
+  auto pi32_type = PointerType::get(i32_type, 0);
+  auto pi64_type = PointerType::get(i64_type, 0);
+  auto ppi64_type = PointerType::get(pi64_type, 0);
+  auto ppi8_type = PointerType::get(pi8_type, 0);
 
-  std::vector<Type*> FuncTy_12_args;
-  FuncTy_12_args.push_back(PointerTy_9);
+  std::vector<Type*> query_args;
+  query_args.push_back(ppi8_type);
   if (hoist_literals) {
-    FuncTy_12_args.push_back(PointerTy_1);
+    query_args.push_back(pi8_type);
   }
-  FuncTy_12_args.push_back(PointerTy_6);
-  FuncTy_12_args.push_back(PointerTy_6);
-  FuncTy_12_args.push_back(PointerTy_6);
-  FuncTy_12_args.push_back(PointerTy_6);
-  PointerType* PointerTy_13 = PointerType::get(PointerTy_6, 0);
+  query_args.push_back(pi64_type);
+  query_args.push_back(pi64_type);
+  query_args.push_back(pi64_type);
+  query_args.push_back(pi64_type);
 
-  FuncTy_12_args.push_back(PointerTy_13);
-  FuncTy_12_args.push_back(PointerTy_13);
-  FuncTy_12_args.push_back(IntegerType::get(mod->getContext(), 32));
-  FuncTy_12_args.push_back(IntegerType::get(mod->getContext(), 64));
-  FuncTy_12_args.push_back(PointerType::get(IntegerType::get(mod->getContext(), 32), 0));
+  query_args.push_back(ppi64_type);
+  query_args.push_back(ppi64_type);
+  query_args.push_back(i32_type);
+  query_args.push_back(i64_type);
+  query_args.push_back(pi32_type);
 
-  FunctionType* FuncTy_12 = FunctionType::get(
+  FunctionType* query_func_type = FunctionType::get(
       /*Result=*/Type::getVoidTy(mod->getContext()),
-      /*Params=*/FuncTy_12_args,
+      /*Params=*/query_args,
       /*isVarArg=*/false);
 
-  auto query_group_by_template_name = unique_name("query_group_by_template", is_nested);
-  auto func_query_group_by_template = mod->getFunction(query_group_by_template_name);
-  CHECK(!func_query_group_by_template);
+  auto query_name = unique_name("query_group_by_template", is_nested);
+  auto query_func_ptr = mod->getFunction(query_name);
+  CHECK(!query_func_ptr);
 
-  func_query_group_by_template = Function::Create(
-      /*Type=*/FuncTy_12,
+  query_func_ptr = Function::Create(
+      /*Type=*/query_func_type,
       /*Linkage=*/GlobalValue::ExternalLinkage,
       /*Name=*/"query_group_by_template",
       mod);
 
-  func_query_group_by_template->setCallingConv(CallingConv::C);
+  query_func_ptr->setCallingConv(CallingConv::C);
 
-  AttributeSet func_query_group_by_template_PAL;
+  AttributeSet query_func_pal;
   {
     SmallVector<AttributeSet, 4> Attrs;
     AttributeSet PAS;
@@ -538,178 +549,176 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
 
     Attrs.push_back(PAS);
 
-    func_query_group_by_template_PAL = AttributeSet::get(mod->getContext(), Attrs);
+    query_func_pal = AttributeSet::get(mod->getContext(), Attrs);
   }
-  func_query_group_by_template->setAttributes(func_query_group_by_template_PAL);
+  query_func_ptr->setAttributes(query_func_pal);
 
-  Function::arg_iterator args = func_query_group_by_template->arg_begin();
-  Value* ptr_byte_stream_143 = args++;
-  ptr_byte_stream_143->setName("byte_stream");
+  Function::arg_iterator query_arg_it = query_func_ptr->arg_begin();
+  Value* byte_stream = query_arg_it;
+  byte_stream->setName("byte_stream");
   Value* literals{nullptr};
   if (hoist_literals) {
-    literals = args++;
+    literals = ++query_arg_it;;
     literals->setName("literals");
   }
-  Value* ptr_row_count_ptr_144 = args++;
-  ptr_row_count_ptr_144->setName("row_count_ptr");
-  Value* frag_row_off_ptr = args++;
+  Value* row_count_ptr = ++query_arg_it;
+  row_count_ptr->setName("row_count_ptr");
+  Value* frag_row_off_ptr = ++query_arg_it;
   frag_row_off_ptr->setName("frag_row_off_ptr");
-  Value* ptr_max_matched_ptr = args++;
-  ptr_max_matched_ptr->setName("max_matched_ptr");
-  Value* ptr_agg_init_val_145 = args++;
-  ptr_agg_init_val_145->setName("agg_init_val");
-  Value* ptr_group_by_buffers = args++;
-  ptr_group_by_buffers->setName("group_by_buffers");
-  Value* ptr_small_groups_buffer = args++;
-  ptr_small_groups_buffer->setName("small_groups_buffer");
-  Value* frag_idx = args++;
+  Value* max_matched_ptr = ++query_arg_it;
+  max_matched_ptr->setName("max_matched_ptr");
+  Value* agg_init_val = ++query_arg_it;
+  agg_init_val->setName("agg_init_val");
+  Value* group_by_buffers = ++query_arg_it;
+  group_by_buffers->setName("group_by_buffers");
+  Value* small_groups_buffer = ++query_arg_it;
+  small_groups_buffer->setName("small_groups_buffer");
+  Value* frag_idx = ++query_arg_it;
   frag_idx->setName("frag_idx");
-  Value* ptr_join_hash_table = args++;
-  ptr_join_hash_table->setName("join_hash_table");
-  Value* ptr_error_code = args++;
-  ptr_error_code->setName("error_code");
+  Value* join_hash_table = ++query_arg_it;
+  join_hash_table->setName("join_hash_table");
+  Value* error_code = ++query_arg_it;
+  error_code->setName("error_code");
 
-  BasicBlock* label_146 = BasicBlock::Create(mod->getContext(), "", func_query_group_by_template, 0);
-  BasicBlock* label__lr_ph_147 = BasicBlock::Create(mod->getContext(), ".lr.ph", func_query_group_by_template, 0);
-  BasicBlock* label_148 = BasicBlock::Create(mod->getContext(), "", func_query_group_by_template, 0);
-  BasicBlock* label___crit_edge_loopexit =
-      BasicBlock::Create(mod->getContext(), "._crit_edge.loopexit", func_query_group_by_template, 0);
-  BasicBlock* label___crit_edge_149 =
-      BasicBlock::Create(mod->getContext(), "._crit_edge", func_query_group_by_template, 0);
+  auto bb_entry = BasicBlock::Create(mod->getContext(), ".entry", query_func_ptr, 0);
+  auto bb_preheader = BasicBlock::Create(mod->getContext(), ".loop.preheader", query_func_ptr, 0);
+  auto bb_forbody = BasicBlock::Create(mod->getContext(), ".forbody", query_func_ptr, 0);
+  auto bb_crit_edge = BasicBlock::Create(mod->getContext(), "._crit_edge", query_func_ptr, 0);
+  auto bb_exit = BasicBlock::Create(mod->getContext(), ".exit", query_func_ptr, 0);
 
-  // Block  (label_146)
-  LoadInst* int64_150 = new LoadInst(ptr_row_count_ptr_144, "", false, label_146);
-  int64_150->setAlignment(8);
-  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "", false, label_146);
+  // Block  .entry
+  LoadInst* row_count = new LoadInst(row_count_ptr, "", false, bb_entry);
+  row_count->setAlignment(8);
+  LoadInst* frag_row_off = new LoadInst(frag_row_off_ptr, "", false, bb_entry);
   frag_row_off->setAlignment(8);
-  LoadInst* max_matched = new LoadInst(ptr_max_matched_ptr, "", false, label_146);
-  int64_150->setAlignment(8);
-  auto crt_matched_ptr = new AllocaInst(IntegerType::get(mod->getContext(), 64), "crt_matched", label_146);
-  new StoreInst(ConstantInt::get(IntegerType::get(mod->getContext(), 64), 0), crt_matched_ptr, false, label_146);
-  CallInst* int32_151 = CallInst::Create(func_pos_start, "", label_146);
-  int32_151->setCallingConv(CallingConv::C);
-  int32_151->setTailCall(true);
-  AttributeSet int32_151_PAL;
-  int32_151->setAttributes(int32_151_PAL);
+  LoadInst* max_matched = new LoadInst(max_matched_ptr, "", false, bb_entry);
+  max_matched->setAlignment(8);
+  auto crt_matched_ptr = new AllocaInst(i64_type, "crt_matched", bb_entry);
+  new StoreInst(ConstantInt::get(i64_type, 0), crt_matched_ptr, false, bb_entry);
+  CallInst* pos_start = CallInst::Create(func_pos_start, "", bb_entry);
+  pos_start->setCallingConv(CallingConv::C);
+  pos_start->setTailCall(true);
+  AttributeSet pos_start_pal;
+  pos_start->setAttributes(pos_start_pal);
 
-  CallInst* int32_152 = CallInst::Create(func_pos_step, "", label_146);
-  int32_152->setCallingConv(CallingConv::C);
-  int32_152->setTailCall(true);
-  AttributeSet int32_152_PAL;
-  int32_152->setAttributes(int32_152_PAL);
+  CallInst* pos_step = CallInst::Create(func_pos_step, "", bb_entry);
+  pos_step->setCallingConv(CallingConv::C);
+  pos_step->setTailCall(true);
+  AttributeSet pos_step_pal;
+  pos_step->setAttributes(pos_step_pal);
 
-  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "", label_146);
+  CallInst* group_buff_idx = CallInst::Create(func_group_buff_idx, "", bb_entry);
   group_buff_idx->setCallingConv(CallingConv::C);
   group_buff_idx->setTailCall(true);
-  AttributeSet group_buff_idx_PAL;
-  group_buff_idx->setAttributes(group_buff_idx_PAL);
+  AttributeSet group_buff_idx_pal;
+  group_buff_idx->setAttributes(group_buff_idx_pal);
 
-  CastInst* int64_153 = new SExtInst(int32_151, IntegerType::get(mod->getContext(), 64), "", label_146);
-  const PointerType* Ty = dyn_cast<PointerType>(ptr_group_by_buffers->getType());
+  CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
+  const PointerType* Ty = dyn_cast<PointerType>(group_by_buffers->getType());
   CHECK(Ty);
-  GetElementPtrInst* ptr_154 = GetElementPtrInst::Create(
+  GetElementPtrInst* group_by_buffers_gep = GetElementPtrInst::Create(
 #if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
       Ty->getArrayElementType(),
 #endif
-      ptr_group_by_buffers,
+      group_by_buffers,
       group_buff_idx,
       "",
-      label_146);
-  LoadInst* ptr_155 = new LoadInst(ptr_154, "", false, label_146);
-  ptr_155->setAlignment(8);
-  LoadInst* small_ptr_155{nullptr};
+      bb_entry);
+  LoadInst* col_buffer = new LoadInst(group_by_buffers_gep, "", false, bb_entry);
+  col_buffer->setAlignment(8);
+  LoadInst* small_buffer{nullptr};
   if (query_mem_desc.getSmallBufferSizeBytes()) {
-    auto small_ptr_154 = GetElementPtrInst::Create(
+    auto small_buffer_gep = GetElementPtrInst::Create(
 #if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
         Ty->getArrayElementType(),
 #endif
-        ptr_small_groups_buffer,
+        small_groups_buffer,
         group_buff_idx,
         "",
-        label_146);
-    small_ptr_155 = new LoadInst(small_ptr_154, "", false, label_146);
-    small_ptr_155->setAlignment(8);
+        bb_entry);
+    small_buffer = new LoadInst(small_buffer_gep, "", false, bb_entry);
+    small_buffer->setAlignment(8);
   }
   CallInst::Create(
       func_init_group_by_buffer,
       std::vector<llvm::Value*>{
-          ptr_155,
-          ptr_agg_init_val_145,
+          col_buffer,
+          agg_init_val,
           ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.entry_count),
           ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.group_col_widths.size()),
           ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.agg_col_widths.size()),
       },
       "",
-      label_146);
+      bb_entry);
   auto shared_mem_bytes_lv =
-      ConstantInt::get(IntegerType::get(mod->getContext(), 32), query_mem_desc.sharedMemBytes(device_type));
-  auto ptr_156 =
-      CallInst::Create(func_init_shared_mem, std::vector<llvm::Value*>{ptr_155, shared_mem_bytes_lv}, "", label_146);
-  ICmpInst* int1_156 = new ICmpInst(*label_146, ICmpInst::ICMP_SLT, int64_153, int64_150, "");
-  BranchInst::Create(label__lr_ph_147, label___crit_edge_149, int1_156, label_146);
+      ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
+  auto result_buffer =
+      CallInst::Create(func_init_shared_mem, std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv}, "", bb_entry);
+  ICmpInst* enter_or_not = new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
+  BranchInst::Create(bb_preheader, bb_exit, enter_or_not, bb_entry);
 
-  // Block .lr.ph (label__lr_ph_147)
-  CastInst* int64_158 = new SExtInst(int32_152, IntegerType::get(mod->getContext(), 64), "", label__lr_ph_147);
-  BranchInst::Create(label_148, label__lr_ph_147);
+  // Block .loop.preheader
+  CastInst* pos_step_i64 = new SExtInst(pos_step, i64_type, "", bb_preheader);
+  BranchInst::Create(bb_forbody, bb_preheader);
 
-  // Block  (label_148)
-  Argument* fwdref_161 = new Argument(IntegerType::get(mod->getContext(), 64));
-  PHINode* int64_pos_01_160 = PHINode::Create(IntegerType::get(mod->getContext(), 64), 2, "pos.01", label_148);
-  int64_pos_01_160->addIncoming(int64_153, label__lr_ph_147);
-  int64_pos_01_160->addIncoming(fwdref_161, label_148);
+  // Block .forbody
+  Argument* pos_pre = new Argument(i64_type);
+  PHINode* pos = PHINode::Create(i64_type, 2, "pos", bb_forbody);
+  pos->addIncoming(pos_start_i64, bb_preheader);
+  pos->addIncoming(pos_pre, bb_forbody);
 
-  std::vector<Value*> void_162_params;
-  void_162_params.push_back(ptr_156);
+  std::vector<Value*> row_process_params;
+  row_process_params.push_back(result_buffer);
   if (query_mem_desc.getSmallBufferSizeBytes()) {
-    void_162_params.push_back(small_ptr_155);
+    row_process_params.push_back(small_buffer);
   } else {
-    void_162_params.push_back(Constant::getNullValue(PointerTy_6));
+    row_process_params.push_back(Constant::getNullValue(pi64_type));
   }
-  void_162_params.push_back(crt_matched_ptr);
-  void_162_params.push_back(ptr_agg_init_val_145);
-  void_162_params.push_back(int64_pos_01_160);
-  void_162_params.push_back(frag_row_off);
-  void_162_params.push_back(ptr_row_count_ptr_144);
+  row_process_params.push_back(crt_matched_ptr);
+  row_process_params.push_back(agg_init_val);
+  row_process_params.push_back(pos);
+  row_process_params.push_back(frag_row_off);
+  row_process_params.push_back(row_count_ptr);
   if (hoist_literals) {
     CHECK(literals);
-    void_162_params.push_back(literals);
+    row_process_params.push_back(literals);
   }
-  CallInst* void_162 = CallInst::Create(func_row_process, void_162_params, "", label_148);
-  void_162->setCallingConv(CallingConv::C);
-  void_162->setTailCall(true);
-  AttributeSet void_162_PAL;
-  void_162->setAttributes(void_162_PAL);
+  CallInst* row_process = CallInst::Create(func_row_process, row_process_params, "", bb_forbody);
+  row_process->setCallingConv(CallingConv::C);
+  row_process->setTailCall(true);
+  AttributeSet row_process_pal;
+  row_process->setAttributes(row_process_pal);
 
-  BinaryOperator* int64_163 = BinaryOperator::Create(Instruction::Add, int64_pos_01_160, int64_158, "", label_148);
-  ICmpInst* int1_164 = new ICmpInst(*label_148, ICmpInst::ICMP_SLT, int64_163, int64_150, "");
+  BinaryOperator* pos_inc = BinaryOperator::Create(Instruction::Add, pos, pos_step_i64, "", bb_forbody);
+  ICmpInst* loop_or_exit = new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {
     ICmpInst* limit_not_reached = new ICmpInst(
-        *label_148, ICmpInst::ICMP_SLT, new LoadInst(crt_matched_ptr, "", false, label_148), max_matched, "");
-    BranchInst::Create(label_148,
-                       label___crit_edge_loopexit,
-                       BinaryOperator::Create(BinaryOperator::And, int1_164, limit_not_reached, "", label_148),
-                       label_148);
+        *bb_forbody, ICmpInst::ICMP_SLT, new LoadInst(crt_matched_ptr, "", false, bb_forbody), max_matched, "");
+    BranchInst::Create(bb_forbody,
+                       bb_crit_edge,
+                       BinaryOperator::Create(BinaryOperator::And, loop_or_exit, limit_not_reached, "", bb_forbody),
+                       bb_forbody);
   } else {
-    BranchInst::Create(label_148, label___crit_edge_loopexit, int1_164, label_148);
+    BranchInst::Create(bb_forbody, bb_crit_edge, loop_or_exit, bb_forbody);
   }
 
-  // Block ._crit_edge.loopexit (label___crit_edge_loopexit)
-  BranchInst::Create(label___crit_edge_149, label___crit_edge_loopexit);
+  // Block ._crit_edge
+  BranchInst::Create(bb_exit, bb_crit_edge);
 
-  // Block ._crit_edge (label___crit_edge_149)
+  // Block .exit
   CallInst::Create(
-      func_write_back, std::vector<Value*>{ptr_155, ptr_156, shared_mem_bytes_lv}, "", label___crit_edge_149);
-  ReturnInst::Create(mod->getContext(), label___crit_edge_149);
+      func_write_back, std::vector<Value*>{col_buffer, result_buffer, shared_mem_bytes_lv}, "", bb_exit);
+  ReturnInst::Create(mod->getContext(), bb_exit);
 
   // Resolve Forward References
-  fwdref_161->replaceAllUsesWith(int64_163);
-  delete fwdref_161;
+  pos_pre->replaceAllUsesWith(pos_inc);
+  delete pos_pre;
 
-  if (verifyFunction(*func_query_group_by_template)) {
+  if (verifyFunction(*query_func_ptr)) {
     LOG(FATAL) << "Generated invalid code. ";
   }
 
-  return func_query_group_by_template;
+  return query_func_ptr;
 }
 
 std::string unique_name(const char* base_name, const bool is_nested) {
