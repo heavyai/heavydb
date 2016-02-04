@@ -100,13 +100,11 @@ llvm::Function* init_group_by_buffer(llvm::Module* mod) {
 
   std::vector<Type*> func_args{pi64_type, pi64_type, i32_type, i32_type, i32_type};
 
-  auto func_type =
-      FunctionType::get(Type::getVoidTy(mod->getContext()), func_args, false);
+  auto func_type = FunctionType::get(Type::getVoidTy(mod->getContext()), func_args, false);
 
   auto func_ptr = mod->getFunction("init_group_by_buffer");
   if (!func_ptr) {
-    func_ptr =
-        Function::Create(func_type, GlobalValue::ExternalLinkage, "init_group_by_buffer", mod);
+    func_ptr = Function::Create(func_type, GlobalValue::ExternalLinkage, "init_group_by_buffer", mod);
     func_ptr->setCallingConv(CallingConv::C);
   }
 
@@ -138,13 +136,12 @@ llvm::Function* row_process(llvm::Module* mod,
   auto i32_type = IntegerType::get(mod->getContext(), 32);
   auto i64_type = IntegerType::get(mod->getContext(), 64);
   auto pi64_type = PointerType::get(i64_type, 0);
-  
 
   if (aggr_col_count) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
       func_args.push_back(pi64_type);
     }
-  } else {                                 // group by query
+  } else {                           // group by query
     func_args.push_back(pi64_type);  // groups buffer
     func_args.push_back(pi64_type);  // small groups buffer
     func_args.push_back(pi64_type);  // max matched
@@ -558,7 +555,8 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   byte_stream->setName("byte_stream");
   Value* literals{nullptr};
   if (hoist_literals) {
-    literals = ++query_arg_it;;
+    literals = ++query_arg_it;
+    ;
     literals->setName("literals");
   }
   Value* row_count_ptr = ++query_arg_it;
@@ -650,8 +648,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
       },
       "",
       bb_entry);
-  auto shared_mem_bytes_lv =
-      ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
+  auto shared_mem_bytes_lv = ConstantInt::get(i32_type, query_mem_desc.sharedMemBytes(device_type));
   auto result_buffer =
       CallInst::Create(func_init_shared_mem, std::vector<llvm::Value*>{col_buffer, shared_mem_bytes_lv}, "", bb_entry);
   ICmpInst* enter_or_not = new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
@@ -706,8 +703,7 @@ llvm::Function* query_group_by_template(llvm::Module* mod,
   BranchInst::Create(bb_exit, bb_crit_edge);
 
   // Block .exit
-  CallInst::Create(
-      func_write_back, std::vector<Value*>{col_buffer, result_buffer, shared_mem_bytes_lv}, "", bb_exit);
+  CallInst::Create(func_write_back, std::vector<Value*>{col_buffer, result_buffer, shared_mem_bytes_lv}, "", bb_exit);
   ReturnInst::Create(mod->getContext(), bb_exit);
 
   // Resolve Forward References
