@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/http/pprof"
 	"net/url"
 	"os"
 	"os/user"
@@ -33,6 +34,8 @@ var (
 	readOnly   bool
 	quiet      bool
 	roundRobin bool
+	profile    bool
+	compress   bool
 )
 
 var (
@@ -70,7 +73,11 @@ func init() {
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
 	pflag.BoolP("quiet", "q", false, "suppress non-error messages")
 	pflag.Bool("round-robin", false, "round-robin between backend urls")
+	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
+	pflag.Bool("compress", false, "enable gzip compression")
 	pflag.CommandLine.MarkHidden("round-robin")
+	pflag.CommandLine.MarkHidden("compress")
+	pflag.CommandLine.MarkHidden("profile")
 
 	pflag.Parse()
 
@@ -78,6 +85,8 @@ func init() {
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
 	viper.BindPFlag("web.round-robin", pflag.CommandLine.Lookup("round-robin"))
+	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
+	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
@@ -112,6 +121,8 @@ func init() {
 	dataDir = viper.GetString("data")
 	readOnly = viper.GetBool("read-only")
 	quiet = viper.GetBool("quiet")
+	profile = viper.GetBool("web.profile")
+	compress = viper.GetBool("web.compress")
 
 	if backendUrl == "" {
 		backendUrl = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
@@ -333,10 +344,20 @@ func main() {
 	mux.HandleFunc("/servers.json", serversHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
+	if profile {
+		mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
+		mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
+		mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
+		mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+	}
+
 	lmux := handlers.LoggingHandler(alog, mux)
 	cmux := handlers.CORS()(lmux)
+	if compress {
+		cmux = handlers.CompressHandler(cmux)
+	}
 	err = http.ListenAndServe(":"+strconv.Itoa(port), cmux)
 	if err != nil {
-		log.Fatal("Error listening: ", err)
+		log.Fatal("Error starting http server: ", err)
 	}
 }
