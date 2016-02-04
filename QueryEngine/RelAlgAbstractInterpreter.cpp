@@ -203,10 +203,11 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   return outputs;
 }
 
-const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RelAlgNode* ra_output) {
+const RexScalar* disambiguate_rex(const RexScalar* rex_scalar, const RANodeOutput& ra_output) {
   const auto rex_abstract_input = dynamic_cast<const RexAbstractInput*>(rex_scalar);
   if (rex_abstract_input) {
-    return new RexInput(ra_output, rex_abstract_input->getIndex());
+    CHECK_LT(static_cast<size_t>(rex_abstract_input->getIndex()), ra_output.size());
+    return new RexInput(ra_output[rex_abstract_input->getIndex()]);
   }
   const auto rex_operator = dynamic_cast<const RexOperator*>(rex_scalar);
   if (rex_operator) {
@@ -226,7 +227,8 @@ void bind_inputs(const std::vector<RelAlgNode*>& nodes) {
     auto filter_node = dynamic_cast<RelFilter*>(ra_node);
     if (filter_node) {
       CHECK_EQ(size_t(1), filter_node->inputCount());
-      const auto disambiguated_condition = disambiguate_rex(filter_node->getCondition(), filter_node->getInput(0));
+      const auto disambiguated_condition =
+          disambiguate_rex(filter_node->getCondition(), get_node_output(filter_node->getInput(0)));
       filter_node->setCondition(disambiguated_condition);
       continue;
     }
