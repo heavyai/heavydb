@@ -1,6 +1,8 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
+
 #include "../Analyzer/Analyzer.h"
+#include "../Parser/ParserNode.h"
 
 #include <glog/logging.h>
 
@@ -548,6 +550,67 @@ std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast
 
 namespace {
 
+SQLTypeInfo build_adjusted_type_info(const SQLTypes sql_type, const int type_scale, const int type_precision) {
+  SQLTypeInfo type_ti(sql_type, 0, 0, false);
+  type_ti.set_scale(type_scale);
+  type_ti.set_precision(type_precision);
+  if (type_ti.is_number() && !type_scale) {
+    switch (type_precision) {
+      case 5:
+        return SQLTypeInfo(kSMALLINT, false);
+      case 10:
+        return SQLTypeInfo(kINT, false);
+      case 19:
+        return SQLTypeInfo(kBIGINT, false);
+      default:
+        CHECK(false);
+    }
+  }
+  return type_ti;
+}
+
+SQLTypeInfo build_type_info(const SQLTypes sql_type, const int scale, const int precision) {
+  SQLTypeInfo ti(sql_type, 0, 0, false);
+  ti.set_scale(scale);
+  ti.set_precision(precision);
+  return ti;
+}
+
+std::shared_ptr<Analyzer::Expr> translate_literal(const RexLiteral* rex_literal) {
+  const auto lit_ti = build_type_info(rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
+  const auto target_ti =
+      build_adjusted_type_info(rex_literal->getType(), rex_literal->getTypeScale(), rex_literal->getTypePrecision());
+  switch (rex_literal->getType()) {
+    case kDECIMAL: {
+      const auto val = rex_literal->getVal<int64_t>();
+      const int precision = rex_literal->getPrecision();
+      const int scale = rex_literal->getScale();
+      auto lit_expr =
+          scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision) : Parser::IntLiteral::analyzeValue(val);
+      return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+    }
+    case kTEXT: {
+      return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
+    }
+    case kBOOLEAN: {
+      Datum d;
+      d.boolval = rex_literal->getVal<bool>();
+      return makeExpr<Analyzer::Constant>(kBOOLEAN, false, d);
+    }
+    case kDOUBLE: {
+      Datum d;
+      d.doubleval = rex_literal->getVal<double>();
+      auto lit_expr = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+      return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+    }
+    case kNULLT: {
+      return makeExpr<Analyzer::Constant>(kNULLT, true);
+    }
+    default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
+  }
+  return nullptr;
+}
+
 std::shared_ptr<const Analyzer::Expr> translate_input(const RexInput* rex_input,
                                                       const int rte_idx,
                                                       const Catalog_Namespace::Catalog& cat) {
@@ -574,6 +637,10 @@ std::shared_ptr<const Analyzer::Expr> translate_rex(const RexScalar* rex,
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
     return translate_input(rex_input, rte_idx, cat);
+  }
+  const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
+  if (rex_literal) {
+    return translate_literal(rex_literal);
   }
   CHECK(false);
   return nullptr;

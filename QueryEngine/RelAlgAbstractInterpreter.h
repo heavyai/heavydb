@@ -93,6 +93,23 @@ class RexLiteral : public RexScalar {
 
   RexLiteral() : literal_(nullptr), type_(kNULLT), scale_(0), precision_(0), type_scale_(0), type_precision_(0) {}
 
+  template <class T>
+  T getVal() const {
+    const auto ptr = boost::get<T>(&literal_);
+    CHECK(ptr);
+    return *ptr;
+  }
+
+  SQLTypes getType() const { return type_; }
+
+  unsigned getScale() const { return scale_; }
+
+  unsigned getPrecision() const { return precision_; }
+
+  unsigned getTypeScale() const { return type_scale_; }
+
+  unsigned getTypePrecision() const { return type_precision_; }
+
  private:
   const boost::variant<int64_t, double, std::string, bool, void*> literal_;
   const SQLTypes type_;
