@@ -10,19 +10,6 @@
 
 #include <memory>
 
-class ScanScope {
-  // TODO
-};
-
-class ScanBufferDesc {
- public:
-  ScanBufferDesc();                           // for results of other queries
-  ScanBufferDesc(const TableDescriptor* td);  // for tables
-
- private:
-  const TableDescriptor* td_;
-};
-
 class Rex {
  public:
   virtual ~Rex(){};

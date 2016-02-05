@@ -6,13 +6,6 @@
 #include <string>
 #include <unordered_map>
 
-ScanBufferDesc::ScanBufferDesc() : td_(nullptr) {
-}
-
-ScanBufferDesc::ScanBufferDesc(const TableDescriptor* td) : td_(td) {
-  CHECK(td_);
-}
-
 namespace {
 
 // Checked json field retrieval.
