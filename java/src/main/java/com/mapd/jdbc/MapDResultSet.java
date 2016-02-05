@@ -56,6 +56,12 @@ class MapDResultSet implements java.sql.ResultSet {
     rowSet = sqlResult.getRow_set();
     rowDesc = rowSet.getRow_desc();
 
+    // in the case of a create (maybe insert) nothing is returned in these field
+    if (rowDesc.isEmpty()){
+      numOfRecords = 0;
+      return;
+    }
+
     rowDesc.get(0).getCol_name();
 
     columnMap = new HashMap();
