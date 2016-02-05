@@ -611,9 +611,9 @@ std::shared_ptr<Analyzer::Expr> translate_literal(const RexLiteral* rex_literal)
   return nullptr;
 }
 
-std::shared_ptr<const Analyzer::Expr> translate_input(const RexInput* rex_input,
-                                                      const int rte_idx,
-                                                      const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> translate_input(const RexInput* rex_input,
+                                                const int rte_idx,
+                                                const Catalog_Namespace::Catalog& cat) {
   const auto source = rex_input->getSourceNode();
   const auto scan_source = dynamic_cast<const RelScan*>(source);
   if (scan_source) {
@@ -629,11 +629,33 @@ std::shared_ptr<const Analyzer::Expr> translate_input(const RexInput* rex_input,
   return nullptr;
 }
 
+std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
+  const auto cast_expr = std::dynamic_pointer_cast<const Analyzer::UOper>(expr);
+  return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
+}
+
+std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
+                                               const int rte_idx,
+                                               const Catalog_Namespace::Catalog& cat) {
+  CHECK_GT(rex_operator->size(), size_t(0));
+  const auto sql_op = rex_operator->getOperator();
+  auto lhs = translate_rex(rex_operator->getOperand(0), rte_idx, cat);
+  for (size_t i = 1; i < rex_operator->size(); ++i) {
+    auto rhs = translate_rex(rex_operator->getOperand(i), rte_idx, cat);
+    if (sql_op == kEQ || sql_op == kNE) {
+      lhs = remove_cast(lhs);
+      rhs = remove_cast(rhs);
+    }
+    lhs = Parser::OperExpr::normalize(sql_op, kONE, lhs, rhs);
+  }
+  return lhs;
+}
+
 }  // namespace
 
-std::shared_ptr<const Analyzer::Expr> translate_rex(const RexScalar* rex,
-                                                    const int rte_idx,
-                                                    const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> translate_rex(const RexScalar* rex,
+                                              const int rte_idx,
+                                              const Catalog_Namespace::Catalog& cat) {
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
     return translate_input(rex_input, rte_idx, cat);
@@ -641,6 +663,10 @@ std::shared_ptr<const Analyzer::Expr> translate_rex(const RexScalar* rex,
   const auto rex_literal = dynamic_cast<const RexLiteral*>(rex);
   if (rex_literal) {
     return translate_literal(rex_literal);
+  }
+  const auto rex_operator = dynamic_cast<const RexOperator*>(rex);
+  if (rex_operator) {
+    return translate_oper(rex_operator, rte_idx, cat);
   }
   CHECK(false);
   return nullptr;

@@ -410,6 +410,8 @@ class Expr;
 
 }  // namespace Analyzer
 
-std::shared_ptr<const Analyzer::Expr> translate_rex(const RexScalar*);
+std::shared_ptr<Analyzer::Expr> translate_rex(const RexScalar* rex,
+                                              const int rte_idx,
+                                              const Catalog_Namespace::Catalog& cat);
 
 #endif  // QUERYENGINE_RELALGABSTRACTINTERPRETER_H
