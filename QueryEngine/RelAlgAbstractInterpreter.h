@@ -141,6 +141,20 @@ class RexOperator : public RexScalar {
   std::vector<std::unique_ptr<const RexScalar>> operands_;
 };
 
+class RexCast : public RexOperator {
+ public:
+  RexCast(const RexScalar* operand, const SQLTypes target_type, const bool nullable)
+      : RexOperator(kCAST, {operand}), target_type_(target_type), nullable_(nullable) {}
+
+  SQLTypes getTargetType() const { return target_type_; }
+
+  bool getNullable() const { return nullable_; }
+
+ private:
+  SQLTypes target_type_;
+  const bool nullable_;
+};
+
 class RelAlgNode;
 
 // The actual input node understood by the Executor.

@@ -634,10 +634,52 @@ std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr
   return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
 }
 
+std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
+                                                const int rte_idx,
+                                                const Catalog_Namespace::Catalog& cat) {
+  CHECK_EQ(size_t(1), rex_operator->size());
+  const auto operand_expr = translate_rex(rex_operator->getOperand(0), rte_idx, cat);
+  const auto sql_op = rex_operator->getOperator();
+  switch (sql_op) {
+    case kCAST: {
+      const auto rex_cast = dynamic_cast<const RexCast*>(rex_operator);
+      CHECK(rex_cast);
+      SQLTypeInfo target_ti(rex_cast->getTargetType(), !rex_cast->getNullable());
+      if (target_ti.is_time()) {  // TODO(alex): check and unify with the rest of the cases
+        return operand_expr->add_cast(target_ti);
+      }
+      return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
+    }
+    case kNOT:
+    case kISNULL: {
+      return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
+    }
+    case kISNOTNULL: {
+      auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
+      return std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
+    }
+    case kMINUS: {
+      const auto& ti = operand_expr->get_type_info();
+      return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
+    }
+    case kUNNEST: {
+      const auto& ti = operand_expr->get_type_info();
+      CHECK(ti.is_array());
+      return makeExpr<Analyzer::UOper>(ti.get_elem_type(), false, kUNNEST, operand_expr);
+    }
+    default:
+      CHECK(false);
+  }
+  return nullptr;
+}
+
 std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
                                                const int rte_idx,
                                                const Catalog_Namespace::Catalog& cat) {
   CHECK_GT(rex_operator->size(), size_t(0));
+  if (rex_operator->size() == 1) {
+    return translate_uoper(rex_operator, rte_idx, cat);
+  }
   const auto sql_op = rex_operator->getOperator();
   auto lhs = translate_rex(rex_operator->getOperand(0), rte_idx, cat);
   for (size_t i = 1; i < rex_operator->size(); ++i) {
