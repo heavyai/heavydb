@@ -1,5 +1,6 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
+#include "../Analyzer/Analyzer.h"
 
 #include <glog/logging.h>
 
@@ -543,5 +544,38 @@ std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast
                                                const Catalog_Namespace::Catalog& cat) {
   RaAbstractInterp interp(query_ast, cat);
   return interp.run();
+}
+
+namespace {
+
+std::shared_ptr<const Analyzer::Expr> translate_input(const RexInput* rex_input,
+                                                      const int rte_idx,
+                                                      const Catalog_Namespace::Catalog& cat) {
+  const auto source = rex_input->getSourceNode();
+  const auto scan_source = dynamic_cast<const RelScan*>(source);
+  if (scan_source) {
+    const auto& field_names = scan_source->getFieldNames();
+    CHECK_LT(static_cast<size_t>(rex_input->getIndex()), field_names.size());
+    const auto& col_name = field_names[rex_input->getIndex()];
+    const auto table_desc = scan_source->getTableDescriptor();
+    const auto cd = cat.getMetadataForColumn(table_desc->tableId, col_name);
+    CHECK(cd);
+    return std::make_shared<Analyzer::ColumnVar>(cd->columnType, table_desc->tableId, cd->columnId, rte_idx);
+  }
+  CHECK(false);
+  return nullptr;
+}
+
+}  // namespace
+
+std::shared_ptr<const Analyzer::Expr> translate_rex(const RexScalar* rex,
+                                                    const int rte_idx,
+                                                    const Catalog_Namespace::Catalog& cat) {
+  const auto rex_input = dynamic_cast<const RexInput*>(rex);
+  if (rex_input) {
+    return translate_input(rex_input, rte_idx, cat);
+  }
+  CHECK(false);
+  return nullptr;
 }
 #endif  // HAVE_CALCITE

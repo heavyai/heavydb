@@ -132,6 +132,8 @@ class RexInput : public RexAbstractInput {
  public:
   RexInput(const RelAlgNode* node, const unsigned in_index) : RexAbstractInput(in_index), node_(node) {}
 
+  const RelAlgNode* getSourceNode() const { return node_; }
+
  private:
   const RelAlgNode* node_;
 };
@@ -193,6 +195,10 @@ class RelScan : public RelAlgNode {
       : td_(td), field_names_(field_names) {}
 
   size_t size() const { return field_names_.size(); }
+
+  const TableDescriptor* getTableDescriptor() const { return td_; }
+
+  const std::vector<std::string>& getFieldNames() const { return field_names_; }
 
  private:
   const TableDescriptor* td_;
@@ -380,5 +386,13 @@ class RelSort : public RelAlgNode {
 };
 
 std::unique_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value&, const Catalog_Namespace::Catalog&);
+
+namespace Analyzer {
+
+class Expr;
+
+}  // namespace Analyzer
+
+std::shared_ptr<const Analyzer::Expr> translate_rex(const RexScalar*);
 
 #endif  // QUERYENGINE_RELALGABSTRACTINTERPRETER_H
