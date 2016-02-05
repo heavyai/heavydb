@@ -134,6 +134,7 @@ bool thrift_with_retry(ThriftService which_service, ClientContext& context, char
 }
 
 #define LOAD_PATCH_SIZE 10000
+
 void copy_table(char* filepath, char* table, ClientContext& context) {
   if (context.session == INVALID_SESSION_ID) {
     std::cerr << "Not connected to any databases." << std::endl;
@@ -177,7 +178,7 @@ void copy_table(char* filepath, char* table, ClientContext& context) {
         std::cout << p.str_val << ", ";
       }
       std::cout << std::endl;
-      */
+       */
       if (row.cols.size() != table_desc.size()) {
         std::cerr << "Incorrect number of columns: (" << row.cols.size() << " vs " << table_desc.size() << ") " << line
                   << std::endl;
@@ -525,13 +526,16 @@ int main(int argc, char** argv) {
   /* default to multi-line mode */
   linenoiseSetMultiLine(1);
 
+  std::string current_line;
+  std::string prompt("mapdql> ");
+
   /* Now this is the main loop of the typical linenoise-based application.
    * The call to linenoise() will block as long as the user types something
    * and presses enter.
    *
    * The typed string is returned as a malloc() allocated string by
    * linenoise, so the user needs to free() it. */
-  while ((line = linenoise("mapd> ")) != NULL) {
+  while ((line = linenoise(prompt.c_str())) != NULL) {
     {
       TQueryResult empty;
       swap(_return, empty);
@@ -545,42 +549,54 @@ int main(int argc, char** argv) {
         std::cerr << "Not connected to any MapD databases." << std::endl;
         continue;
       }
-      if (thrift_with_retry(kSQL, context, line)) {
-        if (context.query_return.row_set.row_desc.empty()) {
-          continue;
-        }
-        const size_t row_count{get_row_count(context.query_return)};
-        if (!row_count) {
-          continue;
-        }
-        bool not_first = false;
-        if (print_header) {
-          for (auto p : context.query_return.row_set.row_desc) {
-            if (not_first)
-              std::cout << delimiter;
-            else
-              not_first = true;
-            std::cout << p.col_name;
+      current_line.append(" ").append(std::string(line));
+      if (current_line.back() == ';') {
+        std::vector<char> writable(current_line.begin(), current_line.end());
+        writable.push_back('\0');
+        if (thrift_with_retry(kSQL, context, &writable[0])) {
+          if (context.query_return.row_set.row_desc.empty()) {
+            continue;
           }
-          std::cout << std::endl;
-        }
-        for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
-          const auto& col_desc = context.query_return.row_set.row_desc;
-          for (size_t col_idx = 0; col_idx < col_desc.size(); ++col_idx) {
-            if (col_idx) {
-              std::cout << delimiter;
+          const size_t row_count{get_row_count(context.query_return)};
+          if (!row_count) {
+            continue;
+          }
+          bool not_first = false;
+          if (print_header) {
+            for (auto p : context.query_return.row_set.row_desc) {
+              if (not_first)
+                std::cout << delimiter;
+              else
+                not_first = true;
+              std::cout << p.col_name;
             }
-            const auto& col_type = col_desc[col_idx].col_type;
-            std::cout << datum_to_string(
-                columnar_val_to_datum(context.query_return.row_set.columns[col_idx], row_idx, col_type), col_type);
+            std::cout << std::endl;
           }
-          std::cout << std::endl;
+          for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+            const auto& col_desc = context.query_return.row_set.row_desc;
+            for (size_t col_idx = 0; col_idx < col_desc.size(); ++col_idx) {
+              if (col_idx) {
+                std::cout << delimiter;
+              }
+              const auto& col_type = col_desc[col_idx].col_type;
+              std::cout << datum_to_string(
+                  columnar_val_to_datum(context.query_return.row_set.columns[col_idx], row_idx, col_type), col_type);
+            }
+            std::cout << std::endl;
+          }
+          if (print_timing) {
+            std::cout << row_count << " rows returned." << std::endl;
+            std::cout << "Execution time: " << context.query_return.execution_time_ms << " ms,"
+                      << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
+          }
         }
-        if (print_timing) {
-          std::cout << row_count << " rows returned." << std::endl;
-          std::cout << "Execution time: " << context.query_return.execution_time_ms << " ms,"
-                    << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
-        }
+        // reset current_line
+        current_line.assign("");
+        prompt.assign("mapdql> ");
+
+      } else {
+        // change the prommpt
+        prompt.assign("..> ");
       }
     } else if (!strncmp(line, "\\cpu", 4)) {
       context.execution_mode = TExecuteMode::CPU;
