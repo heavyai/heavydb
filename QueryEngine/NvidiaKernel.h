@@ -1,22 +1,20 @@
 #ifndef QUERYENGINE_NVIDIAKERNELLAUNCH_H
 #define QUERYENGINE_NVIDIAKERNELLAUNCH_H
 
+#include "../CudaMgr/CudaMgr.h"
+
 #include <cuda.h>
 #include <string>
 #include <vector>
 
-#ifdef HAVE_CUDA
-namespace {
-void fill_options(std::vector<CUjit_option>& option_keys,
-                  std::vector<void*>& option_values,
-                  const unsigned block_size_x) {
-  option_keys.push_back(CU_JIT_LOG_VERBOSE);
-  option_values.push_back(reinterpret_cast<void*>(1));
-  option_keys.push_back(CU_JIT_THREADS_PER_BLOCK);
-  option_values.push_back(reinterpret_cast<void*>(block_size_x));
-}
-}
-#endif
+struct CubinResult {
+  void* cubin;
+  std::vector<CUjit_option> option_keys;
+  std::vector<void*> option_values;
+  CUlinkState link_state;
+};
+
+CubinResult ptx_to_cubin(const std::string& ptx, const unsigned block_size, const CudaMgr_Namespace::CudaMgr* cuda_mgr);
 
 class GpuCompilationContext {
  public:
