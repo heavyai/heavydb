@@ -5,6 +5,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <glog/logging.h>
 
+#ifdef HAVE_CUDA
 namespace {
 
 void fill_options(std::vector<CUjit_option>& option_keys,
@@ -61,6 +62,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   CHECK_GT(cubinSize, size_t(0));
   return {cubin, option_keys, option_values, link_state};
 }
+#endif
 
 GpuCompilationContext::GpuCompilationContext(const void* image,
                                              const std::string& kernel_name,
