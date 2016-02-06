@@ -13,6 +13,7 @@
 #include <iostream>
 #include <fstream>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/tokenizer.hpp>
@@ -78,7 +79,7 @@ enum ThriftService {
 
 namespace {
 
-bool thrift_with_retry(ThriftService which_service, ClientContext& context, char* arg) {
+bool thrift_with_retry(ThriftService which_service, ClientContext& context, const char* arg) {
   try {
     switch (which_service) {
       case kCONNECT:
@@ -550,10 +551,12 @@ int main(int argc, char** argv) {
         continue;
       }
       current_line.append(" ").append(std::string(line));
+      boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
-        std::vector<char> writable(current_line.begin(), current_line.end());
-        writable.push_back('\0');
-        if (thrift_with_retry(kSQL, context, &writable[0])) {
+        std::string query(current_line);
+        current_line.clear();
+        prompt.assign("mapdql> ");
+        if (thrift_with_retry(kSQL, context, query.c_str())) {
           if (context.query_return.row_set.row_desc.empty()) {
             continue;
           }
@@ -590,10 +593,6 @@ int main(int argc, char** argv) {
                       << " Total time: " << context.query_return.total_time_ms << " ms" << std::endl;
           }
         }
-        // reset current_line
-        current_line.assign("");
-        prompt.assign("mapdql> ");
-
       } else {
         // change the prommpt
         prompt.assign("..> ");
