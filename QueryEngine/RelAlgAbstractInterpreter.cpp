@@ -118,7 +118,8 @@ RexAgg* parse_aggregate_expr(const rapidjson::Value& expr) {
   const auto type = to_sql_type(json_str(field(type_json, "type")));
   const auto nullable = json_bool(field(type_json, "nullable"));
   const auto operands = indices_from_json_array(field(expr, "operands"));
-  return new RexAgg(agg, distinct, type, nullable, operands);
+  CHECK_LE(operands.size(), size_t(1));
+  return new RexAgg(agg, distinct, type, nullable, operands.empty() ? -1 : operands[0]);
 }
 
 RexScalar* parse_scalar_expr(const rapidjson::Value& expr) {

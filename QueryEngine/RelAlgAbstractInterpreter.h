@@ -12,7 +12,7 @@
 
 class Rex {
  public:
-  virtual ~Rex(){};
+  virtual std::string toString() const = 0;
 };
 
 class RexScalar : public Rex {};
@@ -24,6 +24,8 @@ class RexAbstractInput : public RexScalar {
   RexAbstractInput(const unsigned in_index) : in_index_(in_index) {}
 
   unsigned getIndex() const { return in_index_; }
+
+  std::string toString() const { return "(RexAbstractInput " + std::to_string(in_index_) + ")"; }
 
  private:
   unsigned in_index_;
@@ -110,6 +112,8 @@ class RexLiteral : public RexScalar {
 
   unsigned getTypePrecision() const { return type_precision_; }
 
+  std::string toString() const { return "(RexLiteral " + boost::lexical_cast<std::string>(literal_) + ")"; }
+
  private:
   const boost::variant<int64_t, double, std::string, bool, void*> literal_;
   const SQLTypes type_;
@@ -136,6 +140,14 @@ class RexOperator : public RexScalar {
 
   SQLOps getOperator() const { return op_; }
 
+  std::string toString() const {
+    std::string result = "(RexOperator " + std::to_string(op_);
+    for (const auto& operand : operands_) {
+      result += operand->toString();
+    }
+    return result + ")";
+  };
+
  private:
   const SQLOps op_;
   std::vector<std::unique_ptr<const RexScalar>> operands_;
@@ -149,6 +161,10 @@ class RexCast : public RexOperator {
   SQLTypes getTargetType() const { return target_type_; }
 
   bool getNullable() const { return nullable_; }
+
+  std::string toString() const {
+    return "(RexCast " + getOperand(0)->toString() + " to " + std::to_string(target_type_) + ")";
+  }
 
  private:
   SQLTypes target_type_;
@@ -165,25 +181,32 @@ class RexInput : public RexAbstractInput {
 
   const RelAlgNode* getSourceNode() const { return node_; }
 
+  std::string toString() const {
+    return "(RexInput " + std::to_string(getIndex()) + " " + std::to_string(reinterpret_cast<const uint64_t>(node_)) +
+           ")";
+  }
+
  private:
   const RelAlgNode* node_;
 };
 
 class RexAgg : public Rex {
  public:
-  RexAgg(const SQLAgg agg,
-         const bool distinct,
-         const SQLTypes type,
-         const bool nullable,
-         const std::vector<size_t> operands)
-      : agg_(agg), distinct_(distinct), type_(type), nullable_(nullable), operands_(operands){};
+  RexAgg(const SQLAgg agg, const bool distinct, const SQLTypes type, const bool nullable, const ssize_t operand)
+      : agg_(agg), distinct_(distinct), type_(type), nullable_(nullable), operand_(operand){};
+
+  std::string toString() const {
+    return "(RexAgg " + std::to_string(agg_) + " " + std::to_string(distinct_) + " " +
+           std::to_string(static_cast<int>(type_)) + " " + std::to_string(static_cast<int>(nullable_)) + " " +
+           std::to_string(operand_) + ")";
+  }
 
  private:
   const SQLAgg agg_;
   const bool distinct_;
   const SQLTypes type_;
   const bool nullable_;
-  const std::vector<size_t> operands_;
+  const ssize_t operand_;
 };
 
 class RelAlgNode {
