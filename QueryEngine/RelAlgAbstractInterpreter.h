@@ -143,7 +143,7 @@ class RexOperator : public RexScalar {
   std::string toString() const {
     std::string result = "(RexOperator " + std::to_string(op_);
     for (const auto& operand : operands_) {
-      result += operand->toString();
+      result += " " + operand->toString();
     }
     return result + ")";
   };
@@ -236,7 +236,7 @@ class RelAlgNode {
     return false;
   }
 
-  virtual ~RelAlgNode() {}
+  virtual std::string toString() const = 0;
 
  protected:
   std::vector<std::unique_ptr<const RelAlgNode>> inputs_;
@@ -253,6 +253,11 @@ class RelScan : public RelAlgNode {
   const TableDescriptor* getTableDescriptor() const { return td_; }
 
   const std::vector<std::string>& getFieldNames() const { return field_names_; }
+
+  std::string toString() const {
+    return "(RelScan<" + std::to_string(reinterpret_cast<uint64_t>(this)) + "> " +
+           std::to_string(reinterpret_cast<uint64_t>(td_)) + ")";
+  }
 
  private:
   const TableDescriptor* td_;
@@ -309,6 +314,14 @@ class RelProject : public RelAlgNode {
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
+  std::string toString() const {
+    std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
+    for (const auto& scalar_expr : scalar_exprs_) {
+      result += " " + scalar_expr->toString();
+    }
+    return result + ")";
+  }
+
  private:
   std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
   const std::vector<std::string> fields_;
@@ -342,6 +355,18 @@ class RelAggregate : public RelAlgNode {
     return result;
   }
 
+  std::string toString() const {
+    std::string result = "(RelAggregate<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(groups: [";
+    for (const auto group_index : group_indices_) {
+      result += " " + std::to_string(group_index);
+    }
+    result += " ] aggs: [";
+    for (const auto& agg_expr : agg_exprs_) {
+      result += " " + agg_expr->toString();
+    }
+    return result + " ])";
+  }
+
  private:
   const std::vector<size_t> group_indices_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
@@ -358,6 +383,13 @@ class RelJoin : public RelAlgNode {
     inputs_.emplace_back(rhs);
   }
 
+  std::string toString() const {
+    std::string result = "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
+    result += condition_ ? condition_->toString() : "null";
+    result += " " + std::to_string(static_cast<int>(join_type_));
+    return result + ")";
+  }
+
  private:
   const std::unique_ptr<const RexScalar> condition_;
   const RelJoinType join_type_;
@@ -372,6 +404,12 @@ class RelFilter : public RelAlgNode {
   const RexScalar* getAndReleaseCondition() { return filter_.release(); }
 
   void setCondition(const RexScalar* condition) { filter_.reset(condition); }
+
+  std::string toString() const {
+    std::string result = "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
+    result += filter_ ? filter_->toString() : "null";
+    return result + ")";
+  }
 
  private:
   std::unique_ptr<const RexScalar> filter_;
@@ -404,6 +442,23 @@ class RelCompound : public RelAlgNode {
 
   size_t size() const { return target_exprs_.size(); }
 
+  std::string toString() const {
+    std::string result = "(RelCompound<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
+    result += (filter_expr_ ? filter_expr_->toString() : "null") + " ";
+    for (const auto target_expr : target_exprs_) {
+      result += target_expr->toString() + " ";
+    }
+    result += "groups: [";
+    for (const size_t group_index : group_indices_) {
+      result += " " + std::to_string(group_index);
+    }
+    result += " ] sources: [";
+    for (const auto& scalar_source : scalar_sources_) {
+      result += " " + scalar_source->toString();
+    }
+    return result + " ])";
+  }
+
  private:
   const std::unique_ptr<const RexScalar> filter_expr_;
   const std::vector<const Rex*> target_exprs_;
@@ -433,6 +488,12 @@ class RelSort : public RelAlgNode {
  public:
   RelSort(const std::vector<SortField>& collation, const RelAlgNode* input) : collation_(collation) {
     inputs_.emplace_back(input);
+  }
+
+  std::string toString() const {
+    std::string result = "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
+    // TODO(alex)
+    return result + ")";
   }
 
  private:
