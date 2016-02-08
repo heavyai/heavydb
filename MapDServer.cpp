@@ -42,6 +42,7 @@
 #include <glog/logging.h>
 #include <signal.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 
 using namespace ::apache::thrift;
@@ -1424,21 +1425,27 @@ int main(int argc, char** argv) {
   }
 
   const auto lock_file = boost::filesystem::path(base_path) / "mapd_server_pid.lck";
-  if (boost::filesystem::exists(lock_file)) {
-    std::ifstream lockf;
-    lockf.open(lock_file.c_str());
-    pid_t pid;
-    lockf >> pid;
-    lockf.close();
-    if (kill(pid, 0) == 0) {
-      std::cerr << "Another MapD Server is running on the same MapD directory." << std::endl;
-      return 1;
-    }
+  auto pid = std::to_string(getpid());
+  int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
+  if (pid_fd == -1) {
+    std::cerr << "Failed to open PID file " << lock_file << ". " << strerror(errno) << "." << std::endl;
+    return 1;
   }
-  std::ofstream lockf;
-  lockf.open(lock_file.c_str(), std::ios::out | std::ios::trunc);
-  lockf << getpid();
-  lockf.close();
+  if (lockf(pid_fd, F_TLOCK, 0) == -1) {
+    std::cerr << "Another MapD Server is using data directory " << boost::filesystem::path(base_path) << "." << std::endl;
+    close(pid_fd);
+    return 1;
+  }
+  if (ftruncate(pid_fd, 0) == -1) {
+    std::cerr << "Failed to truncate PID file " << lock_file << ". " << strerror(errno) << "." << std::endl;
+    close(pid_fd);
+    return 1;
+  }
+  if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
+    std::cerr << "Failed to write PID file " << lock_file << ". " << strerror(errno) << "." << std::endl;
+    close(pid_fd);
+    return 1;
+  }
 
 
   if (enable_fork) {
@@ -1449,7 +1456,9 @@ int main(int argc, char** argv) {
         break;
       }
       for (auto fd = sysconf(_SC_OPEN_MAX); fd > 0; --fd) {
-        close(fd);
+        if (fd != pid_fd) {
+          close(fd);
+        }
       }
       int status{0};
       CHECK_NE(-1, waitpid(pid, &status, 0));
