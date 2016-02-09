@@ -39,6 +39,7 @@ gen-js/
 java/target/
 
 # go files
-go/
-!go/src/mapd.com/
-!go/src/vendor/
+ThirdParty/go/bin/
+ThirdParty/go/pkg/
+ThirdParty/go/src/*
+!ThirdParty/go/src/mapd/

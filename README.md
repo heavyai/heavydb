@@ -43,6 +43,8 @@ MapD has the following dependencies:
 
 Generating PDFs of the documentation requires `pandoc` and `texlive` (specifically `pdflatex`).
 
+Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
+
 ## CentOS 6/7
 
 [scripts/mapd-deps-linux.sh](scripts/mapd-deps-linux.sh) is provided that will automatically download, build, and install most dependencies. Before running this script, make sure you have the basic build tools installed:
