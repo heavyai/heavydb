@@ -22,6 +22,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/handlers"
+	"github.com/rs/cors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
@@ -365,7 +366,7 @@ func main() {
 	}
 
 	lmux := handlers.LoggingHandler(alog, mux)
-	cmux := handlers.CORS()(lmux)
+	cmux := cors.Default().Handler(lmux)
 	if compress {
 		cmux = handlers.CompressHandler(cmux)
 	}

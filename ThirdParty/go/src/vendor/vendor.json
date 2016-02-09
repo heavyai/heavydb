@@ -83,6 +83,16 @@
 			"revisionTime": "2015-07-16T22:11:58-07:00"
 		},
 		{
+			"path": "github.com/rs/cors",
+			"revision": "ceb1fbf238d7711a11a86a2622d0b85305348aeb",
+			"revisionTime": "2015-10-29T22:37:20-07:00"
+		},
+		{
+			"path": "github.com/rs/xhandler",
+			"revision": "d9d9599b6aaf6a058cb7b1f48291ded2cbd13390",
+			"revisionTime": "2015-12-23T17:29:56-08:00"
+		},
+		{
 			"path": "github.com/spf13/cast",
 			"revision": "ee7b3e0353166ab1f3a605294ac8cd2b77953778",
 			"revisionTime": "2015-11-26T07:42:19+01:00"
@@ -101,6 +111,11 @@
 			"path": "github.com/spf13/viper",
 			"revision": "a212099cbe6fbe8d07476bfda8d2d39b6ff8f325",
 			"revisionTime": "2016-01-11T16:07:23+01:00"
+		},
+		{
+			"path": "golang.org/x/net/context",
+			"revision": "7f88271ea9913b72aca44fa7fc8af919eacc17ce",
+			"revisionTime": "2016-02-05T10:48:01+09:00"
 		},
 		{
 			"path": "gopkg.in/fsnotify.v1",
