@@ -296,7 +296,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     if (ra_project) {
       fields = ra_project->getFields();
       if (first_project) {
-        CHECK_EQ(size_t(1), ra_project->size());
+        CHECK_EQ(size_t(1), ra_project->inputCount());
         // Rebind the input of the project to the input of the filter itself
         // since we know that we'll evaluate the filter on the fly, with no
         // intermediate buffer.
