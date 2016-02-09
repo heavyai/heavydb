@@ -1,5 +1,6 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
+#include "CalciteDeserializerUtils.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"

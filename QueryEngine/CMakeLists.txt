@@ -8,6 +8,7 @@ set(query_engine_source_files
     CalciteAdapter.cpp
     Codec.cpp
     Execute.cpp
+    ExecutionDescriptor.cpp
     ExpressionRange.cpp
     GpuMemUtils.cpp
     GpuSort.cpp

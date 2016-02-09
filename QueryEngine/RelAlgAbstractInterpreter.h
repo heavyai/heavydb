@@ -1,8 +1,6 @@
 #ifndef QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 #define QUERYENGINE_RELALGABSTRACTINTERPRETER_H
 
-#include "CalciteDeserializerUtils.h"
-
 #include "../Catalog/Catalog.h"
 
 #include <boost/variant.hpp>
@@ -212,7 +210,7 @@ class RexAgg : public Rex {
 class RelAlgNode {
  public:
   RelAlgNode() : context_data_(nullptr) {}
-  void setContextData(const void* context_data) { context_data_ = context_data; }
+  void setContextData(const void* context_data) const { context_data_ = context_data; }
   const size_t inputCount() const { return inputs_.size(); }
   const RelAlgNode* getInput(const size_t idx) const {
     CHECK(idx < inputs_.size());
@@ -240,7 +238,7 @@ class RelAlgNode {
 
  protected:
   std::vector<std::unique_ptr<const RelAlgNode>> inputs_;
-  const void* context_data_;
+  mutable const void* context_data_;
 };
 
 class RelScan : public RelAlgNode {
