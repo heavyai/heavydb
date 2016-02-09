@@ -1,5 +1,6 @@
 #include "StringDictionary.h"
 #include "../Shared/sqltypes.h"
+#include "../Utils/StringLike.h"
 
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
@@ -140,6 +141,10 @@ int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
 
 std::string StringDictionary::getString(int32_t string_id) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  return getStringUnlocked(string_id);
+}
+
+std::string StringDictionary::getStringUnlocked(int32_t string_id) const noexcept {
   if (string_id >= 0) {
     CHECK_LT(string_id, static_cast<int32_t>(str_count_));
     return getStringChecked(string_id);
@@ -155,6 +160,32 @@ std::pair<char*, size_t> StringDictionary::getStringBytes(int32_t string_id) con
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringBytesChecked(string_id);
+}
+
+size_t StringDictionary::size() const noexcept {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  return str_count_;
+}
+
+std::vector<int32_t> StringDictionary::getLike(const std::string& pattern, const bool icase, const char escape) const
+    noexcept {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
+  std::vector<int32_t> result;
+  for (size_t string_id = 0; string_id < str_count_; ++string_id) {
+    const auto str = getStringUnlocked(string_id);
+    if (icase ? string_ilike(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)
+              : string_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
+      result.push_back(string_id);
+    }
+  }
+  for (const auto& kv : transient_int_to_str_) {
+    const auto str = getStringUnlocked(kv.first);
+    if (icase ? string_ilike(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)
+              : string_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
+      result.push_back(kv.first);
+    }
+  }
+  return result;
 }
 
 void StringDictionary::clearTransient() noexcept {

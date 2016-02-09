@@ -24,6 +24,9 @@ class StringDictionary {
   int32_t get(const std::string& str) const noexcept;
   std::string getString(int32_t string_id) const noexcept;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
+  size_t size() const noexcept;
+
+  std::vector<int32_t> getLike(const std::string& pattern, const bool icase, const char escape) const noexcept;
 
   void clearTransient() noexcept;
   bool checkpoint() noexcept;
@@ -40,6 +43,7 @@ class StringDictionary {
   void increaseCapacity() noexcept;
   int32_t getOrAddImpl(const std::string& str, bool recover) noexcept;
   int32_t getUnlocked(const std::string& str) const noexcept;
+  std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
   int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data) const noexcept;
