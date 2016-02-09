@@ -512,4 +512,6 @@ std::shared_ptr<Analyzer::Expr> translate_rex(const RexScalar* rex,
                                               const int rte_idx,
                                               const Catalog_Namespace::Catalog& cat);
 
+std::string tree_string(const RelAlgNode*, const size_t indent = 0);
+
 #endif  // QUERYENGINE_RELALGABSTRACTINTERPRETER_H

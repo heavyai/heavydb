@@ -714,4 +714,12 @@ std::shared_ptr<Analyzer::Expr> translate_rex(const RexScalar* rex,
   CHECK(false);
   return nullptr;
 }
+
+std::string tree_string(const RelAlgNode* ra, const size_t indent) {
+  std::string result = std::string(indent, ' ') + ra->toString() + "\n";
+  for (size_t i = 0; i < ra->inputCount(); ++i) {
+    result += tree_string(ra->getInput(i), indent + 2);
+  }
+  return result;
+}
 #endif  // HAVE_CALCITE
