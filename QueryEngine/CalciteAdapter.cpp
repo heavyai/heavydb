@@ -951,6 +951,21 @@ std::string pg_shim(const std::string& query) {
   auto result = query;
   boost::ireplace_all(result, "unnest", "PG_UNNEST");
   {
+    boost::smatch what;
+    boost::regex cast_true_expr{R"(CAST\s*\(\s*'t'\s+AS\s+boolean\s*\))", boost::regex::extended | boost::regex::icase};
+    if (boost::regex_search(result, what, cast_true_expr)) {
+      result = boost::regex_replace(query, cast_true_expr, "true");
+    }
+  }
+  {
+    boost::smatch what;
+    boost::regex cast_false_expr{R"(CAST\s*\(\s*'f'\s+AS\s+boolean\s*\))",
+                                 boost::regex::extended | boost::regex::icase};
+    if (boost::regex_search(result, what, cast_false_expr)) {
+      result = boost::regex_replace(query, cast_false_expr, "false");
+    }
+  }
+  {
     boost::regex ilike_expr{R"((\s+)([^\s]+)\s+ilike\s+('[^']+')(\s+escape(\s+('[^']+')))?)",
                             boost::regex::extended | boost::regex::icase};
     boost::smatch what;

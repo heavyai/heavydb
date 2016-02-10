@@ -8,11 +8,14 @@ SET (calcite_source_files
     ${CMAKE_BINARY_DIR}/gen-cpp/calciteserver_types.cpp
 )
 
+find_package(JNI REQUIRED)
+include_directories(${JNI_INCLUDE_DIRS})
+
 include_directories("/usr/local/include")
 
 ADD_LIBRARY (Calcite ${calcite_source_files})
 
-TARGET_LINK_LIBRARIES (Calcite Catalog ${Thrift_LIBRARIES})
+TARGET_LINK_LIBRARIES (Calcite Catalog ${Thrift_LIBRARIES} ${JAVA_JVM_LIBRARY})
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift

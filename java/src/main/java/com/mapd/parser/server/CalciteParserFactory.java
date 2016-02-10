@@ -5,19 +5,25 @@ package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.MapDParser;
 import org.apache.commons.pool.PoolableObjectFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
  * @author michael
  */
 class CalciteParserFactory implements PoolableObjectFactory {
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteParserFactory.class);
 
-  public CalciteParserFactory() {
+  private final String dataDir;
+
+  public CalciteParserFactory(String dataDir) {
+    this.dataDir = dataDir;
   }
 
   @Override
   public Object makeObject() throws Exception {
-    MapDParser obj = new MapDParser();
+    MapDParser obj = new MapDParser(dataDir);
     return obj;
   }
 
@@ -28,7 +34,13 @@ class CalciteParserFactory implements PoolableObjectFactory {
 
   @Override
   public boolean validateObject(Object obj) {
-    return true;
+    MapDParser mdp = (MapDParser)obj;
+    if (mdp.getCallCount() < 1000) {
+      return true;
+    } else {
+      MAPDLOGGER.debug(" invalidating object due to max use count");
+      return false;
+    }
   }
 
   @Override

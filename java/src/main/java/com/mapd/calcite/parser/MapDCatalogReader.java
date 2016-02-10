@@ -27,11 +27,13 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
+import com.mapd.metadata.MetaConnect;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTypeInfo;
 import com.mapd.thrift.server.ThriftException;
+import java.sql.Connection;
 import java.util.ArrayList;
 
 import java.util.Arrays;
@@ -63,7 +65,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
           = Ordering.from(String.CASE_INSENSITIVE_ORDER).lexicographical();
 
   private static volatile Map<List<String>, MapDTable> MAPD_TABLES = Maps.newConcurrentMap();
-  private static volatile Map<String, MapDSchema> MAPD_SCHEMAS = Maps.newConcurrentMap();
+  private static volatile Map<String, MapDDatabase> MAPD_DATABASE = Maps.newConcurrentMap();
 
   //~ Instance fields --------------------------------------------------------
   protected final RelDataTypeFactory typeFactory;
@@ -71,6 +73,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
   private RelDataType addressType;
   private final EnumMap<TDatumType, ArrayList<ArrayList<RelDataType>>> mapDTypes;
   private MapDUser currentMapDUser;
+  private final String dataDir;
 
   //~ Constructors -----------------------------------------------------------
   /**
@@ -80,9 +83,12 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
    * Caller must then call {@link #init} to populate with data.</p>
    *
    * @param typeFactory Type factory
+   * @param dataDir directory containing the mapd data
+   *
    */
-  public MapDCatalogReader(RelDataTypeFactory typeFactory) {
+  public MapDCatalogReader(RelDataTypeFactory typeFactory, String dataDir) {
     this.typeFactory = typeFactory;
+    this.dataDir = dataDir;
 
     // add all the MapD datatype into this structure
     // it is indexed with the TDatumType,  isArray , isNullable
@@ -110,58 +116,24 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
 
   private MapDTable getTableData(String tableName) {
 
-    int session = 0;
+    MetaConnect metaConnect = new MetaConnect(dataDir, currentMapDUser.getDB());
+    metaConnect.connectToDBCatalog();
+    // Now get tables column details
+    Map<String, TColumnType> tableDescriptor = metaConnect.getTableDescriptor(tableName);
 
-    // establish connection to mapd server
-    TTransport transport;
-    //always local host do not support sepertion of calcite and mapd server
-    transport = new TSocket("localhost", currentMapDUser.getMapDPort());
-
-    try {
-      transport.open();
-    } catch (TTransportException ex) {
-      throw new RuntimeException("Open failed - " + ex.toString());
-    }
-
-    TProtocol protocol = new TBinaryProtocol(transport);
-
-    MapD.Client client = new MapD.Client(protocol);
-
-    try {
-      session = client.connect(currentMapDUser.getUser(), currentMapDUser.getPasswd(), currentMapDUser.getDB());
-    } catch (ThriftException ex) {
-      throw new RuntimeException("Connect failed - " + ex.toString());
-    } catch (TException ex) {
-      throw new RuntimeException("Connect failed - " + ex.toString());
-    }
-
-    MAPDLOGGER.debug("Connected session is " + session);
-
-    // get schema
-    MapDSchema schema = MAPD_SCHEMAS.get(currentMapDUser.getDB());
+    // get database
+    MapDDatabase db = MAPD_DATABASE.get(currentMapDUser.getDB());
     // if schema doesn't exist create it and store it
     // note we are in sync block here as all table create is managed in sync
-    if (schema == null) {
-      schema = new MapDSchema(currentMapDUser.getDB());
-      registerSchema(schema);
+    if (db == null) {
+      db = new MapDDatabase(currentMapDUser.getDB());
+      registerSchema(db);
     }
 
-    MAPDLOGGER.debug("Schema is " + currentMapDUser.getDB());
+    MAPDLOGGER.debug("Database is " + currentMapDUser.getDB());
 
     MAPDLOGGER.debug("\t table  is " + tableName);
-    MapDTable mtable = MapDTable.create(this, schema, tableName, false);
-
-    // Now get tables column details
-    Map<String, TColumnType> tableDescriptor = null;
-    try {
-      tableDescriptor = client.get_table_descriptor(session, tableName);
-    } catch (ThriftException ex) {
-      throw new RuntimeException("Get table descriptor failed - " + ex.toString());
-    } catch (TException ex) {
-      if (!ex.toString().equals("TMapDException(error_msg:Table doesn't exist)")) {
-        throw new RuntimeException("Get table descriptor failed - " + ex.toString());
-      } 
-    }
+    MapDTable mtable = MapDTable.create(this, db, tableName, false);
 
     // if we have a table descriptor from mapd server
     if (tableDescriptor != null) {
@@ -179,30 +151,12 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
                 .get(value.getCol_type().is_array ? 1 : 0));
 
       }
-      mtable.addColumn("rowid", typeFactory.createSqlType(SqlTypeName.BIGINT));
-      try {
-        mtable.setRowCount(client.get_row_count(session, tableName));
-      } catch (ThriftException ex) {
-        throw new RuntimeException("Get Row Count failed - " + ex.toString());
-      } catch (TException ex) {
-        throw new RuntimeException("Get Row Count failed - " + ex.toString());
-      }
       registerTable(mtable);
     } else {
       // no table in MapD server schema
       mtable = null;
     }
-
-    try {
-      client.disconnect(session);
-    } catch (ThriftException ex) {
-      throw new RuntimeException("Disconnect failed - " + ex.toString());
-    } catch (TException ex) {
-      throw new RuntimeException("Disconnect failed - " + ex.toString());
-    }
-
     return mtable;
-
   }
 
   /**
@@ -242,7 +196,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
                     RelDataTypeComparability.NONE);
 
     // Register "SALES" schema.
-    MapDSchema salesSchema = new MapDSchema("SALES");
+    MapDDatabase salesSchema = new MapDDatabase("SALES");
     registerSchema(salesSchema);
 
     // Register "EMP" table.
@@ -292,7 +246,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     registerTable(contactAddressTable);
 
     // Register "CUSTOMER" schema.
-    MapDSchema customerSchema = new MapDSchema("CUSTOMER");
+    MapDDatabase customerSchema = new MapDDatabase("CUSTOMER");
     registerSchema(customerSchema);
 
     // Register "CONTACT" table.
@@ -398,8 +352,8 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
     MAPD_TABLES.put(table.getQualifiedName(), table);
   }
 
-  protected void registerSchema(MapDSchema schema) {
-    MAPD_SCHEMAS.put(schema.getSchemaName(), schema);
+  protected void registerSchema(MapDDatabase schema) {
+    MAPD_DATABASE.put(schema.getSchemaName(), schema);
   }
 
   /**
@@ -475,7 +429,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
       case 1:
         // looking for schema names
         result = Lists.newArrayList();
-        for (MapDSchema schema : MAPD_SCHEMAS.values()) {
+        for (MapDDatabase schema : MAPD_DATABASE.values()) {
           final String catalogName = names.get(0);
           if (schema.getCatalogName().equals(catalogName)) {
             final ImmutableList<String> names1
@@ -486,7 +440,7 @@ public class MapDCatalogReader implements Prepare.CatalogReader {
         return result;
       case 2:
         // looking for table names in the given schema
-        MapDSchema schema = MAPD_SCHEMAS.get(names.get(1));
+        MapDDatabase schema = MAPD_DATABASE.get(names.get(1));
         if (schema == null) {
           return Collections.emptyList();
         }

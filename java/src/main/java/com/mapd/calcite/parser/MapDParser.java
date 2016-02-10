@@ -36,9 +36,7 @@ import org.slf4j.LoggerFactory;
  * @author michael
  */
 
-
 public final class MapDParser {
-
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
   private final Quoting quoting = Quoting.DOUBLE_QUOTE;
@@ -50,9 +48,11 @@ public final class MapDParser {
   private final SqlValidator validator;
   private final SqlToRelConverter converter;
 
-  public MapDParser(){
+  private int callCount = 0;
+
+  public MapDParser(String dataDir){
     typeFactory = new SqlTypeFactoryImpl(RelDataTypeSystem.DEFAULT);
-    catalogReader = new MapDCatalogReader(typeFactory);
+    catalogReader = new MapDCatalogReader(typeFactory, dataDir);
     validator = new MapDValidator(
                   createOperatorTable(),
                   catalogReader,
@@ -66,6 +66,7 @@ public final class MapDParser {
 
   public String getRelAlgebra(String sql, final boolean legacy_syntax, final MapDUser mapDUser)
           throws SqlParseException {
+    callCount++;
     SqlNode node = processSQL(sql, legacy_syntax);
 
     boolean is_select_star = isSelectStar(node);
@@ -243,5 +244,9 @@ public final class MapDParser {
             .setUnquotedCasing(unquotedCasing)
             .setQuotedCasing(quotedCasing)
             .build());
+  }
+
+  public int getCallCount() {
+    return callCount;
   }
 }

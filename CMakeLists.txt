@@ -108,6 +108,8 @@ include_directories(ThirdParty/rapidjson)
 option(ENABLE_CALCITE "Build Calcite adapter" OFF)
 if(ENABLE_CALCITE)
     add_definitions("-DHAVE_CALCITE")
+    find_package(JNI REQUIRED)
+    include_directories(${JNI_INCLUDE_DIRS})
 endif()
 
 ADD_SUBDIRECTORY    (SqliteConnector)
@@ -311,7 +313,8 @@ if(ENABLE_CALCITE)
       DEPENDS ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
       SOURCES ${CMAKE_SOURCE_DIR}/java/pom.xml ${CMAKE_SOURCE_DIR}/mapd.thrift
       )
-    ##install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
+    install(FILES ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
+    file(COPY ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
   endif()
 endif()
 

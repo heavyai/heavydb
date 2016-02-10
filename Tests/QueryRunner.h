@@ -10,7 +10,6 @@
 Catalog_Namespace::SessionInfo* get_session(const char* db_path);
 
 ResultRows run_multiple_agg(const std::string& query_str,
-                            const bool use_calcite,
                             const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
                             const ExecutorDeviceType device_type,
                             const bool hoist_literals);

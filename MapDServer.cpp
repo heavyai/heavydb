@@ -17,6 +17,7 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
 #include "Parser/parser.h"
+#include "Parser/ParserWrapper.h"
 #include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
@@ -93,7 +94,7 @@ class MapDHandler : virtual public MapDIf {
         window_ptr_(nullptr),
 #ifdef HAVE_CALCITE
         render_mem_bytes_(render_mem_bytes),
-        calcite_(calcite_port),
+        calcite_(calcite_port, base_data_path_),
         legacy_syntax_(legacy_syntax) {
 #else
         render_mem_bytes_(render_mem_bytes) {
@@ -1136,16 +1137,16 @@ class MapDHandler : virtual public MapDIf {
       int num_parse_errors = 0;
       Planner::RootPlan* root_plan{nullptr};
 #ifdef HAVE_CALCITE
-      if (with_calcite) {
-        try {
-          std::unique_ptr<Planner::RootPlan> plan_ptr;
+      try {
+        std::unique_ptr<Planner::RootPlan> plan_ptr;
+        ParserWrapper pw{query_str};
+        // if this is a calcite select or explain select run in calcite
+        if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
           _return.execution_time_ms += measure<>::execution([&]() {
-            static const std::string explain_str{"explain"};
-            const bool is_explain{boost::istarts_with(query_str, explain_str)};
+
             // pass sql to calcite server to let it parse for testing purposes
-            const std::string actual_query{is_explain ? query_str.substr(explain_str.size()) : query_str};
+            const std::string actual_query{pw.is_select_explain ? pw.actual_query : query_str};
             {
-              std::lock_guard<std::mutex> calcite_lock(calcite_mutex_);
               const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
                                                      session_info.get_currentUser().passwd,
                                                      session_info.get_catalog().get_currentDB().dbName,
@@ -1154,24 +1155,21 @@ class MapDHandler : virtual public MapDIf {
               root_plan = translate_query(query_ra, session_info.get_catalog());
               plan_ptr.reset(root_plan);
             }
-            if (is_explain) {
+            if (pw.is_select_explain) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
             CHECK(root_plan);
           });
           execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
           return;
-        } catch (InvalidParseRequest& e) {
-          TMapDException ex;
-          LOG(ERROR) << "Calcite had an issue parsing '" << query_str << "' query: " << e.whyUp;
-          ex.error_msg = std::string("Exception: ") + e.whyUp;
-          throw ex;
-        } catch (std::exception& e) {
-          TMapDException ex;
-          ex.error_msg = std::string("Exception: ") + e.what();
-          LOG(ERROR) << ex.error_msg;
-          throw ex;
+        } else {
+          LOG(ERROR) << "passing query to legacy processor";
         }
+      } catch (std::exception& e) {
+        TMapDException ex;
+        ex.error_msg = std::string("Exception: ") + e.what();
+        LOG(ERROR) << ex.error_msg;
+        throw ex;
       }
 #endif  // HAVE_CALCITE
       try {
@@ -1283,7 +1281,9 @@ void start_server(TThreadedServer& server) {
 int main(int argc, char** argv) {
   int port = 9091;
   int http_port = 9090;
+#ifdef HAVE_CALCITE
   int calcite_port = 9093;
+#endif  // HAVE_CALCITE
   std::string base_path;
   std::string device("gpu");
   std::string config_file("mapd.conf");
@@ -1432,7 +1432,8 @@ int main(int argc, char** argv) {
     return 1;
   }
   if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-    std::cerr << "Another MapD Server is using data directory " << boost::filesystem::path(base_path) << "." << std::endl;
+    std::cerr << "Another MapD Server is using data directory " << boost::filesystem::path(base_path) << "."
+              << std::endl;
     close(pid_fd);
     return 1;
   }
@@ -1490,8 +1491,9 @@ int main(int argc, char** argv) {
                                                   num_gpus,
                                                   start_gpu,
                                                   ldapMetadata,
-                                                  calcite_port,
+                                                  port,
                                                   enable_legacy_syntax));
+
   shared_ptr<TProcessor> processor(new MapDProcessor(handler));
 
   shared_ptr<TServerTransport> bufServerTransport(new TServerSocket(port));

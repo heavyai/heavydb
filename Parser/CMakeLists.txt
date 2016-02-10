@@ -23,7 +23,7 @@ ADD_CUSTOM_COMMAND(
 Set(FlexppOutput ${CMAKE_CURRENT_BINARY_DIR}/Scanner.cpp)
 
 Set(FlexppOutput Scanner.cpp)
-#IF (FLEXPP_EXECUTABLE) 
+#IF (FLEXPP_EXECUTABLE)
 ADD_CUSTOM_COMMAND(
     OUTPUT ${FlexppOutput}
     COMMAND ${FLEXPP_EXECUTABLE}
@@ -31,7 +31,7 @@ ADD_CUSTOM_COMMAND(
         -i
         -o${FlexppOutput}
         ${CMAKE_CURRENT_SOURCE_DIR}/scanner.l
-    DEPENDS scanner.l 
+    DEPENDS scanner.l
     COMMENT "Generating Scanner.cpp"
 )
 #ENDIF()
@@ -49,6 +49,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register -Wno-write-stri
 SET (parser_source_files
 	ParserNode.cpp
 	ParserNode.h
+  ParserWrapper.cpp
+  ParserWrapper.h
 	${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/ExtractFromTime.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../QueryEngine/DateTruncate.cpp
 )

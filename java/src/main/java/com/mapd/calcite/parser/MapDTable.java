@@ -56,7 +56,7 @@ public class MapDTable implements Prepare.PreparingTable {
   }
 
   public static MapDTable create(MapDCatalogReader catalogReader,
-          MapDSchema schema, String name, boolean stream) {
+          MapDDatabase schema, String name, boolean stream) {
     MapDTable table
             = new MapDTable(catalogReader, schema.getCatalogName(), schema.getSchemaName(),
                     name, stream);

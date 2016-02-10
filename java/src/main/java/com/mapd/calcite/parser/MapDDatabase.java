@@ -14,12 +14,12 @@ import java.util.List;
 /**
  * MapD schema.
  */
-public class MapDSchema {
+public class MapDDatabase {
 
   private final List<String> tableNames = Lists.newArrayList();
   private final String name;
 
-  public MapDSchema(String name) {
+  public MapDDatabase(String name) {
     this.name = name;
   }
 

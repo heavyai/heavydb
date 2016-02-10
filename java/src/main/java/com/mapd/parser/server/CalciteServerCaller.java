@@ -17,7 +17,7 @@ public class CalciteServerCaller {
         calciteServerWrapper = new CalciteServerWrapper();
         break;
       case 2:
-        calciteServerWrapper = new CalciteServerWrapper(Integer.valueOf(args[0]), Integer.valueOf(args[1]));
+        calciteServerWrapper = new CalciteServerWrapper(Integer.valueOf(args[0]), Integer.valueOf(args[1]), args[2]);
         break;
       default:
         MAPDLOGGER.error("Incorrect parameters; CalciteServerCaller [calcitePort, mapDPort]");

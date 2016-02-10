@@ -21,16 +21,17 @@ public class CalciteServerWrapper implements Runnable {
   private final Processor processor;
   private TServer server;
   private int mapDPort = 9091;
+  private String dataDir = ("data/");
   private int calcitePort = 9093;
   private boolean shutdown = false;
 
   public CalciteServerWrapper(){
-    handler = new CalciteServerHandler(mapDPort);
+    handler = new CalciteServerHandler(mapDPort, dataDir);
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
   }
 
-  public CalciteServerWrapper(int calcitePort, int mapDPort){
-    handler = new CalciteServerHandler(mapDPort);
+  public CalciteServerWrapper(int calcitePort, int mapDPort, String dataDir){
+    handler = new CalciteServerHandler(mapDPort, dataDir);
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;
