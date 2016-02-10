@@ -167,22 +167,37 @@ size_t StringDictionary::size() const noexcept {
   return str_count_;
 }
 
-std::vector<int32_t> StringDictionary::getLike(const std::string& pattern, const bool icase, const char escape) const
-    noexcept {
+namespace {
+
+bool is_like(const std::string& str,
+             const std::string& pattern,
+             const bool icase,
+             const bool is_simple,
+             const char escape) {
+  return icase ? (is_simple ? string_ilike_simple(str.c_str(), str.size(), pattern.c_str(), pattern.size())
+                            : string_ilike(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape))
+               : (is_simple ? string_like_simple(str.c_str(), str.size(), pattern.c_str(), pattern.size())
+                            : string_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape));
+}
+
+}  // namespace
+
+std::vector<std::string> StringDictionary::getLike(const std::string& pattern,
+                                                   const bool icase,
+                                                   const bool is_simple,
+                                                   const char escape) const noexcept {
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
-  std::vector<int32_t> result;
+  std::vector<std::string> result;
   for (size_t string_id = 0; string_id < str_count_; ++string_id) {
     const auto str = getStringUnlocked(string_id);
-    if (icase ? string_ilike(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)
-              : string_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
-      result.push_back(string_id);
+    if (is_like(str, pattern, icase, is_simple, escape)) {
+      result.push_back(str);
     }
   }
   for (const auto& kv : transient_int_to_str_) {
     const auto str = getStringUnlocked(kv.first);
-    if (icase ? string_ilike(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)
-              : string_like(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
-      result.push_back(kv.first);
+    if (is_like(str, pattern, icase, is_simple, escape)) {
+      result.push_back(str);
     }
   }
   return result;

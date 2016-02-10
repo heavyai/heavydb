@@ -543,6 +543,7 @@ class LikeExpr : public Expr {
         is_ilike(i),
         is_simple(s) {}
   const Expr* get_arg() const { return arg.get(); }
+  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
   const Expr* get_like_expr() const { return like_expr.get(); }
   const Expr* get_escape_expr() const { return escape_expr.get(); }
   bool get_is_ilike() const { return is_ilike; }

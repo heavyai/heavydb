@@ -11,6 +11,7 @@
 #include "RuntimeFunctions.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "CudaMgr/CudaMgr.h"
+#include "Parser/ParserNode.h"
 #include "Shared/mapdpath.h"
 #include "Shared/checked_alloc.h"
 
@@ -560,6 +561,13 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     CHECK_EQ(size_t(1), escape_char_expr->get_constval().stringval->size());
     escape_char = (*escape_char_expr->get_constval().stringval)[0];
   }
+  auto pattern = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
+  CHECK(pattern);
+  auto fast_dict_like_lv = codegenDictLike(
+      expr->get_own_arg(), pattern, expr->get_is_ilike(), expr->get_is_simple(), escape_char, hoist_literals);
+  if (fast_dict_like_lv) {
+    return fast_dict_like_lv;
+  }
   auto str_lv = codegen(expr->get_arg(), true, hoist_literals);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
@@ -567,8 +575,6 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
     cgen_state_->must_run_on_cpu_ = true;
   }
-  auto like_expr_arg_const = dynamic_cast<const Analyzer::Constant*>(expr->get_like_expr());
-  CHECK(like_expr_arg_const);
   auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, hoist_literals);
   CHECK_EQ(size_t(3), like_expr_arg_lvs.size());
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
@@ -584,6 +590,44 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const bool hoist_
     str_like_args.push_back(inlineIntNull(expr->get_type_info()));
   }
   return cgen_state_->emitCall(fn_name, str_like_args);
+}
+
+llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> like_arg,
+                                       const Analyzer::Constant* pattern,
+                                       const bool ilike,
+                                       const bool is_simple,
+                                       const char escape_char,
+                                       const bool hoist_literals) {
+  const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(like_arg);
+  if (!cast_oper) {
+    return nullptr;
+  }
+  CHECK(cast_oper);
+  CHECK_EQ(kCAST, cast_oper->get_optype());
+  const auto dict_like_arg = cast_oper->get_own_operand();
+  const auto& dict_like_arg_ti = dict_like_arg->get_type_info();
+  CHECK(dict_like_arg_ti.is_string());
+  CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
+  const auto sd = getStringDictionary(dict_like_arg_ti.get_comp_param(), row_set_mem_owner_);
+  if (sd->size() > 1000000) {
+    return nullptr;
+  }
+  const auto& pattern_ti = pattern->get_type_info();
+  CHECK(pattern_ti.is_string());
+  CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
+  const auto& pattern_datum = pattern->get_constval();
+  const auto& pattern_str = *pattern_datum.stringval;
+  const auto matching_strings = sd->getLike(pattern_str, ilike, is_simple, escape_char);
+  if (matching_strings.size() > 10) {
+    return nullptr;
+  }
+  std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
+  for (const auto& matching_string : matching_strings) {
+    auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
+    matching_str_exprs.push_back(const_val->add_cast(dict_like_arg_ti));
+  }
+  const auto in_values = makeExpr<Analyzer::InValues>(dict_like_arg, matching_str_exprs);
+  return codegen(in_values.get(), hoist_literals);
 }
 
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const bool hoist_literals) {

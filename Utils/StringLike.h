@@ -12,6 +12,8 @@
 
 #include "../Shared/funcannotations.h"
 
+#include <stdint.h>
+
 /*
  * @brief string_like performs the SQL LIKE and ILIKE operation
  * @param str string argument to be matched against pattern.  single-byte
@@ -27,5 +29,15 @@
 extern "C" DEVICE bool string_like(const char* str, int str_len, const char* pattern, int pat_len, char escape_char);
 
 extern "C" DEVICE bool string_ilike(const char* str, int str_len, const char* pattern, int pat_len, char escape_char);
+
+extern "C" DEVICE bool string_like_simple(const char* str,
+                                          const int32_t str_len,
+                                          const char* pattern,
+                                          const int32_t pat_len);
+
+extern "C" DEVICE bool string_ilike_simple(const char* str,
+                                           const int32_t str_len,
+                                           const char* pattern,
+                                           const int32_t pat_len);
 
 #endif  // STRING_LIKE_H

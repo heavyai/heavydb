@@ -26,7 +26,10 @@ class StringDictionary {
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t size() const noexcept;
 
-  std::vector<int32_t> getLike(const std::string& pattern, const bool icase, const char escape) const noexcept;
+  std::vector<std::string> getLike(const std::string& pattern,
+                                   const bool icase,
+                                   const bool is_simple,
+                                   const char escape) const noexcept;
 
   void clearTransient() noexcept;
   bool checkpoint() noexcept;

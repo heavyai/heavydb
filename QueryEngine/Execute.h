@@ -207,6 +207,12 @@ class Executor {
   llvm::Value* codegen(const Analyzer::DatetruncExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::CharLengthExpr*, const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
+  llvm::Value* codegenDictLike(const std::shared_ptr<Analyzer::Expr> arg,
+                               const Analyzer::Constant* pattern,
+                               const bool ilike,
+                               const bool is_simple,
+                               const char escape_char,
+                               const bool hoist_literals);
   llvm::Value* codegen(const Analyzer::InValues*, const bool hoist_literals);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenCmp(const SQLOps,
