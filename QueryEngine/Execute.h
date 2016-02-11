@@ -10,6 +10,7 @@ typedef void GLFWwindow;
 #include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
 #include "../Shared/measure.h"
+#include "../Shared/thread_count.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "NvidiaKernel.h"
 
@@ -36,13 +37,6 @@ typedef void GLFWwindow;
 enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 
 class Executor;
-
-inline int cpu_threads() {
-  // could use std::thread::hardware_concurrency(), but some
-  // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
-  // Play it POSIX.1 safe instead.
-  return std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
-}
 
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
   switch (width) {
