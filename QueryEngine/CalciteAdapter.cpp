@@ -257,19 +257,19 @@ class CalciteAdapter {
         if (target_ti.is_time()) {  // TODO(alex): check and unify with the rest of the cases
           return operand_expr->add_cast(target_ti);
         }
-        return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
+        return makeExpr<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
       }
       case kNOT:
       case kISNULL: {
-        return std::make_shared<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
+        return makeExpr<Analyzer::UOper>(kBOOLEAN, sql_op, operand_expr);
       }
       case kISNOTNULL: {
-        auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
-        return std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
+        auto is_null = makeExpr<Analyzer::UOper>(kBOOLEAN, kISNULL, operand_expr);
+        return makeExpr<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
       }
       case kMINUS: {
         const auto& ti = operand_expr->get_type_info();
-        return std::make_shared<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
+        return makeExpr<Analyzer::UOper>(ti, false, kUMINUS, operand_expr);
       }
       case kUNNEST: {
         const auto& ti = operand_expr->get_type_info();
@@ -360,7 +360,7 @@ class CalciteAdapter {
         const auto cd = cat_.getMetadataForColumn(col_name_td.td_->tableId, col_name);
         CHECK(cd);
         used_columns_[col_name_td.td_->tableId].insert(cd->columnId);
-        return std::make_shared<Analyzer::ColumnVar>(cd->columnType, col_name_td.td_->tableId, cd->columnId, rte_idx);
+        return makeExpr<Analyzer::ColumnVar>(cd->columnType, col_name_td.td_->tableId, cd->columnId, rte_idx);
       }
       col_name_idx -= col_name_td.names_.size();
       ++rte_idx;
@@ -384,7 +384,7 @@ class CalciteAdapter {
     }
     const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
     const auto agg_ti = get_agg_type(agg_kind, arg_expr);
-    return std::make_shared<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
+    return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
   }
 
   std::shared_ptr<Analyzer::Expr> translateTypedLiteral(const rapidjson::Value& expr) {
