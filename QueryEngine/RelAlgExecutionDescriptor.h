@@ -1,5 +1,5 @@
-#ifndef QUERYENGINE_EXECUTIONDESCRIPTOR_H
-#define QUERYENGINE_EXECUTIONDESCRIPTOR_H
+#ifndef QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
+#define QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
 
 #include "GroupByAndAggregate.h"
 #include "RelAlgAbstractInterpreter.h"
@@ -30,4 +30,4 @@ class RaExecutionDesc {
 
 std::list<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);
 
-#endif  // QUERYENGINE_EXECUTIONDESCRIPTOR_H
+#endif  // QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H

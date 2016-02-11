@@ -8,7 +8,6 @@ set(query_engine_source_files
     CalciteAdapter.cpp
     Codec.cpp
     Execute.cpp
-    ExecutionDescriptor.cpp
     ExpressionRange.cpp
     GpuMemUtils.cpp
     GpuSort.cpp
@@ -17,6 +16,8 @@ set(query_engine_source_files
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     RelAlgAbstractInterpreter.cpp
+    RelAlgExecutionDescriptor.cpp
+    RelAlgExecutor.cpp
     RuntimeFunctions.cpp
     RuntimeFunctions.bc
     StringFunctions.cpp

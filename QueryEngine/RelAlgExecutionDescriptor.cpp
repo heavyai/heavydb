@@ -1,5 +1,5 @@
 #ifdef HAVE_CALCITE
-#include "ExecutionDescriptor.h"
+#include "RelAlgExecutionDescriptor.h"
 
 std::list<RaExecutionDesc> get_execution_descriptors(const RelAlgNode* ra_node) {
   CHECK(ra_node);
