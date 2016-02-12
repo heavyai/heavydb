@@ -440,6 +440,12 @@ class RelCompound : public RelAlgNode {
 
   size_t size() const { return target_exprs_.size(); }
 
+  const RexScalar* getFilterExpr() const { return filter_expr_.get(); }
+
+  const size_t getScalarSourcesSize() const { return scalar_sources_.size(); }
+
+  const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
+
   std::string toString() const {
     std::string result = "(RelCompound<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += (filter_expr_ ? filter_expr_->toString() : "null") + " ";
