@@ -370,7 +370,9 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
       real_strings.push_back(*p);
     }
   }
-  CHECK(lit_buf_size <= static_cast<size_t>(std::numeric_limits<int16_t>::max()));
+  if (lit_buf_size > static_cast<size_t>(std::numeric_limits<int16_t>::max())) {
+    throw TooManyLiterals();
+  }
   int16_t crt_real_str_off = lit_buf_size;
   for (const auto& real_str : real_strings) {
     CHECK_LE(real_str.size(), static_cast<size_t>(std::numeric_limits<int16_t>::max()));

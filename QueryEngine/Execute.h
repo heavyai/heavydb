@@ -131,6 +131,11 @@ class CompilationRetryNoLazyFetch : public std::runtime_error {
   CompilationRetryNoLazyFetch() : std::runtime_error("CompilationRetryNoLazyFetch") {}
 };
 
+class TooManyLiterals : public std::runtime_error {
+ public:
+  TooManyLiterals() : std::runtime_error("Too many literals in the query") {}
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
