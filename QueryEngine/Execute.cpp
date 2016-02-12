@@ -618,9 +618,6 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   const auto& pattern_datum = pattern->get_constval();
   const auto& pattern_str = *pattern_datum.stringval;
   const auto matching_strings = sd->getLike(pattern_str, ilike, is_simple, escape_char);
-  if (matching_strings.size() > 10) {
-    return nullptr;
-  }
   std::list<std::shared_ptr<Analyzer::Expr>> matching_str_exprs;
   for (const auto& matching_string : matching_strings) {
     auto const_val = Parser::StringLiteral::analyzeValue(matching_string);
