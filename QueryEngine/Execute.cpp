@@ -2745,7 +2745,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                       llvm_ir_cpu,
                       join_info,
                       allow_loop_joins);
-    } catch (...) {
+    } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu =
           compilePlan(plan,
                       false,
@@ -2810,7 +2810,7 @@ ResultRows Executor::executeAggScanPlan(const Planner::Plan* plan,
                       llvm_ir_gpu,
                       join_info,
                       allow_loop_joins);
-    } catch (...) {
+    } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_gpu =
           compilePlan(plan,
                       render_allocator,

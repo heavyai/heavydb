@@ -126,6 +126,11 @@ struct hash<ScanId> {
 };
 }
 
+class CompilationRetryNoLazyFetch : public std::runtime_error {
+ public:
+  CompilationRetryNoLazyFetch() : std::runtime_error("CompilationRetryNoLazyFetch") {}
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -685,7 +690,7 @@ class Executor {
                             columns_to_not_fetch_.end(),
                             std::inserter(intersect, intersect.begin()));
       if (!intersect.empty()) {
-        throw std::exception();
+        throw CompilationRetryNoLazyFetch();
       }
       return columns_to_fetch_.find(do_not_fetch_column->get_column_id()) == columns_to_fetch_.end();
     }
