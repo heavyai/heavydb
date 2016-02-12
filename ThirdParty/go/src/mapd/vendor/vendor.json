@@ -83,6 +83,11 @@
 			"revisionTime": "2015-07-16T22:11:58-07:00"
 		},
 		{
+			"path": "github.com/rcrowley/go-metrics",
+			"revision": "51425a2415d21afadfd55cd93432c0bc69e9598d",
+			"revisionTime": "2016-01-13T15:50:30-08:00"
+		},
+		{
 			"path": "github.com/rs/cors",
 			"revision": "ceb1fbf238d7711a11a86a2622d0b85305348aeb",
 			"revisionTime": "2015-10-29T22:37:20-07:00"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	crand "crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -22,30 +23,36 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/handlers"
+	"github.com/rcrowley/go-metrics"
 	"github.com/rs/cors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
 var (
-	port        int
-	backendUrl  string
-	frontend    string
-	dataDir     string
-	certFile    string
-	keyFile     string
-	readOnly    bool
-	quiet       bool
-	roundRobin  bool
-	enableHttps bool
-	profile     bool
-	compress    bool
+	port          int
+	backendUrl    string
+	frontend      string
+	dataDir       string
+	certFile      string
+	keyFile       string
+	readOnly      bool
+	quiet         bool
+	roundRobin    bool
+	enableHttps   bool
+	profile       bool
+	compress      bool
+	thriftMetrics bool
 )
 
 var (
 	backendUserMap map[string]string
 	backendUrls    []string
 	sessionCounter int
+)
+
+var (
+	registry metrics.Registry
 )
 
 type Server struct {
@@ -82,9 +89,11 @@ func init() {
 	pflag.Bool("round-robin", false, "round-robin between backend urls")
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
 	pflag.Bool("compress", false, "enable gzip compression")
+	pflag.Bool("metrics", false, "enable Thrift call metrics, accessible from /debug/metrics")
 	pflag.CommandLine.MarkHidden("round-robin")
 	pflag.CommandLine.MarkHidden("compress")
 	pflag.CommandLine.MarkHidden("profile")
+	pflag.CommandLine.MarkHidden("metrics")
 
 	pflag.Parse()
 
@@ -97,6 +106,7 @@ func init() {
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
 	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
+	viper.BindPFlag("web.metrics", pflag.CommandLine.Lookup("metrics"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
@@ -133,6 +143,7 @@ func init() {
 	quiet = viper.GetBool("quiet")
 	profile = viper.GetBool("web.profile")
 	compress = viper.GetBool("web.compress")
+	thriftMetrics = viper.GetBool("web.metrics")
 
 	if backendUrl == "" {
 		backendUrl = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
@@ -145,6 +156,8 @@ func init() {
 	enableHttps = viper.GetBool("web.enable-https")
 	certFile = viper.GetString("web.cert")
 	keyFile = viper.GetString("web.key")
+
+	registry = metrics.NewRegistry()
 }
 
 func uploadHandler(rw http.ResponseWriter, r *http.Request) {
@@ -249,6 +262,12 @@ func selectBestServer() string {
 	}
 }
 
+func recordTiming(name string, then time.Time) {
+	d := time.Since(then)
+	t := registry.GetOrRegister(name, metrics.NewTimer())
+	t.(metrics.Timer).Update(d / time.Millisecond)
+}
+
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
 
@@ -270,6 +289,17 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "POST" {
+		if thriftMetrics {
+			defer recordTiming("all", time.Now())
+			// FIXME(andrewseidl): use a better parser for TJSONProtocol
+			p, _ := ioutil.ReadAll(r.Body)
+			r.Body = ioutil.NopCloser(bytes.NewReader(p))
+			pp := strings.SplitN(string(p), ",", 3)
+			if len(pp) > 1 {
+				defer recordTiming(strings.Replace(pp[1], "\"", "", -1), time.Now())
+			}
+		}
+
 		u, _ := url.Parse(be)
 		h = httputil.NewSingleHostReverseProxy(u)
 		rw.Header().Del("Access-Control-Allow-Origin")
@@ -294,6 +324,14 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 	h := http.StripPrefix("/downloads/", http.FileServer(http.Dir(dataDir+"/mapd_export/")))
 	h.ServeHTTP(rw, r)
+}
+
+func metricsHandler(rw http.ResponseWriter, r *http.Request) {
+	b1 := new(bytes.Buffer)
+	metrics.WriteJSONOnce(registry, b1)
+	b2 := new(bytes.Buffer)
+	json.Indent(b2, b1.Bytes(), "", "  ")
+	rw.Write(b2.Bytes())
 }
 
 func serversHandler(rw http.ResponseWriter, r *http.Request) {
@@ -359,10 +397,14 @@ func main() {
 	mux.HandleFunc("/", thriftOrFrontendHandler)
 
 	if profile {
-		mux.Handle("/debug/pprof/", http.HandlerFunc(pprof.Index))
-		mux.Handle("/debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-		mux.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
-		mux.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	}
+
+	if thriftMetrics {
+		mux.HandleFunc("/debug/metrics/", metricsHandler)
 	}
 
 	lmux := handlers.LoggingHandler(alog, mux)
