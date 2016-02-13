@@ -1,4 +1,5 @@
 #include "GroupByAndAggregate.h"
+#include "AggregateUtils.h"
 
 #include "ExpressionRange.h"
 #include "GpuSort.h"
@@ -58,11 +59,129 @@ ResultRows::ResultRows(const QueryMemoryDescriptor& query_mem_desc,
     targets_.push_back(agg_info);
   }
   std::vector<TargetValue> row;
+  initAggInitValCache(query_mem_desc.agg_col_widths.size());
   if (in_place_ && has_lazy_columns) {
     while (fetchLazyOrBuildRow(row, col_buffers, targets, false, false, true)) {
     };
   }
   moveToBegin();
+}
+
+bool ResultRows::reduceSingleRow(const int64_t* group_by_buffer,
+                                 const int32_t groups_buffer_entry_count,
+                                 size_t row_base_idx,
+                                 const int8_t warp_count,
+                                 const bool is_columnar,
+                                 const bool keep_cnt_dtnc_buff,
+                                 std::vector<int64_t>& agg_vals) const {
+  const size_t agg_col_count = agg_vals.size();
+  CHECK_EQ(agg_col_count, query_mem_desc_.agg_col_widths.size());
+  CHECK_GE(agg_col_count, targets_.size());
+  std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
+  bool discard_row = true;
+  for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
+    bool discard_partial_result = true;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
+         ++target_idx, ++agg_col_idx) {
+      const auto& agg_info = targets_[target_idx];
+      auto partial_bin_val = partial_agg_vals[agg_col_idx] =
+          group_by_buffer[is_columnar ? row_base_idx + agg_col_idx * groups_buffer_entry_count
+                                      : row_base_idx + agg_col_idx];
+      if (agg_info.is_distinct) {
+        CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
+        partial_bin_val = bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
+        if (!keep_cnt_dtnc_buff)
+          partial_agg_vals[target_idx] = partial_bin_val;
+      }
+      if (kAVG == agg_info.agg_kind) {
+        CHECK(agg_info.is_agg && !agg_info.is_distinct);
+        ++agg_col_idx;
+        partial_bin_val = partial_agg_vals[agg_col_idx] =
+            group_by_buffer[is_columnar ? row_base_idx + agg_col_idx * groups_buffer_entry_count
+                                        : row_base_idx + agg_col_idx];
+      }
+      if (agg_col_idx == static_cast<size_t>(query_mem_desc_.idx_target_as_key) &&
+          partial_bin_val != query_mem_desc_.init_val) {
+        CHECK(agg_info.is_agg);
+        discard_partial_result = false;
+      }
+    }
+    row_base_idx += agg_col_count;
+    if (discard_partial_result) {
+      continue;
+    }
+    discard_row = false;
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
+         ++target_idx, ++agg_col_idx) {
+      const auto& agg_info = targets_[target_idx];
+      auto partial_bin_val = partial_agg_vals[agg_col_idx];
+      if (agg_info.is_agg) {
+        switch (agg_info.agg_kind) {
+          case kCOUNT:
+          case kSUM:
+            if (agg_info.sql_type.is_fp()) {
+              agg_sum_double(&agg_vals[agg_col_idx], *reinterpret_cast<const double*>(&partial_bin_val));
+            } else {
+              agg_sum(&agg_vals[agg_col_idx], partial_bin_val);
+            }
+            break;
+          case kAVG:
+            if (agg_info.sql_type.is_fp()) {
+              agg_sum_double(&agg_vals[agg_col_idx], *reinterpret_cast<const double*>(&partial_bin_val));
+            } else {
+              agg_sum(&agg_vals[agg_col_idx], partial_bin_val);
+            }
+            partial_bin_val = partial_agg_vals[++agg_col_idx];
+            agg_sum(&agg_vals[agg_col_idx], partial_bin_val);
+            break;
+          case kMIN:
+            if (!agg_info.sql_type.is_fp()) {
+              if (agg_info.skip_null_val) {
+                agg_min_skip_val(&agg_vals[agg_col_idx], partial_bin_val, inline_int_null_val(agg_info.sql_type));
+              } else {
+                agg_min(&agg_vals[agg_col_idx], partial_bin_val);
+              }
+            } else {
+              if (agg_info.skip_null_val) {
+                agg_min_double_skip_val(&agg_vals[agg_col_idx],
+                                        *reinterpret_cast<const double*>(&partial_bin_val),
+                                        inline_fp_null_val(agg_info.sql_type));
+              } else {
+                agg_min_double(&agg_vals[agg_col_idx], *reinterpret_cast<const double*>(&partial_bin_val));
+              }
+            }
+            break;
+          case kMAX:
+            if (!agg_info.sql_type.is_fp()) {
+              if (agg_info.skip_null_val) {
+                agg_max_skip_val(&agg_vals[agg_col_idx], partial_bin_val, inline_int_null_val(agg_info.sql_type));
+              } else {
+                agg_max(&agg_vals[agg_col_idx], partial_bin_val);
+              }
+            } else {
+              if (agg_info.skip_null_val) {
+                agg_max_double_skip_val(&agg_vals[agg_col_idx],
+                                        *reinterpret_cast<const double*>(&partial_bin_val),
+                                        inline_fp_null_val(agg_info.sql_type));
+              } else {
+                agg_max_double(&agg_vals[agg_col_idx], *reinterpret_cast<const double*>(&partial_bin_val));
+              }
+            }
+            break;
+          default:
+            CHECK(false);
+            break;
+        }
+      } else {
+        if (agg_vals[agg_col_idx]) {
+          CHECK_EQ(agg_vals[agg_col_idx], partial_bin_val);
+        } else {
+          agg_vals[agg_col_idx] = partial_bin_val;
+        }
+      }
+    }
+  }
+  return discard_row;
 }
 
 void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
@@ -71,55 +190,21 @@ void ResultRows::addKeylessGroupByBuffer(const int64_t* group_by_buffer,
                                          const int8_t warp_count,
                                          const bool is_columnar) {
   CHECK(!is_columnar || warp_count == 1);
-  const size_t agg_col_count{targets_.size()};
-  std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
+  const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   std::vector<int64_t> agg_vals(agg_col_count, 0);
   simple_keys_.reserve(groups_buffer_entry_count);
   target_values_.reserve(groups_buffer_entry_count);
   for (int32_t bin = 0; bin < groups_buffer_entry_count; ++bin) {
-    memset(&partial_agg_vals[0], 0, agg_col_count * sizeof(partial_agg_vals[0]));
-    memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
+    memcpy(&agg_vals[0], &agg_init_vals_[0], agg_col_count * sizeof(agg_vals[0]));
     beginRow(bin + min_val);
-    bool discard_row = true;
     size_t group_by_buffer_base_idx{is_columnar ? bin : warp_count * bin * agg_col_count};
-    for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
-      bool discard_partial_result = true;
-      for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-        const auto& agg_info = targets_[target_idx];
-        CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
-        auto partial_bin_val = partial_agg_vals[target_idx] =
-            group_by_buffer[is_columnar ? group_by_buffer_base_idx + target_idx * groups_buffer_entry_count
-                                        : group_by_buffer_base_idx + target_idx];
-        if (agg_info.is_distinct) {
-          CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
-          partial_bin_val =
-              bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
-        }
-        if (agg_info.is_agg && partial_bin_val) {
-          discard_partial_result = false;
-        }
-      }
-      group_by_buffer_base_idx += agg_col_count;
-      if (discard_partial_result) {
-        continue;
-      }
-      discard_row = false;
-      for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-        const auto& agg_info = targets_[target_idx];
-        auto partial_bin_val = partial_agg_vals[target_idx];
-        if (agg_info.is_agg) {
-          CHECK_EQ(kCOUNT, agg_info.agg_kind);
-          agg_vals[target_idx] += partial_bin_val;
-        } else {
-          if (agg_vals[target_idx]) {
-            CHECK_EQ(agg_vals[target_idx], partial_bin_val);
-          } else {
-            agg_vals[target_idx] = partial_bin_val;
-          }
-        }
-      }
-    }
-    if (discard_row) {
+    if (reduceSingleRow(group_by_buffer,
+                        groups_buffer_entry_count,
+                        group_by_buffer_base_idx,
+                        warp_count,
+                        is_columnar,
+                        true,
+                        agg_vals)) {
       discardRow();
       continue;
     }
@@ -141,65 +226,12 @@ void ResultRows::reduce(const ResultRows& other_results,
     return;
   }
 
-  if (group_by_buffer_ && !in_place_) {
-    CHECK(!query_mem_desc.sortOnGpu());
-    CHECK(other_results.group_by_buffer_);
-    const size_t agg_col_count{targets_.size()};
-    for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-      const auto& agg_info = targets_[target_idx];
-      CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
-      CountDistinctImplType count_distinct_type{CountDistinctImplType::Bitmap};
-      size_t bitmap_sz_bytes{0};
-      if (agg_info.is_distinct) {
-        CHECK(agg_info.is_agg);
-        CHECK_EQ(kCOUNT, agg_info.agg_kind);
-        auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(target_idx);
-        CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
-        count_distinct_type = count_distinct_desc_it->second.impl_type_;
-        if (count_distinct_type == CountDistinctImplType::Bitmap) {
-          bitmap_sz_bytes = count_distinct_desc_it->second.bitmapSizeBytes();
-        }
-      }
-      CHECK(warp_count_ == 1 || !output_columnar);
-      for (int32_t bin = 0; bin < groups_buffer_entry_count_; ++bin) {
-        size_t group_by_buffer_base_idx{output_columnar ? target_idx * groups_buffer_entry_count_ + bin
-                                                        : bin * warp_count_ * agg_col_count + target_idx};
-        for (int8_t warp_idx = 0; warp_idx < warp_count_; ++warp_idx) {
-          const auto val = other_results.group_by_buffer_[group_by_buffer_base_idx];
-          if (agg_info.is_agg) {
-            if (agg_info.is_distinct) {
-              if (count_distinct_type == CountDistinctImplType::Bitmap) {
-                auto old_set = reinterpret_cast<int8_t*>(group_by_buffer_[group_by_buffer_base_idx]);
-                auto new_set = reinterpret_cast<int8_t*>(val);
-                bitmap_set_unify(new_set, old_set, bitmap_sz_bytes);
-              } else {
-                CHECK(count_distinct_type == CountDistinctImplType::StdSet);
-                auto old_set = reinterpret_cast<std::set<int64_t>*>(group_by_buffer_[group_by_buffer_base_idx]);
-                auto new_set = reinterpret_cast<std::set<int64_t>*>(val);
-                old_set->insert(new_set->begin(), new_set->end());
-                new_set->insert(old_set->begin(), old_set->end());
-              }
-            } else {
-              group_by_buffer_[group_by_buffer_base_idx] += val;
-            }
-          } else {
-            if (val) {
-              group_by_buffer_[group_by_buffer_base_idx] = val;
-            }
-          }
-          group_by_buffer_base_idx += agg_col_count;
-        }
-      }
-    }
-    return;
-  }
-
   auto reduce_impl = [this](int64_t* crt_val_i1,
                             int64_t* crt_val_i2,
                             const int64_t new_val_i1,
                             const int64_t new_val_i2,
                             const TargetInfo& agg_info,
-                            const size_t agg_col_idx) {
+                            const size_t target_idx) {
     CHECK(agg_info.sql_type.is_integer() || agg_info.sql_type.is_decimal() || agg_info.sql_type.is_time() ||
           agg_info.sql_type.is_boolean() || agg_info.sql_type.is_string() || agg_info.sql_type.is_fp());
     switch (agg_info.agg_kind) {
@@ -209,7 +241,7 @@ void ResultRows::reduce(const ResultRows& other_results,
         if (agg_info.is_distinct) {
           CHECK(agg_info.is_agg);
           CHECK_EQ(kCOUNT, agg_info.agg_kind);
-          auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(agg_col_idx);
+          auto count_distinct_desc_it = row_set_mem_owner_->count_distinct_descriptors_.find(target_idx);
           CHECK(count_distinct_desc_it != row_set_mem_owner_->count_distinct_descriptors_.end());
           if (count_distinct_desc_it->second.impl_type_ == CountDistinctImplType::Bitmap) {
             auto old_set = reinterpret_cast<int8_t*>(*crt_val_i1);
@@ -241,6 +273,12 @@ void ResultRows::reduce(const ResultRows& other_results,
         }
         break;
       case kMIN:
+        if (!agg_info.is_agg) {  // projected groupby key
+          if (new_val_i1) {
+            *crt_val_i1 = new_val_i1;
+          }
+          break;
+        }
         if (!agg_info.sql_type.is_fp()) {
           if (agg_info.skip_null_val) {
             agg_min_skip_val(crt_val_i1, new_val_i1, inline_int_null_val(agg_info.sql_type));
@@ -276,6 +314,41 @@ void ResultRows::reduce(const ResultRows& other_results,
         CHECK(false);
     }
   };
+
+  if (group_by_buffer_ && !in_place_) {
+    CHECK(!query_mem_desc.sortOnGpu());
+    CHECK(other_results.group_by_buffer_);
+    const size_t agg_col_count{query_mem_desc.agg_col_widths.size()};
+    auto& crt_results = group_by_buffer_;
+    const auto& new_results = other_results.group_by_buffer_;
+    CHECK_GE(agg_col_count, targets_.size());
+    for (size_t target_index = 0, agg_col_idx = 0; target_index < targets_.size() && agg_col_idx < agg_col_count;
+         ++target_index, ++agg_col_idx) {
+      const auto agg_info = targets_[target_index];
+      CHECK(warp_count_ == 1 || !output_columnar);
+      for (int32_t bin = 0; bin < groups_buffer_entry_count_; ++bin) {
+        size_t group_by_buffer_base_idx{output_columnar ? agg_col_idx * groups_buffer_entry_count_ + bin
+                                                        : bin * warp_count_ * agg_col_count + agg_col_idx};
+        size_t additional_idx{output_columnar ? (agg_col_idx + 1) * groups_buffer_entry_count_ + bin
+                                              : bin * warp_count_ * agg_col_count + (agg_col_idx + 1)};
+
+        for (int8_t warp_idx = 0; warp_idx < warp_count_; ++warp_idx) {
+          reduce_impl(&crt_results[group_by_buffer_base_idx],
+                      (kAVG == agg_info.agg_kind ? &crt_results[additional_idx] : nullptr),
+                      new_results[group_by_buffer_base_idx],
+                      (kAVG == agg_info.agg_kind ? new_results[additional_idx] : 0),
+                      agg_info,
+                      target_index);
+          group_by_buffer_base_idx += agg_col_count;
+          additional_idx += agg_col_count;
+        }
+      }
+      if (kAVG == agg_info.agg_kind) {
+        ++agg_col_idx;
+      }
+    }
+    return;
+  }
 
   if (simple_keys_.empty() && multi_keys_.empty() && !in_place_) {
     CHECK(!query_mem_desc.sortOnGpu());
@@ -767,6 +840,21 @@ TargetValue ResultRows::getRowAt(const size_t row_idx,
                               row_set_mem_owner_);
 }
 
+void ResultRows::initAggInitValCache(size_t agg_col_count) {
+  agg_init_vals_.resize(agg_col_count);
+  for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
+       ++target_idx, ++agg_col_idx) {
+    auto agg_info = targets_[target_idx];
+    if (!agg_info.is_agg) {
+      continue;
+    }
+    agg_init_vals_[agg_col_idx] = init_agg_val(agg_info.agg_kind, agg_info.sql_type);
+    if (kAVG == agg_info.agg_kind) {
+      agg_init_vals_[++agg_col_idx] = 0;
+    }
+  }
+}
+
 std::vector<TargetValue> ResultRows::getNextRow(const bool translate_strings, const bool decimal_to_double) const {
   if (just_explain_) {
     if (crt_row_buff_idx_) {
@@ -815,67 +903,41 @@ bool ResultRows::fetchLazyOrBuildRow(std::vector<TargetValue>& row,
     while (group_by_buffer_idx_ < static_cast<size_t>(groups_buffer_entry_count_)) {
       const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
       CHECK(!output_columnar_ || warp_count == 1);
-      const size_t agg_col_count{targets_.size()};
-      std::vector<int64_t> partial_agg_vals(agg_col_count, 0);
+      const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
       std::vector<int64_t> agg_vals(agg_col_count, 0);
-      memset(&partial_agg_vals[0], 0, agg_col_count * sizeof(partial_agg_vals[0]));
-      memset(&agg_vals[0], 0, agg_col_count * sizeof(agg_vals[0]));
-      bool discard_row = true;
+      CHECK_EQ(agg_col_count, agg_init_vals_.size());
+      memcpy(&agg_vals[0], &agg_init_vals_[0], agg_col_count * sizeof(agg_vals[0]));
       size_t group_by_buffer_base_idx{output_columnar_ ? group_by_buffer_idx_
                                                        : warp_count * group_by_buffer_idx_ * agg_col_count};
-      for (int8_t warp_idx = 0; warp_idx < warp_count; ++warp_idx) {
-        bool discard_partial_result = true;
-        for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-          const auto& agg_info = targets_[target_idx];
-          CHECK(!agg_info.is_agg || (agg_info.is_agg && agg_info.agg_kind == kCOUNT));
-          auto partial_bin_val = partial_agg_vals[target_idx] =
-              group_by_buffer_[output_columnar_ ? group_by_buffer_base_idx + target_idx * groups_buffer_entry_count_
-                                                : group_by_buffer_base_idx + target_idx];
-          if (agg_info.is_distinct) {
-            CHECK(agg_info.is_agg && agg_info.agg_kind == kCOUNT);
-            partial_bin_val = partial_agg_vals[target_idx] =
-                bitmap_set_size(partial_bin_val, target_idx, row_set_mem_owner_->count_distinct_descriptors_);
-          }
-          if (agg_info.is_agg && partial_bin_val) {
-            discard_partial_result = false;
-          }
-        }
-        group_by_buffer_base_idx += agg_col_count;
-        if (discard_partial_result) {
-          continue;
-        }
-        discard_row = false;
-        for (size_t target_idx = 0; target_idx < agg_col_count; ++target_idx) {
-          const auto& agg_info = targets_[target_idx];
-          auto partial_bin_val = partial_agg_vals[target_idx];
-          if (agg_info.is_agg) {
-            CHECK_EQ(kCOUNT, agg_info.agg_kind);
-            agg_vals[target_idx] += partial_bin_val;
-          } else {
-            if (agg_vals[target_idx]) {
-              CHECK_EQ(agg_vals[target_idx], partial_bin_val);
-            } else {
-              agg_vals[target_idx] = partial_bin_val;
-            }
-          }
-        }
-      }
-      if (discard_row) {
+      if (reduceSingleRow(group_by_buffer_,
+                          groups_buffer_entry_count_,
+                          group_by_buffer_base_idx,
+                          warp_count,
+                          output_columnar_,
+                          false,
+                          agg_vals)) {
         ++group_by_buffer_idx_;
         continue;
       }
-      for (size_t i = 0; i < agg_vals.size(); ++i) {
-        const auto& agg_info = targets_[i];
+      for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < agg_col_count;
+           ++target_idx, ++agg_col_idx) {
+        const auto& agg_info = targets_[target_idx];
         if (agg_info.is_distinct) {
-          row.emplace_back(agg_vals[i]);
+          row.emplace_back(agg_vals[agg_col_idx]);
         } else {
-          row.push_back(result_rows_get_impl(InternalTargetValue(agg_vals[i]),
-                                             i,
-                                             targets_[i],
+          auto target_val =
+              (kAVG == agg_info.agg_kind ? InternalTargetValue(agg_vals[agg_col_idx], agg_vals[agg_col_idx + 1])
+                                         : InternalTargetValue(agg_vals[agg_col_idx]));
+          row.push_back(result_rows_get_impl(target_val,
+                                             target_idx,
+                                             targets_[target_idx],
                                              decimal_to_double,
                                              translate_strings,
                                              executor_,
                                              row_set_mem_owner_));
+          if (kAVG == agg_info.agg_kind) {
+            ++agg_col_idx;
+          }
         }
       }
       ++crt_row_idx_;
@@ -1202,6 +1264,7 @@ void QueryExecutionContext::initGroups(int64_t* groups_buffer,
     for (int32_t i = 0; i < groups_buffer_entry_count * agg_col_count * static_cast<int32_t>(warp_size); ++i) {
       auto init_idx = i % agg_col_count;
       const ssize_t bitmap_sz{agg_bitmap_size[init_idx]};
+      CHECK_EQ(bitmap_sz, agg_bitmap_size[i % agg_col_count]);
       if (!bitmap_sz) {
         groups_buffer[i] = init_vals[init_idx];
       } else {
@@ -1259,8 +1322,10 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
   const size_t agg_col_count{query_mem_desc_.agg_col_widths.size()};
   std::vector<ssize_t> agg_bitmap_size(deferred ? agg_col_count : 0);
 
-  size_t init_agg_idx{0};
-  for (size_t target_idx = 0; target_idx < executor_->plan_state_->target_exprs_.size(); ++target_idx) {
+  CHECK_GE(agg_col_count, executor_->plan_state_->target_exprs_.size());
+  for (size_t target_idx = 0, agg_col_idx = 0;
+       target_idx < executor_->plan_state_->target_exprs_.size() && agg_col_idx < agg_col_count;
+       ++target_idx, ++agg_col_idx) {
     const auto target_expr = executor_->plan_state_->target_exprs_[target_idx];
     const auto agg_info = target_info(target_expr);
     if (agg_info.is_distinct) {
@@ -1270,26 +1335,23 @@ std::vector<ssize_t> QueryExecutionContext::allocateCountDistinctBuffers(const b
       const auto& count_distinct_desc = count_distinct_it->second;
       if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
         if (deferred) {
-          agg_bitmap_size[init_agg_idx] = count_distinct_desc.bitmap_sz_bits;
+          agg_bitmap_size[agg_col_idx] = count_distinct_desc.bitmap_sz_bits;
         } else {
-          init_agg_vals_[init_agg_idx] = allocateCountDistinctBitmap(count_distinct_desc.bitmap_sz_bits);
+          init_agg_vals_[agg_col_idx] = allocateCountDistinctBitmap(count_distinct_desc.bitmap_sz_bits);
         }
       } else {
         CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::StdSet);
         if (deferred) {
-          agg_bitmap_size[init_agg_idx] = -1;
+          agg_bitmap_size[agg_col_idx] = -1;
         } else {
-          init_agg_vals_[init_agg_idx] = allocateCountDistinctSet();
+          init_agg_vals_[agg_col_idx] = allocateCountDistinctSet();
         }
       }
     }
     if (agg_info.agg_kind == kAVG) {
-      init_agg_idx += 2;
-    } else {
-      ++init_agg_idx;
+      ++agg_col_idx;
     }
   }
-  CHECK_LE(init_agg_idx, agg_col_count);
 
   return agg_bitmap_size;
 }
@@ -1523,10 +1585,10 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
     if (query_mem_desc_.keyless_hash) {
       CHECK(!sort_on_gpu_);
       CHECK_EQ(size_t(1), group_by_col_count);
-      CHECK_EQ(targets.size(), agg_col_count);
       const int8_t warp_count = query_mem_desc_.interleavedBins(device_type_) ? executor_->warpSize() : 1;
       if (!query_mem_desc_.interleavedBins(ExecutorDeviceType::GPU) || !was_auto_device) {
-        return ResultRows(targets,
+        return ResultRows(query_mem_desc_,
+                          targets,
                           executor_,
                           row_set_mem_owner_,
                           device_type_,
@@ -1536,7 +1598,7 @@ ResultRows QueryExecutionContext::groupBufferToResults(const size_t i,
                           warp_count);
       }
       // Can't do the fast reduction in auto mode for interleaved bins, warp count isn't the same
-      ResultRows results(targets, executor_, row_set_mem_owner_, ExecutorDeviceType::CPU);
+      ResultRows results({}, targets, executor_, row_set_mem_owner_, ExecutorDeviceType::CPU);
       results.addKeylessGroupByBuffer(
           group_by_buffer, groups_buffer_entry_count, query_mem_desc_.min_val, warp_count, output_columnar_);
       return results;
@@ -1969,7 +2031,7 @@ GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   return getExprRangeInfo(groupby_exprs_.front().get());
 }
 
-GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) {
+GroupByAndAggregate::ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) const {
   const int64_t guessed_range_max{255};  // TODO(alex): replace with educated guess
 
   const auto expr_range = getExpressionRange(expr, query_infos_, executor_);
@@ -2118,6 +2180,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                        GroupByColRangeType::Scan,
                        false,
                        false,
+                       -1,
+                       0,
                        group_col_widths,
                        agg_col_widths,
                        0,
@@ -2155,6 +2219,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            hash_type,
                            false,
                            false,
+                           -1,
+                           0,
                            group_col_widths,
                            agg_col_widths,
                            max_groups_buffer_entry_count * (render_output ? 4 : 1),
@@ -2172,30 +2238,10 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
         return;
       } else {
         CHECK(!render_output);
+        const auto keyless_info = getKeylessInfo(target_expr_list);
         bool keyless =
             (!sort_on_gpu_hint || !many_entries(col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
-            !col_range_info.bucket;
-        if (keyless) {
-          bool found_count = false;  // shouldn't use keyless for projection only
-          for (const auto target_expr : target_expr_list) {
-            auto agg_info = target_info(target_expr);
-            if (agg_info.is_agg) {
-              if (agg_info.agg_kind != kCOUNT) {
-                keyless = false;
-                break;
-              } else {
-                found_count = true;
-              }
-            }
-            if (!agg_info.is_agg && !dynamic_cast<Analyzer::ColumnVar*>(target_expr)) {
-              keyless = false;
-              break;
-            }
-          }
-          if (!found_count) {
-            keyless = false;
-          }
-        }
+            !col_range_info.bucket && keyless_info.keyless;
         size_t bin_count = col_range_info.max - col_range_info.min;
         if (col_range_info.bucket) {
           bin_count /= col_range_info.bucket;
@@ -2207,6 +2253,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                            col_range_info.hash_type_,
                            keyless,
                            interleaved_bins,
+                           keyless_info.target_index,
+                           keyless_info.init_val,
                            group_col_widths,
                            agg_col_widths,
                            bin_count,
@@ -2230,6 +2278,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          col_range_info.hash_type_,
                          false,
                          false,
+                         -1,
+                         0,
                          group_col_widths,
                          agg_col_widths,
                          max_groups_buffer_entry_count,
@@ -2252,6 +2302,8 @@ void GroupByAndAggregate::initQueryMemoryDescriptor(const size_t max_groups_buff
                          col_range_info.hash_type_,
                          false,
                          false,
+                         -1,
+                         0,
                          group_col_widths,
                          agg_col_widths,
                          static_cast<size_t>(col_range_info.max),
@@ -2281,6 +2333,106 @@ QueryMemoryDescriptor GroupByAndAggregate::getQueryMemoryDescriptor() const {
 
 bool GroupByAndAggregate::outputColumnar() const {
   return output_columnar_;
+}
+
+GroupByAndAggregate::KeylessInfo GroupByAndAggregate::getKeylessInfo(
+    const std::vector<Analyzer::Expr*>& target_expr_list) const {
+  bool keyless{true}, found{false};
+  int32_t index{0};
+  int64_t init_val{0};
+  for (const auto target_expr : target_expr_list) {
+    auto agg_info = target_info(target_expr);
+    if (!found && agg_info.is_agg) {
+      const auto agg_expr = dynamic_cast<Analyzer::AggExpr*>(target_expr);
+      CHECK(agg_expr);
+      switch (agg_info.agg_kind) {
+        case kAVG:
+          ++index;
+        // fall thru
+        case kCOUNT:
+          init_val = 0;
+          found = true;
+          break;
+        case kSUM: {
+          init_val = 0;
+          auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
+          switch (expr_range_info.getType()) {
+            case ExpressionRangeType::FloatingPoint:
+              if (expr_range_info.getFpMax() < 0 || expr_range_info.getFpMin() > 0) {
+                found = true;
+              }
+              break;
+            case ExpressionRangeType::Integer:
+              if (expr_range_info.getIntMax() < 0 || expr_range_info.getIntMin() > 0) {
+                found = true;
+              }
+              break;
+            default:
+              break;
+          }
+          break;
+        }
+        case kMIN: {
+          auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
+          auto init_max = init_agg_val(agg_info.agg_kind, agg_info.sql_type);
+          switch (expr_range_info.getType()) {
+            case ExpressionRangeType::FloatingPoint: {
+              init_val = init_max;
+              auto double_max = *reinterpret_cast<const double*>(&init_max);
+              if (expr_range_info.getFpMax() < double_max) {
+                found = true;
+              }
+              break;
+            }
+            case ExpressionRangeType::Integer:
+              init_val = init_max;
+              if (expr_range_info.getIntMax() < init_max) {
+                found = true;
+              }
+              break;
+            default:
+              break;
+          }
+          break;
+        }
+        case kMAX: {
+          auto expr_range_info = getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
+          auto init_min = init_agg_val(agg_info.agg_kind, agg_info.sql_type);
+          switch (expr_range_info.getType()) {
+            case ExpressionRangeType::FloatingPoint: {
+              init_val = init_min;
+              auto double_min = *reinterpret_cast<const double*>(&init_min);
+              if (expr_range_info.getFpMin() > double_min) {
+                found = true;
+              }
+              break;
+            }
+            case ExpressionRangeType::Integer:
+              init_val = init_min;
+              if (expr_range_info.getIntMin() > init_min) {
+                found = true;
+              }
+              break;
+            default:
+              break;
+          }
+          break;
+        }
+        default:
+          keyless = false;
+          break;
+      }
+    }
+    if (!keyless) {
+      break;
+    }
+    if (!found) {
+      ++index;
+    }
+  }
+
+  // shouldn't use keyless for projection only
+  return {keyless && found, index, init_val};
 }
 
 bool GroupByAndAggregate::gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries) {

@@ -82,8 +82,12 @@ class RowSetMemoryOwner;
 struct QueryMemoryDescriptor {
   const Executor* executor_;
   GroupByColRangeType hash_type;
+
   bool keyless_hash;
   bool interleaved_bins_on_gpu;
+  int32_t idx_target_as_key;
+  int64_t init_val;
+
   std::vector<int8_t> group_col_widths;
   std::vector<int8_t> agg_col_widths;
   size_t entry_count;        // the number of entries in the main buffer
@@ -510,7 +514,8 @@ class ReductionRanOutOfSlots : public std::runtime_error {
 
 class ResultRows {
  public:
-  ResultRows(const std::vector<Analyzer::Expr*>& targets,
+  ResultRows(const QueryMemoryDescriptor& query_mem_desc,
+             const std::vector<Analyzer::Expr*>& targets,
              const Executor* executor,
              const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
              const ExecutorDeviceType device_type,
@@ -520,7 +525,7 @@ class ResultRows {
              const int8_t warp_count = 0,
              const int64_t queue_time_ms = 0)
       : executor_(executor),
-        query_mem_desc_{},
+        query_mem_desc_(query_mem_desc),
         row_set_mem_owner_(row_set_mem_owner),
         group_by_buffer_(group_by_buffer),
         groups_buffer_entry_count_(groups_buffer_entry_count),
@@ -543,6 +548,7 @@ class ResultRows {
       const auto agg_info = target_info(target_expr);
       targets_.push_back(agg_info);
     }
+    initAggInitValCache(query_mem_desc.agg_col_widths.size());
   }
 
   ResultRows(const QueryMemoryDescriptor& query_mem_desc,
@@ -627,6 +633,14 @@ class ResultRows {
     multi_keys_.push_back(key);
     target_values_.beginRow(row_set_mem_owner_.get());
   }
+
+  bool reduceSingleRow(const int64_t* group_by_buffer,
+                       const int32_t groups_buffer_entry_count,
+                       size_t row_base_idx,
+                       const int8_t warp_count,
+                       const bool is_columnar,
+                       const bool keep_cnt_dtnc_buff,
+                       std::vector<int64_t>& agg_vals) const;
 
   void addKeylessGroupByBuffer(const int64_t* group_by_buffer,
                                const int32_t groups_buffer_entry_count,
@@ -731,6 +745,8 @@ class ResultRows {
   int64_t getQueueTime() { return queue_time_ms_; }
   int64_t getRenderTime() { return render_time_ms_; }
 
+  void initAggInitValCache(size_t agg_col_count);
+
  private:
   bool fetchLazyOrBuildRow(std::vector<TargetValue>& row,
                            const std::vector<std::vector<const int8_t*>>& col_buffers,
@@ -741,8 +757,15 @@ class ResultRows {
 
   void addValues(const std::vector<int64_t>& vals) {
     target_values_.reserveRow(vals.size());
-    for (const auto val : vals) {
-      target_values_.addValue(val);
+    for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets_.size() && agg_col_idx < vals.size();
+         ++target_idx, ++agg_col_idx) {
+      const auto& agg_info = targets_[target_idx];
+      if (kAVG == agg_info.agg_kind) {
+        target_values_.addValue(vals[agg_col_idx], vals[agg_col_idx + 1]);
+        ++agg_col_idx;
+      } else {
+        target_values_.addValue(vals[agg_col_idx]);
+      }
     }
   }
 
@@ -782,6 +805,7 @@ class ResultRows {
   QueryMemoryDescriptor query_mem_desc_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
 
+  std::vector<int64_t> agg_init_vals_;
   int64_t* group_by_buffer_;
   int32_t groups_buffer_entry_count_;
   mutable size_t group_by_buffer_idx_;
@@ -1041,7 +1065,15 @@ class GroupByAndAggregate {
 
   GroupByAndAggregate::ColRangeInfo getColRangeInfo();
 
-  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr);
+  GroupByAndAggregate::ColRangeInfo getExprRangeInfo(const Analyzer::Expr* expr) const;
+
+  struct KeylessInfo {
+    const bool keyless;
+    const int32_t target_index;
+    const int64_t init_val;
+  };
+
+  KeylessInfo getKeylessInfo(const std::vector<Analyzer::Expr*>& target_expr_list) const;
 
   void codegenAggCalls(llvm::Value* agg_out_start_ptr,
                        const std::vector<llvm::Value*>& agg_out_vec,

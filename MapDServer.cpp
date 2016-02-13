@@ -996,7 +996,7 @@ class MapDHandler : virtual public MapDIf {
                                           0,
                                           0,
                                           nullptr);
-    ResultRows results({}, nullptr, nullptr, executor_device_type);
+    ResultRows results({}, {}, nullptr, nullptr, executor_device_type);
     _return.execution_time_ms += measure<>::execution([&]() {
       results = executor->execute(root_plan,
                                   session_info,

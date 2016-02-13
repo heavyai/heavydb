@@ -31,7 +31,7 @@ class ExecutionResult {
 class RaExecutionDesc {
  public:
   RaExecutionDesc(const std::vector<ForLoop>& for_loops, const RelAlgNode* body)
-      : for_loops_(for_loops), body_(body), result_({{}, nullptr, nullptr, ExecutorDeviceType::CPU}, {}) {}
+      : for_loops_(for_loops), body_(body), result_({{}, {}, nullptr, nullptr, ExecutorDeviceType::CPU}, {}) {}
 
   const ExecutionResult& getResult() const { return result_; }
 
