@@ -736,6 +736,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
+      if (col_var->get_rte_idx() > 0) {
+        // rowid for inner scan, the fragment offset from the outer scan
+        // is meaningless, the relative position in the scan is the rowid
+        return {posArg(col_var)};
+      }
       return {cgen_state_->ir_builder_.CreateAdd(posArg(col_var), fragRowOff())};
     }
   }
@@ -2590,9 +2595,6 @@ void collect_scan_cols(std::list<ScanColDescriptor>& scan_cols,
     auto cd = get_column_descriptor(scan_col_id, table_id, cat);
     if (cd->isVirtualCol) {
       CHECK_EQ("rowid", cd->columnName);
-      if (is_join) {
-        throw std::runtime_error("rowid not supported for join plans yet");
-      }
     } else {
       scan_cols.emplace_back(scan_col_id, table_descriptor, scan_idx);
     }
