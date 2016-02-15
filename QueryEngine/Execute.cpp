@@ -631,9 +631,10 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
 
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const bool hoist_literals) {
   llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
+  const auto lhs_lvs = codegen(expr->get_arg(), true, hoist_literals);
   for (auto in_val : expr->get_value_list()) {
     result = cgen_state_->ir_builder_.CreateOr(
-        result, toBool(codegenCmp(kEQ, kONE, expr->get_arg(), in_val.get(), hoist_literals)));
+        result, toBool(codegenCmp(kEQ, kONE, lhs_lvs, expr->get_arg()->get_type_info(), in_val.get(), hoist_literals)));
   }
   return result;
 }
@@ -1264,18 +1265,18 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper, const bool 
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
   }
-  return codegenCmp(optype, qualifier, lhs, rhs, hoist_literals);
+  const auto lhs_lvs = codegen(lhs, true, hoist_literals);
+  return codegenCmp(optype, qualifier, lhs_lvs, lhs->get_type_info(), rhs, hoist_literals);
 }
 
 llvm::Value* Executor::codegenCmp(const SQLOps optype,
                                   const SQLQualifier qualifier,
-                                  const Analyzer::Expr* lhs,
+                                  std::vector<llvm::Value*> lhs_lvs,
+                                  const SQLTypeInfo& lhs_ti,
                                   const Analyzer::Expr* rhs,
                                   const bool hoist_literals) {
   CHECK(IS_COMPARISON(optype));
-  const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
-  auto lhs_lvs = codegen(lhs, true, hoist_literals);
   if (rhs_ti.is_array()) {
     const Analyzer::Expr* arr_expr{rhs};
     if (dynamic_cast<const Analyzer::UOper*>(rhs)) {

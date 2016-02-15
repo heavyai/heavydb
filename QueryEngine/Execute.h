@@ -221,7 +221,8 @@ class Executor {
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
   llvm::Value* codegenCmp(const SQLOps,
                           const SQLQualifier,
-                          const Analyzer::Expr*,
+                          std::vector<llvm::Value*>,
+                          const SQLTypeInfo&,
                           const Analyzer::Expr*,
                           const bool hoist_literals);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
