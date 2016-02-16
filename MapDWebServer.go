@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -30,19 +31,18 @@ import (
 )
 
 var (
-	port          int
-	backendUrl    string
-	frontend      string
-	dataDir       string
-	certFile      string
-	keyFile       string
-	readOnly      bool
-	quiet         bool
-	roundRobin    bool
-	enableHttps   bool
-	profile       bool
-	compress      bool
-	thriftMetrics bool
+	port        int
+	backendUrl  string
+	frontend    string
+	dataDir     string
+	certFile    string
+	keyFile     string
+	readOnly    bool
+	quiet       bool
+	roundRobin  bool
+	enableHttps bool
+	profile     bool
+	compress    bool
 )
 
 var (
@@ -63,6 +63,17 @@ type Server struct {
 	Database string `json:"database"`
 	Master   bool   `json:"master"`
 }
+
+type ThriftMethodTimings struct {
+	Regex  *regexp.Regexp
+	Start  string
+	Units  string
+	Labels []string
+}
+
+var (
+	thriftMethodMap map[string]ThriftMethodTimings
+)
 
 func getLogName(lvl string) string {
 	n := filepath.Base(os.Args[0])
@@ -106,7 +117,6 @@ func init() {
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
 	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
-	viper.BindPFlag("web.metrics", pflag.CommandLine.Lookup("metrics"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("config", pflag.CommandLine.Lookup("config"))
@@ -143,7 +153,6 @@ func init() {
 	quiet = viper.GetBool("quiet")
 	profile = viper.GetBool("web.profile")
 	compress = viper.GetBool("web.compress")
-	thriftMetrics = viper.GetBool("web.metrics")
 
 	if backendUrl == "" {
 		backendUrl = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
@@ -158,6 +167,21 @@ func init() {
 	keyFile = viper.GetString("web.key")
 
 	registry = metrics.NewRegistry()
+
+	// TODO(andrew): this should be auto-gen'd by Thrift
+	thriftMethodMap = make(map[string]ThriftMethodTimings)
+	thriftMethodMap["render"] = ThriftMethodTimings{
+		Regex:  regexp.MustCompile(`"?":{"i64":(\d+)`),
+		Start:  `"3":{"i64":`,
+		Units:  "ms",
+		Labels: []string{"execution_time_ms", "render_time_ms", "total_time_ms"},
+	}
+	thriftMethodMap["sql_execute"] = ThriftMethodTimings{
+		Regex:  regexp.MustCompile(`"?":{"i64":(\d+)`),
+		Start:  `"2":{"i64":`,
+		Units:  "ms",
+		Labels: []string{"execution_time_ms", "total_time_ms"},
+	}
 }
 
 func uploadHandler(rw http.ResponseWriter, r *http.Request) {
@@ -262,10 +286,102 @@ func selectBestServer() string {
 	}
 }
 
-func recordTiming(name string, then time.Time) {
-	d := time.Since(then)
+func recordTiming(name string, dur time.Duration) {
 	t := registry.GetOrRegister(name, metrics.NewTimer())
-	t.(metrics.Timer).Update(d / time.Millisecond)
+	// TODO(andrew): change units to milliseconds if it does not impact other
+	// calculations
+	t.(metrics.Timer).Update(dur)
+}
+
+func recordTimingDuration(name string, then time.Time) {
+	dur := time.Since(then)
+	recordTiming(name, dur)
+}
+
+// ResponseMultiWriter implements an http.ResponseWriter with support for
+// outputting to an additional io.Writer.
+type ResponseMultiWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+
+func (w *ResponseMultiWriter) WriteHeader(c int) {
+	w.ResponseWriter.Header().Del("Content-Length")
+	w.ResponseWriter.WriteHeader(c)
+}
+
+func (w *ResponseMultiWriter) Header() http.Header {
+	return w.ResponseWriter.Header()
+}
+
+func (w *ResponseMultiWriter) Write(b []byte) (int, error) {
+	h := w.ResponseWriter.Header()
+	h.Del("Content-Length")
+	return w.Writer.Write(b)
+}
+
+// thriftTimingHandler records timings for all Thrift method calls. It also
+// records timings reported by the backend, as defined by ThriftMethodMap.
+// TODO(andrew): use proper Thrift-generated parser
+func thriftTimingHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		var thriftMethod string
+		body, _ := ioutil.ReadAll(r.Body)
+		r.Body = ioutil.NopCloser(bytes.NewReader(body))
+
+		elems := strings.SplitN(string(body), ",", 3)
+		if len(elems) > 1 {
+			thriftMethod = strings.Trim(elems[1], `"`)
+		}
+
+		if r.Method != "POST" || len(thriftMethod) < 1 || (r.Method == "POST" && r.URL.Path != "/") {
+			h.ServeHTTP(rw, r)
+			return
+		}
+
+		tm, exists := thriftMethodMap[thriftMethod]
+		defer recordTimingDuration("all", time.Now())
+		defer recordTimingDuration(thriftMethod, time.Now())
+
+		if !exists {
+			h.ServeHTTP(rw, r)
+			return
+		}
+
+		buf := new(bytes.Buffer)
+		mw := io.MultiWriter(buf, rw)
+
+		rw = &ResponseMultiWriter{
+			Writer:         mw,
+			ResponseWriter: rw,
+		}
+
+		h.ServeHTTP(rw, r)
+
+		go func() {
+			offset := strings.LastIndex(buf.String(), tm.Start)
+			if offset >= 0 {
+				timings := tm.Regex.FindAllStringSubmatch(buf.String()[offset:], len(tm.Labels))
+				for k, v := range timings {
+					dur, _ := time.ParseDuration(v[1] + tm.Units)
+					recordTiming(thriftMethod+"."+tm.Labels[k], dur)
+				}
+			}
+		}()
+	})
+}
+
+func metricsHandler(rw http.ResponseWriter, r *http.Request) {
+	jsonBuf := new(bytes.Buffer)
+	metrics.WriteJSONOnce(registry, jsonBuf)
+	ijsonBuf := new(bytes.Buffer)
+	json.Indent(ijsonBuf, jsonBuf.Bytes(), "", "  ")
+	rw.Write(ijsonBuf.Bytes())
+}
+
+func metricsResetHandler(rw http.ResponseWriter, r *http.Request) {
+	registry.UnregisterAll()
+	metricsHandler(rw, r)
 }
 
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
@@ -289,17 +405,6 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "POST" {
-		if thriftMetrics {
-			defer recordTiming("all", time.Now())
-			// FIXME(andrewseidl): use a better parser for TJSONProtocol
-			p, _ := ioutil.ReadAll(r.Body)
-			r.Body = ioutil.NopCloser(bytes.NewReader(p))
-			pp := strings.SplitN(string(p), ",", 3)
-			if len(pp) > 1 {
-				defer recordTiming(strings.Replace(pp[1], "\"", "", -1), time.Now())
-			}
-		}
-
 		u, _ := url.Parse(be)
 		h = httputil.NewSingleHostReverseProxy(u)
 		rw.Header().Del("Access-Control-Allow-Origin")
@@ -324,14 +429,6 @@ func downloadsHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 	h := http.StripPrefix("/downloads/", http.FileServer(http.Dir(dataDir+"/mapd_export/")))
 	h.ServeHTTP(rw, r)
-}
-
-func metricsHandler(rw http.ResponseWriter, r *http.Request) {
-	b1 := new(bytes.Buffer)
-	metrics.WriteJSONOnce(registry, b1)
-	b2 := new(bytes.Buffer)
-	json.Indent(b2, b1.Bytes(), "", "  ")
-	rw.Write(b2.Bytes())
 }
 
 func serversHandler(rw http.ResponseWriter, r *http.Request) {
@@ -395,6 +492,8 @@ func main() {
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/servers.json", serversHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
+	mux.HandleFunc("/metrics/", metricsHandler)
+	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
 
 	if profile {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -403,12 +502,9 @@ func main() {
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	}
 
-	if thriftMetrics {
-		mux.HandleFunc("/debug/metrics/", metricsHandler)
-	}
-
 	lmux := handlers.LoggingHandler(alog, mux)
 	cmux := cors.Default().Handler(lmux)
+	cmux = thriftTimingHandler(cmux)
 	if compress {
 		cmux = handlers.CompressHandler(cmux)
 	}
