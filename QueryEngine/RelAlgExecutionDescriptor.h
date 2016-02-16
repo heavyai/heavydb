@@ -22,6 +22,8 @@ class RaExecutionDesc {
 
   void setResult(const ResultRows* result) { result_.reset(result); }
 
+  const RelAlgNode* getBody() const { return body_; }
+
  private:
   const std::vector<ForLoop> for_loops_;
   const RelAlgNode* body_;

@@ -2,7 +2,16 @@
 #include "RelAlgExecutor.h"
 #include "RexVisitor.h"
 
-ResultRows RelAlgExecutor::executeRelAlgSeq(const std::list<RaExecutionDesc>&, const CompilationOptions&) {
+ResultRows RelAlgExecutor::executeRelAlgSeq(std::list<RaExecutionDesc>& exec_descs, const CompilationOptions& co) {
+  for (auto& exec_desc : exec_descs) {
+    const auto body = exec_desc.getBody();
+    const auto compound = dynamic_cast<const RelCompound*>(body);
+    if (compound) {
+      exec_desc.setResult(executeCompound(compound, co));
+      continue;
+    }
+    CHECK(false);
+  }
   CHECK(false);
   return ResultRows("", 0);
 }
@@ -35,10 +44,10 @@ std::unordered_set<unsigned> get_used_inputs(const RelCompound* compound) {
 
 }  // namespace
 
-ResultRows RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
+ResultRows* RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
   const auto used_inputs = get_used_inputs(compound);
   CHECK(!used_inputs.empty());
   CHECK(false);
-  return ResultRows("", 0);
+  return new ResultRows("", 0);
 }
 #endif  // HAVE_CALCITE
