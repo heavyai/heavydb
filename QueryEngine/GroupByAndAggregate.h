@@ -971,7 +971,8 @@ class GroupByAndAggregate {
  public:
   GroupByAndAggregate(Executor* executor,
                       const ExecutorDeviceType device_type,
-                      const Planner::Plan* plan,
+                      const std::list<Analyzer::Expr*>& groupby_exprs,
+                      const std::vector<std::shared_ptr<Analyzer::TargetEntry>> target_list,
                       const bool render_output,
                       const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
@@ -1055,7 +1056,8 @@ class GroupByAndAggregate {
 
   QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;
-  const Planner::Plan* plan_;
+  const std::list<Analyzer::Expr*> groupby_exprs_;
+  const std::vector<std::shared_ptr<Analyzer::TargetEntry>> target_list_;
   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const int64_t scan_limit_;
@@ -1104,8 +1106,8 @@ inline uint64_t exp_to_scale(const unsigned exp) {
   return res;
 }
 
-inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
-  const auto& target_list = plan->get_targetlist();
+inline std::vector<Analyzer::Expr*> get_agg_target_exprs(
+    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& target_list) {
   std::vector<Analyzer::Expr*> result;
   for (auto target : target_list) {
     auto target_expr = target->get_expr();
@@ -1113,6 +1115,11 @@ inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* pl
     result.push_back(target_expr);
   }
   return result;
+}
+
+inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
+  const auto& target_list = plan->get_targetlist();
+  return get_agg_target_exprs(target_list);
 }
 
 inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {

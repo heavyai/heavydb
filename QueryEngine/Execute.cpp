@@ -3927,6 +3927,21 @@ llvm::Value* get_arg_by_name(llvm::Function* func, const std::string& name) {
   return nullptr;
 }
 
+std::list<Analyzer::Expr*> group_by_exprs(const Planner::Plan* plan) {
+  const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+  // For non-aggregate (scan only) plans, execute them like a group by
+  // row index -- the null pointer means row index to Executor::codegen().
+  if (agg_plan) {
+    const auto& owned_groupby_list = agg_plan->get_groupby_list();
+    std::list<Analyzer::Expr*> result;
+    for (const auto g : owned_groupby_list) {
+      result.push_back(g.get());
+    }
+    return result;
+  }
+  return {nullptr};
+}
+
 }  // namespace
 
 void Executor::nukeOldState(const bool allow_lazy_fetch, const JoinInfo& join_info) {
@@ -3965,9 +3980,12 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
   }
   nukeOldState(allow_lazy_fetch, join_info);
 
+  const auto groupby_exprs = group_by_exprs(plan);
+
   GroupByAndAggregate group_by_and_aggregate(this,
                                              device_type,
-                                             plan,
+                                             groupby_exprs,
+                                             plan->get_targetlist(),
                                              render_output,
                                              query_infos,
                                              row_set_mem_owner,
