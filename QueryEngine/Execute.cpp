@@ -2498,7 +2498,7 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
     rows_to_sort.in_place_ = false;
     rows_to_sort.group_by_buffer_ = nullptr;
   }
-  if (rows_to_sort.query_mem_desc_.sortOnGpu()) {
+  if (rows_to_sort.query_mem_desc_.sortOnGpu() && !rows_to_sort.definitelyHasNoRows()) {
     const int device_id{0};
     CHECK(rows_to_sort.in_place_);
     CHECK_EQ(size_t(1), rows_to_sort.in_place_group_by_buffers_.size());
