@@ -261,8 +261,17 @@ class RowSetMemoryOwner : boost::noncopyable {
   friend class ResultRows;
 };
 
-inline TargetInfo target_info(const Analyzer::Expr* target_expr) {
-  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+inline const Analyzer::AggExpr* cast_to_agg_expr(const Analyzer::Expr* target_expr) {
+  return dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+}
+
+inline const Analyzer::AggExpr* cast_to_agg_expr(const std::shared_ptr<Analyzer::Expr> target_expr) {
+  return dynamic_cast<const Analyzer::AggExpr*>(target_expr.get());
+}
+
+template <class PointerType>
+inline TargetInfo target_info(const PointerType target_expr) {
+  const auto agg_expr = cast_to_agg_expr(target_expr);
   bool notnull = target_expr->get_type_info().get_notnull();
   if (!agg_expr) {
     return {false, kMIN, target_expr ? target_expr->get_type_info() : SQLTypeInfo(kBIGINT, notnull), false, false};
@@ -971,8 +980,8 @@ class GroupByAndAggregate {
  public:
   GroupByAndAggregate(Executor* executor,
                       const ExecutorDeviceType device_type,
-                      const std::list<Analyzer::Expr*>& groupby_exprs,
-                      const std::vector<std::shared_ptr<Analyzer::TargetEntry>> target_list,
+                      const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+                      const std::vector<Analyzer::Expr*>& target_exprs,
                       const bool render_output,
                       const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>,
@@ -1056,8 +1065,8 @@ class GroupByAndAggregate {
 
   QueryMemoryDescriptor query_mem_desc_;
   Executor* executor_;
-  const std::list<Analyzer::Expr*> groupby_exprs_;
-  const std::vector<std::shared_ptr<Analyzer::TargetEntry>> target_list_;
+  const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs_;
+  const std::vector<Analyzer::Expr*> target_exprs_;
   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const int64_t scan_limit_;

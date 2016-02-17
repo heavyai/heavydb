@@ -267,8 +267,22 @@ class Executor {
                                const bool just_explain,
                                const bool allow_loop_joins,
                                RenderAllocator* render_allocator);
-  ResultRows executeAggScanPlan(const Planner::Plan* plan,
-                                const int64_t limit,
+
+  struct RelAlgExecutionUnit {
+    const std::vector<ScanId> scan_ids;
+    const std::list<ScanColDescriptor> scan_cols;
+    const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
+    const std::list<std::shared_ptr<Analyzer::Expr>> quals;
+    const std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+    const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+    const std::vector<Analyzer::Expr*> target_exprs;
+    const std::list<Analyzer::OrderEntry> order_entries;
+    const int64_t scan_limit;
+  };
+
+  ResultRows executeAggScanPlan(const bool is_agg_plan,
+                                const std::vector<Fragmenter_Namespace::QueryInfo>&,
+                                const RelAlgExecutionUnit&,
                                 const bool hoist_literals,
                                 const ExecutorDeviceType device_type,
                                 const ExecutorOptLevel,
@@ -276,14 +290,13 @@ class Executor {
                                 std::shared_ptr<RowSetMemoryOwner>,
                                 size_t& max_groups_buffer_entry_guess,
                                 int32_t* error_code,
-                                const Planner::Sort* sort_plan,
                                 const bool output_columnar_hint,
                                 const bool allow_multifrag,
                                 const bool just_explain,
                                 const bool allow_loop_joins,
                                 RenderAllocator* render_allocator);
   ResultRows collectAllDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
-                                     const Planner::Plan* plan,
+                                     const std::vector<Analyzer::Expr*>& target_exprs,
                                      const QueryMemoryDescriptor& query_mem_desc,
                                      const ExecutorDeviceType device_type,
                                      const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
@@ -305,7 +318,7 @@ class Executor {
                                                   const int64_t rowid_lookup_key)> dispatch,
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
-                         const Planner::AggPlan* agg_plan,
+                         const bool is_agg_plan,
                          const std::vector<ScanId>& scan_ids,
                          const std::map<int, const TableFragments*>& all_tables_fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
@@ -418,15 +431,9 @@ class Executor {
     std::shared_ptr<JoinHashTable> join_hash_table_;
   };
 
-  CompilationResult compilePlan(const Planner::Plan* plan,
-                                const bool render_output,
+  CompilationResult compilePlan(const bool render_output,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
-                                const std::vector<Executor::AggInfo>& agg_infos,
-                                const std::vector<ScanId>& scan_ids,
-                                const std::list<ScanColDescriptor>& scan_cols,
-                                const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
-                                const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
-                                const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+                                const RelAlgExecutionUnit& ra_exe_unit,
                                 const bool hoist_literals,
                                 const bool allow_multifrag,
                                 const ExecutorDeviceType device_type,
@@ -436,8 +443,6 @@ class Executor {
                                 std::shared_ptr<RowSetMemoryOwner>,
                                 const size_t max_groups_buffer_entry_count,
                                 const size_t small_groups_buffer_entry_count,
-                                const int64_t scan_limit,
-                                const Planner::Sort* sort_plan,
                                 const bool output_columnar_hint,
                                 const bool serialize_llvm_ir,
                                 std::string& llvm_ir,
@@ -448,7 +453,7 @@ class Executor {
 
   void allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_loop_joins);
 
-  JoinInfo chooseJoinType(const Planner::Join*,
+  JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
                           const std::vector<Fragmenter_Namespace::QueryInfo>&,
                           const ExecutorDeviceType device_type);
 
