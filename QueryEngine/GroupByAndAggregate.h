@@ -545,7 +545,7 @@ class ResultRows {
              const ExecutorDeviceType device_type,
              const int device_id);
 
-  explicit ResultRows(const std::string& explanation, int64_t queue_time_ms)
+  ResultRows(const std::string& explanation, int64_t queue_time_ms)
       : query_mem_desc_{},
         group_by_buffer_idx_(0),
         output_columnar_(false),
@@ -562,7 +562,7 @@ class ResultRows {
         explanation_(explanation),
         queue_time_ms_(queue_time_ms) {}
 
-  explicit ResultRows(const std::string& explanation, int64_t queue_time_ms, int64_t render_time_ms)
+  ResultRows(const std::string& explanation, int64_t queue_time_ms, int64_t render_time_ms)
       : query_mem_desc_{},
         group_by_buffer_idx_(0),
         output_columnar_(false),
