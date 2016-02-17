@@ -3982,19 +3982,20 @@ Executor::CompilationResult Executor::compilePlan(const Planner::Plan* plan,
 
   const auto groupby_exprs = group_by_exprs(plan);
 
-  GroupByAndAggregate group_by_and_aggregate(this,
-                                             device_type,
-                                             groupby_exprs,
-                                             plan->get_targetlist(),
-                                             render_output,
-                                             query_infos,
-                                             row_set_mem_owner,
-                                             max_groups_buffer_entry_guess,
-                                             small_groups_buffer_entry_count,
-                                             scan_limit,
-                                             allow_multifrag,
-                                             sort_plan,
-                                             output_columnar_hint && device_type == ExecutorDeviceType::GPU);
+  GroupByAndAggregate group_by_and_aggregate(
+      this,
+      device_type,
+      groupby_exprs,
+      plan->get_targetlist(),
+      render_output,
+      query_infos,
+      row_set_mem_owner,
+      max_groups_buffer_entry_guess,
+      small_groups_buffer_entry_count,
+      scan_limit,
+      allow_multifrag,
+      sort_plan ? sort_plan->get_order_entries() : std::list<Analyzer::OrderEntry>{},
+      output_columnar_hint && device_type == ExecutorDeviceType::GPU);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   const bool output_columnar = group_by_and_aggregate.outputColumnar();

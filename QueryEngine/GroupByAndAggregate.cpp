@@ -2009,7 +2009,7 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
                                          const size_t small_groups_buffer_entry_count,
                                          const int64_t scan_limit,
                                          const bool allow_multifrag,
-                                         const Planner::Sort* sort_plan,
+                                         const std::list<Analyzer::OrderEntry>& order_entries,
                                          const bool output_columnar_hint)
     : executor_(executor),
       groupby_exprs_(groupby_exprs),
@@ -2026,13 +2026,13 @@ GroupByAndAggregate::GroupByAndAggregate(Executor* executor,
       throw std::runtime_error("Cannot group by string columns which are not dictionary encoded.");
     }
   }
-  bool sort_on_gpu_hint =
-      device_type == ExecutorDeviceType::GPU && allow_multifrag && sort_plan && gpuCanHandleOrderEntries(sort_plan);
+  bool sort_on_gpu_hint = device_type == ExecutorDeviceType::GPU && allow_multifrag && !order_entries.empty() &&
+                          gpuCanHandleOrderEntries(order_entries);
   initQueryMemoryDescriptor(
       max_groups_buffer_entry_count, small_groups_buffer_entry_count, sort_on_gpu_hint, render_output);
   query_mem_desc_.sort_on_gpu_ =
       sort_on_gpu_hint && query_mem_desc_.canOutputColumnar() && !query_mem_desc_.keyless_hash;
-  query_mem_desc_.is_sort_plan = sort_plan && !query_mem_desc_.sort_on_gpu_;
+  query_mem_desc_.is_sort_plan = !order_entries.empty() && !query_mem_desc_.sort_on_gpu_;
   output_columnar_ = (output_columnar_hint && query_mem_desc_.canOutputColumnar()) || query_mem_desc_.sortOnGpu();
   query_mem_desc_.output_columnar = output_columnar_;
 }
@@ -2279,16 +2279,14 @@ bool GroupByAndAggregate::outputColumnar() const {
   return output_columnar_;
 }
 
-bool GroupByAndAggregate::gpuCanHandleOrderEntries(const Planner::Sort* sort_plan) {
-  const auto& target_list = sort_plan->get_child_plan()->get_targetlist();
-  const auto& order_entries = sort_plan->get_order_entries();
+bool GroupByAndAggregate::gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries) {
   if (order_entries.size() > 1) {  // TODO(alex): lift this restriction
     return false;
   }
   for (const auto order_entry : order_entries) {
     CHECK_GE(order_entry.tle_no, 1);
-    CHECK_LE(static_cast<size_t>(order_entry.tle_no), target_list.size());
-    const auto target_expr = target_list[order_entry.tle_no - 1]->get_expr();
+    CHECK_LE(static_cast<size_t>(order_entry.tle_no), target_list_.size());
+    const auto target_expr = target_list_[order_entry.tle_no - 1]->get_expr();
     if (!dynamic_cast<Analyzer::AggExpr*>(target_expr)) {
       return false;
     }

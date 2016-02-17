@@ -980,14 +980,12 @@ class GroupByAndAggregate {
                       const size_t small_groups_buffer_entry_count,
                       const int64_t scan_limit,
                       const bool allow_multifrag,
-                      const Planner::Sort* sort_plan,
+                      const std::list<Analyzer::OrderEntry>& order_entries,
                       const bool output_columnar_hint);
 
   QueryMemoryDescriptor getQueryMemoryDescriptor() const;
 
   bool outputColumnar() const;
-
-  bool gpuCanHandleOrderEntries(const Planner::Sort* sort_plan);
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
@@ -1019,6 +1017,8 @@ class GroupByAndAggregate {
     bool chain_to_next_;
     DiamondCodegen* parent_;
   };
+
+  bool gpuCanHandleOrderEntries(const std::list<Analyzer::OrderEntry>& order_entries);
 
   void initQueryMemoryDescriptor(const size_t max_groups_buffer_entry_count,
                                  const size_t small_groups_buffer_entry_count,
