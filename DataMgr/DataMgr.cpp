@@ -100,6 +100,7 @@ void DataMgr::populateMgrs(const size_t userSpecifiedCpuBufferSize) {
                              (1 << 29);  // set max mem size to be size of global mem - 512MB
       size_t gpuSlabSize = std::min(static_cast<size_t>((cudaMgr_->deviceProperties[gpuNum].globalMem / 4)),
                                     static_cast<size_t>(bufferAllocIncrement));
+      gpuSlabSize -= gpuSlabSize % 512;
       // cout << "Gpu Slab Size: " << gpuSlabSize << endl;
       // bufferMgrs_[2].push_back(new GpuCudaBufferMgr(gpuNum, gpuMaxMemSize, cudaMgr_, 1 << 29,512,bufferMgrs_[1][0]));
       bufferMgrs_[2].push_back(
