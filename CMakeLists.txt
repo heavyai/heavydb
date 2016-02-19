@@ -159,6 +159,7 @@ if(ENABLE_CALCITE)
 endif()
 
 add_executable(mapd_server ${mapd_server_source_files})
+set_target_properties(mapd_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
