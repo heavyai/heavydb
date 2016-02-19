@@ -246,6 +246,12 @@ extern "C" __attribute__((always_inline)) void agg_count_distinct_bitmap(int64_t
   reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
 }
 
+extern "C"
+    __attribute__((always_inline)) bool bit_is_set(const int8_t* bitset, const int64_t val, const int64_t min_val) {
+  const uint64_t bitmap_idx = val - min_val;
+  return bitset[bitmap_idx >> 3] & (1 << (bitmap_idx & 7));
+}
+
 extern "C" __attribute__((always_inline)) void agg_sum(int64_t* agg, const int64_t val) {
   *agg += val;
 }

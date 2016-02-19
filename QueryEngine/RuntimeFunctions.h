@@ -26,6 +26,8 @@ extern "C" void agg_max_double_skip_val(int64_t* agg, const double val, const do
 
 extern "C" void agg_min_double_skip_val(int64_t* agg, const double val, const double skip_val);
 
+extern "C" void agg_count_distinct_bitmap(int64_t* agg, const int64_t val, const int64_t min_val);
+
 #define EMPTY_KEY std::numeric_limits<int64_t>::max()
 
 extern "C" int64_t* get_group_value(int64_t* groups_buffer,
