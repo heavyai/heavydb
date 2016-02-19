@@ -446,6 +446,8 @@ class RelCompound : public RelAlgNode {
 
   const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
 
+  const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
+
   std::string toString() const {
     std::string result = "(RelCompound<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += (filter_expr_ ? filter_expr_->toString() : "null") + " ";

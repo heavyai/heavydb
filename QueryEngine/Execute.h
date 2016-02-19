@@ -761,6 +761,7 @@ class Executor {
   friend class QueryExecutionContext;
   friend class ResultRows;
   friend class JoinHashTable;
+  friend class RelAlgExecutor;
 };
 
 #endif  // QUERYENGINE_EXECUTE_H

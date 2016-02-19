@@ -47,6 +47,45 @@ std::unordered_set<unsigned> get_used_inputs(const RelCompound* compound) {
 ResultRows* RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
   const auto used_inputs = get_used_inputs(compound);
   CHECK(!used_inputs.empty());
+  int rte_idx = 0;  // TODO(alex)
+  std::vector<ScanId> scan_ids;
+  std::list<ScanColDescriptor> scan_cols;
+  {
+    CHECK_EQ(size_t(1), compound->inputCount());
+    const auto scan_ra = dynamic_cast<const RelScan*>(compound->getInput(0));
+    CHECK(scan_ra);  // TODO(alex)
+    scan_ids.emplace_back(scan_ra->getTableDescriptor()->tableId, rte_idx);
+    for (const auto used_input : used_inputs) {
+      scan_cols.emplace_back(used_input, scan_ra->getTableDescriptor(), rte_idx);
+    }
+  }
+  const auto filter_expr = translate_rex(compound->getFilterExpr(), rte_idx, cat_);
+  std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
+  for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
+    scalar_sources.push_back(translate_rex(compound->getScalarSource(i), rte_idx, cat_));
+  }
+  std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+  for (const auto group_idx : compound->getGroupIndices()) {
+    groupby_exprs.push_back(scalar_sources[group_idx]);
+  }
+  Executor::RelAlgExecutionUnit rel_alg_exe_unit{scan_ids, scan_cols, {}, {filter_expr}, {}, groupby_exprs, {}, {}, 0};
+  size_t max_groups_buffer_entry_guess{2048};
+  int32_t error_code{0};
+  executor_->executeAggScanPlan(true,
+                                {},
+                                rel_alg_exe_unit,
+                                co.hoist_literals_,
+                                co.device_type_,
+                                co.opt_level_,
+                                cat_,
+                                executor_->row_set_mem_owner_,
+                                max_groups_buffer_entry_guess,
+                                &error_code,
+                                false,
+                                true,
+                                false,
+                                false,
+                                nullptr);
   CHECK(false);
   return new ResultRows("", 0);
 }
