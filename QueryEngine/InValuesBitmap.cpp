@@ -1,3 +1,4 @@
+#include "Execute.h"
 #include "InValuesBitmap.h"
 #ifdef HAVE_CUDA
 #include "GpuMemUtils.h"
@@ -27,27 +28,27 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
 #endif  // HAVE_CUDA
   CHECK(!values.empty());
-  auto min_val = std::numeric_limits<int64_t>::max();
-  auto max_val = std::numeric_limits<int64_t>::min();
+  min_val_ = std::numeric_limits<int64_t>::max();
+  max_val_ = std::numeric_limits<int64_t>::min();
   for (const auto value : values) {
     if (value == null_val) {
       has_nulls_ = true;
       continue;
     }
-    if (value < min_val) {
-      min_val = value;
+    if (value < min_val_) {
+      min_val_ = value;
     }
-    if (value > max_val) {
-      max_val = value;
+    if (value > max_val_) {
+      max_val_ = value;
     }
   }
-  if (max_val < min_val) {
-    CHECK_EQ(std::numeric_limits<int64_t>::max(), min_val);
-    CHECK_EQ(std::numeric_limits<int64_t>::min(), max_val);
+  if (max_val_ < min_val_) {
+    CHECK_EQ(std::numeric_limits<int64_t>::max(), min_val_);
+    CHECK_EQ(std::numeric_limits<int64_t>::min(), max_val_);
     return;
   }
   const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
-  const auto bitmap_sz_bits = static_cast<int64_t>(checked_int64_t(max_val) - min_val + 1);
+  const auto bitmap_sz_bits = static_cast<int64_t>(checked_int64_t(max_val_) - min_val_ + 1);
   if (bitmap_sz_bits > MAX_BITMAP_BITS) {
     throw FailedToCreateBitmap();
   }
@@ -57,7 +58,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
     if (value == null_val) {
       continue;
     }
-    agg_count_distinct_bitmap(reinterpret_cast<int64_t*>(bitset_), value, min_val);
+    agg_count_distinct_bitmap(reinterpret_cast<int64_t*>(&bitset_), value, min_val_);
   }
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
@@ -73,4 +74,13 @@ InValuesBitmap::~InValuesBitmap() {
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
     free(bitset_);
   }
+}
+
+llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor, const bool hoist_literals) {
+  const auto needle_i64 = executor->toDoublePrecision(needle);
+  return executor->cgen_state_->emitCall("bit_is_set",
+                                         {executor->ll_int(reinterpret_cast<int64_t>(bitset_)),
+                                          needle_i64,
+                                          executor->ll_int(min_val_),
+                                          executor->ll_int(max_val_)});
 }

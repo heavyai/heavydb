@@ -4,6 +4,7 @@
 typedef void GLFWwindow;
 
 #include "GroupByAndAggregate.h"
+#include "InValuesBitmap.h"
 #include "JoinHashTable.h"
 #include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
@@ -216,6 +217,7 @@ class Executor {
                                const char escape_char,
                                const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
+  InValuesBitmap* createInValuesBitmap(const Analyzer::InValues*, const CompilationOptions&);
   llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenCmp(const SQLOps,
                           const SQLQualifier,
@@ -819,6 +821,7 @@ class Executor {
   friend struct QueryMemoryDescriptor;
   friend class QueryExecutionContext;
   friend class ResultRows;
+  friend class InValuesBitmap;
   friend class JoinHashTable;
   friend class RelAlgExecutor;
   friend class ExecutionDispatch;

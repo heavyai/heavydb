@@ -32,10 +32,12 @@ class InValuesBitmap {
                  Data_Namespace::DataMgr* data_mgr);
   ~InValuesBitmap();
 
-  llvm::Value* codegen(const llvm::Value* needle, Executor* executor, const bool hoist_literals);
+  llvm::Value* codegen(llvm::Value* needle, Executor* executor, const bool hoist_literals);
 
  private:
   int8_t* bitset_;
+  int64_t min_val_;
+  int64_t max_val_;
   bool has_nulls_;
   const Data_Namespace::MemoryLevel memory_level_;
 };

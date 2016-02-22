@@ -767,6 +767,47 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
   return result;
 }
 
+InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_values, const CompilationOptions& co) {
+  const auto& value_list = in_values->get_value_list();
+  std::vector<int64_t> values;
+  const auto& ti = in_values->get_arg()->get_type_info();
+  if (!(ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT))) {
+    return nullptr;
+  }
+  const auto sd = ti.is_string() ? getStringDictionary(ti.get_comp_param(), row_set_mem_owner_) : nullptr;
+  if (value_list.size() > 0) {  // TODO(alex): set threshold
+    for (const auto in_val : value_list) {
+      const auto in_val_const = std::dynamic_pointer_cast<Analyzer::Constant>(in_val);
+      if (!in_val_const) {
+        return nullptr;
+      }
+      const auto& in_val_ti = in_val_const->get_type_info();
+      CHECK(in_val_ti == ti);
+      if (ti.is_string()) {
+        CHECK(sd);
+        const auto string_id = sd->get(*in_val_const->get_constval().stringval);
+        if (string_id >= 0) {
+          values.push_back(string_id);
+        }
+      } else {
+        values.push_back(codegenIntConst(in_val_const.get())->getSExtValue());
+      }
+    }
+    try {
+      return new InValuesBitmap(
+          values,
+          inline_int_null_val(ti),
+          co.device_type_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL,
+          0,
+          &catalog_->get_dataMgr());
+    } catch (...) {
+      return nullptr;
+    }
+  }
+  CHECK(false);
+  return nullptr;
+}
+
 llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper, const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   if (IS_ARITHMETIC(optype)) {
