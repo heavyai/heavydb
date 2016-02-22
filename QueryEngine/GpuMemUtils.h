@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_GPUMEMUTILS_H
 #define QUERYENGINE_GPUMEMUTILS_H
 
+#include "CompilationOptions.h"
 #include "../DataMgr/DataMgr.h"
 
 #include <cuda.h>

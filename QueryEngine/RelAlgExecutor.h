@@ -4,12 +4,6 @@
 #include "Execute.h"
 #include "RelAlgExecutionDescriptor.h"
 
-struct CompilationOptions {
-  const bool hoist_literals_;
-  const ExecutorDeviceType device_type_;
-  const ExecutorOptLevel opt_level_;
-};
-
 class RelAlgExecutor {
  public:
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat) {}

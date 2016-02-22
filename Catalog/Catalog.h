@@ -23,14 +23,16 @@
 #include <cstdint>
 #include <ctime>
 
-#include "../SqliteConnector/SqliteConnector.h"
 #include "TableDescriptor.h"
 #include "ColumnDescriptor.h"
 #include "DictDescriptor.h"
 #include "FrontendViewDescriptor.h"
 #include "LinkDescriptor.h"
-#include "../DataMgr/DataMgr.h"
 #include "LdapServer.h"
+
+#include "../DataMgr/DataMgr.h"
+#include "../QueryEngine/CompilationOptions.h"
+#include "../SqliteConnector/SqliteConnector.h"
 
 struct Privileges {
   bool super_;

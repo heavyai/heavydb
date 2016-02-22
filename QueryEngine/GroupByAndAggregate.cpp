@@ -2393,9 +2393,7 @@ GroupByAndAggregate::DiamondCodegen::~DiamondCodegen() {
   LL_BUILDER.SetInsertPoint(orig_cond_false_);
 }
 
-bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
-                                  const ExecutorDeviceType device_type,
-                                  const bool hoist_literals) {
+bool GroupByAndAggregate::codegen(llvm::Value* filter_result, const CompilationOptions& co) {
   CHECK(filter_result);
 
   bool can_return_error = false;
@@ -2416,7 +2414,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         LL_BUILDER.CreateStore(LL_BUILDER.CreateAdd(crt_matched, executor_->ll_int(int64_t(1))), arg_it);
       }
 
-      auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, device_type, hoist_literals, filter_cfg);
+      auto agg_out_start_ptr = codegenGroupBy(query_mem_desc, co, filter_cfg);
       if (query_mem_desc.usesGetGroupValueFast() ||
           query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
         if (query_mem_desc.hash_type == GroupByColRangeType::MultiColPerfectHash) {
@@ -2424,7 +2422,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         }
         // Don't generate null checks if the group slot is guaranteed to be non-null,
         // as it's the case for get_group_value_fast* family.
-        codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
+        codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, co);
       } else {
         {
           DiamondCodegen nullcheck_cfg(LL_BUILDER.CreateICmpNE(agg_out_start_ptr,
@@ -2434,7 +2432,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
                                        false,
                                        "groupby_nullcheck",
                                        &filter_cfg);
-          codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, device_type, hoist_literals);
+          codegenAggCalls(agg_out_start_ptr, {}, query_mem_desc, co);
         }
         can_return_error = true;
         LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
@@ -2448,7 +2446,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
       for (int32_t i = 0; i < get_agg_count(target_exprs_); ++i) {
         agg_out_vec.push_back(arg_it++);
       }
-      codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, device_type, hoist_literals);
+      codegenAggCalls(nullptr, agg_out_vec, query_mem_desc, co);
     }
   }
 
@@ -2458,8 +2456,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
 }
 
 llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& query_mem_desc,
-                                                 const ExecutorDeviceType device_type,
-                                                 const bool hoist_literals,
+                                                 const CompilationOptions& co,
                                                  DiamondCodegen& diamond_codegen) {
   auto arg_it = ROW_FUNC->arg_begin();
   auto groups_buffer = arg_it++;
@@ -2474,7 +2471,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
       const auto group_expr = groupby_exprs_.front();
       const auto group_expr_lv =
           executor_->groupByColumnCodegen(group_expr.get(),
-                                          hoist_literals,
+                                          co,
                                           query_mem_desc.has_nulls,
                                           query_mem_desc.max_val + (query_mem_desc.bucket ? query_mem_desc.bucket : 1),
                                           diamond_codegen,
@@ -2486,7 +2483,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
         if (query_mem_desc.keyless_hash) {
           get_group_fn_name += "_keyless";
         }
-        if (query_mem_desc.interleavedBins(device_type)) {
+        if (query_mem_desc.interleavedBins(co.device_type_)) {
           CHECK(!outputColumnar());
           CHECK(query_mem_desc.keyless_hash);
           get_group_fn_name += "_semiprivate";
@@ -2500,7 +2497,7 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
         } else {
           get_group_fn_args.push_back(
               LL_INT(outputColumnar() ? 1 : static_cast<int32_t>(query_mem_desc.agg_col_widths.size())));
-          if (query_mem_desc.interleavedBins(device_type)) {
+          if (query_mem_desc.interleavedBins(co.device_type_)) {
             auto warp_idx = emitCall("thread_warp_idx", {LL_INT(executor_->warpSize())});
             get_group_fn_args.push_back(warp_idx);
             get_group_fn_args.push_back(LL_INT(executor_->warpSize()));
@@ -2529,12 +2526,8 @@ llvm::Value* GroupByAndAggregate::codegenGroupBy(const QueryMemoryDescriptor& qu
       int32_t subkey_idx = 0;
       for (const auto group_expr : groupby_exprs_) {
         auto col_range_info = getExprRangeInfo(group_expr.get());
-        const auto group_expr_lv = executor_->groupByColumnCodegen(group_expr.get(),
-                                                                   hoist_literals,
-                                                                   col_range_info.has_nulls,
-                                                                   col_range_info.max + 1,
-                                                                   diamond_codegen,
-                                                                   array_loops);
+        const auto group_expr_lv = executor_->groupByColumnCodegen(
+            group_expr.get(), co, col_range_info.has_nulls, col_range_info.max + 1, diamond_codegen, array_loops);
         // store the sub-key to the buffer
         LL_BUILDER.CreateStore(group_expr_lv, LL_BUILDER.CreateGEP(group_key, LL_INT(subkey_idx++)));
       }
@@ -2646,8 +2639,7 @@ uint32_t GroupByAndAggregate::aggColumnarOff(const uint32_t agg_out_off, const Q
 void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
                                           const std::vector<llvm::Value*>& agg_out_vec,
                                           const QueryMemoryDescriptor& query_mem_desc,
-                                          const ExecutorDeviceType device_type,
-                                          const bool hoist_literals) {
+                                          const CompilationOptions& co) {
   // TODO(alex): unify the two cases, the output for non-group by queries
   //             should be a contiguous buffer
   const bool is_group_by{agg_out_start_ptr};
@@ -2666,7 +2658,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
     }
     const auto agg_info = target_info(target_expr);
     const auto agg_fn_names = agg_fn_base_names(agg_info);
-    auto target_lvs = codegenAggArg(target_expr, hoist_literals);
+    auto target_lvs = codegenAggArg(target_expr, co);
     llvm::Value* str_target_lv{nullptr};
     if (target_lvs.size() == 3) {
       // none encoding string, pop the packed pointer + length since
@@ -2687,7 +2679,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
     }
     const bool is_simple_count = agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
     auto arg_expr = agg_arg(target_expr);
-    if (device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() && is_simple_count &&
+    if (co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() && is_simple_count &&
         (!arg_expr || arg_expr->get_type_info().get_notnull())) {
       CHECK_EQ(size_t(1), agg_fn_names.size());
       // TODO(alex): use 32-bit wherever possible, avoid casts
@@ -2736,7 +2728,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
       if (agg_info.is_distinct) {
         CHECK(!agg_info.sql_type.is_fp());
         CHECK_EQ("agg_count_distinct", agg_base_name);
-        codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc, device_type);
+        codegenCountDistinct(target_idx, target_expr, agg_args, query_mem_desc, co.device_type_);
       } else {
         if (agg_info.skip_null_val) {
           const SQLTypeInfo& null_ti{arg_expr ? arg_expr->get_type_info() : agg_info.sql_type};
@@ -2747,7 +2739,7 @@ void GroupByAndAggregate::codegenAggCalls(llvm::Value* agg_out_start_ptr,
           agg_args.push_back(null_lv);
         }
         if (!agg_info.is_distinct) {
-          emitCall((device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory())
+          emitCall((co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory())
                        ? agg_fname + "_shared"
                        : agg_fname,
                    agg_args);
@@ -2799,14 +2791,13 @@ void GroupByAndAggregate::codegenCountDistinct(const size_t target_idx,
 }
 
 std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Expr* target_expr,
-                                                             const bool hoist_literals) {
+                                                             const CompilationOptions& co) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   // TODO(alex): handle arrays uniformly?
   if (target_expr) {
     const auto& target_ti = target_expr->get_type_info();
     if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
-      const auto target_lvs =
-          executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, hoist_literals);
+      const auto target_lvs = executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
       CHECK_EQ(size_t(1), target_lvs.size());
       CHECK(!agg_expr);
       const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
@@ -2821,8 +2812,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(const Analyzer::Exp
               {target_lvs.front(), executor_->posArg(target_expr), executor_->ll_int(log2_bytes(elem_ti.get_size()))})};
     }
   }
-  return agg_expr ? executor_->codegen(agg_expr->get_arg(), true, hoist_literals)
-                  : executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, hoist_literals);
+  return agg_expr ? executor_->codegen(agg_expr->get_arg(), true, co)
+                  : executor_->codegen(target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
 }
 
 llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname, const std::vector<llvm::Value*>& args) {

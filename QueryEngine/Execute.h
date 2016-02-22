@@ -34,8 +34,6 @@ typedef void GLFWwindow;
 #include <deque>
 #include <unistd.h>
 
-enum class ExecutorOptLevel { Default, LoopStrengthReduction };
-
 class Executor;
 
 inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
@@ -198,36 +196,36 @@ class Executor {
   llvm::ConstantFP* ll_fp(const double v) const {
     return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), v));
   }
-  std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::BinOper*, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::UOper*, const bool hoist_literals);
+  std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*, const bool fetch_column, const bool hoist_literals);
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
                                     const int dict_id,
-                                    const bool hoist_literals);
-  std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::ExtractExpr*, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::DatetruncExpr*, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::CharLengthExpr*, const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::LikeExpr*, const bool hoist_literals);
+                                    const CompilationOptions&);
+  std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);
   llvm::Value* codegenDictLike(const std::shared_ptr<Analyzer::Expr> arg,
                                const Analyzer::Constant* pattern,
                                const bool ilike,
                                const bool is_simple,
                                const char escape_char,
-                               const bool hoist_literals);
-  llvm::Value* codegen(const Analyzer::InValues*, const bool hoist_literals);
-  llvm::Value* codegenCmp(const Analyzer::BinOper*, const bool hoist_literals);
+                               const CompilationOptions&);
+  llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
+  llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenCmp(const SQLOps,
                           const SQLQualifier,
                           std::vector<llvm::Value*>,
                           const SQLTypeInfo&,
                           const Analyzer::Expr*,
-                          const bool hoist_literals);
-  llvm::Value* codegenLogical(const Analyzer::BinOper*, const bool hoist_literals);
+                          const CompilationOptions&);
+  llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* toBool(llvm::Value*);
-  llvm::Value* codegenArith(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenDiv(llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
@@ -238,12 +236,12 @@ class Executor {
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&);
-  llvm::Value* codegenLogical(const Analyzer::UOper*, const bool hoist_literals);
-  llvm::Value* codegenCast(const Analyzer::UOper*, const bool hoist_literals);
-  llvm::Value* codegenUMinus(const Analyzer::UOper*, const bool hoist_literals);
-  llvm::Value* codegenIsNull(const Analyzer::UOper*, const bool hoist_literals);
-  llvm::Value* codegenUnnest(const Analyzer::UOper*, const bool hoist_literals);
-  llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const bool hoist_literals);
+  llvm::Value* codegenLogical(const Analyzer::UOper*, const CompilationOptions&);
+  llvm::Value* codegenCast(const Analyzer::UOper*, const CompilationOptions&);
+  llvm::Value* codegenUMinus(const Analyzer::UOper*, const CompilationOptions&);
+  llvm::Value* codegenIsNull(const Analyzer::UOper*, const CompilationOptions&);
+  llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
+  llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var, const bool fetch_column, const bool hoist_literals);
   llvm::Value* posArg(const Analyzer::Expr*) const;
@@ -283,9 +281,7 @@ class Executor {
   ResultRows executeAggScanPlan(const bool is_agg_plan,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>&,
                                 const RelAlgExecutionUnit&,
-                                const bool hoist_literals,
-                                const ExecutorDeviceType device_type,
-                                const ExecutorOptLevel,
+                                const CompilationOptions&,
                                 const Catalog_Namespace::Catalog&,
                                 std::shared_ptr<RowSetMemoryOwner>,
                                 size_t& max_groups_buffer_entry_guess,
@@ -434,10 +430,8 @@ class Executor {
   CompilationResult compilePlan(const bool render_output,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const RelAlgExecutionUnit& ra_exe_unit,
-                                const bool hoist_literals,
+                                const CompilationOptions&,
                                 const bool allow_multifrag,
-                                const ExecutorDeviceType device_type,
-                                const ExecutorOptLevel,
                                 const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                 const bool allow_lazy_fetch,
                                 std::shared_ptr<RowSetMemoryOwner>,
@@ -465,17 +459,15 @@ class Executor {
   std::vector<void*> optimizeAndCodegenCPU(llvm::Function*,
                                            llvm::Function*,
                                            std::unordered_set<llvm::Function*>&,
-                                           const bool hoist_literals,
-                                           const ExecutorOptLevel,
-                                           llvm::Module*);
+                                           llvm::Module*,
+                                           const CompilationOptions&);
   std::vector<void*> optimizeAndCodegenGPU(llvm::Function*,
                                            llvm::Function*,
                                            std::unordered_set<llvm::Function*>&,
-                                           const bool hoist_literals,
-                                           const ExecutorOptLevel,
                                            llvm::Module*,
                                            const bool no_inline,
-                                           const CudaMgr_Namespace::CudaMgr* cuda_mgr);
+                                           const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                           const CompilationOptions&);
   std::string generatePTX(const std::string&) const;
   void initializeNVPTXBackend() const;
 
@@ -484,7 +476,7 @@ class Executor {
   unsigned blockSize() const;
 
   llvm::Value* groupByColumnCodegen(Analyzer::Expr* group_by_col,
-                                    const bool hoist_literals,
+                                    const CompilationOptions&,
                                     const bool translate_null_val,
                                     const int64_t translated_null_val,
                                     GroupByAndAggregate::DiamondCodegen&,

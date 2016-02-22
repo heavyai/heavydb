@@ -13,8 +13,6 @@
 #include <vector>
 #include <string>
 
-enum class ExecutorDeviceType { CPU, GPU, Hybrid };
-
 namespace File_Namespace {
 class FileBuffer;
 }

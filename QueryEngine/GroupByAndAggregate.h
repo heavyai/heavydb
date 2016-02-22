@@ -1,6 +1,7 @@
 #ifndef QUERYENGINE_GROUPBYANDAGGREGATE_H
 #define QUERYENGINE_GROUPBYANDAGGREGATE_H
 
+#include "CompilationOptions.h"
 #include "GpuMemUtils.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Planner/Planner.h"
@@ -998,7 +999,7 @@ class GroupByAndAggregate {
 
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
-  bool codegen(llvm::Value* filter_result, const ExecutorDeviceType, const bool hoist_literals);
+  bool codegen(llvm::Value* filter_result, const CompilationOptions& co);
 
  private:
   struct ColRangeInfo {
@@ -1034,10 +1035,7 @@ class GroupByAndAggregate {
                                  const bool sort_on_gpu_hint,
                                  const bool render_output);
 
-  llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&,
-                              const ExecutorDeviceType,
-                              const bool hoist_literals,
-                              DiamondCodegen&);
+  llvm::Value* codegenGroupBy(const QueryMemoryDescriptor&, const CompilationOptions&, DiamondCodegen&);
 
   llvm::Function* codegenPerfectHashFunction();
 
@@ -1048,8 +1046,7 @@ class GroupByAndAggregate {
   void codegenAggCalls(llvm::Value* agg_out_start_ptr,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const QueryMemoryDescriptor&,
-                       const ExecutorDeviceType,
-                       const bool hoist_literals);
+                       const CompilationOptions&);
 
   uint32_t aggColumnarOff(const uint32_t agg_out_off, const QueryMemoryDescriptor& query_mem_desc);
 
@@ -1059,7 +1056,7 @@ class GroupByAndAggregate {
                             const QueryMemoryDescriptor&,
                             const ExecutorDeviceType);
 
-  std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr, const bool hoist_literals);
+  std::vector<llvm::Value*> codegenAggArg(const Analyzer::Expr* target_expr, const CompilationOptions& co);
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
 
