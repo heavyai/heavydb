@@ -2881,7 +2881,6 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     plan_state_->target_exprs_.push_back(target_expr);
   }
-  const auto current_dbid = cat.get_currentDB().dbId;
   std::vector<std::pair<ResultRows, std::vector<size_t>>> all_fragment_results;
   all_fragment_results.reserve(query_infos.front().fragments.size());
 
@@ -2910,197 +2909,29 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
   for (size_t i = 1; i <= query_infos.front().fragments.size(); ++i) {
     all_frag_row_offsets[i] = all_frag_row_offsets[i - 1] + query_infos.front().fragments[i - 1].numTuples;
   }
-  auto dispatch = [this,
-                   current_dbid,
-                   device_type,
-                   &available_cpus,
-                   &available_gpus,
-                   &query_infos,
-                   &ra_exe_unit,
-                   &scheduler_cv,
-                   &scheduler_mutex,
-                   &compilation_result_cpu,
-                   &compilation_result_gpu,
-                   &co,
-                   &all_fragment_results,
-                   &cat,
-                   &all_frag_row_offsets,
-                   &query_context_mutexes,
-                   &query_contexts,
-                   row_set_mem_owner,
-                   error_code,
-                   render_allocator](const ExecutorDeviceType chosen_device_type,
-                                     int chosen_device_id,
-                                     const std::map<int, std::vector<size_t>>& frag_ids,
-                                     const size_t ctx_idx,
-                                     const int64_t rowid_lookup_key) {
-    static std::mutex reduce_mutex;
-    const auto memory_level =
-        chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
-    std::vector<int64_t> num_rows;
-    std::vector<uint64_t> dev_frag_row_offsets;
-    const int outer_table_id = ra_exe_unit.scan_ids.front().table_id_;
-    const auto outer_it = frag_ids.find(outer_table_id);
-    CHECK(outer_it != frag_ids.end());
-    for (const auto frag_id : outer_it->second) {
-      const auto& outer_fragment = query_infos.front().fragments[frag_id];
-      if (device_type != ExecutorDeviceType::Hybrid) {
-        chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
-      }
-      num_rows.push_back(outer_fragment.numTuples);
-      if (ra_exe_unit.scan_ids.size() > 1) {
-        for (size_t table_idx = 1; table_idx < ra_exe_unit.scan_ids.size(); ++table_idx) {
-          const int inner_table_id = ra_exe_unit.scan_ids[table_idx].table_id_;
-          const auto inner_it = frag_ids.find(inner_table_id);
-          if (inner_it->second.empty()) {
-            num_rows.push_back(0);
-          }
-          CHECK(inner_it != frag_ids.end());
-          for (const auto inner_frag_id : inner_it->second) {
-            const auto& inner_fragment = query_infos[table_idx].fragments[inner_frag_id];
-            num_rows.push_back(inner_fragment.numTuples);
-          }
-        }
-      }
-      dev_frag_row_offsets.push_back(all_frag_row_offsets[frag_id]);
-    }
-    CHECK_GE(chosen_device_id, 0);
-    CHECK_LT(chosen_device_id, max_gpu_count);
-    // need to own them while query executes
-    std::list<ChunkIter> chunk_iterators;
-    std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
-    std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
-    if (chosen_device_type == ExecutorDeviceType::GPU) {
-      gpu_lock.reset(new std::lock_guard<std::mutex>(gpu_exec_mutex_[chosen_device_id]));
-    }
-    std::vector<std::vector<const int8_t*>> col_buffers;
-    try {
-      std::map<int, const TableFragments*> all_tables_fragments;
-      for (size_t table_idx = 0; table_idx < ra_exe_unit.scan_ids.size(); ++table_idx) {
-        int table_id = ra_exe_unit.scan_ids[table_idx].table_id_;
-        const auto& fragments = query_infos[table_idx].fragments;
-        auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
-        if (!it_ok.second) {
-          std::lock_guard<std::mutex> lock(reduce_mutex);
-          *error_code = ERR_UNSUPPORTED_SELF_JOIN;
-          return;
-        }
-      }
-      col_buffers = fetchChunks(ra_exe_unit.scan_cols,
-                                chosen_device_id,
-                                memory_level,
-                                ra_exe_unit.scan_ids,
-                                all_tables_fragments,
-                                frag_ids,
-                                cat,
-                                chunk_iterators,
-                                chunks);
-    } catch (const OutOfMemory&) {
-      std::lock_guard<std::mutex> lock(reduce_mutex);
-      *error_code = ERR_OUT_OF_GPU_MEM;
-      return;
-    }
-    CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
-    const CompilationResult& compilation_result =
-        chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu : compilation_result_cpu;
-    CHECK(!compilation_result.query_mem_desc.usesCachedContext() || !ra_exe_unit.scan_limit);
-    std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
-    try {
-      query_exe_context_owned = compilation_result.query_mem_desc.usesCachedContext()
-                                    ? nullptr
-                                    : compilation_result.query_mem_desc.getQueryExecutionContext(
-                                          plan_state_->init_agg_vals_,
-                                          this,
-                                          chosen_device_type,
-                                          chosen_device_id,
-                                          col_buffers,
-                                          row_set_mem_owner,
-                                          compilation_result.output_columnar,
-                                          compilation_result.query_mem_desc.sortOnGpu(),
-                                          render_allocator);
-    } catch (const OutOfHostMemory& e) {
-      LOG(ERROR) << e.what();
-      *error_code = ERR_OUT_OF_CPU_MEM;
-      return;
-    }
-    QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
-    std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
-    if (compilation_result.query_mem_desc.usesCachedContext()) {
-      query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes[ctx_idx]));
-      if (!query_contexts[ctx_idx]) {
-        try {
-          query_contexts[ctx_idx] =
-              compilation_result.query_mem_desc.getQueryExecutionContext(plan_state_->init_agg_vals_,
-                                                                         this,
-                                                                         chosen_device_type,
-                                                                         chosen_device_id,
-                                                                         col_buffers,
-                                                                         row_set_mem_owner,
-                                                                         compilation_result.output_columnar,
-                                                                         compilation_result.query_mem_desc.sortOnGpu(),
-                                                                         render_allocator);
-        } catch (const OutOfHostMemory& e) {
-          LOG(ERROR) << e.what();
-          *error_code = ERR_OUT_OF_CPU_MEM;
-          return;
-        }
-      }
-      query_exe_context = query_contexts[ctx_idx].get();
-    }
-    CHECK(query_exe_context);
-    int32_t err{0};
-    ResultRows device_results(
-        compilation_result.query_mem_desc, {}, nullptr, nullptr, 0, false, {}, chosen_device_type, chosen_device_id);
-    uint32_t start_rowid{0};
-    if (rowid_lookup_key >= 0) {
-      CHECK_LE(frag_ids.size(), size_t(1));
-      if (!frag_ids.empty()) {
-        start_rowid = rowid_lookup_key - all_frag_row_offsets[frag_ids.begin()->second.front()];
-      }
-    }
-    if (ra_exe_unit.groupby_exprs.empty()) {
-      err = executePlanWithoutGroupBy(compilation_result,
-                                      co.hoist_literals_,
-                                      device_results,
-                                      ra_exe_unit.target_exprs,
-                                      chosen_device_type,
-                                      col_buffers,
-                                      query_exe_context,
-                                      num_rows,
-                                      dev_frag_row_offsets,
-                                      &cat.get_dataMgr(),
-                                      chosen_device_id,
-                                      start_rowid,
-                                      ra_exe_unit.scan_ids.size(),
-                                      render_allocator);
-    } else {
-      err = executePlanWithGroupBy(compilation_result,
-                                   co.hoist_literals_,
-                                   device_results,
-                                   ra_exe_unit.target_exprs,
-                                   ra_exe_unit.groupby_exprs.size(),
-                                   chosen_device_type,
-                                   col_buffers,
-                                   query_exe_context,
-                                   num_rows,
-                                   dev_frag_row_offsets,
-                                   &cat.get_dataMgr(),
-                                   chosen_device_id,
-                                   ra_exe_unit.scan_limit,
-                                   device_type == ExecutorDeviceType::Hybrid,
-                                   start_rowid,
-                                   ra_exe_unit.scan_ids.size(),
-                                   render_allocator);
-    }
-    {
-      std::lock_guard<std::mutex> lock(reduce_mutex);
-      if (err) {
-        *error_code = err;
-      }
-      if (!device_results.definitelyHasNoRows()) {
-        all_fragment_results.emplace_back(device_results, frag_ids.begin()->second);
-      }
-    }
+  ExecutionDispatch execution_dispatch(this,
+                                       ra_exe_unit,
+                                       query_infos,
+                                       cat,
+                                       device_type,
+                                       co.hoist_literals_,
+                                       compilation_result_cpu,
+                                       compilation_result_gpu,
+                                       all_frag_row_offsets,
+                                       query_context_mutexes,
+                                       query_contexts,
+                                       row_set_mem_owner,
+                                       error_code,
+                                       render_allocator,
+                                       all_fragment_results);
+  auto dispatch =
+      [this, &execution_dispatch, &available_cpus, &available_gpus, &scheduler_mutex, &scheduler_cv, device_type](
+          const ExecutorDeviceType chosen_device_type,
+          int chosen_device_id,
+          const std::map<int, std::vector<size_t>>& frag_ids,
+          const size_t ctx_idx,
+          const int64_t rowid_lookup_key) {
+    execution_dispatch.dispatch(chosen_device_type, chosen_device_id, frag_ids, ctx_idx, rowid_lookup_key);
     if (device_type == ExecutorDeviceType::Hybrid) {
       std::unique_lock<std::mutex> scheduler_lock(scheduler_mutex);
       if (chosen_device_type == ExecutorDeviceType::CPU) {
@@ -3155,6 +2986,213 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
     }
   }
   return results_union(all_fragment_results);
+}
+
+Executor::ExecutionDispatch::ExecutionDispatch(
+    Executor* executor,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+    const Catalog_Namespace::Catalog& cat,
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals,
+    const Executor::CompilationResult& compilation_result_cpu,
+    const Executor::CompilationResult& compilation_result_gpu,
+    const std::vector<uint64_t>& all_frag_row_offsets,
+    std::vector<std::mutex>& query_context_mutexes,
+    std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    int32_t* error_code,
+    RenderAllocator* render_allocator,
+    std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results)
+    : executor_(executor),
+      ra_exe_unit_(ra_exe_unit),
+      query_infos_(query_infos),
+      cat_(cat),
+      device_type_(device_type),
+      hoist_literals_(hoist_literals),
+      compilation_result_cpu_(compilation_result_cpu),
+      compilation_result_gpu_(compilation_result_gpu),
+      all_frag_row_offsets_(all_frag_row_offsets),
+      query_context_mutexes_(query_context_mutexes),
+      query_contexts_(query_contexts),
+      row_set_mem_owner_(row_set_mem_owner),
+      error_code_(error_code),
+      render_allocator_(render_allocator),
+      all_fragment_results_(all_fragment_results) {
+}
+
+void Executor::ExecutionDispatch::dispatch(const ExecutorDeviceType chosen_device_type,
+                                           int chosen_device_id,
+                                           const std::map<int, std::vector<size_t>>& frag_ids,
+                                           const size_t ctx_idx,
+                                           const int64_t rowid_lookup_key) {
+  static std::mutex reduce_mutex;
+  const auto memory_level =
+      chosen_device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL;
+  std::vector<int64_t> num_rows;
+  std::vector<uint64_t> dev_frag_row_offsets;
+  const int outer_table_id = ra_exe_unit_.scan_ids.front().table_id_;
+  const auto outer_it = frag_ids.find(outer_table_id);
+  CHECK(outer_it != frag_ids.end());
+  for (const auto frag_id : outer_it->second) {
+    const auto& outer_fragment = query_infos_.front().fragments[frag_id];
+    if (device_type_ != ExecutorDeviceType::Hybrid) {
+      chosen_device_id = outer_fragment.deviceIds[static_cast<int>(memory_level)];
+    }
+    num_rows.push_back(outer_fragment.numTuples);
+    if (ra_exe_unit_.scan_ids.size() > 1) {
+      for (size_t table_idx = 1; table_idx < ra_exe_unit_.scan_ids.size(); ++table_idx) {
+        const int inner_table_id = ra_exe_unit_.scan_ids[table_idx].table_id_;
+        const auto inner_it = frag_ids.find(inner_table_id);
+        if (inner_it->second.empty()) {
+          num_rows.push_back(0);
+        }
+        CHECK(inner_it != frag_ids.end());
+        for (const auto inner_frag_id : inner_it->second) {
+          const auto& inner_fragment = query_infos_[table_idx].fragments[inner_frag_id];
+          num_rows.push_back(inner_fragment.numTuples);
+        }
+      }
+    }
+    dev_frag_row_offsets.push_back(all_frag_row_offsets_[frag_id]);
+  }
+  CHECK_GE(chosen_device_id, 0);
+  CHECK_LT(chosen_device_id, max_gpu_count);
+  // need to own them while query executes
+  std::list<ChunkIter> chunk_iterators;
+  std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks;
+  std::unique_ptr<std::lock_guard<std::mutex>> gpu_lock;
+  if (chosen_device_type == ExecutorDeviceType::GPU) {
+    gpu_lock.reset(new std::lock_guard<std::mutex>(executor_->gpu_exec_mutex_[chosen_device_id]));
+  }
+  std::vector<std::vector<const int8_t*>> col_buffers;
+  try {
+    std::map<int, const TableFragments*> all_tables_fragments;
+    for (size_t table_idx = 0; table_idx < ra_exe_unit_.scan_ids.size(); ++table_idx) {
+      int table_id = ra_exe_unit_.scan_ids[table_idx].table_id_;
+      const auto& fragments = query_infos_[table_idx].fragments;
+      auto it_ok = all_tables_fragments.insert(std::make_pair(table_id, &fragments));
+      if (!it_ok.second) {
+        std::lock_guard<std::mutex> lock(reduce_mutex);
+        *error_code_ = ERR_UNSUPPORTED_SELF_JOIN;
+        return;
+      }
+    }
+    col_buffers = executor_->fetchChunks(ra_exe_unit_.scan_cols,
+                                         chosen_device_id,
+                                         memory_level,
+                                         ra_exe_unit_.scan_ids,
+                                         all_tables_fragments,
+                                         frag_ids,
+                                         cat_,
+                                         chunk_iterators,
+                                         chunks);
+  } catch (const OutOfMemory&) {
+    std::lock_guard<std::mutex> lock(reduce_mutex);
+    *error_code_ = ERR_OUT_OF_GPU_MEM;
+    return;
+  }
+  CHECK(chosen_device_type != ExecutorDeviceType::Hybrid);
+  const CompilationResult& compilation_result =
+      chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu_ : compilation_result_cpu_;
+  CHECK(!compilation_result.query_mem_desc.usesCachedContext() || !ra_exe_unit_.scan_limit);
+  std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
+  try {
+    query_exe_context_owned =
+        compilation_result.query_mem_desc.usesCachedContext()
+            ? nullptr
+            : compilation_result.query_mem_desc.getQueryExecutionContext(executor_->plan_state_->init_agg_vals_,
+                                                                         executor_,
+                                                                         chosen_device_type,
+                                                                         chosen_device_id,
+                                                                         col_buffers,
+                                                                         row_set_mem_owner_,
+                                                                         compilation_result.output_columnar,
+                                                                         compilation_result.query_mem_desc.sortOnGpu(),
+                                                                         render_allocator_);
+  } catch (const OutOfHostMemory& e) {
+    LOG(ERROR) << e.what();
+    *error_code_ = ERR_OUT_OF_CPU_MEM;
+    return;
+  }
+  QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
+  std::unique_ptr<std::lock_guard<std::mutex>> query_ctx_lock;
+  if (compilation_result.query_mem_desc.usesCachedContext()) {
+    query_ctx_lock.reset(new std::lock_guard<std::mutex>(query_context_mutexes_[ctx_idx]));
+    if (!query_contexts_[ctx_idx]) {
+      try {
+        query_contexts_[ctx_idx] =
+            compilation_result.query_mem_desc.getQueryExecutionContext(executor_->plan_state_->init_agg_vals_,
+                                                                       executor_,
+                                                                       chosen_device_type,
+                                                                       chosen_device_id,
+                                                                       col_buffers,
+                                                                       row_set_mem_owner_,
+                                                                       compilation_result.output_columnar,
+                                                                       compilation_result.query_mem_desc.sortOnGpu(),
+                                                                       render_allocator_);
+      } catch (const OutOfHostMemory& e) {
+        LOG(ERROR) << e.what();
+        *error_code_ = ERR_OUT_OF_CPU_MEM;
+        return;
+      }
+    }
+    query_exe_context = query_contexts_[ctx_idx].get();
+  }
+  CHECK(query_exe_context);
+  int32_t err{0};
+  ResultRows device_results(
+      compilation_result.query_mem_desc, {}, nullptr, nullptr, 0, false, {}, chosen_device_type, chosen_device_id);
+  uint32_t start_rowid{0};
+  if (rowid_lookup_key >= 0) {
+    CHECK_LE(frag_ids.size(), size_t(1));
+    if (!frag_ids.empty()) {
+      start_rowid = rowid_lookup_key - all_frag_row_offsets_[frag_ids.begin()->second.front()];
+    }
+  }
+  if (ra_exe_unit_.groupby_exprs.empty()) {
+    err = executor_->executePlanWithoutGroupBy(compilation_result,
+                                               hoist_literals_,
+                                               device_results,
+                                               ra_exe_unit_.target_exprs,
+                                               chosen_device_type,
+                                               col_buffers,
+                                               query_exe_context,
+                                               num_rows,
+                                               dev_frag_row_offsets,
+                                               &cat_.get_dataMgr(),
+                                               chosen_device_id,
+                                               start_rowid,
+                                               ra_exe_unit_.scan_ids.size(),
+                                               render_allocator_);
+  } else {
+    err = executor_->executePlanWithGroupBy(compilation_result,
+                                            hoist_literals_,
+                                            device_results,
+                                            ra_exe_unit_.target_exprs,
+                                            ra_exe_unit_.groupby_exprs.size(),
+                                            chosen_device_type,
+                                            col_buffers,
+                                            query_exe_context,
+                                            num_rows,
+                                            dev_frag_row_offsets,
+                                            &cat_.get_dataMgr(),
+                                            chosen_device_id,
+                                            ra_exe_unit_.scan_limit,
+                                            device_type_ == ExecutorDeviceType::Hybrid,
+                                            start_rowid,
+                                            ra_exe_unit_.scan_ids.size(),
+                                            render_allocator_);
+  }
+  {
+    std::lock_guard<std::mutex> lock(reduce_mutex);
+    if (err) {
+      *error_code_ = err;
+    }
+    if (!device_results.definitelyHasNoRows()) {
+      all_fragment_results_.emplace_back(device_results, frag_ids.begin()->second);
+    }
+  }
 }
 
 ResultRows Executor::collectAllDeviceResults(

@@ -278,6 +278,55 @@ class Executor {
     const int64_t scan_limit;
   };
 
+  struct CompilationResult {
+    std::vector<void*> native_functions;
+    LiteralValues literal_values;
+    QueryMemoryDescriptor query_mem_desc;
+    bool output_columnar;
+  };
+
+  class ExecutionDispatch {
+   private:
+    Executor* executor_;
+    const RelAlgExecutionUnit& ra_exe_unit_;
+    const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
+    const Catalog_Namespace::Catalog& cat_;
+    const ExecutorDeviceType device_type_;
+    const bool hoist_literals_;
+    const CompilationResult& compilation_result_cpu_;
+    const CompilationResult& compilation_result_gpu_;
+    const std::vector<uint64_t>& all_frag_row_offsets_;
+    std::vector<std::mutex>& query_context_mutexes_;
+    std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts_;
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
+    int32_t* error_code_;
+    RenderAllocator* render_allocator_;
+    std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results_;
+
+   public:
+    ExecutionDispatch(Executor* executor,
+                      const RelAlgExecutionUnit& ra_exe_unit,
+                      const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                      const Catalog_Namespace::Catalog& cat,
+                      const ExecutorDeviceType device_type,
+                      const bool hoist_literals,
+                      const CompilationResult& compilation_result_cpu,
+                      const CompilationResult& compilation_result_gpu,
+                      const std::vector<uint64_t>& all_frag_row_offsets,
+                      std::vector<std::mutex>& query_context_mutexes,
+                      std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
+                      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                      int32_t* error_code,
+                      RenderAllocator* render_allocator,
+                      std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results);
+
+    void dispatch(const ExecutorDeviceType chosen_device_type,
+                  int chosen_device_id,
+                  const std::map<int, std::vector<size_t>>& frag_ids,
+                  const size_t ctx_idx,
+                  const int64_t rowid_lookup_key);
+  };
+
   ResultRows executeAggScanPlan(const bool is_agg_plan,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>&,
                                 const RelAlgExecutionUnit&,
@@ -364,13 +413,6 @@ class Executor {
                              const bool allow_multifrag,
                              const bool just_explain,
                              const bool allow_loop_joins);
-
-  struct CompilationResult {
-    std::vector<void*> native_functions;
-    LiteralValues literal_values;
-    QueryMemoryDescriptor query_mem_desc;
-    bool output_columnar;
-  };
 
   int32_t executePlanWithGroupBy(const CompilationResult&,
                                  const bool hoist_literals,
@@ -754,6 +796,7 @@ class Executor {
   friend class ResultRows;
   friend class JoinHashTable;
   friend class RelAlgExecutor;
+  friend class ExecutionDispatch;
 };
 
 #endif  // QUERYENGINE_EXECUTE_H
