@@ -285,6 +285,9 @@ ArrayDatum StringToArray(const std::string& s, const SQLTypeInfo& ti, const Copy
 }
 
 void parseStringArray(const std::string& s, const CopyParams& copy_params, std::vector<std::string>& string_vec) {
+  if (s == copy_params.null_str || s.size() < 1) {
+    return;
+  }
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
     LOG(WARNING) << "Malformed array: " << s;
     return;
@@ -459,18 +462,19 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       }
       break;
     case kARRAY:
-      if (!is_null) {
-        if (IS_STRING(cd->columnType.get_subtype())) {
-          std::vector<std::string>& string_vec = addStringArray();
-          parseStringArray(val, copy_params, string_vec);
-        } else {
+      if (is_null && cd->columnType.get_notnull()) {
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      }
+      if (IS_STRING(cd->columnType.get_subtype())) {
+        std::vector<std::string>& string_vec = addStringArray();
+        parseStringArray(val, copy_params, string_vec);
+      } else {
+        if (!is_null) {
           ArrayDatum d = StringToArray(val, cd->columnType, copy_params);
           addArray(d);
+        } else {
+          addArray(ArrayDatum(0, NULL, true));
         }
-      } else {
-        if (cd->columnType.get_notnull())
-          throw std::runtime_error("NULL for column " + cd->columnName);
-        addArray(ArrayDatum(0, NULL, true));
       }
       break;
     default:
@@ -560,17 +564,18 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd, const TDatum& datu
       }
       break;
     case kARRAY:
-      if (!is_null) {
-        if (IS_STRING(cd->columnType.get_subtype())) {
-          std::vector<std::string>& string_vec = addStringArray();
-          addBinaryStringArray(datum, string_vec);
-        } else {
-          addArray(TDatumToArrayDatum(datum, cd->columnType));
-        }
+      if (is_null && cd->columnType.get_notnull()) {
+        throw std::runtime_error("NULL for column " + cd->columnName);
+      }
+      if (IS_STRING(cd->columnType.get_subtype())) {
+        std::vector<std::string>& string_vec = addStringArray();
+        addBinaryStringArray(datum, string_vec);
       } else {
-        if (cd->columnType.get_notnull())
-          throw std::runtime_error("NULL for column " + cd->columnName);
-        addArray(ArrayDatum(0, NULL, true));
+        if (!is_null) {
+          addArray(TDatumToArrayDatum(datum, cd->columnType));
+        } else {
+          addArray(ArrayDatum(0, NULL, true));
+        }
       }
       break;
     default:
