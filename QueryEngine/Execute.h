@@ -283,6 +283,24 @@ class Executor {
     LiteralValues literal_values;
     QueryMemoryDescriptor query_mem_desc;
     bool output_columnar;
+    std::string llvm_ir;
+  };
+
+  enum class JoinImplType { Invalid, Loop, HashOneToOne };
+
+  struct JoinInfo {
+    JoinInfo(const JoinImplType join_impl_type,
+             const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
+             std::shared_ptr<JoinHashTable> join_hash_table)
+        : join_impl_type_(join_impl_type),
+          equi_join_tautologies_(equi_join_tautologies),
+          join_hash_table_(join_hash_table) {}
+
+    JoinImplType join_impl_type_;
+    std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
+                                                                             // definition when using a hash join; we'll
+                                                                             // fold them to true during code generation
+    std::shared_ptr<JoinHashTable> join_hash_table_;
   };
 
   class ExecutionDispatch {
@@ -291,10 +309,9 @@ class Executor {
     const RelAlgExecutionUnit& ra_exe_unit_;
     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos_;
     const Catalog_Namespace::Catalog& cat_;
-    const ExecutorDeviceType device_type_;
-    const bool hoist_literals_;
-    const CompilationResult& compilation_result_cpu_;
-    const CompilationResult& compilation_result_gpu_;
+    CompilationOptions co_;
+    CompilationResult compilation_result_cpu_;
+    CompilationResult compilation_result_gpu_;
     const std::vector<uint64_t>& all_frag_row_offsets_;
     std::vector<std::mutex>& query_context_mutexes_;
     std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts_;
@@ -308,10 +325,7 @@ class Executor {
                       const RelAlgExecutionUnit& ra_exe_unit,
                       const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
-                      const ExecutorDeviceType device_type,
-                      const bool hoist_literals,
-                      const CompilationResult& compilation_result_cpu,
-                      const CompilationResult& compilation_result_gpu,
+                      const CompilationOptions& co,
                       const std::vector<uint64_t>& all_frag_row_offsets,
                       std::vector<std::mutex>& query_context_mutexes,
                       std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
@@ -320,11 +334,26 @@ class Executor {
                       RenderAllocator* render_allocator,
                       std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results);
 
-    void dispatch(const ExecutorDeviceType chosen_device_type,
-                  int chosen_device_id,
-                  const std::map<int, std::vector<size_t>>& frag_ids,
-                  const size_t ctx_idx,
-                  const int64_t rowid_lookup_key);
+    void compile(const JoinInfo& join_info,
+                 const size_t max_groups_buffer_entry_guess,
+                 const bool allow_multifrag,
+                 const bool output_columnar_hint,
+                 const bool just_explain,
+                 const bool allow_loop_joins);
+
+    void run(const ExecutorDeviceType chosen_device_type,
+             int chosen_device_id,
+             const std::map<int, std::vector<size_t>>& frag_ids,
+             const size_t ctx_idx,
+             const int64_t rowid_lookup_key);
+
+    std::string getIR(const ExecutorDeviceType device_type) const;
+
+    ExecutorDeviceType getDeviceType() const;
+
+    const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
+
+    const bool outputColumnar() const;
   };
 
   ResultRows executeAggScanPlan(const bool is_agg_plan,
@@ -452,23 +481,6 @@ class Executor {
                                       const bool output_columnar) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
-  enum class JoinImplType { Invalid, Loop, HashOneToOne };
-
-  struct JoinInfo {
-    JoinInfo(const JoinImplType join_impl_type,
-             const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-             std::shared_ptr<JoinHashTable> join_hash_table)
-        : join_impl_type_(join_impl_type),
-          equi_join_tautologies_(equi_join_tautologies),
-          join_hash_table_(join_hash_table) {}
-
-    JoinImplType join_impl_type_;
-    std::vector<std::shared_ptr<Analyzer::BinOper>> equi_join_tautologies_;  // expressions we equi-join on are true by
-                                                                             // definition when using a hash join; we'll
-                                                                             // fold them to true during code generation
-    std::shared_ptr<JoinHashTable> join_hash_table_;
-  };
-
   CompilationResult compilePlan(const bool render_output,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const RelAlgExecutionUnit& ra_exe_unit,
@@ -481,7 +493,6 @@ class Executor {
                                 const size_t small_groups_buffer_entry_count,
                                 const bool output_columnar_hint,
                                 const bool serialize_llvm_ir,
-                                std::string& llvm_ir,
                                 const JoinInfo& join_info,
                                 const bool allow_loop_joins);
 

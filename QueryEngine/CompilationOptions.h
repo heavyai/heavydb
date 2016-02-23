@@ -6,7 +6,7 @@ enum class ExecutorDeviceType { CPU, GPU, Hybrid };
 enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 
 struct CompilationOptions {
-  const ExecutorDeviceType device_type_;
+  ExecutorDeviceType device_type_;
   const bool hoist_literals_;
   const ExecutorOptLevel opt_level_;
 };
