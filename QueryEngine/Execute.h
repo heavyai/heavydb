@@ -313,12 +313,12 @@ class Executor {
     CompilationResult compilation_result_cpu_;
     CompilationResult compilation_result_gpu_;
     std::vector<uint64_t> all_frag_row_offsets_;
-    std::vector<std::mutex>& query_context_mutexes_;
-    std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts_;
+    std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts_;
+    std::vector<std::mutex> query_context_mutexes_;
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
     int32_t* error_code_;
     RenderAllocator* render_allocator_;
-    std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results_;
+    std::vector<std::pair<ResultRows, std::vector<size_t>>> all_fragment_results_;
 
    public:
     ExecutionDispatch(Executor* executor,
@@ -326,12 +326,18 @@ class Executor {
                       const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
                       const CompilationOptions& co,
-                      std::vector<std::mutex>& query_context_mutexes,
-                      std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
+                      const size_t context_count,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                       int32_t* error_code,
-                      RenderAllocator* render_allocator,
-                      std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results);
+                      RenderAllocator* render_allocator);
+
+    ExecutionDispatch(const ExecutionDispatch&) = delete;
+
+    ExecutionDispatch& operator=(const ExecutionDispatch&) = delete;
+
+    ExecutionDispatch(ExecutionDispatch&&) = delete;
+
+    ExecutionDispatch& operator=(ExecutionDispatch&&) = delete;
 
     void compile(const JoinInfo& join_info,
                  const size_t max_groups_buffer_entry_guess,
@@ -344,7 +350,7 @@ class Executor {
              int chosen_device_id,
              const std::map<int, std::vector<size_t>>& frag_ids,
              const size_t ctx_idx,
-             const int64_t rowid_lookup_key);
+             const int64_t rowid_lookup_key) noexcept;
 
     std::string getIR(const ExecutorDeviceType device_type) const;
 
@@ -355,6 +361,10 @@ class Executor {
     const bool outputColumnar() const;
 
     const std::vector<uint64_t>& getFragOffsets() const;
+
+    const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;
+
+    std::vector<std::pair<ResultRows, std::vector<size_t>>>& getFragmentResults();
   };
 
   ResultRows executeAggScanPlan(const bool is_agg_plan,
@@ -377,11 +387,9 @@ class Executor {
   static ExecutorDeviceType getDeviceTypeForTargets(const Executor::RelAlgExecutionUnit& ra_exe_unit,
                                                     const ExecutorDeviceType requested_device_type);
 
-  ResultRows collectAllDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
+  ResultRows collectAllDeviceResults(ExecutionDispatch& execution_dispatch,
                                      const std::vector<Analyzer::Expr*>& target_exprs,
                                      const QueryMemoryDescriptor& query_mem_desc,
-                                     const ExecutorDeviceType device_type,
-                                     const std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                      const bool output_columnar);
 
