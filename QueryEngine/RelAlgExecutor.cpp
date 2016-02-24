@@ -71,19 +71,16 @@ ResultRows* RelAlgExecutor::executeCompound(const RelCompound* compound, const C
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{scan_ids, scan_cols, {}, {filter_expr}, {}, groupby_exprs, {}, {}, 0};
   size_t max_groups_buffer_entry_guess{2048};
   int32_t error_code{0};
-  executor_->executeAggScanPlan(true,
-                                {},
-                                rel_alg_exe_unit,
-                                co,
-                                cat_,
-                                executor_->row_set_mem_owner_,
-                                max_groups_buffer_entry_guess,
-                                &error_code,
-                                false,
-                                true,
-                                false,
-                                false,
-                                nullptr);
+  executor_->executeWorkUnit(&error_code,
+                             max_groups_buffer_entry_guess,
+                             true,
+                             {},
+                             rel_alg_exe_unit,
+                             co,
+                             {false, true, false, false},
+                             cat_,
+                             executor_->row_set_mem_owner_,
+                             nullptr);
   CHECK(false);
   return new ResultRows("", 0);
 }

@@ -303,6 +303,13 @@ class Executor {
     std::shared_ptr<JoinHashTable> join_hash_table_;
   };
 
+  struct ExecutionOptions {
+    const bool output_columnar_hint;
+    const bool allow_multifrag;
+    const bool just_explain;
+    const bool allow_loop_joins;
+  };
+
   class ExecutionDispatch {
    private:
     Executor* executor_;
@@ -341,10 +348,7 @@ class Executor {
 
     void compile(const JoinInfo& join_info,
                  const size_t max_groups_buffer_entry_guess,
-                 const bool allow_multifrag,
-                 const bool output_columnar_hint,
-                 const bool just_explain,
-                 const bool allow_loop_joins);
+                 const ExecutionOptions& options);
 
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
@@ -367,19 +371,16 @@ class Executor {
     std::vector<std::pair<ResultRows, std::vector<size_t>>>& getFragmentResults();
   };
 
-  ResultRows executeAggScanPlan(const bool is_agg_plan,
-                                const std::vector<Fragmenter_Namespace::QueryInfo>&,
-                                const RelAlgExecutionUnit&,
-                                const CompilationOptions&,
-                                const Catalog_Namespace::Catalog&,
-                                std::shared_ptr<RowSetMemoryOwner>,
-                                size_t& max_groups_buffer_entry_guess,
-                                int32_t* error_code,
-                                const bool output_columnar_hint,
-                                const bool allow_multifrag,
-                                const bool just_explain,
-                                const bool allow_loop_joins,
-                                RenderAllocator* render_allocator);
+  ResultRows executeWorkUnit(int32_t* error_code,
+                             size_t& max_groups_buffer_entry_guess,
+                             const bool is_agg,
+                             const std::vector<Fragmenter_Namespace::QueryInfo>&,
+                             const RelAlgExecutionUnit&,
+                             const CompilationOptions&,
+                             const ExecutionOptions& options,
+                             const Catalog_Namespace::Catalog&,
+                             std::shared_ptr<RowSetMemoryOwner>,
+                             RenderAllocator* render_allocator);
 
   ResultRows executeExplain(const ExecutionDispatch&);
 
@@ -408,7 +409,7 @@ class Executor {
                                                   const int64_t rowid_lookup_key)> dispatch,
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
-                         const bool is_agg_plan,
+                         const bool is_agg,
                          const std::vector<ScanId>& scan_ids,
                          const std::map<int, const TableFragments*>& all_tables_fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
@@ -500,17 +501,14 @@ class Executor {
   CompilationResult compilePlan(const bool render_output,
                                 const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                 const RelAlgExecutionUnit& ra_exe_unit,
-                                const CompilationOptions&,
-                                const bool allow_multifrag,
+                                const CompilationOptions& co,
+                                const ExecutionOptions& eo,
                                 const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                 const bool allow_lazy_fetch,
                                 std::shared_ptr<RowSetMemoryOwner>,
                                 const size_t max_groups_buffer_entry_count,
                                 const size_t small_groups_buffer_entry_count,
-                                const bool output_columnar_hint,
-                                const bool serialize_llvm_ir,
-                                const JoinInfo& join_info,
-                                const bool allow_loop_joins);
+                                const JoinInfo& join_info);
 
   void codegenInnerScanNextRow();
 

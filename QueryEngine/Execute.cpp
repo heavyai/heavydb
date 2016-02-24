@@ -238,7 +238,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     }
     const auto join_quals = join_plan ? join_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
     CHECK(check_plan_sanity(plan));
-    const bool is_agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
+    const bool is_agg = dynamic_cast<const Planner::AggPlan*>(plan);
     const auto order_entries = sort_plan_in ? sort_plan_in->get_order_entries() : std::list<Analyzer::OrderEntry>{};
     const auto query_infos = get_query_infos(scan_ids, cat);
     if (query_infos.size() == 1) {
@@ -248,27 +248,24 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     if (limit || offset) {
       const size_t scan_limit = get_scan_limit(plan, limit);
       size_t max_groups_buffer_entry_guess_limit{scan_limit ? scan_limit + offset : max_groups_buffer_entry_guess};
-      auto rows = executeAggScanPlan(is_agg_plan,
-                                     query_infos,
-                                     {scan_ids,
-                                      scan_cols,
-                                      simple_quals,
-                                      quals,
-                                      join_quals,
-                                      groupby_exprs,
-                                      target_exprs,
-                                      order_entries,
-                                      get_scan_limit(plan, scan_limit ? scan_limit + offset : 0)},
-                                     {device_type, hoist_literals, opt_level},
-                                     cat,
-                                     row_set_mem_owner_,
-                                     max_groups_buffer_entry_guess_limit,
-                                     error_code,
-                                     false,
-                                     allow_multifrag,
-                                     just_explain,
-                                     allow_loop_joins,
-                                     render_allocator);
+      auto rows = executeWorkUnit(error_code,
+                                  max_groups_buffer_entry_guess_limit,
+                                  is_agg,
+                                  query_infos,
+                                  {scan_ids,
+                                   scan_cols,
+                                   simple_quals,
+                                   quals,
+                                   join_quals,
+                                   groupby_exprs,
+                                   target_exprs,
+                                   order_entries,
+                                   get_scan_limit(plan, scan_limit ? scan_limit + offset : 0)},
+                                  {device_type, hoist_literals, opt_level},
+                                  {false, allow_multifrag, just_explain, allow_loop_joins},
+                                  cat,
+                                  row_set_mem_owner_,
+                                  render_allocator);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       rows.dropFirstN(offset);
       if (limit) {
@@ -276,27 +273,24 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
       }
       return rows;
     }
-    return executeAggScanPlan(is_agg_plan,
-                              query_infos,
-                              {scan_ids,
-                               scan_cols,
-                               simple_quals,
-                               quals,
-                               join_quals,
-                               groupby_exprs,
-                               target_exprs,
-                               order_entries,
-                               get_scan_limit(plan, limit)},
-                              {device_type, hoist_literals, opt_level},
-                              cat,
-                              row_set_mem_owner_,
-                              max_groups_buffer_entry_guess,
-                              error_code,
-                              false,
-                              allow_multifrag,
-                              just_explain,
-                              allow_loop_joins,
-                              render_allocator);
+    return executeWorkUnit(error_code,
+                           max_groups_buffer_entry_guess,
+                           is_agg,
+                           query_infos,
+                           {scan_ids,
+                            scan_cols,
+                            simple_quals,
+                            quals,
+                            join_quals,
+                            groupby_exprs,
+                            target_exprs,
+                            order_entries,
+                            get_scan_limit(plan, limit)},
+                           {device_type, hoist_literals, opt_level},
+                           {false, allow_multifrag, just_explain, allow_loop_joins},
+                           cat,
+                           row_set_mem_owner_,
+                           render_allocator);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -2484,27 +2478,24 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
     QueryRewriter query_rewriter(agg_plan, query_infos, this);
     query_rewriter.rewrite();
   }
-  auto result_rows = executeAggScanPlan(true,
-                                        query_infos,
-                                        {scan_ids,
-                                         scan_cols,
-                                         simple_quals,
-                                         quals,
-                                         join_quals,
-                                         agg_plan->get_groupby_list(),
-                                         get_agg_target_exprs(agg_plan),
-                                         order_entries,
-                                         0},
-                                        {device_type, hoist_literals, opt_level},
-                                        cat,
-                                        row_set_mem_owner_,
-                                        max_groups_buffer_entry_guess,
-                                        error_code,
-                                        false,
-                                        allow_multifrag,
-                                        just_explain,
-                                        allow_loop_joins,
-                                        nullptr);
+  auto result_rows = executeWorkUnit(error_code,
+                                     max_groups_buffer_entry_guess,
+                                     true,
+                                     query_infos,
+                                     {scan_ids,
+                                      scan_cols,
+                                      simple_quals,
+                                      quals,
+                                      join_quals,
+                                      agg_plan->get_groupby_list(),
+                                      get_agg_target_exprs(agg_plan),
+                                      order_entries,
+                                      0},
+                                     {device_type, hoist_literals, opt_level},
+                                     {false, allow_multifrag, just_explain, allow_loop_joins},
+                                     cat,
+                                     row_set_mem_owner_,
+                                     nullptr);
   if (just_explain) {
     return result_rows;
   }
@@ -2578,16 +2569,13 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
                    order_entries,
                    0},
                   {ExecutorDeviceType::CPU, hoist_literals, opt_level},
-                  allow_multifrag,
+                  {false, allow_multifrag, just_explain, allow_loop_joins},
                   nullptr,
                   false,
                   row_set_mem_owner_,
                   result_rows.rowCount(),
                   small_groups_buffer_entry_count_,
-                  false,
-                  just_explain,
-                  JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr),
-                  allow_loop_joins);
+                  JoinInfo(JoinImplType::Invalid, std::vector<std::shared_ptr<Analyzer::BinOper>>{}, nullptr));
   auto column_buffers = result_columns.getColumnBuffers();
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
@@ -2759,19 +2747,16 @@ size_t get_context_count(const ExecutorDeviceType device_type, const size_t cpu_
 
 }  // namespace
 
-ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
-                                        const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
-                                        const RelAlgExecutionUnit& ra_exe_unit,
-                                        const CompilationOptions& co,
-                                        const Catalog_Namespace::Catalog& cat,
-                                        std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                        size_t& max_groups_buffer_entry_guess,
-                                        int32_t* error_code,
-                                        const bool output_columnar_hint,
-                                        const bool allow_multifrag,
-                                        const bool just_explain,
-                                        const bool allow_loop_joins,
-                                        RenderAllocator* render_allocator) {
+ResultRows Executor::executeWorkUnit(int32_t* error_code,
+                                     size_t& max_groups_buffer_entry_guess,
+                                     const bool is_agg,
+                                     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
+                                     const RelAlgExecutionUnit& ra_exe_unit,
+                                     const CompilationOptions& co,
+                                     const ExecutionOptions& options,
+                                     const Catalog_Namespace::Catalog& cat,
+                                     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                                     RenderAllocator* render_allocator) {
   *error_code = 0;
 
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
@@ -2805,10 +2790,9 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
                                        row_set_mem_owner,
                                        error_code,
                                        render_allocator);
-  execution_dispatch.compile(
-      join_info, max_groups_buffer_entry_guess, allow_multifrag, output_columnar_hint, just_explain, allow_loop_joins);
+  execution_dispatch.compile(join_info, max_groups_buffer_entry_guess, options);
 
-  if (just_explain) {
+  if (options.just_explain) {
     return executeExplain(execution_dispatch);
   }
 
@@ -2845,21 +2829,22 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
     all_tables_fragments[ra_exe_unit.scan_ids[table_idx].table_id_] = &query_infos[table_idx].fragments;
   }
   const QueryMemoryDescriptor& query_mem_desc = execution_dispatch.getQueryMemoryDescriptor();
-  dispatchFragments(dispatch,
-                    execution_dispatch.getDeviceType(),
-                    allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
-                    is_agg_plan,
-                    ra_exe_unit.scan_ids,
-                    all_tables_fragments,
-                    ra_exe_unit.simple_quals,
-                    execution_dispatch.getFragOffsets(),
-                    context_count,
-                    scheduler_cv,
-                    scheduler_mutex,
-                    available_gpus,
-                    available_cpus);
+  dispatchFragments(
+      dispatch,
+      execution_dispatch.getDeviceType(),
+      options.allow_multifrag && (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext()),
+      is_agg,
+      ra_exe_unit.scan_ids,
+      all_tables_fragments,
+      ra_exe_unit.simple_quals,
+      execution_dispatch.getFragOffsets(),
+      context_count,
+      scheduler_cv,
+      scheduler_mutex,
+      available_gpus,
+      available_cpus);
   cat.get_dataMgr().freeAllBuffers();
-  if (is_agg_plan) {
+  if (is_agg) {
     try {
       return collectAllDeviceResults(execution_dispatch,
                                      ra_exe_unit.target_exprs,
@@ -3112,10 +3097,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
 
 void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                           const size_t max_groups_buffer_entry_guess,
-                                          const bool allow_multifrag,
-                                          const bool output_columnar_hint,
-                                          const bool just_explain,
-                                          const bool allow_loop_joins) {
+                                          const ExecutionOptions& options) {
   auto compile_on_cpu = [&]() {
     const CompilationOptions co_cpu{ExecutorDeviceType::CPU, co_.hoist_literals_, co_.opt_level_};
     try {
@@ -3124,34 +3106,28 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                  query_infos_,
                                  ra_exe_unit_,
                                  co_cpu,
-                                 allow_multifrag,
+                                 options,
                                  cat_.get_dataMgr().cudaMgr_,
                                  true,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
                                  render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
                                                    : executor_->small_groups_buffer_entry_count_,
-                                 output_columnar_hint,
-                                 just_explain,
-                                 join_info,
-                                 allow_loop_joins);
+                                 join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu_ =
           executor_->compilePlan(false,
                                  query_infos_,
                                  ra_exe_unit_,
                                  co_cpu,
-                                 allow_multifrag,
+                                 options,
                                  cat_.get_dataMgr().cudaMgr_,
                                  false,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
                                  render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
                                                    : executor_->small_groups_buffer_entry_count_,
-                                 output_columnar_hint,
-                                 just_explain,
-                                 join_info,
-                                 allow_loop_joins);
+                                 join_info);
     }
   };
 
@@ -3168,34 +3144,28 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                  query_infos_,
                                  ra_exe_unit_,
                                  co_gpu,
-                                 allow_multifrag,
+                                 options,
                                  cat_.get_dataMgr().cudaMgr_,
                                  render_allocator_ ? false : true,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
                                  render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
                                                    : executor_->small_groups_buffer_entry_count_,
-                                 output_columnar_hint,
-                                 just_explain,
-                                 join_info,
-                                 allow_loop_joins);
+                                 join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_gpu_ =
           executor_->compilePlan(render_allocator_,
                                  query_infos_,
                                  ra_exe_unit_,
                                  co_gpu,
-                                 allow_multifrag,
+                                 options,
                                  cat_.get_dataMgr().cudaMgr_,
                                  false,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
                                  render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
                                                    : executor_->small_groups_buffer_entry_count_,
-                                 output_columnar_hint,
-                                 just_explain,
-                                 join_info,
-                                 allow_loop_joins);
+                                 join_info);
     }
   }
 
@@ -3270,7 +3240,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                                           const int64_t rowid_lookup_key)> dispatch,
                                  const ExecutorDeviceType device_type,
                                  const bool allow_multifrag,
-                                 const bool is_agg_plan,
+                                 const bool is_agg,
                                  const std::vector<ScanId>& scan_ids,
                                  const std::map<int, const TableFragments*>& all_tables_fragments,
                                  const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
@@ -3289,7 +3259,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
   CHECK(it != all_tables_fragments.end());
   const auto fragments = it->second;
 
-  if (device_type == ExecutorDeviceType::GPU && allow_multifrag && is_agg_plan) {
+  if (device_type == ExecutorDeviceType::GPU && allow_multifrag && is_agg) {
     // NB: We should never be on this path when the query is retried because of
     //     running out of group by slots; also, for scan only queries (!agg_plan)
     //     we want the high-granularity, fragment by fragment execution instead.
@@ -4032,16 +4002,13 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
                                                   const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                                   const RelAlgExecutionUnit& ra_exe_unit,
                                                   const CompilationOptions& co,
-                                                  const bool allow_multifrag,
+                                                  const ExecutionOptions& eo,
                                                   const CudaMgr_Namespace::CudaMgr* cuda_mgr,
                                                   const bool allow_lazy_fetch,
                                                   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                                   const size_t max_groups_buffer_entry_guess,
                                                   const size_t small_groups_buffer_entry_count,
-                                                  const bool output_columnar_hint,
-                                                  const bool serialize_llvm_ir,
-                                                  const JoinInfo& join_info,
-                                                  const bool allow_loop_joins) {
+                                                  const JoinInfo& join_info) {
   nukeOldState(allow_lazy_fetch, join_info);
 
   GroupByAndAggregate group_by_and_aggregate(this,
@@ -4054,9 +4021,9 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
                                              max_groups_buffer_entry_guess,
                                              small_groups_buffer_entry_count,
                                              ra_exe_unit.scan_limit,
-                                             allow_multifrag,
+                                             eo.allow_multifrag,
                                              ra_exe_unit.order_entries,
-                                             output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
+                                             eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
   auto query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   const bool output_columnar = group_by_and_aggregate.outputColumnar();
@@ -4107,7 +4074,7 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
   auto bb = llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(bb);
 
-  allocateInnerScansIterators(ra_exe_unit.scan_ids, allow_loop_joins);
+  allocateInnerScansIterators(ra_exe_unit.scan_ids, eo.allow_loop_joins);
 
   // generate the code for the filter
   allocateLocalColumnIds(ra_exe_unit.scan_cols);
@@ -4245,7 +4212,7 @@ Executor::CompilationResult Executor::compilePlan(const bool render_output,
       markDeadRuntimeFuncs(*cgen_state_->module_, {query_func, cgen_state_->row_func_}, {multifrag_query_func});
 
   std::string llvm_ir;
-  if (serialize_llvm_ir) {
+  if (eo.just_explain) {
     llvm_ir = serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
   }
   return Executor::CompilationResult{
