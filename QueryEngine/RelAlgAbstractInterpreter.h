@@ -23,7 +23,7 @@ class RexAbstractInput : public RexScalar {
 
   unsigned getIndex() const { return in_index_; }
 
-  std::string toString() const { return "(RexAbstractInput " + std::to_string(in_index_) + ")"; }
+  std::string toString() const override { return "(RexAbstractInput " + std::to_string(in_index_) + ")"; }
 
  private:
   unsigned in_index_;
@@ -110,7 +110,7 @@ class RexLiteral : public RexScalar {
 
   unsigned getTypePrecision() const { return type_precision_; }
 
-  std::string toString() const { return "(RexLiteral " + boost::lexical_cast<std::string>(literal_) + ")"; }
+  std::string toString() const override { return "(RexLiteral " + boost::lexical_cast<std::string>(literal_) + ")"; }
 
  private:
   const boost::variant<int64_t, double, std::string, bool, void*> literal_;
@@ -138,7 +138,7 @@ class RexOperator : public RexScalar {
 
   SQLOps getOperator() const { return op_; }
 
-  std::string toString() const {
+  std::string toString() const override {
     std::string result = "(RexOperator " + std::to_string(op_);
     for (const auto& operand : operands_) {
       result += " " + operand->toString();
@@ -160,7 +160,7 @@ class RexCast : public RexOperator {
 
   bool getNullable() const { return nullable_; }
 
-  std::string toString() const {
+  std::string toString() const override {
     return "(RexCast " + getOperand(0)->toString() + " to " + std::to_string(target_type_) + ")";
   }
 
@@ -179,7 +179,7 @@ class RexInput : public RexAbstractInput {
 
   const RelAlgNode* getSourceNode() const { return node_; }
 
-  std::string toString() const {
+  std::string toString() const override {
     return "(RexInput " + std::to_string(getIndex()) + " " + std::to_string(reinterpret_cast<const uint64_t>(node_)) +
            ")";
   }
@@ -193,7 +193,7 @@ class RexAgg : public Rex {
   RexAgg(const SQLAgg agg, const bool distinct, const SQLTypes type, const bool nullable, const ssize_t operand)
       : agg_(agg), distinct_(distinct), type_(type), nullable_(nullable), operand_(operand){};
 
-  std::string toString() const {
+  std::string toString() const override {
     return "(RexAgg " + std::to_string(agg_) + " " + std::to_string(distinct_) + " " +
            std::to_string(static_cast<int>(type_)) + " " + std::to_string(static_cast<int>(nullable_)) + " " +
            std::to_string(operand_) + ")";
@@ -252,7 +252,7 @@ class RelScan : public RelAlgNode {
 
   const std::vector<std::string>& getFieldNames() const { return field_names_; }
 
-  std::string toString() const {
+  std::string toString() const override {
     return "(RelScan<" + std::to_string(reinterpret_cast<uint64_t>(this)) + "> " +
            std::to_string(reinterpret_cast<uint64_t>(td_)) + ")";
   }
@@ -312,7 +312,7 @@ class RelProject : public RelAlgNode {
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
-  std::string toString() const {
+  std::string toString() const override {
     std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     for (const auto& scalar_expr : scalar_exprs_) {
       result += " " + scalar_expr->toString();
@@ -353,7 +353,7 @@ class RelAggregate : public RelAlgNode {
     return result;
   }
 
-  std::string toString() const {
+  std::string toString() const override {
     std::string result = "(RelAggregate<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(groups: [";
     for (const auto group_index : group_indices_) {
       result += " " + std::to_string(group_index);
@@ -381,7 +381,7 @@ class RelJoin : public RelAlgNode {
     inputs_.emplace_back(rhs);
   }
 
-  std::string toString() const {
+  std::string toString() const override {
     std::string result = "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += condition_ ? condition_->toString() : "null";
     result += " " + std::to_string(static_cast<int>(join_type_));
@@ -403,7 +403,7 @@ class RelFilter : public RelAlgNode {
 
   void setCondition(const RexScalar* condition) { filter_.reset(condition); }
 
-  std::string toString() const {
+  std::string toString() const override {
     std::string result = "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += filter_ ? filter_->toString() : "null";
     return result + ")";
@@ -448,7 +448,7 @@ class RelCompound : public RelAlgNode {
 
   const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
 
-  std::string toString() const {
+  std::string toString() const override {
     std::string result = "(RelCompound<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += (filter_expr_ ? filter_expr_->toString() : "null") + " ";
     for (const auto target_expr : target_exprs_) {
@@ -496,7 +496,7 @@ class RelSort : public RelAlgNode {
     inputs_.emplace_back(input);
   }
 
-  std::string toString() const {
+  std::string toString() const override {
     std::string result = "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     // TODO(alex)
     return result + ")";
