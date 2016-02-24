@@ -312,7 +312,7 @@ class Executor {
     CompilationOptions co_;
     CompilationResult compilation_result_cpu_;
     CompilationResult compilation_result_gpu_;
-    const std::vector<uint64_t>& all_frag_row_offsets_;
+    std::vector<uint64_t> all_frag_row_offsets_;
     std::vector<std::mutex>& query_context_mutexes_;
     std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts_;
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
@@ -326,7 +326,6 @@ class Executor {
                       const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
                       const CompilationOptions& co,
-                      const std::vector<uint64_t>& all_frag_row_offsets,
                       std::vector<std::mutex>& query_context_mutexes,
                       std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -354,6 +353,8 @@ class Executor {
     const QueryMemoryDescriptor& getQueryMemoryDescriptor() const;
 
     const bool outputColumnar() const;
+
+    const std::vector<uint64_t>& getFragOffsets() const;
   };
 
   ResultRows executeAggScanPlan(const bool is_agg_plan,
@@ -369,6 +370,13 @@ class Executor {
                                 const bool just_explain,
                                 const bool allow_loop_joins,
                                 RenderAllocator* render_allocator);
+
+  ResultRows executeExplain(const ExecutionDispatch&);
+
+  // TODO(alex): remove
+  static ExecutorDeviceType getDeviceTypeForTargets(const Executor::RelAlgExecutionUnit& ra_exe_unit,
+                                                    const ExecutorDeviceType requested_device_type);
+
   ResultRows collectAllDeviceResults(std::vector<std::pair<ResultRows, std::vector<size_t>>>& all_fragment_results,
                                      const std::vector<Analyzer::Expr*>& target_exprs,
                                      const QueryMemoryDescriptor& query_mem_desc,

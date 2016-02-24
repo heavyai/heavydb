@@ -2723,6 +2723,24 @@ ResultRows Executor::executeSortPlan(const Planner::Sort* sort_plan,
   return rows_to_sort;
 }
 
+namespace {
+
+size_t compute_buffer_entry_guess(const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos) {
+  using Fragmenter_Namespace::FragmentInfo;
+  size_t max_groups_buffer_entry_guess = 1;
+  for (const auto& query_info : query_infos) {
+    CHECK(!query_info.fragments.empty());
+    auto it =
+        std::max_element(query_info.fragments.begin(),
+                         query_info.fragments.end(),
+                         [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.numTuples < f2.numTuples; });
+    max_groups_buffer_entry_guess *= it->numTuples;
+  }
+  return max_groups_buffer_entry_guess;
+}
+
+}  // namespace
+
 ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
                                         const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
                                         const RelAlgExecutionUnit& ra_exe_unit,
@@ -2738,15 +2756,7 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
                                         RenderAllocator* render_allocator) {
   *error_code = 0;
 
-  auto agg_infos = get_agg_name_and_exprs(ra_exe_unit.target_exprs);
-  auto device_type = co.device_type_;
-  for (const auto& agg_info : agg_infos) {
-    // TODO(alex): count distinct can't be executed on the GPU yet, punt to CPU
-    if (std::get<0>(agg_info) == "agg_count_distinct") {
-      device_type = ExecutorDeviceType::CPU;
-      break;
-    }
-  }
+  const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
 
   CHECK(!query_infos.empty());
 
@@ -2755,24 +2765,10 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
     // of group by slots. Make the conservative choice: allocate fragment size
     // slots and run on the CPU.
     CHECK(device_type == ExecutorDeviceType::CPU);
-    using Fragmenter_Namespace::FragmentInfo;
-    max_groups_buffer_entry_guess = 1;
-    for (const auto& query_info : query_infos) {
-      CHECK(!query_info.fragments.empty());
-      auto it =
-          std::max_element(query_info.fragments.begin(),
-                           query_info.fragments.end(),
-                           [](const FragmentInfo& f1, const FragmentInfo& f2) { return f1.numTuples < f2.numTuples; });
-      max_groups_buffer_entry_guess *= it->numTuples;
-    }
+    max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
   const auto join_info = chooseJoinType(ra_exe_unit.join_quals, query_infos, device_type);
-
-  std::vector<uint64_t> all_frag_row_offsets(query_infos.front().fragments.size() + 1);
-  for (size_t i = 1; i <= query_infos.front().fragments.size(); ++i) {
-    all_frag_row_offsets[i] = all_frag_row_offsets[i - 1] + query_infos.front().fragments[i - 1].numTuples;
-  }
 
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
@@ -2803,7 +2799,6 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
                                        query_infos,
                                        cat,
                                        {device_type, co.hoist_literals_, co.opt_level_},
-                                       all_frag_row_offsets,
                                        query_context_mutexes,
                                        query_contexts,
                                        row_set_mem_owner,
@@ -2814,17 +2809,7 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
       join_info, max_groups_buffer_entry_guess, allow_multifrag, output_columnar_hint, just_explain, allow_loop_joins);
 
   if (just_explain) {
-    std::string explained_plan;
-    const auto llvm_ir_cpu = execution_dispatch.getIR(ExecutorDeviceType::CPU);
-    if (!llvm_ir_cpu.empty()) {
-      explained_plan += ("IR for the CPU:\n===============\n" + llvm_ir_cpu);
-    }
-    const auto llvm_ir_gpu = execution_dispatch.getIR(ExecutorDeviceType::GPU);
-    if (!llvm_ir_gpu.empty()) {
-      explained_plan +=
-          (std::string(llvm_ir_cpu.empty() ? "" : "\n") + "IR for the GPU:\n===============\n" + llvm_ir_gpu);
-    }
-    return ResultRows(explained_plan);
+    return executeExplain(execution_dispatch);
   }
 
   for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -2867,7 +2852,7 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
                     ra_exe_unit.scan_ids,
                     all_tables_fragments,
                     ra_exe_unit.simple_quals,
-                    all_frag_row_offsets,
+                    execution_dispatch.getFragOffsets(),
                     context_count,
                     scheduler_cv,
                     scheduler_mutex,
@@ -2899,13 +2884,40 @@ ResultRows Executor::executeAggScanPlan(const bool is_agg_plan,
   return results_union(all_fragment_results);
 }
 
+ResultRows Executor::executeExplain(const ExecutionDispatch& execution_dispatch) {
+  std::string explained_plan;
+  const auto llvm_ir_cpu = execution_dispatch.getIR(ExecutorDeviceType::CPU);
+  if (!llvm_ir_cpu.empty()) {
+    explained_plan += ("IR for the CPU:\n===============\n" + llvm_ir_cpu);
+  }
+  const auto llvm_ir_gpu = execution_dispatch.getIR(ExecutorDeviceType::GPU);
+  if (!llvm_ir_gpu.empty()) {
+    explained_plan +=
+        (std::string(llvm_ir_cpu.empty() ? "" : "\n") + "IR for the GPU:\n===============\n" + llvm_ir_gpu);
+  }
+  return ResultRows(explained_plan);
+}
+
+// Looks at the targets and returns a feasible device type. We only punt
+// to CPU for count distinct and we should probably fix it and remove this.
+ExecutorDeviceType Executor::getDeviceTypeForTargets(const Executor::RelAlgExecutionUnit& ra_exe_unit,
+                                                     const ExecutorDeviceType requested_device_type) {
+  auto agg_infos = get_agg_name_and_exprs(ra_exe_unit.target_exprs);
+  for (const auto& agg_info : agg_infos) {
+    // TODO(alex): count distinct can't be executed on the GPU yet, punt to CPU
+    if (std::get<0>(agg_info) == "agg_count_distinct") {
+      return ExecutorDeviceType::CPU;
+    }
+  }
+  return requested_device_type;
+}
+
 Executor::ExecutionDispatch::ExecutionDispatch(
     Executor* executor,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<Fragmenter_Namespace::QueryInfo>& query_infos,
     const Catalog_Namespace::Catalog& cat,
     const CompilationOptions& co,
-    const std::vector<uint64_t>& all_frag_row_offsets,
     std::vector<std::mutex>& query_context_mutexes,
     std::vector<std::unique_ptr<QueryExecutionContext>>& query_contexts,
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -2917,13 +2929,16 @@ Executor::ExecutionDispatch::ExecutionDispatch(
       query_infos_(query_infos),
       cat_(cat),
       co_(co),
-      all_frag_row_offsets_(all_frag_row_offsets),
       query_context_mutexes_(query_context_mutexes),
       query_contexts_(query_contexts),
       row_set_mem_owner_(row_set_mem_owner),
       error_code_(error_code),
       render_allocator_(render_allocator),
       all_fragment_results_(all_fragment_results) {
+  all_frag_row_offsets_.resize(query_infos.front().fragments.size() + 1);
+  for (size_t i = 1; i <= query_infos.front().fragments.size(); ++i) {
+    all_frag_row_offsets_[i] = all_frag_row_offsets_[i - 1] + query_infos_.front().fragments[i - 1].numTuples;
+  }
 }
 
 void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_type,
@@ -3217,6 +3232,10 @@ const QueryMemoryDescriptor& Executor::ExecutionDispatch::getQueryMemoryDescript
 
 const bool Executor::ExecutionDispatch::outputColumnar() const {
   return compilation_result_cpu_.native_functions.empty() ? compilation_result_gpu_.output_columnar : false;
+}
+
+const std::vector<uint64_t>& Executor::ExecutionDispatch::getFragOffsets() const {
+  return all_frag_row_offsets_;
 }
 
 ResultRows Executor::collectAllDeviceResults(
