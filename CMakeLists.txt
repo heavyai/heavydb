@@ -166,6 +166,7 @@ add_custom_command(
     OUTPUT ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
 
 if(ENABLE_CALCITE)
   add_custom_command(
@@ -183,6 +184,7 @@ if(ENABLE_CALCITE)
       ARGS -p ${CMAKE_SOURCE_DIR}/java/src/gen
       COMMAND ${Thrift_EXECUTABLE}
       ARGS -gen java -out ${CMAKE_SOURCE_DIR}/java/src/gen/ ${CMAKE_SOURCE_DIR}/java/calciteserver.thrift)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/src/gen/)
 endif()
 
 execute_process(
@@ -197,6 +199,8 @@ configure_file(
   "${CMAKE_BINARY_DIR}/MapDRelease.h"
   @ONLY
   )
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
 # required to force regen of MAPD_GIT_HASH.txt, MapDRelease.h
 add_custom_target(rerun_cmake ALL
   COMMAND cmake .
@@ -251,6 +255,9 @@ if(GO_EXECUTABLE)
     SOURCES MapDWebServer.go
     )
   install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
+
   add_subdirectory(ThirdParty/generate_cert)
 endif()
 
@@ -273,6 +280,7 @@ if(PANDOC_EXECUTABLE AND PDFLATEX_EXECUTABLE AND ENABLE_DOCS)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
     )
   install(FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf DESTINATION docs)
+  list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDGuide.pdf)
 elseif(ENABLE_DOCS)
   message(WARNING "pandoc or pdflatex not found. Skipping PDF docs.")
 endif()
@@ -306,6 +314,8 @@ if(ENABLE_CALCITE)
     ##install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
   endif()
 endif()
+
+set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
 install(TARGETS initdb mapd mapd_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
