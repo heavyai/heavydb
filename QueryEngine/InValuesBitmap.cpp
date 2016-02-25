@@ -5,6 +5,7 @@
 #endif  // HAVE_CUDA
 #include "GroupByAndAggregate.h"
 #include "RuntimeFunctions.h"
+#include "../Parser/ParserNode.h"
 #include "../Shared/checked_alloc.h"
 
 #include <boost/multiprecision/cpp_int.hpp>
@@ -19,20 +20,21 @@ typedef boost::multiprecision::number<
 InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const int64_t null_val,
                                const Data_Namespace::MemoryLevel memory_level,
-                               const int device_id,
+                               const int device_count,
                                Data_Namespace::DataMgr* data_mgr)
-    : bitset_(nullptr), has_nulls_(false), memory_level_(memory_level) {
+    : null_val_(null_val), memory_level_(memory_level), device_count_(device_count) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL || memory_level == Data_Namespace::GPU_LEVEL);
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, memory_level_);
 #endif  // HAVE_CUDA
-  CHECK(!values.empty());
+  if (values.empty()) {
+    throw FailedToCreateBitmap();
+  }
   min_val_ = std::numeric_limits<int64_t>::max();
   max_val_ = std::numeric_limits<int64_t>::min();
   for (const auto value : values) {
     if (value == null_val) {
-      has_nulls_ = true;
       continue;
     }
     if (value < min_val_) {
@@ -45,7 +47,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   if (max_val_ < min_val_) {
     CHECK_EQ(std::numeric_limits<int64_t>::max(), min_val_);
     CHECK_EQ(std::numeric_limits<int64_t>::min(), max_val_);
-    return;
+    throw FailedToCreateBitmap();
   }
   const int64_t MAX_BITMAP_BITS{8 * 1000 * 1000 * 1000L};
   const auto bitmap_sz_bits = static_cast<int64_t>(checked_int64_t(max_val_) - min_val_ + 1);
@@ -53,34 +55,58 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
     throw FailedToCreateBitmap();
   }
   const auto bitmap_sz_bytes = bitmap_size_bytes(bitmap_sz_bits);
-  bitset_ = static_cast<int8_t*>(checked_calloc(bitmap_sz_bytes, 1));
+  auto cpu_bitset = static_cast<int8_t*>(checked_calloc(bitmap_sz_bytes, 1));
   for (const auto value : values) {
     if (value == null_val) {
       continue;
     }
-    agg_count_distinct_bitmap(reinterpret_cast<int64_t*>(&bitset_), value, min_val_);
+    agg_count_distinct_bitmap(reinterpret_cast<int64_t*>(&cpu_bitset), value, min_val_);
   }
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    auto gpu_bitset = alloc_gpu_mem(data_mgr, bitmap_sz_bytes, device_id, nullptr);
-    copy_to_gpu(data_mgr, gpu_bitset, bitset_, bitmap_sz_bytes, device_id);
-    free(bitset_);
-    bitset_ = reinterpret_cast<int8_t*>(gpu_bitset);
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
+      auto gpu_bitset = alloc_gpu_mem(data_mgr, bitmap_sz_bytes, device_id, nullptr);
+      copy_to_gpu(data_mgr, gpu_bitset, cpu_bitset, bitmap_sz_bytes, device_id);
+      bitsets_.push_back(reinterpret_cast<int8_t*>(gpu_bitset));
+    }
+    free(cpu_bitset);
+  } else {
+    bitsets_.push_back(cpu_bitset);
   }
+#else
+  bitsets_.push_back(cpu_bitset);
 #endif  // HAVE_CUDA
 }
 
 InValuesBitmap::~InValuesBitmap() {
   if (memory_level_ == Data_Namespace::CPU_LEVEL) {
-    free(bitset_);
+    CHECK_EQ(size_t(1), bitsets_.size());
+    free(bitsets_.front());
   }
 }
 
-llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor, const bool hoist_literals) {
+llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) {
+  CHECK(!bitsets_.empty());
+  std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
+  std::vector<const Analyzer::Constant*> constants;
+  for (const auto bitset : bitsets_) {
+    const int64_t bitset_handle = reinterpret_cast<int64_t>(bitset);
+    const auto bitset_handle_literal =
+        std::dynamic_pointer_cast<Analyzer::Constant>(Parser::IntLiteral::analyzeValue(bitset_handle));
+    CHECK(bitset_handle_literal);
+    CHECK_EQ(kENCODING_NONE, bitset_handle_literal->get_type_info().get_compression());
+    constants_owned.push_back(bitset_handle_literal);
+    constants.push_back(bitset_handle_literal.get());
+  }
+  const auto bitset_handle_lvs = executor->codegenHoistedConstants(constants, kENCODING_NONE, 0);
+  CHECK_EQ(size_t(1), bitset_handle_lvs.size());
   const auto needle_i64 = executor->toDoublePrecision(needle);
+  const auto null_bool_val = static_cast<int8_t>(inline_int_null_val(SQLTypeInfo(kBOOLEAN, false)));
   return executor->cgen_state_->emitCall("bit_is_set",
-                                         {executor->ll_int(reinterpret_cast<int64_t>(bitset_)),
+                                         {executor->toDoublePrecision(bitset_handle_lvs.front()),
                                           needle_i64,
                                           executor->ll_int(min_val_),
-                                          executor->ll_int(max_val_)});
+                                          executor->ll_int(max_val_),
+                                          executor->ll_int(null_val_),
+                                          executor->ll_int(null_bool_val)});
 }

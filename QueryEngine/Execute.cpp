@@ -487,10 +487,17 @@ bool Executor::isCPUOnly() const {
   return !catalog_->get_dataMgr().cudaMgr_;
 }
 
-std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& literals) {
+std::vector<int8_t> Executor::serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,
+                                                const int device_id) {
+  if (literals.empty()) {
+    return {};
+  }
+  const auto dev_literals_it = literals.find(device_id);
+  CHECK(dev_literals_it != literals.end());
+  const auto& dev_literals = dev_literals_it->second;
   size_t lit_buf_size{0};
   std::vector<std::string> real_strings;
-  for (const auto& lit : literals) {
+  for (const auto& lit : dev_literals) {
     lit_buf_size = addAligned(lit_buf_size, Executor::literalBytes(lit));
     if (lit.which() == 7) {
       const auto p = boost::get<std::string>(&lit);
@@ -509,7 +516,7 @@ std::vector<int8_t> Executor::serializeLiterals(const Executor::LiteralValues& l
   unsigned crt_real_str_idx = 0;
   std::vector<int8_t> serialized(lit_buf_size);
   size_t off{0};
-  for (const auto& lit : literals) {
+  for (const auto& lit : dev_literals) {
     const auto lit_bytes = Executor::literalBytes(lit);
     off = addAligned(off, lit_bytes);
     switch (lit.which()) {
@@ -758,8 +765,16 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
 }
 
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const CompilationOptions& co) {
-  const auto& arg_ti = expr->get_arg()->get_type_info();
   const auto lhs_lvs = codegen(expr->get_arg(), true, co);
+  if (co.hoist_literals_) {  // TODO(alex): remove this constraint
+    const auto in_vals_bitmap = createInValuesBitmap(expr, co);
+    if (in_vals_bitmap) {
+      cgen_state_->addInValuesBitmap(in_vals_bitmap);
+      CHECK_EQ(size_t(1), lhs_lvs.size());
+      return in_vals_bitmap->codegen(lhs_lvs.front(), this);
+    }
+  }
+  const auto& arg_ti = expr->get_arg()->get_type_info();
   llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
   if (arg_ti.get_notnull()) {
     for (auto in_val : expr->get_value_list()) {
@@ -778,6 +793,18 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
   return result;
 }
 
+namespace {
+
+const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
+  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
+  if (!cast_expr || cast_expr->get_optype() != kCAST) {
+    return expr;
+  }
+  return cast_expr->get_operand();
+}
+
+}  // namespace
+
 InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_values, const CompilationOptions& co) {
   const auto& value_list = in_values->get_value_list();
   std::vector<int64_t> values;
@@ -786,13 +813,13 @@ InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_valu
     return nullptr;
   }
   const auto sd = ti.is_string() ? getStringDictionary(ti.get_comp_param(), row_set_mem_owner_) : nullptr;
-  if (value_list.size() > 0) {  // TODO(alex): set threshold
+  if (value_list.size() > 10) {
     for (const auto in_val : value_list) {
-      const auto in_val_const = std::dynamic_pointer_cast<Analyzer::Constant>(in_val);
+      const auto in_val_const = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
       if (!in_val_const) {
         return nullptr;
       }
-      const auto& in_val_ti = in_val_const->get_type_info();
+      const auto& in_val_ti = in_val->get_type_info();
       CHECK(in_val_ti == ti);
       if (ti.is_string()) {
         CHECK(sd);
@@ -801,7 +828,7 @@ InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_valu
           values.push_back(string_id);
         }
       } else {
-        values.push_back(codegenIntConst(in_val_const.get())->getSExtValue());
+        values.push_back(codegenIntConst(in_val_const)->getSExtValue());
       }
     }
     try {
@@ -809,13 +836,12 @@ InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_valu
           values,
           inline_int_null_val(ti),
           co.device_type_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL : Data_Namespace::CPU_LEVEL,
-          0,
+          deviceCount(co.device_type_),
           &catalog_->get_dataMgr());
     } catch (...) {
       return nullptr;
     }
   }
-  CHECK(false);
   return nullptr;
 }
 
@@ -1098,38 +1124,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
                                             const EncodingType enc_type,
                                             const int dict_id,
                                             const CompilationOptions& co) {
-  const auto& type_info = constant->get_type_info();
   if (co.hoist_literals_) {
-    auto lit_buff_lv = getLiteralBuffArg(cgen_state_->row_func_);
-    const int16_t lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id);
-    const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, ll_int(lit_off));
-    if (type_info.is_string() && enc_type != kENCODING_DICT) {
-      CHECK_EQ(kENCODING_NONE, type_info.get_compression());
-      CHECK_EQ(size_t(4), literalBytes(LiteralValue(std::string(""))));
-      auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(
-          lit_buf_start, llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
-      // packed offset + length, 16 bits each
-      auto off_and_len = cgen_state_->ir_builder_.CreateLoad(off_and_len_ptr);
-      auto off_lv = cgen_state_->ir_builder_.CreateLShr(
-          cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0xffff0000))), ll_int(int32_t(16)));
-      auto len_lv = cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
-      return {ll_int(int64_t(0)), cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, off_lv), len_lv};
-    }
-    llvm::Type* val_ptr_type{nullptr};
-    const auto val_bits = get_bit_width(type_info);
-    CHECK_EQ(size_t(0), val_bits % 8);
-    if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_string() ||
-        type_info.is_boolean()) {
-      val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
-    } else {
-      CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
-      val_ptr_type = (type_info.get_type() == kFLOAT) ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
-                                                      : llvm::Type::getDoublePtrTy(cgen_state_->context_);
-    }
-    auto lit_lv =
-        cgen_state_->ir_builder_.CreateLoad(cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
-    return {lit_lv};
+    std::vector<const Analyzer::Constant*> constants(deviceCount(co.device_type_), constant);
+    return codegenHoistedConstants(constants, enc_type, dict_id);
   }
+  const auto& type_info = constant->get_type_info();
   const auto type = type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
   switch (type) {
     case kBOOLEAN:
@@ -1167,6 +1166,58 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Constant* constant,
       CHECK(false);
   }
   CHECK(false);
+}
+
+std::vector<llvm::Value*> Executor::codegenHoistedConstants(const std::vector<const Analyzer::Constant*>& constants,
+                                                            const EncodingType enc_type,
+                                                            const int dict_id) {
+  CHECK(!constants.empty());
+  const auto& type_info = constants.front()->get_type_info();
+  auto lit_buff_lv = getLiteralBuffArg(cgen_state_->row_func_);
+  int16_t lit_off{-1};
+  for (size_t device_id = 0; device_id < constants.size(); ++device_id) {
+    const auto constant = constants[device_id];
+    const auto& crt_type_info = constant->get_type_info();
+    CHECK(type_info == crt_type_info);
+    const int16_t dev_lit_off = cgen_state_->getOrAddLiteral(constant, enc_type, dict_id, device_id);
+    if (device_id) {
+      CHECK_EQ(lit_off, dev_lit_off);
+    } else {
+      lit_off = dev_lit_off;
+    }
+  }
+  CHECK_GE(lit_off, int16_t(0));
+  const auto lit_buf_start = cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, ll_int(lit_off));
+  if (type_info.is_string() && enc_type != kENCODING_DICT) {
+    CHECK_EQ(kENCODING_NONE, type_info.get_compression());
+    CHECK_EQ(size_t(4), literalBytes(LiteralValue(std::string(""))));
+    auto off_and_len_ptr = cgen_state_->ir_builder_.CreateBitCast(
+        lit_buf_start, llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
+    // packed offset + length, 16 bits each
+    auto off_and_len = cgen_state_->ir_builder_.CreateLoad(off_and_len_ptr);
+    auto off_lv = cgen_state_->ir_builder_.CreateLShr(
+        cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0xffff0000))), ll_int(int32_t(16)));
+    auto len_lv = cgen_state_->ir_builder_.CreateAnd(off_and_len, ll_int(int32_t(0x0000ffff)));
+    return {ll_int(int64_t(0)), cgen_state_->ir_builder_.CreateGEP(lit_buff_lv, off_lv), len_lv};
+  }
+  llvm::Type* val_ptr_type{nullptr};
+  const auto val_bits = get_bit_width(type_info);
+  CHECK_EQ(size_t(0), val_bits % 8);
+  if (type_info.is_integer() || type_info.is_decimal() || type_info.is_time() || type_info.is_string() ||
+      type_info.is_boolean()) {
+    val_ptr_type = llvm::PointerType::get(llvm::IntegerType::get(cgen_state_->context_, val_bits), 0);
+  } else {
+    CHECK(type_info.get_type() == kFLOAT || type_info.get_type() == kDOUBLE);
+    val_ptr_type = (type_info.get_type() == kFLOAT) ? llvm::Type::getFloatPtrTy(cgen_state_->context_)
+                                                    : llvm::Type::getDoublePtrTy(cgen_state_->context_);
+  }
+  auto lit_lv =
+      cgen_state_->ir_builder_.CreateLoad(cgen_state_->ir_builder_.CreateBitCast(lit_buf_start, val_ptr_type));
+  return {lit_lv};
+}
+
+int Executor::deviceCount(const ExecutorDeviceType device_type) const {
+  return device_type == ExecutorDeviceType::GPU ? catalog_->get_dataMgr().cudaMgr_->getDeviceCount() : 1;
 }
 
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr, const CompilationOptions& co) {
@@ -2636,7 +2687,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK_EQ(column_buffers.size(), static_cast<size_t>(in_col_count));
   auto query_exe_context = query_mem_desc.getQueryExecutionContext(
       init_agg_vals, this, ExecutorDeviceType::CPU, 0, {}, row_set_mem_owner_, false, false, nullptr);
-  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values, 0);
   *error_code = 0;
   std::vector<std::vector<const int8_t*>> multi_frag_col_buffers{column_buffers};
   launch_query_cpu_code(compilation_result.native_functions,
@@ -3522,7 +3573,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             RenderAllocator* render_allocator) {
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
-  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   if (device_type == ExecutorDeviceType::CPU) {
     out_vec = launch_query_cpu_code(compilation_result.native_functions,
@@ -3613,7 +3664,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
   // 1. Optimize size (make keys more compact).
   // 2. Resize on overflow.
   // 3. Optimize runtime.
-  const auto hoist_buf = serializeLiterals(compilation_result.literal_values);
+  const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   const auto join_hash_table_ptr = getJoinHashTablePtr(device_type, device_id);
   if (device_type == ExecutorDeviceType::CPU) {

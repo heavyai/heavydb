@@ -197,6 +197,9 @@ class Executor {
   llvm::ConstantFP* ll_fp(const double v) const {
     return static_cast<llvm::ConstantFP*>(llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), v));
   }
+  llvm::ConstantInt* ll_bool(const bool v) const {
+    return static_cast<llvm::ConstantInt*>(llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), v));
+  }
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*, const bool fetch_columns, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
@@ -205,6 +208,10 @@ class Executor {
                                     const EncodingType enc_type,
                                     const int dict_id,
                                     const CompilationOptions&);
+  std::vector<llvm::Value*> codegenHoistedConstants(const std::vector<const Analyzer::Constant*>&,
+                                                    const EncodingType enc_type,
+                                                    const int dict_id);
+  int deviceCount(const ExecutorDeviceType) const;
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
@@ -283,7 +290,7 @@ class Executor {
 
   struct CompilationResult {
     std::vector<void*> native_functions;
-    LiteralValues literal_values;
+    std::unordered_map<int, LiteralValues> literal_values;
     QueryMemoryDescriptor query_mem_desc;
     bool output_columnar;
     std::string llvm_ir;
@@ -573,7 +580,8 @@ class Executor {
                       llvm::Module*,
                       std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>&);
 
-  std::vector<int8_t> serializeLiterals(const Executor::LiteralValues& literals);
+  std::vector<int8_t> serializeLiterals(const std::unordered_map<int, Executor::LiteralValues>& literals,
+                                        const int device_id);
 
   static size_t literalBytes(const LiteralValue& lit) {
     switch (lit.which()) {
@@ -614,50 +622,56 @@ class Executor {
           context_(llvm::getGlobalContext()),
           ir_builder_(context_),
           must_run_on_cpu_(false),
-          uses_div_(false),
-          literal_bytes_(0) {}
+          uses_div_(false) {}
 
-    size_t getOrAddLiteral(const Analyzer::Constant* constant, const EncodingType enc_type, const int dict_id) {
+    size_t getOrAddLiteral(const Analyzer::Constant* constant,
+                           const EncodingType enc_type,
+                           const int dict_id,
+                           const int device_id) {
       const auto& ti = constant->get_type_info();
       const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
       switch (type) {
         case kBOOLEAN:
           return getOrAddLiteral(constant->get_is_null() ? int8_t(inline_int_null_val(ti))
-                                                         : int8_t(constant->get_constval().boolval ? 1 : 0));
+                                                         : int8_t(constant->get_constval().boolval ? 1 : 0),
+                                 device_id);
         case kSMALLINT:
-          return getOrAddLiteral(constant->get_is_null() ? int16_t(inline_int_null_val(ti))
-                                                         : constant->get_constval().smallintval);
+          return getOrAddLiteral(
+              constant->get_is_null() ? int16_t(inline_int_null_val(ti)) : constant->get_constval().smallintval,
+              device_id);
         case kINT:
-          return getOrAddLiteral(constant->get_is_null() ? int32_t(inline_int_null_val(ti))
-                                                         : constant->get_constval().intval);
+          return getOrAddLiteral(
+              constant->get_is_null() ? int32_t(inline_int_null_val(ti)) : constant->get_constval().intval, device_id);
         case kBIGINT:
-          return getOrAddLiteral(constant->get_is_null() ? int64_t(inline_int_null_val(ti))
-                                                         : constant->get_constval().bigintval);
+          return getOrAddLiteral(
+              constant->get_is_null() ? int64_t(inline_int_null_val(ti)) : constant->get_constval().bigintval,
+              device_id);
         case kFLOAT:
-          return getOrAddLiteral(constant->get_is_null() ? float(inline_fp_null_val(ti))
-                                                         : constant->get_constval().floatval);
+          return getOrAddLiteral(
+              constant->get_is_null() ? float(inline_fp_null_val(ti)) : constant->get_constval().floatval, device_id);
         case kDOUBLE:
-          return getOrAddLiteral(constant->get_is_null() ? inline_fp_null_val(ti) : constant->get_constval().doubleval);
+          return getOrAddLiteral(constant->get_is_null() ? inline_fp_null_val(ti) : constant->get_constval().doubleval,
+                                 device_id);
         case kCHAR:
         case kTEXT:
         case kVARCHAR:
           CHECK(constant->get_constval().stringval);  // TODO(alex): support null
           if (enc_type == kENCODING_DICT) {
-            return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id));
+            return getOrAddLiteral(std::make_pair(*constant->get_constval().stringval, dict_id), device_id);
           }
           CHECK_EQ(kENCODING_NONE, enc_type);
-          return getOrAddLiteral(*constant->get_constval().stringval);
+          return getOrAddLiteral(*constant->get_constval().stringval, device_id);
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
           // TODO(alex): support null
-          return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval));
+          return getOrAddLiteral(static_cast<int64_t>(constant->get_constval().timeval), device_id);
         default:
           CHECK(false);
       }
     }
 
-    const LiteralValues& getLiterals() const { return literals_; }
+    const std::unordered_map<int, LiteralValues>& getLiterals() const { return literals_; }
 
     llvm::Value* addStringConstant(const std::string& str) {
       llvm::Value* str_lv =
@@ -668,6 +682,9 @@ class Executor {
       return str_lv;
     }
 
+    void addInValuesBitmap(const InValuesBitmap* in_values_bitmap) {
+      in_values_bitmaps_.emplace_back(in_values_bitmap);
+    }
     // look up a runtime function based on the name, return type and type of
     // the arguments and call it; x64 only, don't call from GPU codegen
     llvm::Value* emitExternalCall(const std::string& fname,
@@ -703,29 +720,31 @@ class Executor {
     std::unordered_map<ScanId, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
+    std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
     bool must_run_on_cpu_;
     bool uses_div_;
 
    private:
     template <class T>
-    size_t getOrAddLiteral(const T& val) {
+    size_t getOrAddLiteral(const T& val, const int device_id) {
       const Executor::LiteralValue var_val(val);
       size_t literal_found_off{0};
-      for (const auto& literal : literals_) {
+      auto& literals = literals_[device_id];
+      for (const auto& literal : literals) {
         const auto lit_bytes = literalBytes(literal);
         literal_found_off = addAligned(literal_found_off, lit_bytes);
         if (literal == var_val) {
           return literal_found_off - lit_bytes;
         }
       }
-      literals_.emplace_back(val);
+      literals.emplace_back(val);
       const auto lit_bytes = literalBytes(var_val);
-      literal_bytes_ = addAligned(literal_bytes_, lit_bytes);
-      return literal_bytes_ - lit_bytes;
+      literal_bytes_[device_id] = addAligned(literal_bytes_[device_id], lit_bytes);
+      return literal_bytes_[device_id] - lit_bytes;
     }
 
-    LiteralValues literals_;
-    size_t literal_bytes_;
+    std::unordered_map<int, LiteralValues> literals_;
+    std::unordered_map<int, size_t> literal_bytes_;
   };
   std::unique_ptr<CgenState> cgen_state_;
 
