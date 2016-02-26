@@ -847,4 +847,19 @@ class Executor {
   friend class ExecutionDispatch;
 };
 
+inline std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<ScanId>& scan_ids,
+                                                                    const Catalog_Namespace::Catalog& cat) {
+  std::vector<Fragmenter_Namespace::QueryInfo> query_infos;
+  {
+    for (const auto& scan_id : scan_ids) {
+      const auto table_descriptor = cat.getMetadataForTable(scan_id.table_id_);
+      CHECK(table_descriptor);
+      const auto fragmenter = table_descriptor->fragmenter;
+      CHECK(fragmenter);
+      query_infos.push_back(fragmenter->getFragmentsForQuery());
+    }
+  }
+  return query_infos;
+}
+
 #endif  // QUERYENGINE_EXECUTE_H

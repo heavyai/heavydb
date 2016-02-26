@@ -85,24 +85,6 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(const std::shared_ptr<Analyze
   return expr->add_cast(transient_dict_ti);
 }
 
-SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const std::shared_ptr<Analyzer::Expr> arg_expr) {
-  switch (agg_kind) {
-    case kCOUNT:
-      return SQLTypeInfo(kBIGINT, false);
-    case kMIN:
-    case kMAX:
-      return arg_expr->get_type_info();
-    case kSUM:
-      return arg_expr->get_type_info().is_integer() ? SQLTypeInfo(kBIGINT, false) : arg_expr->get_type_info();
-    case kAVG:
-      return SQLTypeInfo(kDOUBLE, false);
-    default:
-      CHECK(false);
-  }
-  CHECK(false);
-  return SQLTypeInfo();
-}
-
 std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr> expr) {
   const auto cast_expr = std::dynamic_pointer_cast<Analyzer::UOper>(expr);
   return cast_expr && cast_expr->get_optype() == kCAST ? cast_expr->get_own_operand() : expr;
@@ -383,7 +365,7 @@ class CalciteAdapter {
       CHECK_LT(operand, static_cast<ssize_t>(scan_targets.size()));
     }
     const auto arg_expr = takes_arg ? scan_targets[operand]->get_own_expr() : nullptr;
-    const auto agg_ti = get_agg_type(agg_kind, arg_expr);
+    const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
     return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
   }
 

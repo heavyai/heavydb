@@ -16,18 +16,19 @@ class ForLoop {
 
 class RaExecutionDesc {
  public:
-  RaExecutionDesc(const std::vector<ForLoop>& for_loops, const RelAlgNode* body) : for_loops_(for_loops), body_(body) {}
+  RaExecutionDesc(const std::vector<ForLoop>& for_loops, const RelAlgNode* body)
+      : for_loops_(for_loops), body_(body), result_({}, nullptr, nullptr, ExecutorDeviceType::CPU) {}
 
-  const ResultRows* getResult() const { return result_.get(); }
+  const ResultRows& getResult() const { return result_; }
 
-  void setResult(const ResultRows* result) { result_.reset(result); }
+  void setResult(const ResultRows& result) { result_ = result; }
 
   const RelAlgNode* getBody() const { return body_; }
 
  private:
   const std::vector<ForLoop> for_loops_;
   const RelAlgNode* body_;
-  std::unique_ptr<const ResultRows> result_;
+  ResultRows result_;
 };
 
 std::list<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);

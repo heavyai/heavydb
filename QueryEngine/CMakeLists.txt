@@ -6,6 +6,7 @@ set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES C
 set(query_engine_source_files
     ArrayOps.cpp
     CalciteAdapter.cpp
+    CalciteDeserializerUtils.cpp
     Codec.cpp
     Execute.cpp
     ExpressionRange.cpp

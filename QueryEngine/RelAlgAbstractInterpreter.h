@@ -199,6 +199,12 @@ class RexAgg : public Rex {
            std::to_string(operand_) + ")";
   }
 
+  SQLAgg getKind() const { return agg_; }
+
+  bool isDistinct() const { return distinct_; }
+
+  ssize_t getOperand() const { return operand_; }
+
  private:
   const SQLAgg agg_;
   const bool distinct_;
@@ -442,6 +448,8 @@ class RelCompound : public RelAlgNode {
 
   const RexScalar* getFilterExpr() const { return filter_expr_.get(); }
 
+  const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
+
   const size_t getScalarSourcesSize() const { return scalar_sources_.size(); }
 
   const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
@@ -514,9 +522,15 @@ class Expr;
 
 }  // namespace Analyzer
 
-std::shared_ptr<Analyzer::Expr> translate_rex(const RexScalar* rex,
-                                              const int rte_idx,
-                                              const Catalog_Namespace::Catalog& cat);
+std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
+                                                     const int rte_idx,
+                                                     const Catalog_Namespace::Catalog& cat);
+
+std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
+    const RexAgg* rex,
+    const int rte_idx,
+    const Catalog_Namespace::Catalog& cat,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 

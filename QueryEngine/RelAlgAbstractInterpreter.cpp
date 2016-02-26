@@ -640,7 +640,7 @@ std::shared_ptr<Analyzer::Expr> translate_uoper(const RexOperator* rex_operator,
                                                 const int rte_idx,
                                                 const Catalog_Namespace::Catalog& cat) {
   CHECK_EQ(size_t(1), rex_operator->size());
-  const auto operand_expr = translate_rex(rex_operator->getOperand(0), rte_idx, cat);
+  const auto operand_expr = translate_scalar_rex(rex_operator->getOperand(0), rte_idx, cat);
   const auto sql_op = rex_operator->getOperator();
   switch (sql_op) {
     case kCAST: {
@@ -683,9 +683,9 @@ std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
     return translate_uoper(rex_operator, rte_idx, cat);
   }
   const auto sql_op = rex_operator->getOperator();
-  auto lhs = translate_rex(rex_operator->getOperand(0), rte_idx, cat);
+  auto lhs = translate_scalar_rex(rex_operator->getOperand(0), rte_idx, cat);
   for (size_t i = 1; i < rex_operator->size(); ++i) {
-    auto rhs = translate_rex(rex_operator->getOperand(i), rte_idx, cat);
+    auto rhs = translate_scalar_rex(rex_operator->getOperand(i), rte_idx, cat);
     if (sql_op == kEQ || sql_op == kNE) {
       lhs = remove_cast(lhs);
       rhs = remove_cast(rhs);
@@ -697,9 +697,9 @@ std::shared_ptr<Analyzer::Expr> translate_oper(const RexOperator* rex_operator,
 
 }  // namespace
 
-std::shared_ptr<Analyzer::Expr> translate_rex(const RexScalar* rex,
-                                              const int rte_idx,
-                                              const Catalog_Namespace::Catalog& cat) {
+std::shared_ptr<Analyzer::Expr> translate_scalar_rex(const RexScalar* rex,
+                                                     const int rte_idx,
+                                                     const Catalog_Namespace::Catalog& cat) {
   const auto rex_input = dynamic_cast<const RexInput*>(rex);
   if (rex_input) {
     return translate_input(rex_input, rte_idx, cat);
@@ -714,6 +714,23 @@ std::shared_ptr<Analyzer::Expr> translate_rex(const RexScalar* rex,
   }
   CHECK(false);
   return nullptr;
+}
+
+std::shared_ptr<Analyzer::Expr> translate_aggregate_rex(
+    const RexAgg* rex,
+    const int rte_idx,
+    const Catalog_Namespace::Catalog& cat,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
+  const auto agg_kind = rex->getKind();
+  const bool is_distinct = rex->isDistinct();
+  const auto operand = rex->getOperand();
+  const bool takes_arg{operand >= 0};
+  if (takes_arg) {
+    CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
+  }
+  const auto arg_expr = takes_arg ? scalar_sources[operand] : nullptr;
+  const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
+  return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct);
 }
 
 std::string tree_string(const RelAlgNode* ra, const size_t indent) {

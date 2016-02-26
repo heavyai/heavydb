@@ -10,7 +10,7 @@ class RelAlgExecutor {
   ResultRows executeRelAlgSeq(std::list<RaExecutionDesc>&, const CompilationOptions&);
 
  private:
-  ResultRows* executeCompound(const RelCompound*, const CompilationOptions&);
+  ResultRows executeCompound(const RelCompound*, const CompilationOptions&);
 
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;

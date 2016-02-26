@@ -189,21 +189,6 @@ bool check_plan_sanity(const Planner::Plan* plan) {
   return static_cast<bool>(scan_plan) != static_cast<bool>(join_plan);
 }
 
-std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<ScanId>& scan_ids,
-                                                             const Catalog_Namespace::Catalog& cat) {
-  std::vector<Fragmenter_Namespace::QueryInfo> query_infos;
-  {
-    for (const auto& scan_id : scan_ids) {
-      const auto table_descriptor = cat.getMetadataForTable(scan_id.table_id_);
-      CHECK(table_descriptor);
-      const auto fragmenter = table_descriptor->fragmenter;
-      CHECK(fragmenter);
-      query_infos.push_back(fragmenter->getFragmentsForQuery());
-    }
-  }
-  return query_infos;
-}
-
 const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
   const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
   if (!cast_expr || cast_expr->get_optype() != kCAST) {

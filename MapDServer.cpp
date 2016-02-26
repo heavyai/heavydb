@@ -13,6 +13,10 @@
 #include "Calcite/Calcite.h"
 #endif  // HAVE_CALCITE
 
+#ifdef HAVE_RAVM
+#include "QueryEngine/RelAlgExecutor.h"
+#endif  // HAVE_RAVM
+
 #include "Catalog/Catalog.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
@@ -1160,11 +1164,34 @@ class MapDHandler : virtual public MapDIf {
             {
               const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
                                                      session_info.get_currentUser().passwd,
-                                                     session_info.get_catalog().get_currentDB().dbName,
+                                                     cat.get_currentDB().dbName,
                                                      legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                                      legacy_syntax_);
-              root_plan = translate_query(query_ra, session_info.get_catalog());
+#ifdef HAVE_RAVM
+              CHECK(!pw.is_select_explain);
+              rapidjson::Document query_ast;
+              query_ast.Parse(query_ra.c_str());
+              CHECK(!query_ast.HasParseError());
+              CHECK(query_ast.IsObject());
+              const auto ra = ra_interpret(query_ast, cat);
+              auto ed_list = get_execution_descriptors(ra.get());
+              auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+                                                    jit_debug_ ? "/tmp" : "",
+                                                    jit_debug_ ? "mapdquery" : "",
+                                                    0,
+                                                    0,
+                                                    window_ptr_,
+                                                    render_mem_bytes_);
+              RelAlgExecutor ra_executor(executor.get(), cat);
+              const auto results =
+                  ra_executor.executeRelAlgSeq(ed_list, {executor_device_type, true, ExecutorOptLevel::Default});
+              CHECK(false);
+              convert_rows(_return, {}, results, column_format);
+              return;
+#else
+              root_plan = translate_query(query_ra, cat);
               plan_ptr.reset(root_plan);
+#endif  // HAVE_RAVM
             }
             if (pw.is_select_explain) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);

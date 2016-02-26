@@ -6,9 +6,7 @@
 
 #include <glog/logging.h>
 
-namespace {
-
-SQLOps to_sql_op(const std::string& op_str) {
+inline SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string(">")) {
     return kGT;
   }
@@ -70,7 +68,7 @@ SQLOps to_sql_op(const std::string& op_str) {
   return kEQ;
 }
 
-SQLAgg to_agg_kind(const std::string& agg_name) {
+inline SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == std::string("COUNT")) {
     return kCOUNT;
   }
@@ -90,7 +88,7 @@ SQLAgg to_agg_kind(const std::string& agg_name) {
   return kCOUNT;
 }
 
-SQLTypes to_sql_type(const std::string& type_name) {
+inline SQLTypes to_sql_type(const std::string& type_name) {
   if (type_name == std::string("BIGINT")) {
     return kBIGINT;
   }
@@ -125,6 +123,12 @@ SQLTypes to_sql_type(const std::string& type_name) {
   return kNULLT;
 }
 
-}  // namespace
+namespace Analyzer {
+
+class Expr;
+
+}  // Analyzer
+
+SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr);
 
 #endif  // QUERYENGINE_CALCITEDESERIALIZERUTILS_H

@@ -112,6 +112,11 @@ if(ENABLE_CALCITE)
     include_directories(${JNI_INCLUDE_DIRS})
 endif()
 
+option(ENABLE_RAVM "Enable RA vm" OFF)
+if(ENABLE_RAVM)
+    add_definitions("-DHAVE_RAVM")
+endif()
+
 ADD_SUBDIRECTORY    (SqliteConnector)
 ADD_SUBDIRECTORY    (Catalog)
 ADD_SUBDIRECTORY    (Parser)
