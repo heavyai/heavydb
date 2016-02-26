@@ -2501,7 +2501,6 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   }
   row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
-  CHECK(scan_plan);
   auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   std::vector<ScanId> scan_ids;
