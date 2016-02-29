@@ -758,11 +758,22 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
 }
 
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const CompilationOptions& co) {
-  llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
+  const auto& arg_ti = expr->get_arg()->get_type_info();
   const auto lhs_lvs = codegen(expr->get_arg(), true, co);
-  for (auto in_val : expr->get_value_list()) {
-    result = cgen_state_->ir_builder_.CreateOr(
-        result, toBool(codegenCmp(kEQ, kONE, lhs_lvs, expr->get_arg()->get_type_info(), in_val.get(), co)));
+  llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
+  if (arg_ti.get_notnull()) {
+    for (auto in_val : expr->get_value_list()) {
+      result = cgen_state_->ir_builder_.CreateOr(
+          result, toBool(codegenCmp(kEQ, kONE, lhs_lvs, expr->get_arg()->get_type_info(), in_val.get(), co)));
+    }
+  } else {
+    result = boolToInt8(result);
+    const auto& expr_ti = expr->get_type_info();
+    CHECK(expr_ti.is_boolean());
+    for (auto in_val : expr->get_value_list()) {
+      const auto crt = codegenCmp(kEQ, kONE, lhs_lvs, expr->get_arg()->get_type_info(), in_val.get(), co);
+      result = cgen_state_->emitCall("logical_or", {result, crt, inlineIntNull(expr_ti)});
+    }
   }
   return result;
 }
@@ -1571,10 +1582,10 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper, const C
   CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
   CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
   if (lhs_lv->getType()->isIntegerTy(1)) {
-    lhs_lv = cgen_state_->ir_builder_.CreateZExt(lhs_lv, get_int_type(8, cgen_state_->context_));
+    lhs_lv = boolToInt8(lhs_lv);
   }
   if (rhs_lv->getType()->isIntegerTy(1)) {
-    rhs_lv = cgen_state_->ir_builder_.CreateZExt(rhs_lv, get_int_type(8, cgen_state_->context_));
+    rhs_lv = boolToInt8(rhs_lv);
   }
   switch (optype) {
     case kAND:
@@ -1592,6 +1603,11 @@ llvm::Value* Executor::toBool(llvm::Value* lv) {
     return cgen_state_->ir_builder_.CreateICmp(llvm::ICmpInst::ICMP_SGT, lv, llvm::ConstantInt::get(lv->getType(), 0));
   }
   return lv;
+}
+
+llvm::Value* Executor::boolToInt8(llvm::Value* lv) {
+  CHECK(lv->getType()->isIntegerTy(1));
+  return cgen_state_->ir_builder_.CreateZExt(lv, get_int_type(8, cgen_state_->context_));
 }
 
 llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const CompilationOptions& co) {
@@ -1638,7 +1654,7 @@ llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper, const Compilati
     if (operand_ti.is_boolean()) {
       CHECK(operand_lv->getType()->isIntegerTy(1) || operand_lv->getType()->isIntegerTy(8));
       if (operand_lv->getType()->isIntegerTy(1)) {
-        operand_lv = cgen_state_->ir_builder_.CreateZExt(operand_lv, get_int_type(8, cgen_state_->context_));
+        operand_lv = boolToInt8(operand_lv);
       }
     }
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {

@@ -227,6 +227,7 @@ class Executor {
                           const CompilationOptions&);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* toBool(llvm::Value*);
+  llvm::Value* boolToInt8(llvm::Value*);
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* codegenDiv(llvm::Value*,
                           llvm::Value*,
