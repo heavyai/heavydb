@@ -467,6 +467,9 @@ std::shared_ptr<Analyzer::Expr> FunctionRef::analyze(const Catalog_Namespace::Ca
     }
     is_distinct = distinct;
   } else {
+    if (!arg) {
+      throw std::runtime_error("Cannot compute " + *name + " with argument '*'.");
+    }
     if (boost::iequals(*name, "min")) {
       agg_type = kMIN;
       arg_expr = arg->analyze(catalog, query, allow_tlist_ref);

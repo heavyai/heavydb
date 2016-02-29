@@ -260,6 +260,9 @@ TEST(ParseAnalyzePlan, Select) {
         "select * from fat where m >= '1999-09-09T111111' and n <= '222222' and o = "
         "'1996-02-23';"));
   });
+  EXPECT_THROW({
+    unique_ptr<RootPlan> plan_ptr(plan_dml("select AVG(*) from fat;"));
+  }, std::runtime_error);
 }
 
 TEST(ParseAnalyzePlan, Insert) {
