@@ -9,6 +9,7 @@ Group=@MAPD_GROUP@
 Environment=DISPLAY=:1
 ExecStart=@MAPD_PATH@/bin/mapd_server --config @MAPD_STORAGE@/mapd.conf
 KillMode=control-group
+LimitNOFILE=16384
 
 [Install]
 WantedBy=multi-user.target
