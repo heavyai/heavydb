@@ -309,12 +309,12 @@ if(ENABLE_CALCITE)
   if(MVN_EXECUTABLE)
     add_custom_target(mapd_java_components ALL
       COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q install
+      COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
       DEPENDS ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/server/MapD.java  ${CMAKE_SOURCE_DIR}/java/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
       SOURCES ${CMAKE_SOURCE_DIR}/java/pom.xml ${CMAKE_SOURCE_DIR}/mapd.thrift
       )
     install(FILES ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
-    file(COPY ${CMAKE_SOURCE_DIR}/java/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
   endif()
 endif()
 
