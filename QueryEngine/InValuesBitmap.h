@@ -39,7 +39,6 @@ class InValuesBitmap {
   int64_t min_val_;
   int64_t max_val_;
   const int64_t null_val_;
-  bool has_nulls_;
   const Data_Namespace::MemoryLevel memory_level_;
   const int device_count_;
 };
