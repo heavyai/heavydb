@@ -204,6 +204,19 @@ std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<S
   return query_infos;
 }
 
+const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
+  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
+  if (!cast_expr || cast_expr->get_optype() != kCAST) {
+    return expr;
+  }
+  return cast_expr->get_operand();
+}
+
+bool is_unnest(const Analyzer::Expr* expr) {
+  return dynamic_cast<const Analyzer::UOper*>(expr) &&
+         static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
+}
+
 }  // namespace
 
 ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
@@ -690,6 +703,9 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr, const Compi
 }
 
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr, const CompilationOptions& co) {
+  if (is_unnest(extract_cast_arg(expr->get_arg()))) {
+    throw std::runtime_error("LIKE not supported for unnested expressions");
+  }
   char escape_char{'\\'};
   if (expr->get_escape_expr()) {
     auto escape_char_expr = dynamic_cast<const Analyzer::Constant*>(expr->get_escape_expr());
@@ -765,7 +781,11 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
 }
 
 llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const CompilationOptions& co) {
-  const auto lhs_lvs = codegen(expr->get_arg(), true, co);
+  const auto in_arg = expr->get_arg();
+  if (is_unnest(in_arg)) {
+    throw std::runtime_error("IN not supported for unnested expressions");
+  }
+  const auto lhs_lvs = codegen(in_arg, true, co);
   if (co.hoist_literals_) {  // TODO(alex): remove this constraint
     const auto in_vals_bitmap = createInValuesBitmap(expr, co);
     if (in_vals_bitmap) {
@@ -774,36 +794,24 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr, const Compilation
       return in_vals_bitmap->codegen(lhs_lvs.front(), this);
     }
   }
-  const auto& arg_ti = expr->get_arg()->get_type_info();
+  const auto& arg_ti = in_arg->get_type_info();
   llvm::Value* result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
   if (arg_ti.get_notnull()) {
     for (auto in_val : expr->get_value_list()) {
       result = cgen_state_->ir_builder_.CreateOr(
-          result, toBool(codegenCmp(kEQ, kONE, lhs_lvs, expr->get_arg()->get_type_info(), in_val.get(), co)));
+          result, toBool(codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
     }
   } else {
     result = boolToInt8(result);
     const auto& expr_ti = expr->get_type_info();
     CHECK(expr_ti.is_boolean());
     for (auto in_val : expr->get_value_list()) {
-      const auto crt = codegenCmp(kEQ, kONE, lhs_lvs, expr->get_arg()->get_type_info(), in_val.get(), co);
+      const auto crt = codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
       result = cgen_state_->emitCall("logical_or", {result, crt, inlineIntNull(expr_ti)});
     }
   }
   return result;
 }
-
-namespace {
-
-const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
-  const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
-  if (!cast_expr || cast_expr->get_optype() != kCAST) {
-    return expr;
-  }
-  return cast_expr->get_operand();
-}
-
-}  // namespace
 
 InValuesBitmap* Executor::createInValuesBitmap(const Analyzer::InValues* in_values, const CompilationOptions& co) {
   const auto& value_list = in_values->get_value_list();
@@ -1474,11 +1482,6 @@ std::string get_null_check_suffix(const SQLTypeInfo& lhs_ti, const SQLTypeInfo& 
     null_check_suffix += "_lhs";
   }
   return null_check_suffix;
-}
-
-bool is_unnest(const Analyzer::Expr* expr) {
-  return dynamic_cast<const Analyzer::UOper*>(expr) &&
-         static_cast<const Analyzer::UOper*>(expr)->get_optype() == kUNNEST;
 }
 
 }  // namespace
