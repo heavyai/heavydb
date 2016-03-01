@@ -145,6 +145,8 @@ endif()
 set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner
     QueryEngine DataMgr Fragmenter Chunk)
 
+set(MAPD_RENDERING_LIBRARIES Rendering QueryRenderer)
+
 if(ENABLE_CALCITE)
     list(APPEND MAPD_LIBRARIES Calcite)
 endif()
