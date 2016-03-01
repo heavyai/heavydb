@@ -943,7 +943,7 @@ literal:
     STRING { $<nodeval>$ = new StringLiteral($<stringval>1); }
   | INTNUM { $<nodeval>$ = new IntLiteral($<intval>1); }
   | NOW '(' ')' { $<nodeval>$ = new TimestampLiteral(); }
-  | DATETIME '(' general_exp ')' { $<nodeval>$ = new TimestampLiteral(); }
+  | DATETIME '(' general_exp ')' { delete dynamic_cast<Expr*>($<nodeval>3); $<nodeval>$ = new TimestampLiteral(); }
   | FIXEDNUM
   {
     $<nodeval>$ = new FixedPtLiteral($<stringval>1);
