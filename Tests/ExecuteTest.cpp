@@ -884,11 +884,11 @@ void import_array_test(const std::string& table_name) {
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   const auto col_descs = cat.getAllColumnMetadataForTable(td->tableId, false, false);
   for (const auto cd : col_descs) {
-    import_buffers.emplace_back(
-        new Importer_NS::TypedImportBuffer(cd,
-                                           cd->columnType.get_compression() == kENCODING_DICT
-                                               ? cat.getMetadataForDict(cd->columnType.get_comp_param())->stringDict
-                                               : nullptr));
+    import_buffers.emplace_back(new Importer_NS::TypedImportBuffer(
+        cd,
+        cd->columnType.get_compression() == kENCODING_DICT
+            ? cat.getMetadataForDict(cd->columnType.get_comp_param())->stringDict.get()
+            : nullptr));
   }
   Importer_NS::CopyParams copy_params;
   copy_params.array_begin = '{';

@@ -483,10 +483,10 @@ StringDictionary* Executor::getStringDictionary(const int dict_id_in,
   if (dd) {
     if (row_set_mem_owner) {
       CHECK(dd->stringDict);
-      row_set_mem_owner->addStringDict(dd->stringDict);
+      row_set_mem_owner->addStringDict(dd->stringDict.get());
     }
     CHECK_EQ(32, dd->dictNBits);
-    return dd->stringDict;
+    return dd->stringDict.get();
   }
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_) {

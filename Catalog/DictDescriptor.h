@@ -2,6 +2,7 @@
 #define DICT_DESCRIPTOR_H
 
 #include <cassert>
+#include <memory>
 #include <string>
 #include "../Shared/sqltypes.h"
 #include "../StringDictionary/StringDictionary.h"
@@ -18,7 +19,7 @@ struct DictDescriptor {
   int dictNBits;
   bool dictIsShared;
   std::string dictFolderPath;
-  StringDictionary* stringDict;
+  std::shared_ptr<StringDictionary> stringDict;
   DictDescriptor(int id, const std::string& name, int nbits, bool shared, std::string& fname)
       : dictId(id),
         dictName(name),

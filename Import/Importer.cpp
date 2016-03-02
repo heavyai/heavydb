@@ -716,7 +716,7 @@ void Loader::init() {
       CHECK(cd->columnType.is_string() || cd->columnType.is_string_array());
       const auto dd = catalog.getMetadataForDict(cd->columnType.get_comp_param());
       CHECK(dd);
-      dict_map[cd->columnId] = dd->stringDict;
+      dict_map[cd->columnId] = dd->stringDict.get();
     }
   }
   insert_data.numRows = 0;

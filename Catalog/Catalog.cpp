@@ -490,8 +490,6 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     if (cd->columnType.get_compression() == kENCODING_DICT) {
       DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
       const auto& dd = dictIt->second;
-      if (dd->stringDict != nullptr)
-        delete dd->stringDict;
       boost::filesystem::remove_all(dd->dictFolderPath);
       dictDescriptorMapById_.erase(dictIt);
     }
@@ -559,8 +557,8 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId) const {
   const auto& dd = dictDescIt->second;
   {
     std::lock_guard<std::mutex> lock(cat_mutex_);
-    if (dd->stringDict == nullptr)
-      dd->stringDict = new StringDictionary(dd->dictFolderPath);
+    if (!dd->stringDict)
+      dd->stringDict = std::make_shared<StringDictionary>(dd->dictFolderPath);
   }
   return dd.get();
 }
