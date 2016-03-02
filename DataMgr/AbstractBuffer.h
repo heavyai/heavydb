@@ -16,6 +16,8 @@
 #include <boost/thread/shared_mutex.hpp>
 #endif
 
+#include <memory>
+
 namespace Data_Namespace {
 
 /**
@@ -28,21 +30,12 @@ namespace Data_Namespace {
 class AbstractBuffer {
  public:
   AbstractBuffer(const int deviceId)
-      : encoder(0),
-        hasEncoder(0),
-        size_(0),
-        isDirty_(false),
-        isAppended_(false),
-        isUpdated_(false),
-        deviceId_(deviceId) {}
+      : hasEncoder(false), size_(0), isDirty_(false), isAppended_(false), isUpdated_(false), deviceId_(deviceId) {}
   AbstractBuffer(const int deviceId, const SQLTypeInfo sqlType)
       : size_(0), isDirty_(false), isAppended_(false), isUpdated_(false), deviceId_(deviceId) {
     initEncoder(sqlType);
   }
-  virtual ~AbstractBuffer() {
-    if (hasEncoder)
-      delete encoder;
-  }
+  virtual ~AbstractBuffer() {}
 
   virtual void read(int8_t* const dst,
                     const size_t numBytes,
@@ -99,20 +92,20 @@ class AbstractBuffer {
   void initEncoder(const SQLTypeInfo tmpSqlType) {
     hasEncoder = true;
     sqlType = tmpSqlType;
-    encoder = Encoder::Create(this, sqlType);
+    encoder.reset(Encoder::Create(this, sqlType));
   }
 
   void syncEncoder(const AbstractBuffer* srcBuffer) {
     hasEncoder = srcBuffer->hasEncoder;
     if (hasEncoder) {
-      if (encoder == 0) {  // Encoder not initialized
+      if (!encoder) {  // Encoder not initialized
         initEncoder(srcBuffer->sqlType);
       }
-      encoder->copyMetadata(srcBuffer->encoder);
+      encoder->copyMetadata(srcBuffer->encoder.get());
     }
   }
 
-  Encoder* encoder;
+  std::unique_ptr<Encoder> encoder;
   bool hasEncoder;
   SQLTypeInfo sqlType;
 

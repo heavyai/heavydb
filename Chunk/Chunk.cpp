@@ -52,10 +52,10 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
         device_id,
         (num_elems + 1) * sizeof(StringOffsetT));  // always record n+1 offsets so string length can be calculated
     if (column_desc->columnType.get_type() == kARRAY) {
-      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder);
+      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
       array_encoder->set_index_buf(index_buf);
     } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
-      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
+      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
       str_encoder->set_index_buf(index_buf);
     }
   } else
@@ -80,10 +80,10 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
 ChunkMetadata Chunk::appendData(DataBlockPtr& src_data, const size_t num_elems, const size_t start_idx) {
   if (column_desc->columnType.is_varlen()) {
     if (column_desc->columnType.get_type() == kARRAY) {
-      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder);
+      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
       return array_encoder->appendData(src_data.arraysPtr, start_idx, num_elems);
     } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
-      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
+      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
       return str_encoder->appendData(src_data.stringsPtr, start_idx, num_elems);
     }
   }
@@ -101,10 +101,10 @@ void Chunk::init_encoder() {
   buffer->initEncoder(column_desc->columnType);
   if (column_desc->columnType.is_varlen()) {
     if (column_desc->columnType.get_type() == kARRAY) {
-      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder);
+      ArrayNoneEncoder* array_encoder = dynamic_cast<ArrayNoneEncoder*>(buffer->encoder.get());
       array_encoder->set_index_buf(index_buf);
     } else if (column_desc->columnType.get_compression() == kENCODING_NONE) {
-      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder);
+      StringNoneEncoder* str_encoder = dynamic_cast<StringNoneEncoder*>(buffer->encoder.get());
       str_encoder->set_index_buf(index_buf);
     }
   }
