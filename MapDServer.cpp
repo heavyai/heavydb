@@ -212,7 +212,7 @@ class MapDHandler : virtual public MapDIf {
     _return.rendering_enabled = enable_rendering_;
   }
 
-  void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) const {
+  static void value_to_thrift_column(const TargetValue& tv, const SQLTypeInfo& ti, TColumn& column) {
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     if (!scalar_tv) {
       const auto list_tv = boost::get<std::vector<ScalarTargetValue>>(&tv);
@@ -277,7 +277,7 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
-  TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) const {
+  static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) {
     TDatum datum;
     const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
     if (!scalar_tv) {
@@ -1013,43 +1013,20 @@ class MapDHandler : virtual public MapDIf {
     // reduce execution time by the time spent during queue waiting
     _return.execution_time_ms -= results.getQueueTime();
     if (root_plan->get_plan_dest() == Planner::RootPlan::Dest::kEXPLAIN) {
-      CHECK_EQ(size_t(1), results.rowCount());
-      TColumnType proj_info;
-      proj_info.col_name = "Explanation";
-      proj_info.col_type.type = TDatumType::STR;
-      proj_info.col_type.nullable = false;
-      proj_info.col_type.is_array = false;
-      _return.row_set.row_desc.push_back(proj_info);
-      const auto crt_row = results.getNextRow(true, true);
-      const auto tv = crt_row[0];
-      CHECK(results.getNextRow(true, true).empty());
-      const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-      CHECK(scalar_tv);
-      const auto s_n = boost::get<NullableString>(scalar_tv);
-      CHECK(s_n);
-      const auto s = boost::get<std::string>(s_n);
-      CHECK(s);
-      if (column_format) {
-        TColumn tcol;
-        tcol.data.str_col.push_back(*s);
-        tcol.nulls.push_back(false);
-        _return.row_set.is_columnar = true;
-        _return.row_set.columns.push_back(tcol);
-      } else {
-        TDatum explanation;
-        explanation.val.str_val = *s;
-        explanation.is_null = false;
-        TRow trow;
-        trow.cols.push_back(explanation);
-        _return.row_set.is_columnar = false;
-        _return.row_set.rows.push_back(trow);
-      }
+      convert_explain(_return, results, column_format);
       return;
     }
     const auto plan = root_plan->get_plan();
+    CHECK(plan);
     const auto& targets = plan->get_targetlist();
+    convert_rows(_return, targets, results, column_format);
+  }
+
+  static void convert_rows(TQueryResult& _return,
+                           const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
+                           const ResultRows& results,
+                           const bool column_format) {
     {
-      CHECK(plan);
       TColumnType proj_info;
       size_t i = 0;
       for (const auto target : targets) {
@@ -1097,6 +1074,40 @@ class MapDHandler : virtual public MapDIf {
         }
         _return.row_set.rows.push_back(trow);
       }
+    }
+  }
+
+  static void convert_explain(TQueryResult& _return, const ResultRows& results, const bool column_format) {
+    CHECK_EQ(size_t(1), results.rowCount());
+    TColumnType proj_info;
+    proj_info.col_name = "Explanation";
+    proj_info.col_type.type = TDatumType::STR;
+    proj_info.col_type.nullable = false;
+    proj_info.col_type.is_array = false;
+    _return.row_set.row_desc.push_back(proj_info);
+    const auto crt_row = results.getNextRow(true, true);
+    const auto tv = crt_row[0];
+    CHECK(results.getNextRow(true, true).empty());
+    const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+    CHECK(scalar_tv);
+    const auto s_n = boost::get<NullableString>(scalar_tv);
+    CHECK(s_n);
+    const auto s = boost::get<std::string>(s_n);
+    CHECK(s);
+    if (column_format) {
+      TColumn tcol;
+      tcol.data.str_col.push_back(*s);
+      tcol.nulls.push_back(false);
+      _return.row_set.is_columnar = true;
+      _return.row_set.columns.push_back(tcol);
+    } else {
+      TDatum explanation;
+      explanation.val.str_val = *s;
+      explanation.is_null = false;
+      TRow trow;
+      trow.cols.push_back(explanation);
+      _return.row_set.is_columnar = false;
+      _return.row_set.rows.push_back(trow);
     }
   }
 
