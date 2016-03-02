@@ -36,6 +36,7 @@ class Plan {
       : targetlist(t), cost(c), child_plan(p) {}
   Plan() : cost(0.0), child_plan(nullptr) {}
   Plan(const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& t) : targetlist(t), cost(0.0), child_plan(nullptr) {}
+  virtual ~Plan() {}
   const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& get_targetlist() const { return targetlist; }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_quals() const { return quals; }
   double get_cost() const { return cost; }
