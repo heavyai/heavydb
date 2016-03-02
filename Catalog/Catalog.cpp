@@ -339,7 +339,7 @@ void Catalog::buildMaps() {
     bool is_shared = sqliteConnector_.getData<bool>(r, 3);
     std::string fname = basePath_ + "/mapd_data/" + currentDB_.dbName + "_" + dictName;
     DictDescriptor* dd = new DictDescriptor(dictId, dictName, dictNBits, is_shared, fname);
-    dictDescriptorMapById_[dd->dictId] = dd;
+    dictDescriptorMapById_[dd->dictId].reset(dd);
   }
   string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, frag_page_size, max_rows, "
@@ -461,7 +461,7 @@ void Catalog::addTableToMap(TableDescriptor& td,
   }
   for (auto dd : dicts) {
     DictDescriptor* new_dd = new DictDescriptor(dd);
-    dictDescriptorMapById_[dd.dictId] = new_dd;
+    dictDescriptorMapById_[dd.dictId].reset(new_dd);
     boost::filesystem::create_directory(new_dd->dictFolderPath);
   }
 }
@@ -489,12 +489,11 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
     columnDescriptorMap_.erase(cnameKey);
     if (cd->columnType.get_compression() == kENCODING_DICT) {
       DictDescriptorMapById::iterator dictIt = dictDescriptorMapById_.find(cd->columnType.get_comp_param());
-      DictDescriptor* dd = dictIt->second;
-      dictDescriptorMapById_.erase(dictIt);
+      const auto& dd = dictIt->second;
       if (dd->stringDict != nullptr)
         delete dd->stringDict;
       boost::filesystem::remove_all(dd->dictFolderPath);
-      delete dd;
+      dictDescriptorMapById_.erase(dictIt);
     }
     delete cd;
   }
@@ -557,13 +556,13 @@ const DictDescriptor* Catalog::getMetadataForDict(int dictId) const {
   if (dictDescIt == dictDescriptorMapById_.end()) {  // check to make sure dictionary exists
     return nullptr;
   }
-  DictDescriptor* dd = dictDescIt->second;
+  const auto& dd = dictDescIt->second;
   {
     std::lock_guard<std::mutex> lock(cat_mutex_);
     if (dd->stringDict == nullptr)
       dd->stringDict = new StringDictionary(dd->dictFolderPath);
   }
-  return dd;
+  return dd.get();
 }
 
 const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId, const string& columnName) const {

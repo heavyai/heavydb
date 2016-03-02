@@ -69,7 +69,7 @@ typedef std::map<ColumnKey, ColumnDescriptor*> ColumnDescriptorMap;
 typedef std::tuple<int, int> ColumnIdKey;
 typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
 
-typedef std::map<int, DictDescriptor*> DictDescriptorMapById;
+typedef std::map<int, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
 
 /**
  * @type FrontendViewDescriptorMap
