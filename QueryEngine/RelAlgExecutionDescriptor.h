@@ -14,21 +14,35 @@ class ForLoop {
   const RelAlgNode* node_;
 };
 
+class ExecutionResult {
+ public:
+  ExecutionResult(const ResultRows& rows, const std::vector<Analyzer::TargetMetaInfo>& targets_meta)
+      : rows_(rows), targets_meta_(targets_meta) {}
+
+  const ResultRows& getRows() const { return rows_; }
+
+  const std::vector<Analyzer::TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
+
+ private:
+  ResultRows rows_;
+  std::vector<Analyzer::TargetMetaInfo> targets_meta_;
+};
+
 class RaExecutionDesc {
  public:
   RaExecutionDesc(const std::vector<ForLoop>& for_loops, const RelAlgNode* body)
-      : for_loops_(for_loops), body_(body), result_({}, nullptr, nullptr, ExecutorDeviceType::CPU) {}
+      : for_loops_(for_loops), body_(body), result_({{}, nullptr, nullptr, ExecutorDeviceType::CPU}, {}) {}
 
-  const ResultRows& getResult() const { return result_; }
+  const ExecutionResult& getResult() const { return result_; }
 
-  void setResult(const ResultRows& result) { result_ = result; }
+  void setResult(const ExecutionResult& result) { result_ = result; }
 
   const RelAlgNode* getBody() const { return body_; }
 
  private:
   const std::vector<ForLoop> for_loops_;
   const RelAlgNode* body_;
-  ResultRows result_;
+  ExecutionResult result_;
 };
 
 std::list<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);

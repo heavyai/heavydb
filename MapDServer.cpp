@@ -991,6 +991,32 @@ class MapDHandler : virtual public MapDIf {
     }
   }
 
+#ifdef HAVE_RAVM
+  void execute_rel_alg(TQueryResult& _return,
+                       const std::string& query_ra,
+                       const bool column_format,
+                       const Catalog_Namespace::SessionInfo& session_info,
+                       const ExecutorDeviceType executor_device_type) const {
+    rapidjson::Document query_ast;
+    query_ast.Parse(query_ra.c_str());
+    CHECK(!query_ast.HasParseError());
+    CHECK(query_ast.IsObject());
+    const auto& cat = session_info.get_catalog();
+    const auto ra = ra_interpret(query_ast, cat);
+    auto ed_list = get_execution_descriptors(ra.get());
+    auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
+                                          jit_debug_ ? "/tmp" : "",
+                                          jit_debug_ ? "mapdquery" : "",
+                                          0,
+                                          0,
+                                          window_ptr_,
+                                          render_mem_bytes_);
+    RelAlgExecutor ra_executor(executor.get(), cat);
+    const auto result = ra_executor.executeRelAlgSeq(ed_list, {executor_device_type, true, ExecutorOptLevel::Default});
+    convert_rows(_return, result.getTargetsMeta(), result.getRows(), column_format);
+  }
+#endif  // HAVE_RAVM
+
   void execute_root_plan(TQueryResult& _return,
                          const Planner::RootPlan* root_plan,
                          const bool column_format,
@@ -1166,50 +1192,34 @@ class MapDHandler : virtual public MapDIf {
       try {
         std::unique_ptr<Planner::RootPlan> plan_ptr;
         ParserWrapper pw{query_str};
+        std::string query_ra;
         // if this is a calcite select or explain select run in calcite
         if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
           _return.execution_time_ms += measure<>::execution([&]() {
-
-            // pass sql to calcite server to let it parse for testing purposes
             const std::string actual_query{pw.is_select_explain ? pw.actual_query : query_str};
-            {
-              const auto query_ra = calcite_.process(session_info.get_currentUser().userName,
-                                                     session_info.get_currentUser().passwd,
-                                                     cat.get_currentDB().dbName,
-                                                     legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                                     legacy_syntax_);
+            query_ra = calcite_.process(session_info.get_currentUser().userName,
+                                        session_info.get_currentUser().passwd,
+                                        cat.get_currentDB().dbName,
+                                        legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                        legacy_syntax_);
 #ifdef HAVE_RAVM
-              CHECK(!pw.is_select_explain);
-              rapidjson::Document query_ast;
-              query_ast.Parse(query_ra.c_str());
-              CHECK(!query_ast.HasParseError());
-              CHECK(query_ast.IsObject());
-              const auto ra = ra_interpret(query_ast, cat);
-              auto ed_list = get_execution_descriptors(ra.get());
-              auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
-                                                    jit_debug_ ? "/tmp" : "",
-                                                    jit_debug_ ? "mapdquery" : "",
-                                                    0,
-                                                    0,
-                                                    window_ptr_,
-                                                    render_mem_bytes_);
-              RelAlgExecutor ra_executor(executor.get(), cat);
-              const auto results =
-                  ra_executor.executeRelAlgSeq(ed_list, {executor_device_type, true, ExecutorOptLevel::Default});
-              CHECK(false);
-              convert_rows(_return, {}, results, column_format);
-              return;
+            CHECK(!pw.is_select_explain);
 #else
-              root_plan = translate_query(query_ra, cat);
-              plan_ptr.reset(root_plan);
-#endif  // HAVE_RAVM
-            }
+            root_plan = translate_query(query_ra, cat);
+            plan_ptr.reset(root_plan);
             if (pw.is_select_explain) {
               root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
             }
-            CHECK(root_plan);
+#endif  // HAVE_RAVM
           });
+#ifdef HAVE_RAVM
+          CHECK(!root_plan);
+          CHECK(!query_ra.empty());
+          execute_rel_alg(_return, query_ra, column_format, session_info, executor_device_type);
+#else
+          CHECK(root_plan);
           execute_root_plan(_return, root_plan, column_format, session_info, executor_device_type);
+#endif  // HAVE_RAVM
           return;
         } else {
           LOG(ERROR) << "passing query to legacy processor";

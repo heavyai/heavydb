@@ -760,8 +760,8 @@ class TargetMetaInfo {
   const SQLTypeInfo& get_type_info() const { return ti_; }
 
  private:
-  const std::string resname_;
-  const SQLTypeInfo ti_;
+  std::string resname_;
+  SQLTypeInfo ti_;
 };
 
 /*

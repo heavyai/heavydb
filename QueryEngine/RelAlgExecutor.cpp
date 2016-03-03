@@ -2,24 +2,12 @@
 #include "RelAlgExecutor.h"
 #include "RexVisitor.h"
 
-ResultRows RelAlgExecutor::executeRelAlgSeq(std::list<RaExecutionDesc>& exec_descs, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::list<RaExecutionDesc>& exec_descs, const CompilationOptions& co) {
   for (auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
     if (compound) {
-      const auto res = executeCompound(compound, co);
-      while (true) {
-        const auto crt_row = res.getNextRow(true, true);
-        if (crt_row.empty()) {
-          break;
-        }
-        std::cout << std::fixed << std::setprecision(13) << row_col_to_string(crt_row, 0, res.getColType(0));
-        for (size_t i = 1; i < res.colCount(); ++i) {
-          std::cout << "|" << row_col_to_string(crt_row, i, res.getColType(i));
-        }
-        std::cout << std::endl;
-      }
-      exec_desc.setResult(res);
+      exec_desc.setResult(executeCompound(compound, co));
       continue;
     }
     CHECK(false);
@@ -124,7 +112,7 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
 
 }  // namespace
 
-ResultRows RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
   int rte_idx = 0;  // TODO(alex)
   std::vector<ScanId> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
@@ -138,16 +126,25 @@ ResultRows RelAlgExecutor::executeCompound(const RelCompound* compound, const Co
       scan_ids, scan_cols, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
   size_t max_groups_buffer_entry_guess{2048};
   int32_t error_code{0};
+  std::vector<Analyzer::TargetMetaInfo> targets_meta;
+  CHECK_EQ(compound->size(), target_exprs.size());
+  for (size_t i = 0; i < compound->size(); ++i) {
+    CHECK(target_exprs[i]);
+    targets_meta.emplace_back(compound->getFieldName(i), target_exprs[i]->get_type_info());
+  }
+  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  return executor_->executeWorkUnit(&error_code,
-                                    max_groups_buffer_entry_guess,
-                                    true,
-                                    get_query_infos(scan_ids, cat_),
-                                    rel_alg_exe_unit,
-                                    co,
-                                    {false, true, false, false},
-                                    cat_,
-                                    executor_->row_set_mem_owner_,
-                                    nullptr);
+  executor_->catalog_ = &cat_;
+  return {executor_->executeWorkUnit(&error_code,
+                                     max_groups_buffer_entry_guess,
+                                     true,
+                                     get_query_infos(scan_ids, cat_),
+                                     rel_alg_exe_unit,
+                                     co,
+                                     {false, true, false, false},
+                                     cat_,
+                                     executor_->row_set_mem_owner_,
+                                     nullptr),
+          targets_meta};
 }
 #endif  // HAVE_CALCITE

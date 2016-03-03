@@ -450,6 +450,8 @@ class RelCompound : public RelAlgNode {
 
   const Rex* getTargetExpr(const size_t i) const { return target_exprs_[i]; }
 
+  const std::string getFieldName(const size_t i) const { return fields_[i]; }
+
   const size_t getScalarSourcesSize() const { return scalar_sources_.size(); }
 
   const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
