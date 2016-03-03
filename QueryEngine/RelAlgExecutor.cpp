@@ -54,7 +54,8 @@ std::pair<std::vector<ScanId>, std::list<ScanColDescriptor>> get_scan_info(const
     CHECK(scan_ra);  // TODO(alex)
     scan_ids.emplace_back(scan_ra->getTableDescriptor()->tableId, rte_idx);
     for (const auto used_input : used_inputs) {
-      scan_cols.emplace_back(used_input, scan_ra->getTableDescriptor(), rte_idx);
+      // Physical columns from a scan node are numbered from 1 in our system.
+      scan_cols.emplace_back(used_input + 1, scan_ra->getTableDescriptor(), rte_idx);
     }
   }
   return {scan_ids, scan_cols};
