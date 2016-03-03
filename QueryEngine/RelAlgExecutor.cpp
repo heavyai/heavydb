@@ -102,11 +102,16 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
     const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
+    std::shared_ptr<Analyzer::Expr> target_expr;
     if (target_rex_agg) {
-      const auto target_expr = translate_aggregate_rex(target_rex_agg, rte_idx, cat, scalar_sources);
-      target_exprs_owned.push_back(target_expr);
-      target_exprs.push_back(target_expr.get());
+      target_expr = translate_aggregate_rex(target_rex_agg, rte_idx, cat, scalar_sources);
+    } else {
+      const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
+      target_expr = translate_scalar_rex(target_rex_scalar, rte_idx, cat);
     }
+    CHECK(target_expr);
+    target_exprs_owned.push_back(target_expr);
+    target_exprs.push_back(target_expr.get());
   }
   return target_exprs;
 }
