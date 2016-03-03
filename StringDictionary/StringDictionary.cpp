@@ -31,6 +31,26 @@ void* checked_mmap(const int fd, const size_t sz) {
   CHECK(ptr != reinterpret_cast<void*>(-1));
   return ptr;
 }
+
+const uint32_t round_up_p2(const size_t num) {
+  uint32_t in = num;
+  in--;
+  in |= in >> 1;
+  in |= in >> 2;
+  in |= in >> 4;
+  in |= in >> 8;
+  in |= in >> 16;
+  in++;
+  return in;
+}
+
+size_t rk_hash(const std::string& str) {
+  size_t str_hash = 1;
+  for (size_t i = 0; i < str.size(); ++i) {
+    str_hash = str_hash * 997 + str[i];
+  }
+  return str_hash;
+}
 }  // namespace
 
 const int32_t StringDictionary::INVALID_STR_ID{-1};
@@ -68,6 +88,11 @@ StringDictionary::StringDictionary(const std::string& folder, const bool recover
   if (recover) {
     const size_t bytes = file_size(offset_fd_);
     const unsigned str_count = bytes / sizeof(StringIdxEntry);
+    // at this point we know the size of the StringDict we need to load
+    // so lets reallocate the vector to the correct size
+    const uint32_t max_entries = round_up_p2(str_count * 2 + 1);
+    std::vector<int32_t> new_str_ids(max_entries, INVALID_STR_ID);
+    str_ids_.swap(new_str_ids);
     unsigned string_id = 0;
     mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
     for (string_id = 0; string_id < str_count; ++string_id) {
@@ -134,7 +159,7 @@ int32_t StringDictionary::get(const std::string& str) const noexcept {
 }
 
 int32_t StringDictionary::getUnlocked(const std::string& str) const noexcept {
-  auto str_id = str_ids_[computeBucket(str, str_ids_)];
+  auto str_id = str_ids_[computeBucket(str, str_ids_, false)];
   if (str_id != INVALID_STR_ID || transient_str_to_int_.empty()) {
     return str_id;
   }
@@ -236,7 +261,7 @@ void StringDictionary::increaseCapacity() noexcept {
   std::vector<int32_t> new_str_ids(str_ids_.size() * 2, INVALID_STR_ID);
   for (size_t i = 0; i < str_count_; ++i) {
     const auto str = getStringChecked(i);
-    int32_t bucket = computeBucket(str, new_str_ids);
+    int32_t bucket = computeBucket(str, new_str_ids, true);
     new_str_ids[bucket] = i;
   }
   str_ids_.swap(new_str_ids);
@@ -247,12 +272,12 @@ int32_t StringDictionary::getOrAddImpl(const std::string& str, bool recover) noe
   if (str.size() == 0)
     return NULL_INT;
   CHECK(str.size() <= MAX_STRLEN);
-  int32_t bucket = computeBucket(str, str_ids_);
+  int32_t bucket = computeBucket(str, str_ids_, recover);
   if (str_ids_[bucket] == INVALID_STR_ID) {
     if (fillRateIsHigh()) {
       // resize when more than 50% is full
       increaseCapacity();
-      bucket = computeBucket(str, str_ids_);
+      bucket = computeBucket(str, str_ids_, recover);
     }
     if (recover) {
       payload_file_off_ += str.size();
@@ -277,28 +302,21 @@ std::pair<char*, size_t> StringDictionary::getStringBytesChecked(const int strin
   return std::make_pair(std::get<0>(str_canary), std::get<1>(str_canary));
 }
 
-namespace {
-
-size_t rk_hash(const std::string& str) {
-  size_t str_hash = 1;
-  for (size_t i = 0; i < str.size(); ++i) {
-    str_hash = str_hash * 997 + str[i];
-  }
-  return str_hash;
-}
-
-}  // namespace
-
-int32_t StringDictionary::computeBucket(const std::string& str, const std::vector<int32_t>& data) const noexcept {
+int32_t StringDictionary::computeBucket(const std::string& str,
+                                        const std::vector<int32_t>& data,
+                                        const bool unique) const noexcept {
   auto bucket = rk_hash(str) & (data.size() - 1);
   while (true) {
     if (data[bucket] == INVALID_STR_ID) {
       break;
     }
-    const auto old_str = getStringChecked(data[bucket]);
-    if (str.size() == old_str.size() && !memcmp(str.c_str(), old_str.c_str(), str.size())) {
-      // found the string
-      break;
+    // if records are unique I don't need to do this test as I know it will not be the same
+    if (!unique) {
+      const auto old_str = getStringChecked(data[bucket]);
+      if (str.size() == old_str.size() && !memcmp(str.c_str(), old_str.c_str(), str.size())) {
+        // found the string
+        break;
+      }
     }
     // wrap around
     if (++bucket == data.size()) {

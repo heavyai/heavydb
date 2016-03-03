@@ -49,7 +49,7 @@ class StringDictionary {
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
-  int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data) const noexcept;
+  int32_t computeBucket(const std::string& str, const std::vector<int32_t>& data, const bool unique) const noexcept;
   void appendToStorage(const std::string& str) noexcept;
   std::tuple<char*, size_t, bool> getStringFromStorage(const int string_id) const noexcept;
   void addPayloadCapacity() noexcept;
