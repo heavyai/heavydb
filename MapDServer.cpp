@@ -1023,22 +1023,33 @@ class MapDHandler : virtual public MapDIf {
     const auto plan = root_plan->get_plan();
     CHECK(plan);
     const auto& targets = plan->get_targetlist();
-    convert_rows(_return, targets, results, column_format);
+    convert_rows(_return, getTargetMetaInfo(targets), results, column_format);
+  }
+
+  static std::vector<Analyzer::TargetMetaInfo> getTargetMetaInfo(
+      const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) {
+    std::vector<Analyzer::TargetMetaInfo> result;
+    for (const auto target : targets) {
+      CHECK(target);
+      CHECK(target->get_expr());
+      result.emplace_back(target->get_resname(), target->get_expr()->get_type_info());
+    }
+    return result;
   }
 
   static void convert_rows(TQueryResult& _return,
-                           const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets,
+                           const std::vector<Analyzer::TargetMetaInfo>& targets,
                            const ResultRows& results,
                            const bool column_format) {
     {
       TColumnType proj_info;
       size_t i = 0;
       for (const auto target : targets) {
-        proj_info.col_name = target->get_resname();
+        proj_info.col_name = target.get_resname();
         if (proj_info.col_name.empty()) {
           proj_info.col_name = "result_" + std::to_string(i + 1);
         }
-        const auto& target_ti = target->get_expr()->get_type_info();
+        const auto& target_ti = target.get_type_info();
         proj_info.col_type.type = type_to_thrift(target_ti);
         proj_info.col_type.encoding = encoding_to_thrift(target_ti);
         proj_info.col_type.nullable = !target_ti.get_notnull();
@@ -1057,7 +1068,7 @@ class MapDHandler : virtual public MapDIf {
         }
         for (size_t i = 0; i < results.colCount(); ++i) {
           const auto agg_result = crt_row[i];
-          value_to_thrift_column(agg_result, targets[i]->get_expr()->get_type_info(), tcolumns[i]);
+          value_to_thrift_column(agg_result, targets[i].get_type_info(), tcolumns[i]);
         }
       }
       for (size_t i = 0; i < results.colCount(); ++i) {
@@ -1074,7 +1085,7 @@ class MapDHandler : virtual public MapDIf {
         trow.cols.reserve(results.colCount());
         for (size_t i = 0; i < results.colCount(); ++i) {
           const auto agg_result = crt_row[i];
-          trow.cols.push_back(value_to_thrift(agg_result, targets[i]->get_expr()->get_type_info()));
+          trow.cols.push_back(value_to_thrift(agg_result, targets[i].get_type_info()));
         }
         _return.row_set.rows.push_back(trow);
       }

@@ -750,6 +750,21 @@ class DatetruncExpr : public Expr {
 };
 
 /*
+ * @type TargetMetaInfo
+ * @brief Encapsulates the name and the type of a relational projection.
+ */
+class TargetMetaInfo {
+ public:
+  TargetMetaInfo(const std::string& resname, const SQLTypeInfo& ti) : resname_(resname), ti_(ti) {}
+  const std::string& get_resname() const { return resname_; }
+  const SQLTypeInfo& get_type_info() const { return ti_; }
+
+ private:
+  const std::string resname_;
+  const SQLTypeInfo ti_;
+};
+
+/*
  * @type TargetEntry
  * @brief Target list defines a relational projection.  It is a list of TargetEntry's.
  */
