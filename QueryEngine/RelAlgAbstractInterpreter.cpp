@@ -470,7 +470,7 @@ class RaAbstractInterp {
   RelFilter* dispatchFilter(const rapidjson::Value& filter_ra) {
     const auto id = node_id(filter_ra);
     CHECK(id);
-    return new RelFilter(parse_operator(field(filter_ra, "condition")), prev(filter_ra));
+    return new RelFilter(parse_scalar_expr(field(filter_ra, "condition")), prev(filter_ra));
   }
 
   const RelAlgNode* prev(const rapidjson::Value& crt_node) {
