@@ -76,12 +76,29 @@ std::pair<std::vector<ScanId>, std::list<ScanColDescriptor>> get_scan_info(const
   return {scan_ids, scan_cols};
 }
 
-std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RelCompound* compound,
+size_t get_scalar_sources_size(const RelCompound* compound) {
+  return compound->getScalarSourcesSize();
+}
+
+size_t get_scalar_sources_size(const RelProject* project) {
+  return project->size();
+}
+
+const RexScalar* scalar_at(const size_t i, const RelCompound* compound) {
+  return compound->getScalarSource(i);
+}
+
+const RexScalar* scalar_at(const size_t i, const RelProject* project) {
+  return project->getProjectAt(i);
+}
+
+template <class RA>
+std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RA* ra_node,
                                                                       const Catalog_Namespace::Catalog& cat,
                                                                       const int rte_idx) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
-  for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
-    scalar_sources.push_back(translate_scalar_rex(compound->getScalarSource(i), rte_idx, cat));
+  for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
+    scalar_sources.push_back(translate_scalar_rex(scalar_at(i, ra_node), rte_idx, cat));
   }
   return scalar_sources;
 }
@@ -134,17 +151,6 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
   return target_exprs;
 }
 
-// TODO(alex): Unify with translate_scalar_sources for Compound nodes?
-std::vector<std::shared_ptr<Analyzer::Expr>> translate_projections(const RelProject* project,
-                                                                   const Catalog_Namespace::Catalog& cat,
-                                                                   const int rte_idx) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
-  for (size_t i = 0; i < project->size(); ++i) {
-    scalar_sources.push_back(translate_scalar_rex(project->getProjectAt(i), rte_idx, cat));
-  }
-  return scalar_sources;
-}
-
 // TODO(alex): Adjust interfaces downstream and make this not needed.
 std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
   std::vector<Analyzer::Expr*> exprs_not_owned;
@@ -189,7 +195,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const 
   std::vector<ScanId> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
   std::tie(scan_ids, scan_cols) = get_scan_info(project, rte_idx);
-  const auto target_exprs_owned = translate_projections(project, cat_, rte_idx);
+  const auto target_exprs_owned = translate_scalar_sources(project, cat_, rte_idx);
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{scan_ids, scan_cols, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(project, target_exprs);
