@@ -117,11 +117,17 @@ struct hash<ScanColDescriptor> {
 };
 }
 
-struct ScanId {
+class ScanId {
+ public:
   ScanId(const int table_id, const int scan_idx) : table_id_(table_id), scan_idx_(scan_idx) {}
 
   bool operator==(const ScanId& that) const { return table_id_ == that.table_id_ && scan_idx_ == that.scan_idx_; }
 
+  int getTableId() const { return table_id_; }
+
+  int getScanIdx() const { return scan_idx_; }
+
+ private:
   const int table_id_;
   const int scan_idx_;
 };
@@ -129,7 +135,7 @@ struct ScanId {
 namespace std {
 template <>
 struct hash<ScanId> {
-  size_t operator()(const ScanId& scan_id) const { return scan_id.table_id_ ^ scan_id.scan_idx_; }
+  size_t operator()(const ScanId& scan_id) const { return scan_id.getTableId() ^ scan_id.getScanIdx(); }
 };
 }
 
@@ -860,7 +866,7 @@ inline std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::v
   std::vector<Fragmenter_Namespace::QueryInfo> query_infos;
   {
     for (const auto& scan_id : scan_ids) {
-      const auto table_descriptor = cat.getMetadataForTable(scan_id.table_id_);
+      const auto table_descriptor = cat.getMetadataForTable(scan_id.getTableId());
       CHECK(table_descriptor);
       const auto fragmenter = table_descriptor->fragmenter;
       CHECK(fragmenter);
