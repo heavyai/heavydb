@@ -3462,8 +3462,8 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
   for (const auto& selected_frag_ids : frag_ids_crossjoin) {
     std::vector<const int8_t*> frag_col_buffers(plan_state_->global_to_local_col_ids_.size());
     for (const auto& col_id : col_global_ids) {
-      const int table_id = col_id.td_->tableId;
-      const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id.col_id_);
+      const int table_id = col_id.getTableDesc()->tableId;
+      const ColumnDescriptor* cd = cat.getMetadataForColumn(table_id, col_id.getColId());
       if (cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
         continue;
@@ -3477,11 +3477,11 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
       const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
       CHECK_LT(frag_id, fragments->size());
       const auto& fragment = (*fragments)[frag_id];
-      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id.col_id_);
+      auto chunk_meta_it = fragment.chunkMetadataMap.find(col_id.getColId());
       CHECK(chunk_meta_it != fragment.chunkMetadataMap.end());
-      ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id.col_id_, fragment.fragmentId};
+      ChunkKey chunk_key{cat.get_currentDB().dbId, table_id, col_id.getColId(), fragment.fragmentId};
       auto memory_level_for_column = memory_level;
-      if (plan_state_->columns_to_fetch_.find(col_id.col_id_) == plan_state_->columns_to_fetch_.end()) {
+      if (plan_state_->columns_to_fetch_.find(col_id.getColId()) == plan_state_->columns_to_fetch_.end()) {
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
       std::shared_ptr<Chunk_NS::Chunk> chunk;
@@ -3533,7 +3533,7 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
     CHECK(selected_fragments_it != selected_fragments.end());
     selected_fragments_crossjoin.push_back(selected_fragments_it->second);
     for (const auto& col_id : col_global_ids) {
-      if (col_id.td_->tableId != table_id || col_id.scan_idx_ != static_cast<int>(scan_idx)) {
+      if (col_id.getTableDesc()->tableId != table_id || col_id.getScanIdx() != static_cast<int>(scan_idx)) {
         continue;
       }
       auto it = plan_state_->global_to_local_col_ids_.find(col_id);
@@ -5005,7 +5005,7 @@ void Executor::allocateLocalColumnIds(const std::list<ScanColDescriptor>& global
   for (const auto& col_id : global_col_ids) {
     const auto local_col_id = plan_state_->global_to_local_col_ids_.size();
     const auto it_ok = plan_state_->global_to_local_col_ids_.insert(std::make_pair(col_id, local_col_id));
-    plan_state_->local_to_global_col_ids_.push_back(col_id.col_id_);
+    plan_state_->local_to_global_col_ids_.push_back(col_id.getColId());
     // enforce uniqueness of the column ids in the scan plan
     CHECK(it_ok.second);
   }

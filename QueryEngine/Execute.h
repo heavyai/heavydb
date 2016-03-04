@@ -85,7 +85,8 @@ const ColumnDescriptor* get_column_descriptor(const int col_id,
 
 }  // namespace
 
-struct ScanColDescriptor {
+class ScanColDescriptor {
+ public:
   ScanColDescriptor(const int col_id, const TableDescriptor* td, const int scan_idx)
       : col_id_(col_id), td_(td), scan_idx_(scan_idx) {}
 
@@ -94,6 +95,13 @@ struct ScanColDescriptor {
            scan_idx_ == that.scan_idx_;
   }
 
+  int getColId() const { return col_id_; }
+
+  const TableDescriptor* getTableDesc() const { return td_; }
+
+  int getScanIdx() const { return scan_idx_; }
+
+ private:
   const int col_id_;
   const TableDescriptor* td_;
   const int scan_idx_;
@@ -103,8 +111,8 @@ namespace std {
 template <>
 struct hash<ScanColDescriptor> {
   size_t operator()(const ScanColDescriptor& scan_col_desc) const {
-    return static_cast<size_t>(scan_col_desc.col_id_) ^ reinterpret_cast<size_t>(scan_col_desc.td_) ^
-           scan_col_desc.scan_idx_;
+    return static_cast<size_t>(scan_col_desc.getColId()) ^ reinterpret_cast<size_t>(scan_col_desc.getTableDesc()) ^
+           scan_col_desc.getScanIdx();
   }
 };
 }
