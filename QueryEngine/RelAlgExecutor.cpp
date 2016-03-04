@@ -89,6 +89,9 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(const RelC
 std::list<std::shared_ptr<Analyzer::Expr>> translate_groupby_exprs(
     const RelCompound* compound,
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources) {
+  if (!compound->isAggregate()) {
+    return {nullptr};
+  }
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   for (const auto group_idx : compound->getGroupIndices()) {
     groupby_exprs.push_back(scalar_sources[group_idx]);
@@ -178,7 +181,7 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, con
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       scan_ids, scan_cols, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
   const auto targets_meta = get_targets_meta(compound, target_exprs);
-  return executeWorkUnit(rel_alg_exe_unit, scan_ids, targets_meta, true, co);
+  return executeWorkUnit(rel_alg_exe_unit, scan_ids, targets_meta, compound->isAggregate(), co);
 }
 
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const CompilationOptions& co) {

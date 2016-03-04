@@ -435,8 +435,13 @@ class RelCompound : public RelAlgNode {
               const std::vector<size_t>& group_indices,
               const std::vector<const RexAgg*>& agg_exprs,
               const std::vector<std::string>& fields,
-              const std::vector<const RexScalar*>& scalar_sources)
-      : filter_expr_(filter_expr), target_exprs_(target_exprs), group_indices_(group_indices), fields_(fields) {
+              const std::vector<const RexScalar*>& scalar_sources,
+              const bool is_agg)
+      : filter_expr_(filter_expr),
+        target_exprs_(target_exprs),
+        group_indices_(group_indices),
+        fields_(fields),
+        is_agg_(is_agg) {
     CHECK_EQ(fields.size(), target_exprs.size());
     for (auto agg_expr : agg_exprs) {
       agg_exprs_.emplace_back(agg_expr);
@@ -459,6 +464,8 @@ class RelCompound : public RelAlgNode {
   const RexScalar* getScalarSource(const size_t i) const { return scalar_sources_[i].get(); }
 
   const std::vector<size_t>& getGroupIndices() const { return group_indices_; }
+
+  bool isAggregate() const { return is_agg_; }
 
   std::string toString() const override {
     std::string result = "(RelCompound<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
@@ -483,6 +490,7 @@ class RelCompound : public RelAlgNode {
   const std::vector<size_t> group_indices_;
   std::vector<std::unique_ptr<const RexAgg>> agg_exprs_;
   const std::vector<std::string> fields_;
+  const bool is_agg_;
   std::vector<std::unique_ptr<const RexScalar>>
       scalar_sources_;  // building blocks for group_indices_ and agg_exprs_; not actually projected, just owned
 };

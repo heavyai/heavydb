@@ -284,6 +284,7 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
   std::vector<const RexAgg*> agg_exprs;
   std::vector<const Rex*> target_exprs;
   bool first_project{true};
+  bool is_agg{false};
   for (const auto node_idx : pattern) {
     const auto ra_node = nodes[node_idx];
     const auto ra_filter = dynamic_cast<RelFilter*>(ra_node);
@@ -307,6 +308,9 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
           bind_project_to_input(ra_project, get_node_output(filter_input->getInput(0)));
         }
         scalar_sources = ra_project->getExpressionsAndRelease();
+        for (const auto scalar_expr : scalar_sources) {
+          target_exprs.push_back(scalar_expr);
+        }
         first_project = false;
       } else {
         CHECK(ra_project->isSimple());
@@ -316,9 +320,11 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
     }
     const auto ra_aggregate = dynamic_cast<RelAggregate*>(ra_node);
     if (ra_aggregate) {
+      is_agg = true;
       fields = ra_aggregate->getFields();
       agg_exprs = ra_aggregate->getAggregatesAndRelease();
       group_indices = ra_aggregate->getGroupIndices();
+      decltype(target_exprs){}.swap(target_exprs);
       for (const auto group_idx : group_indices) {
         CHECK_LT(group_idx, scalar_sources.size());
         target_exprs.push_back(scalar_sources[group_idx]);
@@ -329,7 +335,8 @@ void create_compound(std::vector<RelAlgNode*>& nodes, const std::vector<size_t>&
       continue;
     }
   }
-  auto compound_node = new RelCompound(filter_rex, target_exprs, group_indices, agg_exprs, fields, scalar_sources);
+  auto compound_node =
+      new RelCompound(filter_rex, target_exprs, group_indices, agg_exprs, fields, scalar_sources, is_agg);
   auto old_node = nodes[pattern.back()];
   nodes[pattern.back()] = compound_node;
   auto first_node = nodes[pattern.front()];
