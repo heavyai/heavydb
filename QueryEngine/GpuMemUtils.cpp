@@ -19,6 +19,33 @@ RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
 #endif
 }
 
+RenderAllocatorMap::RenderAllocatorMap(::CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                       ::QueryRenderer::QueryRenderManager* render_manager,
+                                       const unsigned block_size_x,
+                                       const unsigned grid_size_x)
+    : cuda_mgr_(cuda_mgr), render_manager_(render_manager) {
+  CHECK(cuda_mgr_ && render_manager_);
+
+}
+
+RenderAllocatorMap::~RenderAllocatorMap() {
+}
+
+RenderAllocator* RenderAllocatorMap::getRenderAllocator(size_t device_id) {
+  return (*this)[device_id];
+}
+
+RenderAllocator* RenderAllocatorMap::operator[](size_t device_id) {
+  auto itr = render_allocator_map_.find(device_id);
+
+  CHECK(itr != render_allocator_map_.end()) << "Device id " << device_id << " not found in RenderAllocatorMap.";
+
+  return &(itr->second);
+}
+
+void RenderAllocatorMap::prepForRendering() {
+}
+
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
                           const size_t num_bytes,
                           const int device_id,

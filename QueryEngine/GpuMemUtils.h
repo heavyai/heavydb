@@ -4,6 +4,10 @@
 #include "CompilationOptions.h"
 #include "../DataMgr/DataMgr.h"
 
+namespace QueryRenderer {
+typedef void QueryRenderManager;
+}  // namespace QueryRenderer
+
 #include <cuda.h>
 
 #include <cstddef>
@@ -29,6 +33,10 @@ class RenderAllocator {
     if (crt_allocated_bytes_ <= preallocated_size_) {
       return reinterpret_cast<CUdeviceptr>(ptr);
     }
+
+    // reset the current allocated bytes for a proper
+    // error resolution
+    crt_allocated_bytes_ = 0;
     throw OutOfRenderMemory();
   }
 
@@ -40,6 +48,25 @@ class RenderAllocator {
   int8_t* preallocated_ptr_;
   const size_t preallocated_size_;
   size_t crt_allocated_bytes_;
+};
+
+class RenderAllocatorMap {
+ public:
+  RenderAllocatorMap(::CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                     ::QueryRenderer::QueryRenderManager* render_manager,
+                     const unsigned block_size_x,
+                     const unsigned grid_size_x);
+  ~RenderAllocatorMap();
+
+  RenderAllocator* getRenderAllocator(size_t device_id);
+  RenderAllocator* operator[](size_t device_id);
+
+  void prepForRendering();
+
+ private:
+  ::CudaMgr_Namespace::CudaMgr* cuda_mgr_;
+  ::QueryRenderer::QueryRenderManager* render_manager_;
+  std::map<size_t, RenderAllocator> render_allocator_map_;
 };
 
 CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,

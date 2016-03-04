@@ -57,10 +57,10 @@ Executor::Executor(const int db_id,
                    const size_t grid_size_x,
                    const std::string& debug_dir,
                    const std::string& debug_file,
-                   GLFWwindow* prnt_window,
-                   const size_t render_mem_bytes)
+                   ::QueryRenderer::QueryRenderManager* render_manager)
     : cgen_state_(new CgenState()),
       is_nested_(false),
+      render_manager_(render_manager),
       block_size_x_(block_size_x),
       grid_size_x_(grid_size_x),
       debug_dir_(debug_dir),
@@ -74,9 +74,8 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
                                                 const std::string& debug_file,
                                                 const size_t block_size_x,
                                                 const size_t grid_size_x,
-                                                GLFWwindow* prnt_window,
-                                                const size_t render_mem_bytes) {
-  const auto executor_key = std::make_pair(db_id, prnt_window);
+                                                ::QueryRenderer::QueryRenderManager* render_manager) {
+  const auto executor_key = std::make_pair(db_id, render_manager);
   {
     mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
     auto it = executors_.find(executor_key);
@@ -90,8 +89,7 @@ std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
     if (it != executors_.end()) {
       return it->second;
     }
-    auto executor = std::make_shared<Executor>(
-        db_id, block_size_x, grid_size_x, debug_dir, debug_file, prnt_window, render_mem_bytes);
+    auto executor = std::make_shared<Executor>(db_id, block_size_x, grid_size_x, debug_dir, debug_file, render_manager);
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
     CHECK(it_ok.second);
     return executor;
@@ -217,7 +215,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                        const bool allow_multifrag,
                                        const bool just_explain,
                                        const bool allow_loop_joins,
-                                       RenderAllocator* render_allocator) {
+                                       RenderAllocatorMap* render_allocator_map) {
   if (dynamic_cast<const Planner::Scan*>(plan) || dynamic_cast<const Planner::AggPlan*>(plan) ||
       dynamic_cast<const Planner::Join*>(plan)) {
     row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
@@ -263,7 +261,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                                   {false, allow_multifrag, just_explain, allow_loop_joins},
                                   cat,
                                   row_set_mem_owner_,
-                                  render_allocator);
+                                  render_allocator_map);
       max_groups_buffer_entry_guess = max_groups_buffer_entry_guess_limit;
       rows.dropFirstN(offset);
       if (limit) {
@@ -288,7 +286,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
                            {false, allow_multifrag, just_explain, allow_loop_joins},
                            cat,
                            row_set_mem_owner_,
-                           render_allocator);
+                           render_allocator_map);
   }
   const auto result_plan = dynamic_cast<const Planner::Result*>(plan);
   if (result_plan) {
@@ -367,12 +365,19 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
     case kSELECT: {
       int32_t error_code{0};
       size_t max_groups_buffer_entry_guess{2048};
-      std::unique_ptr<RenderAllocator> render_allocator;
+
+      std::unique_ptr<RenderAllocatorMap> render_allocator_map;
       if (root_plan->get_plan_dest() == Planner::RootPlan::kRENDER) {
         if (device_type != ExecutorDeviceType::GPU) {
           throw std::runtime_error("Backend rendering is only supported on GPU");
         }
-        throw std::runtime_error("This build doesn't support backend rendering");
+
+        if (!render_manager_) {
+          throw std::runtime_error("This build doesn't support backend rendering");
+        }
+
+        render_allocator_map.reset(
+            new RenderAllocatorMap(catalog_->get_dataMgr().cudaMgr_, render_manager_, blockSize(), gridSize()));
       }
       auto rows = executeSelectPlan(root_plan->get_plan(),
                                     root_plan->get_limit(),
@@ -387,7 +392,7 @@ ResultRows Executor::execute(const Planner::RootPlan* root_plan,
                                     allow_multifrag,
                                     root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN,
                                     allow_loop_joins,
-                                    render_allocator.get());
+                                    render_allocator_map.get());
       if (error_code == ERR_DIV_BY_ZERO) {
         throw std::runtime_error("Division by zero");
       }
@@ -2852,7 +2857,7 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
                                      const ExecutionOptions& options,
                                      const Catalog_Namespace::Catalog& cat,
                                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                                     RenderAllocator* render_allocator) {
+                                     RenderAllocatorMap* render_allocator_map) {
   *error_code = 0;
 
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
@@ -2885,7 +2890,7 @@ ResultRows Executor::executeWorkUnit(int32_t* error_code,
                                        context_count,
                                        row_set_mem_owner,
                                        error_code,
-                                       render_allocator);
+                                       render_allocator_map);
   execution_dispatch.compile(join_info, max_groups_buffer_entry_guess, options);
 
   if (options.just_explain) {
@@ -2999,7 +3004,7 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
                                                const size_t context_count,
                                                const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                                int32_t* error_code,
-                                               RenderAllocator* render_allocator)
+                                               RenderAllocatorMap* render_allocator_map)
     : executor_(executor),
       ra_exe_unit_(ra_exe_unit),
       query_infos_(query_infos),
@@ -3009,7 +3014,7 @@ Executor::ExecutionDispatch::ExecutionDispatch(Executor* executor,
       query_context_mutexes_(context_count),
       row_set_mem_owner_(row_set_mem_owner),
       error_code_(error_code),
-      render_allocator_(render_allocator) {
+      render_allocator_map_(render_allocator_map) {
   all_frag_row_offsets_.resize(query_infos.front().fragments.size() + 1);
   for (size_t i = 1; i <= query_infos.front().fragments.size(); ++i) {
     all_frag_row_offsets_[i] = all_frag_row_offsets_[i - 1] + query_infos_.front().fragments[i - 1].numTuples;
@@ -3105,7 +3110,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                                          row_set_mem_owner_,
                                                                          compilation_result.output_columnar,
                                                                          compilation_result.query_mem_desc.sortOnGpu(),
-                                                                         render_allocator_);
+                                                                         render_allocator_map_);
   } catch (const OutOfHostMemory& e) {
     LOG(ERROR) << e.what();
     *error_code_ = ERR_OUT_OF_CPU_MEM;
@@ -3126,7 +3131,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                                        row_set_mem_owner_,
                                                                        compilation_result.output_columnar,
                                                                        compilation_result.query_mem_desc.sortOnGpu(),
-                                                                       render_allocator_);
+                                                                       render_allocator_map_);
       } catch (const OutOfHostMemory& e) {
         LOG(ERROR) << e.what();
         *error_code_ = ERR_OUT_OF_CPU_MEM;
@@ -3160,7 +3165,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                                chosen_device_id,
                                                start_rowid,
                                                ra_exe_unit_.scan_ids.size(),
-                                               render_allocator_);
+                                               render_allocator_map_);
   } else {
     err = executor_->executePlanWithGroupBy(compilation_result,
                                             co_.hoist_literals_,
@@ -3178,7 +3183,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                             co_.device_type_ == ExecutorDeviceType::Hybrid,
                                             start_rowid,
                                             ra_exe_unit_.scan_ids.size(),
-                                            render_allocator_);
+                                            render_allocator_map_);
   }
   {
     std::lock_guard<std::mutex> lock(reduce_mutex);
@@ -3207,8 +3212,8 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                  true,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
-                                 render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
-                                                   : executor_->small_groups_buffer_entry_count_,
+                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                       : executor_->small_groups_buffer_entry_count_,
                                  join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_cpu_ =
@@ -3221,8 +3226,8 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                  false,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
-                                 render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
-                                                   : executor_->small_groups_buffer_entry_count_,
+                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                       : executor_->small_groups_buffer_entry_count_,
                                  join_info);
     }
   };
@@ -3236,21 +3241,21 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
     const CompilationOptions co_gpu{ExecutorDeviceType::GPU, co_.hoist_literals_, co_.opt_level_};
     try {
       compilation_result_gpu_ =
-          executor_->compilePlan(render_allocator_,
+          executor_->compilePlan(render_allocator_map_,
                                  query_infos_,
                                  ra_exe_unit_,
                                  co_gpu,
                                  options,
                                  cat_.get_dataMgr().cudaMgr_,
-                                 render_allocator_ ? false : true,
+                                 render_allocator_map_ ? false : true,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
-                                 render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
-                                                   : executor_->small_groups_buffer_entry_count_,
+                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                       : executor_->small_groups_buffer_entry_count_,
                                  join_info);
     } catch (const CompilationRetryNoLazyFetch&) {
       compilation_result_gpu_ =
-          executor_->compilePlan(render_allocator_,
+          executor_->compilePlan(render_allocator_map_,
                                  query_infos_,
                                  ra_exe_unit_,
                                  co_gpu,
@@ -3259,8 +3264,8 @@ void Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                  false,
                                  row_set_mem_owner_,
                                  max_groups_buffer_entry_guess,
-                                 render_allocator_ ? executor_->render_small_groups_buffer_entry_count_
-                                                   : executor_->small_groups_buffer_entry_count_,
+                                 render_allocator_map_ ? executor_->render_small_groups_buffer_entry_count_
+                                                       : executor_->small_groups_buffer_entry_count_,
                                  join_info);
     }
   }
@@ -3559,7 +3564,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                             const int device_id,
                                             const uint32_t start_rowid,
                                             const uint32_t num_tables,
-                                            RenderAllocator* render_allocator) {
+                                            RenderAllocatorMap* render_allocator_map) {
   int32_t error_code = device_type == ExecutorDeviceType::GPU ? 0 : start_rowid;
   std::vector<int64_t*> out_vec;
   const auto hoist_buf = serializeLiterals(compilation_result.literal_values, device_id);
@@ -3595,7 +3600,7 @@ int32_t Executor::executePlanWithoutGroupBy(const CompilationResult& compilation
                                                  &error_code,
                                                  num_tables,
                                                  join_hash_table_ptr,
-                                                 render_allocator);
+                                                 render_allocator_map);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     }
@@ -3647,7 +3652,7 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                          const bool was_auto_device,
                                          const uint32_t start_rowid,
                                          const uint32_t num_tables,
-                                         RenderAllocator* render_allocator) {
+                                         RenderAllocatorMap* render_allocator_map) {
   CHECK_NE(group_by_col_count, size_t(0));
   // TODO(alex):
   // 1. Optimize size (make keys more compact).
@@ -3687,18 +3692,18 @@ int32_t Executor::executePlanWithGroupBy(const CompilationResult& compilation_re
                                        &error_code,
                                        num_tables,
                                        join_hash_table_ptr,
-                                       render_allocator);
+                                       render_allocator_map);
     } catch (const OutOfMemory&) {
       return ERR_OUT_OF_GPU_MEM;
     } catch (const OutOfRenderMemory&) {
       return ERR_OUT_OF_RENDER_MEM;
     }
   }
-  if (!query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator) {
+  if (!query_exe_context->query_mem_desc_.usesCachedContext() && !render_allocator_map) {
     CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
     results = query_exe_context->getRowSet(target_exprs, query_exe_context->query_mem_desc_, was_auto_device);
   }
-  if (error_code && (render_allocator || (!scan_limit || results.rowCount() < static_cast<size_t>(scan_limit)))) {
+  if (error_code && (render_allocator_map || (!scan_limit || results.rowCount() < static_cast<size_t>(scan_limit)))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
   return 0;
@@ -5115,6 +5120,6 @@ std::pair<bool, int64_t> Executor::skipFragment(const int table_id,
   return {false, -1};
 }
 
-std::map<std::pair<int, GLFWwindow*>, std::shared_ptr<Executor>> Executor::executors_;
+std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>> Executor::executors_;
 std::mutex Executor::execute_mutex_;
 mapd_shared_mutex Executor::executors_cache_mutex_;

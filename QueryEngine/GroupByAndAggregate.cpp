@@ -1109,7 +1109,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
                                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                                              const bool output_columnar,
                                              const bool sort_on_gpu,
-                                             RenderAllocator* render_allocator)
+                                             RenderAllocatorMap* render_allocator_map)
     : query_mem_desc_(query_mem_desc),
       init_agg_vals_(executor->plan_state_->init_agg_vals_),
       executor_(executor),
@@ -1123,7 +1123,7 @@ QueryExecutionContext::QueryExecutionContext(const QueryMemoryDescriptor& query_
       output_columnar_(output_columnar),
       sort_on_gpu_(sort_on_gpu) {
   CHECK(!sort_on_gpu_ || output_columnar);
-  if (render_allocator || query_mem_desc_.group_col_widths.empty()) {
+  if (render_allocator_map || query_mem_desc_.group_col_widths.empty()) {
     allocateCountDistinctBuffers(false);
     return;
   }
@@ -1596,9 +1596,15 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(const std::vector<voi
                                                            int32_t* error_code,
                                                            const uint32_t num_tables,
                                                            const int64_t join_hash_table,
-                                                           RenderAllocator* render_allocator) const {
+                                                           RenderAllocatorMap* render_allocator_map) const {
 #ifdef HAVE_CUDA
   data_mgr->cudaMgr_->setContext(device_id);
+
+  RenderAllocator* render_allocator = nullptr;
+  if (render_allocator_map) {
+    render_allocator = render_allocator_map->getRenderAllocator(device_id);
+  }
+
   auto cu_func = static_cast<CUfunction>(cu_functions[device_id]);
   std::vector<int64_t*> out_vec;
   uint32_t num_fragments = col_buffers.size();
@@ -1873,7 +1879,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
-    RenderAllocator* render_allocator) const {
+    RenderAllocatorMap* render_allocator_map) const {
   return std::unique_ptr<QueryExecutionContext>(new QueryExecutionContext(*this,
                                                                           init_agg_vals,
                                                                           executor,
@@ -1883,7 +1889,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                                                           row_set_mem_owner,
                                                                           output_columnar,
                                                                           sort_on_gpu,
-                                                                          render_allocator));
+                                                                          render_allocator_map));
 }
 
 size_t QueryMemoryDescriptor::getBufferSizeQuad(const ExecutorDeviceType device_type) const {

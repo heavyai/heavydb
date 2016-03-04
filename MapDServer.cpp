@@ -59,13 +59,6 @@ using boost::shared_ptr;
 
 #define INVALID_SESSION_ID -1
 
-void mainGLFWErrorCallback(int error, const char* errstr) {
-  // TODO(croot): should we throw an exception?
-  // NOTE: There are cases when an error is caught here, but
-  // is not fatal -- i.e. putting GLFW in headless mode.
-  LOG(ERROR) << "GLFW error: 0x" << std::hex << error << ": " << errstr << std::endl;
-}
-
 class MapDHandler : virtual public MapDIf {
  public:
   MapDHandler(const std::string& base_data_path,
@@ -94,14 +87,12 @@ class MapDHandler : virtual public MapDIf {
         allow_multifrag_(allow_multifrag),
         read_only_(read_only),
         allow_loop_joins_(allow_loop_joins),
-        enable_rendering_(enable_rendering),
-        window_ptr_(nullptr),
 #ifdef HAVE_CALCITE
-        render_mem_bytes_(render_mem_bytes),
+        enable_rendering_(enable_rendering),
         calcite_(calcite_port, base_data_path_),
         legacy_syntax_(legacy_syntax) {
 #else
-        render_mem_bytes_(render_mem_bytes) {
+        enable_rendering_(enable_rendering) {
 #endif  // HAVE_CALCITE
     LOG(INFO) << "MapD Server " << MapDRelease;
     if (executor_device == "gpu") {
@@ -109,17 +100,6 @@ class MapDHandler : virtual public MapDIf {
       LOG(INFO) << "Started in GPU Mode" << std::endl;
       cpu_mode_only_ = false;
 
-      // init glfw for rendering queries
-      // TODO(croot): can do this for cpu queries
-      // probably too
-      if (enable_rendering_) {
-        try {
-          initGLFW();
-        } catch (const std::exception& e) {
-          enable_rendering_ = false;
-          LOG(ERROR) << "Backend rendering disabled: " << e.what();
-        }
-      }
     } else if (executor_device == "hybrid") {
       executor_device_type_ = ExecutorDeviceType::Hybrid;
       LOG(INFO) << "Started in Hybrid Mode" << std::endl;
@@ -136,9 +116,7 @@ class MapDHandler : virtual public MapDIf {
     import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   }
 
-  ~MapDHandler() {
-    LOG(INFO) << "mapd_server exits." << std::endl;
-  }
+  ~MapDHandler() { LOG(INFO) << "mapd_server exits." << std::endl; }
 
   void check_read_only(const std::string& str) {
     if (read_only_) {
@@ -774,8 +752,7 @@ class MapDHandler : virtual public MapDIf {
                                                 jit_debug_ ? "mapdquery" : "",
                                                 0,
                                                 0,
-                                                window_ptr_,
-                                                render_mem_bytes_);
+                                                nullptr);
 
           auto clock_begin = timer_start();
           auto results = executor->execute(root_plan,
@@ -942,10 +919,6 @@ class MapDHandler : virtual public MapDIf {
  private:
   typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
 
-  void initGLFW() {
-    throw std::runtime_error("Backend rendering disabled in this build.");
-  }
-
   SessionMap::iterator get_session_it(const TSessionId session) {
     auto session_it = sessions_.find(session);
     if (session_it == sessions_.end()) {
@@ -1004,13 +977,8 @@ class MapDHandler : virtual public MapDIf {
     const auto& cat = session_info.get_catalog();
     const auto ra = ra_interpret(query_ast, cat);
     auto ed_list = get_execution_descriptors(ra.get());
-    auto executor = Executor::getExecutor(cat.get_currentDB().dbId,
-                                          jit_debug_ ? "/tmp" : "",
-                                          jit_debug_ ? "mapdquery" : "",
-                                          0,
-                                          0,
-                                          window_ptr_,
-                                          render_mem_bytes_);
+    auto executor = Executor::getExecutor(
+        cat.get_currentDB().dbId, jit_debug_ ? "/tmp" : "", jit_debug_ ? "mapdquery" : "", 0, 0, nullptr);
     RelAlgExecutor ra_executor(executor.get(), cat);
     const auto result = ra_executor.executeRelAlgSeq(ed_list, {executor_device_type, true, ExecutorOptLevel::Default});
     convert_rows(_return, result.getTargetsMeta(), result.getRows(), column_format);
@@ -1027,8 +995,7 @@ class MapDHandler : virtual public MapDIf {
                                           jit_debug_ ? "mapdquery" : "",
                                           0,
                                           0,
-                                          window_ptr_,
-                                          render_mem_bytes_);
+                                          nullptr);
     ResultRows results({}, nullptr, nullptr, executor_device_type);
     _return.execution_time_ms += measure<>::execution([&]() {
       results = executor->execute(root_plan,
@@ -1304,8 +1271,6 @@ class MapDHandler : virtual public MapDIf {
   bool cpu_mode_only_;
   mapd_shared_mutex rw_mutex_;
   std::mutex calcite_mutex_;
-  GLFWwindow* window_ptr_;
-  const size_t render_mem_bytes_;
 #ifdef HAVE_CALCITE
   Calcite calcite_;
   const bool legacy_syntax_;
