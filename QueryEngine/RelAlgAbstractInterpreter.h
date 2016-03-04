@@ -179,13 +179,18 @@ class RexInput : public RexAbstractInput {
 
   const RelAlgNode* getSourceNode() const { return node_; }
 
+  // This isn't great, but we need it for coalescing nodes to Compound since
+  // RexInput in descendents need to be rebound to the newly created Compound.
+  // Maybe create a fresh RA tree with the required changes after each coalescing?
+  void setSourceNode(const RelAlgNode* node) const { node_ = node; }
+
   std::string toString() const override {
     return "(RexInput " + std::to_string(getIndex()) + " " + std::to_string(reinterpret_cast<const uint64_t>(node_)) +
            ")";
   }
 
  private:
-  const RelAlgNode* node_;
+  mutable const RelAlgNode* node_;
 };
 
 class RexAgg : public Rex {
@@ -230,7 +235,7 @@ class RelAlgNode {
 
   const void addInput(const RelAlgNode* input) { inputs_.emplace_back(input); }
 
-  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  virtual bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
     for (auto& input_ptr : inputs_) {
       if (input_ptr.get() == old_input) {
         input_ptr.reset(input);
@@ -320,6 +325,8 @@ class RelProject : public RelAlgNode {
 
   const std::string getFieldName(const size_t i) const { return fields_[i]; }
 
+  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+
   std::string toString() const override {
     std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
     for (const auto& scalar_expr : scalar_exprs_) {
@@ -389,6 +396,8 @@ class RelJoin : public RelAlgNode {
     inputs_.emplace_back(rhs);
   }
 
+  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
+
   std::string toString() const override {
     std::string result = "(RelJoin<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += condition_ ? condition_->toString() : "null";
@@ -403,17 +412,25 @@ class RelJoin : public RelAlgNode {
 
 class RelFilter : public RelAlgNode {
  public:
-  RelFilter(const RexScalar* filter, const RelAlgNode* input) : filter_(filter) { inputs_.emplace_back(input); }
+  RelFilter(const RexScalar* filter, const RelAlgNode* input) : filter_(filter) {
+    CHECK(filter_);
+    inputs_.emplace_back(input);
+  }
 
   const RexScalar* getCondition() const { return filter_.get(); }
 
   const RexScalar* getAndReleaseCondition() { return filter_.release(); }
 
-  void setCondition(const RexScalar* condition) { filter_.reset(condition); }
+  void setCondition(const RexScalar* condition) {
+    CHECK(condition);
+    filter_.reset(condition);
+  }
+
+  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   std::string toString() const override {
     std::string result = "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
-    result += filter_ ? filter_->toString() : "null";
+    result += filter_->toString();
     return result + ")";
   }
 
@@ -450,6 +467,8 @@ class RelCompound : public RelAlgNode {
       scalar_sources_.emplace_back(scalar_source);
     }
   }
+
+  bool replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) override;
 
   size_t size() const { return target_exprs_.size(); }
 

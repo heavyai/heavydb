@@ -1,6 +1,7 @@
 #ifdef HAVE_CALCITE
 #include "RelAlgAbstractInterpreter.h"
 #include "CalciteDeserializerUtils.h"
+#include "RexVisitor.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
@@ -9,6 +10,72 @@
 
 #include <string>
 #include <unordered_map>
+
+namespace {
+
+class RexRebindInputsVisitor : public RexVisitor<void*> {
+ public:
+  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
+      : old_input_(old_input), new_input_(new_input) {}
+  void* visitInput(const RexInput* rex_input) const override {
+    const auto old_source = rex_input->getSourceNode();
+    if (old_source == old_input_) {
+      rex_input->setSourceNode(new_input_);
+    }
+    return nullptr;
+  };
+
+ private:
+  const RelAlgNode* old_input_;
+  const RelAlgNode* new_input_;
+};
+
+}  // namespace
+
+bool RelProject::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  if (RelAlgNode::replaceInput(old_input, input)) {
+    RexRebindInputsVisitor rebind_inputs(old_input, input);
+    for (const auto& scalar_expr : scalar_exprs_) {
+      rebind_inputs.visit(scalar_expr.get());
+    }
+    return true;
+  }
+  return false;
+}
+
+bool RelJoin::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  if (RelAlgNode::replaceInput(old_input, input)) {
+    RexRebindInputsVisitor rebind_inputs(old_input, input);
+    if (condition_) {
+      rebind_inputs.visit(condition_.get());
+    }
+    return true;
+  }
+  return false;
+}
+
+bool RelFilter::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  if (RelAlgNode::replaceInput(old_input, input)) {
+    RexRebindInputsVisitor rebind_inputs(old_input, input);
+    rebind_inputs.visit(filter_.get());
+    return true;
+  }
+  return false;
+}
+
+bool RelCompound::replaceInput(const RelAlgNode* old_input, const RelAlgNode* input) {
+  if (RelAlgNode::replaceInput(old_input, input)) {
+    RexRebindInputsVisitor rebind_inputs(old_input, input);
+    for (const auto& scalar_source : scalar_sources_) {
+      rebind_inputs.visit(scalar_source.get());
+    }
+    if (filter_expr_) {
+      rebind_inputs.visit(filter_expr_.get());
+    }
+    return true;
+  }
+  return false;
+}
 
 namespace {
 
