@@ -10,6 +10,11 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::list<RaExecutionDesc>& exe
       exec_desc.setResult(executeCompound(compound, co));
       continue;
     }
+    const auto project = dynamic_cast<const RelProject*>(body);
+    if (project) {
+      exec_desc.setResult(executeProject(project, co));
+      continue;
+    }
     CHECK(false);
   }
   CHECK(!exec_descs.empty());
@@ -43,14 +48,24 @@ std::unordered_set<unsigned> get_used_inputs(const RelCompound* compound) {
   return used_inputs;
 }
 
-std::pair<std::vector<ScanId>, std::list<ScanColDescriptor>> get_scan_info(const RelCompound* compound,
-                                                                           const int rte_idx) {
-  const auto used_inputs = get_used_inputs(compound);
+std::unordered_set<unsigned> get_used_inputs(const RelProject* project) {
+  RexUsedInputsVisitor visitor;
+  std::unordered_set<unsigned> used_inputs;
+  for (size_t i = 0; i < project->size(); ++i) {
+    const auto proj_inputs = visitor.visit(project->getProjectAt(i));
+    used_inputs.insert(proj_inputs.begin(), proj_inputs.end());
+  }
+  return used_inputs;
+}
+
+template <class RA>
+std::pair<std::vector<ScanId>, std::list<ScanColDescriptor>> get_scan_info(const RA* ra_node, const int rte_idx) {
+  const auto used_inputs = get_used_inputs(ra_node);
   std::vector<ScanId> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
   {
-    CHECK_EQ(size_t(1), compound->inputCount());
-    const auto scan_ra = dynamic_cast<const RelScan*>(compound->getInput(0));
+    CHECK_EQ(size_t(1), ra_node->inputCount());
+    const auto scan_ra = dynamic_cast<const RelScan*>(ra_node->getInput(0));
     CHECK(scan_ra);  // TODO(alex)
     scan_ids.emplace_back(scan_ra->getTableDescriptor()->tableId, rte_idx);
     for (const auto used_input : used_inputs) {
@@ -116,6 +131,37 @@ std::vector<Analyzer::Expr*> translate_targets(std::vector<std::shared_ptr<Analy
   return target_exprs;
 }
 
+// TODO(alex): Unify with translate_scalar_sources for Compound nodes?
+std::vector<std::shared_ptr<Analyzer::Expr>> translate_projections(const RelProject* project,
+                                                                   const Catalog_Namespace::Catalog& cat,
+                                                                   const int rte_idx) {
+  std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
+  for (size_t i = 0; i < project->size(); ++i) {
+    scalar_sources.push_back(translate_scalar_rex(project->getProjectAt(i), rte_idx, cat));
+  }
+  return scalar_sources;
+}
+
+// TODO(alex): Adjust interfaces downstream and make this not needed.
+std::vector<Analyzer::Expr*> get_exprs_not_owned(const std::vector<std::shared_ptr<Analyzer::Expr>>& exprs) {
+  std::vector<Analyzer::Expr*> exprs_not_owned;
+  for (const auto expr : exprs) {
+    exprs_not_owned.push_back(expr.get());
+  }
+  return exprs_not_owned;
+}
+
+template <class RA>
+std::vector<Analyzer::TargetMetaInfo> get_targets_meta(const RA* ra_node,
+                                                       const std::vector<Analyzer::Expr*>& target_exprs) {
+  std::vector<Analyzer::TargetMetaInfo> targets_meta;
+  for (size_t i = 0; i < ra_node->size(); ++i) {
+    CHECK(target_exprs[i]);
+    targets_meta.emplace_back(ra_node->getFieldName(i), target_exprs[i]->get_type_info());
+  }
+  return targets_meta;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
@@ -128,22 +174,38 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, con
   const auto quals = translate_quals(compound, cat_, rte_idx);
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned;
   const auto target_exprs = translate_targets(target_exprs_owned, scalar_sources, compound, cat_, rte_idx);
+  CHECK_EQ(compound->size(), target_exprs.size());
   Executor::RelAlgExecutionUnit rel_alg_exe_unit{
       scan_ids, scan_cols, {}, quals, {}, groupby_exprs, target_exprs, {}, 0};
+  const auto targets_meta = get_targets_meta(compound, target_exprs);
+  return executeWorkUnit(rel_alg_exe_unit, scan_ids, targets_meta, true, co);
+}
+
+ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const CompilationOptions& co) {
+  int rte_idx = 0;  // TODO(alex)
+  std::vector<ScanId> scan_ids;
+  std::list<ScanColDescriptor> scan_cols;
+  std::tie(scan_ids, scan_cols) = get_scan_info(project, rte_idx);
+  const auto target_exprs_owned = translate_projections(project, cat_, rte_idx);
+  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+  Executor::RelAlgExecutionUnit rel_alg_exe_unit{scan_ids, scan_cols, {}, {}, {}, {nullptr}, target_exprs, {}, 0};
+  const auto targets_meta = get_targets_meta(project, target_exprs);
+  return executeWorkUnit(rel_alg_exe_unit, scan_ids, targets_meta, false, co);
+}
+
+ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
+                                                const std::vector<ScanId>& scan_ids,
+                                                const std::vector<Analyzer::TargetMetaInfo>& targets_meta,
+                                                const bool is_agg,
+                                                const CompilationOptions& co) {
   size_t max_groups_buffer_entry_guess{2048};
   int32_t error_code{0};
-  std::vector<Analyzer::TargetMetaInfo> targets_meta;
-  CHECK_EQ(compound->size(), target_exprs.size());
-  for (size_t i = 0; i < compound->size(); ++i) {
-    CHECK(target_exprs[i]);
-    targets_meta.emplace_back(compound->getFieldName(i), target_exprs[i]->get_type_info());
-  }
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
   executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
   executor_->catalog_ = &cat_;
   return {executor_->executeWorkUnit(&error_code,
                                      max_groups_buffer_entry_guess,
-                                     true,
+                                     is_agg,
                                      get_query_infos(scan_ids, cat_),
                                      rel_alg_exe_unit,
                                      co,
@@ -153,4 +215,5 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, con
                                      nullptr),
           targets_meta};
 }
+
 #endif  // HAVE_CALCITE

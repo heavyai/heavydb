@@ -318,8 +318,10 @@ class RelProject : public RelAlgNode {
 
   const std::vector<std::string>& getFields() const { return fields_; }
 
+  const std::string getFieldName(const size_t i) const { return fields_[i]; }
+
   std::string toString() const override {
-    std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
+    std::string result = "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
     for (const auto& scalar_expr : scalar_exprs_) {
       result += " " + scalar_expr->toString();
     }
