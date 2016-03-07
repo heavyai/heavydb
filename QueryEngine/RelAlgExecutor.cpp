@@ -60,9 +60,10 @@ std::unordered_set<unsigned> get_used_inputs(const RelProject* project) {
 }
 
 template <class RA>
-std::pair<std::vector<ScanId>, std::list<ScanColDescriptor>> get_scan_info(const RA* ra_node, const int rte_idx) {
+std::pair<std::vector<ScanDescriptor>, std::list<ScanColDescriptor>> get_scan_info(const RA* ra_node,
+                                                                                   const int rte_idx) {
   const auto used_inputs = get_used_inputs(ra_node);
-  std::vector<ScanId> scan_ids;
+  std::vector<ScanDescriptor> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
   {
     CHECK_EQ(size_t(1), ra_node->inputCount());
@@ -177,7 +178,7 @@ std::vector<Analyzer::TargetMetaInfo> get_targets_meta(const RA* ra_node,
 
 ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, const CompilationOptions& co) {
   int rte_idx = 0;  // TODO(alex)
-  std::vector<ScanId> scan_ids;
+  std::vector<ScanDescriptor> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
   std::tie(scan_ids, scan_cols) = get_scan_info(compound, rte_idx);
   const auto scalar_sources = translate_scalar_sources(compound, cat_, rte_idx);
@@ -194,7 +195,7 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound, con
 
 ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const CompilationOptions& co) {
   int rte_idx = 0;  // TODO(alex)
-  std::vector<ScanId> scan_ids;
+  std::vector<ScanDescriptor> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
   std::tie(scan_ids, scan_cols) = get_scan_info(project, rte_idx);
   const auto target_exprs_owned = translate_scalar_sources(project, cat_, rte_idx);
@@ -205,7 +206,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project, const 
 }
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(const Executor::RelAlgExecutionUnit& rel_alg_exe_unit,
-                                                const std::vector<ScanId>& scan_ids,
+                                                const std::vector<ScanDescriptor>& scan_ids,
                                                 const std::vector<Analyzer::TargetMetaInfo>& targets_meta,
                                                 const bool is_agg,
                                                 const CompilationOptions& co) {

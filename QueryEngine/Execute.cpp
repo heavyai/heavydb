@@ -134,7 +134,7 @@ void collect_scan_cols(std::list<ScanColDescriptor>& scan_cols,
   }
 }
 
-void collect_scan_col_info(std::vector<ScanId>& scan_ids,
+void collect_scan_col_info(std::vector<ScanDescriptor>& scan_ids,
                            std::list<ScanColDescriptor>& scan_cols,
                            const Planner::Plan* plan,
                            const Catalog_Namespace::Catalog& cat) {
@@ -227,7 +227,7 @@ ResultRows Executor::executeSelectPlan(const Planner::Plan* plan,
     auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
     const auto agg_plan = dynamic_cast<const Planner::AggPlan*>(plan);
     auto groupby_exprs = agg_plan ? agg_plan->get_groupby_list() : std::list<std::shared_ptr<Analyzer::Expr>>{nullptr};
-    std::vector<ScanId> scan_ids;
+    std::vector<ScanDescriptor> scan_ids;
     std::list<ScanColDescriptor> scan_cols;
     collect_scan_col_info(scan_ids, scan_cols, plan, cat);
     const auto join_plan = get_join_child(plan);
@@ -1044,7 +1044,8 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
     if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
       return hash_pos_it->second;
     }
-    const auto inner_it = cgen_state_->scan_to_iterator_.find(ScanId(col_var->get_table_id(), col_var->get_rte_idx()));
+    const auto inner_it =
+        cgen_state_->scan_to_iterator_.find(ScanDescriptor(col_var->get_table_id(), col_var->get_rte_idx()));
     if (inner_it != cgen_state_->scan_to_iterator_.end()) {
       CHECK(inner_it->second.first);
       CHECK(inner_it->second.first->getType()->isIntegerTy(64));
@@ -2558,7 +2559,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   const auto scan_plan = dynamic_cast<const Planner::Scan*>(agg_plan->get_child_plan());
   auto simple_quals = scan_plan ? scan_plan->get_simple_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
   auto quals = scan_plan ? scan_plan->get_quals() : std::list<std::shared_ptr<Analyzer::Expr>>{};
-  std::vector<ScanId> scan_ids;
+  std::vector<ScanDescriptor> scan_ids;
   std::list<ScanColDescriptor> scan_cols;
   collect_scan_col_info(scan_ids, scan_cols, agg_plan, cat);
   const auto join_plan = get_join_child(agg_plan);
@@ -3336,7 +3337,7 @@ void Executor::dispatchFragments(const std::function<void(const ExecutorDeviceTy
                                  const ExecutorDeviceType device_type,
                                  const bool allow_multifrag,
                                  const bool is_agg,
-                                 const std::vector<ScanId>& scan_ids,
+                                 const std::vector<ScanDescriptor>& scan_ids,
                                  const std::map<int, const TableFragments*>& all_tables_fragments,
                                  const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                                  const std::vector<uint64_t>& all_frag_row_offsets,
@@ -3440,7 +3441,7 @@ std::vector<std::vector<const int8_t*>> Executor::fetchChunks(
     const std::list<ScanColDescriptor>& col_global_ids,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
-    const std::vector<ScanId>& scan_ids,
+    const std::vector<ScanDescriptor>& scan_ids,
     const std::map<int, const TableFragments*>& all_tables_fragments,
     const std::map<int, std::vector<size_t>>& selected_fragments,
     const Catalog_Namespace::Catalog& cat,
@@ -3524,7 +3525,7 @@ void Executor::buildSelectedFragsMapping(std::vector<std::vector<size_t>>& selec
                                          std::vector<size_t>& local_col_to_frag_pos,
                                          const std::list<ScanColDescriptor>& col_global_ids,
                                          const std::map<int, std::vector<size_t>>& selected_fragments,
-                                         const std::vector<ScanId>& scan_ids) {
+                                         const std::vector<ScanDescriptor>& scan_ids) {
   local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
   size_t frag_pos{0};
   for (size_t scan_idx = 0; scan_idx < scan_ids.size(); ++scan_idx) {
@@ -4334,7 +4335,7 @@ void Executor::codegenInnerScanNextRow() {
   }
 }
 
-void Executor::allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_loop_joins) {
+void Executor::allocateInnerScansIterators(const std::vector<ScanDescriptor>& scan_ids, const bool allow_loop_joins) {
   if (scan_ids.size() <= 1) {
     return;
   }

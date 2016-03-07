@@ -117,25 +117,57 @@ struct hash<ScanColDescriptor> {
 };
 }
 
-class ScanId {
+class ScanDescriptor {
  public:
-  ScanId(const int table_id, const int scan_idx) : table_id_(table_id), scan_idx_(scan_idx) {}
+  enum class InputSourceType { TABLE, RESULT };
 
-  bool operator==(const ScanId& that) const { return table_id_ == that.table_id_ && scan_idx_ == that.scan_idx_; }
+  ScanDescriptor(const int table_id, const int scan_idx)
+      : input_source_type_(InputSourceType::TABLE), table_id_(table_id), scan_idx_(scan_idx) {}
 
-  int getTableId() const { return table_id_; }
+  ScanDescriptor(const ResultRows* result_rows, const int scan_idx)
+      : input_source_type_(InputSourceType::RESULT), result_rows_(result_rows), scan_idx_(scan_idx) {
+    CHECK(false);  // Not hitting this path yet.
+  }
+
+  bool operator==(const ScanDescriptor& that) const {
+    return (input_source_type_ == InputSourceType::TABLE ? table_id_ == that.table_id_
+                                                         : result_rows_ == that.result_rows_) &&
+           scan_idx_ == that.scan_idx_;
+  }
+
+  InputSourceType getSourceType() const { return input_source_type_; }
+
+  int getTableId() const {
+    CHECK(input_source_type_ == InputSourceType::TABLE);
+    return table_id_;
+  }
+
+  const ResultRows* getResultRows() const {
+    CHECK(input_source_type_ == InputSourceType::RESULT);
+    CHECK(result_rows_);
+    return result_rows_;
+  }
 
   int getScanIdx() const { return scan_idx_; }
 
  private:
-  const int table_id_;
+  const InputSourceType input_source_type_;
+  union {
+    const int table_id_;
+    const ResultRows* result_rows_;
+  };
   const int scan_idx_;
 };
 
 namespace std {
 template <>
-struct hash<ScanId> {
-  size_t operator()(const ScanId& scan_id) const { return scan_id.getTableId() ^ scan_id.getScanIdx(); }
+struct hash<ScanDescriptor> {
+  size_t operator()(const ScanDescriptor& scan_id) const {
+    size_t table_id = scan_id.getSourceType() == ScanDescriptor::InputSourceType::TABLE
+                          ? scan_id.getTableId()
+                          : reinterpret_cast<size_t>(scan_id.getResultRows());
+    return table_id ^ scan_id.getScanIdx();
+  }
 };
 }
 
@@ -291,7 +323,7 @@ class Executor {
                                RenderAllocator* render_allocator);
 
   struct RelAlgExecutionUnit {
-    const std::vector<ScanId> scan_ids;
+    const std::vector<ScanDescriptor> scan_ids;
     const std::list<ScanColDescriptor> scan_cols;
     const std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
     const std::list<std::shared_ptr<Analyzer::Expr>> quals;
@@ -434,7 +466,7 @@ class Executor {
                          const ExecutorDeviceType device_type,
                          const bool allow_multifrag,
                          const bool is_agg,
-                         const std::vector<ScanId>& scan_ids,
+                         const std::vector<ScanDescriptor>& scan_ids,
                          const std::map<int, const TableFragments*>& all_tables_fragments,
                          const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
                          const std::vector<uint64_t>& all_frag_row_offsets,
@@ -447,7 +479,7 @@ class Executor {
   std::vector<std::vector<const int8_t*>> fetchChunks(const std::list<ScanColDescriptor>&,
                                                       const int device_id,
                                                       const Data_Namespace::MemoryLevel,
-                                                      const std::vector<ScanId>& scan_ids,
+                                                      const std::vector<ScanDescriptor>& scan_ids,
                                                       const std::map<int, const TableFragments*>&,
                                                       const std::map<int, std::vector<size_t>>& selected_fragments,
                                                       const Catalog_Namespace::Catalog&,
@@ -458,7 +490,7 @@ class Executor {
                                  std::vector<size_t>& local_col_to_frag_pos,
                                  const std::list<ScanColDescriptor>& col_global_ids,
                                  const std::map<int, std::vector<size_t>>& selected_fragments,
-                                 const std::vector<ScanId>& scan_ids);
+                                 const std::vector<ScanDescriptor>& scan_ids);
 
   ResultRows executeResultPlan(const Planner::Result* result_plan,
                                const bool hoist_literals,
@@ -536,7 +568,7 @@ class Executor {
 
   void codegenInnerScanNextRow();
 
-  void allocateInnerScansIterators(const std::vector<ScanId>& scan_ids, const bool allow_loop_joins);
+  void allocateInnerScansIterators(const std::vector<ScanDescriptor>& scan_ids, const bool allow_loop_joins);
 
   JoinInfo chooseJoinType(const std::list<std::shared_ptr<Analyzer::Expr>>&,
                           const std::vector<Fragmenter_Namespace::QueryInfo>&,
@@ -731,7 +763,7 @@ class Executor {
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
-    std::unordered_map<ScanId, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
+    std::unordered_map<ScanDescriptor, std::pair<llvm::Value*, llvm::Value*>> scan_to_iterator_;
     std::vector<llvm::BasicBlock*> inner_scan_labels_;
     std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
     std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
@@ -861,7 +893,7 @@ class Executor {
   friend class ExecutionDispatch;
 };
 
-inline std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<ScanId>& scan_ids,
+inline std::vector<Fragmenter_Namespace::QueryInfo> get_query_infos(const std::vector<ScanDescriptor>& scan_ids,
                                                                     const Catalog_Namespace::Catalog& cat) {
   std::vector<Fragmenter_Namespace::QueryInfo> query_infos;
   {
