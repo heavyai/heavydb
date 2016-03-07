@@ -2650,7 +2650,7 @@ ResultRows Executor::executeResultPlan(const Planner::Result* result_plan,
   CHECK(row_func);
   std::list<ScanColDescriptor> pseudo_scan_cols;
   for (int pseudo_col = 1; pseudo_col <= in_col_count; ++pseudo_col) {
-    pseudo_scan_cols.emplace_back(pseudo_col, nullptr, -1);
+    pseudo_scan_cols.emplace_back(pseudo_col, static_cast<const TableDescriptor*>(nullptr), -1);
   }
   auto compilation_result =
       compilePlan(false,
