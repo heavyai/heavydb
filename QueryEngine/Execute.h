@@ -93,9 +93,7 @@ class ScanColDescriptor {
       : input_source_type_(InputSourceType::TABLE), col_id_(col_id), td_(td), scan_idx_(scan_idx) {}
 
   ScanColDescriptor(const int col_id, const ResultRows* result_rows, const int scan_idx)
-      : input_source_type_(InputSourceType::RESULT), col_id_(col_id), result_rows_(result_rows), scan_idx_(scan_idx) {
-    CHECK(false);  // Not hitting this path yet.
-  }
+      : input_source_type_(InputSourceType::RESULT), col_id_(col_id), result_rows_(result_rows), scan_idx_(scan_idx) {}
 
   bool operator==(const ScanColDescriptor& that) const {
     const bool payload_equal = input_source_type_ == InputSourceType::TABLE
@@ -149,9 +147,7 @@ class ScanDescriptor {
       : input_source_type_(InputSourceType::TABLE), table_id_(table_id), scan_idx_(scan_idx) {}
 
   ScanDescriptor(const ResultRows* result_rows, const int scan_idx)
-      : input_source_type_(InputSourceType::RESULT), result_rows_(result_rows), scan_idx_(scan_idx) {
-    CHECK(false);  // Not hitting this path yet.
-  }
+      : input_source_type_(InputSourceType::RESULT), result_rows_(result_rows), scan_idx_(scan_idx) {}
 
   bool operator==(const ScanDescriptor& that) const {
     return (input_source_type_ == InputSourceType::TABLE ? table_id_ == that.table_id_

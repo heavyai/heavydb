@@ -69,11 +69,19 @@ std::pair<std::vector<ScanDescriptor>, std::list<ScanColDescriptor>> get_scan_in
     CHECK_EQ(size_t(1), ra_node->inputCount());
     const auto input_ra = ra_node->getInput(0);
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
-    CHECK(scan_ra);
-    scan_descs.emplace_back(scan_ra->getTableDescriptor()->tableId, rte_idx);
-    for (const auto used_input : used_inputs) {
-      // Physical columns from a scan node are numbered from 1 in our system.
-      scan_cols.emplace_back(used_input + 1, scan_ra->getTableDescriptor(), rte_idx);
+    if (scan_ra) {
+      scan_descs.emplace_back(scan_ra->getTableDescriptor()->tableId, rte_idx);
+      for (const auto used_input : used_inputs) {
+        // Physical columns from a scan node are numbered from 1 in our system.
+        scan_cols.emplace_back(used_input + 1, scan_ra->getTableDescriptor(), rte_idx);
+      }
+    } else {
+      const auto execution_desc = static_cast<const RaExecutionDesc*>(input_ra->getContextData());
+      const auto& result_rows = execution_desc->getResult().getRows();
+      scan_descs.emplace_back(&result_rows, rte_idx);
+      for (const auto used_input : used_inputs) {
+        scan_cols.emplace_back(used_input, &result_rows, rte_idx);
+      }
     }
   }
   return {scan_descs, scan_cols};
