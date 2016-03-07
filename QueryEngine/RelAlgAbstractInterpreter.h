@@ -221,8 +221,19 @@ class RexAgg : public Rex {
 class RelAlgNode {
  public:
   RelAlgNode() : context_data_(nullptr) {}
-  void setContextData(const void* context_data) const { context_data_ = context_data; }
+
+  void setContextData(const void* context_data) const {
+    CHECK(!context_data_);
+    context_data_ = context_data;
+  }
+
+  const void* getContextData() const {
+    CHECK(context_data_);
+    return context_data_;
+  }
+
   const size_t inputCount() const { return inputs_.size(); }
+
   const RelAlgNode* getInput(const size_t idx) const {
     CHECK(idx < inputs_.size());
     return inputs_[idx].get();

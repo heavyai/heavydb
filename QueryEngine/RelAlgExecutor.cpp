@@ -2,7 +2,8 @@
 #include "RelAlgExecutor.h"
 #include "RexVisitor.h"
 
-ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::list<RaExecutionDesc>& exec_descs, const CompilationOptions& co) {
+ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& exec_descs,
+                                                 const CompilationOptions& co) {
   for (auto& exec_desc : exec_descs) {
     const auto body = exec_desc.getBody();
     const auto compound = dynamic_cast<const RelCompound*>(body);
@@ -65,8 +66,9 @@ std::pair<std::vector<ScanId>, std::list<ScanColDescriptor>> get_scan_info(const
   std::list<ScanColDescriptor> scan_cols;
   {
     CHECK_EQ(size_t(1), ra_node->inputCount());
-    const auto scan_ra = dynamic_cast<const RelScan*>(ra_node->getInput(0));
-    CHECK(scan_ra);  // TODO(alex)
+    const auto input_ra = ra_node->getInput(0);
+    const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
+    CHECK(scan_ra);
     scan_ids.emplace_back(scan_ra->getTableDescriptor()->tableId, rte_idx);
     for (const auto used_input : used_inputs) {
       // Physical columns from a scan node are numbered from 1 in our system.

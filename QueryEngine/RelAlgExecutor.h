@@ -7,7 +7,7 @@
 class RelAlgExecutor {
  public:
   RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat) : executor_(executor), cat_(cat) {}
-  ExecutionResult executeRelAlgSeq(std::list<RaExecutionDesc>&, const CompilationOptions&);
+  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>&, const CompilationOptions&);
 
  private:
   ExecutionResult executeCompound(const RelCompound*, const CompilationOptions&);

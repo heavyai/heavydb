@@ -35,7 +35,10 @@ class RaExecutionDesc {
 
   const ExecutionResult& getResult() const { return result_; }
 
-  void setResult(const ExecutionResult& result) { result_ = result; }
+  void setResult(const ExecutionResult& result) {
+    result_ = result;
+    body_->setContextData(this);
+  }
 
   const RelAlgNode* getBody() const { return body_; }
 
@@ -45,6 +48,6 @@ class RaExecutionDesc {
   ExecutionResult result_;
 };
 
-std::list<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);
+std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);
 
 #endif  // QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
