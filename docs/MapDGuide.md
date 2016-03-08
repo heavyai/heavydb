@@ -566,6 +566,8 @@ COPY <table> FROM '<file path>' [WITH (<property> = value, ...)];
 * `line_delimiter` a single-character string for terminating each line. The default is `"\n"`.
 * `threads` number of threads for doing the data importing.  The default is the number of CPU cores on the system.
 
+Note: by default the CSV parser assumes one row per line. To import a file with multiple lines in a single field, specify `threads = 1` in the `WITH` clause.
+
 Example:
 ```
 COPY tweets from '/tmp/tweets.csv' WITH (nulls = 'NA');

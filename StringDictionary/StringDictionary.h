@@ -35,6 +35,7 @@ class StringDictionary {
   bool checkpoint() noexcept;
 
   static const int32_t INVALID_STR_ID;
+  static const size_t MAX_STRLEN = (2 << 16) - 1;
 
  private:
   struct StringIdxEntry {

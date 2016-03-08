@@ -12,7 +12,6 @@
 
 namespace {
 const int PAGE_SIZE = getpagesize();
-const size_t MAX_STRLEN = (2 << 16) - 1;
 
 size_t file_size(const int fd) {
   struct stat buf;
